@@ -1,0 +1,115 @@
+@import './fonts.css';
+@import './tailwind.css';
+@import './theme.css';
+
+html,
+body,
+#root {
+	height: 100%;
+}
+
+body {
+	overflow: hidden;
+}
+
+/* Allow toasts to show above overflow hidden */
+.toaster {
+	z-index: 9999 !important;
+	pointer-events: none;
+}
+
+/* Dashboard specific toaster positioning with offset */
+.dashboard-toaster {
+	position: fixed !important;
+	top: 20px !important;
+	left: 50% !important;
+	transform: translateX(-50%) !important;
+	margin-left: 128px !important;
+	/* Half of expanded sidebar width to center in content area */
+	transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* Adjust toast position for collapsed sidebar */
+.sidebar-collapsed .dashboard-toaster {
+	margin-left: 20px !important;
+	/* Adjusted from 40px to move it more left as requested */
+}
+
+/* Center page titles and table headers when sidebar is collapsed */
+.sidebar-collapsed .text-center {
+	text-align: center !important;
+}
+
+.sidebar-collapsed [class*="CardTitle"] {
+	text-align: center !important;
+	margin: 0 auto !important;
+}
+
+.toaster>* {
+	pointer-events: auto;
+}
+
+/* Custom toast styling */
+.custom-toast {
+	background: white !important;
+	color: black !important;
+	border: 1px solid #e5e7eb !important;
+	box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
+	display: flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	text-align: center !important;
+}
+
+/* Toast icon colors */
+[data-sonner-toast][data-type="error"] svg {
+	color: #dc2626 !important;
+	fill: #dc2626 !important;
+}
+
+[data-sonner-toast][data-type="success"] svg {
+	color: #166534 !important;
+	fill: #166534 !important;
+}
+
+/* Neutral scrollbar styling */
+::-webkit-scrollbar {
+	width: 12px;
+	height: 12px;
+}
+
+::-webkit-scrollbar-track {
+	background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+	background: #9ca3af;
+	border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+	background: #6b7280;
+}
+
+/* Firefox scrollbar */
+* {
+	scrollbar-width: thin;
+	scrollbar-color: #9ca3af #f1f1f1;
+}
+
+/* Date input styling */
+input[type="date"] {
+	color: black;
+}
+
+input[type="date"]::-webkit-datetime-edit-day-field {
+	color: black;
+}
+
+input[type="date"]::-webkit-datetime-edit-month-field {
+	color: black;
+}
+
+input[type="date"]::-webkit-datetime-edit-year-field {
+	color: black;
+}
