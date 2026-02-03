@@ -1,8 +1,8 @@
-import { Card, CardContent } from '@/app/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { Input } from '@/app/components/ui/input';
-import { Plus, Edit, Trash, Search, Filter } from 'lucide-react';
+import { Plus, Edit, Trash, Search, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import React from 'react';
 import {
@@ -120,19 +120,18 @@ export default function UserManagement({ onSetHeaderAction }: { onSetHeaderActio
 
   return (
     <Card>
-      <CardContent className="pt-6">
+      <CardHeader className="pt-5 pb-0 px-6">
+        <div className="flex items-center justify-center">
+          <CardTitle className="text-center text-[15px] font-black text-gray-900 uppercase tracking-[0.1em] leading-tight p-0 -m-1">
+            USER MANAGEMENT
+          </CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-0 -mt-3">
         {/* Search and Filter Section */}
-        <div className="flex gap-4 mb-6">
-          <div className="flex-1 relative">
-            <Button
-              type="button"
-              variant="ghost"
-              className="absolute left-0 top-1/2 -translate-y-1/2 h-9 w-9 text-gray-500"
-              onClick={() => (document.getElementById('userSearch') as HTMLInputElement)?.focus()}
-              title="Focus search"
-            >
-              <Search className="h-5 w-5" />
-            </Button>
+        <div className="flex gap-2 mb-5 items-center">
+          <div className="flex-1 relative group">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 group-focus-within:text-red-600 transition-colors" />
             <Input
               id="userSearch"
               placeholder="Search by username or email..."
@@ -141,16 +140,19 @@ export default function UserManagement({ onSetHeaderAction }: { onSetHeaderActio
                 setSearchQuery(e.target.value);
                 setCurrentPage(1);
               }}
-              className="pl-10 h-9"
+              className="pl-10 h-8 text-[11px] border-gray-100 bg-gray-50/50 focus-visible:ring-1 focus-visible:ring-red-600 focus-visible:border-red-600 rounded-lg w-full transition-all"
             />
           </div>
           <Button
             variant="outline"
-            className="h-9 w-9"
+            className={`h-9 w-9 p-0 rounded-lg transition-colors ${roleFilter !== 'all' || statusFilter !== 'all'
+              ? 'border-red-600 text-red-600 bg-red-50 hover:bg-red-100'
+              : 'border-gray-200 text-gray-500 hover:border-red-600 hover:text-red-600 hover:bg-red-50'
+              }`}
             onClick={() => setIsFilterOpen(true)}
             title="Open filters"
           >
-            <Filter className="h-5 w-5" />
+            <Filter className="h-4 w-4" />
           </Button>
         </div>
 
@@ -191,15 +193,16 @@ export default function UserManagement({ onSetHeaderAction }: { onSetHeaderActio
               </div>
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="flex justify-center gap-4 pt-4 pb-2">
               <Button
                 variant="outline"
                 onClick={handleResetFilters}
+                className="h-11 px-8 min-w-[160px] font-bold uppercase tracking-wider bg-slate-50 border-gray-200 hover:bg-slate-100"
               >
-                Reset Filters
+                Reset
               </Button>
               <Button
-                className="bg-red-600 hover:bg-red-700"
+                className="bg-red-600 hover:bg-red-700 h-11 px-8 min-w-[160px] font-bold uppercase tracking-wider shadow-md"
                 onClick={() => setIsFilterOpen(false)}
               >
                 Apply
@@ -251,40 +254,54 @@ export default function UserManagement({ onSetHeaderAction }: { onSetHeaderActio
           </table>
         </div>
 
-        <div className="mt-6 flex items-center justify-between">
-          <div className="text-sm text-gray-600">
-            Showing {filteredUsers.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1} to{' '}
-            {Math.min(currentPage * itemsPerPage, filteredUsers.length)} of {filteredUsers.length} results
+        <div className="bg-white border-t border-gray-100 pt-1.5 pb-1 px-3 flex items-center justify-between">
+          <div className="text-[11px] text-gray-500 font-bold uppercase tracking-wider">
+            PAGE {currentPage} OF {totalPages || 1}
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-3">
             <Button
               variant="outline"
               onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
               disabled={currentPage === 1}
-              className={`w-9 h-9 ${currentPage === 1 ? 'bg-gray-500 text-white border-gray-500 hover:bg-gray-500 hover:text-white' : ''}`}
+              className={`h-8 w-8 p-0 rounded-lg transition-all mt-0 border-none ${currentPage === 1
+                ? 'bg-slate-200 text-slate-500'
+                : 'bg-slate-600 text-white hover:bg-slate-700 shadow-sm'
+                }`}
             >
-              &lt;
+              <ChevronLeft className="h-4 w-4" />
             </Button>
-            <div className="flex items-center gap-1">
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                <Button
-                  key={page}
-                  variant={currentPage === page ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setCurrentPage(page)}
-                  className={`w-8 h-8 p-0 ${currentPage === page ? 'bg-red-600 hover:bg-red-700 text-white' : ''}`}
-                >
-                  {page}
-                </Button>
-              ))}
+
+            <div className="max-w-[140px] md:max-w-[300px] overflow-x-auto no-scrollbar py-0.5 px-0.5 flex items-center gap-1">
+              {Array.from({ length: totalPages || 1 }, (_, i) => {
+                const pageNum = i + 1;
+                const isActive = currentPage === pageNum;
+                return (
+                  <Button
+                    key={pageNum}
+                    variant={isActive ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`h-7 w-7 min-w-[28px] p-0 text-[10px] font-black rounded-lg transition-all ${isActive
+                      ? 'bg-red-600 hover:bg-red-700 text-white border-red-600 shadow-sm shadow-red-200'
+                      : 'bg-white border-gray-100 text-gray-600 hover:bg-red-50 hover:text-red-600 hover:border-red-100'
+                      }`}
+                  >
+                    {pageNum}
+                  </Button>
+                );
+              })}
             </div>
+
             <Button
               variant="outline"
-              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-              disabled={currentPage === totalPages}
-              className={`w-9 h-9 ${currentPage === totalPages ? 'bg-gray-500 text-white border-gray-500 hover:bg-gray-500 hover:text-white' : ''}`}
+              onClick={() => setCurrentPage(Math.min(totalPages || 1, currentPage + 1))}
+              disabled={currentPage === totalPages || totalPages === 0}
+              className={`h-8 w-8 p-0 rounded-lg transition-all mt-0 border-none ${currentPage === (totalPages || 1)
+                ? 'bg-slate-200 text-slate-500'
+                : 'bg-slate-600 text-white hover:bg-slate-700 shadow-sm'
+                }`}
             >
-              &gt;
+              <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
         </div>

@@ -21,7 +21,7 @@ import { mockServices } from '@/app/lib/mockData';
 import { useOrders } from '@/app/context/OrderContext';
 import { useExpenses } from '@/app/context/ExpenseContext';
 import AddExpenseModal from '@/app/components/AddExpenseModal';
-import { FileText, ChevronDown, ChevronLeft, ChevronRight, Filter, Search, MoreVertical, Edit, ArrowRight, Banknote, PlusCircle, Sparkles, PackageOpen, Clock7, ClipboardCheck, CircleAlert, X, Calendar as CalendarIcon } from 'lucide-react';
+import { FileText, ChevronDown, ChevronLeft, ChevronRight, Filter, Search, MoreVertical, Edit, ArrowRight, PlusCircle, PackageOpen, Clock7, ClipboardCheck, CircleAlert, X, Calendar as CalendarIcon, TrendingUp } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Cell } from 'recharts';
 import type { JobOrder } from '@/app/types';
 
@@ -338,7 +338,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
             className="bg-white border-red-600 text-red-600 hover:bg-red-50 font-bold shadow-sm transition-all"
           >
             <PlusCircle className="h-5 w-4 mr-0" />
-            Add Expense
+            New Expense
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -357,7 +357,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                 <DropdownMenuItem
                   key={range}
                   onClick={() => setProfitRange(range as typeof profitRange)}
-                  className={`uppercase px-4 py-2 text-sm font-semibold cursor-pointer transition-colors ${profitRange === range ? 'bg-red-600 text-white' : 'bg-white text-red-700'} hover:bg-red-600 hover:text-white`}
+                  className={`uppercase px-4 py-2 text-sm font-semibold cursor-pointer ${profitRange === range ? 'bg-red-600 text-white focus:bg-red-600 focus:text-white' : 'bg-white text-red-700 hover:bg-red-100 hover:text-red-700 focus:bg-red-100 focus:text-red-700'}`}
                 >
                   {range}
                 </DropdownMenuItem>
@@ -386,7 +386,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
               <DropdownMenuItem
                 key={range}
                 onClick={() => setProfitRange(range as typeof profitRange)}
-                className={`uppercase px-4 py-2 text-sm font-semibold cursor-pointer transition-colors ${profitRange === range ? 'bg-red-600 text-white' : 'bg-white text-red-700'} hover:bg-red-600 hover:text-white`}
+                className={`uppercase px-4 py-2 text-sm font-semibold cursor-pointer ${profitRange === range ? 'bg-red-600 text-white focus:bg-red-600 focus:text-white' : 'bg-white text-red-700 hover:bg-red-100 hover:text-red-700 focus:bg-red-100 focus:text-red-700'}`}
               >
                 {range}
               </DropdownMenuItem>
@@ -406,67 +406,62 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
           {/* Status Summary - Always Visible */}
           <Card>
             <CardHeader className="text-center pt-5 pb-0 mb-0">
-              <CardTitle className="text-center text-base font-semibold uppercase mb-0 pb-0">Status Summary</CardTitle>
+              <CardTitle className="text-center text-base font-bold text-gray-900 uppercase mb-0 pb-0 tracking-tight">Status Summary</CardTitle>
             </CardHeader>
             <CardContent className="flex justify-center pt-0 pb-0 mb-0 -mt-5">
               <div className="grid w-full grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
                 {/* New Order */}
-                <div
-                  className={`relative flex items-center rounded-xl border cursor-pointer transition px-4 py-2 sm:px-6 sm:py-2 ${selectedStatus === 'new-order' ? 'border-purple-600 bg-purple-100' : 'border-purple-200 bg-purple-50 hover:bg-purple-100'}`}
+                <Card
+                  className={`border-none shadow-md bg-gradient-to-br from-purple-50 to-purple-100 overflow-hidden relative cursor-pointer transition-all ${selectedStatus === 'new-order' ? 'ring-2 ring-purple-600' : ''}`}
                   onClick={() => setSelectedStatus('new-order')}
                 >
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center justify-center h-8 w-8 rounded-full bg-white text-purple-600 border-2 border-purple-200 shadow-sm">
-                    <PlusCircle className="h-5 w-5" />
+                  <div className="absolute top-0 right-0 p-3 opacity-10">
+                    <PlusCircle size={48} className="text-purple-600" />
                   </div>
-                  <div className="flex-1 flex flex-col items-center justify-center mx-auto">
-                    <div className="text-2xl font-extrabold text-purple-700 text-center">{filteredOrders.filter(o => o.status === 'new-order').length}</div>
-                    <div className="text-xs font-medium text-purple-700 text-center uppercase">New Order</div>
-                  </div>
-                </div>
+                  <CardContent className="pt-5 pb-1 px-3">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 leading-none mb-1">New Order</p>
+                    <p className="text-3xl font-black text-purple-600 tracking-tight leading-none">{filteredOrders.filter(o => o.status === 'new-order').length}</p>
+                  </CardContent>
+                </Card>
                 {/* On-Going */}
-                <div
-                  className={`relative flex items-center rounded-xl border cursor-pointer transition px-4 py-2 sm:px-6 sm:py-2 ${selectedStatus === 'on-going' ? 'border-blue-600 bg-blue-100' : 'border-blue-200 bg-blue-50 hover:bg-blue-100'}`}
+                <Card
+                  className={`border-none shadow-md bg-gradient-to-br from-blue-50 to-blue-100 overflow-hidden relative cursor-pointer transition-all ${selectedStatus === 'on-going' ? 'ring-2 ring-blue-600' : ''}`}
                   onClick={() => setSelectedStatus('on-going')}
                 >
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center justify-center h-8 w-8 rounded-full bg-white text-blue-600 border-2 border-blue-200 shadow-sm">
-                    <div className="relative">
-                      <Clock7 className="h-5 w-5" />
-                      <div className="absolute top-0 -right-1 h-3 w-3 flex items-center justify-center bg-white rounded-full">
-                        <Sparkles className="h-2 w-2" />
-                      </div>
-                    </div>
+                  <div className="absolute top-0 right-0 p-3 opacity-10">
+                    <Clock7 size={48} className="text-blue-600" />
                   </div>
-                  <div className="flex-1 flex flex-col items-center justify-center mx-auto">
-                    <div className="text-2xl font-extrabold text-blue-700 text-center">{filteredOrders.filter(o => o.status === 'on-going').length}</div>
-                    <div className="text-xs font-medium text-blue-700 text-center uppercase">On-Going</div>
-                  </div>
-                </div>
+                  <CardContent className="pt-5 pb-1 px-3">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 leading-none mb-1">On-Going</p>
+                    <p className="text-3xl font-black text-blue-600 tracking-tight leading-none">{filteredOrders.filter(o => o.status === 'on-going').length}</p>
+                  </CardContent>
+                </Card>
                 {/* For Release */}
-                <div
-                  className={`relative flex items-center rounded-xl border cursor-pointer transition px-4 py-2 sm:px-6 sm:py-2 ${selectedStatus === 'for-release' ? 'border-orange-600 bg-orange-100' : 'border-orange-200 bg-orange-50 hover:bg-orange-100'}`}
+                <Card
+                  className={`border-none shadow-md bg-gradient-to-br from-orange-50 to-orange-100 overflow-hidden relative cursor-pointer transition-all ${selectedStatus === 'for-release' ? 'ring-2 ring-orange-600' : ''}`}
                   onClick={() => setSelectedStatus('for-release')}
                 >
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center justify-center h-8 w-8 rounded-full bg-white text-orange-600 border-2 border-orange-200 shadow-sm">
-                    <PackageOpen className="h-5 w-5" />
+                  <div className="absolute top-0 right-0 p-3 opacity-10">
+                    <PackageOpen size={48} className="text-orange-600" />
                   </div>
-                  <div className="flex-1 flex flex-col items-center justify-center mx-auto">
-                    <div className="text-2xl font-extrabold text-orange-700 text-center">{filteredOrders.filter(o => o.status === 'for-release').length}</div>
-                    <div className="text-xs font-medium text-orange-700 text-center uppercase">For Release</div>
-                  </div>
-                </div>
+                  <CardContent className="pt-5 pb-1 px-3">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 leading-none mb-1">For Release</p>
+                    <p className="text-3xl font-black text-orange-600 tracking-tight leading-none">{filteredOrders.filter(o => o.status === 'for-release').length}</p>
+                  </CardContent>
+                </Card>
                 {/* Claimed */}
-                <div
-                  className={`relative flex items-center rounded-xl border cursor-pointer transition px-4 py-2 sm:px-6 sm:py-2 ${selectedStatus === 'claimed' ? 'border-gray-600 bg-gray-100' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'}`}
+                <Card
+                  className={`border-none shadow-md bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden relative cursor-pointer transition-all ${selectedStatus === 'claimed' ? 'ring-2 ring-gray-600' : ''}`}
                   onClick={() => setSelectedStatus('claimed')}
                 >
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center justify-center h-8 w-8 rounded-full bg-white text-gray-700 border-2 border-gray-200 shadow-sm">
-                    <ClipboardCheck className="h-5 w-5" />
+                  <div className="absolute top-0 right-0 p-3 opacity-10">
+                    <ClipboardCheck size={48} className="text-gray-600" />
                   </div>
-                  <div className="flex-1 flex flex-col items-center justify-center mx-auto">
-                    <div className="text-2xl font-extrabold text-gray-700 text-center">{filteredOrders.filter(o => o.status === 'claimed').length}</div>
-                    <div className="text-xs font-medium text-gray-700 text-center uppercase">Claimed</div>
-                  </div>
-                </div>
+                  <CardContent className="pt-5 pb-1 px-3">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 leading-none mb-1">Claimed</p>
+                    <p className="text-3xl font-black text-gray-600 tracking-tight leading-none">{filteredOrders.filter(o => o.status === 'claimed').length}</p>
+                  </CardContent>
+                </Card>
               </div>
             </CardContent>
           </Card>
@@ -475,45 +470,45 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
           {!selectedStatus && (
             <Card>
               <CardHeader className="pt-5 pb-0 mb-0">
-                <CardTitle className="text-center text-base font-semibold uppercase mb-0 pb-0">Overview Summary</CardTitle>
+                <CardTitle className="text-center text-base font-bold text-gray-900 uppercase mb-0 pb-0 tracking-tight">Overview Summary</CardTitle>
               </CardHeader>
               <CardContent className="pt-0 pb-0 mb-0 -mt-5">
-                <div className="space-y-2">
-                  {/* Card 1: Total Active Orders - Full Width */}
-                  <div className="relative flex items-center rounded-xl bg-yellow-50 text-yellow-700 shadow-sm border border-yellow-200 px-3 py-3 min-h-[60px]">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center justify-center h-8 w-8 rounded-full bg-white text-yellow-600 border-2 border-yellow-200 shadow-sm flex-shrink-0">
-                      <FileText className="h-5 w-5" />
+                <div className={`grid gap-2 ${role === 'owner' ? 'grid-cols-1 md:grid-cols-3' : 'grid-cols-1'}`}>
+                  {/* Card 1: Total Active Orders */}
+                  <Card className="border-none shadow-md bg-white overflow-hidden relative">
+                    <div className="absolute top-0 right-0 p-4 opacity-10">
+                      <FileText size={64} className="text-yellow-600" />
                     </div>
-                    <div className="flex flex-1 flex-col items-center justify-center mx-auto">
-                      <p className="text-xl font-bold text-yellow-700 text-center">{overviewOrders.filter(o => ['new-order', 'on-going', 'for-release'].includes(o.status)).length}</p>
-                      <p className="text-[10px] font-medium text-center uppercase leading-tight">Total Active Orders</p>
-                    </div>
-                  </div>
+                    <CardContent className="pt-6">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">Total Active Orders</p>
+                      <p className="text-3xl font-black text-yellow-600 tracking-tight">{overviewOrders.filter(o => ['new-order', 'on-going', 'for-release'].includes(o.status)).length}</p>
+                    </CardContent>
+                  </Card>
 
                   {role === 'owner' && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <>
                       {/* Card 2: Pending Payments (Light Red) */}
-                      <div className="relative flex items-center rounded-xl bg-red-50 text-red-700 shadow-sm border border-red-200 px-3 py-3 min-h-[60px]">
-                        <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center justify-center h-8 w-8 rounded-full bg-white text-red-600 border-2 border-red-200 shadow-sm flex-shrink-0">
-                          <CircleAlert className="h-5 w-5" />
+                      <Card className="border-none shadow-md bg-white overflow-hidden relative">
+                        <div className="absolute top-0 right-0 p-4 opacity-10">
+                          <CircleAlert size={64} className="text-red-600" />
                         </div>
-                        <div className="flex flex-1 flex-col items-center justify-center mx-auto">
-                          <p className="text-xl font-bold text-red-700 text-center">{'\u20B1'}{parseFloat(totalPendingPayments.toFixed(2)).toLocaleString()}</p>
-                          <p className="text-[10px] font-medium text-center uppercase leading-tight">Pending Payments</p>
-                        </div>
-                      </div>
+                        <CardContent className="pt-6">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">Pending Payments</p>
+                          <p className="text-3xl font-black text-red-600 tracking-tight">{'\u20B1'}{parseFloat(totalPendingPayments.toFixed(2)).toLocaleString()}</p>
+                        </CardContent>
+                      </Card>
 
-                      {/* Card 2: Total Sales */}
-                      <div className="relative flex items-center rounded-xl bg-[#ecfdf3] text-[#15803d] shadow-sm border border-[#bbf7d0] px-3 py-3 min-h-[60px]">
-                        <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center justify-center h-8 w-8 rounded-full bg-white text-[#15803d] border-2 border-[#bbf7d0] shadow-sm flex-shrink-0">
-                          < Banknote className="h-5 w-5" />
+                      {/* Card 3: Total Sales */}
+                      <Card className="border-none shadow-md bg-white overflow-hidden relative">
+                        <div className="absolute top-0 right-0 p-4 opacity-10">
+                          <TrendingUp size={64} className="text-green-600" />
                         </div>
-                        <div className="flex flex-1 flex-col items-center justify-center mx-auto">
-                          <p className="text-xl font-bold text-[#15803d] text-center">{'\u20B1'}{parseFloat(totalSales.toFixed(2)).toLocaleString()}</p>
-                          <p className="text-[10px] font-medium text-center uppercase leading-tight">Total Sales</p>
-                        </div>
-                      </div>
-                    </div>
+                        <CardContent className="pt-6">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">Total Sales</p>
+                          <p className="text-3xl font-black text-green-600 tracking-tight">{'\u20B1'}{parseFloat(totalSales.toFixed(2)).toLocaleString()}</p>
+                        </CardContent>
+                      </Card>
+                    </>
                   )}
                 </div>
               </CardContent>
@@ -525,19 +520,19 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
             <Card className="border-2 shadow-lg mt-2 gap-2">
               <CardHeader className="pt-5 pb-0 px-4">
                 <div className="flex items-center justify-center">
-                  <CardTitle className="text-center text-lg leading-tight p-0 m-0">
+                  <CardTitle className="text-center text-[15px] font-black text-gray-900 uppercase tracking-[0.1em] leading-tight p-0 m-0">
                     {(() => {
                       switch (selectedStatus) {
                         case 'new-order':
-                          return 'NEW ORDER TABLE';
+                          return 'NEW ORDER';
                         case 'on-going':
-                          return 'ON-GOING TABLE';
+                          return 'ON-GOING';
                         case 'for-release':
-                          return 'FOR RELEASE TABLE';
+                          return 'FOR RELEASE';
                         case 'claimed':
-                          return 'CLAIMED TABLE';
+                          return 'CLAIMED';
                         default:
-                          return 'STATUS TABLE';
+                          return 'STATUS';
                       }
                     })()}
                   </CardTitle>
@@ -560,11 +555,11 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                   >
                     Back
                   </Button>
-                  <div className="flex-1 relative">
+                  <div className="flex-1 relative group">
                     <Button
                       type="button"
                       variant="ghost"
-                      className="absolute left-0 top-1/2 -translate-y-1/2 h-9 w-9 text-gray-500"
+                      className="absolute left-0 top-1/2 -translate-y-1/2 h-9 w-9 text-gray-500 group-focus-within:text-red-600 transition-colors"
                       onClick={() => (document.getElementById('statusTableSearch') as HTMLInputElement)?.focus()}
                       title="Focus search"
                     >
@@ -578,16 +573,19 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                         setSearchQuery(e.target.value);
                         setCurrentPage(1);
                       }}
-                      className="pl-10 h-9"
+                      className="pl-10 h-8 text-[11px] border-gray-100 bg-gray-50/50 focus-visible:ring-1 focus-visible:ring-red-600 focus-visible:border-red-600 rounded-lg w-full transition-all"
                     />
                   </div>
                   <Button
                     variant="outline"
-                    className="h-9 w-9"
+                    className={`h-9 w-9 p-0 rounded-lg transition-colors ${filterService !== 'all' || startDate || endDate
+                      ? 'border-red-600 text-red-600 bg-red-50 hover:bg-red-100'
+                      : 'border-gray-200 text-gray-500 hover:border-red-600 hover:text-red-600 hover:bg-red-50'
+                      }`}
                     onClick={() => setIsFilterOpen(true)}
                     title="Open filters"
                   >
-                    <Filter className={`h-5 w-5 ${filterService !== 'all' || startDate || endDate ? 'text-red-600' : 'text-gray-500'}`} />
+                    <Filter className="h-5 w-5" />
                   </Button>
                 </div>
 
@@ -637,16 +635,19 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                       </div>
                     </div>
 
-                    <div className="flex justify-between items-center pt-2">
-                      <Button className="bg-gray-500 hover:bg-red-700 text-white" onClick={() => {
-                        setFilterService('all');
-                        setStartDate('');
-                        setEndDate('');
-                        setCurrentPage(1);
-                      }}>
+                    <div className="flex items-center justify-between gap-3 pt-2">
+                      <Button
+                        variant="ghost"
+                        className="flex-1 w-full bg-gray-200 text-gray-700 hover:bg-gray-800 hover:text-white font-bold h-10 transition-colors uppercase tracking-wider rounded-lg"
+                        onClick={() => {
+                          setFilterService('all');
+                          setStartDate('');
+                          setEndDate('');
+                          setCurrentPage(1);
+                        }}>
                         Reset
                       </Button>
-                      <Button className="bg-red-600 hover:bg-red-700" onClick={() => setIsFilterOpen(false)}>
+                      <Button className="flex-1 w-full bg-red-600 hover:bg-red-700 text-white font-bold h-10 rounded-lg shadow-md uppercase tracking-wider transition-all" onClick={() => setIsFilterOpen(false)}>
                         Apply
                       </Button>
                     </div>
@@ -654,7 +655,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                 </Dialog>
 
                 {/* Orders Table */}
-                <div className="overflow-x-auto">
+                <div>
                   {(() => {
                     let filtered = filteredOrders.filter(order => order.status === selectedStatus);
 
@@ -719,7 +720,11 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                                 }}
                               >
                                 <td className="px-4 py-3 text-sm font-medium text-center">{order.orderNumber}</td>
-                                <td className="px-4 py-3 text-sm text-center">{order.customerName}</td>
+                                <td className="px-4 py-3 text-sm text-center">
+                                  <div className="inline-block text-left w-full max-w-[180px]">
+                                    {order.customerName}
+                                  </div>
+                                </td>
                                 <td className="px-4 py-3 text-sm text-center">
                                   {Array.isArray(order.baseService)
                                     ? order.baseService.map(s => s.replace(' (with basic cleaning)', '')).join(', ')
@@ -733,6 +738,8 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                                     let badgeClass = '';
                                     if (order.priorityLevel === 'rush') {
                                       badgeClass = 'bg-red-100 text-red-700';
+                                    } else if (order.priorityLevel === 'premium') {
+                                      badgeClass = 'bg-amber-100 text-amber-700';
                                     } else if (order.priorityLevel === 'regular') {
                                       badgeClass = 'bg-green-100 text-green-700';
                                     } else {
@@ -827,43 +834,55 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
 
 
                         {/* Pagination */}
-                        <div className="mt-6 flex items-center">
-                          <div className="text-sm text-gray-600 flex-shrink-0">
-                            Showing {filtered.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1} to{' '}
-                            {Math.min(currentPage * itemsPerPage, filtered.length)} of {filtered.length} results
+                        <div className="mt-2 flex items-center justify-between pt-1.5 pb-1 border-t border-gray-50 px-3">
+                          <div className="text-[11px] text-gray-500 font-bold uppercase tracking-wider">
+                            PAGE {currentPage} OF {totalPages}
                           </div>
-                          <div className="flex-1 flex justify-end">
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                                disabled={currentPage === 1}
-                                className={`w-9 h-9 ${currentPage === 1 ? 'bg-gray-500 text-white border-gray-500 hover:bg-gray-500 hover:text-white' : ''}`}
-                              >
-                                &lt;
-                              </Button>
-                              <div className="flex items-center gap-1 overflow-x-auto max-w-[60vw] scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent pb-2">
-                                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                          <div className="flex items-center gap-3">
+                            <Button
+                              variant="outline"
+                              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                              disabled={currentPage === 1}
+                              className={`h-8 w-8 p-0 rounded-lg transition-all mt-0 border-none ${currentPage === 1
+                                ? 'bg-slate-200 text-slate-500'
+                                : 'bg-slate-600 text-white hover:bg-slate-700 shadow-sm'
+                                }`}
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                            </Button>
+
+                            <div className="max-w-[140px] md:max-w-[300px] overflow-x-auto no-scrollbar py-0.5 px-0.5 flex items-center gap-1">
+                              {Array.from({ length: totalPages }, (_, i) => {
+                                const pageNum = i + 1;
+                                const isActive = currentPage === pageNum;
+                                return (
                                   <Button
-                                    key={page}
-                                    variant={currentPage === page ? 'default' : 'outline'}
+                                    key={pageNum}
+                                    variant={isActive ? "default" : "outline"}
                                     size="sm"
-                                    onClick={() => setCurrentPage(page)}
-                                    className={`w-8 h-8 p-0 flex-shrink-0 ${currentPage === page ? 'bg-red-600 hover:bg-red-700 text-white' : ''}`}
+                                    onClick={() => setCurrentPage(pageNum)}
+                                    className={`h-7 w-7 min-w-[28px] p-0 text-[10px] font-black rounded-lg transition-all ${isActive
+                                      ? 'bg-red-600 hover:bg-red-700 text-white border-red-600 shadow-sm shadow-red-200'
+                                      : 'bg-white border-gray-100 text-gray-600 hover:bg-red-50 hover:text-red-600 hover:border-red-100'
+                                      }`}
                                   >
-                                    {page}
+                                    {pageNum}
                                   </Button>
-                                ))}
-                              </div>
-                              <Button
-                                variant="outline"
-                                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                                disabled={currentPage === totalPages}
-                                className={`w-9 h-9 ${currentPage === totalPages ? 'bg-gray-500 text-white border-gray-500 hover:bg-gray-500 hover:text-white' : ''}`}
-                              >
-                                &gt;
-                              </Button>
+                                );
+                              })}
                             </div>
+
+                            <Button
+                              variant="outline"
+                              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                              disabled={currentPage === totalPages}
+                              className={`h-8 w-8 p-0 rounded-lg transition-all mt-0 border-none ${currentPage === totalPages
+                                ? 'bg-slate-200 text-slate-500'
+                                : 'bg-slate-600 text-white hover:bg-slate-700 shadow-sm'
+                                }`}
+                            >
+                              <ChevronRight className="h-4 w-4" />
+                            </Button>
                           </div>
                         </div>
                       </>
@@ -885,69 +904,154 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
               </DialogHeader>
 
               {selectedOrder && (
-                <div className="space-y-6">
-                  {/* Customer Information */}
-                  <div className="border-b pb-4">
-                    <h3 className="font-semibold text-lg mb-3">Customer Information</h3>
+                <div className="space-y-5 pt-2 max-h-[70vh] overflow-y-auto px-1 pr-2 no-scrollbar">
+                  {/* Section: Customer Information */}
+                  <div className="space-y-4">
+                    <h3 className="text-base font-bold text-gray-900 tracking-tight">Customer Information</h3>
                     <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label className="text-sm text-gray-600">Name</Label>
-                        <p className="font-medium">{selectedOrder.customerName}</p>
+                      <div className="space-y-1">
+                        <Label className="text-xs font-medium text-slate-500">Name</Label>
+                        <p className="text-[14px] font-bold text-slate-900 leading-tight">{selectedOrder.customerName}</p>
                       </div>
-                      <div>
-                        <Label className="text-sm text-gray-600">Contact Number</Label>
-                        <p className="font-medium">{selectedOrder.contactNumber}</p>
+                      <div className="space-y-1">
+                        <Label className="text-xs font-medium text-slate-500">Contact Number</Label>
+                        <p className="text-[14px] font-bold text-slate-900 leading-tight">{selectedOrder.contactNumber}</p>
                       </div>
                     </div>
                   </div>
 
-                  {/* Order Status */}
-                  <div className="border-b pb-4">
-                    <h3 className="font-semibold text-lg mb-3">Order Status</h3>
-                    <div className="space-y-2">
-                      <Label className="text-sm text-gray-600">Status</Label>
-                      <p className="font-medium capitalize">{selectedOrder.status.replace('-', ' ')}</p>
+                  <div className="border-b border-slate-100" />
+
+                  {/* Section: Shoe Details */}
+                  <div className="space-y-4">
+                    <h3 className="text-base font-bold text-gray-900 tracking-tight">Shoe Details</h3>
+                    <div className="grid grid-cols-3 gap-x-4 gap-y-4">
+                      <div className="space-y-1">
+                        <Label className="text-xs font-medium text-slate-500">Brand</Label>
+                        <p className="text-[14px] font-bold text-slate-900">{selectedOrder.brand || '-'}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs font-medium text-slate-500">Material</Label>
+                        <p className="text-[14px] font-bold text-slate-900">{selectedOrder.shoeMaterial || '-'}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs font-medium text-slate-500">Quantity</Label>
+                        <p className="text-[14px] font-bold text-slate-900">{selectedOrder.quantity || 1} Pair(s)</p>
+                      </div>
+                    </div>
+
+                    {/* Physical Condition */}
+                    <div className="space-y-2 mt-2">
+                      <Label className="text-xs font-medium text-slate-500">Physical Condition</Label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {Object.entries(selectedOrder.condition || {}).map(([key, value]) => {
+                          if (key === 'others' && value) return <span key={key} className="px-2 py-1 bg-slate-50 border border-slate-100 rounded-md text-[11px] font-bold text-slate-600">Other: {value}</span>;
+                          if (value === true) {
+                            const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                            return <span key={key} className="px-2 py-1 bg-red-50 border border-red-100 rounded-md text-[11px] font-bold text-red-600">{label}</span>;
+                          }
+                          return null;
+                        })}
+                        {Object.values(selectedOrder.condition || {}).every(v => !v) && <p className="text-xs text-slate-400 italic">No issues reported</p>}
+                      </div>
                     </div>
                   </div>
 
-                  {/* Services */}
-                  <div className="border-b pb-4">
-                    <h3 className="font-semibold text-lg mb-3">Services</h3>
-                    <div className="space-y-2">
-                      <div>
-                        <Label className="text-sm text-gray-600">Base Service</Label>
-                        <p className="font-medium">{selectedOrder.baseService}</p>
-                      </div>
-                      {selectedOrder.addOns.length > 0 && (
-                        <div>
-                          <Label className="text-sm text-gray-600">Add-ons</Label>
-                          <div className="space-y-1">
-                            {selectedOrder.addOns.map((addon, idx) => (
-                              <p key={idx} className="font-medium">
-                                • {addon.name} {addon.quantity > 1 && <span className="text-gray-500 text-xs">(x{addon.quantity})</span>}
-                              </p>
-                            ))}
-                          </div>
+                  <div className="border-b border-slate-100" />
+
+                  {/* Section: Services & Status */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-4">
+                      <h3 className="text-base font-bold text-gray-900 tracking-tight">Services</h3>
+                      <div className="space-y-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs font-medium text-slate-500">Base Service</Label>
+                          <p className="text-[14px] font-bold text-slate-900">{Array.isArray(selectedOrder.baseService) ? selectedOrder.baseService.join(', ') : selectedOrder.baseService}</p>
                         </div>
-                      )}
+                        {selectedOrder.addOns.length > 0 && (
+                          <div className="space-y-1">
+                            <Label className="text-xs font-medium text-slate-500">Add-ons</Label>
+                            <div className="space-y-0.5">
+                              {selectedOrder.addOns.map((addon, idx) => (
+                                <p key={idx} className="text-[14px] font-bold text-slate-900">
+                                  • {addon.name} {addon.quantity > 1 && <span className="text-slate-400 font-medium text-xs">({addon.quantity})</span>}
+                                </p>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="space-y-4">
+                      <h3 className="text-base font-bold text-gray-900 tracking-tight">Order Status</h3>
+                      <div className="space-y-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs font-medium text-slate-500">Priority</Label>
+                          <p className="text-[14px] font-black text-red-600 uppercase tracking-tight">{selectedOrder.priorityLevel}</p>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs font-medium text-slate-500">Assigned To</Label>
+                          <p className="text-[14px] font-bold text-slate-900">{selectedOrder.assignedTo || 'Unassigned'}</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Pricing */}
-                  <div>
-                    <h3 className="font-semibold text-lg mb-3">Pricing</h3>
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <Label className="text-sm text-gray-600">Base Service Fee</Label>
-                        <p className="font-medium">{'\u20B1'}{selectedOrder.baseServiceFee.toFixed(2)}</p>
+                  <div className="border-b border-slate-100" />
+
+                  {/* Section: Logistics */}
+                  <div className="space-y-4">
+                    <h3 className="text-base font-bold text-gray-900 tracking-tight">Logistics</h3>
+                    <div className="space-y-1">
+                      <Label className="text-xs font-medium text-slate-500">Shipping Preference</Label>
+                      <p className="text-[14px] font-bold text-slate-900 capitalize">{selectedOrder.shippingPreference || '-'}</p>
+                    </div>
+                  </div>
+
+                  <div className="border-b border-slate-100" />
+
+                  {/* Section: Payment Information */}
+                  <div className="space-y-4">
+                    <h3 className="text-base font-bold text-gray-900 tracking-tight">Payment Details</h3>
+                    <div className="grid grid-cols-2 gap-y-4">
+                      <div className="space-y-1">
+                        <Label className="text-xs font-medium text-slate-500">Method</Label>
+                        <p className="text-[14px] font-bold text-slate-900 uppercase">{selectedOrder.paymentMethod || '-'}</p>
                       </div>
-                      <div className="flex justify-between items-center">
-                        <Label className="text-sm text-gray-600">Add-ons Total</Label>
-                        <p className="font-medium">{'\u20B1'}{selectedOrder.addOnsTotal.toFixed(2)}</p>
+                      <div className="space-y-1">
+                        <Label className="text-xs font-medium text-slate-500">Status</Label>
+                        <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-black uppercase tracking-wider ${selectedOrder.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' :
+                          selectedOrder.paymentStatus === 'partial' ? 'bg-amber-100 text-amber-700' :
+                            'bg-red-100 text-red-700'
+                          }`}>
+                          {selectedOrder.paymentStatus || 'unpaid'}
+                        </span>
                       </div>
-                      <div className="flex justify-between border-t pt-2 font-semibold text-lg items-center">
-                        <p>Grand Total</p>
-                        <p>{'\u20B1'}{selectedOrder.grandTotal.toFixed(2)}</p>
+                      <div className="space-y-1">
+                        <Label className="text-xs font-medium text-slate-500">Amount Received</Label>
+                        <p className="text-[14px] font-bold text-slate-900">₱{(selectedOrder.amountReceived || 0).toFixed(2)}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs font-medium text-slate-500">Change</Label>
+                        <p className="text-[14px] font-bold text-slate-900">₱{(selectedOrder.change || 0).toFixed(2)}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section: Pricing Summary */}
+                  <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100 mt-2">
+                    <div className="space-y-2.5">
+                      <div className="flex justify-between items-center text-slate-600">
+                        <span className="text-sm font-medium">Base Service Fee</span>
+                        <span className="text-[14px] font-bold text-slate-900">₱{selectedOrder.baseServiceFee.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-slate-600">
+                        <span className="text-sm font-medium">Add-ons Total</span>
+                        <span className="text-[14px] font-bold text-slate-900">₱{selectedOrder.addOnsTotal.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between items-center pt-2 border-t border-slate-200 mt-2">
+                        <span className="text-lg font-black text-slate-900">Grand Total</span>
+                        <span className="text-lg font-black text-red-600">₱{selectedOrder.grandTotal.toFixed(2)}</span>
                       </div>
                     </div>
                   </div>
@@ -984,27 +1088,24 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
               {role === 'owner' && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <Card>
-                    <CardHeader className="flex flex-row items-center justify-between">
-                      <CardTitle className="text-left uppercase">Service Volume by Type</CardTitle>
-                      <div className="flex items-center gap-4 mr-2">
-                        {/* Multi-colored legend for each service type in 2 columns, reordered */}
-                        <div className="grid grid-cols-2 gap-x-6 gap-y-1">
-                          <div className="flex items-center gap-2 text-sm font-semibold text-gray-600">
-                            <div className="w-4 h-4 rounded" style={{ background: '#0d948880' }}></div>
-                            <span>BASIC CLEANING</span>
-                          </div>
-                          <div className="flex items-center gap-2 text-sm font-semibold text-gray-600">
-                            <div className="w-4 h-4 rounded" style={{ background: '#c026d380' }}></div>
-                            <span>FULL REGLUE</span>
-                          </div>
-                          <div className="flex items-center gap-2 text-sm font-semibold text-gray-600">
-                            <div className="w-4 h-4 rounded" style={{ background: '#6366f180' }}></div>
-                            <span>MINOR REGLUE</span>
-                          </div>
-                          <div className="flex items-center gap-2 text-sm font-semibold text-gray-600">
-                            <div className="w-4 h-4 rounded" style={{ background: '#f59e0b80' }}></div>
-                            <span>COLOR RENEWAL</span>
-                          </div>
+                    <CardHeader className="flex flex-row items-start justify-between mt-3 py-6 gap-2">
+                      <CardTitle className="text-left text-base font-black uppercase whitespace-nowrap tracking-tight">Service Volume by Type</CardTitle>
+                      <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 ml-auto text-left">
+                        <div className="flex items-center gap-2 text-[11px] font-bold text-gray-600 uppercase tracking-tight whitespace-nowrap">
+                          <div className="w-2.5 h-2.5 bg-[#84b6af] rounded-full shrink-0"></div>
+                          <span>BASIC CLEANING</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[11px] font-bold text-gray-600 uppercase tracking-tight whitespace-nowrap">
+                          <div className="w-2.5 h-2.5 bg-[#c084fc] rounded-full shrink-0"></div>
+                          <span>FULL REGLUE</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[11px] font-bold text-gray-600 uppercase tracking-tight whitespace-nowrap">
+                          <div className="w-2.5 h-2.5 bg-[#a78bfa] rounded-full shrink-0"></div>
+                          <span>MINOR REGLUE</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[11px] font-bold text-gray-600 uppercase tracking-tight whitespace-nowrap">
+                          <div className="w-2.5 h-2.5 bg-[#fbbf24] rounded-full shrink-0"></div>
+                          <span>COLOR RENEWAL</span>
                         </div>
                       </div>
                     </CardHeader>
@@ -1017,10 +1118,13 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis
                               dataKey="name"
-                              tick={{ fontSize: 13, fontWeight: 600 }}
+                              axisLine={false}
+                              tickLine={false}
+                              tick={{ fill: '#64748b', fontSize: 11, fontWeight: 500 }}
                               interval={0}
-                              tickMargin={8}
-                              height={50}
+                              angle={-20}
+                              textAnchor="end"
+                              height={60}
                             />
                             <YAxis allowDecimals={false} />
                             <Tooltip
@@ -1083,15 +1187,15 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                   </Card>
 
                   <Card>
-                    <CardHeader className="flex flex-row items-center justify-between mt-3">
-                      <CardTitle className="text-left">{chartTitle}</CardTitle>
-                      <div className="flex items-center gap-4 mr-2">
-                        <div className="flex items-center gap-2 text-sm font-semibold text-gray-600">
-                          <div className="w-4 h-4 bg-purple-500 rounded"></div>
+                    <CardHeader className="flex flex-row items-start justify-between mt-3 py-6 gap-2">
+                      <CardTitle className="text-left text-base font-black uppercase whitespace-nowrap tracking-tight">{chartTitle}</CardTitle>
+                      <div className="flex flex-col items-start gap-1.5 ml-auto">
+                        <div className="flex items-center gap-2 text-[11px] font-bold text-gray-600 uppercase tracking-tight whitespace-nowrap mt-1">
+                          <div className="w-2.5 h-2.5 bg-purple-500 rounded-full shrink-0"></div>
                           <span>NEW ORDERS</span>
                         </div>
-                        <div className="flex items-center gap-2 text-sm font-semibold text-gray-600">
-                          <div className="w-4 h-4 bg-orange-500 rounded"></div>
+                        <div className="flex items-center gap-2 text-[11px] font-bold text-gray-600 uppercase tracking-tight whitespace-nowrap mt-1">
+                          <div className="w-2.5 h-2.5 bg-orange-500 rounded-full shrink-0"></div>
                           <span>RELEASE ORDERS</span>
                         </div>
                       </div>
@@ -1131,354 +1235,366 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                 </div>
               )}
 
-              {/* Assigned Orders Table */}
-              <Card>
-                <CardHeader className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 pb-3">
-                  <div className="flex items-center gap-3">
-                    <CardTitle className="text-left uppercase whitespace-nowrap">
-                      {role === 'owner' ? 'Assigned Orders Overview' : 'My Assigned Orders'}
-                    </CardTitle>
-                    {role === 'staff' && (
+              {/* My Assigned Orders - Staff Only */}
+              {role === 'staff' && (
+                <Card>
+                  <CardHeader className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 pb-3">
+                    <div className="flex items-center gap-3">
+                      <CardTitle className="text-left uppercase whitespace-nowrap font-black">
+                        My Assigned Orders
+                      </CardTitle>
                       <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-black bg-blue-100 text-blue-800 uppercase tracking-tight">
                         {orders.filter(o => o.assignedTo === user.username && o.status !== 'claimed').length} TASKS
                       </span>
-                    )}
-                  </div>
-                  <div className="flex flex-col md:flex-row items-center gap-3 w-full lg:w-auto">
-                    <div className="relative w-full md:w-[320px]">
-                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
-                      <Input
-                        placeholder="Search order # or customer..."
-                        value={searchQueryAssigned}
-                        onChange={(e) => {
-                          setSearchQueryAssigned(e.target.value);
-                          setCurrentPageAssigned(1);
-                        }}
-                        className="pl-8 h-9 text-xs border-gray-200 bg-gray-50/50"
-                      />
                     </div>
+                    <div className="flex flex-col md:flex-row items-center gap-3 w-full lg:w-auto">
+                      <div className="relative w-full md:w-[320px]">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                        <Input
+                          placeholder="Search order # or customer..."
+                          value={searchQueryAssigned}
+                          onChange={(e) => {
+                            setSearchQueryAssigned(e.target.value);
+                            setCurrentPageAssigned(1);
+                          }}
+                          className="pl-8 h-9 text-xs border-gray-200 bg-gray-50/50"
+                        />
+                      </div>
 
-                    <Dialog open={isFilterOpen} onOpenChange={setIsFilterOpen}>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setTempFilterService(filterServiceAssigned);
-                          setTempStartDate(startDateAssigned);
-                          setTempEndDate(endDateAssigned);
-                          setIsFilterOpen(true);
-                        }}
-                        className={`h-9 w-9 p-0 flex items-center justify-center border-gray-200 transition-all rounded-lg ${filterServiceAssigned !== 'all' || startDateAssigned || endDateAssigned ? 'bg-red-50 text-red-600 border-red-200 shadow-sm' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
-                      >
-                        <Filter className="h-4 w-4" />
-                      </Button>
-                      <DialogContent className="sm:max-w-[550px] p-0 overflow-hidden rounded-[2rem] border-none shadow-2xl">
-                        <DialogHeader className="bg-white px-8 py-6 border-b flex flex-row items-center justify-between sticky top-0 z-10">
-                          <DialogTitle className="text-2xl font-black text-gray-900 tracking-tight">Filters</DialogTitle>
-                          <Button variant="ghost" size="icon" onClick={() => setIsFilterOpen(false)} className="h-8 w-8 rounded-full hover:bg-gray-100 p-0">
-                            <X size={20} className="text-gray-400" />
-                          </Button>
-                        </DialogHeader>
-                        <div className="p-10 space-y-10 bg-white">
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                            <div className="flex flex-col gap-2.5">
-                              <Label className="text-[13px] font-black text-[#374151] ml-1 uppercase tracking-wide">Service Type</Label>
-                              <Select value={tempFilterService} onValueChange={setTempFilterService}>
-                                <SelectTrigger className="h-12 bg-white border-[#fecaca] hover:border-red-300 rounded-2xl px-5 text-sm font-bold text-gray-700 shadow-sm transition-all focus:ring-4 focus:ring-red-50">
-                                  <SelectValue placeholder="All Services" />
-                                </SelectTrigger>
-                                <SelectContent className="rounded-2xl border-gray-100 shadow-2xl p-1">
-                                  <SelectItem value="all" className="font-bold text-gray-600 rounded-xl">All Services</SelectItem>
-                                  {baseServices.map(s => (
-                                    <SelectItem key={s.id} value={s.name} className="font-bold text-gray-600 rounded-xl">{s.name}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="flex flex-col gap-2.5">
-                              <Label className="text-[13px] font-black text-[#374151] ml-1 uppercase tracking-wide">Start Date</Label>
-                              <div className="relative group">
-                                <Input
-                                  type="date"
-                                  value={tempStartDate}
-                                  onChange={(e) => setTempStartDate(e.target.value)}
-                                  className="h-12 pl-5 pr-10 bg-white border-gray-100 rounded-2xl text-sm font-bold text-gray-700 shadow-sm transition-all focus:ring-4 focus:ring-red-50 cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
-                                />
-                                <CalendarIcon className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none transition-colors group-hover:text-red-500" />
+                      <Dialog open={isFilterOpen} onOpenChange={setIsFilterOpen}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setTempFilterService(filterServiceAssigned);
+                            setTempStartDate(startDateAssigned);
+                            setTempEndDate(endDateAssigned);
+                            setIsFilterOpen(true);
+                          }}
+                          className={`h-9 w-9 p-0 flex items-center justify-center border-gray-200 transition-all rounded-lg ${filterServiceAssigned !== 'all' || startDateAssigned || endDateAssigned ? 'bg-red-50 text-red-600 border-red-200 shadow-sm' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                        >
+                          <Filter className="h-4 w-4" />
+                        </Button>
+                        <DialogContent className="sm:max-w-[550px] p-0 overflow-hidden rounded-[2rem] border-none shadow-2xl">
+                          <DialogHeader className="bg-white px-8 py-6 border-b flex flex-row items-center justify-between sticky top-0 z-10">
+                            <DialogTitle className="text-2xl font-black text-gray-900 tracking-tight">Filters</DialogTitle>
+                            <Button variant="ghost" size="icon" onClick={() => setIsFilterOpen(false)} className="h-8 w-8 rounded-full hover:bg-gray-100 p-0">
+                              <X size={20} className="text-gray-400" />
+                            </Button>
+                          </DialogHeader>
+                          <div className="p-10 space-y-10 bg-white">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                              <div className="flex flex-col gap-2.5">
+                                <Label className="text-[13px] font-black text-[#374151] ml-1 uppercase tracking-wide">Service Type</Label>
+                                <Select value={tempFilterService} onValueChange={setTempFilterService}>
+                                  <SelectTrigger className="h-12 bg-white border-[#fecaca] hover:border-red-300 rounded-2xl px-5 text-sm font-bold text-gray-700 shadow-sm transition-all focus:ring-4 focus:ring-red-50">
+                                    <SelectValue placeholder="All Services" />
+                                  </SelectTrigger>
+                                  <SelectContent className="rounded-2xl border-gray-100 shadow-2xl p-1">
+                                    <SelectItem value="all" className="font-bold text-gray-600 rounded-xl">All Services</SelectItem>
+                                    {baseServices.map(s => (
+                                      <SelectItem key={s.id} value={s.name} className="font-bold text-gray-600 rounded-xl">{s.name}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="flex flex-col gap-2.5">
+                                <Label className="text-[13px] font-black text-[#374151] ml-1 uppercase tracking-wide">Start Date</Label>
+                                <div className="relative group">
+                                  <Input
+                                    type="date"
+                                    value={tempStartDate}
+                                    onChange={(e) => setTempStartDate(e.target.value)}
+                                    className="h-12 pl-5 pr-10 bg-white border-gray-100 rounded-2xl text-sm font-bold text-gray-700 shadow-sm transition-all focus:ring-4 focus:ring-red-50 cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                                  />
+                                  <CalendarIcon className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none transition-colors group-hover:text-red-500" />
+                                </div>
+                              </div>
+                              <div className="flex flex-col gap-2.5">
+                                <Label className="text-[13px] font-black text-[#374151] ml-1 uppercase tracking-wide">End Date</Label>
+                                <div className="relative group">
+                                  <Input
+                                    type="date"
+                                    value={tempEndDate}
+                                    onChange={(e) => setTempEndDate(e.target.value)}
+                                    className="h-12 pl-5 pr-10 bg-white border-gray-100 rounded-2xl text-sm font-bold text-gray-700 shadow-sm transition-all focus:ring-4 focus:ring-red-50 cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                                  />
+                                  <CalendarIcon className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none transition-colors group-hover:text-red-500" />
+                                </div>
                               </div>
                             </div>
-                            <div className="flex flex-col gap-2.5">
-                              <Label className="text-[13px] font-black text-[#374151] ml-1 uppercase tracking-wide">End Date</Label>
-                              <div className="relative group">
-                                <Input
-                                  type="date"
-                                  value={tempEndDate}
-                                  onChange={(e) => setTempEndDate(e.target.value)}
-                                  className="h-12 pl-5 pr-10 bg-white border-gray-100 rounded-2xl text-sm font-bold text-gray-700 shadow-sm transition-all focus:ring-4 focus:ring-red-50 cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
-                                />
-                                <CalendarIcon className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none transition-colors group-hover:text-red-500" />
-                              </div>
+
+                            <div className="flex items-center justify-center gap-4 pt-6">
+                              <Button
+                                variant="outline"
+                                onClick={() => {
+                                  setTempFilterService('all');
+                                  setTempStartDate('');
+                                  setTempEndDate('');
+                                }}
+                                className="h-11 px-8 min-w-[200px] bg-slate-100 hover:bg-slate-200 text-slate-700 border-none rounded-xl font-bold transition-all text-sm uppercase tracking-wider"
+                              >
+                                Reset
+                              </Button>
+                              <Button
+                                onClick={() => {
+                                  setFilterServiceAssigned(tempFilterService);
+                                  setStartDateAssigned(tempStartDate);
+                                  setEndDateAssigned(tempEndDate);
+                                  setIsFilterOpen(false);
+                                  setCurrentPageAssigned(1);
+                                }}
+                                className="bg-red-600 hover:bg-red-700 text-white border-none rounded-xl font-bold shadow-md active:scale-95 transition-all h-11 px-8 min-w-[200px] text-sm uppercase tracking-wider"
+                              >
+                                Apply
+                              </Button>
                             </div>
                           </div>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-red-50">
+                          <tr>
+                            <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 uppercase">Order #</th>
+                            <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 uppercase">Customer Name</th>
+                            <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 uppercase">Service Type</th>
+                            <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 uppercase">Priority Level</th>
+                            <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 uppercase">Status</th>
+                            <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 uppercase">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {(() => {
+                            const allAssigned = orders.filter(o => o.assignedTo === user.username && o.status !== 'claimed')
+                              .filter(o => {
+                                // Search filter
+                                if (searchQueryAssigned) {
+                                  const query = searchQueryAssigned.toLowerCase();
+                                  if (!o.orderNumber.toLowerCase().includes(query) &&
+                                    !o.customerName.toLowerCase().includes(query)) return false;
+                                }
+                                // Status filter
+                                if (filterStatusAssigned !== 'all' && o.status !== filterStatusAssigned) return false;
 
-                          <div className="flex items-center justify-between pt-6">
-                            <Button
-                              variant="outline"
-                              onClick={() => {
-                                setTempFilterService('all');
-                                setTempStartDate('');
-                                setTempEndDate('');
-                              }}
-                              className="h-14 w-40 bg-[#64748b] hover:bg-[#475569] text-white border-none rounded-2xl font-black shadow-lg shadow-slate-100 hover:shadow-xl active:scale-95 transition-all text-lg uppercase tracking-wider"
-                            >
-                              Reset
-                            </Button>
-                            <Button
-                              onClick={() => {
-                                setFilterServiceAssigned(tempFilterService);
-                                setStartDateAssigned(tempStartDate);
-                                setEndDateAssigned(tempEndDate);
-                                setIsFilterOpen(false);
-                                setCurrentPageAssigned(1);
-                              }}
-                              className="h-14 w-40 bg-[#d94452] hover:bg-[#c13946] text-white border-none rounded-2xl font-black shadow-lg shadow-red-100 hover:shadow-xl active:scale-95 transition-all text-lg uppercase tracking-wider"
-                            >
-                              Apply
-                            </Button>
-                          </div>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="bg-red-50">
-                        <tr>
-                          <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 uppercase">Order #</th>
-                          <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 uppercase">Customer Name</th>
-                          <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 uppercase">Service Type</th>
-                          {role === 'owner' && <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 uppercase">Assigned To</th>}
-                          <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 uppercase">Priority Level</th>
-                          <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 uppercase">Status</th>
-                          <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 uppercase">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200">
-                        {(() => {
-                          const allAssigned = (role === 'owner'
-                            ? orders.filter(o => o.assignedTo && o.status !== 'claimed')
-                            : orders.filter(o => o.assignedTo === user.username && o.status !== 'claimed'))
-                            .filter(o => {
-                              // Search filter
-                              if (searchQueryAssigned) {
-                                const query = searchQueryAssigned.toLowerCase();
-                                if (!o.orderNumber.toLowerCase().includes(query) &&
-                                  !o.customerName.toLowerCase().includes(query)) return false;
-                              }
-                              // Status filter
-                              if (filterStatusAssigned !== 'all' && o.status !== filterStatusAssigned) return false;
+                                // Service filter
+                                if (filterServiceAssigned !== 'all' && !o.baseService.includes(filterServiceAssigned)) return false;
 
-                              // Service filter
-                              if (filterServiceAssigned !== 'all' && !o.baseService.includes(filterServiceAssigned)) return false;
+                                // Date range filter
+                                if (startDateAssigned) {
+                                  if (new Date(o.createdAt) < new Date(startDateAssigned)) return false;
+                                }
+                                if (endDateAssigned) {
+                                  const endObj = new Date(endDateAssigned);
+                                  endObj.setHours(23, 59, 59, 999);
+                                  if (new Date(o.createdAt) > endObj) return false;
+                                }
 
-                              // Date range filter
-                              if (startDateAssigned) {
-                                if (new Date(o.createdAt) < new Date(startDateAssigned)) return false;
-                              }
-                              if (endDateAssigned) {
-                                const endObj = new Date(endDateAssigned);
-                                endObj.setHours(23, 59, 59, 999);
-                                if (new Date(o.createdAt) > endObj) return false;
-                              }
+                                return true;
+                              }).sort((a, b) => {
+                                // Priority sorting: Rush=0, Premium=1, Regular=2
+                                const priorityMap = { 'rush': 0, 'premium': 1, 'regular': 2 };
+                                const aP = priorityMap[a.priorityLevel as keyof typeof priorityMap] ?? 3;
+                                const bP = priorityMap[b.priorityLevel as keyof typeof priorityMap] ?? 3;
 
-                              return true;
-                            }).sort((a, b) => {
-                              // Priority sorting: Rush=0, Premium=1, Regular=2
-                              const priorityMap = { 'rush': 0, 'premium': 1, 'regular': 2 };
-                              const aP = priorityMap[a.priorityLevel as keyof typeof priorityMap] ?? 3;
-                              const bP = priorityMap[b.priorityLevel as keyof typeof priorityMap] ?? 3;
+                                if (aP !== bP) return aP - bP;
+                                return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+                              });
 
-                              if (aP !== bP) return aP - bP;
-                              return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-                            });
+                            const itemsPerPageAssigned = 5;
+                            const totalPagesAssigned = Math.ceil(allAssigned.length / itemsPerPageAssigned);
+                            const startIndexAssigned = (currentPageAssigned - 1) * itemsPerPageAssigned;
+                            const paginatedAssigned = allAssigned.slice(startIndexAssigned, startIndexAssigned + itemsPerPageAssigned);
 
-                          const itemsPerPageAssigned = 5;
-                          const totalPagesAssigned = Math.ceil(allAssigned.length / itemsPerPageAssigned);
-                          const startIndexAssigned = (currentPageAssigned - 1) * itemsPerPageAssigned;
-                          const paginatedAssigned = allAssigned.slice(startIndexAssigned, startIndexAssigned + itemsPerPageAssigned);
-
-                          if (allAssigned.length === 0) {
-                            return (
-                              <tr>
-                                <td colSpan={role === 'owner' ? 7 : 6} className="px-4 py-8 text-center text-sm text-gray-500 italic">
-                                  No active assigned orders found.
-                                </td>
-                              </tr>
-                            );
-                          }
-
-                          return (
-                            <>
-                              {paginatedAssigned.map((job) => (
-                                <tr key={job.id} className="hover:bg-gray-50 transition-colors">
-                                  <td className="px-4 py-3 text-sm font-medium text-center">{job.orderNumber}</td>
-                                  <td className="px-4 py-3 text-sm text-center font-medium">{job.customerName}</td>
-                                  <td className="px-4 py-3 text-sm text-center truncate max-w-[150px]">
-                                    {Array.isArray(job.baseService)
-                                      ? job.baseService.map(s => s.replace(' (with basic cleaning)', '')).join(', ')
-                                      : String(job.baseService).replace(' (with basic cleaning)', '')}
-                                  </td>
-                                  {role === 'owner' && (
-                                    <td className="px-4 py-3 text-sm text-center font-semibold text-blue-600 uppercase">
-                                      {job.assignedTo}
-                                    </td>
-                                  )}
-                                  <td className="px-4 py-3 text-sm text-center">
-                                    <span className={`px-2 py-1 rounded-md text-[10px] font-black uppercase ${job.priorityLevel === 'rush' ? 'bg-red-100 text-red-700 shadow-sm' :
-                                      job.priorityLevel === 'premium' ? 'bg-amber-100 text-amber-700 shadow-sm' :
-                                        'bg-green-100 text-green-700 shadow-sm'
-                                      }`}>
-                                      {job.priorityLevel}
-                                    </span>
-                                  </td>
-                                  <td className="px-4 py-3 text-sm text-center">
-                                    <span className={`px-2 py-1 rounded-md text-[10px] font-black uppercase ${job.status === 'new-order' ? 'bg-purple-100 text-purple-700' :
-                                      job.status === 'on-going' ? 'bg-blue-100 text-blue-700' :
-                                        job.status === 'for-release' ? 'bg-orange-100 text-orange-700' :
-                                          'bg-gray-100 text-gray-700'
-                                      }`}>
-                                      {job.status.replace('-', ' ')}
-                                    </span>
-                                  </td>
-                                  <td className="px-4 py-3 text-sm text-center align-middle">
-                                    <div className="flex items-center justify-center">
-                                      <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-9 w-[68px] p-0 border border-red-500 rounded-lg bg-red-50/30 hover:bg-red-50 transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-sm group"
-                                          >
-                                            <MoreVertical size={16} className="text-red-500 fill-red-500" />
-                                            <ChevronDown size={14} className="text-red-500 transition-transform group-data-[state=open]:rotate-180" />
-                                          </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end" className="w-[180px] p-1.5 rounded-2xl border-gray-100 shadow-2xl">
-                                          <DropdownMenuItem
-                                            onClick={() => { setSelectedOrder(job); setIsEditing(true); }}
-                                            className="h-11 gap-3 rounded-xl px-4 cursor-pointer bg-amber-50 hover:bg-amber-100 text-amber-800 transition-all font-bold mb-1.5"
-                                          >
-                                            <Edit size={16} className="text-amber-600" />
-                                            <span>Edit Order</span>
-                                          </DropdownMenuItem>
-
-                                          <DropdownMenuItem
-                                            onClick={() => updateOrder(job.id, { status: 'on-going' })}
-                                            className="h-11 gap-3 rounded-xl px-4 cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-800 transition-all font-bold"
-                                          >
-                                            <ArrowRight size={16} className="text-blue-500" />
-                                            <span>On-Going</span>
-                                          </DropdownMenuItem>
-
-                                          <DropdownMenuSeparator className="my-2 bg-gray-50" />
-                                          <DropdownMenuLabel className="text-[10px] font-black uppercase text-gray-400 tracking-widest px-3 py-1 mb-1">Set Status</DropdownMenuLabel>
-
-                                          <DropdownMenuItem
-                                            onClick={() => updateOrder(job.id, { status: 'for-release' })}
-                                            className="h-10 gap-2.5 rounded-lg px-4 cursor-pointer text-orange-600 hover:bg-orange-50 font-bold transition-all text-xs"
-                                          >
-                                            <div className="h-2 w-2 rounded-full bg-orange-500 shadow-sm shadow-orange-200" />
-                                            <span>Set to For Release</span>
-                                          </DropdownMenuItem>
-                                          <DropdownMenuItem
-                                            onClick={() => updateOrder(job.id, { status: 'claimed' })}
-                                            className="h-10 gap-2.5 rounded-lg px-4 cursor-pointer text-green-600 hover:bg-green-50 font-bold transition-all text-xs"
-                                          >
-                                            <div className="h-2 w-2 rounded-full bg-green-500 shadow-sm shadow-green-200" />
-                                            <span>Set to Claimed</span>
-                                          </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                      </DropdownMenu>
-                                    </div>
-                                  </td>
-                                </tr>
-                              ))}
-                              {totalPagesAssigned > 1 && (
+                            if (allAssigned.length === 0) {
+                              return (
                                 <tr>
-                                  <td colSpan={role === 'owner' ? 7 : 6} className="px-4 py-4 border-t bg-gray-50/50">
-                                    <div className="flex items-center justify-between">
-                                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                                        Showing {startIndexAssigned + 1}-{Math.min(startIndexAssigned + itemsPerPageAssigned, allAssigned.length)} of {allAssigned.length}
-                                      </p>
-                                      <div className="flex items-center gap-2">
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() => setCurrentPageAssigned(prev => Math.max(1, prev - 1))}
-                                          disabled={currentPageAssigned === 1}
-                                          className="h-8 w-8 p-0 flex items-center justify-center bg-white text-gray-700 border-gray-200 hover:bg-gray-50 transition-colors"
-                                        >
-                                          <ChevronLeft className="h-4 w-4" />
-                                        </Button>
-
-                                        <div className="flex items-center gap-1">
-                                          {Array.from({ length: Math.min(5, totalPagesAssigned) }, (_, i) => {
-                                            let pageNum;
-                                            if (totalPagesAssigned <= 5) {
-                                              pageNum = i + 1;
-                                            } else if (currentPageAssigned <= 3) {
-                                              pageNum = i + 1;
-                                            } else if (currentPageAssigned >= totalPagesAssigned - 2) {
-                                              pageNum = totalPagesAssigned - 4 + i;
-                                            } else {
-                                              pageNum = currentPageAssigned - 2 + i;
-                                            }
-
-                                            return (
-                                              <Button
-                                                key={pageNum}
-                                                variant={currentPageAssigned === pageNum ? "default" : "outline"}
-                                                size="sm"
-                                                onClick={() => setCurrentPageAssigned(pageNum)}
-                                                className={`h-8 w-8 p-0 text-xs font-bold ${currentPageAssigned === pageNum ? "bg-red-600 hover:bg-red-700 text-white border-red-600" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}
-                                              >
-                                                {pageNum}
-                                              </Button>
-                                            );
-                                          })}
-                                        </div>
-
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() => setCurrentPageAssigned(prev => Math.min(totalPagesAssigned, prev + 1))}
-                                          disabled={currentPageAssigned === totalPagesAssigned}
-                                          className="h-8 w-8 p-0 flex items-center justify-center bg-white text-gray-700 border-gray-200 hover:bg-gray-50 transition-colors"
-                                        >
-                                          <ChevronRight className="h-4 w-4" />
-                                        </Button>
-                                      </div>
-                                    </div>
+                                  <td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-500 italic">
+                                    No active assigned orders found.
                                   </td>
                                 </tr>
-                              )}
-                            </>
-                          );
-                        })()}
-                      </tbody>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
+                              );
+                            }
+
+                            return (
+                              <>
+                                {paginatedAssigned.map((job) => (
+                                  <tr key={job.id} className="hover:bg-gray-50 transition-colors">
+                                    <td className="px-4 py-3 text-sm font-medium text-center">{job.orderNumber}</td>
+                                    <td className="px-4 py-3 text-sm text-center font-medium">{job.customerName}</td>
+                                    <td className="px-4 py-3 text-sm text-center truncate max-w-[150px]">
+                                      {Array.isArray(job.baseService)
+                                        ? job.baseService.map(s => s.replace(' (with basic cleaning)', '')).join(', ')
+                                        : String(job.baseService).replace(' (with basic cleaning)', '')}
+                                    </td>
+                                    <td className="px-4 py-3 text-sm text-center">
+                                      {(() => {
+                                        let badgeClass = '';
+                                        if (job.priorityLevel === 'rush') {
+                                          badgeClass = 'bg-red-100 text-red-700';
+                                        } else if (job.priorityLevel === 'premium') {
+                                          badgeClass = 'bg-amber-100 text-amber-700';
+                                        } else if (job.priorityLevel === 'regular') {
+                                          badgeClass = 'bg-green-100 text-green-700';
+                                        } else {
+                                          badgeClass = 'bg-gray-100 text-gray-700';
+                                        }
+                                        return (
+                                          <span className={`px-2 py-1 rounded-md text-xs font-semibold uppercase ${badgeClass}`}>
+                                            {job.priorityLevel}
+                                          </span>
+                                        );
+                                      })()}
+                                    </td>
+                                    <td className="px-4 py-3 text-sm text-center">
+                                      {(() => {
+                                        let statusClass = '';
+                                        let text = job.status.replace('-', ' ');
+                                        if (job.status === 'new-order') {
+                                          statusClass = 'bg-purple-100 text-purple-700';
+                                        } else if (job.status === 'on-going') {
+                                          statusClass = 'bg-blue-100 text-blue-700';
+                                        } else if (job.status === 'for-release') {
+                                          statusClass = 'bg-orange-100 text-orange-700';
+                                        } else if (job.status === 'claimed') {
+                                          statusClass = 'bg-gray-100 text-gray-700';
+                                        }
+                                        return (
+                                          <span className={`px-2 py-1 rounded-md text-xs font-semibold uppercase ${statusClass}`}>
+                                            {text}
+                                          </span>
+                                        );
+                                      })()}
+                                    </td>
+                                    <td className="px-4 py-3 text-sm text-center align-middle">
+                                      <div className="flex items-center justify-center">
+                                        <DropdownMenu>
+                                          <DropdownMenuTrigger asChild>
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              className="h-9 w-[68px] p-0 border border-red-500 rounded-lg bg-red-50/30 hover:bg-red-50 transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-sm group"
+                                            >
+                                              <MoreVertical size={16} className="text-red-500 fill-red-500" />
+                                              <ChevronDown size={14} className="text-red-500 transition-transform group-data-[state=open]:rotate-180" />
+                                            </Button>
+                                          </DropdownMenuTrigger>
+                                          <DropdownMenuContent align="end" className="w-[180px] p-1.5 rounded-2xl border-gray-100 shadow-2xl">
+                                            <DropdownMenuItem
+                                              onClick={() => { setSelectedOrder(job); setIsEditing(true); }}
+                                              className="h-11 gap-3 rounded-xl px-4 cursor-pointer bg-amber-50 hover:bg-amber-100 text-amber-800 transition-all font-bold mb-1.5"
+                                            >
+                                              <Edit size={16} className="text-amber-600" />
+                                              <span>Edit Order</span>
+                                            </DropdownMenuItem>
+
+                                            <DropdownMenuItem
+                                              onClick={() => updateOrder(job.id, { status: 'on-going' })}
+                                              className="h-11 gap-3 rounded-xl px-4 cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-800 transition-all font-bold"
+                                            >
+                                              <ArrowRight size={16} className="text-blue-500" />
+                                              <span>On-Going</span>
+                                            </DropdownMenuItem>
+
+                                            <DropdownMenuSeparator className="my-2 bg-gray-50" />
+                                            <DropdownMenuLabel className="text-[10px] font-black uppercase text-gray-400 tracking-widest px-3 py-1 mb-1">Set Status</DropdownMenuLabel>
+
+                                            <DropdownMenuItem
+                                              onClick={() => updateOrder(job.id, { status: 'for-release' })}
+                                              className="h-10 gap-2.5 rounded-lg px-4 cursor-pointer text-orange-600 hover:bg-orange-50 font-bold transition-all text-xs"
+                                            >
+                                              <div className="h-2 w-2 rounded-full bg-orange-500 shadow-sm shadow-orange-200" />
+                                              <span>Set to For Release</span>
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem
+                                              onClick={() => updateOrder(job.id, { status: 'claimed' })}
+                                              className="h-10 gap-2.5 rounded-lg px-4 cursor-pointer text-green-600 hover:bg-green-50 font-bold transition-all text-xs"
+                                            >
+                                              <div className="h-2 w-2 rounded-full bg-green-500 shadow-sm shadow-green-200" />
+                                              <span>Set to Claimed</span>
+                                            </DropdownMenuItem>
+                                          </DropdownMenuContent>
+                                        </DropdownMenu>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))}
+                                {totalPagesAssigned > 1 && (
+                                  <tr>
+                                    <td colSpan={6} className="px-0 py-0 border-t border-gray-100">
+                                      <div className="flex items-center justify-between pt-1.5 pb-1 border-t border-gray-50 px-3">
+                                        <div className="text-[11px] text-gray-500 font-bold uppercase tracking-wider">
+                                          PAGE {currentPageAssigned} OF {totalPagesAssigned}
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                          <Button
+                                            variant="outline"
+                                            onClick={() => setCurrentPageAssigned(Math.max(1, currentPageAssigned - 1))}
+                                            disabled={currentPageAssigned === 1}
+                                            className={`h-8 w-8 p-0 rounded-lg transition-all mt-0 border-none ${currentPageAssigned === 1
+                                              ? 'bg-slate-200 text-slate-500'
+                                              : 'bg-slate-600 text-white hover:bg-slate-700 shadow-sm'
+                                              }`}
+                                          >
+                                            <ChevronLeft className="h-4 w-4" />
+                                          </Button>
+
+                                          <div className="max-w-[140px] md:max-w-[300px] overflow-x-auto no-scrollbar py-0.5 px-0.5 flex items-center gap-1">
+                                            {Array.from({ length: totalPagesAssigned }, (_, i) => {
+                                              const pageNum = i + 1;
+                                              const isActive = currentPageAssigned === pageNum;
+                                              return (
+                                                <Button
+                                                  key={pageNum}
+                                                  variant={isActive ? "default" : "outline"}
+                                                  size="sm"
+                                                  onClick={() => setCurrentPageAssigned(pageNum)}
+                                                  className={`h-7 w-7 min-w-[28px] p-0 text-[10px] font-black rounded-lg transition-all ${isActive
+                                                    ? 'bg-red-600 hover:bg-red-700 text-white border-red-600 shadow-sm shadow-red-200'
+                                                    : 'bg-white border-gray-100 text-gray-600 hover:bg-red-50 hover:text-red-600 hover:border-red-100'
+                                                    }`}
+                                                >
+                                                  {pageNum}
+                                                </Button>
+                                              );
+                                            })}
+                                          </div>
+
+                                          <Button
+                                            variant="outline"
+                                            onClick={() => setCurrentPageAssigned(Math.min(totalPagesAssigned, currentPageAssigned + 1))}
+                                            disabled={currentPageAssigned === totalPagesAssigned}
+                                            className={`h-8 w-8 p-0 rounded-lg transition-all mt-0 border-none ${currentPageAssigned === totalPagesAssigned
+                                              ? 'bg-slate-200 text-slate-500'
+                                              : 'bg-slate-600 text-white hover:bg-slate-700 shadow-sm'
+                                              }`}
+                                          >
+                                            <ChevronRight className="h-4 w-4" />
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Recent Jobs */}
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle className="text-left uppercase">Recent Orders</CardTitle>
+                  <CardTitle className="text-left uppercase font-black">Recent Orders</CardTitle>
                   <div className="flex flex-col items-end">
-                    <span className="text-lg font-semibold text-gray-700 uppercase">{profitRange}</span>
+                    <span className="text-lg font-black text-gray-700 uppercase">{profitRange}</span>
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -1517,6 +1633,8 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                                   let badgeClass = '';
                                   if (job.priorityLevel === 'rush') {
                                     badgeClass = 'bg-red-100 text-red-700';
+                                  } else if (job.priorityLevel === 'premium') {
+                                    badgeClass = 'bg-amber-100 text-amber-700';
                                   } else if (job.priorityLevel === 'regular') {
                                     badgeClass = 'bg-green-100 text-green-700';
                                   } else {

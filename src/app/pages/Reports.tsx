@@ -3,7 +3,7 @@ import { mockServices } from '@/app/lib/mockData';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { useState, useEffect, useMemo } from 'react';
 
-import { Wallet, TrendingUp, ShoppingBag, Receipt, Filter, DollarSign, Calendar, ArrowDownRight, ChevronDown } from 'lucide-react';
+import { TrendingUp, ShoppingBag, Filter, Calendar, ArrowDownRight, ChevronDown } from 'lucide-react';
 import { format, isSameDay, isSameWeek, isSameMonth, isSameYear } from 'date-fns';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/app/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu';
@@ -188,7 +188,7 @@ export default function Reports({ onSetHeaderActionRight }: ReportsProps) {
               <DropdownMenuItem
                 key={range}
                 onClick={() => setDateRange(range as typeof dateRange)}
-                className={`uppercase px-4 py-2 text-sm font-semibold cursor-pointer transition-colors ${dateRange === range ? 'bg-red-600 text-white' : 'bg-white text-red-700'} hover:bg-red-600 hover:text-white`}
+                className={`uppercase px-4 py-2 text-sm font-semibold cursor-pointer ${dateRange === range ? 'bg-red-600 text-white focus:bg-red-600 focus:text-white' : 'bg-white text-red-700 hover:bg-red-100 hover:text-red-700 focus:bg-red-100 focus:text-red-700'}`}
               >
                 {range}
               </DropdownMenuItem>
@@ -219,16 +219,9 @@ export default function Reports({ onSetHeaderActionRight }: ReportsProps) {
             <TrendingUp size={64} className="text-green-600" />
           </div>
           <CardContent className="pt-6">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-lg bg-green-50 text-green-600">
-                  <Wallet size={14} />
-                </div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Total Sales</p>
-              </div>
-            </div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">Total Sales</p>
             <p className="text-3xl font-black text-green-600 tracking-tight">
-              P{totalSalesAmount.toLocaleString()}
+              ₱{totalSalesAmount.toLocaleString()}
             </p>
           </CardContent>
         </Card>
@@ -241,15 +234,11 @@ export default function Reports({ onSetHeaderActionRight }: ReportsProps) {
             <ShoppingBag size={64} className="text-purple-600" />
           </div>
           <CardContent className="pt-6">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="p-2 rounded-lg bg-purple-50 text-purple-600">
-                <Receipt size={16} />
-              </div>
-              <p className="text-[11px] font-black uppercase tracking-widest text-gray-400">Total Orders</p>
-            </div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">Total Orders</p>
             <p className="text-3xl font-black text-purple-600 tracking-tight">
               {totalOrdersCount.toLocaleString()}
-            </p>          </CardContent>
+            </p>
+          </CardContent>
         </Card>
 
         <Card
@@ -260,14 +249,9 @@ export default function Reports({ onSetHeaderActionRight }: ReportsProps) {
             <ArrowDownRight size={64} className="text-red-600" />
           </div>
           <CardContent className="pt-6">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="p-2 rounded-lg bg-red-50 text-red-600">
-                <Receipt size={16} />
-              </div>
-              <p className="text-[11px] font-black uppercase tracking-widest text-gray-400">Total Expenses</p>
-            </div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">Total Expenses</p>
             <p className="text-3xl font-black text-red-600 tracking-tight">
-              P{totalExpensesAmount.toLocaleString()}
+              ₱{totalExpensesAmount.toLocaleString()}
             </p>
           </CardContent>
         </Card>
@@ -277,14 +261,9 @@ export default function Reports({ onSetHeaderActionRight }: ReportsProps) {
             <TrendingUp size={64} className="text-blue-600" />
           </div>
           <CardContent className="pt-6">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="p-2 rounded-lg bg-blue-50 text-blue-600">
-                <DollarSign size={16} />
-              </div>
-              <p className="text-[11px] font-black uppercase tracking-widest text-gray-400">Profit</p>
-            </div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">Profit</p>
             <p className="text-3xl font-black text-blue-600 tracking-tight">
-              P{profit.toLocaleString()}
+              ₱{profit.toLocaleString()}
             </p>
           </CardContent>
         </Card>
@@ -293,30 +272,8 @@ export default function Reports({ onSetHeaderActionRight }: ReportsProps) {
       {/* 2. PAYMENT ANALYTICS & SERVICE TYPE */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="border-none shadow-md">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <div>
-              <CardTitle className="text-lg font-black text-gray-900 uppercase">Total Sales By Service Type</CardTitle>
-            </div>
-            <div className="flex items-center gap-4 mr-2">
-              <div className="grid grid-cols-2 gap-x-6 gap-y-1">
-                <div className="flex items-center gap-2 text-[10px] font-bold text-gray-600 uppercase tracking-widest">
-                  <div className="w-3 h-3 rounded" style={{ background: '#0d948880' }}></div>
-                  <span>BASIC CLEANING</span>
-                </div>
-                <div className="flex items-center gap-2 text-[10px] font-bold text-gray-600 uppercase tracking-widest">
-                  <div className="w-3 h-3 rounded" style={{ background: '#c026d380' }}></div>
-                  <span>FULL REGLUE</span>
-                </div>
-                <div className="flex items-center gap-2 text-[10px] font-bold text-gray-600 uppercase tracking-widest">
-                  <div className="w-3 h-3 rounded" style={{ background: '#6366f180' }}></div>
-                  <span>MINOR REGLUE</span>
-                </div>
-                <div className="flex items-center gap-2 text-[10px] font-bold text-gray-600 uppercase tracking-widest">
-                  <div className="w-3 h-3 rounded" style={{ background: '#f59e0b80' }}></div>
-                  <span>COLOR RENEWAL</span>
-                </div>
-              </div>
-            </div>
+          <CardHeader className="text-center">
+            <CardTitle className="text-lg font-bold uppercase tracking-tight">Total Sales By Service Type</CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
@@ -325,8 +282,18 @@ export default function Reports({ onSetHeaderActionRight }: ReportsProps) {
                 <XAxis type="number" hide />
                 <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 10, fontWeight: 700 }} axisLine={false} tickLine={false} />
                 <Tooltip
-                  formatter={(value: number) => [`P${value.toLocaleString()}`, 'Total Sales']}
-                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      const data = payload[0].payload;
+                      return (
+                        <div className="bg-white p-3 rounded-xl border-none shadow-lg">
+                          <p className="font-bold text-gray-900 text-sm mb-1">{data.name}</p>
+                          <p className="text-xs text-gray-600">Total Sales: ₱{data.amount.toLocaleString()}</p>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
                 />
 
                 <Bar dataKey="amount" radius={[0, 4, 4, 0]} barSize={20}>
@@ -336,43 +303,60 @@ export default function Reports({ onSetHeaderActionRight }: ReportsProps) {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+
+            {/* Legend below chart in 2 columns */}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 mt-4 justify-items-start max-w-lg mx-auto ml-[80px]">
+              <div className="flex items-center gap-2 text-[10px] font-bold text-gray-600 uppercase tracking-widest">
+                <div className="w-3 h-3 rounded-full" style={{ background: '#0d948880' }}></div>
+                <span>BASIC CLEANING</span>
+              </div>
+              <div className="flex items-center gap-2 text-[10px] font-bold text-gray-600 uppercase tracking-widest">
+                <div className="w-3 h-3 rounded-full" style={{ background: '#c026d380' }}></div>
+                <span>FULL REGLUE</span>
+              </div>
+              <div className="flex items-center gap-2 text-[10px] font-bold text-gray-600 uppercase tracking-widest">
+                <div className="w-3 h-3 rounded-full" style={{ background: '#6366f180' }}></div>
+                <span>MINOR REGLUE</span>
+              </div>
+              <div className="flex items-center gap-2 text-[10px] font-bold text-gray-600 uppercase tracking-widest">
+                <div className="w-3 h-3 rounded-full" style={{ background: '#f59e0b80' }}></div>
+                <span>COLOR RENEWAL</span>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
         <Card className="border-none shadow-md">
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-lg font-black text-gray-900 uppercase">Payment Method Analytics</CardTitle>
-              </div>
-              <div className="flex items-center gap-2">
-                <Select value={selectedPaymentMethod} onValueChange={setSelectedPaymentMethod}>
-                  <SelectTrigger className="w-[105px] h-7 text-[9px] font-black uppercase tracking-[0.1em] border-gray-200 bg-gray-50/50 focus:ring-0 focus:ring-offset-0">
-                    <div className="flex items-center gap-1.5">
-                      <Filter size={10} className="text-gray-400" />
-                      <SelectValue placeholder="Filter" />
-                    </div>
-                  </SelectTrigger>
-                  <SelectContent className="border-gray-200">
-                    <SelectItem value="all" className="text-[10px] font-bold uppercase tracking-widest">ALL</SelectItem>
-                    <SelectItem value="cash" className="text-[10px] font-bold uppercase tracking-widest">Cash Only</SelectItem>
-                    <SelectItem value="gcash" className="text-[10px] font-bold uppercase tracking-widest">GCash Only</SelectItem>
-                    <SelectItem value="maya" className="text-[10px] font-bold uppercase tracking-widest">Maya Only</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            <CardTitle className="text-lg font-bold text-gray-900 uppercase text-center">Payment Method Analytics</CardTitle>
+            <div className="flex justify-end mt-3">
+              <Select value={selectedPaymentMethod} onValueChange={setSelectedPaymentMethod}>
+                <SelectTrigger className="w-[105px] h-7 text-[9px] font-black uppercase tracking-[0.1em] border-gray-200 bg-gray-50/50 focus:ring-0 focus:ring-offset-0">
+                  <div className="flex items-center gap-1.5">
+                    <Filter size={10} className="text-gray-400" />
+                    <SelectValue placeholder="Filter" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent className="border-gray-200" align="end" side="bottom">
+                  <SelectItem value="all" className="text-[10px] font-bold uppercase tracking-widest">ALL</SelectItem>
+                  <SelectItem value="cash" className="text-[10px] font-bold uppercase tracking-widest">Cash</SelectItem>
+                  <SelectItem value="gcash" className="text-[10px] font-bold uppercase tracking-widest">GCash</SelectItem>
+                  <SelectItem value="maya" className="text-[10px] font-bold uppercase tracking-widest">Maya</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </CardHeader>
-          <CardContent className="flex flex-col md:flex-row items-center">
-            <div className="w-full md:w-1/2">
-              <ResponsiveContainer width="100%" height={250}>
+          <CardContent className="flex flex-col items-center -mt-6">
+            {/* Centered Pie Chart */}
+            <div className="w-full flex justify-center">
+              <ResponsiveContainer width="100%" height={300} className="max-w-md">
                 <PieChart>
                   <Pie
                     data={paymentMethodStats}
                     cx="50%"
                     cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
+                    innerRadius={80}
+                    outerRadius={110}
                     paddingAngle={5}
                     dataKey="value"
                   >
@@ -381,22 +365,30 @@ export default function Reports({ onSetHeaderActionRight }: ReportsProps) {
                     ))}
                   </Pie>
                   <Tooltip
-                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        const data = payload[0].payload;
+                        return (
+                          <div className="bg-white p-3 rounded-xl border-none shadow-lg">
+                            <p className="font-bold text-gray-900 text-sm mb-1">{data.name}</p>
+                            <p className="text-xs text-gray-600">Transactions: {data.value}</p>
+                            <p className="text-xs text-gray-600">{data.name} Sales: ₱{data.amount.toLocaleString()}</p>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
                   />
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            <div className="w-full md:w-1/2 space-y-4">
+
+            {/* Simple legend below chart - matching Total Sales style */}
+            <div className="grid grid-cols-3 gap-x-4 gap-y-2 mt-4 justify-items-start max-w-lg mx-auto">
               {paymentMethodStats.map((item) => (
-                <div key={item.name} className="flex items-center justify-between p-3 rounded-xl bg-gray-50">
-                  <div className="flex items-center gap-3">
-                    <div className="h-3 w-3 rounded-full" style={{ backgroundColor: item.color }} />
-                    <span className="text-xs font-black text-gray-700 uppercase tracking-tight">{item.name}</span>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs font-black text-gray-900">P{item.amount.toLocaleString()}</p>
-                    <p className="text-[9px] font-bold text-gray-400 uppercase">{item.value} Transactions</p>
-                  </div>
+                <div key={item.name} className="flex items-center gap-2 text-[10px] font-bold text-gray-600 uppercase tracking-widest">
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
+                  <span>{item.name}</span>
                 </div>
               ))}
             </div>
@@ -436,8 +428,8 @@ export default function Reports({ onSetHeaderActionRight }: ReportsProps) {
                     </TableCell>
                     <TableCell className="text-[11px] font-black text-gray-900 py-2.5 text-center border-l border-gray-100">{row.receiptNr}</TableCell>
                     <TableCell className="text-[11px] font-black text-gray-600 py-2.5 text-center border-l border-gray-100">{row.paymentMethod}</TableCell>
-                    <TableCell className="text-[11px] font-black text-red-600 py-2.5 text-center border-l border-gray-100">P{row.amountPaid.toLocaleString()}</TableCell>
-                    <TableCell className="text-[11px] font-bold text-gray-400 py-2.5 text-center border-l border-gray-100">P{row.balance.toLocaleString()}</TableCell>
+                    <TableCell className="text-[11px] font-black text-red-600 py-2.5 text-center border-l border-gray-100">₱{row.amountPaid.toLocaleString()}</TableCell>
+                    <TableCell className="text-[11px] font-bold text-gray-400 py-2.5 text-center border-l border-gray-100">₱{row.balance.toLocaleString()}</TableCell>
                     <TableCell className="text-[10px] font-medium text-gray-500 py-2.5 text-center border-l border-gray-100 italic">{row.remarks}</TableCell>
                   </TableRow>
                 ))}
@@ -484,44 +476,44 @@ export default function Reports({ onSetHeaderActionRight }: ReportsProps) {
             <div className="lg:col-span-3 bg-yellow-50/50 p-6 space-y-4 border-r border-gray-200">
               <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-gray-600">
                 <span>Total Cash Sales:</span>
-                <span className="text-gray-900 font-bold">P{totalCashSales.toLocaleString()}</span>
+                <span className="text-gray-900 font-bold">₱{totalCashSales.toLocaleString()}</span>
               </div>
               <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-gray-600">
                 <span>Total Gcash Sales:</span>
-                <span className="text-gray-900 font-bold">P{totalGcashSales.toLocaleString()}</span>
+                <span className="text-gray-900 font-bold">₱{totalGcashSales.toLocaleString()}</span>
               </div>
               <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-gray-600">
                 <span>Total Maya Sales:</span>
-                <span className="text-gray-900 font-bold">P{totalMayaSales.toLocaleString()}</span>
+                <span className="text-gray-900 font-bold">₱{totalMayaSales.toLocaleString()}</span>
               </div>
               <div className="flex justify-between items-center pt-2 border-t border-gray-200">
                 <span className="text-xs font-black uppercase tracking-widest text-red-600">Total Daily Sales:</span>
-                <span className="text-sm font-black text-red-600">P{totalDailySales.toLocaleString()}</span>
+                <span className="text-sm font-black text-red-600">₱{totalDailySales.toLocaleString()}</span>
               </div>
             </div>
 
             <div className="lg:col-span-7 p-6 grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4 bg-gray-50/30">
               <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-gray-600">
                 <span>Beginning Cash Fund:</span>
-                <span className="text-gray-900 font-black">P{beginningCashFund.toLocaleString()}</span>
+                <span className="text-gray-900 font-black">₱{beginningCashFund.toLocaleString()}</span>
               </div>
               <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-gray-600">
                 <span>Expected Cash on Hand:</span>
-                <span className="text-gray-900 font-black">P{expectedCashOnHand.toLocaleString()}</span>
+                <span className="text-gray-900 font-black">₱{expectedCashOnHand.toLocaleString()}</span>
               </div>
               <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-gray-600">
                 <span>Total Expenses:</span>
-                <span className="text-red-600 font-black">P{totalExpensesAmount.toLocaleString()}</span>
+                <span className="text-red-600 font-black">₱{totalExpensesAmount.toLocaleString()}</span>
               </div>
               <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-gray-600">
                 <span>Actual Cash Counted:</span>
-                <span className="text-blue-600 font-black underline underline-offset-4 decoration-blue-200">P{actualCashCounted.toLocaleString()}</span>
+                <span className="text-blue-600 font-black underline underline-offset-4 decoration-blue-200">₱{actualCashCounted.toLocaleString()}</span>
               </div>
               <div className="md:col-span-2 pt-2 border-t border-gray-200 flex justify-end">
                 <div className="flex items-center gap-4">
                   <span className="text-xs font-black uppercase tracking-widest text-gray-500">Over / Short:</span>
                   <span className={`text-lg font-black ${overShort >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    P{overShort.toLocaleString()}
+                    ₱{overShort.toLocaleString()}
                   </span>
                 </div>
               </div>

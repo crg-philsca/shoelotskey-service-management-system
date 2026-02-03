@@ -55,8 +55,8 @@ export default function Expenses() {
                     onClick={() => setIsExpenseModalOpen(true)}
                     className="bg-red-600 hover:bg-red-700 text-white font-bold shadow-md"
                 >
-                    <Plus className="h-4 w-4 mr-1" />
-                    Add Expense
+                    <Plus className="h-4 w-4 mr-0" />
+                    New Expense
                 </Button>
             </div>
 
@@ -135,7 +135,7 @@ export default function Expenses() {
                                             <div className="flex flex-col items-center gap-2">
                                                 <Receipt className="h-12 w-12 text-gray-300" />
                                                 <p className="font-semibold">No expenses recorded yet.</p>
-                                                <p className="text-sm">Click "Add Expense" to get started.</p>
+                                                <p className="text-sm">Click "New Expense" to get started.</p>
                                             </div>
                                         </TableCell>
                                     </TableRow>

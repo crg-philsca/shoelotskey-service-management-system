@@ -1,13 +1,12 @@
 import { Card, CardContent } from '@/app/components/ui/card';
 import { Calendar } from '@/app/components/ui/calendar';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { mockJobOrders } from '@/app/lib/mockData';
-import { Calendar as CalendarIcon, Package, User, CreditCard } from 'lucide-react';
+import { Calendar as CalendarIcon, Package, User, CreditCard, ClipboardList, FileText, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
+import { Input } from '@/app/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { useNavigate } from 'react-router-dom';
-import { useEffect } from 'react';
-import { ClipboardList, FileText } from 'lucide-react';
-import ClaimMonitoringModal from '@/app/components/ClaimMonitoringModal';
 
 interface CalendarViewProps {
   onSetHeaderActionRight?: (node: React.ReactNode) => void;
@@ -29,8 +28,9 @@ export default function CalendarView({ onSetHeaderActionRight }: CalendarViewPro
 
   const [date, setDate] = useState<Date | undefined>(releaseDates[0] ?? new Date());
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 20;
-  const [isClaimRecordOpen, setIsClaimRecordOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterPriority, setFilterPriority] = useState<string>('all');
+  const itemsPerPage = 15;
 
   const isSameDay = (a: Date, b: Date) =>
     a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
@@ -42,7 +42,18 @@ export default function CalendarView({ onSetHeaderActionRight }: CalendarViewPro
 
   const jobsOnDate = forReleaseOrders.filter(job => {
     if (!date || !job.predictedCompletionDate) return false;
-    return isSameDay(job.predictedCompletionDate, date);
+    const matchesDate = isSameDay(job.predictedCompletionDate, date);
+    if (!matchesDate) return false;
+
+    // Filter by Priority
+    if (filterPriority !== 'all' && job.priorityLevel !== filterPriority) return false;
+
+    if (!searchTerm) return true;
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      job.orderNumber.toLowerCase().includes(searchLower) ||
+      job.customerName.toLowerCase().includes(searchLower)
+    );
   });
 
   const sortedJobsOnDate = [...jobsOnDate].sort((a, b) => {
@@ -58,17 +69,17 @@ export default function CalendarView({ onSetHeaderActionRight }: CalendarViewPro
       onSetHeaderActionRight(
         <div className="flex items-center gap-2">
           <Button
-            onClick={() => setIsClaimRecordOpen(true)}
+            onClick={() => navigate('/claim-monitoring')}
             className="bg-white hover:bg-red-50 text-red-600 border border-red-200 font-bold h-9 px-4 shadow-sm transition-all"
           >
-            <FileText className="h-4 w-4 mr-0" />
-            Record Claim
+            <FileText className="h-4 w-4 mr-1 text-red-600" />
+            Claim Record
           </Button>
           <Button
             onClick={() => navigate('/dashboard', { state: { status: 'for-release' } })}
             className="bg-red-600 hover:bg-red-700 text-white font-bold h-9 px-4 shadow-sm transition-all"
           >
-            <ClipboardList className="h-4 w-4 mr-0" />
+            <ClipboardList className="h-4 w-4 mr-1" />
             Release Table
           </Button>
         </div>
@@ -79,19 +90,50 @@ export default function CalendarView({ onSetHeaderActionRight }: CalendarViewPro
 
   return (
     <div className="max-w-6xl mx-auto space-y-4">
-      <Card className="shadow-lg border-gray-200 overflow-hidden min-h-[480px] flex flex-col">
+      <Card className="shadow-lg border-gray-200 overflow-hidden flex flex-col">
         <CardContent className="p-0 flex flex-col lg:flex-row flex-1">
-          {/* Sidebar - Calendar - Narrower now and aligned with main header */}
+          {/* Sidebar - Calendar */}
           <div className="w-full lg:w-[240px] border-b lg:border-b-0 lg:border-r border-gray-200 bg-gray-50/30 flex flex-col">
-            {/* Aligned Sidebar Header */}
-            <div className="p-4 border-b border-gray-200 flex items-center h-[65px]">
+            <div className="p-4 border-b border-gray-200 flex items-center h-[56px]">
               <div className="flex items-center gap-3">
                 <div className="h-8 w-1 bg-red-600 rounded-full"></div>
                 <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Select Release Date</h3>
               </div>
             </div>
 
-            <div className="flex-1 p-4 flex flex-col justify-center items-center">
+            <div className="pt-4 px-4 pb-4 flex flex-col items-center">
+              <div className="w-full max-w-[220px]">
+                <div className="relative group">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-400 group-focus-within:text-red-600 transition-colors" />
+                  <Input
+                    type="text"
+                    placeholder="Search orders"
+                    value={searchTerm}
+                    onChange={(e) => {
+                      setSearchTerm(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="pl-8 bg-white border-gray-200 text-[10px] font-bold h-8 rounded-lg focus-visible:ring-1 focus-visible:ring-red-600 focus-visible:border-red-600 placeholder:text-gray-400 tracking-wider transition-all shadow-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="w-full max-w-[220px] mt-3">
+                <Select value={filterPriority} onValueChange={(val) => { setFilterPriority(val); setCurrentPage(1); }}>
+                  <SelectTrigger className="w-full h-8 text-[10px] font-bold border-gray-200 focus:ring-red-600 focus:border-red-600">
+                    <SelectValue placeholder="All Priorities" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all" className="text-[10px] font-bold focus:bg-red-50 focus:text-red-900">All Priorities</SelectItem>
+                    <SelectItem value="regular" className="text-[10px] font-bold text-green-600 focus:bg-red-50 focus:text-green-700">Regular</SelectItem>
+                    <SelectItem value="rush" className="text-[10px] font-bold text-red-600 focus:bg-red-50 focus:text-red-700">Rush</SelectItem>
+                    <SelectItem value="premium" className="text-[10px] font-bold text-blue-600 focus:bg-red-50 focus:text-blue-700">Premium</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="flex-1 px-4 pb-4 pt-0 flex flex-col justify-center items-center">
               <div className="w-full max-w-[220px]">
                 <Calendar
                   mode="single"
@@ -100,14 +142,15 @@ export default function CalendarView({ onSetHeaderActionRight }: CalendarViewPro
                   modifiers={{ releaseDay: releaseDates }}
                   modifiersClassNames={{
                     releaseDay:
-                      'relative after:content-[""] after:absolute after:left-1/2 after:-translate-x-1/2 after:bottom-1 after:h-1 after:w-1 after:rounded-full after:bg-red-600 font-bold text-red-700'
+                      'relative after:content-[""] after:absolute after:left-1/2 after:-translate-x-1/2 after:bottom-0.5 after:h-[4px] after:w-[4px] after:rounded-full after:bg-red-600 font-bold text-red-700'
                   }}
                   classNames={{
-                    head_cell: 'text-[10px] font-bold rounded-md w-8 text-gray-400 uppercase py-2',
+                    head_cell: 'text-[10px] font-bold rounded-md w-9 text-gray-400 uppercase py-2',
                     caption_label: 'text-base font-black text-red-600 uppercase tracking-tight',
                     table: 'w-full border-collapse',
                     months: 'w-full',
-                    day: 'h-8 w-8 p-0 font-bold transition-all hover:bg-red-50 hover:text-red-700 rounded-lg flex items-center justify-center text-xs',
+                    cell: 'w-9 h-9 p-0 text-center',
+                    day: 'h-8 w-8 p-0 font-bold transition-all hover:bg-red-50 hover:text-red-700 rounded-md flex items-center justify-center text-[10px] mx-auto',
                     day_selected: 'bg-red-600 text-white hover:bg-red-700 hover:text-white rounded-md shadow-sm',
                     day_today: 'bg-red-50 text-red-600 border border-red-200',
                     nav_button: 'hover:bg-red-50 text-red-600 rounded-full h-7 w-7 flex items-center justify-center transition-colors',
@@ -128,7 +171,7 @@ export default function CalendarView({ onSetHeaderActionRight }: CalendarViewPro
             </div>
           </div>
 
-          {/* Main Content - Orders List - Wider now */}
+          {/* Main Content - Orders List */}
           <div className="flex-1 flex flex-col bg-white">
             <div className="p-4 border-b border-gray-200 flex items-center justify-center relative bg-white/50 backdrop-blur-sm sticky top-0 z-10 h-[56px]">
               <div className="flex flex-col items-center text-center">
@@ -144,147 +187,148 @@ export default function CalendarView({ onSetHeaderActionRight }: CalendarViewPro
               </div>
             </div>
 
-            <div className="flex-1 p-4 pr-4 overflow-y-scroll max-h-[440px] flex flex-col scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+            <div className="flex-1 p-4 pr-4 overflow-y-scroll min-h-[440px] max-h-[440px] flex flex-col scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
               {sortedJobsOnDate.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center py-20 text-center space-y-4">
                   <div className="h-20 w-20 rounded-full bg-gray-50 flex items-center justify-center text-gray-300">
                     <Package size={40} />
                   </div>
                   <div className="space-y-1">
-                    <p className="text-gray-400 font-black uppercase tracking-widest text-sm">No Orders Scheduled</p>
-                    <p className="text-xs text-gray-400 font-medium">Try selecting a date marked with a red indicator.</p>
+                    <p className="text-gray-400 font-black uppercase tracking-widest text-sm">
+                      {searchTerm ? 'No matching orders' : 'No Releases Scheduled'}
+                    </p>
+                    <p className="text-xs text-gray-400 font-medium">
+                      {searchTerm
+                        ? `We couldn't find any orders matching "${searchTerm}" for this date.`
+                        : 'Try selecting a date marked with a red indicator.'}
+                    </p>
                   </div>
                 </div>
               ) : (
-                <>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 align-start content-start">
-                    {paginatedJobs.map(job => (
-                      <div key={job.id} className="group border border-red-100/60 rounded-2xl p-3 hover:border-red-300 hover:shadow-xl hover:shadow-red-500/5 transition-all duration-300 bg-white relative overflow-hidden flex flex-col h-full ring-1 ring-transparent hover:ring-red-50">
-                        {/* Order Number Header - Centered Value Only */}
-                        <div className="flex flex-col items-center">
-                          <span className="text-xs font-black text-gray-800 tracking-tight leading-none pt-1">{job.orderNumber}</span>
-                        </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 align-start content-start">
+                  {paginatedJobs.map(job => (
+                    <div key={job.id} className="group border border-red-100/60 rounded-2xl p-3 hover:border-red-300 hover:shadow-xl hover:shadow-red-500/5 transition-all duration-300 bg-white relative overflow-hidden flex flex-col h-full ring-1 ring-transparent hover:ring-red-50">
+                      <div className="flex flex-col items-center">
+                        <span className="text-xs font-black text-gray-800 tracking-tight leading-none pt-1">{job.orderNumber}</span>
+                      </div>
 
-                        <div className="border-t border-gray-200 my-1.5"></div>
+                      <div className="border-t border-gray-200 my-1.5"></div>
 
-                        <div className="space-y-3 flex-1 flex flex-col justify-center py-1">
-                          {/* Customer Info */}
-                          <div className="flex items-center gap-2">
-                            <div className="h-6 w-6 rounded-lg bg-red-50 flex items-center justify-center text-red-600 flex-shrink-0 group-hover:bg-red-600 group-hover:text-white transition-colors">
-                              <User size={12} />
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-none mb-0.5">Customer Name</p>
-                              <p className="text-[11px] font-bold text-gray-700 leading-tight break-words">{job.customerName}</p>
-                            </div>
+                      <div className="space-y-3 flex-1 flex flex-col justify-center py-1">
+                        <div className="flex items-center gap-2">
+                          <div className="h-6 w-6 rounded-lg bg-red-50 flex items-center justify-center text-red-600 flex-shrink-0 group-hover:bg-red-600 group-hover:text-white transition-colors">
+                            <User size={12} />
                           </div>
-
-                          {/* Service Type */}
-                          <div className="flex items-center gap-2">
-                            <div className="h-6 w-6 rounded-lg bg-orange-50 flex items-center justify-center text-orange-600 flex-shrink-0 group-hover:bg-orange-500 group-hover:text-white transition-colors">
-                              <Package size={12} />
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-none mb-0.5">Service Type</p>
-                              <p className="text-[11px] font-bold text-gray-600 leading-tight">
-                                {Array.isArray(job.baseService)
-                                  ? job.baseService.map(s => s.replace(' (with basic cleaning)', '')).join(', ')
-                                  : String(job.baseService).replace(' (with basic cleaning)', '')}
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Payment Status row */}
-                          <div className="flex items-center gap-2">
-                            <div className="h-6 w-6 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 flex-shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                              <CreditCard size={12} />
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-none mb-0.5">Payment Status</p>
-                              <p className={`text-[9px] font-black uppercase tracking-tight ${job.paymentStatus === 'paid' ? 'text-green-600' : 'text-red-500'}`}>
-                                {job.paymentStatus}
-                              </p>
-                            </div>
+                          <div className="min-w-0">
+                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-none mb-0.5">Customer Name</p>
+                            <p className="text-[11px] font-bold text-gray-700 leading-tight break-words">{job.customerName}</p>
                           </div>
                         </div>
 
-                        <div className="border-t border-gray-200 my-1.5"></div>
+                        <div className="flex items-center gap-2">
+                          <div className="h-6 w-6 rounded-lg bg-orange-50 flex items-center justify-center text-orange-600 flex-shrink-0 group-hover:bg-orange-500 group-hover:text-white transition-colors">
+                            <Package size={12} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-none mb-0.5">Service Type</p>
+                            <p className="text-[11px] font-bold text-gray-600 leading-tight">
+                              {Array.isArray(job.baseService)
+                                ? job.baseService.map(s => s.replace(' (with basic cleaning)', '')).join(', ')
+                                : String(job.baseService).replace(' (with basic cleaning)', '')}
+                            </p>
+                          </div>
+                        </div>
 
-                        {/* Footer with Priority Badge */}
-                        <div className="flex items-center justify-center pb-0.5">
-                          {(() => {
-                            let badgeClass = '';
-                            if (job.priorityLevel === 'rush') {
-                              badgeClass = 'bg-red-100 text-red-700 border-red-200';
-                            } else if (job.priorityLevel === 'regular') {
-                              badgeClass = 'bg-green-100 text-green-700 border-green-200';
-                            } else {
-                              badgeClass = 'bg-blue-100 text-blue-700 border-blue-200';
-                            }
-                            return (
-                              <span className={`px-3 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest border ${badgeClass}`}>
-                                {job.priorityLevel}
-                              </span>
-                            );
-                          })()}
+                        <div className="flex items-center gap-2">
+                          <div className="h-6 w-6 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 flex-shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                            <CreditCard size={12} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-none mb-0.5">Payment Status</p>
+                            <p className={`text-[9px] font-black uppercase tracking-tight ${job.paymentStatus === 'paid' ? 'text-green-600' : 'text-red-500'}`}>
+                              {job.paymentStatus}
+                            </p>
+                          </div>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </>
+
+                      <div className="border-t border-gray-200 my-1.5"></div>
+
+                      <div className="flex items-center justify-center pb-0.5">
+                        {(() => {
+                          let badgeClass = '';
+                          if (job.priorityLevel === 'rush') {
+                            badgeClass = 'bg-red-100 text-red-700 border-red-200';
+                          } else if (job.priorityLevel === 'regular') {
+                            badgeClass = 'bg-green-100 text-green-700 border-green-200';
+                          } else {
+                            badgeClass = 'bg-blue-100 text-blue-700 border-blue-200';
+                          }
+                          return (
+                            <span className={`px-3 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest border ${badgeClass}`}>
+                              {job.priorityLevel}
+                            </span>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
 
-            {/* Pagination - Always visible at bottom-right, matching dashboard style */}
-            <div className="p-3 border-t border-gray-200 bg-white flex items-center justify-between mt-auto">
-              <div className="text-xs text-gray-500 font-medium">
-                Showing {sortedJobsOnDate.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1} to{' '}
-                {Math.min(currentPage * itemsPerPage, sortedJobsOnDate.length)} of {sortedJobsOnDate.length} releases
-              </div>
-              <div className="flex justify-end">
-                <div className="flex gap-2">
+            {totalPages > 0 && (
+              <div className="pt-1.5 pb-1 border-t border-gray-100 bg-white flex items-center justify-between px-5">
+                <div className="text-[11px] text-gray-500 font-bold uppercase tracking-wider">
+                  PAGE {currentPage} OF {totalPages}
+                </div>
+                <div className="flex items-center gap-3">
                   <Button
                     variant="outline"
                     onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                     disabled={currentPage === 1}
-                    className={`w-8 h-8 ${currentPage === 1 ? 'bg-gray-400 text-white border-gray-400' : 'bg-white border-gray-200 text-gray-600 hover:text-red-600 hover:border-red-200 shadow-sm'}`}
+                    className={`h-8 w-8 p-0 rounded-lg transition-all border-none ${currentPage === 1
+                      ? 'bg-slate-200 text-white'
+                      : 'bg-slate-500 text-white hover:bg-slate-600 shadow-sm'
+                      }`}
                   >
-                    &lt;
+                    <ChevronLeft className="h-4 w-4" />
                   </Button>
-                  <div className="flex items-center gap-1">
-                    {Array.from({ length: Math.max(1, totalPages) }, (_, i) => i + 1).map((page) => (
-                      <Button
-                        key={page}
-                        variant={currentPage === page ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => setCurrentPage(page)}
-                        className={`w-7 h-7 p-0 text-[10px] font-bold transition-all ${currentPage === page ? 'bg-red-600 hover:bg-red-700 text-white border-red-600 shadow-sm' : 'bg-white border-gray-200 text-gray-600 hover:text-red-600 hover:border-red-200 shadow-sm'}`}
-                      >
-                        {page}
-                      </Button>
-                    ))}
+                  <div className="flex flex-col items-center">
+                    <div className="flex items-center gap-2 overflow-x-auto max-w-[400px] scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent py-0.5 pb-2 px-1">
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                        <Button
+                          key={page}
+                          variant={currentPage === page ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setCurrentPage(page)}
+                          className={`h-8 w-8 p-0 text-[11px] font-bold rounded-lg flex-shrink-0 transition-all ${currentPage === page
+                            ? 'bg-red-600 hover:bg-red-700 text-white border-red-600 shadow-sm'
+                            : 'bg-white border-gray-100 text-gray-600 hover:bg-red-50 hover:text-red-600 hover:border-red-100'
+                            }`}
+                        >
+                          {page}
+                        </Button>
+                      ))}
+                    </div>
                   </div>
                   <Button
                     variant="outline"
                     onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                     disabled={currentPage === totalPages || totalPages === 0}
-                    className={`w-8 h-8 ${currentPage === totalPages || totalPages === 0 ? 'bg-gray-400 text-white border-gray-400' : 'bg-white border-gray-200 text-gray-600 hover:text-red-600 hover:border-red-200 shadow-sm'}`}
+                    className={`h-8 w-8 p-0 rounded-lg transition-all border-none ${currentPage === totalPages || totalPages === 0
+                      ? 'bg-slate-200 text-white'
+                      : 'bg-slate-500 text-white hover:bg-slate-600 shadow-sm'
+                      }`}
                   >
-                    &gt;
+                    <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         </CardContent>
       </Card>
-
-
-      <ClaimMonitoringModal
-        isOpen={isClaimRecordOpen}
-        onClose={() => setIsClaimRecordOpen(false)}
-      />
-    </div >
+    </div>
   );
 }
-

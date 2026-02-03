@@ -1290,17 +1290,17 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="flex items-center justify-between pt-5 mt-2 border-t border-gray-100">
+                    <div className="flex items-center gap-4 pt-5 mt-2 border-t border-gray-100">
                         <Button
                             type="button"
-                            className="bg-gray-200 hover:bg-red-700 text-gray-600 hover:text-white font-black text-xs uppercase tracking-widest h-9 px-8 transition-all rounded-lg shadow-sm"
+                            className="flex-1 bg-gray-200 hover:bg-gray-700 text-gray-600 hover:text-white font-black text-xs uppercase tracking-widest h-10 transition-all rounded-lg shadow-sm"
                             onClick={onCancel}
                         >
                             Cancel
                         </Button>
                         <Button
                             type="submit"
-                            className="bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-widest h-9 px-8 shadow-lg shadow-red-200 transition-all rounded-lg"
+                            className="flex-1 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-widest h-10 shadow-lg shadow-red-200 transition-all rounded-lg"
                         >
                             Submit
                         </Button>

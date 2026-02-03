@@ -127,7 +127,7 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-[98vw] h-[95vh] flex flex-col bg-white p-0 gap-0 border-none shadow-2xl">
-                <DialogHeader className="px-8 py-5 border-b border-gray-100 bg-white flex flex-col gap-2 flex-shrink-0">
+                <DialogHeader className="px-6 py-4 border-b border-gray-100 bg-white flex flex-col gap-2 flex-shrink-0">
                     {/* Top Row: Title & Order Number */}
                     <div className="flex flex-row items-center justify-center gap-3 w-full">
                         <DialogTitle className="text-xl font-bold text-gray-900 whitespace-nowrap">
@@ -170,35 +170,12 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                 </SelectContent>
                             </Select>
                         </div>
-
-                        {/* Assignment - Visible to Owner only? No, visible to all but only Owner can edit? 
-                            Let's keep it simple: visible and editable by all for now, or just Owner if we have the role.
-                            Wait, I don't have 'role' prop here. I'll add it to props later if needed, but for now I'll just add the field.
-                        */}
-                        <div className="flex flex-row items-center gap-1 border-l pl-6 border-gray-100">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Assigned To</span>
-                            <Select
-                                value={formData.assignedTo || 'unassigned'}
-                                onValueChange={(val: string) => setFormData({ ...formData, assignedTo: val === 'unassigned' ? undefined : val })}
-                            >
-                                <SelectTrigger className="h-6 border-none shadow-none p-0 px-2 text-xs focus:ring-0 font-medium min-w-[100px] text-left rounded-md transition-colors ml-1 bg-gray-50 text-gray-700 hover:bg-gray-100">
-                                    <SelectValue placeholder="Unassigned" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="unassigned">Unassigned</SelectItem>
-                                    <SelectItem value="staff">staff</SelectItem>
-                                    <SelectItem value="staff1">staff1</SelectItem>
-                                    <SelectItem value="staff2">staff2</SelectItem>
-                                    <SelectItem value="technician">technician</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
                     </div>
                 </DialogHeader>
 
-                <div className="flex-1 overflow-y-auto p-8 space-y-8 bg-white">
+                <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-white">
                     {/* Customer Header */}
-                    <div className="bg-white p-6 rounded-lg border border-gray-100 shadow-sm">
+                    <div className="bg-white p-5 rounded-lg border border-gray-100 shadow-sm">
                         <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                             <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
                             Customer Details
@@ -346,55 +323,13 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                     <div className="bg-white p-6 rounded-lg border border-gray-100 shadow-sm">
                         <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                             <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
-                            Services & Payment
+                            Services
                         </h3>
                         <div className="space-y-8">
                             {/* Top Row: Services Selection */}
                             <div className="space-y-6">
+                                {/* Top Row: Priority & Assignment */}
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <Label className={LABEL_STYLE}>Primary Service</Label>
-                                        <div className="border border-gray-100 rounded-lg p-2 max-h-40 overflow-y-auto space-y-1 bg-[#F8F9FA]/50">
-                                            {baseServices.map(s => {
-                                                const isChecked = (Array.isArray(formData.baseService) ? formData.baseService : []).includes(s.name);
-                                                return (
-                                                    <div key={s.id} className="flex items-center space-x-2 p-1.5 hover:bg-gray-50 rounded cursor-pointer" onClick={(e) => {
-                                                        e.preventDefault();
-                                                        const current = Array.isArray(formData.baseService) ? formData.baseService : [];
-                                                        const newServices = current.includes(s.name)
-                                                            ? current.filter(n => n !== s.name)
-                                                            : [...current, s.name];
-
-                                                        const updated = { ...formData, baseService: newServices };
-                                                        const totals = recalculateTotals(updated);
-                                                        setFormData({ ...updated, ...totals });
-                                                    }}>
-                                                        <Checkbox
-                                                            type="button"
-                                                            checked={isChecked}
-                                                            onCheckedChange={(checked) => {
-                                                                const current = Array.isArray(formData.baseService) ? formData.baseService : [];
-                                                                const newServices = checked
-                                                                    ? [...current, s.name]
-                                                                    : current.filter(n => n !== s.name);
-                                                                const updated = { ...formData, baseService: newServices };
-                                                                const totals = recalculateTotals(updated);
-                                                                setFormData({ ...updated, ...totals });
-                                                            }} id={`edit-base-${s.id}`} />
-                                                        <label htmlFor={`edit-base-${s.id}`} className="text-xs font-medium cursor-pointer flex-1 flex justify-between items-start">
-                                                            <div className="flex flex-col">
-                                                                <span>{s.name.split(' (with basic cleaning)')[0]}</span>
-                                                                {s.name.includes('(with basic cleaning)') && (
-                                                                    <span className="text-[10px] text-gray-500 font-normal">(with basic cleaning)</span>
-                                                                )}
-                                                            </div>
-                                                            <span className="text-gray-400 ml-2">{'\u20B1'}{s.price}</span>
-                                                        </label>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
                                     <div>
                                         <Label className={LABEL_STYLE}>Priority Level</Label>
                                         <Select
@@ -410,17 +345,77 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                             </SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="regular">Regular</SelectItem>
-                                                {/* Rush: Available for Basic Cleaning and Reglue, NOT Color Renewal */}
-                                                {/* Rush: Available for Basic Cleaning and Reglue */}
                                                 {(Array.isArray(formData.baseService) ? formData.baseService : []).some(s => s === 'Basic Cleaning' || s.includes('Reglue')) && (
                                                     <SelectItem value="rush">Rush</SelectItem>
                                                 )}
-                                                {/* Premium: Only available for Color Renewal */}
                                                 {formData.baseService.includes('Color Renewal') && (
                                                     <SelectItem value="premium">Premium</SelectItem>
                                                 )}
                                             </SelectContent>
                                         </Select>
+                                    </div>
+                                    <div>
+                                        <Label className={LABEL_STYLE}>Assigned To</Label>
+                                        <Select
+                                            value={formData.assignedTo || 'unassigned'}
+                                            onValueChange={(val: string) => setFormData({ ...formData, assignedTo: val === 'unassigned' ? undefined : val })}
+                                        >
+                                            <SelectTrigger className={`${INPUT_STYLE}`}>
+                                                <SelectValue placeholder="Unassigned" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="unassigned">Unassigned</SelectItem>
+                                                <SelectItem value="staff">staff</SelectItem>
+                                                <SelectItem value="staff1">staff1</SelectItem>
+                                                <SelectItem value="staff2">staff2</SelectItem>
+                                                <SelectItem value="technician">technician</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+
+                                {/* Second Row: Primary Service (Full Width) */}
+                                <div>
+                                    <Label className={LABEL_STYLE}>Primary Service</Label>
+                                    <div className="border border-gray-100 rounded-lg p-2 max-h-40 overflow-y-auto space-y-1 bg-[#F8F9FA]/50">
+                                        {baseServices.map(s => {
+                                            const isChecked = (Array.isArray(formData.baseService) ? formData.baseService : []).includes(s.name);
+                                            return (
+                                                <div key={s.id} className="flex items-center space-x-2 p-1.5 hover:bg-gray-50 rounded cursor-pointer" onClick={(e) => {
+                                                    e.preventDefault();
+                                                    const current = Array.isArray(formData.baseService) ? formData.baseService : [];
+                                                    const newServices = current.includes(s.name)
+                                                        ? current.filter(n => n !== s.name)
+                                                        : [...current, s.name];
+
+                                                    const updated = { ...formData, baseService: newServices };
+                                                    const totals = recalculateTotals(updated);
+                                                    setFormData({ ...updated, ...totals });
+                                                }}>
+                                                    <Checkbox
+                                                        type="button"
+                                                        checked={isChecked}
+                                                        onCheckedChange={(checked) => {
+                                                            const current = Array.isArray(formData.baseService) ? formData.baseService : [];
+                                                            const newServices = checked
+                                                                ? [...current, s.name]
+                                                                : current.filter(n => n !== s.name);
+                                                            const updated = { ...formData, baseService: newServices };
+                                                            const totals = recalculateTotals(updated);
+                                                            setFormData({ ...updated, ...totals });
+                                                        }} id={`edit-base-${s.id}`} />
+                                                    <label htmlFor={`edit-base-${s.id}`} className="text-xs font-medium cursor-pointer flex-1 flex justify-between items-start">
+                                                        <div className="flex flex-col">
+                                                            <span>{s.name.split(' (with basic cleaning)')[0]}</span>
+                                                            {s.name.includes('(with basic cleaning)') && (
+                                                                <span className="text-[10px] text-gray-500 font-normal">(with basic cleaning)</span>
+                                                            )}
+                                                        </div>
+                                                        <span className="text-gray-400 ml-2">{'\u20B1'}{s.price}</span>
+                                                    </label>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                                 <div>
@@ -542,13 +537,13 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                     </div>
                 </div>
 
-                <DialogFooter className="bg-white border-t border-gray-100 p-6 flex justify-between items-center flex-shrink-0 z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-                    <Button variant="ghost" onClick={() => onOpenChange(false)} className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold h-11 px-6">
+                <DialogFooter className="bg-white border-t border-gray-100 py-3 flex justify-center gap-6 items-center flex-shrink-0 z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] w-full pr-12">
+                    <Button variant="ghost" onClick={() => onOpenChange(false)} className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold h-11 px-8 min-w-[200px] uppercase tracking-wider">
                         Cancel
                     </Button>
                     <Button
                         onClick={() => onSave(formData.id, formData)}
-                        className="bg-red-600 hover:bg-red-700 text-white font-bold shadow-lg shadow-red-200 h-11 px-6 min-w-[100px]"
+                        className="bg-red-600 hover:bg-red-700 text-white font-bold shadow-lg shadow-red-200 h-11 px-8 min-w-[200px] uppercase tracking-wider"
                     >
                         Save
                     </Button>

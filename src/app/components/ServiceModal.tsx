@@ -59,20 +59,20 @@ export default function ServiceModal({ isOpen, onClose, service, onSave }: Servi
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="max-w-md">
                 <DialogHeader>
-                    <DialogTitle className="text-xl font-bold uppercase text-red-600">
+                    <DialogTitle className="text-xl font-bold uppercase text-red-600 text-center">
                         {service ? 'Edit Service' : 'Add New Service'}
                     </DialogTitle>
                 </DialogHeader>
 
                 <form onSubmit={handleSubmit} className="space-y-4 mt-2">
                     <div className="space-y-2">
-                        <Label htmlFor="service-name" className="text-xs font-bold uppercase tracking-widest text-gray-500">Service Name</Label>
+                        <Label htmlFor="service-name" className="text-xs font-bold uppercase tracking-widest text-gray-500">Name</Label>
                         <Input
                             id="service-name"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
                             placeholder="e.g. Deep Cleaning"
-                            className="font-medium"
+                            className="font-medium border-red-200 focus-visible:ring-0 focus-visible:border-red-600"
                             required
                         />
                     </div>
@@ -87,7 +87,7 @@ export default function ServiceModal({ isOpen, onClose, service, onSave }: Servi
                                     type="number"
                                     value={price}
                                     onChange={(e) => setPrice(e.target.value)}
-                                    className="pl-7 font-bold text-red-600"
+                                    className="pl-7 font-bold text-red-600 border-red-200 focus-visible:ring-0 focus-visible:border-red-600"
                                     placeholder="0.00"
                                     required
                                 />
@@ -97,7 +97,7 @@ export default function ServiceModal({ isOpen, onClose, service, onSave }: Servi
                         <div className="space-y-2">
                             <Label htmlFor="category" className="text-xs font-bold uppercase tracking-widest text-gray-500">Category</Label>
                             <Select value={category} onValueChange={(val: any) => setCategory(val)}>
-                                <SelectTrigger className="font-medium">
+                                <SelectTrigger className="font-medium border-red-200 focus:ring-0 focus:border-red-600">
                                     <SelectValue placeholder="Select type" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -115,15 +115,16 @@ export default function ServiceModal({ isOpen, onClose, service, onSave }: Servi
                             id="active-status"
                             checked={active}
                             onCheckedChange={setActive}
+                            className="data-[state=checked]:bg-emerald-500"
                         />
                     </div>
 
-                    <DialogFooter className="pt-4 flex sm:justify-between">
-                        <Button type="button" variant="outline" onClick={onClose} className="font-bold">
+                    <DialogFooter className="pt-4 flex gap-3">
+                        <Button type="button" variant="outline" onClick={onClose} className="flex-1 h-9 font-bold text-xs border border-gray-300 bg-gray-200 hover:bg-gray-700 text-gray-700 hover:text-white transition-all">
                             Cancel
                         </Button>
-                        <Button type="submit" className="bg-red-600 hover:bg-red-700 text-white font-bold">
-                            {service ? 'Save Changes' : 'Create'}
+                        <Button type="submit" className="bg-red-600 hover:bg-red-700 text-white font-bold flex-1 h-9 text-xs uppercase tracking-widest">
+                            {service ? 'Save' : 'Create'}
                         </Button>
                     </DialogFooter>
                 </form>
