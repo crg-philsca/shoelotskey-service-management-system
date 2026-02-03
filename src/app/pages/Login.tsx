@@ -21,7 +21,7 @@ export default function Login({ onLogin }: LoginProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Validate empty fields
     if (!username.trim()) {
       toast.error('Please enter your username', {
@@ -29,14 +29,14 @@ export default function Login({ onLogin }: LoginProps) {
       });
       return;
     }
-    
+
     if (!password.trim()) {
       toast.error('Please enter your password', {
         style: { background: '#fef2f2', color: '#dc2626' }
       });
       return;
     }
-    
+
     // Mock login logic
     if (username === 'owner' && password === 'owner123') {
       toast.success('Welcome, Owner!', {
@@ -61,7 +61,7 @@ export default function Login({ onLogin }: LoginProps) {
       <div className="flex flex-col flex-grow items-center justify-center w-full py-8 px-2 sm:px-4 md:px-6 mt-8">
         {/* Login Card - Center */}
         <Card className="w-full max-w-xs sm:max-w-sm md:max-w-md shadow-2xl mx-auto">
-          <CardHeader className="space-y-0 text-center pb-0 mb-0" style={{marginBottom: '-4px', paddingBottom: 0}}>
+          <CardHeader className="space-y-0 text-center pb-0 mb-0" style={{ marginBottom: '-4px', paddingBottom: 0 }}>
             <img
               src="/login.png"
               alt="Shoelotskey logo"
@@ -69,7 +69,7 @@ export default function Login({ onLogin }: LoginProps) {
               loading="lazy"
             />
             <CardDescription className="text-base xs:text-lg md:text-xl font-semibold text-black">
-              SERVICE MANAGEMENT SYSTEM
+
             </CardDescription>
           </CardHeader>
           <CardContent>
