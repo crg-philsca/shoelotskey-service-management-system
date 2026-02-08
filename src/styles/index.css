@@ -97,6 +97,23 @@ body {
 	scrollbar-color: #9ca3af #f1f1f1;
 }
 
+.custom-scrollbar::-webkit-scrollbar {
+	width: 5px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+	background: #e2e8f0;
+	border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+	background: #cbd5e1;
+}
+
 /* Date input styling */
 input[type="date"] {
 	color: black;

@@ -16,7 +16,7 @@ export default function ServiceIntakeModal({ }: ServiceIntakeModalProps) {
             <DialogTrigger asChild>
                 <Button className="bg-red-600 hover:bg-red-700 text-white gap-2 font-bold shadow-sm">
                     <CopyPlus size={18} />
-                    New Job Order
+                    New Job Order Form
                 </Button>
             </DialogTrigger>
             <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-[#F8F9FA] p-0 gap-0">

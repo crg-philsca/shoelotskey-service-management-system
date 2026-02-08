@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import { cn } from '@/app/components/ui/utils';
 import type { ReactNode } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
@@ -21,7 +22,26 @@ import { mockServices } from '@/app/lib/mockData';
 import { useOrders } from '@/app/context/OrderContext';
 import { useExpenses } from '@/app/context/ExpenseContext';
 import AddExpenseModal from '@/app/components/AddExpenseModal';
-import { FileText, ChevronDown, ChevronLeft, ChevronRight, Filter, Search, MoreVertical, Edit, ArrowRight, PlusCircle, PackageOpen, Clock7, ClipboardCheck, CircleAlert, X, Calendar as CalendarIcon, TrendingUp } from 'lucide-react';
+import {
+  Search,
+  MoreVertical,
+  Calendar as CalendarIcon,
+  TrendingUp,
+  ChevronDown,
+  Edit,
+  ArrowRight,
+  PlusCircle,
+  X,
+  Filter,
+  RotateCcw,
+  Clock7,
+  PackageOpen,
+  ClipboardCheck,
+  FileText,
+  CircleAlert,
+  ChevronLeft,
+  ChevronRight
+} from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Cell } from 'recharts';
 import type { JobOrder } from '@/app/types';
 
@@ -684,11 +704,14 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                       );
                     }
 
-                    // Sort rush orders to the top
+                    // Sort: Recently updated first (move next moves to top), then rush
                     filtered.sort((a, b) => {
+                      const timeA = new Date(a.updatedAt || a.createdAt).getTime();
+                      const timeB = new Date(b.updatedAt || b.createdAt).getTime();
+                      if (timeA !== timeB) return timeB - timeA;
                       if (a.priorityLevel === 'rush' && b.priorityLevel !== 'rush') return -1;
                       if (a.priorityLevel !== 'rush' && b.priorityLevel === 'rush') return 1;
-                      return 0;
+                      return b.orderNumber.localeCompare(a.orderNumber);
                     });
 
                     const totalPages = Math.ceil(filtered.length / itemsPerPage) || 1;
@@ -719,7 +742,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                                   setIsEditing(false);
                                 }}
                               >
-                                <td className="px-4 py-3 text-sm font-medium text-center">{order.orderNumber}</td>
+                                <td className="px-4 py-3 text-sm font-medium text-center whitespace-nowrap">{order.orderNumber}</td>
                                 <td className="px-4 py-3 text-sm text-center">
                                   <div className="inline-block text-left w-full max-w-[180px]">
                                     {order.customerName}
@@ -762,66 +785,79 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                                       </button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end" className="w-56 p-2 space-y-1">
-                                      <DropdownMenuItem onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectedOrder(order);
-                                        setIsEditing(true);
-                                      }} className="border border-gray-200 rounded-md px-2.5 py-1.5 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:text-yellow-800 focus:bg-yellow-100">
-                                        <Edit className="h-4 w-4 mr-2" />
-                                        Edit Order
-                                      </DropdownMenuItem>
+                                      {order.status === 'new-order' && (
+                                        <DropdownMenuItem onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedOrder(order);
+                                          setIsEditing(true);
+                                        }} className="border border-gray-200 rounded-md px-2.5 py-1.5 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:text-yellow-800 focus:bg-yellow-100 mb-1">
+                                          <Edit className="h-4 w-4 mr-2" />
+                                          Edit Order Detail
+                                        </DropdownMenuItem>
+                                      )}
+
+                                      {order.status !== 'new-order' && (
+                                        <DropdownMenuItem onClick={(e) => {
+                                          e.stopPropagation();
+                                          const prevStatus =
+                                            order.status === 'on-going' ? 'new-order' :
+                                              order.status === 'for-release' ? 'on-going' :
+                                                order.status === 'claimed' ? 'for-release' : null;
+
+                                          if (prevStatus) {
+                                            updateOrder(order.id, {
+                                              status: prevStatus as any,
+                                              updatedAt: new Date(),
+                                              actualCompletionDate: undefined
+                                            }, user.username);
+                                            toast.success(`Order reverted to ${prevStatus.replace('-', ' ')}`);
+                                          }
+                                        }} className={cn(
+                                          "border rounded-md px-2.5 py-1.5 mb-1 focus:outline-none",
+                                          order.status === 'on-going' && "border-purple-200 text-purple-600 bg-purple-50 hover:bg-purple-100 focus:text-purple-700 focus:bg-purple-100",
+                                          order.status === 'for-release' && "border-blue-200 text-blue-600 bg-blue-50 hover:bg-blue-100 focus:text-blue-700 focus:bg-blue-100",
+                                          order.status === 'claimed' && "border-orange-200 text-orange-600 bg-orange-50 hover:bg-orange-100 focus:text-orange-700 focus:bg-orange-100"
+                                        )}>
+                                          <RotateCcw className={cn(
+                                            "h-4 w-4 mr-2",
+                                            order.status === 'on-going' && "text-purple-500",
+                                            order.status === 'for-release' && "text-blue-500",
+                                            order.status === 'claimed' && "text-orange-500"
+                                          )} />
+                                          {order.status === 'on-going' ? 'Undo to New Order' :
+                                            order.status === 'for-release' ? 'Undo to On-Going' :
+                                              'Undo to For Release'}
+                                        </DropdownMenuItem>
+                                      )}
+
                                       {selectedStatus === 'new-order' && (
                                         <DropdownMenuItem onClick={(e) => {
                                           e.stopPropagation();
-                                          const prevStatus = order.status;
                                           updateOrder(order.id, { status: 'on-going', updatedAt: new Date() }, user.username);
-                                          toast.success('Order moved to On-Going', {
-                                            style: { background: '#f0fdf4', color: '#166534' },
-                                            action: {
-                                              label: 'Undo',
-                                              onClick: () => updateOrder(order.id, { status: prevStatus, updatedAt: new Date() })
-                                            },
-                                            actionButtonStyle: { backgroundColor: '#dc2626', color: 'white' }
-                                          });
+                                          toast.success('Order moved to On-Going');
                                         }} className="border border-gray-200 rounded-md px-2.5 py-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 focus:text-blue-700 focus:bg-blue-100">
                                           <ArrowRight className="h-4 w-4 mr-2" />
-                                          On-Going
+                                          Move to On-Going
                                         </DropdownMenuItem>
                                       )}
                                       {selectedStatus === 'on-going' && (
                                         <DropdownMenuItem onClick={(e) => {
                                           e.stopPropagation();
-                                          const prevStatus = order.status;
                                           updateOrder(order.id, { status: 'for-release', updatedAt: new Date() }, user.username);
-                                          toast.success('Order moved to For Release', {
-                                            style: { background: '#f0fdf4', color: '#166534' },
-                                            action: {
-                                              label: 'Undo',
-                                              onClick: () => updateOrder(order.id, { status: prevStatus, updatedAt: new Date() })
-                                            },
-                                            actionButtonStyle: { backgroundColor: '#dc2626', color: 'white' }
-                                          });
+                                          toast.success('Order moved to For Release');
                                         }} className="border border-gray-200 rounded-md px-2.5 py-1.5 text-orange-600 bg-orange-50 hover:bg-orange-100 focus:text-orange-700 focus:bg-orange-100">
                                           <ArrowRight className="h-4 w-4 mr-2" />
-                                          For Release
+                                          Move to For Release
                                         </DropdownMenuItem>
                                       )}
                                       {selectedStatus === 'for-release' && (
                                         <DropdownMenuItem onClick={(e) => {
                                           e.stopPropagation();
-                                          const prevStatus = order.status;
                                           updateOrder(order.id, { status: 'claimed', updatedAt: new Date(), actualCompletionDate: new Date() }, user.username);
-                                          toast.success('Order moved to Claimed', {
-                                            style: { background: '#f0fdf4', color: '#166534' },
-                                            action: {
-                                              label: 'Undo',
-                                              onClick: () => updateOrder(order.id, { status: prevStatus, updatedAt: new Date(), actualCompletionDate: undefined })
-                                            },
-                                            actionButtonStyle: { backgroundColor: '#dc2626', color: 'white' }
-                                          });
+                                          toast.success('Order moved to Claimed');
                                         }} className="border border-gray-200 rounded-md px-2.5 py-1.5 text-gray-600 bg-gray-50 hover:bg-gray-100 focus:text-gray-700 focus:bg-gray-100">
                                           <ArrowRight className="h-4 w-4 mr-2" />
-                                          Claimed
+                                          Move to Claimed
                                         </DropdownMenuItem>
                                       )}
                                     </DropdownMenuContent>
@@ -1020,13 +1056,19 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                       </div>
                       <div className="space-y-1">
                         <Label className="text-xs font-medium text-slate-500">Status</Label>
-                        <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-black uppercase tracking-wider ${selectedOrder.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' :
+                        <span className={`inline-block px-2 py-0.5 rounded text-[14px] font-black uppercase tracking-wider ${selectedOrder.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' :
                           selectedOrder.paymentStatus === 'partial' ? 'bg-amber-100 text-amber-700' :
                             'bg-red-100 text-red-700'
                           }`}>
                           {selectedOrder.paymentStatus || 'unpaid'}
                         </span>
                       </div>
+                      {['gcash', 'maya'].includes(selectedOrder.paymentMethod?.toLowerCase()) && (selectedOrder.paymentStatus === 'paid' || selectedOrder.paymentStatus === 'partial') && (
+                        <div className="space-y-1 col-span-2">
+                          <Label className="text-xs font-medium text-slate-500">Reference Number</Label>
+                          <p className="text-[14px] font-bold text-slate-900 font-mono tracking-tight">{selectedOrder.referenceNo || '-'}</p>
+                        </div>
+                      )}
                       <div className="space-y-1">
                         <Label className="text-xs font-medium text-slate-500">Amount Received</Label>
                         <p className="text-[14px] font-bold text-slate-900">₱{(selectedOrder.amountReceived || 0).toFixed(2)}</p>
@@ -1035,6 +1077,14 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                         <Label className="text-xs font-medium text-slate-500">Change</Label>
                         <p className="text-[14px] font-bold text-slate-900">₱{(selectedOrder.change || 0).toFixed(2)}</p>
                       </div>
+                      {(selectedOrder.paymentStatus === 'unpaid' || selectedOrder.paymentStatus === 'partial') && (
+                        <div className="space-y-1">
+                          <Label className="text-xs font-medium text-slate-500">Remaining Balance</Label>
+                          <p className="text-[14px] font-black uppercase tracking-wider text-red-600">
+                            ₱{(selectedOrder.grandTotal - (selectedOrder.amountReceived || 0)).toFixed(2)}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -1049,6 +1099,12 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                         <span className="text-sm font-medium">Add-ons Total</span>
                         <span className="text-[14px] font-bold text-slate-900">₱{selectedOrder.addOnsTotal.toFixed(2)}</span>
                       </div>
+                      {selectedOrder.priorityLevel === 'rush' && (
+                        <div className="flex justify-between items-center text-slate-600">
+                          <span className="text-sm font-medium">Rush Fee</span>
+                          <span className="text-[14px] font-bold text-slate-900">₱{(selectedOrder.grandTotal - (selectedOrder.baseServiceFee + selectedOrder.addOnsTotal)).toFixed(2)}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between items-center pt-2 border-t border-slate-200 mt-2">
                         <span className="text-lg font-black text-slate-900">Grand Total</span>
                         <span className="text-lg font-black text-red-600">₱{selectedOrder.grandTotal.toFixed(2)}</span>
@@ -1064,6 +1120,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
           <EditOrderModal
             order={selectedOrder}
             open={!!selectedOrder && isEditing}
+            hideHistory={role === 'staff'}
             onOpenChange={(open) => {
               if (!open) {
                 setIsEditing(false);
@@ -1395,13 +1452,17 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
 
                                 return true;
                               }).sort((a, b) => {
-                                // Priority sorting: Rush=0, Premium=1, Regular=2
+                                // Sort: Recently updated first, then priority
                                 const priorityMap = { 'rush': 0, 'premium': 1, 'regular': 2 };
                                 const aP = priorityMap[a.priorityLevel as keyof typeof priorityMap] ?? 3;
                                 const bP = priorityMap[b.priorityLevel as keyof typeof priorityMap] ?? 3;
 
+                                const timeA = new Date(a.updatedAt || a.createdAt).getTime();
+                                const timeB = new Date(b.updatedAt || b.createdAt).getTime();
+
+                                if (timeA !== timeB) return timeB - timeA;
                                 if (aP !== bP) return aP - bP;
-                                return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+                                return b.orderNumber.localeCompare(a.orderNumber);
                               });
 
                             const itemsPerPageAssigned = 5;
@@ -1423,7 +1484,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                               <>
                                 {paginatedAssigned.map((job) => (
                                   <tr key={job.id} className="hover:bg-gray-50 transition-colors">
-                                    <td className="px-4 py-3 text-sm font-medium text-center">{job.orderNumber}</td>
+                                    <td className="px-4 py-3 text-sm font-medium text-center whitespace-nowrap">{job.orderNumber}</td>
                                     <td className="px-4 py-3 text-sm text-center font-medium">{job.customerName}</td>
                                     <td className="px-4 py-3 text-sm text-center truncate max-w-[150px]">
                                       {Array.isArray(job.baseService)
@@ -1483,34 +1544,88 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                                             </Button>
                                           </DropdownMenuTrigger>
                                           <DropdownMenuContent align="end" className="w-[180px] p-1.5 rounded-2xl border-gray-100 shadow-2xl">
-                                            <DropdownMenuItem
-                                              onClick={() => { setSelectedOrder(job); setIsEditing(true); }}
-                                              className="h-11 gap-3 rounded-xl px-4 cursor-pointer bg-amber-50 hover:bg-amber-100 text-amber-800 transition-all font-bold mb-1.5"
-                                            >
-                                              <Edit size={16} className="text-amber-600" />
-                                              <span>Edit Order</span>
-                                            </DropdownMenuItem>
+                                            {job.status === 'new-order' && (
+                                              <DropdownMenuItem
+                                                onClick={() => { setSelectedOrder(job); setIsEditing(true); }}
+                                                className="h-11 gap-3 rounded-xl px-4 cursor-pointer bg-amber-50 hover:bg-amber-100 text-amber-800 transition-all font-bold mb-1.5"
+                                              >
+                                                <Edit size={16} className="text-amber-600" />
+                                                <span>Edit Order Detail</span>
+                                              </DropdownMenuItem>
+                                            )}
 
-                                            <DropdownMenuItem
-                                              onClick={() => updateOrder(job.id, { status: 'on-going' })}
-                                              className="h-11 gap-3 rounded-xl px-4 cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-800 transition-all font-bold"
-                                            >
-                                              <ArrowRight size={16} className="text-blue-500" />
-                                              <span>On-Going</span>
-                                            </DropdownMenuItem>
+                                            {job.status !== 'new-order' && (
+                                              <DropdownMenuItem
+                                                onClick={() => {
+                                                  const prevStatus =
+                                                    job.status === 'on-going' ? 'new-order' :
+                                                      job.status === 'for-release' ? 'on-going' :
+                                                        job.status === 'claimed' ? 'for-release' : null;
+                                                  if (prevStatus) updateOrder(job.id, { status: prevStatus as any, actualCompletionDate: undefined });
+                                                }}
+                                                className={cn(
+                                                  "h-11 gap-3 rounded-xl px-4 cursor-pointer transition-all font-bold mb-1.5",
+                                                  job.status === 'on-going' && "bg-purple-50 hover:bg-purple-100 text-purple-700",
+                                                  job.status === 'for-release' && "bg-blue-50 hover:bg-blue-100 text-blue-700",
+                                                  job.status === 'claimed' && "bg-orange-50 hover:bg-orange-100 text-orange-700"
+                                                )}
+                                              >
+                                                <RotateCcw size={16} className={cn(
+                                                  job.status === 'on-going' && "text-purple-500",
+                                                  job.status === 'for-release' && "text-blue-500",
+                                                  job.status === 'claimed' && "text-orange-500"
+                                                )} />
+                                                <span>
+                                                  {job.status === 'on-going' ? 'Undo to New Order' :
+                                                    job.status === 'for-release' ? 'Undo to On-Going' :
+                                                      'Undo to For Release'}
+                                                </span>
+                                              </DropdownMenuItem>
+                                            )}
+
+                                            {['new-order', 'on-going', 'for-release'].includes(job.status) && (
+                                              <DropdownMenuItem
+                                                onClick={() => {
+                                                  const nextStatus =
+                                                    job.status === 'new-order' ? 'on-going' :
+                                                      job.status === 'on-going' ? 'for-release' :
+                                                        job.status === 'for-release' ? 'claimed' : null;
+
+                                                  if (nextStatus) {
+                                                    updateOrder(job.id, {
+                                                      status: nextStatus as any,
+                                                      actualCompletionDate: nextStatus === 'claimed' ? new Date() : undefined
+                                                    });
+                                                  }
+                                                }}
+                                                className={cn(
+                                                  "h-11 gap-3 rounded-xl px-4 cursor-pointer transition-all font-bold",
+                                                  job.status === 'for-release'
+                                                    ? "bg-gray-50 hover:bg-gray-100 text-gray-700"
+                                                    : "bg-blue-50 hover:bg-blue-100 text-blue-800"
+                                                )}
+                                              >
+                                                <ArrowRight size={16} className={job.status === 'for-release' ? "text-gray-500" : "text-blue-500"} />
+                                                <span>
+                                                  {job.status === 'new-order' ? 'Move to On-Going' :
+                                                    job.status === 'on-going' ? 'Move to For Release' :
+                                                      'Move to Claimed'}
+                                                </span>
+                                              </DropdownMenuItem>
+                                            )}
 
                                             <DropdownMenuSeparator className="my-2 bg-gray-50" />
                                             <DropdownMenuLabel className="text-[10px] font-black uppercase text-gray-400 tracking-widest px-3 py-1 mb-1">Set Status</DropdownMenuLabel>
 
                                             <DropdownMenuItem
-                                              onClick={() => updateOrder(job.id, { status: 'for-release' })}
+                                              onClick={() => updateOrder(job.id, { status: 'for-release', actualCompletionDate: undefined })}
                                               className="h-10 gap-2.5 rounded-lg px-4 cursor-pointer text-orange-600 hover:bg-orange-50 font-bold transition-all text-xs"
                                             >
                                               <div className="h-2 w-2 rounded-full bg-orange-500 shadow-sm shadow-orange-200" />
                                               <span>Set to For Release</span>
                                             </DropdownMenuItem>
                                             <DropdownMenuItem
-                                              onClick={() => updateOrder(job.id, { status: 'claimed' })}
+                                              onClick={() => updateOrder(job.id, { status: 'claimed', actualCompletionDate: new Date() })}
                                               className="h-10 gap-2.5 rounded-lg px-4 cursor-pointer text-green-600 hover:bg-green-50 font-bold transition-all text-xs"
                                             >
                                               <div className="h-2 w-2 rounded-full bg-green-500 shadow-sm shadow-green-200" />
@@ -1618,7 +1733,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                           });
                           return sortedOrders.slice(0, 5).map((job) => (
                             <tr key={job.id}>
-                              <td className="px-4 py-3 text-sm font-medium text-center">{job.orderNumber}</td>
+                              <td className="px-4 py-3 text-sm font-medium text-center whitespace-nowrap">{job.orderNumber}</td>
                               <td className="px-4 py-3 text-sm text-center">{job.customerName}</td>
                               <td className="px-4 py-3 text-sm text-center">
                                 {Array.isArray(job.baseService)

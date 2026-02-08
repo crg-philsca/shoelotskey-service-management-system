@@ -184,7 +184,7 @@ export default function ClaimMonitoring() {
                         <table className="w-full border-collapse min-w-[700px]">
                             <thead className="bg-red-50">
                                 <tr>
-                                    <th className="border-b border-gray-200 px-2 py-1.5 text-[11px] font-black text-gray-500 uppercase tracking-wider w-[110px] whitespace-nowrap text-center">Order #</th>
+                                    <th className="border-b border-gray-200 px-2 py-1.5 text-[11px] font-black text-gray-500 uppercase tracking-wider w-[150px] whitespace-nowrap text-center">Order #</th>
                                     <th className="border-b border-gray-200 px-2 py-1.5 text-[11px] font-black text-gray-500 uppercase tracking-wider text-center w-[180px]">Customer's Name</th>
                                     <th className="border-b border-gray-200 px-2 py-1.5 text-[11px] font-black text-gray-500 uppercase tracking-wider w-[90px] whitespace-nowrap text-center">Date</th>
                                     <th className="border-b border-gray-200 px-2 py-1.5 text-[11px] font-black text-gray-500 uppercase tracking-wider w-[60px] whitespace-nowrap text-center">Pairs</th>

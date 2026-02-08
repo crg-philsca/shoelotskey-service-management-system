@@ -1,7 +1,7 @@
 export type JobStatus = 'new-order' | 'on-going' | 'for-release' | 'claimed';
 export type Priority = 'regular' | 'rush' | 'premium';
 export type ShippingPreference = 'pickup' | 'delivery';
-export type PaymentMethod = 'cash' | 'gcash' | 'paymaya' | 'bank_transfer' | 'maya';
+export type PaymentMethod = 'cash' | 'gcash' | 'maya';
 export type PaymentStatus = 'unpaid' | 'paid' | 'partial';
 
 export interface ServiceIntakeData {
@@ -35,13 +35,19 @@ export interface ServiceIntakeData {
 
   // Shipping
   shippingPreference: ShippingPreference;
-  deliveryAddress?: string;
+  deliveryAddress?: string; // Composed address
+  deliveryCourier?: string;
+  province?: string;
+  city?: string;
+  barangay?: string;
+  zipCode?: string;
 
   // Payment
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
   amountReceived?: number;
   change?: number;
+  referenceNo?: string;
 
   // Storage
   shelfLocation?: string;
@@ -49,6 +55,24 @@ export interface ServiceIntakeData {
   // Metadata
   transactionDate: Date;
   processedBy: string;
+}
+
+export interface ShoeItem {
+  id: string;
+  brand: string;
+  shoeMaterial: string;
+  quantity: number;
+  condition: {
+    scratches: boolean;
+    ripsHoles: boolean;
+    wornOut: boolean;
+    soleSeparation: boolean;
+    yellowing: boolean;
+    deepStains: boolean;
+    others: string;
+  };
+  baseService: string[];
+  addOns: { name: string; quantity: number }[];
 }
 
 export interface JobOrder extends ServiceIntakeData {
@@ -60,6 +84,8 @@ export interface JobOrder extends ServiceIntakeData {
   actualCompletionDate?: Date;
   createdAt: Date;
   updatedAt: Date;
+  items?: ShoeItem[];
+  releaseTime?: string;
   statusHistory: Array<{
     status: JobStatus;
     timestamp: Date;

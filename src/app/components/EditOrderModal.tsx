@@ -15,6 +15,7 @@ interface EditOrderModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSave: (orderId: string, updates: Partial<JobOrder>) => void;
+    hideHistory?: boolean;
 }
 
 const SHOE_BRANDS = [
@@ -27,7 +28,7 @@ const SHOE_MATERIALS = [
     'Leather', 'Synthetic', 'Canvas', 'Mesh', 'Rubber', 'Textile', 'Suede', 'Knit', 'Patent Leather', 'Denim', 'Nubuck', 'Other'
 ];
 
-export default function EditOrderModal({ order, open, onOpenChange, onSave }: EditOrderModalProps) {
+export default function EditOrderModal({ order, open, onOpenChange, onSave, hideHistory }: EditOrderModalProps) {
     const [formData, setFormData] = useState<JobOrder | null>(null);
 
     useEffect(() => {
@@ -131,7 +132,7 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                     {/* Top Row: Title & Order Number */}
                     <div className="flex flex-row items-center justify-center gap-3 w-full">
                         <DialogTitle className="text-xl font-bold text-gray-900 whitespace-nowrap">
-                            EDIT ORDER
+                            EDIT ORDER DETAIL
                         </DialogTitle>
                         <span className="text-sm font-bold text-gray-500 bg-gray-100 px-3 py-1 rounded-full whitespace-nowrap">
                             {formData.orderNumber}
@@ -141,17 +142,26 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                     {/* Bottom Row: Actions (Activity & Status) */}
                     <div className="flex flex-row justify-center gap-6 w-full">
                         {/* Activity */}
-                        <div className="flex flex-row items-center gap-1">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Activity</span>
-                            <Button variant="ghost" size="sm" className="h-7 px-2 hover:bg-red-50 hover:text-red-500 text-gray-600 text-xs">
-                                <History size={14} className="mr-0" /> History
-                            </Button>
-                        </div>
+                        {!hideHistory && (
+                            <div className="flex flex-row items-center gap-1">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Activity</span>
+                                <Button variant="ghost" size="sm" className="h-7 px-2 hover:bg-red-50 hover:text-red-500 text-gray-600 text-xs">
+                                    <History size={14} className="mr-0" /> History
+                                </Button>
+                            </div>
+                        )}
 
                         {/* Status */}
                         <div className="flex flex-row items-center gap-1">
                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Status</span>
-                            <Select value={formData.status} onValueChange={(val: JobStatus) => setFormData({ ...formData, status: val })}>
+                            <Select
+                                value={formData.status}
+                                onValueChange={(val: JobStatus) => setFormData({
+                                    ...formData,
+                                    status: val,
+                                    actualCompletionDate: val === 'claimed' ? new Date() : undefined
+                                })}
+                            >
                                 <SelectTrigger
                                     className={`h-6 border-none shadow-none p-0 px-2 text-xs focus:ring-0 font-medium min-w-[100px] text-left rounded-md transition-colors ml-1
                                     ${formData.status === 'new-order' ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' :
@@ -504,7 +514,6 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                                                 <SelectItem value="cash">Cash</SelectItem>
                                                                 <SelectItem value="gcash">GCash</SelectItem>
                                                                 <SelectItem value="maya">Maya</SelectItem>
-                                                                <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
                                                             </SelectContent>
                                                         </Select>
                                                     )}
@@ -524,6 +533,18 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                                 </div>
                                             </div>
                                         </div>
+
+                                        {['gcash', 'maya'].includes(formData.paymentMethod) && (formData.paymentStatus === 'paid' || formData.paymentStatus === 'partial') && (
+                                            <div className="pt-2">
+                                                <Label className={LABEL_STYLE}>Reference Number</Label>
+                                                <Input
+                                                    value={formData.referenceNo || ''}
+                                                    onChange={(e) => setFormData({ ...formData, referenceNo: e.target.value })}
+                                                    className="h-9 text-xs bg-white border-gray-200 font-mono"
+                                                    placeholder="Enter reference number"
+                                                />
+                                            </div>
+                                        )}
                                         <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
                                             <span className="text-xs font-bold text-gray-500 uppercase">Remaining Balance</span>
                                             <span className={`text-base font-black ${remainingBalance > 0 ? 'text-red-600' : 'text-green-600'} `}>

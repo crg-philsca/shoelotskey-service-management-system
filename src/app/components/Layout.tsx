@@ -43,7 +43,7 @@ export default function Layout({ children, user, onLogout, onUpdateUser, headerA
 
   const ownerMenuItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', shortLabel: 'Dashboard' },
-    { path: '/service-intake', icon: FileText, label: 'Service Intake', shortLabel: 'Intake' },
+    { path: '/service-intake', icon: FileText, label: 'Job Order Form', shortLabel: 'Job Order Form' },
     { path: '/calendar', icon: Calendar, label: 'Release Calendar', shortLabel: 'Calendar' },
     { path: '/reports', icon: Activity, label: 'Sales Report', shortLabel: 'Sales' },
     { path: '/service-management', icon: Wrench, label: 'Service Management', shortLabel: 'Service' },
@@ -52,13 +52,13 @@ export default function Layout({ children, user, onLogout, onUpdateUser, headerA
 
   const staffMenuItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', shortLabel: 'Dashboard' },
-    { path: '/service-intake', icon: FileText, label: 'Service Intake', shortLabel: 'Intake' },
+    { path: '/service-intake', icon: FileText, label: 'Job Order Form', shortLabel: 'Job Order Form' },
     { path: '/calendar', icon: Calendar, label: 'Release Calendar', shortLabel: 'Calendar' },
   ];
 
   const pageTitles: Record<string, string> = {
     '/dashboard': 'Dashboard',
-    '/service-intake': 'Service Intake',
+    '/service-intake': 'Job Order Form',
     '/calendar': 'Release Calendar',
     '/reports': 'Sales Report',
     '/service-management': 'Service Management',

@@ -79,7 +79,7 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
               <CardTitle className="text-base font-black text-gray-900 uppercase">Base Services</CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
-              <div className="space-y-3 -mt-2">
+              <div className="space-y-3 -mt-2 pr-1 max-h-[240px] overflow-y-scroll custom-scrollbar">
                 {services.filter(s => s.category === 'base').map(service => (
                   <div key={service.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border-none gap-3">
                     <div className="min-w-0">
@@ -110,7 +110,7 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
               <CardTitle className="text-base font-black text-gray-900 uppercase">Priority Fees</CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
-              <div className="space-y-3 -mt-2">
+              <div className="space-y-3 -mt-2 pr-1 max-h-[180px] overflow-y-scroll custom-scrollbar">
                 {services.filter(s => s.category === 'priority').map(service => (
                   <div key={service.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border-none gap-3">
                     <div className="min-w-0">
@@ -143,8 +143,8 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
           <CardHeader className="pt-3 pb-0 px-4">
             <CardTitle className="text-base font-black text-gray-900 uppercase">Add-On Services</CardTitle>
           </CardHeader>
-          <CardContent className="pt-0">
-            <div className="space-y-3 -mt-2">
+          <CardContent className="pt-0 h-[calc(100%-48px)]">
+            <div className="space-y-3 -mt-2 pr-1 max-h-[440px] overflow-y-scroll custom-scrollbar">
               {services.filter(s => s.category === 'addon').map(service => (
                 <div key={service.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border-none gap-3">
                   <div className="min-w-0">

@@ -6,7 +6,7 @@ import { Input } from '@/app/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu';
-import { Search, Filter, MoreVertical, Edit, ArrowRight } from 'lucide-react';
+import { Search, Filter, MoreVertical, Edit, ArrowRight, RotateCcw } from 'lucide-react';
 import { mockServices } from '@/app/lib/mockData';
 import EditOrderModal from '@/app/components/EditOrderModal';
 import ServiceIntakeModal from '@/app/components/ServiceIntakeModal';
@@ -72,11 +72,14 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
         return true;
     });
 
-    // Sort: Rush first, then newest
+    // Sort: Recently updated first (move to status moves to top), then rush, then sequence
     filteredOrders.sort((a, b) => {
+        const timeA = new Date(a.updatedAt || a.createdAt).getTime();
+        const timeB = new Date(b.updatedAt || b.createdAt).getTime();
+        if (timeA !== timeB) return timeB - timeA;
         if (a.priorityLevel === 'rush' && b.priorityLevel !== 'rush') return -1;
         if (a.priorityLevel !== 'rush' && b.priorityLevel === 'rush') return 1;
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        return b.orderNumber.localeCompare(a.orderNumber);
     });
 
     const totalPages = Math.ceil(filteredOrders.length / itemsPerPage) || 1;
@@ -199,7 +202,7 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                                     onCheckedChange={(checked) => handleSelectOrder(order.id, checked as boolean)}
                                                 />
                                             </td>
-                                            <td className="p-4 font-medium">{order.orderNumber}</td>
+                                            <td className="p-4 font-medium whitespace-nowrap">{order.orderNumber}</td>
                                             <td className="p-4">
                                                 <div className="font-medium text-gray-900">{order.customerName}</div>
                                                 <div className="text-xs text-gray-500">{order.contactNumber}</div>
@@ -240,14 +243,39 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                                         </Button>
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end">
-                                                        <DropdownMenuItem onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setSelectedOrder(order);
-                                                            setIsEditing(true);
-                                                        }}>
-                                                            <Edit className="mr-2 h-4 w-4" /> Edit
-                                                        </DropdownMenuItem>
-                                                        {['new-order', 'on-going', 'for-release', 'claimed'].includes(order.status) && (
+                                                        {order.status === 'new-order' && (
+                                                            <DropdownMenuItem onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setSelectedOrder(order);
+                                                                setIsEditing(true);
+                                                            }}>
+                                                                <Edit className="mr-2 h-4 w-4" /> Edit
+                                                            </DropdownMenuItem>
+                                                        )}
+                                                        {order.status !== 'new-order' && (
+                                                            <DropdownMenuItem onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                const prevStatus =
+                                                                    order.status === 'on-going' ? 'new-order' :
+                                                                        order.status === 'for-release' ? 'on-going' :
+                                                                            order.status === 'claimed' ? 'for-release' : null;
+
+                                                                if (prevStatus) {
+                                                                    updateOrder(order.id, {
+                                                                        status: prevStatus as any,
+                                                                        updatedAt: new Date(),
+                                                                        actualCompletionDate: undefined
+                                                                    }, user.username);
+                                                                    toast.success(`Order reverted to ${prevStatus.replace('-', ' ')}`);
+                                                                }
+                                                            }}>
+                                                                <RotateCcw className="mr-2 h-4 w-4" />
+                                                                {order.status === 'on-going' ? 'Undo to New Order' :
+                                                                    order.status === 'for-release' ? 'Undo to On-Going' :
+                                                                        'Undo to For Release'}
+                                                            </DropdownMenuItem>
+                                                        )}
+                                                        {['new-order', 'on-going', 'for-release', 'claimed'].includes(order.status) && order.status !== 'claimed' && (
                                                             <DropdownMenuItem onClick={(e) => {
                                                                 e.stopPropagation();
                                                                 const nextStatus =
@@ -256,7 +284,11 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                                                             order.status === 'for-release' ? 'claimed' : null;
 
                                                                 if (nextStatus) {
-                                                                    updateOrder(order.id, { status: nextStatus as any, updatedAt: new Date() }, user.username);
+                                                                    updateOrder(order.id, {
+                                                                        status: nextStatus as any,
+                                                                        updatedAt: new Date(),
+                                                                        actualCompletionDate: nextStatus === 'claimed' ? new Date() : undefined
+                                                                    }, user.username);
                                                                     toast.success(`Order moved to ${nextStatus.replace('-', ' ')}`);
                                                                 }
                                                             }}>
@@ -346,6 +378,7 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
             {selectedOrder && (
                 <EditOrderModal
                     open={isEditing}
+                    hideHistory={user.role === 'staff'}
                     onOpenChange={(open) => {
                         setIsEditing(open);
                         if (!open) setSelectedOrder(null);
@@ -387,7 +420,7 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                 <p className="text-sm text-gray-600">{selectedOrder.condition.others || 'No notes'}</p>
                             </div>
                             <div className="flex justify-end pt-4">
-                                <Button onClick={() => setIsEditing(true)}>Edit Order</Button>
+                                <Button onClick={() => setIsEditing(true)}>Edit Order Detail</Button>
                             </div>
                         </div>
                     </DialogContent>

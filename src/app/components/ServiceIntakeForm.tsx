@@ -8,26 +8,32 @@ import { Checkbox } from '@/app/components/ui/checkbox';
 import { Textarea } from '@/app/components/ui/textarea';
 import { toast } from 'sonner';
 import { mockServices } from '@/app/lib/mockData';
-import { cityNames, getBarangaysForCity, getZipFor } from '@/app/lib/ncrLocations';
-import { Plus, X, Search, Calendar, User, Hash, ClipboardList, RotateCcw } from 'lucide-react';
+import { Plus, X, Calendar, User, Hash, ClipboardList, RotateCcw } from 'lucide-react';
 import { useOrders } from '@/app/context/OrderContext';
 import type { ShippingPreference, PaymentMethod, PaymentStatus, Priority } from '@/app/types';
+import { CreatableCombobox } from './ui/creatable-combobox';
 
 // Dropdown options
 const SHOE_BRANDS = [
-    'Nike', 'Adidas', 'Asics', 'Puma', 'New Balance', 'Converse', 'Vans', 'Reebok', 'Jordan',
+    'Other', 'Nike', 'Adidas', 'Asics', 'Puma', 'New Balance', 'Converse', 'Vans', 'Reebok', 'Jordan',
     'Under Armour', 'Timberland', 'Dr. Martens', 'Salomon', 'Merrell', 'Skechers', 'Mizuno',
-    'Brooks', 'Saucony', 'Hoka', 'Other'
+    'Brooks', 'Saucony', 'Hoka'
 ];
 
 const SHOE_MATERIALS = [
-    'Leather', 'Synthetic', 'Canvas', 'Mesh', 'Rubber', 'Textile', 'Suede', 'Knit', 'Patent Leather', 'Denim', 'Nubuck', 'Other'
+    'Other', 'Leather', 'Synthetic', 'Canvas', 'Mesh', 'Rubber', 'Textile', 'Suede', 'Knit', 'Patent Leather', 'Denim', 'Nubuck'
+];
+
+const DELIVERY_COURIERS = [
+    'Other', 'Lalamove', 'JRS', 'LBC'
 ];
 
 interface ShoeEntry {
     id: string;
     brand: string;
+    otherBrand?: string;
     shoeMaterial: string;
+    otherMaterial?: string;
     quantity: number;
     condition: {
         scratches: boolean;
@@ -49,9 +55,35 @@ interface ServiceIntakeFormProps {
 }
 
 const LABEL_STYLE = "text-[11px] font-bold text-gray-500 mb-1 block uppercase tracking-tight";
-const INPUT_STYLE = "bg-[#F8F9FA] border-gray-100 h-9 text-xs focus:ring-red-50 focus:border-red-100 transition-all";
+const INPUT_STYLE = "bg-white border-gray-100 h-9 text-xs focus:ring-red-50 focus:border-red-100 transition-all shadow-sm";
 const CARD_HEADER_STYLE = "bg-red-50/50 py-2 px-6 border-b border-red-100/50";
 const CARD_TITLE_STYLE = "text-gray-600 font-black text-[14px] uppercase tracking-widest flex items-center gap-2";
+
+function ClearableInput({ id, value, onChange, placeholder, className, required, type = "text", inputMode }: any) {
+    return (
+        <div className="relative group/input">
+            <Input
+                id={id}
+                value={value}
+                onChange={onChange}
+                placeholder={placeholder}
+                className={`${className} ${value ? 'pr-8' : ''}`}
+                required={required}
+                type={type}
+                inputMode={inputMode}
+            />
+            {value && (
+                <button
+                    type="button"
+                    onClick={() => onChange({ target: { value: '' } } as any)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors opacity-0 group-hover/input:opacity-100"
+                >
+                    <X size={12} />
+                </button>
+            )}
+        </div>
+    );
+}
 
 export default function ServiceIntakeForm({ user, onSuccess, onCancel }: ServiceIntakeFormProps) {
     const { addOrder, orders } = useOrders();
@@ -59,11 +91,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
     const [contactNumber, setContactNumber] = useState('');
     // State for Shipping Preference
     const [shippingPreference, setShippingPreference] = useState<string>("pickup");
-    // State for searchable dropdowns
-    const [citySearch, setCitySearch] = useState<string>("");
-    const [barangaySearch, setBarangaySearch] = useState<string>("");
-    const [brandSearch, setBrandSearch] = useState<string>("");
-    const [materialSearch, setMaterialSearch] = useState('');
+
 
     // Auto-reset priority level if conditions are not met
 
@@ -89,10 +117,13 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
     const [deliveryAddress, setDeliveryAddress] = useState({
         houseNo: '',
         street: '',
+        province: '',
         city: '',
         barangay: '',
         zipCode: '',
     });
+    const [deliveryCourier, setDeliveryCourier] = useState('');
+    const [otherCourier, setOtherCourier] = useState('');
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
     const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('unpaid');
     const [amountReceived, setAmountReceived] = useState('');
@@ -106,15 +137,17 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
         setCustomerName('');
         setContactNumber('');
         setShippingPreference('pickup');
-        setCitySearch('');
-        setBarangaySearch('');
+
         setDeliveryAddress({
             houseNo: '',
             street: '',
+            province: '',
             city: '',
             barangay: '',
             zipCode: '',
         });
+        setDeliveryCourier('');
+        setOtherCourier('');
 
         // Reset Shoes
         setShoes([{
@@ -149,14 +182,19 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
 
     // Generate Unique Order ID on Mount
     useEffect(() => {
-        const year = new Date().getFullYear();
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        const prefix = `ORD-${year}-${month}-${day}-`;
+
         const existingIds = orders
-            .filter(o => o.orderNumber.startsWith(`ORD-${year}-`))
-            .map(o => parseInt(o.orderNumber.split('-')[2] || '0'));
+            .filter(o => o.orderNumber.startsWith(prefix))
+            .map(o => parseInt(o.orderNumber.split('-')[4] || '0')); // ORD-YYYY-MM-DD-XXX -> index 4 is XXX
 
         const maxSeq = existingIds.length > 0 ? Math.max(...existingIds) : 0;
         const nextSeq = String(maxSeq + 1).padStart(3, '0'); // e.g., 001, 002
-        setGeneratedOrderNumber(`ORD-${year}-${nextSeq}`);
+        setGeneratedOrderNumber(`${prefix}${nextSeq}`);
     }, [orders]);
 
     // Auto-reset priority level if conditions are not met
@@ -188,6 +226,15 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
     };
 
 
+
+    const calculatePredictedDays = () => {
+        const hasAdditional = shoes.some(shoe =>
+            (shoe.baseService && shoe.baseService.some(s => s !== 'Basic Cleaning')) ||
+            (shoe.addOns && shoe.addOns.length > 0)
+        );
+        const baseDays = hasAdditional ? 25 : 10;
+        return priorityLevel === 'rush' ? baseDays - 1 : baseDays;
+    };
 
     const getShoeTotal = (shoe: ShoeEntry) => {
         let total = 0;
@@ -225,7 +272,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                 addOnsTotal += getAddonTotal(addon.name, addonQuantity) * shoe.quantity;
             });
 
-            // Calculate Priority Fee per shoe (Additive logic)
+            // Calculate Rush Fee per shoe (Additive logic)
             let shoePriorityFee = 0;
             // services is already declared in outer scope
             if (priorityLevel === 'rush') {
@@ -297,9 +344,19 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
             return;
         }
 
-        if (shippingPreference === 'delivery' && (!deliveryAddress.houseNo || !deliveryAddress.street || !deliveryAddress.city || !deliveryAddress.barangay || !deliveryAddress.zipCode)) {
-            toast.error('Please enter complete delivery address');
-            return;
+        if (shippingPreference === 'delivery') {
+            if (!deliveryAddress.houseNo || !deliveryAddress.street || !deliveryAddress.province || !deliveryAddress.city || !deliveryAddress.barangay || !deliveryAddress.zipCode) {
+                toast.error('Please enter complete delivery address');
+                return;
+            }
+            if (!deliveryCourier) {
+                toast.error('Please select a delivery courier');
+                return;
+            }
+            if (deliveryCourier === 'Other' && !otherCourier) {
+                toast.error('Please specify the courier');
+                return;
+            }
         }
 
         // Create new order
@@ -314,7 +371,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
         // Helper to format delivery address
         const formatAddress = () => {
             if (shippingPreference === 'pickup') return undefined;
-            return `${deliveryAddress.houseNo} ${deliveryAddress.street}, ${deliveryAddress.barangay}, ${deliveryAddress.city}, ${deliveryAddress.zipCode}`;
+            return `${deliveryAddress.houseNo} ${deliveryAddress.street}, ${deliveryAddress.barangay}, ${deliveryAddress.city}, ${deliveryAddress.province}, ${deliveryAddress.zipCode}`;
         };
 
         shoes.forEach((shoe, index) => {
@@ -322,12 +379,12 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
 
             const newOrder: any = { // Using any temporarily if types mismatch, but preferably match JobOrder type
                 id: `JO-${year}${month}${day}-${sequence}${groupSuffix}`,
-                orderNumber: `ORD-${year}-${sequence}`,
+                orderNumber: `ORD-${year}-${month}-${day}-${sequence.slice(-3)}`, // Match format ORD-YYYY-MM-DD-XXX
                 customerName,
                 contactNumber,
-                brand: shoe.brand || 'Other',
+                brand: shoe.brand === 'Other' ? (shoe.otherBrand || 'Other') : (shoe.brand || 'Other'),
                 shoeType: 'Sneakers', // Defaulting as specific type selector is not in this specific view snippet
-                shoeMaterial: shoe.shoeMaterial || 'Other',
+                shoeMaterial: shoe.shoeMaterial === 'Other' ? (shoe.otherMaterial || 'Other') : (shoe.shoeMaterial || 'Other'),
                 quantity: shoe.quantity,
                 condition: shoe.condition,
                 baseService: shoe.baseService,
@@ -338,6 +395,11 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                 grandTotal: 0, // This is per shoe total in this loop context
                 shippingPreference,
                 deliveryAddress: formatAddress(),
+                deliveryCourier: shippingPreference === 'delivery' ? (deliveryCourier === 'Other' ? otherCourier : deliveryCourier) : undefined,
+                province: shippingPreference === 'delivery' ? deliveryAddress.province : undefined,
+                city: shippingPreference === 'delivery' ? deliveryAddress.city : undefined,
+                barangay: shippingPreference === 'delivery' ? deliveryAddress.barangay : undefined,
+                zipCode: shippingPreference === 'delivery' ? deliveryAddress.zipCode : undefined,
                 paymentMethod,
                 paymentStatus,
                 amountReceived: paymentStatus === 'paid' || paymentStatus === 'partial' ? parseFloat(amountReceived.replace(/,/g, '') || '0') / shoes.length : undefined, // Split payment? Or just assign to primary?
@@ -348,7 +410,8 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                 status: 'new-order',
                 assignedTo: undefined,
                 predictedCompletionDate: (() => {
-                    const date = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+                    const daysToAdd = calculatePredictedDays();
+                    const date = new Date(Date.now() + daysToAdd * 24 * 60 * 60 * 1000);
                     if (releaseTime) {
                         const [rHours, rMinutes] = releaseTime.split(':').map(Number);
                         date.setHours(rHours, rMinutes, 0, 0);
@@ -413,10 +476,8 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
         setCustomerName('');
         setContactNumber('');
         setShippingPreference('pickup');
-        setCitySearch('');
-        setBarangaySearch('');
-        setBrandSearch('');
-        setMaterialSearch('');
+
+
         setShoes([{
             id: Date.now().toString(),
             brand: '',
@@ -438,10 +499,13 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
         setDeliveryAddress({
             houseNo: '',
             street: '',
+            province: '',
             city: '',
             barangay: '',
             zipCode: '',
         });
+        setDeliveryCourier('');
+        setOtherCourier('');
         setPaymentMethod('cash');
         setPaymentStatus('unpaid');
         setAmountReceived('');
@@ -497,10 +561,10 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                     <div className={`grid gap-3 md:gap-4 -mt-1 ${shippingPreference === 'pickup' ? 'grid-cols-3' : 'grid-cols-12 mb-2.5'}`}>
                         <div className={shippingPreference === 'pickup' ? 'col-span-1' : 'col-span-6'}>
                             <Label htmlFor="customerName" className={LABEL_STYLE}>Customer Name</Label>
-                            <Input
+                            <ClearableInput
                                 id="customerName"
                                 value={customerName}
-                                onChange={(e) => setCustomerName(e.target.value)}
+                                onChange={(e: any) => setCustomerName(e.target.value)}
                                 placeholder="Enter name"
                                 className={INPUT_STYLE}
                                 required
@@ -508,10 +572,10 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                         </div>
                         <div className={shippingPreference === 'pickup' ? 'col-span-1' : 'col-span-6'}>
                             <Label htmlFor="contactNumber" className={LABEL_STYLE}>Contact Number</Label>
-                            <Input
+                            <ClearableInput
                                 id="contactNumber"
                                 value={contactNumber}
-                                onChange={e => setContactNumber(formatContactNumber(e.target.value))}
+                                onChange={(e: any) => setContactNumber(formatContactNumber(e.target.value))}
                                 placeholder="09xx-xxx-xxxx"
                                 maxLength={13}
                                 inputMode="numeric"
@@ -537,8 +601,8 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
 
                     {shippingPreference === 'delivery' && (
                         <div className="space-y-2.5">
-                            {/* Row 1: Shipping Pref, Unit/No, Street */}
-                            <div className="grid grid-cols-3 gap-3 md:gap-4">
+                            {/* Row 1: Shipping Pref, Courier */}
+                            <div className="grid grid-cols-2 gap-3 md:gap-4">
                                 <div className="col-span-1">
                                     <Label htmlFor="shippingPref" className={LABEL_STYLE}>Shipping Preference</Label>
                                     <Select value={shippingPreference} onValueChange={(value: ShippingPreference) => setShippingPreference(value)}>
@@ -552,461 +616,441 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                                     </Select>
                                 </div>
                                 <div className="col-span-1">
+                                    <Label htmlFor="deliveryCourier" className={LABEL_STYLE}>Delivery Courier</Label>
+                                    <CreatableCombobox
+                                        options={DELIVERY_COURIERS}
+                                        value={deliveryCourier}
+                                        onChange={setDeliveryCourier}
+                                        placeholder="Select Courier"
+                                        searchPlaceholder="Search courier..."
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Row 2: Unit/No, Street, Barangay */}
+                            <div className="grid grid-cols-3 gap-3 md:gap-4">
+                                <div className="col-span-1">
                                     <Label htmlFor="unitNo" className={LABEL_STYLE}>UNIT/NO</Label>
-                                    <Input
+                                    <ClearableInput
                                         id="unitNo"
                                         value={deliveryAddress.houseNo}
-                                        onChange={(e) => setDeliveryAddress({ ...deliveryAddress, houseNo: e.target.value })}
+                                        onChange={(e: any) => setDeliveryAddress({ ...deliveryAddress, houseNo: e.target.value })}
                                         placeholder="#123"
                                         className={INPUT_STYLE}
                                         required
                                     />
                                 </div>
                                 <div className="col-span-1">
-                                    <Label htmlFor="street" className={LABEL_STYLE}>STREET</Label>
-                                    <Input
+                                    <Label htmlFor="street" className={LABEL_STYLE}>STREET/SUBDIVISION</Label>
+                                    <ClearableInput
                                         id="street"
                                         value={deliveryAddress.street}
-                                        onChange={(e) => setDeliveryAddress({ ...deliveryAddress, street: e.target.value })}
-                                        placeholder="Street"
+                                        onChange={(e: any) => setDeliveryAddress({ ...deliveryAddress, street: e.target.value })}
+                                        placeholder="Street/Subdivision"
+                                        className={INPUT_STYLE}
+                                        required
+                                    />
+                                </div>
+                                <div className="col-span-1">
+                                    <Label htmlFor="barangay" className={LABEL_STYLE}>BARANGAY</Label>
+                                    <ClearableInput
+                                        id="barangay"
+                                        value={deliveryAddress.barangay}
+                                        onChange={(e: any) => setDeliveryAddress({ ...deliveryAddress, barangay: e.target.value })}
+                                        placeholder="Barangay"
                                         className={INPUT_STYLE}
                                         required
                                     />
                                 </div>
                             </div>
 
-                            {/* Row 2: City, Barangay, ZIP */}
+                            {/* Row 3: City, Province, Zip Code */}
                             <div className="grid grid-cols-3 gap-3 md:gap-4">
                                 <div className="col-span-1">
                                     <Label htmlFor="city" className={LABEL_STYLE}>CITY</Label>
-                                    <Select
+                                    <ClearableInput
+                                        id="city"
                                         value={deliveryAddress.city}
-                                        onValueChange={(value) => {
-                                            setDeliveryAddress({ ...deliveryAddress, city: value, barangay: '', zipCode: '' });
-                                        }}
-                                    >
-                                        <SelectTrigger id="city" className={INPUT_STYLE}>
-                                            <SelectValue placeholder="City" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <div className="relative px-2 py-1">
-                                                <span className="absolute left-3 top-2.5 text-gray-400">
-                                                    <Search size={16} />
-                                                </span>
-                                                <input
-                                                    className="w-full px-2 py-1 border rounded mb-2 text-sm pl-10 pr-8"
-                                                    placeholder="Search..."
-                                                    value={citySearch}
-                                                    onChange={e => setCitySearch(e.target.value)}
-                                                    onKeyDown={e => e.stopPropagation()}
-                                                    onClick={e => e.stopPropagation()}
-                                                    onMouseDown={e => e.stopPropagation()}
-                                                />
-                                            </div>
-                                            {cityNames.filter(c => c.toLowerCase().includes(citySearch.toLowerCase())).map((c) => (
-                                                <SelectItem key={c} value={c}>{c}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="relative col-span-1">
-                                    <Label htmlFor="barangay" className={LABEL_STYLE}>BARANGAY</Label>
-                                    <Select
-                                        value={deliveryAddress.barangay}
-                                        onValueChange={(value) => {
-                                            const zip = getZipFor(deliveryAddress.city, value);
-                                            setDeliveryAddress({ ...deliveryAddress, barangay: value, zipCode: zip });
-                                        }}
-                                        disabled={!deliveryAddress.city}
-                                    >
-                                        <SelectTrigger id="barangay" className={INPUT_STYLE}>
-                                            <SelectValue placeholder="Barangay" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <div className="relative px-2 py-1">
-                                                <span className="absolute left-3 top-2.5 text-gray-400">
-                                                    <Search size={16} />
-                                                </span>
-                                                <input
-                                                    className="w-full px-2 py-1 border rounded mb-2 text-sm pl-10 pr-8"
-                                                    placeholder="Search..."
-                                                    value={barangaySearch}
-                                                    onChange={e => setBarangaySearch(e.target.value)}
-                                                    onKeyDown={e => e.stopPropagation()}
-                                                    onClick={e => e.stopPropagation()}
-                                                    onMouseDown={e => e.stopPropagation()}
-                                                />
-                                            </div>
-                                            {getBarangaysForCity(deliveryAddress.city).filter(b => b.toLowerCase().includes(barangaySearch.toLowerCase())).map((b) => (
-                                                <SelectItem key={b} value={b}>{b}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                        onChange={(e: any) => setDeliveryAddress({ ...deliveryAddress, city: e.target.value })}
+                                        placeholder="City"
+                                        className={INPUT_STYLE}
+                                        required
+                                    />
                                 </div>
                                 <div className="col-span-1">
-                                    <Label htmlFor="zipCode" className={LABEL_STYLE}>ZIP</Label>
-                                    <Input
+                                    <Label htmlFor="province" className={LABEL_STYLE}>PROVINCE</Label>
+                                    <ClearableInput
+                                        id="province"
+                                        value={deliveryAddress.province}
+                                        onChange={(e: any) => setDeliveryAddress({ ...deliveryAddress, province: e.target.value })}
+                                        placeholder="Province"
+                                        className={INPUT_STYLE}
+                                        required
+                                    />
+                                </div>
+                                <div className="col-span-1">
+                                    <Label htmlFor="zipCode" className={LABEL_STYLE}>ZIP CODE</Label>
+                                    <ClearableInput
                                         id="zipCode"
                                         value={deliveryAddress.zipCode}
-                                        placeholder="ZIP"
-                                        className={`${INPUT_STYLE} bg-gray-100 cursor-not-allowed`}
-                                        readOnly
+                                        onChange={(e: any) => setDeliveryAddress({ ...deliveryAddress, zipCode: e.target.value })}
+                                        placeholder="Zip Code"
+                                        className={INPUT_STYLE}
                                         required
                                     />
                                 </div>
                             </div>
                         </div>
                     )}
+
+
                 </CardContent>
-            </Card>
+            </Card >
 
             {/* Shoes */}
-            <div className="space-y-2">
-                {shoes.map((shoe, index) => (
-                    <Card key={shoe.id} className="border-red-100/50 shadow-sm bg-white group relative">
-                        <CardHeader className={`${CARD_HEADER_STYLE} !py-2`}>
-                            <div className="flex items-center justify-between translate-y-[1px]">
-                                <div className="flex items-center gap-3">
-                                    <div className="bg-red-600 text-white text-[10px] font-black w-[18px] h-[18px] flex items-center justify-center rounded">
-                                        {index + 1}
+            < div className="space-y-2" >
+                {
+                    shoes.map((shoe, index) => (
+                        <Card key={shoe.id} className="border-red-100/50 shadow-sm bg-white group relative">
+                            <CardHeader className={`${CARD_HEADER_STYLE} !py-2`}>
+                                <div className="flex items-center justify-between translate-y-[1px]">
+                                    <div className="flex items-center gap-3">
+                                        <div className="bg-red-600 text-white text-[10px] font-black w-[18px] h-[18px] flex items-center justify-center rounded">
+                                            {index + 1}
+                                        </div>
+                                        <CardTitle className={`${CARD_TITLE_STYLE} text-slate-900`}>SHOE DETAILS</CardTitle>
                                     </div>
-                                    <CardTitle className={`${CARD_TITLE_STYLE} text-slate-900`}>SHOE DETAILS</CardTitle>
+                                    {shoes.length > 1 && (
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => removeShoe(shoe.id)}
+                                            className="h-5 w-5 text-red-500 hover:text-white hover:bg-red-700 transition-all p-0 rounded-full"
+                                        >
+                                            <X size={14} />
+                                        </Button>
+                                    )}
                                 </div>
-                                {shoes.length > 1 && (
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => removeShoe(shoe.id)}
-                                        className="h-5 w-5 text-red-500 hover:text-white hover:bg-red-700 transition-all p-0 rounded-full"
-                                    >
-                                        <X size={14} />
-                                    </Button>
-                                )}
-                            </div>
-                        </CardHeader>
-                        <CardContent className="px-5 pt-0 pb-3">
-                            <div className="space-y-4">
-                                {/* Top Section: Identification & Condition */}
-                                <div className="grid grid-cols-1 md:grid-cols-12 gap-x-8 gap-y-6 -mt-1">
-                                    {/* Left Column: Identification & Condition */}
-                                    <div className="md:col-span-5 flex flex-col gap-3 h-full">
-                                        {/* Identification Row - Stacked for narrow column */}
-                                        <div className="space-y-2.5">
-                                            <div className="grid grid-cols-2 gap-3">
-                                                <div className="col-span-1">
-                                                    <Label className={LABEL_STYLE}>Brand</Label>
-                                                    <Select value={shoe.brand} onValueChange={(value) => updateShoe(shoe.id, { brand: value })}>
-                                                        <SelectTrigger className={INPUT_STYLE}>
-                                                            <SelectValue placeholder="Brand" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <div className="relative px-2 py-1">
-                                                                <Search size={14} className="absolute left-3 top-2.5 text-gray-400" />
-                                                                <input
-                                                                    className="w-full px-2 py-1 border rounded mb-2 text-xs pl-8 pr-2"
-                                                                    placeholder="Search..."
-                                                                    value={brandSearch}
-                                                                    onChange={e => setBrandSearch(e.target.value)}
-                                                                    onKeyDown={e => e.stopPropagation()}
-                                                                />
-                                                            </div>
-                                                            {SHOE_BRANDS.filter(b => b.toLowerCase().includes(brandSearch.toLowerCase())).map((b) => (
-                                                                <SelectItem key={b} value={b} className="text-xs">{b}</SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
+                            </CardHeader>
+                            <CardContent className="px-5 pt-0 pb-3">
+                                <div className="space-y-4">
+                                    {/* Top Section: Identification & Condition */}
+                                    <div className="grid grid-cols-1 md:grid-cols-12 gap-x-8 gap-y-6 -mt-1">
+                                        {/* Left Column: Identification & Condition */}
+                                        <div className="md:col-span-5 flex flex-col gap-3 h-full">
+                                            {/* Identification Row - Stacked for narrow column */}
+                                            <div className="space-y-2.5">
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <div className="col-span-1">
+                                                        <Label className={LABEL_STYLE}>Brand</Label>
+                                                        <CreatableCombobox
+                                                            options={SHOE_BRANDS}
+                                                            value={shoe.brand}
+                                                            onChange={(val) => updateShoe(shoe.id, { brand: val })}
+                                                            placeholder="Select Brand"
+                                                            searchPlaceholder="Search brand..."
+                                                        />
+                                                    </div>
+                                                    <div className="col-span-1">
+                                                        <Label className={LABEL_STYLE}>Material</Label>
+                                                        <CreatableCombobox
+                                                            options={SHOE_MATERIALS}
+                                                            value={shoe.shoeMaterial}
+                                                            onChange={(val) => updateShoe(shoe.id, { shoeMaterial: val })}
+                                                            placeholder="Select Material"
+                                                            searchPlaceholder="Search material..."
+                                                        />
+                                                    </div>
                                                 </div>
-                                                <div className="col-span-1">
-                                                    <Label className={LABEL_STYLE}>Material</Label>
-                                                    <Select value={shoe.shoeMaterial} onValueChange={(val) => updateShoe(shoe.id, { shoeMaterial: val })}>
-                                                        <SelectTrigger className={INPUT_STYLE}>
-                                                            <SelectValue placeholder="Material" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <div className="p-2">
-                                                                <div className="relative">
-                                                                    <Search className="absolute left-2 top-2.5 h-3 w-3 text-gray-400" />
-                                                                    <input
-                                                                        className="w-full text-[10px] border rounded-md pl-7 pr-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-red-100"
-                                                                        placeholder="Search..."
-                                                                        onKeyDown={(e) => e.stopPropagation()}
-                                                                        onChange={(e) => setMaterialSearch(e.target.value)}
-                                                                        value={materialSearch}
-                                                                    />
-                                                                </div>
-                                                            </div>
-                                                            {SHOE_MATERIALS.filter(m => m.toLowerCase().includes(materialSearch.toLowerCase())).map((m) => (
-                                                                <SelectItem key={m} value={m} className="text-xs">{m}</SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
+                                                <div className="grid grid-cols-4 gap-3">
+                                                    <div className="col-span-1">
+                                                        <Label className={LABEL_STYLE}>Quantity</Label>
+                                                        <Input
+                                                            type="number"
+                                                            min="1"
+                                                            value={shoe.quantity}
+                                                            onChange={(e) => updateShoe(shoe.id, { quantity: parseInt(e.target.value) || 1 })}
+                                                            className={`${INPUT_STYLE} text-center font-bold px-1`}
+                                                        />
+                                                    </div>
+                                                    <div className="col-span-3">
+                                                        <Label className={LABEL_STYLE}>Priority Level</Label>
+                                                        <div className="relative group/select">
+                                                            <Select value={priorityLevel} onValueChange={(val: any) => setPriorityLevel(val)}>
+                                                                <SelectTrigger className={INPUT_STYLE}>
+                                                                    <SelectValue placeholder="Regular" />
+                                                                </SelectTrigger>
+                                                                <SelectContent align="start" side="bottom" position="popper" sideOffset={5}>
+                                                                    <SelectItem value="regular">Regular</SelectItem>
+                                                                    {shoes.some(shoe => {
+                                                                        const services = Array.isArray(shoe.baseService) ? shoe.baseService : [];
+                                                                        return services.some(s => s === 'Basic Cleaning' || s.includes('Reglue'));
+                                                                    }) && (
+                                                                            <SelectItem value="rush">Rush</SelectItem>
+                                                                        )}
+                                                                </SelectContent>
+                                                            </Select>
+                                                            {priorityLevel !== 'regular' && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setPriorityLevel('regular')}
+                                                                    className="absolute right-8 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors opacity-0 group-hover/select:opacity-100"
+                                                                >
+                                                                    <X size={12} />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
-                                            <div className="grid grid-cols-4 gap-3">
-                                                <div className="col-span-1">
-                                                    <Label className={LABEL_STYLE}>Quantity</Label>
-                                                    <Input
-                                                        type="number"
-                                                        min="1"
-                                                        value={shoe.quantity}
-                                                        onChange={(e) => updateShoe(shoe.id, { quantity: parseInt(e.target.value) || 1 })}
-                                                        className={`${INPUT_STYLE} text-center font-bold px-1`}
-                                                    />
+
+                                            {/* Shoe Condition Section */}
+                                            <div className="flex flex-col flex-1 gap-2 pt-2 border-t border-gray-200 mt-1">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <Label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Shoe Condition</Label>
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-5 w-5 bg-transparent border border-transparent shadow-none text-gray-400 hover:bg-white hover:text-red-600 hover:border-red-100 hover:shadow-md p-0 transition-all rounded-md"
+                                                            onClick={() => updateShoe(shoe.id, {
+                                                                condition: {
+                                                                    scratches: false,
+                                                                    yellowing: false,
+                                                                    ripsHoles: false,
+                                                                    deepStains: false,
+                                                                    soleSeparation: false,
+                                                                    fadedWorn: false,
+                                                                    others: ''
+                                                                }
+                                                            })}
+                                                            title="Reset condition"
+                                                        >
+                                                            <RotateCcw className="h-3 w-3" />
+                                                        </Button>
+                                                    </div>
+                                                    <span className="text-[9px] font-bold text-gray-300 uppercase italic">Check all that apply</span>
                                                 </div>
-                                                <div className="col-span-3">
-                                                    <Label className={LABEL_STYLE}>Priority Level</Label>
-                                                    <Select value={priorityLevel} onValueChange={(val: any) => setPriorityLevel(val)}>
-                                                        <SelectTrigger className={INPUT_STYLE}>
-                                                            <SelectValue placeholder="Regular" />
-                                                        </SelectTrigger>
-                                                        <SelectContent align="start" side="bottom" position="popper" sideOffset={5}>
-                                                            <SelectItem value="regular">Regular</SelectItem>
-                                                            {shoes.some(shoe => {
-                                                                const services = Array.isArray(shoe.baseService) ? shoe.baseService : [];
-                                                                return services.some(s => s === 'Basic Cleaning' || s.includes('Reglue'));
-                                                            }) && (
-                                                                    <SelectItem value="rush">Rush</SelectItem>
-                                                                )}
-                                                            {shoes.some(shoe => {
-                                                                const services = Array.isArray(shoe.baseService) ? shoe.baseService : [];
-                                                                return services.some(s => s.includes('Color Renewal'));
-                                                            }) && (
-                                                                    <SelectItem value="premium">Premium</SelectItem>
-                                                                )}
-                                                        </SelectContent>
-                                                    </Select>
+                                                <div className="bg-white rounded-xl border border-red-100/50 p-3">
+                                                    <div className="grid grid-cols-2 gap-y-2 gap-x-2">
+                                                        {[
+                                                            { id: 'scratches', label: 'Scratches' },
+                                                            { id: 'yellowing', label: 'Yellowing' },
+                                                            { id: 'ripsHoles', label: 'Rips/holes' },
+                                                            { id: 'deepStains', label: 'Deep stains' },
+                                                            { id: 'soleSeparation', label: 'Sole separation' },
+                                                            { id: 'fadedWorn', label: 'Faded/worn' },
+                                                        ].map((cond) => (
+                                                            <div key={cond.id} className="flex items-center space-x-3">
+                                                                <Checkbox
+                                                                    id={`${cond.id}-${shoe.id}`}
+                                                                    checked={(shoe.condition as any)[cond.id]}
+                                                                    onCheckedChange={(checked) =>
+                                                                        updateShoe(shoe.id, {
+                                                                            condition: { ...shoe.condition, [cond.id]: checked as boolean }
+                                                                        })
+                                                                    }
+                                                                    className="h-5 w-5 border-gray-300 data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600"
+                                                                />
+                                                                <label htmlFor={`${cond.id}-${shoe.id}`} className="text-xs font-bold text-gray-600 cursor-pointer select-none">
+                                                                    {cond.label}
+                                                                </label>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                                <div className="relative pt-1 flex-1 flex flex-col">
+                                                    <Textarea
+                                                        placeholder="Notes: "
+                                                        value={shoe.condition.others}
+                                                        onChange={(e) =>
+                                                            updateShoe(shoe.id, {
+                                                                condition: { ...shoe.condition, others: e.target.value }
+                                                            })
+                                                        }
+                                                        rows={1}
+                                                        className="text-[11px] bg-[#F8F9FA]/80 border-none rounded-xl placeholder:text-gray-400/70 px-3 py-2 focus:ring-1 focus:ring-red-50 transition-all min-h-[40px] h-full resize-none shadow-inner"
+                                                    />
                                                 </div>
                                             </div>
                                         </div>
 
-                                        {/* Shoe Condition Section */}
-                                        <div className="flex flex-col flex-1 gap-2 pt-2 border-t border-gray-200 mt-1">
-                                            <div className="flex items-center justify-between">
+                                        {/* Right Column: Services & Add-ons */}
+                                        <div className="md:col-span-7 border-l border-gray-50 md:pl-8 flex flex-col h-full">
+                                            <div className="flex items-center justify-between mb-4">
                                                 <div className="flex items-center gap-2">
-                                                    <Label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Shoe Condition</Label>
+                                                    <Label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Services & Add-ons</Label>
                                                     <Button
                                                         type="button"
                                                         variant="ghost"
                                                         size="icon"
                                                         className="h-5 w-5 bg-transparent border border-transparent shadow-none text-gray-400 hover:bg-white hover:text-red-600 hover:border-red-100 hover:shadow-md p-0 transition-all rounded-md"
-                                                        onClick={() => updateShoe(shoe.id, {
-                                                            condition: {
-                                                                scratches: false,
-                                                                yellowing: false,
-                                                                ripsHoles: false,
-                                                                deepStains: false,
-                                                                soleSeparation: false,
-                                                                fadedWorn: false,
-                                                                others: ''
-                                                            }
-                                                        })}
-                                                        title="Reset condition"
+                                                        onClick={() => updateShoe(shoe.id, { baseService: [], addOns: [] })}
+                                                        title="Reset services"
                                                     >
                                                         <RotateCcw className="h-3 w-3" />
                                                     </Button>
                                                 </div>
-                                                <span className="text-[9px] font-bold text-gray-300 uppercase italic">Check all that apply</span>
+                                                {shoe.baseService && shoe.baseService.length > 0 ? (
+                                                    <span className="text-xs font-black text-red-600 bg-red-50/50 px-2.5 py-1 rounded uppercase flex items-center gap-1.5">
+                                                        <span className="text-[10px] opacity-70">Unit Total:</span> {formatPeso(getShoeTotal(shoe))}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-xs font-bold text-gray-300 uppercase italic">Select applicable services</span>
+                                                )}
                                             </div>
-                                            <div className="bg-white rounded-xl border border-red-100/50 p-3">
-                                                <div className="grid grid-cols-2 gap-y-2 gap-x-2">
-                                                    {[
-                                                        { id: 'scratches', label: 'Scratches' },
-                                                        { id: 'yellowing', label: 'Yellowing' },
-                                                        { id: 'ripsHoles', label: 'Rips/holes' },
-                                                        { id: 'deepStains', label: 'Deep stains' },
-                                                        { id: 'soleSeparation', label: 'Sole separation' },
-                                                        { id: 'fadedWorn', label: 'Faded/worn' },
-                                                    ].map((cond) => (
-                                                        <div key={cond.id} className="flex items-center space-x-3">
-                                                            <Checkbox
-                                                                id={`${cond.id}-${shoe.id}`}
-                                                                checked={(shoe.condition as any)[cond.id]}
-                                                                onCheckedChange={(checked) =>
-                                                                    updateShoe(shoe.id, {
-                                                                        condition: { ...shoe.condition, [cond.id]: checked as boolean }
-                                                                    })
-                                                                }
-                                                                className="h-5 w-5 border-gray-300 data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600"
-                                                            />
-                                                            <label htmlFor={`${cond.id}-${shoe.id}`} className="text-xs font-bold text-gray-600 cursor-pointer select-none">
-                                                                {cond.label}
-                                                            </label>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                            <div className="relative pt-1 flex-1 flex flex-col">
-                                                <Textarea
-                                                    placeholder="Notes: "
-                                                    value={shoe.condition.others}
-                                                    onChange={(e) =>
-                                                        updateShoe(shoe.id, {
-                                                            condition: { ...shoe.condition, others: e.target.value }
-                                                        })
-                                                    }
-                                                    rows={1}
-                                                    className="text-[11px] bg-[#F8F9FA]/80 border-none rounded-xl placeholder:text-gray-400/70 px-3 py-2 focus:ring-1 focus:ring-red-50 transition-all min-h-[40px] h-full resize-none shadow-inner"
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
 
-                                    {/* Right Column: Services & Add-ons */}
-                                    <div className="md:col-span-7 border-l border-gray-50 md:pl-8 flex flex-col h-full">
-                                        <div className="flex items-center justify-between mb-4">
-                                            <div className="flex items-center gap-2">
-                                                <Label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Services & Add-ons</Label>
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-5 w-5 bg-transparent border border-transparent shadow-none text-gray-400 hover:bg-white hover:text-red-600 hover:border-red-100 hover:shadow-md p-0 transition-all rounded-md"
-                                                    onClick={() => updateShoe(shoe.id, { baseService: [], addOns: [] })}
-                                                    title="Reset services"
-                                                >
-                                                    <RotateCcw className="h-3 w-3" />
-                                                </Button>
-                                            </div>
-                                            {shoe.baseService && shoe.baseService.length > 0 ? (
-                                                <span className="text-xs font-black text-red-600 bg-red-50/50 px-2.5 py-1 rounded uppercase flex items-center gap-1.5">
-                                                    <span className="text-[10px] opacity-70">Unit Total:</span> {formatPeso(getShoeTotal(shoe))}
-                                                </span>
-                                            ) : (
-                                                <span className="text-xs font-bold text-gray-300 uppercase italic">Select applicable services</span>
-                                            )}
-                                        </div>
-
-                                        <div className="bg-[#F8F9FA]/50 p-3 rounded-xl border border-gray-100 flex-grow flex flex-col">
-                                            <div className="flex flex-col h-full gap-4">
-                                                {/* Base Services */}
-                                                <div className="space-y-3">
-                                                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Base Services</Label>
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        {baseServices.map(service => {
-                                                            const isChecked = (Array.isArray(shoe.baseService) ? shoe.baseService : []).includes(service.name);
-                                                            return (
-                                                                <label key={service.id} className="flex items-center space-x-2 bg-white p-3 rounded-lg border border-gray-100 hover:border-red-100 transition-colors cursor-pointer shadow-sm">
-                                                                    <Checkbox
-                                                                        type="button"
-                                                                        id={`shoe-${shoe.id}-service-${service.id}`}
-                                                                        checked={isChecked}
-                                                                        onCheckedChange={(checked) => {
-                                                                            const currentServices = Array.isArray(shoe.baseService) ? shoe.baseService : [];
-                                                                            const newServices = checked
-                                                                                ? [...currentServices, service.name]
-                                                                                : currentServices.filter(s => s !== service.name);
-                                                                            updateShoe(shoe.id, { baseService: newServices });
-                                                                        }}
-                                                                        className="h-4 w-4 data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600"
-                                                                    />
-                                                                    <div className="flex items-center justify-between flex-1 min-w-0">
-                                                                        <span className="text-[11px] font-bold leading-tight text-gray-700 truncate">
-                                                                            {service.name.split(' (with basic cleaning)')[0]}
-                                                                        </span>
-                                                                        {isChecked && (
-                                                                            <span className="text-[11px] font-black text-red-600 shrink-0 ml-2">{formatPeso(service.price)}</span>
-                                                                        )}
-                                                                    </div>
-                                                                </label>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
-
-                                                {/* Add-ons Section */}
-                                                <div className="space-y-3 pt-3 border-t border-gray-200 flex flex-col flex-grow">
-                                                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Add-on Services</Label>
-                                                    {(!shoe.baseService || shoe.baseService.length === 0) ? (
-                                                        <div className="border border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center bg-white gap-2 min-h-[60px] flex-grow">
-                                                            <span className="text-xs font-bold italic text-gray-300 uppercase tracking-widest">Awaiting Base Service</span>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="grid grid-cols-2 gap-2">
-                                                            {addOnServices.filter(addon => {
-                                                                const baseServicesArr = shoe.baseService || [];
-                                                                const basicCleaningAddOns = ['Unyellowing', 'White Paint', 'Minor Restoration', 'Minor Retouch'];
-                                                                const reglueAddOns = ['Another Layer'];
-                                                                if (baseServicesArr.includes('Basic Cleaning') && basicCleaningAddOns.includes(addon.name)) return true;
-                                                                if (baseServicesArr.some(s => s.includes('Full Reglue')) && reglueAddOns.includes(addon.name)) return true;
-                                                                const colorAddOns = ['2 Colors', '3 Colors'];
-                                                                if (baseServicesArr.some(s => s.includes('Color Renewal')) && colorAddOns.includes(addon.name)) return true;
-                                                                return false;
-                                                            }).sort((a, b) => {
-                                                                const order: Record<string, number> = {
-                                                                    'Unyellowing': 1,
-                                                                    'Minor Retouch': 2,
-                                                                    'White Paint': 3,
-                                                                    'Minor Restoration': 4,
-                                                                    '2 Colors': 5,
-                                                                    '3 Colors': 6,
-                                                                    'Another Layer': 7
-                                                                };
-                                                                return (order[a.name] || 99) - (order[b.name] || 99);
-                                                            }).map((addon) => {
-                                                                const isChecked = shoe.addOns.some(a => a.name === addon.name);
-                                                                const addonItem = shoe.addOns.find(a => a.name === addon.name);
-                                                                const quantity = addonItem?.quantity || 1;
-                                                                return (
-                                                                    <div key={addon.id} className={`flex items-center justify-between p-2 rounded-lg border bg-white transition-all ${isChecked ? 'border-red-100 bg-red-50/10' : 'border-gray-50'} gap-4`}>
-                                                                        <div className="flex items-center space-x-2 min-w-0 flex-1">
+                                            <div className="bg-[#F8F9FA]/50 p-3 rounded-xl border border-gray-100 flex-grow flex flex-col">
+                                                <div className="flex flex-col h-full gap-4">
+                                                    {/* Base Services */}
+                                                    <div className="space-y-3">
+                                                        <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Base Services</Label>
+                                                        <div className="max-h-[108px] overflow-y-auto pr-1 custom-scrollbar">
+                                                            <div className="grid grid-cols-2 gap-2">
+                                                                {baseServices.map(service => {
+                                                                    const isChecked = (Array.isArray(shoe.baseService) ? shoe.baseService : []).includes(service.name);
+                                                                    return (
+                                                                        <label key={service.id} className={`flex items-center space-x-2 p-3 rounded-lg border transition-all cursor-pointer shadow-sm ${isChecked ? 'border-red-100 bg-red-50/10' : 'bg-white border-gray-100 hover:border-red-100'}`}>
                                                                             <Checkbox
                                                                                 type="button"
-                                                                                id={`addon-${shoe.id}-${addon.id}`}
+                                                                                id={`shoe-${shoe.id}-service-${service.id}`}
                                                                                 checked={isChecked}
                                                                                 onCheckedChange={(checked) => {
-                                                                                    let newAddOns = checked
-                                                                                        ? [...shoe.addOns, { name: addon.name, quantity: 1 }]
-                                                                                        : shoe.addOns.filter(a => a.name !== addon.name);
-                                                                                    if (addon.name === 'Unyellowing' && !checked) {
-                                                                                        newAddOns = newAddOns.filter(a => a.name !== 'White Paint');
+                                                                                    const currentServices = Array.isArray(shoe.baseService) ? shoe.baseService : [];
+                                                                                    let newServices = checked
+                                                                                        ? [...currentServices, service.name]
+                                                                                        : currentServices.filter(s => s !== service.name);
+
+                                                                                    // Auto-select Basic Cleaning if Minor/Full Reglue or Color Renewal is selected
+                                                                                    const requiresCleaning = ['Minor Reglue', 'Full Reglue', 'Color Renewal'];
+                                                                                    if (checked && requiresCleaning.includes(service.name)) {
+                                                                                        if (!newServices.includes('Basic Cleaning')) {
+                                                                                            newServices.push('Basic Cleaning');
+                                                                                        }
                                                                                     }
-                                                                                    updateShoe(shoe.id, { addOns: newAddOns });
+
+                                                                                    // If Basic Cleaning is unchecked, also uncheck services that require it
+                                                                                    if (!checked && service.name === 'Basic Cleaning') {
+                                                                                        newServices = newServices.filter(s => !requiresCleaning.includes(s));
+                                                                                    }
+
+                                                                                    updateShoe(shoe.id, { baseService: newServices });
                                                                                 }}
-                                                                                className="h-4 w-4 shrink-0 data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600"
+                                                                                className="h-4 w-4 data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600"
                                                                             />
-                                                                            <label htmlFor={`addon-${shoe.id}-${addon.id}`} className="text-[11px] font-bold text-gray-600 cursor-pointer leading-tight">
-                                                                                {addon.name}
-                                                                            </label>
-                                                                        </div>
-                                                                        {isChecked && (
-                                                                            <div className="flex items-center gap-3 ml-auto shrink-0">
-                                                                                <input
-                                                                                    type="number"
-                                                                                    min="1"
-                                                                                    value={quantity}
-                                                                                    onChange={(e) => {
-                                                                                        const val = e.target.value;
-                                                                                        const newQuantity = val === '' ? 1 : Math.max(1, parseInt(val));
-                                                                                        const newAddOns = shoe.addOns.map(a =>
-                                                                                            a.name === addon.name ? { ...a, quantity: newQuantity } : a
-                                                                                        );
-                                                                                        updateShoe(shoe.id, { addOns: newAddOns });
-                                                                                    }}
-                                                                                    className="w-10 h-5 border border-gray-200 rounded text-[10px] font-bold text-center focus:outline-none focus:border-red-500 bg-white [&::-webkit-inner-spin-button]:opacity-100 [&::-webkit-inner-spin-button]:h-[16px] [&::-webkit-inner-spin-button]:my-auto px-0"
-                                                                                />
-                                                                                <span className="text-[11px] font-black text-red-600 min-w-[50px] text-right">{formatPeso(getAddonTotal(addon.name, quantity))}</span>
+                                                                            <div className="flex items-center justify-between flex-1 min-w-0">
+                                                                                <span className="text-[11px] font-bold leading-tight text-gray-700 truncate">
+                                                                                    {service.name}
+                                                                                </span>
+                                                                                {isChecked && (
+                                                                                    <span className="text-[11px] font-black text-red-600 shrink-0 ml-2">{formatPeso(service.price)}</span>
+                                                                                )}
                                                                             </div>
-                                                                        )}
-                                                                    </div>
-                                                                );
-                                                            })}
+                                                                        </label>
+                                                                    );
+                                                                })}
+                                                            </div>
                                                         </div>
-                                                    )}
+                                                    </div>
+
+                                                    {/* Add-ons Section */}
+                                                    <div className="space-y-3 pt-3 border-t border-gray-200 flex flex-col flex-grow">
+                                                        <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Add-on Services</Label>
+                                                        {(!shoe.baseService || shoe.baseService.length === 0) ? (
+                                                            <div className="border border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center bg-white gap-2 min-h-[60px] flex-grow">
+                                                                <span className="text-xs font-bold italic text-gray-300 uppercase tracking-widest">Awaiting Base Service</span>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="max-h-[108px] overflow-y-auto pr-1 custom-scrollbar">
+                                                                <div className="grid grid-cols-2 gap-2">
+                                                                    {addOnServices.filter(addon => {
+                                                                        const baseServicesArr = shoe.baseService || [];
+                                                                        const basicCleaningAddOns = ['Unyellowing', 'White Paint', 'Minor Restoration', 'Minor Retouch'];
+                                                                        const reglueAddOns = ['Another Layer', 'Premium Glue'];
+                                                                        if (baseServicesArr.includes('Basic Cleaning') && basicCleaningAddOns.includes(addon.name)) return true;
+                                                                        if (baseServicesArr.some(s => s.includes('Full Reglue')) && reglueAddOns.includes(addon.name)) return true;
+                                                                        const colorAddOns = ['2 Colors', '3 Colors'];
+                                                                        if (baseServicesArr.some(s => s.includes('Color Renewal')) && colorAddOns.includes(addon.name)) return true;
+                                                                        return false;
+                                                                    }).sort((a, b) => {
+                                                                        const order: Record<string, number> = {
+                                                                            'Unyellowing': 1,
+                                                                            'Minor Retouch': 2,
+                                                                            'White Paint': 3,
+                                                                            'Minor Restoration': 4,
+                                                                            '2 Colors': 5,
+                                                                            '3 Colors': 6,
+                                                                            'Another Layer': 7,
+                                                                            'Premium Glue': 8
+                                                                        };
+                                                                        return (order[a.name] || 99) - (order[b.name] || 99);
+                                                                    }).map((addon) => {
+                                                                        const isChecked = shoe.addOns.some(a => a.name === addon.name);
+                                                                        const addonItem = shoe.addOns.find(a => a.name === addon.name);
+                                                                        const quantity = addonItem?.quantity || 1;
+                                                                        return (
+                                                                            <div key={addon.id} className={`flex items-center justify-between p-2 rounded-lg border bg-white transition-all ${isChecked ? 'border-red-100 bg-red-50/10' : 'border-gray-50'} gap-4`}>
+                                                                                <div className="flex items-center space-x-2 min-w-0 flex-1">
+                                                                                    <Checkbox
+                                                                                        type="button"
+                                                                                        id={`addon-${shoe.id}-${addon.id}`}
+                                                                                        checked={isChecked}
+                                                                                        onCheckedChange={(checked) => {
+                                                                                            let newAddOns = checked
+                                                                                                ? [...shoe.addOns, { name: addon.name, quantity: 1 }]
+                                                                                                : shoe.addOns.filter(a => a.name !== addon.name);
+                                                                                            if (addon.name === 'Unyellowing' && !checked) {
+                                                                                                newAddOns = newAddOns.filter(a => a.name !== 'White Paint');
+                                                                                            }
+                                                                                            updateShoe(shoe.id, { addOns: newAddOns });
+                                                                                        }}
+                                                                                        className="h-4 w-4 shrink-0 data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600"
+                                                                                    />
+                                                                                    <label htmlFor={`addon-${shoe.id}-${addon.id}`} className="text-[11px] font-bold text-gray-600 cursor-pointer leading-tight">
+                                                                                        {addon.name}
+                                                                                    </label>
+                                                                                </div>
+                                                                                {isChecked && (
+                                                                                    <div className="flex items-center gap-3 ml-auto shrink-0">
+                                                                                        <input
+                                                                                            type="number"
+                                                                                            min="1"
+                                                                                            value={quantity}
+                                                                                            onChange={(e) => {
+                                                                                                const val = e.target.value;
+                                                                                                const newQuantity = val === '' ? 1 : Math.max(1, parseInt(val));
+                                                                                                const newAddOns = shoe.addOns.map(a =>
+                                                                                                    a.name === addon.name ? { ...a, quantity: newQuantity } : a
+                                                                                                );
+                                                                                                updateShoe(shoe.id, { addOns: newAddOns });
+                                                                                            }}
+                                                                                            className="w-10 h-5 border border-gray-200 rounded text-[10px] font-bold text-center focus:outline-none focus:border-red-500 bg-white [&::-webkit-inner-spin-button]:opacity-100 [&::-webkit-inner-spin-button]:h-[16px] [&::-webkit-inner-spin-button]:my-auto px-0"
+                                                                                        />
+                                                                                        <span className="text-[11px] font-black text-red-600 min-w-[50px] text-right">{formatPeso(getAddonTotal(addon.name, quantity))}</span>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                ))
+                            </CardContent>
+                        </Card>
+                    ))
                 }
-            </div>
+            </div >
 
             {/* Add Shoe Button */}
-            <div className="my-4">
+            < div className="my-4" >
                 <Button
                     type="button"
                     variant="outline"
@@ -1016,10 +1060,10 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                     <Plus size={16} className="stroke-[3]" />
                     Add Another Shoe Item
                 </Button>
-            </div>
+            </div >
 
             {/* Order Summary Section */}
-            <Card className="border-red-100/50 shadow-sm bg-white overflow-hidden">
+            < Card className="border-red-100/50 shadow-sm bg-white overflow-hidden" >
                 <CardHeader className={`${CARD_HEADER_STYLE} !py-2`}>
                     <div className="flex items-center justify-between w-full translate-y-[1px]">
                         <div className="flex items-center gap-3">
@@ -1092,7 +1136,10 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                                                 <Label className={LABEL_STYLE}>Release Date</Label>
                                                 <div className="flex items-center bg-white h-9 rounded-lg px-3 text-xs text-gray-900 border border-gray-100/50 shadow-sm">
                                                     <Calendar size={14} className="mr-2 text-gray-400 shrink-0" />
-                                                    <span>{new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toLocaleDateString()}</span>
+                                                    <span>{(() => {
+                                                        const daysToAdd = calculatePredictedDays();
+                                                        return new Date(Date.now() + daysToAdd * 24 * 60 * 60 * 1000).toLocaleDateString();
+                                                    })()}</span>
                                                 </div>
                                             </div>
                                             <div className="space-y-1 col-span-3">
@@ -1109,9 +1156,9 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                                             {/* Row 2: Order ID, Processed By & Payment Status */}
                                             <div className="space-y-1 col-span-4">
                                                 <Label className={LABEL_STYLE}>Order ID</Label>
-                                                <div className="flex items-center bg-white h-9 rounded-lg px-3 text-xs text-gray-900 border border-gray-100/50 shadow-sm">
+                                                <div className="flex items-center bg-white h-9 rounded-lg px-3 text-[11px] text-gray-900 border border-gray-100/50 shadow-sm">
                                                     <Hash size={14} className="mr-2 text-gray-400" />
-                                                    <span className="truncate">{generatedOrderNumber || 'Generating...'}</span>
+                                                    <span className="whitespace-nowrap">{generatedOrderNumber || 'Generating...'}</span>
                                                 </div>
                                             </div>
                                             <div className="space-y-1 col-span-4">
@@ -1123,41 +1170,68 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                                             </div>
                                             <div className="space-y-1 col-span-4">
                                                 <Label className={LABEL_STYLE}>Payment Status</Label>
-                                                <Select value={paymentStatus} onValueChange={(value: PaymentStatus) => setPaymentStatus(value)}>
-                                                    <SelectTrigger className="bg-white border-gray-100/50 h-9 rounded-lg text-xs text-gray-900 shadow-sm">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="unpaid">Unpaid</SelectItem>
-                                                        <SelectItem value="partial">Partial</SelectItem>
-                                                        <SelectItem value="paid">Paid</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
+                                                <div className="relative group/select">
+                                                    <Select value={paymentStatus} onValueChange={(value: PaymentStatus) => setPaymentStatus(value)}>
+                                                        <SelectTrigger className="bg-white border-gray-100/50 h-9 rounded-lg text-xs text-gray-900 shadow-sm pr-8">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="unpaid">Unpaid</SelectItem>
+                                                            <SelectItem value="partial">Partial</SelectItem>
+                                                            <SelectItem value="paid">Paid</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                    {paymentStatus !== 'unpaid' && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setPaymentStatus('unpaid');
+                                                            }}
+                                                            className="absolute right-8 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors opacity-0 group-hover/select:opacity-100"
+                                                        >
+                                                            <X size={12} />
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
 
                                         <div className="grid grid-cols-6 gap-2 pt-0">
-
                                             {/* Row 3: Payment Method & Reference Number */}
                                             {paymentStatus !== 'unpaid' && (
                                                 <>
                                                     <div className={`space-y-1 ${paymentMethod === 'cash' ? 'col-span-6' : 'col-span-3'}`}>
                                                         <Label className={LABEL_STYLE}>Payment Method</Label>
-                                                        <Select value={paymentMethod} onValueChange={(value: PaymentMethod) => setPaymentMethod(value)}>
-                                                            <SelectTrigger className="bg-white border-gray-100/50 h-9 rounded-lg text-xs shadow-sm">
-                                                                <SelectValue />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                <SelectItem value="cash">Cash</SelectItem>
-                                                                <SelectItem value="gcash">GCash</SelectItem>
-                                                                <SelectItem value="paymaya">Maya</SelectItem>
-                                                            </SelectContent>
-                                                        </Select>
+                                                        <div className="relative group/select">
+                                                            <Select value={paymentMethod} onValueChange={(value: PaymentMethod) => setPaymentMethod(value)}>
+                                                                <SelectTrigger className="bg-white border-gray-100/50 h-9 rounded-lg text-xs shadow-sm pr-8">
+                                                                    <SelectValue />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="cash">Cash</SelectItem>
+                                                                    <SelectItem value="gcash">GCash</SelectItem>
+                                                                    <SelectItem value="maya">Maya</SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                            {paymentMethod && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setPaymentMethod('cash'); // Reset to default cash
+                                                                    }}
+                                                                    className="absolute right-8 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors opacity-0 group-hover/select:opacity-100"
+                                                                >
+                                                                    <X size={12} />
+                                                                </button>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                    {(paymentMethod === 'gcash' || paymentMethod === 'paymaya') && (
+                                                    {['gcash', 'maya'].includes(paymentMethod) && (paymentStatus === 'paid' || paymentStatus === 'partial') && (
                                                         <div className="space-y-1 col-span-3">
                                                             <Label htmlFor="refNo" className={LABEL_STYLE}>Reference Number</Label>
-                                                            <Input
+                                                            <ClearableInput
                                                                 id="refNo"
                                                                 value={referenceNo}
                                                                 onChange={(e: any) => setReferenceNo(formatReferenceNo(e.target.value))}
@@ -1268,7 +1342,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                                     </div>
                                     {rushFee > 0 && (
                                         <div className="flex justify-between items-center text-[13px]">
-                                            <span className="text-gray-500 font-medium">{shoes.length > 1 ? 'Priority Fee Total' : 'Priority Fee'}</span>
+                                            <span className="text-gray-500 font-medium">{shoes.length > 1 ? 'Rush Fee Total' : 'Rush Fee'}</span>
                                             <span className="font-bold text-gray-800">{formatPeso(rushFee)}</span>
                                         </div>
                                     )}
@@ -1309,6 +1383,6 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
             </Card>
 
 
-        </form >
+        </form>
     );
 }

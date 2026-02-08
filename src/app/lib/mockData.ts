@@ -4,9 +4,9 @@ import { Service, JobOrder, JobStatus, PaymentStatus, Shelf } from '@/app/types'
 export const mockServices: Service[] = [
   // Base Services
   { id: '1', name: 'Basic Cleaning', price: 325, category: 'base', active: true, description: 'Standard shoe cleaning service' },
-  { id: '2', name: 'Minor Reglue (with basic cleaning)', price: 450, category: 'base', active: true, description: 'Minor regluing with basic cleaning' },
-  { id: '3', name: 'Full Reglue (with basic cleaning)', price: 575, category: 'base', active: true, description: 'Full regluing with basic cleaning' },
-  { id: '4', name: 'Color Renewal (with basic cleaning)', price: 325, category: 'base', active: true },
+  { id: '2', name: 'Minor Reglue', price: 125, category: 'base', active: true, description: 'Minor regluing' },
+  { id: '3', name: 'Full Reglue', price: 250, category: 'base', active: true, description: 'Full regluing' },
+  { id: '4', name: 'Color Renewal', price: 0, category: 'base', active: true },
 
   // Add-ons
   { id: '6', name: 'Unyellowing', price: 125, category: 'addon', active: true },
@@ -16,6 +16,7 @@ export const mockServices: Service[] = [
   { id: '9', name: 'Minor Restoration', price: 225, category: 'addon', active: true },
   { id: '10', name: '2 Colors', price: 375, category: 'addon', active: true },
   { id: '11', name: '3 Colors', price: 475, category: 'addon', active: true },
+  { id: '17', name: 'Premium Glue', price: 1530, category: 'addon', active: true },
   { id: '13', name: 'Rush Fee (Basic Cleaning)', price: 150, category: 'priority', active: true },
   { id: '14', name: 'Rush Fee (Minor Reglue)', price: 250, category: 'priority', active: true },
   { id: '15', name: 'Rush Fee (Full Reglue)', price: 250, category: 'priority', active: true },
@@ -58,7 +59,7 @@ export const mockJobOrders: JobOrder[] = (() => {
 
         orders.push({
           id: `JO-TODAY-${String(todayOrderId++).padStart(3, '0')}`,
-          orderNumber: `ORD-${new Date().getFullYear()}-${String(todayOrderId).padStart(4, '0')}`,
+          orderNumber: `ORD-${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}-${String(todayOrderId).padStart(3, '0')}`,
           customerName: customerNames[Math.floor(Math.random() * customerNames.length)],
           contactNumber: `09${Math.floor(100000000 + Math.random() * 900000000)}`,
           brand: brands[Math.floor(Math.random() * brands.length)],
@@ -151,7 +152,7 @@ export const mockJobOrders: JobOrder[] = (() => {
 
     return {
       id: `JO-${year}${month}${day}-${sequence}${groupSuffix}`,
-      orderNumber: `ORD-${year}-${sequence}`,
+      orderNumber: `ORD-${year}-${month}-${day}-${sequence.slice(-3)}`, // Using last 3 digits of sequence to match user request "001"
       customerName: customerNames[Math.floor(Math.random() * customerNames.length)],
       contactNumber: `09${Math.floor(100000000 + Math.random() * 900000000)}`,
       brand: brands[Math.floor(Math.random() * brands.length)],
