@@ -9,8 +9,9 @@ import { Textarea } from '@/app/components/ui/textarea';
 import { toast } from 'sonner';
 import { mockServices } from '@/app/lib/mockData';
 import { Plus, X, Calendar, User, Hash, ClipboardList, RotateCcw } from 'lucide-react';
-import { useOrders } from '@/app/context/OrderContext';
+import { useOrders } from '../context/OrderContext';
 import type { ShippingPreference, PaymentMethod, PaymentStatus, Priority } from '@/app/types';
+import { format as dateFnsFormat } from 'date-fns';
 import { CreatableCombobox } from './ui/creatable-combobox';
 
 // Dropdown options
@@ -131,6 +132,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
     const [referenceNo, setReferenceNo] = useState('');
     const [orderTime, setOrderTime] = useState(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
     const [releaseTime, setReleaseTime] = useState('');
+    const [assignedTo, setAssignedTo] = useState<string | undefined>(user?.username);
 
     const handleResetForm = () => {
         // Reset Customer Info
@@ -177,10 +179,10 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
         setReferenceNo('');
         setOrderTime(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
         setReleaseTime('');
+        setAssignedTo(user?.username);
     };
     const [generatedOrderNumber, setGeneratedOrderNumber] = useState('');
 
-    // Generate Unique Order ID on Mount
     useEffect(() => {
         const today = new Date();
         const year = today.getFullYear();
@@ -188,12 +190,20 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
         const day = String(today.getDate()).padStart(2, '0');
         const prefix = `ORD-${year}-${month}-${day}-`;
 
+        // Extract numeric sequences, handling potential -A, -B suffixes
         const existingIds = orders
-            .filter(o => o.orderNumber.startsWith(prefix))
-            .map(o => parseInt(o.orderNumber.split('-')[4] || '0')); // ORD-YYYY-MM-DD-XXX -> index 4 is XXX
+            .filter(o => o.orderNumber && typeof o.orderNumber === 'string' && o.orderNumber.startsWith(prefix))
+            .map(o => {
+                const parts = o.orderNumber.split('-');
+                const seqPart = parts[4] || '';
+                // Only extract the numeric part if it exists
+                const numericMatch = seqPart.match(/\d+/);
+                return numericMatch ? parseInt(numericMatch[0]) : 0;
+            })
+            .filter(n => !isNaN(n) && n > 0);
 
         const maxSeq = existingIds.length > 0 ? Math.max(...existingIds) : 0;
-        const nextSeq = String(maxSeq + 1).padStart(3, '0'); // e.g., 001, 002
+        const nextSeq = String(maxSeq + 1).padStart(3, '0');
         setGeneratedOrderNumber(`${prefix}${nextSeq}`);
     }, [orders]);
 
@@ -228,12 +238,27 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
 
 
     const calculatePredictedDays = () => {
-        const hasAdditional = shoes.some(shoe =>
-            (shoe.baseService && shoe.baseService.some(s => s !== 'Basic Cleaning')) ||
-            (shoe.addOns && shoe.addOns.length > 0)
-        );
+        // Check if any shoe has anything other than "Basic Cleaning"
+        const hasAdditional = shoes.some(shoe => {
+            const services = shoe.baseService || [];
+            const isJustBasicCleaning = services.length === 1 && services[0] === 'Basic Cleaning';
+            const hasAddons = shoe.addOns && shoe.addOns.length > 0;
+            return !isJustBasicCleaning || hasAddons;
+        });
+
         const baseDays = hasAdditional ? 25 : 10;
-        return priorityLevel === 'rush' ? baseDays - 1 : baseDays;
+
+        // Rush only reduces by 1 day and is limited to Basic Cleaning/Reglue
+        const isRushEligible = shoes.every(shoe => {
+            const services = shoe.baseService || [];
+            return services.every(s => s === 'Basic Cleaning' || s.toLowerCase().includes('reglue'));
+        });
+
+        if (priorityLevel === 'rush' && isRushEligible) {
+            return baseDays - 1;
+        }
+
+        return baseDays;
     };
 
     const getShoeTotal = (shoe: ShoeEntry) => {
@@ -366,7 +391,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
         const year = createdDate.getFullYear();
         const month = String(createdDate.getMonth() + 1).padStart(2, '0');
         const day = String(createdDate.getDate()).padStart(2, '0');
-        const sequence = String(Math.floor(Math.random() * 10000)).padStart(4, '0'); // Simplified sequence
+        const sequence = generatedOrderNumber.split('-').pop() || '001';
 
         // Helper to format delivery address
         const formatAddress = () => {
@@ -379,7 +404,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
 
             const newOrder: any = { // Using any temporarily if types mismatch, but preferably match JobOrder type
                 id: `JO-${year}${month}${day}-${sequence}${groupSuffix}`,
-                orderNumber: `ORD-${year}-${month}-${day}-${sequence.slice(-3)}`, // Match format ORD-YYYY-MM-DD-XXX
+                orderNumber: generatedOrderNumber, // Use the pre-generated sequential number
                 customerName,
                 contactNumber,
                 brand: shoe.brand === 'Other' ? (shoe.otherBrand || 'Other') : (shoe.brand || 'Other'),
@@ -408,7 +433,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                 transactionDate: createdDate,
                 processedBy: user?.username || 'Current User',
                 status: 'new-order',
-                assignedTo: undefined,
+                assignedTo: assignedTo,
                 predictedCompletionDate: (() => {
                     const daysToAdd = calculatePredictedDays();
                     const date = new Date(Date.now() + daysToAdd * 24 * 60 * 60 * 1000);
@@ -512,6 +537,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
         setReferenceNo('');
         setOrderTime(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
         setReleaseTime('');
+        setAssignedTo(undefined);
     };
 
     const formatReferenceNo = (value: string) => {
@@ -550,7 +576,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
     return (
         <form onSubmit={handleSubmit} className="space-y-3">
             {/* Customer Information Section */}
-            <Card className="border-red-100/50 shadow-sm bg-white overflow-hidden">
+            <Card className="border-red-100/50 shadow-sm bg-white overflow-hidden rounded-2xl">
                 <CardHeader className={`${CARD_HEADER_STYLE} !py-2`}>
                     <div className="flex items-center gap-3 translate-y-[1px]">
                         <User className="text-red-600 fill-red-600" size={18} />
@@ -558,8 +584,8 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                     </div>
                 </CardHeader>
                 <CardContent className="px-6 pt-0 pb-4 space-y-4">
-                    <div className={`grid gap-3 md:gap-4 -mt-1 ${shippingPreference === 'pickup' ? 'grid-cols-3' : 'grid-cols-12 mb-2.5'}`}>
-                        <div className={shippingPreference === 'pickup' ? 'col-span-1' : 'col-span-6'}>
+                    <div className={`grid gap-3 md:gap-4 -mt-1 ${shippingPreference === 'pickup' ? 'grid-cols-1 md:grid-cols-3' : 'grid-cols-1 md:grid-cols-12 mb-2.5'}`}>
+                        <div className={shippingPreference === 'pickup' ? 'col-span-1' : 'col-span-1 md:col-span-6'}>
                             <Label htmlFor="customerName" className={LABEL_STYLE}>Customer Name</Label>
                             <ClearableInput
                                 id="customerName"
@@ -570,7 +596,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                                 required
                             />
                         </div>
-                        <div className={shippingPreference === 'pickup' ? 'col-span-1' : 'col-span-6'}>
+                        <div className={shippingPreference === 'pickup' ? 'col-span-1' : 'col-span-1 md:col-span-6'}>
                             <Label htmlFor="contactNumber" className={LABEL_STYLE}>Contact Number</Label>
                             <ClearableInput
                                 id="contactNumber"
@@ -602,7 +628,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                     {shippingPreference === 'delivery' && (
                         <div className="space-y-2.5">
                             {/* Row 1: Shipping Pref, Courier */}
-                            <div className="grid grid-cols-2 gap-3 md:gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
                                 <div className="col-span-1">
                                     <Label htmlFor="shippingPref" className={LABEL_STYLE}>Shipping Preference</Label>
                                     <Select value={shippingPreference} onValueChange={(value: ShippingPreference) => setShippingPreference(value)}>
@@ -628,7 +654,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                             </div>
 
                             {/* Row 2: Unit/No, Street, Barangay */}
-                            <div className="grid grid-cols-3 gap-3 md:gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
                                 <div className="col-span-1">
                                     <Label htmlFor="unitNo" className={LABEL_STYLE}>UNIT/NO</Label>
                                     <ClearableInput
@@ -665,7 +691,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                             </div>
 
                             {/* Row 3: City, Province, Zip Code */}
-                            <div className="grid grid-cols-3 gap-3 md:gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
                                 <div className="col-span-1">
                                     <Label htmlFor="city" className={LABEL_STYLE}>CITY</Label>
                                     <ClearableInput
@@ -711,7 +737,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
             < div className="space-y-2" >
                 {
                     shoes.map((shoe, index) => (
-                        <Card key={shoe.id} className="border-red-100/50 shadow-sm bg-white group relative">
+                        <Card key={shoe.id} className="border-red-100/50 shadow-sm bg-white group relative rounded-2xl">
                             <CardHeader className={`${CARD_HEADER_STYLE} !py-2`}>
                                 <div className="flex items-center justify-between translate-y-[1px]">
                                     <div className="flex items-center gap-3">
@@ -741,7 +767,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                                         <div className="md:col-span-5 flex flex-col gap-3 h-full">
                                             {/* Identification Row - Stacked for narrow column */}
                                             <div className="space-y-2.5">
-                                                <div className="grid grid-cols-2 gap-3">
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                                     <div className="col-span-1">
                                                         <Label className={LABEL_STYLE}>Brand</Label>
                                                         <CreatableCombobox
@@ -763,7 +789,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                                                         />
                                                     </div>
                                                 </div>
-                                                <div className="grid grid-cols-4 gap-3">
+                                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                                                     <div className="col-span-1">
                                                         <Label className={LABEL_STYLE}>Quantity</Label>
                                                         <Input
@@ -774,7 +800,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                                                             className={`${INPUT_STYLE} text-center font-bold px-1`}
                                                         />
                                                     </div>
-                                                    <div className="col-span-3">
+                                                    <div className="col-span-1 lg:col-span-3">
                                                         <Label className={LABEL_STYLE}>Priority Level</Label>
                                                         <div className="relative group/select">
                                                             <Select value={priorityLevel} onValueChange={(val: any) => setPriorityLevel(val)}>
@@ -1114,65 +1140,99 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
 
                                 return (
                                     <div className="bg-[#F8F9FA]/50 p-4 rounded-xl border border-red-50/50 space-y-3 shadow-sm h-full flex flex-col justify-center">
-                                        <div className="grid grid-cols-12 gap-2">
+                                        <div className="grid grid-cols-2 md:grid-cols-12 gap-2">
                                             {/* Row 1: Order Date, Order Time, Release Date & Release Time */}
-                                            <div className="space-y-1 col-span-3">
+                                            <div className="space-y-1 col-span-1 md:col-span-3">
                                                 <Label className={LABEL_STYLE}>Order Date</Label>
-                                                <div className="flex items-center bg-white h-9 rounded-lg px-3 text-xs text-gray-900 border border-gray-100/50 shadow-sm">
+                                                <div className="flex items-center bg-white h-9 rounded-xl px-3 text-xs text-gray-900 border border-gray-100/50 shadow-sm">
                                                     <Calendar size={14} className="mr-2 text-gray-400 shrink-0" />
-                                                    <span>{new Date().toLocaleDateString()}</span>
+                                                    <span className="truncate">{dateFnsFormat(new Date(), 'MM/dd/yy')}</span>
                                                 </div>
                                             </div>
-                                            <div className="space-y-1 col-span-3">
+                                            <div className="space-y-1 col-span-1 md:col-span-3">
                                                 <Label className={LABEL_STYLE}>Order Time</Label>
                                                 <Input
                                                     type="time"
                                                     value={orderTime}
                                                     onChange={(e) => setOrderTime(e.target.value)}
-                                                    className="bg-white border-gray-100/50 h-9 rounded-lg text-xs text-gray-900 shadow-sm"
+                                                    className="bg-white border-gray-100/50 h-9 rounded-xl text-xs text-gray-900 shadow-sm px-2"
                                                 />
                                             </div>
-                                            <div className="space-y-1 col-span-3">
+                                            <div className="space-y-1 col-span-1 md:col-span-3">
                                                 <Label className={LABEL_STYLE}>Release Date</Label>
-                                                <div className="flex items-center bg-white h-9 rounded-lg px-3 text-xs text-gray-900 border border-gray-100/50 shadow-sm">
+                                                <div className="flex items-center bg-white h-9 rounded-xl px-3 text-xs text-gray-900 border border-gray-100/50 shadow-sm">
                                                     <Calendar size={14} className="mr-2 text-gray-400 shrink-0" />
-                                                    <span>{(() => {
+                                                    <span className="truncate">{(() => {
                                                         const daysToAdd = calculatePredictedDays();
-                                                        return new Date(Date.now() + daysToAdd * 24 * 60 * 60 * 1000).toLocaleDateString();
+                                                        return dateFnsFormat(new Date(Date.now() + daysToAdd * 24 * 60 * 60 * 1000), 'MM/dd/yy');
                                                     })()}</span>
                                                 </div>
                                             </div>
-                                            <div className="space-y-1 col-span-3">
+                                            <div className="space-y-1 col-span-1 md:col-span-3">
                                                 <Label className={LABEL_STYLE}>Release Time</Label>
                                                 <Input
                                                     type="time"
                                                     value={releaseTime}
                                                     onChange={(e) => setReleaseTime(e.target.value)}
                                                     placeholder="--:--"
-                                                    className="bg-white border-gray-100/50 h-9 rounded-lg text-xs text-gray-900 shadow-sm"
+                                                    className="bg-white border-gray-100/50 h-9 rounded-xl text-xs text-gray-900 shadow-sm px-2"
                                                 />
                                             </div>
-
-                                            {/* Row 2: Order ID, Processed By & Payment Status */}
-                                            <div className="space-y-1 col-span-4">
+                                            {/* Row 2: Order ID, Processed By, Assigned To & Payment Status */}
+                                            <div className="space-y-1 col-span-2 md:col-span-3">
                                                 <Label className={LABEL_STYLE}>Order ID</Label>
-                                                <div className="flex items-center bg-white h-9 rounded-lg px-3 text-[11px] text-gray-900 border border-gray-100/50 shadow-sm">
+                                                <div className="flex items-center bg-white h-9 rounded-xl px-3 text-[11px] text-gray-900 border border-gray-100/50 shadow-sm">
                                                     <Hash size={14} className="mr-2 text-gray-400" />
                                                     <span className="whitespace-nowrap">{generatedOrderNumber || 'Generating...'}</span>
                                                 </div>
                                             </div>
-                                            <div className="space-y-1 col-span-4">
+                                            <div className="space-y-1 col-span-1 md:col-span-3">
                                                 <Label className={LABEL_STYLE}>Processed By</Label>
-                                                <div className="flex items-center bg-white h-9 rounded-lg px-3 text-xs text-gray-900 border border-gray-100/50 shadow-sm">
+                                                <div className="flex items-center bg-white h-9 rounded-xl px-3 text-xs text-gray-900 border border-gray-100/50 shadow-sm">
                                                     <User size={14} className="mr-2 text-gray-400" />
-                                                    {user?.username || 'Current User'}
+                                                    <span className="truncate">{user?.username || 'Current User'}</span>
                                                 </div>
                                             </div>
-                                            <div className="space-y-1 col-span-4">
+                                            <div className="space-y-1 col-span-1 md:col-span-3">
+                                                <Label className={LABEL_STYLE}>Assigned To</Label>
+                                                <div className="relative group/select">
+                                                    <Select
+                                                        value={assignedTo || 'unassigned'}
+                                                        onValueChange={(val: string) => setAssignedTo(val === 'unassigned' ? undefined : val)}
+                                                    >
+                                                        <SelectTrigger className="bg-white border-gray-100/50 h-9 rounded-xl text-xs text-gray-900 shadow-sm pr-8">
+                                                            <SelectValue placeholder="Unassigned" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="unassigned">Unassigned</SelectItem>
+                                                            {user?.username && (
+                                                                <SelectItem value={user.username}>{user.username}</SelectItem>
+                                                            )}
+                                                            <SelectItem value="staff">staff</SelectItem>
+                                                            <SelectItem value="staff1">staff1</SelectItem>
+                                                            <SelectItem value="staff2">staff2</SelectItem>
+                                                            <SelectItem value="technician">technician</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                    {assignedTo && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setAssignedTo(undefined);
+                                                            }}
+                                                            className="absolute right-8 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors opacity-0 group-hover/select:opacity-100"
+                                                        >
+                                                            <X size={12} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div className="space-y-1 col-span-1 md:col-span-3">
                                                 <Label className={LABEL_STYLE}>Payment Status</Label>
                                                 <div className="relative group/select">
                                                     <Select value={paymentStatus} onValueChange={(value: PaymentStatus) => setPaymentStatus(value)}>
-                                                        <SelectTrigger className="bg-white border-gray-100/50 h-9 rounded-lg text-xs text-gray-900 shadow-sm pr-8">
+                                                        <SelectTrigger className="bg-white border-gray-100/50 h-9 rounded-xl text-xs text-gray-900 shadow-sm pr-8">
                                                             <SelectValue />
                                                         </SelectTrigger>
                                                         <SelectContent>
@@ -1197,15 +1257,15 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                                             </div>
                                         </div>
 
-                                        <div className="grid grid-cols-6 gap-2 pt-0">
+                                        <div className="grid grid-cols-1 md:grid-cols-6 gap-2 pt-0">
                                             {/* Row 3: Payment Method & Reference Number */}
                                             {paymentStatus !== 'unpaid' && (
                                                 <>
-                                                    <div className={`space-y-1 ${paymentMethod === 'cash' ? 'col-span-6' : 'col-span-3'}`}>
+                                                    <div className={`space-y-1 ${paymentMethod === 'cash' ? 'col-span-1 md:col-span-6' : 'col-span-1 md:col-span-3'}`}>
                                                         <Label className={LABEL_STYLE}>Payment Method</Label>
                                                         <div className="relative group/select">
                                                             <Select value={paymentMethod} onValueChange={(value: PaymentMethod) => setPaymentMethod(value)}>
-                                                                <SelectTrigger className="bg-white border-gray-100/50 h-9 rounded-lg text-xs shadow-sm pr-8">
+                                                                <SelectTrigger className="bg-white border-gray-100/50 h-9 rounded-xl text-xs shadow-sm pr-8">
                                                                     <SelectValue />
                                                                 </SelectTrigger>
                                                                 <SelectContent>
@@ -1229,14 +1289,14 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                                                         </div>
                                                     </div>
                                                     {['gcash', 'maya'].includes(paymentMethod) && (paymentStatus === 'paid' || paymentStatus === 'partial') && (
-                                                        <div className="space-y-1 col-span-3">
+                                                        <div className="space-y-1 col-span-1 md:col-span-3">
                                                             <Label htmlFor="refNo" className={LABEL_STYLE}>Reference Number</Label>
                                                             <ClearableInput
                                                                 id="refNo"
                                                                 value={referenceNo}
                                                                 onChange={(e: any) => setReferenceNo(formatReferenceNo(e.target.value))}
                                                                 placeholder="XXXX-XXXX-XXXX"
-                                                                className="bg-white border-gray-100/50 h-9 rounded-lg text-xs shadow-sm"
+                                                                className="bg-white border-gray-100/50 h-9 rounded-xl text-xs shadow-sm"
                                                             />
                                                         </div>
                                                     )}
@@ -1246,7 +1306,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                                             {/* Row 4: Amount Received & Result Field */}
                                             {showAmountRec && (
                                                 <>
-                                                    <div className="space-y-1 col-span-3">
+                                                    <div className="space-y-1 col-span-1 md:col-span-3">
                                                         <Label htmlFor="amountRec" className={LABEL_STYLE}>Amount Received</Label>
                                                         <div className="relative">
                                                             <span className="absolute left-3 top-2.5 text-gray-900 text-xs font-black">{'\u20B1'}</span>
@@ -1265,7 +1325,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                                                         </div>
                                                     </div>
 
-                                                    <div className="space-y-1 col-span-3">
+                                                    <div className="space-y-1 col-span-1 md:col-span-3">
                                                         {isPartial ? (
                                                             <>
                                                                 <Label htmlFor="depositAmt" className={LABEL_STYLE}>Deposit Amount</Label>
@@ -1300,7 +1360,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                                             {/* Row 5: Amount Change & Remaining Balance (Partial Only) */}
                                             {isPartial && (
                                                 <>
-                                                    <div className="space-y-1 col-span-3">
+                                                    <div className="space-y-1 col-span-1 md:col-span-3">
                                                         <Label className={LABEL_STYLE}>Amount Change</Label>
                                                         <div className="relative">
                                                             <span className="absolute left-3 top-2.5 text-gray-900 text-xs font-black">{'\u20B1'}</span>
@@ -1312,7 +1372,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                                                             />
                                                         </div>
                                                     </div>
-                                                    <div className="space-y-1 col-span-3">
+                                                    <div className="space-y-1 col-span-1 md:col-span-3">
                                                         <Label className={LABEL_STYLE}>Remaining Balance</Label>
                                                         <div className="relative">
                                                             <span className="absolute left-3 top-2.5 text-gray-900 text-xs font-black">{'\u20B1'}</span>
@@ -1364,17 +1424,17 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="flex items-center gap-4 pt-5 mt-2 border-t border-gray-100">
+                    <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4 pt-5 mt-2 border-t border-gray-100">
                         <Button
                             type="button"
-                            className="flex-1 bg-gray-200 hover:bg-gray-700 text-gray-600 hover:text-white font-black text-xs uppercase tracking-widest h-10 transition-all rounded-lg shadow-sm"
+                            className="w-full sm:flex-1 bg-gray-200 hover:bg-gray-700 text-gray-600 hover:text-white font-black text-xs uppercase tracking-widest h-10 transition-all rounded-lg shadow-sm"
                             onClick={onCancel}
                         >
                             Cancel
                         </Button>
                         <Button
                             type="submit"
-                            className="flex-1 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-widest h-10 shadow-lg shadow-red-200 transition-all rounded-lg"
+                            className="w-full sm:flex-1 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-widest h-10 shadow-lg shadow-red-200 transition-all rounded-lg"
                         >
                             Submit
                         </Button>

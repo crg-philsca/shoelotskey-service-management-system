@@ -19,7 +19,7 @@ export default function ServiceIntakeModal({ }: ServiceIntakeModalProps) {
                     New Job Order Form
                 </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-[#F8F9FA] p-0 gap-0">
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-[#F8F9FA] p-0 gap-0 rounded-2xl border-none shadow-2xl">
                 <div className="p-6">
                     <ServiceIntakeForm onSuccess={() => setOpen(false)} onCancel={() => setOpen(false)} />
                 </div>

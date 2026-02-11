@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Functional IPO System Diagram - Service Management System</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --purple-primary: #8b5cf6;
+            --purple-light: #c084fc;
+            --red-accent: #ef4444;
+            --blue-accent: #3b82f6;
+            --green-accent: #10b981;
+            --glass-bg: rgba(30, 41, 59, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-dark);
+            background-image:
+                radial-gradient(circle at 20% 30%, rgba(139, 92, 246, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(239, 68, 68, 0.1) 0%, transparent 50%);
+            font-family: 'Outfit', sans-serif;
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-x: hidden;
+        }
+
+        .container {
+            width: 95%;
+            max-width: 1250px;
+            margin: 40px auto;
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 40px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            animation: fadeIn 0.8s ease-out;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 50px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            margin-bottom: 10px;
+            background: linear-gradient(to right, #fff, var(--purple-light));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-transform: uppercase;
+        }
+
+        .subtitle {
+            font-size: 1.1rem;
+            color: #94a3b8;
+            font-weight: 400;
+        }
+
+        .mermaid-section {
+            background: rgba(15, 23, 42, 0.5);
+            border-radius: 16px;
+            padding: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            min-height: 550px;
+        }
+
+        .mermaid {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+        }
+
+        .description-grid {
+            display: grid;
+            grid-template-cols: repeat(3, 1fr);
+            gap: 20px;
+            margin-top: 50px;
+        }
+
+        .desc-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 20px;
+        }
+
+        .desc-card h3 {
+            margin-top: 0;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .desc-card ul {
+            padding-left: 18px;
+            margin-bottom: 0;
+            color: #cbd5e1;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 25px;
+            margin-top: 30px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 99px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.75rem;
+            color: #94a3b8;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        footer {
+            margin-top: 40px;
+            margin-bottom: 40px;
+            color: #64748b;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            text-align: center;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <header>
+            <h1>Functional System IPO Model</h1>
+            <div class="subtitle">Live System Components | Data Flow & Feedback Architecture</div>
+        </header>
+
+        <div class="mermaid-section">
+            <div id="diagram" class="mermaid"></div>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item"><span class="dot" style="background:#8b5cf6"></span> Live Inputs</div>
+            <div class="legend-item"><span class="dot" style="background:#3b82f6"></span> Active Processes</div>
+            <div class="legend-item"><span class="dot" style="background:#ef4444"></span> Functional Outputs</div>
+            <div class="legend-item"><span class="dot" style="background:#10b981"></span> Feedback Mechanism</div>
+        </div>
+
+        <div class="description-grid">
+            <div class="desc-card">
+                <h3 style="color: var(--purple-primary)">FUNCTIONAL INPUTS</h3>
+                <ul style="list-style-type: '→ '">
+                    <li><strong>Service Intake Data:</strong> Brand, Material, Condition Checklist (Sole Sep,
+                        Scratches).</li>
+                    <li><strong>Order Specifics:</strong> Base Service Selection & Dynamic Add-on Quantities.</li>
+                    <li><strong>Financial Inputs:</strong> Payment Method (GCash/Maya), Partial Amounts, Ref Nos.</li>
+                    <li><strong>Logistics:</strong> Shipping Preferences (Pickup/Delivery) & Courier Details.</li>
+                </ul>
+            </div>
+            <div class="desc-card">
+                <h3 style="color: var(--blue-accent)">CORE SYSTEM PROCESSES</h3>
+                <ul style="list-style-type: '⚙ '">
+                    <li><strong>Workflow Management:</strong> Orchestrating Status Life-cycle (New → Ongoing → Release).
+                    </li>
+                    <li><strong>Financial Logic:</strong> Grand Total Calculation (Base + Addons) & Revenue Summation.
+                    </li>
+                    <li><strong>Resource Logic:</strong> Staff Task Assignment & Technician Loading.</li>
+                    <li><strong>Predictive Engine:</strong> Estimating Deadlines based on Service Complexity.</li>
+                </ul>
+            </div>
+            <div class="desc-card">
+                <h3 style="color: var(--red-accent)">SYSTEM OUTPUTS</h3>
+                <ul style="list-style-type: '✓ '">
+                    <li><strong>Dashboard BI:</strong> Revenue Trends & Service Volume Groupings (Cleaning/Repair).</li>
+                    <li><strong>Audit Logs:</strong> Real-time Status History & Transaction Ref Records.</li>
+                    <li><strong>Views:</strong> Calendar Schedule Manifests & Compact Claim Monitoring Lists.</li>
+                    <li><strong>Status Badges:</strong> Standardized UI feedback for Priority & Payment states.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        &copy; 2026 SHOELOTSKEY SERVICE MANAGEMENT SYSTEM | IPO CONTEXTUAL MAPPING
+    </footer>
+
+    <script>
+        const diagramCode = `
+flowchart LR
+    %% Data Points
+    subgraph INPUTS ["LIVE SYSTEM INPUTS"]
+        direction TB
+        I1["Customer & Contact Info"]
+        I2["Shoe Specs & Condition (Separation/Rips)"]
+        I3["Service Matrix (Base + Add-ons)"]
+        I4["Payment & Shipping Metadata"]
+    end
+
+    subgraph PROCESS ["ACTIVE LOGIC LAYERS"]
+        direction TB
+        P1["Status Orchestration (Job Lifecycle)"]
+        P2["Financial Math Engine (Sales/Profit)"]
+        P3["Staff & Assignment Allocator"]
+        P4["Predictive Deadline Calculation"]
+        P5["Status History & Audit Logger"]
+    end
+
+    subgraph OUTPUTS ["FUNCTIONAL OUTPUT VIEWS"]
+        direction TB
+        O1["Trend Analytics (Recharts BI)"]
+        O2["Calendar Manifest & Schedules"]
+        O3["Validated Order Detail Records"]
+        O4["Financial Badges & Payment Logs"]
+        O5["Claim Monitoring & Release UI"]
+    end
+
+    %% Flow Architecture
+    INPUTS ===>|Data Submission| PROCESS
+    PROCESS ===>|Render Logic| OUTPUTS
+
+    %% Feedback Loop Mechanism
+    OUTPUTS -.->|"STATUS TRANSITIONS & DATA UPDATES"| PROCESS
+    PROCESS -.->|"HISTORICAL TRENDS & RE-ENTRY"| INPUTS
+
+    %% Advanced Styling
+    style INPUTS fill:#1e293b,stroke:#8b5cf6,stroke-width:2px,color:#fff
+    style PROCESS fill:#0f172a,stroke:#3b82f6,stroke-width:3px,color:#fff
+    style OUTPUTS fill:#1e293b,stroke:#ef4444,stroke-width:2px,color:#fff
+`.trim();
+
+        document.getElementById('diagram').textContent = diagramCode;
+
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'dark',
+            securityLevel: 'loose',
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'basis'
+            }
+        });
+    </script>
+</body>
+
+</html>

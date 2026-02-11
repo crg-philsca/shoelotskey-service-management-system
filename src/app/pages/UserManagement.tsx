@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/ca
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { Input } from '@/app/components/ui/input';
-import { Plus, Edit, Trash, Search, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
+import { PlusCircle, Edit, Trash, Search, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import React from 'react';
 import {
@@ -69,7 +69,7 @@ export default function UserManagement({ onSetHeaderAction }: { onSetHeaderActio
             setUserModalOpen(true);
           }}
         >
-          <Plus className="h-4 w-4 mr-0" />
+          <PlusCircle className="h-4 w-4 mr-0" />
           New User
         </Button>
       );

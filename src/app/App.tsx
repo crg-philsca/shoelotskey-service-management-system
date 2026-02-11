@@ -22,6 +22,7 @@ const ActivityHistory = lazy(() => import('@/app/pages/ActivityHistory'));
 const TotalSales = lazy(() => import('@/app/pages/TotalSales'));
 const TotalOrders = lazy(() => import('@/app/pages/TotalOrders'));
 const Expenses = lazy(() => import('@/app/pages/Expenses'));
+const ProfileSettings = lazy(() => import('@/app/pages/ProfileSettings'));
 
 // Loading fallback component
 const PageLoader = () => (
@@ -79,7 +80,7 @@ export default function App() {
     <BrowserRouter>
       <OrderProvider>
         <ExpenseProvider>
-          <Layout user={user} onLogout={handleLogout} onUpdateUser={handleUpdateUser} headerAction={headerActionRight}>
+          <Layout user={user} onLogout={handleLogout} headerAction={headerActionRight}>
             <Suspense fallback={<PageLoader />}>
               <Routes>
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -92,9 +93,10 @@ export default function App() {
                 <Route path="/calendar" element={<CalendarView onSetHeaderActionRight={setHeaderActionRight} />} />
                 <Route path="/claim-monitoring" element={<ClaimMonitoring />} />
                 <Route path="/activity-history" element={<ActivityHistory />} />
-                <Route path="/total-sales" element={<TotalSales />} />
-                <Route path="/total-orders" element={<TotalOrders />} />
-                <Route path="/expenses" element={<Expenses />} />
+                <Route path="/total-sales" element={<TotalSales onSetHeaderActionRight={setHeaderActionRight} />} />
+                <Route path="/total-orders" element={<TotalOrders onSetHeaderActionRight={setHeaderActionRight} />} />
+                <Route path="/expenses" element={<Expenses onSetHeaderActionRight={setHeaderActionRight} />} />
+                <Route path="/settings" element={<ProfileSettings user={user} onUpdateUser={handleUpdateUser} />} />
                 {user.role === 'owner' && (
                   <>
                     <Route path="/reports" element={<Reports onSetHeaderActionRight={setHeaderActionRight} />} />

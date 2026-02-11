@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useOrders } from '@/app/context/OrderContext';
+import { useOrders } from '../context/OrderContext';
+import { JobOrder } from '@/app/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
@@ -7,12 +8,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu';
 import { Search, Filter, MoreVertical, Edit, ArrowRight, RotateCcw, User, Phone, Clock, CreditCard, Tag, MapPin, UserPlus, Calendar as CalendarIcon } from 'lucide-react';
-import { format } from 'date-fns';
+import { format as dateFnsFormat } from 'date-fns';
 import { mockServices } from '@/app/lib/mockData';
 import EditOrderModal from '@/app/components/EditOrderModal';
 import ServiceIntakeModal from '@/app/components/ServiceIntakeModal';
 import { toast } from 'sonner';
-import { JobOrder } from '@/app/types';
 import { Label } from '@/app/components/ui/label';
 import { Checkbox } from '@/app/components/ui/checkbox';
 
@@ -44,7 +44,7 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
     }, [onSetHeaderAction]);
 
     // Filter logic
-    const filteredOrders = orders.filter(order => {
+    const filteredOrders = orders.filter((order: JobOrder) => {
         // Status
         if (filterStatus !== 'all' && order.status !== filterStatus) return false;
 
@@ -73,12 +73,21 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
     });
 
     // Sort: Recently updated first (move to status moves to top), then rush, then sequence
-    filteredOrders.sort((a, b) => {
+    filteredOrders.sort((a: JobOrder, b: JobOrder) => {
         const timeA = new Date(a.updatedAt || a.createdAt).getTime();
         const timeB = new Date(b.updatedAt || b.createdAt).getTime();
-        if (timeA !== timeB) return timeB - timeA;
-        if (a.priorityLevel === 'rush' && b.priorityLevel !== 'rush') return -1;
-        if (a.priorityLevel !== 'rush' && b.priorityLevel === 'rush') return 1;
+
+        const validA = !isNaN(timeA) ? timeA : 0;
+        const validB = !isNaN(timeB) ? timeB : 0;
+
+        if (validA !== validB) return validB - validA;
+
+        // Priority Level fallback (Rush first)
+        const priorityOrder = { rush: 0, premium: 1, regular: 2 };
+        const priorityA = priorityOrder[a.priorityLevel as keyof typeof priorityOrder] ?? 3;
+        const priorityB = priorityOrder[b.priorityLevel as keyof typeof priorityOrder] ?? 3;
+        if (priorityA !== priorityB) return priorityA - priorityB;
+
         return b.orderNumber.localeCompare(a.orderNumber);
     });
 
@@ -90,7 +99,7 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
 
     const handleSelectAll = (checked: boolean) => {
         if (checked) {
-            setSelectedOrderIds(paginatedOrders.map(o => o.id));
+            setSelectedOrderIds(paginatedOrders.map((o: JobOrder) => o.id));
         } else {
             setSelectedOrderIds([]);
         }
@@ -159,7 +168,7 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                     </div>
 
                     {/* Table */}
-                    <div className="rounded-md border">
+                    <div className="rounded-xl border">
                         <table className="w-full text-sm">
                             <thead className="bg-gray-50 border-b">
                                 <tr>
@@ -187,7 +196,7 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                         </td>
                                     </tr>
                                 ) : (
-                                    paginatedOrders.map((order) => (
+                                    paginatedOrders.map((order: JobOrder) => (
                                         <tr
                                             key={order.id}
                                             className={`border-b border-gray-100 hover:bg-gray-50/80 transition-all cursor-pointer ${selectedOrderIds.includes(order.id) ? 'bg-red-50/30' : ''}`}
@@ -288,7 +297,8 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                                                     updateOrder(order.id, {
                                                                         status: nextStatus as any,
                                                                         updatedAt: new Date(),
-                                                                        actualCompletionDate: nextStatus === 'claimed' ? new Date() : undefined
+                                                                        actualCompletionDate: nextStatus === 'claimed' ? new Date() : undefined,
+                                                                        claimedBy: nextStatus === 'claimed' ? order.customerName : order.claimedBy
                                                                     }, user.username);
                                                                     toast.success(`Order moved to ${nextStatus.replace('-', ' ')}`);
                                                                 }
@@ -432,7 +442,7 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                         <div className="flex items-center gap-2">
                                             <CalendarIcon size={12} className="text-gray-400" />
                                             <p className="text-sm font-medium text-gray-600">
-                                                {format(new Date(selectedOrder.transactionDate || selectedOrder.createdAt), 'MMM dd, yyyy h:mm a')}
+                                                {dateFnsFormat(new Date(selectedOrder.transactionDate || selectedOrder.createdAt), 'MM/dd/yy HH:mm')}
                                             </p>
                                         </div>
                                     </div>
@@ -441,10 +451,10 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                         <div className="flex items-center gap-2">
                                             <Clock size={12} className="text-gray-400" />
                                             <p className="text-sm font-bold text-gray-800">
-                                                {selectedOrder.predictedCompletionDate ? format(new Date(selectedOrder.predictedCompletionDate), 'MMM dd, yyyy') : '-'}
-                                                {['for-release', 'claimed'].includes(selectedOrder.status) && (
+                                                {selectedOrder.predictedCompletionDate ? dateFnsFormat(new Date(selectedOrder.predictedCompletionDate), 'MM/dd/yy HH:mm') : '-'}
+                                                {['for-release', 'claimed'].includes(selectedOrder.status) && selectedOrder.releaseTime && (
                                                     <span className="text-xs text-gray-500 ml-1 font-normal">
-                                                        @ {selectedOrder.releaseTime || '10:00 AM'}
+                                                        @ {selectedOrder.releaseTime}
                                                     </span>
                                                 )}
                                             </p>
@@ -495,10 +505,10 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                             <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">Physical Condition</Label>
                                             <div className="flex flex-wrap gap-1.5">
                                                 {Object.entries(item.condition || {}).map(([key, value]) => {
-                                                    if (key === 'others' && value) return <span key={key} className="px-2 py-1 bg-white border border-gray-200 rounded-md text-[10px] font-bold text-gray-600 shadow-sm">Note: {String(value)}</span>;
+                                                    if (key === 'others' && value) return <span key={key} className="px-2 py-1 bg-white border border-gray-200 rounded-xl text-[10px] font-bold text-gray-600 shadow-sm">Note: {String(value)}</span>;
                                                     if (value === true) {
                                                         const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-                                                        return <span key={key} className="px-2 py-1 bg-red-50 border border-red-100 rounded-md text-[10px] font-bold text-red-600">{label}</span>;
+                                                        return <span key={key} className="px-2 py-1 bg-red-50 border border-red-100 rounded-xl text-[10px] font-bold text-red-600">{label}</span>;
                                                     }
                                                     return null;
                                                 })}

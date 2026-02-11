@@ -496,9 +496,9 @@ export default function CalendarView({ onSetHeaderActionRight }: CalendarViewPro
                       <Clock size={12} className="text-gray-400" />
                       <p className="text-sm font-bold text-gray-800">
                         {selectedOrder.predictedCompletionDate ? format(new Date(selectedOrder.predictedCompletionDate), 'MMM dd, yyyy') : '-'}
-                        {['for-release', 'claimed'].includes(selectedOrder.status) && (
+                        {['for-release', 'claimed'].includes(selectedOrder.status) && selectedOrder.releaseTime && (
                           <span className="text-xs text-gray-500 ml-1 font-normal">
-                            @ {selectedOrder.releaseTime || '10:00 AM'}
+                            @ {selectedOrder.releaseTime}
                           </span>
                         )}
                       </p>

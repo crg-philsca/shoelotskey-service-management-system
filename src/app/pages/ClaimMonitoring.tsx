@@ -1,11 +1,12 @@
 import { useNavigate } from 'react-router-dom';
-import { useOrders } from '@/app/context/OrderContext';
-import { Search, Filter, Check, Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useOrders } from '../context/OrderContext';
+import { JobOrder } from '@/app/types';
+import { Search, Filter, Check, Calendar as CalendarIcon, ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/app/components/ui/card';
 import { Input } from '@/app/components/ui/input';
 import { useState, useMemo } from 'react';
-import { format } from "date-fns";
+import { format as dateFnsFormat } from "date-fns";
 import {
     Dialog,
     DialogContent,
@@ -55,8 +56,8 @@ export default function ClaimMonitoring() {
     // Filter and Search logic
     const filteredOrders = useMemo(() => {
         return orders
-            .filter(order => order.status === 'claimed')
-            .filter(order => {
+            .filter((order: JobOrder) => order.status === 'claimed')
+            .filter((order: JobOrder) => {
                 const matchesSearch =
                     order.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                     order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase());
@@ -83,7 +84,7 @@ export default function ClaimMonitoring() {
 
                 return matchesSearch && matchesPayment && matchesPaymentMethod && matchesAttendedBy && matchesDateRange;
             })
-            .sort((a, b) => {
+            .sort((a: JobOrder, b: JobOrder) => {
                 const dateA = a.actualCompletionDate ? new Date(a.actualCompletionDate).getTime() : 0;
                 const dateB = b.actualCompletionDate ? new Date(b.actualCompletionDate).getTime() : 0;
                 return dateB - dateA; // Newest first
@@ -145,6 +146,7 @@ export default function ClaimMonitoring() {
                                 onClick={() => navigate('/calendar')}
                                 className="bg-red-600 hover:bg-red-700 text-white hover:text-white border-red-600 font-black h-9 px-3 flex-shrink-0 uppercase text-[10px] tracking-wider"
                             >
+                                <ArrowLeft className="h-4 w-4 mr-1" />
                                 Back
                             </Button>
 
@@ -154,7 +156,7 @@ export default function ClaimMonitoring() {
                                     placeholder="Search by order number or customer name..."
                                     value={searchTerm}
                                     onChange={handleSearchChange}
-                                    className="pl-10 h-8 text-[11px] border-gray-100 bg-gray-50/50 focus-visible:ring-1 focus-visible:ring-red-600 focus-visible:border-red-600 rounded-lg w-full transition-all"
+                                    className="pl-10 h-8 text-[11px] border-gray-100 bg-gray-50/50 focus-visible:ring-1 focus-visible:ring-red-600 focus-visible:border-red-600 rounded-xl w-full transition-all"
                                 />
                             </div>
 
@@ -202,10 +204,10 @@ export default function ClaimMonitoring() {
                                         </td>
                                     </tr>
                                 ) : (
-                                    paginatedOrders.map((order) => {
+                                    paginatedOrders.map((order: JobOrder) => {
                                         const balance = order.grandTotal - (order.amountReceived || 0);
                                         const isFullyPaid = balance <= 0 && order.paymentStatus === 'paid';
-                                        const releaseDate = order.actualCompletionDate ? new Date(order.actualCompletionDate).toLocaleDateString() : '-';
+                                        const releaseDate = order.actualCompletionDate ? dateFnsFormat(new Date(order.actualCompletionDate), 'MM/dd/yy HH:mm') : '-';
 
                                         return (
                                             <tr key={order.id} className="hover:bg-red-50/20 transition-colors border-b border-gray-100 last:border-0">
@@ -307,7 +309,7 @@ export default function ClaimMonitoring() {
 
             {/* Filter Modal */}
             <Dialog open={isFilterModalOpen} onOpenChange={setIsFilterModalOpen}>
-                <DialogContent className="sm:max-w-[450px] p-0 overflow-hidden rounded-xl border-none shadow-2xl">
+                <DialogContent className="sm:max-w-[450px] p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
                     <DialogHeader className="p-4 border-b border-gray-100 flex flex-row items-center justify-between bg-white">
                         <DialogTitle className="text-lg font-bold text-gray-900 w-full text-center">Filters</DialogTitle>
                     </DialogHeader>
@@ -394,7 +396,7 @@ export default function ClaimMonitoring() {
                                                 )}
                                             >
                                                 <CalendarIcon className="mr-2 h-4 w-4" />
-                                                {tempFilters.startDate ? format(tempFilters.startDate, "PPP") : <span>dd/mm/yyyy</span>}
+                                                {tempFilters.startDate ? dateFnsFormat(tempFilters.startDate, "PPP") : <span>dd/mm/yyyy</span>}
                                             </Button>
                                         </PopoverTrigger>
                                         <PopoverContent className="w-auto p-0" align="start" side="bottom" sideOffset={4}>
@@ -419,7 +421,7 @@ export default function ClaimMonitoring() {
                                                 )}
                                             >
                                                 <CalendarIcon className="mr-2 h-4 w-4" />
-                                                {tempFilters.endDate ? format(tempFilters.endDate, "PPP") : <span>dd/mm/yyyy</span>}
+                                                {tempFilters.endDate ? dateFnsFormat(tempFilters.endDate, "PPP") : <span>dd/mm/yyyy</span>}
                                             </Button>
                                         </PopoverTrigger>
                                         <PopoverContent className="w-auto p-0" align="start" side="bottom" sideOffset={4}>

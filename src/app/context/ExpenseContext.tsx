@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { Expense, mockExpenses } from '@/app/lib/mockData';
 
 interface ExpenseContextType {
@@ -9,7 +9,21 @@ interface ExpenseContextType {
 const ExpenseContext = createContext<ExpenseContextType | undefined>(undefined);
 
 export function ExpenseProvider({ children }: { children: ReactNode }) {
-    const [expenses, setExpenses] = useState<Expense[]>(mockExpenses);
+    const [expenses, setExpenses] = useState<Expense[]>(() => {
+        const saved = localStorage.getItem('expenses');
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            return parsed.map((exp: any) => ({
+                ...exp,
+                date: new Date(exp.date).toISOString() // Keeping it as ISO string as per original type but ensuring it's valid
+            }));
+        }
+        return mockExpenses;
+    });
+
+    useEffect(() => {
+        localStorage.setItem('expenses', JSON.stringify(expenses));
+    }, [expenses]);
 
     const addExpense = (expense: Expense) => {
         setExpenses((prev) => [expense, ...prev]);

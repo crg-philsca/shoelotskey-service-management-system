@@ -1,10 +1,6 @@
-import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FileText, Calendar, Activity, Wrench, Users, LogOut, ChevronLeft, ChevronRight, Settings, Eye, EyeOff, Menu } from 'lucide-react';
-import { toast } from 'sonner';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { LayoutDashboard, FileText, Calendar, Activity, Wrench, Users, LogOut, ChevronLeft, ChevronRight, Settings, Menu } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
-import { Input } from '@/app/components/ui/input';
-import { Label } from '@/app/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/app/components/ui/tooltip';
 import { Sheet, SheetContent, SheetTrigger } from '@/app/components/ui/sheet';
 import { useState, useEffect } from 'react';
@@ -13,28 +9,15 @@ interface LayoutProps {
   children: React.ReactNode;
   user: { username: string; email?: string; role: 'owner' | 'staff' };
   onLogout: () => void;
-  onUpdateUser?: (username: string, email: string) => void;
   headerAction?: React.ReactNode;
   headerActionLeft?: React.ReactNode;
 }
 
-export default function Layout({ children, user, onLogout, onUpdateUser, headerAction, headerActionLeft }: LayoutProps) {
+export default function Layout({ children, user, onLogout, headerAction, headerActionLeft }: LayoutProps) {
   const location = useLocation();
+  const navigate = useNavigate();
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [profileUsername, setProfileUsername] = useState(user?.username || '');
-  const [profileEmail, setProfileEmail] = useState(user?.email || '');
-  const [profilePassword, setProfilePassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  // Update local state when user prop changes
-  useEffect(() => {
-    if (user) {
-      setProfileUsername(user.username);
-      setProfileEmail(user.email || '');
-    }
-  }, [user]);
 
   // Close mobile menu when location changes
   useEffect(() => {
@@ -43,7 +26,7 @@ export default function Layout({ children, user, onLogout, onUpdateUser, headerA
 
   const ownerMenuItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', shortLabel: 'Dashboard' },
-    { path: '/service-intake', icon: FileText, label: 'Job Order Form', shortLabel: 'Job Order Form' },
+    { path: '/service-intake', icon: FileText, label: 'Job Order Form', shortLabel: 'Job Order' },
     { path: '/calendar', icon: Calendar, label: 'Release Calendar', shortLabel: 'Calendar' },
     { path: '/reports', icon: Activity, label: 'Sales Report', shortLabel: 'Sales' },
     { path: '/service-management', icon: Wrench, label: 'Service Management', shortLabel: 'Service' },
@@ -52,7 +35,7 @@ export default function Layout({ children, user, onLogout, onUpdateUser, headerA
 
   const staffMenuItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', shortLabel: 'Dashboard' },
-    { path: '/service-intake', icon: FileText, label: 'Job Order Form', shortLabel: 'Job Order Form' },
+    { path: '/service-intake', icon: FileText, label: 'Job Order Form', shortLabel: 'Job Order' },
     { path: '/calendar', icon: Calendar, label: 'Release Calendar', shortLabel: 'Calendar' },
   ];
 
@@ -68,13 +51,14 @@ export default function Layout({ children, user, onLogout, onUpdateUser, headerA
     '/expenses': 'Expenses',
     '/claim-monitoring': 'CLAIM RECORD',
     '/activity-history': 'Activity History',
+    '/settings': 'Profile Settings',
   };
 
   const menuItems = user.role === 'owner' ? ownerMenuItems : staffMenuItems;
 
   const SidebarContent = ({ collapsed }: { collapsed: boolean }) => (
     <>
-      <div className="px-2 py-2 border-b border-red-500 flex items-center">
+      <div className="px-2 h-16 shrink-0 border-b border-red-500 flex items-center">
         <div className={collapsed ? 'flex justify-center w-full' : 'flex items-center gap-10 pl-4'}>
           <div className="h-12 w-12 rounded-full bg-white flex items-center justify-center flex-shrink-0">
             <img
@@ -135,12 +119,12 @@ export default function Layout({ children, user, onLogout, onUpdateUser, headerA
             <TooltipTrigger asChild>
               <button
                 type="button"
-                onClick={() => setIsProfileOpen(true)}
+                onClick={() => navigate('/settings')}
                 className={`${collapsed ? 'flex flex-col items-center justify-center gap-1 h-auto p-2 w-full' : 'flex flex-row items-center gap-3 px-4 py-3 w-full'} rounded-lg bg-transparent text-red-100 hover:bg-red-600 hover:text-white transition-colors`}
               >
                 <Settings size={20} />
                 {collapsed ? (
-                  <span className="text-[10px] leading-tight text-center w-full break-normal font-bold">Profile</span>
+                  <span className="text-[10px] leading-tight text-center w-full break-normal font-bold">Settings</span>
                 ) : (
                   <span className="text-sm font-bold">Profile Settings</span>
                 )}
@@ -197,7 +181,7 @@ export default function Layout({ children, user, onLogout, onUpdateUser, headerA
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden min-h-0">
-        <header className="bg-white border-b border-gray-200 px-4 lg:px-8 py-3 lg:py-4 flex items-center relative overflow-visible">
+        <header className="bg-white border-b border-gray-200 px-4 lg:px-8 h-16 shrink-0 flex items-center relative overflow-visible">
           {/* Mobile Menu Toggle */}
           <div className="lg:hidden mr-4">
             <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
@@ -237,69 +221,6 @@ export default function Layout({ children, user, onLogout, onUpdateUser, headerA
         </main>
       </div>
 
-      <Dialog open={isProfileOpen} onOpenChange={setIsProfileOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Profile Settings</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 mt-2">
-            <div className="space-y-2">
-              <Label htmlFor="profile-username">Username</Label>
-              <Input
-                id="profile-username"
-                value={profileUsername}
-                onChange={(e) => setProfileUsername(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="profile-email">Email</Label>
-              <Input
-                id="profile-email"
-                type="email"
-                value={profileEmail}
-                onChange={(e) => setProfileEmail(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="profile-password">Password</Label>
-              <div className="relative">
-                <Input
-                  id="profile-password"
-                  type={showPassword ? "text" : "password"}
-                  value={profilePassword}
-                  onChange={(e) => setProfilePassword(e.target.value)}
-                  className="pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
-                >
-                  {showPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-          <DialogFooter className="sm:justify-between">
-            <Button variant="outline" onClick={() => setIsProfileOpen(false)}>
-              Cancel
-            </Button>
-            <Button className="bg-red-600 hover:bg-red-700 font-bold" onClick={() => {
-              if (onUpdateUser) {
-                onUpdateUser(profileUsername, profileEmail);
-              }
-              toast.success('Profile updated successfully');
-              setIsProfileOpen(false);
-            }}>
-              Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

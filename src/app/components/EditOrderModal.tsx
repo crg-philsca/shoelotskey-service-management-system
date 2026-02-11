@@ -14,7 +14,7 @@ interface EditOrderModalProps {
     order: JobOrder | null;
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    onSave: (orderId: string, updates: Partial<JobOrder>) => void;
+    onSave?: (orderId: string, updates: Partial<JobOrder>) => void;
     hideHistory?: boolean;
 }
 
@@ -127,14 +127,14 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave, hide
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-[98vw] h-[95vh] flex flex-col bg-white p-0 gap-0 border-none shadow-2xl">
+            <DialogContent className="max-w-[95vw] sm:max-w-[800px] h-[95vh] flex flex-col bg-white p-0 gap-0 border-none shadow-2xl rounded-2xl overflow-hidden">
                 <DialogHeader className="px-6 py-4 border-b border-gray-100 bg-white flex flex-col gap-2 flex-shrink-0">
                     {/* Top Row: Title & Order Number */}
                     <div className="flex flex-row items-center justify-center gap-3 w-full">
-                        <DialogTitle className="text-xl font-bold text-gray-900 whitespace-nowrap">
+                        <DialogTitle className="text-xl font-bold text-gray-900 tracking-tight">
                             EDIT ORDER DETAIL
                         </DialogTitle>
-                        <span className="text-sm font-bold text-gray-500 bg-gray-100 px-3 py-1 rounded-full whitespace-nowrap">
+                        <span className="text-sm font-bold text-gray-400 bg-gray-100 px-3 py-1 rounded-full whitespace-nowrap">
                             {formData.orderNumber}
                         </span>
                     </div>
@@ -183,9 +183,9 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave, hide
                     </div>
                 </DialogHeader>
 
-                <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-white">
+                <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 bg-gray-50/30">
                     {/* Customer Header */}
-                    <div className="bg-white p-5 rounded-lg border border-gray-100 shadow-sm">
+                    <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
                         <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                             <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
                             Customer Details
@@ -239,7 +239,7 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave, hide
                     </div>
 
                     {/* Shoe Details & Condition */}
-                    <div className="bg-white p-6 rounded-lg border border-gray-100 shadow-sm">
+                    <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
                         <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                             <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
                             Shoe Details
@@ -330,7 +330,7 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave, hide
                     </div>
 
                     {/* Financials & Services */}
-                    <div className="bg-white p-6 rounded-lg border border-gray-100 shadow-sm">
+                    <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
                         <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                             <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
                             Services
@@ -480,7 +480,7 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave, hide
 
                             {/* Bottom Row: Calculations & Payment Status */}
                             <div className="flex justify-end pt-6 border-t border-gray-100">
-                                <div className="bg-gray-50 rounded-xl p-6 space-y-5 border border-gray-200/60 w-full max-w-md">
+                                <div className="bg-gray-50 rounded-xl p-6 space-y-5 border border-gray-200/60 w-full max-w-md ml-auto">
                                     <div className="flex justify-between items-center text-sm">
                                         <span className="text-gray-500 font-medium">Unit Total</span>
                                         <span className="font-bold">{'\u20B1'}{formData.baseServiceFee.toFixed(2)}</span>
@@ -558,13 +558,13 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave, hide
                     </div>
                 </div>
 
-                <DialogFooter className="bg-white border-t border-gray-100 py-3 flex justify-center gap-6 items-center flex-shrink-0 z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] w-full pr-12">
-                    <Button variant="ghost" onClick={() => onOpenChange(false)} className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold h-11 px-8 min-w-[200px] uppercase tracking-wider">
+                <DialogFooter className="bg-white border-t border-gray-100 py-4 px-6 flex justify-center gap-4 items-center flex-shrink-0 z-10 shadow-[0_-4px_12px_-2px_rgba(0,0,0,0.05)]">
+                    <Button variant="ghost" onClick={() => onOpenChange(false)} className="bg-gray-100/80 hover:bg-gray-200 text-gray-600 font-bold h-11 px-8 min-w-[180px] uppercase tracking-wider rounded-xl transition-all">
                         Cancel
                     </Button>
                     <Button
-                        onClick={() => onSave(formData.id, formData)}
-                        className="bg-red-600 hover:bg-red-700 text-white font-bold shadow-lg shadow-red-200 h-11 px-8 min-w-[200px] uppercase tracking-wider"
+                        onClick={() => onSave?.(formData.id, formData)}
+                        className="bg-red-600 hover:bg-red-700 text-white font-bold shadow-lg shadow-red-200 h-11 px-8 min-w-[180px] uppercase tracking-wider rounded-xl transition-all active:scale-95"
                     >
                         Save
                     </Button>

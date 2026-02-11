@@ -86,6 +86,7 @@ export interface JobOrder extends ServiceIntakeData {
   updatedAt: Date;
   items?: ShoeItem[];
   releaseTime?: string;
+  claimedBy?: string;
   statusHistory: Array<{
     status: JobStatus;
     timestamp: Date;

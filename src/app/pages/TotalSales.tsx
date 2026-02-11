@@ -1,222 +1,417 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOrders } from '@/app/context/OrderContext';
-import { ChevronLeft, ChevronRight, TrendingUp, DollarSign, CreditCard, ShoppingCart } from 'lucide-react';
+import type { JobOrder } from '@/app/types';
+import {
+    ArrowLeft,
+    ChevronLeft,
+    ChevronRight,
+    Filter,
+    CreditCard,
+    Search,
+    Calendar as CalendarIcon,
+    ChevronDown,
+    Wallet,
+    LineChart,
+    Activity,
+    TrendingUp,
+    TrendingDown,
+} from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/app/components/ui/table';
-import { Badge } from '@/app/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
+import { Input } from '@/app/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu';
+import { mockServices } from '@/app/lib/mockData';
 
-export default function TotalSales() {
+type TotalSalesProps = {
+    onSetHeaderActionRight?: (action: ReactNode | null) => void;
+};
+
+export default function TotalSales({ onSetHeaderActionRight }: TotalSalesProps) {
     const navigate = useNavigate();
     const { orders } = useOrders();
+
+    const [profitRange, setProfitRange] = useState<'Daily' | 'Weekly' | 'Quarterly' | 'Annually'>('Daily');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [filterService, setFilterService] = useState<string>('all');
+    const [filterPriority, setFilterPriority] = useState<string>('all');
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
+    const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 15;
 
-    // Filter for all paid orders
-    const salesOrders = orders.filter(order => order.paymentStatus === 'paid');
+    const formatNumericDateTime = (value: string | number | Date) => {
+        const d = new Date(value);
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        const yy = String(d.getFullYear()).slice(-2);
+        const hh = String(d.getHours()).padStart(2, '0');
+        const min = String(d.getMinutes()).padStart(2, '0');
+        return `${mm}/${dd}/${yy} ${hh}:${min}`;
+    };
 
-    const totalSales = salesOrders.reduce((sum, order) => sum + (order.amountReceived || 0), 0);
-    const averageSale = salesOrders.length > 0 ? totalSales / salesOrders.length : 0;
+    const baseServices = mockServices.filter((s) => s.category === 'base');
 
-    // Pagination
-    const totalPages = Math.ceil(salesOrders.length / itemsPerPage);
+    useEffect(() => {
+        if (!onSetHeaderActionRight) return;
+
+        onSetHeaderActionRight(
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <button
+                        type="button"
+                        aria-label="Select range"
+                        className="w-10 h-10 md:w-40 flex items-center justify-center md:justify-between rounded-md border border-red-600 bg-red-600 px-2 md:px-3 py-2 text-sm font-semibold uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:border-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                    >
+                        <CalendarIcon className="h-4 w-4 md:mr-1 shrink-0" aria-hidden="true" />
+                        <span className="hidden md:inline truncate mx-1">{profitRange}</span>
+                        <ChevronDown className="hidden md:block h-4 w-4 text-white shrink-0" aria-hidden="true" />
+                    </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-40 p-0 rounded-xl border border-red-600 bg-white shadow-lg overflow-hidden">
+                    {['Daily', 'Weekly', 'Quarterly', 'Annually'].map((range) => (
+                        <DropdownMenuItem
+                            key={range}
+                            onClick={() => setProfitRange(range as typeof profitRange)}
+                            className={`uppercase px-4 py-2 text-sm font-semibold cursor-pointer ${profitRange === range
+                                ? 'bg-red-600 text-white focus:bg-red-600 focus:text-white'
+                                : 'bg-white text-red-700 hover:bg-red-100 hover:text-red-700 focus:bg-red-100 focus:text-red-700'
+                                }`}
+                        >
+                            {range}
+                        </DropdownMenuItem>
+                    ))}
+                </DropdownMenuContent>
+            </DropdownMenu>
+        );
+
+        return () => onSetHeaderActionRight(null);
+    }, [onSetHeaderActionRight, profitRange]);
+
+    const salesOrders = useMemo(() => {
+        const now = new Date();
+        const isWithinRange = (createdAt: Date) => {
+            const diffDays = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
+            if (profitRange === 'Daily') {
+                const startOfToday = new Date(now);
+                startOfToday.setHours(0, 0, 0, 0);
+                return createdAt >= startOfToday;
+            }
+            if (profitRange === 'Weekly') return diffDays < 7;
+            if (profitRange === 'Quarterly') return diffDays < 90;
+            return diffDays < 365;
+        };
+
+        return orders
+            .filter((order: JobOrder) => order.paymentStatus === 'paid')
+            .filter((order: JobOrder) => isWithinRange(new Date(order.transactionDate || order.createdAt)));
+    }, [orders, profitRange]);
+
+    const filteredOrders = useMemo(() => {
+        let filtered = [...salesOrders];
+
+        if (filterService !== 'all') {
+            filtered = filtered.filter((order) => order.baseService.includes(filterService));
+        }
+
+        if (filterPriority !== 'all') {
+            filtered = filtered.filter((order) => order.priorityLevel === filterPriority);
+        }
+
+        if (startDate) {
+            const start = new Date(startDate);
+            filtered = filtered.filter((order) => new Date(order.transactionDate || order.createdAt) >= start);
+        }
+        if (endDate) {
+            const end = new Date(endDate);
+            end.setHours(23, 59, 59, 999);
+            filtered = filtered.filter((order) => new Date(order.transactionDate || order.createdAt) <= end);
+        }
+
+        if (searchQuery) {
+            const query = searchQuery.toLowerCase();
+            filtered = filtered.filter((order) =>
+                order.customerName.toLowerCase().includes(query) || order.orderNumber.toLowerCase().includes(query)
+            );
+        }
+
+        // Sort: Recently updated/created first, then by priority, then by Order Number descending
+        filtered.sort((a, b) => {
+            const timeA = new Date(a.updatedAt || a.createdAt).getTime();
+            const timeB = new Date(b.updatedAt || b.createdAt).getTime();
+
+            const validA = !isNaN(timeA) ? timeA : 0;
+            const validB = !isNaN(timeB) ? timeB : 0;
+
+            if (validA !== validB) return validB - validA;
+
+            // Priority Level fallback (Rush first)
+            const priorityOrder = { rush: 0, premium: 1, regular: 2 };
+            const priorityA = priorityOrder[a.priorityLevel as keyof typeof priorityOrder] ?? 3;
+            const priorityB = priorityOrder[b.priorityLevel as keyof typeof priorityOrder] ?? 3;
+            if (priorityA !== priorityB) return priorityA - priorityB;
+
+            return b.orderNumber.localeCompare(a.orderNumber);
+        });
+
+        return filtered;
+    }, [salesOrders, filterService, filterPriority, startDate, endDate, searchQuery]);
+
+    const totalSales = filteredOrders.reduce((sum: number, order: JobOrder) => sum + (order.amountReceived || 0), 0);
+    const averageSale = filteredOrders.length > 0 ? totalSales / filteredOrders.length : 0;
+
+    const totalPages = Math.ceil(filteredOrders.length / itemsPerPage) || 1;
     const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    const paginatedOrders = salesOrders.slice(startIndex, endIndex);
+    const paginatedOrders = filteredOrders.slice(startIndex, startIndex + itemsPerPage);
 
     const handlePageChange = (page: number) => {
         setCurrentPage(page);
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    // Payment method breakdown
-    const paymentBreakdown = salesOrders.reduce((acc, order) => {
-        const method = order.paymentMethod || 'cash';
+    const paymentBreakdown = filteredOrders.reduce((acc: Record<string, number>, order: JobOrder) => {
+        const method = (order.paymentMethod || 'cash').toLowerCase();
         acc[method] = (acc[method] || 0) + (order.amountReceived || 0);
         return acc;
     }, {} as Record<string, number>);
 
     return (
         <div className="space-y-6">
-            {/* Header */}
-            <div className="flex items-center gap-2">
-                <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => navigate('/reports')}
-                    className="hover:bg-red-50 text-red-600 border-red-200 font-bold shadow-sm"
-                >
-                    <ChevronLeft className="h-4 w-4 mr-1" />
-                    Back to Reports
-                </Button>
-            </div>
-
-            {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <Card className="border-none shadow-lg bg-gradient-to-br from-green-50 to-white overflow-hidden relative">
-                    <div className="absolute top-0 right-0 p-4 opacity-10">
-                        <TrendingUp size={80} className="text-green-600" />
-                    </div>
-                    <CardContent className="pt-6 pb-4 relative z-10">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+                <Card className="border-none shadow-lg bg-gradient-to-br from-green-50 to-white">
+                    <CardContent className="pt-6 pb-4">
                         <div className="flex items-center gap-2 mb-2">
-                            <div className="p-2 rounded-lg bg-green-100 text-green-600">
-                                <DollarSign size={18} />
+                            <div className="p-2 rounded-lg bg-green-100 text-green-700">
+                                <LineChart className="h-4 w-4" />
                             </div>
                             <p className="text-xs font-black uppercase tracking-wider text-gray-500">Total Sales</p>
                         </div>
-                        <p className="text-4xl font-black text-green-600 tracking-tight">₱{totalSales.toLocaleString()}</p>
+                        <p className="text-3xl font-black text-green-700 tracking-tight">₱{totalSales.toLocaleString()}</p>
                     </CardContent>
                 </Card>
 
                 <Card className="border-none shadow-lg bg-gradient-to-br from-blue-50 to-white">
                     <CardContent className="pt-6 pb-4">
                         <div className="flex items-center gap-2 mb-2">
-                            <div className="p-2 rounded-lg bg-blue-100 text-blue-600">
-                                <ShoppingCart size={18} />
+                            <div className="p-2 rounded-lg bg-blue-100 text-blue-700">
+                                <Wallet className="h-4 w-4" />
                             </div>
-                            <p className="text-xs font-black uppercase tracking-wider text-gray-500">Transactions</p>
+                            <p className="text-xs font-black uppercase tracking-wider text-gray-500">Paid Orders</p>
                         </div>
-                        <p className="text-4xl font-black text-blue-600 tracking-tight">{salesOrders.length}</p>
+                        <p className="text-3xl font-black text-blue-700 tracking-tight">{filteredOrders.length}</p>
                     </CardContent>
                 </Card>
 
                 <Card className="border-none shadow-lg bg-gradient-to-br from-purple-50 to-white">
                     <CardContent className="pt-6 pb-4">
                         <div className="flex items-center gap-2 mb-2">
-                            <div className="p-2 rounded-lg bg-purple-100 text-purple-600">
-                                <TrendingUp size={18} />
+                            <div className="p-2 rounded-lg bg-purple-100 text-purple-700">
+                                <Activity className="h-4 w-4" />
                             </div>
-                            <p className="text-xs font-black uppercase tracking-wider text-gray-500">Avg. Sale</p>
+                            <p className="text-xs font-black uppercase tracking-wider text-gray-500">Average Sale</p>
                         </div>
-                        <p className="text-4xl font-black text-purple-600 tracking-tight">₱{Math.round(averageSale).toLocaleString()}</p>
+                        <p className="text-3xl font-black text-purple-700 tracking-tight">₱{Math.round(averageSale).toLocaleString()}</p>
                     </CardContent>
                 </Card>
 
                 <Card className="border-none shadow-lg bg-gradient-to-br from-amber-50 to-white">
                     <CardContent className="pt-6 pb-4">
                         <div className="flex items-center gap-2 mb-2">
-                            <div className="p-2 rounded-lg bg-amber-100 text-amber-600">
-                                <CreditCard size={18} />
+                            <div className="p-2 rounded-lg bg-amber-100 text-amber-700">
+                                <CreditCard className="h-4 w-4" />
                             </div>
                             <p className="text-xs font-black uppercase tracking-wider text-gray-500">Cash Sales</p>
                         </div>
-                        <p className="text-3xl font-black text-amber-600 tracking-tight">₱{(paymentBreakdown.cash || 0).toLocaleString()}</p>
+                        <p className="text-3xl font-black text-amber-700 tracking-tight">₱{Math.round(paymentBreakdown.cash || 0).toLocaleString()}</p>
+                    </CardContent>
+                </Card>
+
+                <Card className="border-none shadow-lg bg-gradient-to-br from-cyan-50 to-white">
+                    <CardContent className="pt-6 pb-4">
+                        <div className="flex items-center gap-2 mb-2">
+                            <div className="p-2 rounded-lg bg-cyan-100 text-cyan-700">
+                                <CreditCard className="h-4 w-4" />
+                            </div>
+                            <p className="text-xs font-black uppercase tracking-wider text-gray-500">GCash Sales</p>
+                        </div>
+                        <p className="text-3xl font-black text-cyan-700 tracking-tight">₱{Math.round(paymentBreakdown.gcash || 0).toLocaleString()}</p>
+                    </CardContent>
+                </Card>
+
+                <Card className="border-none shadow-lg bg-gradient-to-br from-pink-50 to-white">
+                    <CardContent className="pt-6 pb-4">
+                        <div className="flex items-center gap-2 mb-2">
+                            <div className="p-2 rounded-lg bg-pink-100 text-pink-700">
+                                <CreditCard className="h-4 w-4" />
+                            </div>
+                            <p className="text-xs font-black uppercase tracking-wider text-gray-500">Maya Sales</p>
+                        </div>
+                        <p className="text-3xl font-black text-pink-700 tracking-tight">₱{Math.round(paymentBreakdown.maya || 0).toLocaleString()}</p>
                     </CardContent>
                 </Card>
             </div>
 
-            {/* Sales Table */}
             <Card className="shadow-xl border-0">
-                <CardHeader className="bg-gradient-to-r from-green-600 to-green-700 text-white rounded-t-xl border-b-0">
-                    <div className="flex items-center justify-between">
-                        <CardTitle className="text-xl font-black uppercase tracking-tight flex items-center gap-2">
-                            <TrendingUp className="h-5 w-5" />
-                            Sales Transactions
-                        </CardTitle>
-                        <p className="text-sm font-semibold text-green-100">
-                            Showing {startIndex + 1}-{Math.min(endIndex, salesOrders.length)} of {salesOrders.length}
-                        </p>
+                <CardHeader className="pb-2 pt-6">
+                    <div className="flex flex-col items-center gap-2">
+                        <CardTitle className="text-lg font-black uppercase tracking-tight text-gray-900">Sales Transactions</CardTitle>
+                        <div className="flex flex-wrap md:flex-nowrap items-center gap-2 md:gap-3 w-full">
+                            <Button
+                                onClick={() => navigate(-1)}
+                                className="bg-red-600 text-white hover:bg-red-700 h-10 px-3 flex-shrink-0 uppercase text-[11px] font-bold flex items-center gap-2 rounded-xl shadow-sm"
+                                size="sm"
+                            >
+                                <ArrowLeft className="h-4 w-4" />
+                                Back
+                            </Button>
+
+                            <div className="flex-1 min-w-[220px] relative group">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className="absolute left-0 top-1/2 -translate-y-1/2 h-10 w-10 text-gray-500 group-focus-within:text-red-600"
+                                    onClick={() => (document.getElementById('salesSearch') as HTMLInputElement)?.focus()}
+                                    title="Focus search"
+                                >
+                                    <Search className="h-5 w-5" />
+                                </Button>
+                                <Input
+                                    id="salesSearch"
+                                    placeholder="Search order # or customer..."
+                                    value={searchQuery}
+                                    onChange={(e) => {
+                                        setSearchQuery(e.target.value);
+                                        setCurrentPage(1);
+                                    }}
+                                    className="pl-10 h-10 text-sm border-gray-200 bg-gray-50/70 focus-visible:ring-1 focus-visible:ring-red-600 focus-visible:border-red-600 rounded-xl"
+                                />
+                            </div>
+
+                            <Button
+                                variant="outline"
+                                className={`h-10 w-10 p-0 rounded-xl transition-colors flex-shrink-0 ${filterService !== 'all' || filterPriority !== 'all' || startDate || endDate
+                                    ? 'border-red-600 text-red-600 bg-red-50 hover:bg-red-100'
+                                    : 'border-gray-200 text-gray-500 hover:border-red-600 hover:text-red-600 hover:bg-red-50'
+                                    }`}
+                                onClick={() => setIsFilterOpen(true)}
+                                title="Open filters"
+                            >
+                                <Filter className="h-4 w-4" />
+                            </Button>
+                        </div>
                     </div>
                 </CardHeader>
-                <CardContent className="p-0">
+
+                <CardContent className="pt-0">
                     <div className="overflow-x-auto">
                         <Table>
                             <TableHeader>
-                                <TableRow className="bg-gray-50">
-                                    <TableHead className="font-black text-gray-700">Order ID</TableHead>
-                                    <TableHead className="font-black text-gray-700">Customer</TableHead>
-                                    <TableHead className="font-black text-gray-700">Date</TableHead>
-                                    <TableHead className="font-black text-gray-700">Service</TableHead>
-                                    <TableHead className="font-black text-gray-700">Payment</TableHead>
-                                    <TableHead className="font-black text-gray-700">Status</TableHead>
-                                    <TableHead className="font-black text-gray-700 text-right">Amount</TableHead>
+                                <TableRow className="bg-[#fef5f3]">
+                                    <TableHead className="font-black text-gray-600 uppercase text-xs">Order #</TableHead>
+                                    <TableHead className="font-black text-gray-600 uppercase text-xs">Customer Name</TableHead>
+                                    <TableHead className="font-black text-gray-600 uppercase text-xs">Service Type</TableHead>
+                                    <TableHead className="font-black text-gray-600 uppercase text-xs">Order Date</TableHead>
+                                    <TableHead className="font-black text-gray-600 uppercase text-xs">Payment</TableHead>
+                                    <TableHead className="font-black text-gray-600 uppercase text-xs">Status</TableHead>
+                                    <TableHead className="font-black text-gray-600 uppercase text-xs text-right">Amount Paid</TableHead>
+                                    <TableHead className="font-black text-gray-600 uppercase text-xs text-right">Remaining Balance</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {paginatedOrders.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={7} className="text-center text-gray-400 py-12">
+                                        <TableCell colSpan={8} className="text-center text-gray-400 py-12">
                                             <div className="flex flex-col items-center gap-2">
-                                                <TrendingUp className="h-12 w-12 text-gray-300" />
+                                                <TrendingUp className="h-10 w-10 text-gray-300" />
                                                 <p className="font-semibold">No sales transactions found.</p>
                                             </div>
                                         </TableCell>
                                     </TableRow>
                                 ) : (
-                                    paginatedOrders.map((order) => (
-                                        <TableRow key={order.id} className="hover:bg-green-50/50 transition-colors">
-                                            <TableCell className="font-mono text-sm font-bold text-gray-700">{order.id}</TableCell>
-                                            <TableCell className="font-semibold text-gray-800">{order.customerName}</TableCell>
-                                            <TableCell className="text-sm text-gray-600">
-                                                {new Date(order.transactionDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                            </TableCell>
-                                            <TableCell className="text-sm text-gray-700">
-                                                {Array.isArray(order.baseService) ? order.baseService.join(', ') : order.baseService}
-                                            </TableCell>
-                                            <TableCell>
-                                                <Badge variant="outline" className={
-                                                    order.paymentMethod === 'cash' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                                                        order.paymentMethod === 'gcash' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                                                            'bg-green-50 text-green-700 border-green-200'
-                                                }>
+                                    paginatedOrders.map((order: JobOrder) => {
+                                        const orderDate = new Date(order.transactionDate || order.createdAt);
+                                        const remainingBalance = (order.grandTotal || 0) - (order.amountReceived || 0);
+                                        const status = order.status || '';
+
+                                        let badgeClass = 'bg-gray-100 text-gray-700';
+                                        if (status === 'new-order') badgeClass = 'bg-purple-100 text-purple-700';
+                                        else if (status === 'on-going') badgeClass = 'bg-blue-100 text-blue-700';
+                                        else if (status === 'for-release') badgeClass = 'bg-orange-100 text-orange-700';
+                                        else if (status === 'claimed') badgeClass = 'bg-gray-200 text-gray-800';
+                                        else if (status === 'paid') badgeClass = 'bg-green-100 text-green-700';
+                                        else if (status === 'unpaid') badgeClass = 'bg-red-100 text-red-700';
+
+                                        const statusLabel = status.replace('-', ' ');
+
+                                        return (
+                                            <TableRow key={order.id} className="hover:bg-gray-50">
+                                                <TableCell className="font-semibold text-gray-800">{order.orderNumber || order.id}</TableCell>
+                                                <TableCell className="text-sm text-gray-700">{order.customerName}</TableCell>
+                                                <TableCell className="text-sm text-gray-700">
+                                                    {Array.isArray(order.baseService)
+                                                        ? order.baseService.map((s) => s.replace(' (with basic cleaning)', '')).join(', ')
+                                                        : String(order.baseService).replace(' (with basic cleaning)', '')}
+                                                </TableCell>
+                                                <TableCell className="text-sm text-gray-700">
+                                                    {formatNumericDateTime(orderDate)}
+                                                </TableCell>
+                                                <TableCell className="text-sm font-semibold text-gray-800 uppercase">
                                                     {order.paymentMethod?.toUpperCase()}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell>
-                                                <Badge variant="outline" className={
-                                                    order.status === 'claimed' ? 'bg-green-50 text-green-700 border-green-200' :
-                                                        'bg-purple-50 text-purple-700 border-purple-200'
-                                                }>
-                                                    {order.status}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                <Badge className="bg-green-100 text-green-700 border-green-300 font-bold text-sm px-3 py-1">
+                                                </TableCell>
+                                                <TableCell className="text-sm">
+                                                    <span className={`px-2 py-0.5 rounded-md text-xs font-semibold uppercase ${badgeClass}`}>
+                                                        {statusLabel}
+                                                    </span>
+                                                </TableCell>
+                                                <TableCell className="text-right font-bold text-sm text-gray-900">
                                                     ₱{(order.amountReceived || 0).toLocaleString()}
-                                                </Badge>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))
+                                                </TableCell>
+                                                <TableCell className="text-right font-semibold text-sm text-gray-700">
+                                                    ₱{Math.max(remainingBalance, 0).toLocaleString()}
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })
                                 )}
                             </TableBody>
                         </Table>
                     </div>
 
-                    {/* Pagination */}
-                    {totalPages > 1 && (
-                        <div className="flex items-center justify-between border-t bg-gray-50 px-6 py-4">
+                    <div className="mt-2 flex items-center justify-between pt-1.5 pb-1 border-t border-gray-50 px-3">
+                        <div className="text-[11px] text-gray-500 font-bold uppercase tracking-wider">
+                            PAGE {currentPage} OF {totalPages}
+                        </div>
+                        <div className="flex items-center gap-3">
                             <Button
                                 variant="outline"
-                                size="sm"
-                                onClick={() => handlePageChange(currentPage - 1)}
+                                onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
                                 disabled={currentPage === 1}
-                                className="font-semibold"
+                                className={`h-8 w-8 p-0 rounded-lg transition-all mt-0 border-none ${currentPage === 1
+                                    ? 'bg-slate-200 text-slate-500'
+                                    : 'bg-slate-600 text-white hover:bg-slate-700 shadow-sm'
+                                    }`}
                             >
-                                <ChevronLeft className="h-4 w-4 mr-1" />
-                                Previous
+                                <ChevronLeft className="h-4 w-4" />
                             </Button>
 
-                            <div className="flex items-center gap-2">
-                                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                                    let pageNum;
-                                    if (totalPages <= 5) {
-                                        pageNum = i + 1;
-                                    } else if (currentPage <= 3) {
-                                        pageNum = i + 1;
-                                    } else if (currentPage >= totalPages - 2) {
-                                        pageNum = totalPages - 4 + i;
-                                    } else {
-                                        pageNum = currentPage - 2 + i;
-                                    }
-
+                            <div className="max-w-[140px] md:max-w-[300px] overflow-x-auto no-scrollbar py-0.5 px-0.5 flex items-center gap-1">
+                                {Array.from({ length: totalPages }, (_, i) => {
+                                    const pageNum = i + 1;
+                                    const isActive = currentPage === pageNum;
                                     return (
                                         <Button
                                             key={pageNum}
-                                            variant={currentPage === pageNum ? "default" : "outline"}
+                                            variant={isActive ? 'default' : 'outline'}
                                             size="sm"
                                             onClick={() => handlePageChange(pageNum)}
-                                            className={currentPage === pageNum ? "bg-green-600 hover:bg-green-700 font-bold" : "font-semibold"}
+                                            className={`h-7 w-7 min-w-[28px] p-0 text-[10px] font-black rounded-lg transition-all ${isActive
+                                                ? 'bg-red-600 hover:bg-red-700 text-white border-red-600 shadow-sm shadow-red-200'
+                                                : 'bg-white border-gray-100 text-gray-600 hover:bg-red-50 hover:text-red-600 hover:border-red-100'
+                                                }`}
                                         >
                                             {pageNum}
                                         </Button>
@@ -226,18 +421,100 @@ export default function TotalSales() {
 
                             <Button
                                 variant="outline"
-                                size="sm"
-                                onClick={() => handlePageChange(currentPage + 1)}
+                                onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
                                 disabled={currentPage === totalPages}
-                                className="font-semibold"
+                                className={`h-8 w-8 p-0 rounded-lg transition-all mt-0 border-none ${currentPage === totalPages
+                                    ? 'bg-slate-200 text-slate-500'
+                                    : 'bg-slate-600 text-white hover:bg-slate-700 shadow-sm'
+                                    }`}
                             >
-                                Next
-                                <ChevronRight className="h-4 w-4 ml-1" />
+                                <ChevronRight className="h-4 w-4" />
                             </Button>
                         </div>
-                    )}
+                    </div>
                 </CardContent>
             </Card>
+
+            <Dialog open={isFilterOpen} onOpenChange={setIsFilterOpen}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="text-center text-base font-black uppercase tracking-tight">Filters</DialogTitle>
+                    </DialogHeader>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">Service Type</label>
+                            <Select value={filterService} onValueChange={setFilterService}>
+                                <SelectTrigger className="h-9 text-xs border-gray-100 bg-gray-50/50">
+                                    <SelectValue placeholder="All Services" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all" className="text-xs focus:bg-red-50 focus:text-red-700">All Services</SelectItem>
+                                    {baseServices.map((service) => (
+                                        <SelectItem key={service.id} value={service.name} className="text-xs focus:bg-red-50 focus:text-red-700">
+                                            {service.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">Priority Level</label>
+                            <Select value={filterPriority} onValueChange={setFilterPriority}>
+                                <SelectTrigger className="h-9 text-xs border-gray-100 bg-gray-50/50">
+                                    <SelectValue placeholder="All Priority" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all" className="text-xs focus:bg-red-50 focus:text-red-700">All Priority</SelectItem>
+                                    <SelectItem value="regular" className="text-xs hover:bg-red-50 focus:bg-red-50 focus:text-red-700">Regular</SelectItem>
+                                    <SelectItem value="rush" className="text-xs hover:bg-red-50 focus:bg-red-50 focus:text-red-700">Rush</SelectItem>
+                                    <SelectItem value="premium" className="text-xs hover:bg-red-50 focus:bg-red-50 focus:text-red-700">Premium</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">Start Date</label>
+                            <Input
+                                type="date"
+                                value={startDate}
+                                onChange={(e) => setStartDate(e.target.value)}
+                                className="h-9 text-xs border-gray-100 bg-gray-50/50 text-center"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">End Date</label>
+                            <Input
+                                type="date"
+                                value={endDate}
+                                onChange={(e) => setEndDate(e.target.value)}
+                                className="h-9 text-xs border-gray-100 bg-gray-50/50 text-center"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 pt-2">
+                        <Button
+                            variant="ghost"
+                            className="flex-1 w-full bg-gray-200 text-gray-700 hover:bg-gray-800 hover:text-white font-bold h-10 transition-colors uppercase tracking-wider rounded-xl"
+                            onClick={() => {
+                                setFilterService('all');
+                                setFilterPriority('all');
+                                setStartDate('');
+                                setEndDate('');
+                                setCurrentPage(1);
+                            }}
+                        >
+                            Reset
+                        </Button>
+                        <Button className="flex-1 w-full bg-red-600 hover:bg-red-700 text-white font-bold h-10 rounded-xl shadow-md uppercase tracking-wider transition-all" onClick={() => setIsFilterOpen(false)}>
+                            Apply
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

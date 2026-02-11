@@ -5,7 +5,7 @@ import { Button } from '@/app/components/ui/button';
 
 import { mockServices } from '@/app/lib/mockData';
 import { Badge } from '@/app/components/ui/badge';
-import { Plus, Edit, Trash, History } from 'lucide-react';
+import { PlusCircle, Edit, Trash, History } from 'lucide-react';
 import ServiceModal from '@/app/components/ServiceModal';
 
 import { Service } from '@/app/types';
@@ -40,7 +40,7 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
               setServiceModalOpen(true);
             }}
           >
-            <Plus size={16} className="mr-0" />
+            <PlusCircle size={16} className="mr-0" />
             New Service
           </Button>
         </div>
