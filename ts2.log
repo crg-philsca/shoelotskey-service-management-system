@@ -1,0 +1,4 @@
+﻿src/app/components/ui/sidebar.tsx(546,29): error TS7006: Parameter 'open' implicitly has an 'any' type.
+src/app/pages/CalendarView.tsx(669,70): error TS2367: This comparison appears to be unintentional because the types '"fully-paid"' and '"downpayment"' have no overlap.
+src/app/pages/Dashboard.tsx(1212,74): error TS2367: This comparison appears to be unintentional because the types '"fully-paid"' and '"downpayment"' have no overlap.
+src/app/pages/JobOrders.tsx(625,88): error TS2367: This comparison appears to be unintentional because the types '"fully-paid"' and '"downpayment"' have no overlap.
