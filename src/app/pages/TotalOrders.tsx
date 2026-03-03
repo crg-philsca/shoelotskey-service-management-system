@@ -12,7 +12,6 @@ import {
     ChevronDown,
     Wallet,
     Clock3,
-    Gauge,
 } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
@@ -21,7 +20,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/app/componen
 import { Input } from '@/app/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu';
-import { mockServices } from '@/app/lib/mockData';
+import { useServices } from '@/app/context/ServiceContext';
 import type { JobOrder } from '@/app/types';
 
 type TotalOrdersProps = {
@@ -52,7 +51,8 @@ export default function TotalOrders({ onSetHeaderActionRight }: TotalOrdersProps
         return `${mm}/${dd}/${yy} ${hh}:${min}`;
     };
 
-    const baseServices = mockServices.filter((s) => s.category === 'base');
+    const { services } = useServices();
+    const baseServices = services.filter((s) => s.category === 'base' && s.active);
 
     useEffect(() => {
         if (!onSetHeaderActionRight) return;
@@ -133,8 +133,11 @@ export default function TotalOrders({ onSetHeaderActionRight }: TotalOrdersProps
 
         // Sort: Recently updated/created first, then by priority, then by Order Number descending
         filtered.sort((a, b) => {
-            const timeA = new Date(a.updatedAt || a.createdAt).getTime();
-            const timeB = new Date(b.updatedAt || b.createdAt).getTime();
+            const lastStatusTimeA = a.statusHistory?.length ? new Date(a.statusHistory[a.statusHistory.length - 1].timestamp).getTime() : 0;
+            const timeA = lastStatusTimeA || new Date(a.updatedAt || a.createdAt).getTime();
+
+            const lastStatusTimeB = b.statusHistory?.length ? new Date(b.statusHistory[b.statusHistory.length - 1].timestamp).getTime() : 0;
+            const timeB = lastStatusTimeB || new Date(b.updatedAt || b.createdAt).getTime();
 
             const validA = !isNaN(timeA) ? timeA : 0;
             const validB = !isNaN(timeB) ? timeB : 0;
@@ -158,10 +161,8 @@ export default function TotalOrders({ onSetHeaderActionRight }: TotalOrdersProps
     const paginatedOrders = filteredOrders.slice(startIndex, startIndex + itemsPerPage);
 
     const totalOrdersCount = filteredOrders.length;
-    const paidOrdersCount = filteredOrders.filter((order) => order.paymentStatus === 'paid').length;
-    const openOrdersCount = filteredOrders.filter((order) => order.paymentStatus !== 'paid').length;
-    const totalOrderValue = filteredOrders.reduce((sum, order) => sum + (order.grandTotal || 0), 0);
-    const averageOrderValue = totalOrdersCount > 0 ? totalOrderValue / totalOrdersCount : 0;
+    const paidOrdersCount = filteredOrders.filter((order) => order.paymentStatus === 'fully-paid').length;
+    const activeOrdersCount = filteredOrders.filter((order) => order.paymentStatus !== 'fully-paid').length;
 
     const handlePageChange = (page: number) => {
         setCurrentPage(page);
@@ -170,7 +171,7 @@ export default function TotalOrders({ onSetHeaderActionRight }: TotalOrdersProps
 
     return (
         <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Card className="border-none shadow-lg bg-gradient-to-br from-blue-50 to-white">
                     <CardContent className="pt-6 pb-4">
                         <div className="flex items-center gap-2 mb-2">
@@ -201,23 +202,13 @@ export default function TotalOrders({ onSetHeaderActionRight }: TotalOrdersProps
                             <div className="p-2 rounded-lg bg-amber-100 text-amber-700">
                                 <Clock3 className="h-4 w-4" />
                             </div>
-                            <p className="text-xs font-black uppercase tracking-wider text-gray-500">Open Orders</p>
+                            <p className="text-xs font-black uppercase tracking-wider text-gray-500">Active Orders</p>
                         </div>
-                        <p className="text-3xl font-black text-amber-700 tracking-tight">{openOrdersCount}</p>
+                        <p className="text-3xl font-black text-amber-700 tracking-tight">{activeOrdersCount}</p>
                     </CardContent>
                 </Card>
 
-                <Card className="border-none shadow-lg bg-gradient-to-br from-purple-50 to-white">
-                    <CardContent className="pt-6 pb-4">
-                        <div className="flex items-center gap-2 mb-2">
-                            <div className="p-2 rounded-lg bg-purple-100 text-purple-700">
-                                <Gauge className="h-4 w-4" />
-                            </div>
-                            <p className="text-xs font-black uppercase tracking-wider text-gray-500">Average Order Value</p>
-                        </div>
-                        <p className="text-3xl font-black text-purple-700 tracking-tight">₱{Math.round(averageOrderValue).toLocaleString()}</p>
-                    </CardContent>
-                </Card>
+
             </div>
 
             <Card className="shadow-xl border-0">
@@ -259,8 +250,8 @@ export default function TotalOrders({ onSetHeaderActionRight }: TotalOrdersProps
                             <Button
                                 variant="outline"
                                 className={`h-10 w-10 p-0 rounded-xl transition-colors flex-shrink-0 ${filterService !== 'all' || filterPriority !== 'all' || startDate || endDate
-                                        ? 'border-red-600 text-red-600 bg-red-50 hover:bg-red-100'
-                                        : 'border-gray-200 text-gray-500 hover:border-red-600 hover:text-red-600 hover:bg-red-50'
+                                    ? 'border-red-600 text-red-600 bg-red-50 hover:bg-red-100'
+                                    : 'border-gray-200 text-gray-500 hover:border-red-600 hover:text-red-600 hover:bg-red-50'
                                     }`}
                                 onClick={() => setIsFilterOpen(true)}
                                 title="Open filters"
@@ -339,8 +330,8 @@ export default function TotalOrders({ onSetHeaderActionRight }: TotalOrdersProps
                                 onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
                                 disabled={currentPage === 1}
                                 className={`h-8 w-8 p-0 rounded-lg transition-all mt-0 border-none ${currentPage === 1
-                                        ? 'bg-slate-200 text-slate-500'
-                                        : 'bg-slate-600 text-white hover:bg-slate-700 shadow-sm'
+                                    ? 'bg-slate-200 text-slate-500'
+                                    : 'bg-slate-600 text-white hover:bg-slate-700 shadow-sm'
                                     }`}
                             >
                                 <ChevronLeft className="h-4 w-4" />
@@ -357,8 +348,8 @@ export default function TotalOrders({ onSetHeaderActionRight }: TotalOrdersProps
                                             size="sm"
                                             onClick={() => handlePageChange(pageNum)}
                                             className={`h-7 w-7 min-w-[28px] p-0 text-[10px] font-black rounded-lg transition-all ${isActive
-                                                    ? 'bg-red-600 hover:bg-red-700 text-white border-red-600 shadow-sm shadow-red-200'
-                                                    : 'bg-white border-gray-100 text-gray-600 hover:bg-red-50 hover:text-red-600 hover:border-red-100'
+                                                ? 'bg-red-600 hover:bg-red-700 text-white border-red-600 shadow-sm shadow-red-200'
+                                                : 'bg-white border-gray-100 text-gray-600 hover:bg-red-50 hover:text-red-600 hover:border-red-100'
                                                 }`}
                                         >
                                             {pageNum}
@@ -372,8 +363,8 @@ export default function TotalOrders({ onSetHeaderActionRight }: TotalOrdersProps
                                 onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
                                 disabled={currentPage === totalPages}
                                 className={`h-8 w-8 p-0 rounded-lg transition-all mt-0 border-none ${currentPage === totalPages
-                                        ? 'bg-slate-200 text-slate-500'
-                                        : 'bg-slate-600 text-white hover:bg-slate-700 shadow-sm'
+                                    ? 'bg-slate-200 text-slate-500'
+                                    : 'bg-slate-600 text-white hover:bg-slate-700 shadow-sm'
                                     }`}
                             >
                                 <ChevronRight className="h-4 w-4" />

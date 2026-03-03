@@ -19,7 +19,7 @@ interface ProcessClaimModalProps {
             paymentMethod?: PaymentMethod;
             amountReceived?: number;
             change?: number;
-            paymentStatus: 'paid';
+            paymentStatus: 'fully-paid';
             status: 'claimed';
             actualCompletionDate: Date;
             updatedAt: Date;
@@ -39,7 +39,7 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
     const totalAmount = order?.grandTotal || 0;
     const amountPaid = order?.amountReceived || 0;
     // If status is not paid, remaining balance is total - paid. If paid, 0.
-    const isFullyPaid = order?.paymentStatus === 'paid';
+    const isFullyPaid = order?.paymentStatus === 'fully-paid';
     const remainingBalance = isFullyPaid ? 0 : Math.max(0, totalAmount - amountPaid);
 
     useEffect(() => {
@@ -93,7 +93,7 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
         };
 
         if (remainingBalance > 0) {
-            updateData.paymentStatus = 'paid';
+            updateData.paymentStatus = 'fully-paid';
             updateData.paymentMethod = paymentMethod;
             // Total amount received is previous paid + current payment
             // But the type expectation for `onConfirm` might need adjustment or we handle logic here.
@@ -102,7 +102,7 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
             // If I paid 500 before, and 500 now for a 1000 item. Total tendered is 1000.
             // If I pay 1000 now for 500 balance (old 500 paid), total tendered is 500 + 1000 = 1500.
 
-            // Actually, let's just ensure the status becomes 'paid'. 
+            // Actually, let's just ensure the status becomes 'fully-paid'. 
             // We will pass the `amountReceived` as the TOTAL amount tendered for the whole order?
             // Or just the amount tendered in this transaction? 
             // The mock logic seems to treat `amountReceived` as total amount paid.

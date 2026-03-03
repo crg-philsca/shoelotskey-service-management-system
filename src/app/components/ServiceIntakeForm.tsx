@@ -7,9 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/app/components/ui/checkbox';
 import { Textarea } from '@/app/components/ui/textarea';
 import { toast } from 'sonner';
-import { mockServices } from '@/app/lib/mockData';
 import { Plus, X, Calendar, User, Hash, ClipboardList, RotateCcw } from 'lucide-react';
 import { useOrders } from '../context/OrderContext';
+import { useServices } from '../context/ServiceContext';
 import type { ShippingPreference, PaymentMethod, PaymentStatus, Priority } from '@/app/types';
 import { format as dateFnsFormat } from 'date-fns';
 import { CreatableCombobox } from './ui/creatable-combobox';
@@ -26,7 +26,7 @@ const SHOE_MATERIALS = [
 ];
 
 const DELIVERY_COURIERS = [
-    'Other', 'Lalamove', 'JRS', 'LBC'
+    'Lalamove', 'JRS', 'LBC', 'Grab', 'Other'
 ];
 
 interface ShoeEntry {
@@ -88,6 +88,7 @@ function ClearableInput({ id, value, onChange, placeholder, className, required,
 
 export default function ServiceIntakeForm({ user, onSuccess, onCancel }: ServiceIntakeFormProps) {
     const { addOrder, orders } = useOrders();
+    const { services } = useServices();
     const [customerName, setCustomerName] = useState('');
     const [contactNumber, setContactNumber] = useState('');
     // State for Shipping Preference
@@ -126,13 +127,12 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
     const [deliveryCourier, setDeliveryCourier] = useState('');
     const [otherCourier, setOtherCourier] = useState('');
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
-    const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('unpaid');
+    const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('downpayment');
     const [amountReceived, setAmountReceived] = useState('');
     const [depositAmount, setDepositAmount] = useState('');
     const [referenceNo, setReferenceNo] = useState('');
     const [orderTime, setOrderTime] = useState(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
     const [releaseTime, setReleaseTime] = useState('');
-    const [assignedTo, setAssignedTo] = useState<string | undefined>(user?.username);
 
     const handleResetForm = () => {
         // Reset Customer Info
@@ -173,13 +173,12 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
         // Reset Order Details
         setPriorityLevel('regular');
         setPaymentMethod('cash');
-        setPaymentStatus('unpaid');
+        setPaymentStatus('downpayment');
         setAmountReceived('');
         setDepositAmount('');
         setReferenceNo('');
         setOrderTime(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
         setReleaseTime('');
-        setAssignedTo(user?.username);
     };
     const [generatedOrderNumber, setGeneratedOrderNumber] = useState('');
 
@@ -226,8 +225,9 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
         }
     }, [shoes, priorityLevel]);
 
-    const baseServices = mockServices.filter(s => s.category === 'base');
-    const addOnServices = mockServices.filter(s => s.category === 'addon');
+    const activeServices = services.filter(s => s.active);
+    const baseServices = activeServices.filter(s => s.category === 'base');
+    const addOnServices = activeServices.filter(s => s.category === 'addon');
 
     const getAddonTotal = (addonName: string, quantity: number) => {
         const addon = addOnServices.find(s => s.name === addonName);
@@ -237,29 +237,71 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
 
 
 
-    const calculatePredictedDays = () => {
-        // Check if any shoe has anything other than "Basic Cleaning"
-        const hasAdditional = shoes.some(shoe => {
-            const services = shoe.baseService || [];
-            const isJustBasicCleaning = services.length === 1 && services[0] === 'Basic Cleaning';
-            const hasAddons = shoe.addOns && shoe.addOns.length > 0;
-            return !isJustBasicCleaning || hasAddons;
-        });
-
-        const baseDays = hasAdditional ? 25 : 10;
-
-        // Rush only reduces by 1 day and is limited to Basic Cleaning/Reglue
-        const isRushEligible = shoes.every(shoe => {
-            const services = shoe.baseService || [];
-            return services.every(s => s === 'Basic Cleaning' || s.toLowerCase().includes('reglue'));
-        });
-
-        if (priorityLevel === 'rush' && isRushEligible) {
-            return baseDays - 1;
+    const parseDuration = (val: string | number | undefined): number => {
+        if (val === undefined) return 0;
+        if (typeof val === 'number') return val;
+        // if string like '7-10', split by - and take the max
+        if (val.includes('-')) {
+            const parts = val.split('-').map(p => parseInt(p.trim(), 10)).filter(n => !isNaN(n));
+            return parts.length > 0 ? Math.max(...parts) : 0;
         }
-
-        return baseDays;
+        const parsed = parseInt(val, 10);
+        return isNaN(parsed) ? 0 : parsed;
     };
+
+    const calculatePredictedDaysBreakdown = () => {
+        let baseDays = 0;
+        let addOnDays = 0;
+        let priorityDays = 0;
+
+        // Alias to avoid name clashing in loops
+        const servicesContext = services;
+
+        shoes.forEach(shoe => {
+            const services = shoe.baseService || [];
+
+            services.forEach(serviceName => {
+                const service = baseServices.find(s => s.name === serviceName);
+                if (service && service.durationDays !== undefined) {
+                    baseDays += parseDuration(service.durationDays);
+                } else if (serviceName === 'Basic Cleaning') {
+                    baseDays += 10;
+                } else {
+                    baseDays += 25;
+                }
+            });
+
+            shoe.addOns.forEach((addon: { name: string; quantity?: number }) => {
+                const addOnDetail = addOnServices.find(s => s.name === addon.name);
+                if (addOnDetail && addOnDetail.durationDays !== undefined) {
+                    addOnDays += parseDuration(addOnDetail.durationDays) * (addon.quantity || 1);
+                }
+            });
+
+            if (priorityLevel === 'rush') {
+                if (services.includes('Basic Cleaning')) {
+                    const fee = servicesContext.find(s => s.category === 'priority' && s.name.includes('Basic Cleaning'));
+                    priorityDays += fee?.durationDays !== undefined ? parseDuration(fee.durationDays) : -9;
+                }
+                if (services.some(s => s.toLowerCase().includes('reglue'))) {
+                    const fee = servicesContext.find(s => s.category === 'priority' && s.name.includes('Reglue'));
+                    priorityDays += fee?.durationDays !== undefined ? parseDuration(fee.durationDays) : -1;
+                }
+            } else if (priorityLevel === 'premium') {
+                if (services.some(s => s.toLowerCase().includes('color renewal'))) {
+                    const fee = servicesContext.find(s => s.category === 'priority' && s.name.includes('Color Renewal'));
+                    priorityDays += fee?.durationDays !== undefined ? parseDuration(fee.durationDays) : -2;
+                }
+            }
+        });
+
+        const totalDays = Math.max(1, baseDays + addOnDays + priorityDays);
+
+        return { baseDays, addOnDays, priorityDays, totalDays };
+    };
+
+    const mlBreakdown = calculatePredictedDaysBreakdown();
+    const calculatePredictedDays = () => mlBreakdown.totalDays;
 
     const getShoeTotal = (shoe: ShoeEntry) => {
         let total = 0;
@@ -267,13 +309,22 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
         if (services.length > 0) {
             services.forEach(serviceName => {
                 const service = baseServices.find(s => s.name === serviceName);
-                if (service) total += service.price * shoe.quantity;
+                if (service) total += service.price;
             });
         }
         shoe.addOns.forEach((addon: { name: string; quantity?: number }) => {
-            total += getAddonTotal(addon.name, addon.quantity || 1) * shoe.quantity;
+            total += getAddonTotal(addon.name, addon.quantity || 1);
         });
-        return total;
+
+        // Add rush fee to unit total if applicable
+        if (priorityLevel === 'rush') {
+            if (services.includes('Basic Cleaning')) total += 150;
+            if (services.some(s => s.toLowerCase().includes('reglue'))) total += 250;
+        } else if (priorityLevel === 'premium') {
+            if (services.some(s => s.toLowerCase().includes('color renewal'))) total += 1000;
+        }
+
+        return total * shoe.quantity;
     };
 
     const calculateTotals = () => {
@@ -325,6 +376,20 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
     };
 
     const { baseTotal, addOnsTotal, rushFee, grandTotal } = calculateTotals();
+
+    useEffect(() => {
+        if (paymentStatus === 'downpayment') {
+            const currentDeposit = parseFloat(depositAmount.replace(/,/g, '')) || 0;
+            const minDeposit = grandTotal / 2;
+            if (currentDeposit < minDeposit && grandTotal > 0) {
+                setDepositAmount(minDeposit.toLocaleString());
+                setAmountReceived(minDeposit.toLocaleString());
+            }
+        } else if (paymentStatus === 'fully-paid' && grandTotal > 0) {
+            setDepositAmount(grandTotal.toLocaleString());
+            setAmountReceived(grandTotal.toLocaleString());
+        }
+    }, [paymentStatus, grandTotal, depositAmount]);
 
     const addShoe = () => {
         setShoes([...shoes, {
@@ -384,6 +449,12 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
             }
         }
 
+        const depositAmt = parseFloat(depositAmount.replace(/,/g, '')) || 0;
+        if (paymentStatus === 'downpayment' && depositAmt < grandTotal / 2) {
+            toast.error('Downpayment must be at least half of the grand total');
+            return;
+        }
+
         // Create new order
         const [oHours, oMinutes] = orderTime.split(':').map(Number);
         const createdDate = new Date();
@@ -427,13 +498,12 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                 zipCode: shippingPreference === 'delivery' ? deliveryAddress.zipCode : undefined,
                 paymentMethod,
                 paymentStatus,
-                amountReceived: paymentStatus === 'paid' || paymentStatus === 'partial' ? parseFloat(amountReceived.replace(/,/g, '') || '0') / shoes.length : undefined, // Split payment? Or just assign to primary?
+                amountReceived: parseFloat(amountReceived.replace(/,/g, '') || '0') / shoes.length, // Split payment? Or just assign to primary?
                 change: 0,
                 shelfLocation: undefined,
                 transactionDate: createdDate,
                 processedBy: user?.username || 'Current User',
                 status: 'new-order',
-                assignedTo: assignedTo,
                 predictedCompletionDate: (() => {
                     const daysToAdd = calculatePredictedDays();
                     const date = new Date(Date.now() + daysToAdd * 24 * 60 * 60 * 1000);
@@ -532,12 +602,11 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
         setDeliveryCourier('');
         setOtherCourier('');
         setPaymentMethod('cash');
-        setPaymentStatus('unpaid');
+        setPaymentStatus('downpayment');
         setAmountReceived('');
         setReferenceNo('');
         setOrderTime(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
         setReleaseTime('');
-        setAssignedTo(undefined);
     };
 
     const formatReferenceNo = (value: string) => {
@@ -580,7 +649,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                 <CardHeader className={`${CARD_HEADER_STYLE} !py-2`}>
                     <div className="flex items-center gap-3 translate-y-[1px]">
                         <User className="text-red-600 fill-red-600" size={18} />
-                        <CardTitle className={`${CARD_TITLE_STYLE} text-slate-900`}>CUSTOMER INFORMATION</CardTitle>
+                        <CardTitle className={`${CARD_TITLE_STYLE} text-slate-900`}>CUSTOMER DETAILS</CardTitle>
                     </div>
                 </CardHeader>
                 <CardContent className="px-6 pt-0 pb-4 space-y-4">
@@ -617,7 +686,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="pickup">Pick-up</SelectItem>
+                                        <SelectItem value="pickup">Pickup</SelectItem>
                                         <SelectItem value="delivery">Delivery</SelectItem>
                                     </SelectContent>
                                 </Select>
@@ -636,7 +705,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="pickup">Pick-up</SelectItem>
+                                            <SelectItem value="pickup">Pickup</SelectItem>
                                             <SelectItem value="delivery">Delivery</SelectItem>
                                         </SelectContent>
                                     </Select>
@@ -656,7 +725,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                             {/* Row 2: Unit/No, Street, Barangay */}
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
                                 <div className="col-span-1">
-                                    <Label htmlFor="unitNo" className={LABEL_STYLE}>UNIT/NO</Label>
+                                    <Label htmlFor="unitNo" className={LABEL_STYLE}>HOUSE/UNIT NUMBER</Label>
                                     <ClearableInput
                                         id="unitNo"
                                         value={deliveryAddress.houseNo}
@@ -667,7 +736,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                                     />
                                 </div>
                                 <div className="col-span-1">
-                                    <Label htmlFor="street" className={LABEL_STYLE}>STREET/SUBDIVISION</Label>
+                                    <Label htmlFor="street" className={LABEL_STYLE}>STREET/BUILDING NAME</Label>
                                     <ClearableInput
                                         id="street"
                                         value={deliveryAddress.street}
@@ -678,7 +747,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                                     />
                                 </div>
                                 <div className="col-span-1">
-                                    <Label htmlFor="barangay" className={LABEL_STYLE}>BARANGAY</Label>
+                                    <Label htmlFor="barangay" className={LABEL_STYLE}>BARANGAY/SUBDIVISION</Label>
                                     <ClearableInput
                                         id="barangay"
                                         value={deliveryAddress.barangay}
@@ -693,7 +762,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                             {/* Row 3: City, Province, Zip Code */}
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
                                 <div className="col-span-1">
-                                    <Label htmlFor="city" className={LABEL_STYLE}>CITY</Label>
+                                    <Label htmlFor="city" className={LABEL_STYLE}>CITY/MUNICIPALITY</Label>
                                     <ClearableInput
                                         id="city"
                                         value={deliveryAddress.city}
@@ -704,7 +773,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                                     />
                                 </div>
                                 <div className="col-span-1">
-                                    <Label htmlFor="province" className={LABEL_STYLE}>PROVINCE</Label>
+                                    <Label htmlFor="province" className={LABEL_STYLE}>PROVINCE/REGION</Label>
                                     <ClearableInput
                                         id="province"
                                         value={deliveryAddress.province}
@@ -864,10 +933,10 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                                                         {[
                                                             { id: 'scratches', label: 'Scratches' },
                                                             { id: 'yellowing', label: 'Yellowing' },
-                                                            { id: 'ripsHoles', label: 'Rips/holes' },
-                                                            { id: 'deepStains', label: 'Deep stains' },
-                                                            { id: 'soleSeparation', label: 'Sole separation' },
-                                                            { id: 'fadedWorn', label: 'Faded/worn' },
+                                                            { id: 'ripsHoles', label: 'Rips/Holes' },
+                                                            { id: 'deepStains', label: 'Deep Stains' },
+                                                            { id: 'soleSeparation', label: 'Sole Separation' },
+                                                            { id: 'fadedWorn', label: 'Faded/Worn' },
                                                         ].map((cond) => (
                                                             <div key={cond.id} className="flex items-center space-x-3">
                                                                 <Checkbox
@@ -967,9 +1036,21 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                                                                                 className="h-4 w-4 data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600"
                                                                             />
                                                                             <div className="flex items-center justify-between flex-1 min-w-0">
-                                                                                <span className="text-[11px] font-bold leading-tight text-gray-700 truncate">
-                                                                                    {service.name}
-                                                                                </span>
+                                                                                <div className="flex flex-col min-w-0">
+                                                                                    <span className="text-[11px] font-bold leading-tight text-gray-700 truncate">
+                                                                                        {service.name}
+                                                                                    </span>
+                                                                                    <div className="flex items-center gap-1.5 mt-0.5 whitespace-nowrap">
+                                                                                        {service.code && (
+                                                                                            <span className="text-[8px] font-black text-gray-400 bg-gray-100 px-1 rounded uppercase tracking-wider">
+                                                                                                {service.code}
+                                                                                            </span>
+                                                                                        )}
+                                                                                        <span className="text-[9px] text-gray-500 font-medium">
+                                                                                            {service.durationDays} days
+                                                                                        </span>
+                                                                                    </div>
+                                                                                </div>
                                                                                 {isChecked && (
                                                                                     <span className="text-[11px] font-black text-red-600 shrink-0 ml-2">{formatPeso(service.price)}</span>
                                                                                 )}
@@ -994,7 +1075,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                                                                     {addOnServices.filter(addon => {
                                                                         const baseServicesArr = shoe.baseService || [];
                                                                         const basicCleaningAddOns = ['Unyellowing', 'White Paint', 'Minor Restoration', 'Minor Retouch'];
-                                                                        const reglueAddOns = ['Another Layer', 'Premium Glue'];
+                                                                        const reglueAddOns = ['Another Layer', 'Premium Glue', 'Middlesole Glue', 'Undersole Glue'];
                                                                         if (baseServicesArr.includes('Basic Cleaning') && basicCleaningAddOns.includes(addon.name)) return true;
                                                                         if (baseServicesArr.some(s => s.includes('Full Reglue')) && reglueAddOns.includes(addon.name)) return true;
                                                                         const colorAddOns = ['2 Colors', '3 Colors'];
@@ -1009,7 +1090,9 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                                                                             '2 Colors': 5,
                                                                             '3 Colors': 6,
                                                                             'Another Layer': 7,
-                                                                            'Premium Glue': 8
+                                                                            'Premium Glue': 8,
+                                                                            'Middlesole Glue': 9,
+                                                                            'Undersole Glue': 10
                                                                         };
                                                                         return (order[a.name] || 99) - (order[b.name] || 99);
                                                                     }).map((addon) => {
@@ -1034,9 +1117,21 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                                                                                         }}
                                                                                         className="h-4 w-4 shrink-0 data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600"
                                                                                     />
-                                                                                    <label htmlFor={`addon-${shoe.id}-${addon.id}`} className="text-[11px] font-bold text-gray-600 cursor-pointer leading-tight">
-                                                                                        {addon.name}
-                                                                                    </label>
+                                                                                    <div className="flex flex-col min-w-0">
+                                                                                        <label htmlFor={`addon-${shoe.id}-${addon.id}`} className="text-[11px] font-bold text-gray-600 cursor-pointer leading-tight truncate">
+                                                                                            {addon.name}
+                                                                                        </label>
+                                                                                        <div className="flex items-center gap-1.5 mt-0.5 whitespace-nowrap">
+                                                                                            {addon.code && (
+                                                                                                <span className="text-[8px] font-black text-gray-400 bg-gray-100 px-1 rounded uppercase tracking-wider">
+                                                                                                    {addon.code}
+                                                                                                </span>
+                                                                                            )}
+                                                                                            <span className="text-[9px] text-gray-500 font-medium">
+                                                                                                +{addon.durationDays} days
+                                                                                            </span>
+                                                                                        </div>
+                                                                                    </div>
                                                                                 </div>
                                                                                 {isChecked && (
                                                                                     <div className="flex items-center gap-3 ml-auto shrink-0">
@@ -1114,8 +1209,8 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                         <div className="h-full">
                             {(() => {
                                 // Logic Helpers
-                                const isPartial = paymentStatus === 'partial';
-                                const isPaid = paymentStatus === 'paid';
+                                const isPartial = paymentStatus === 'downpayment';
+                                const isPaid = paymentStatus === 'fully-paid';
                                 const showAmountRec = isPartial || isPaid;
 
                                 // Calculations
@@ -1178,135 +1273,86 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                                                     className="bg-white border-gray-100/50 h-9 rounded-xl text-xs text-gray-900 shadow-sm px-2"
                                                 />
                                             </div>
-                                            {/* Row 2: Order ID, Processed By, Assigned To & Payment Status */}
-                                            <div className="space-y-1 col-span-2 md:col-span-3">
+                                            {/* ML Predicted Duration Breakdown */}
+                                            <div className="col-span-2 md:col-span-12 bg-blue-50 border border-blue-100/50 rounded-lg p-2 flex items-center justify-between text-[10px] text-blue-800 shadow-sm mt-1">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-bold flex items-center gap-1"><span className="text-blue-600 animate-pulse">✨</span> ML Prediction:</span>
+                                                    <span>
+                                                        {mlBreakdown.baseDays}d Base
+                                                        {mlBreakdown.addOnDays > 0 ? ` + ${mlBreakdown.addOnDays}d Add-on` : ''}
+                                                        {mlBreakdown.priorityDays < 0 ? ` - ${Math.abs(mlBreakdown.priorityDays)}d Rush` : (mlBreakdown.priorityDays > 0 ? ` + ${mlBreakdown.priorityDays}d Priority` : '')}
+                                                    </span>
+                                                </div>
+                                                <span className="font-black text-blue-900 bg-blue-100 px-2 py-0.5 rounded text-[10px] uppercase tracking-wider">
+                                                    Total: {mlBreakdown.totalDays} Days
+                                                </span>
+                                            </div>
+                                            {/* Row 2: Order ID, Processed By */}
+                                            <div className="space-y-1 col-span-1 md:col-span-6">
                                                 <Label className={LABEL_STYLE}>Order ID</Label>
                                                 <div className="flex items-center bg-white h-9 rounded-xl px-3 text-[11px] text-gray-900 border border-gray-100/50 shadow-sm">
                                                     <Hash size={14} className="mr-2 text-gray-400" />
                                                     <span className="whitespace-nowrap">{generatedOrderNumber || 'Generating...'}</span>
                                                 </div>
                                             </div>
-                                            <div className="space-y-1 col-span-1 md:col-span-3">
+                                            <div className="space-y-1 col-span-1 md:col-span-6">
                                                 <Label className={LABEL_STYLE}>Processed By</Label>
                                                 <div className="flex items-center bg-white h-9 rounded-xl px-3 text-xs text-gray-900 border border-gray-100/50 shadow-sm">
                                                     <User size={14} className="mr-2 text-gray-400" />
                                                     <span className="truncate">{user?.username || 'Current User'}</span>
                                                 </div>
                                             </div>
-                                            <div className="space-y-1 col-span-1 md:col-span-3">
-                                                <Label className={LABEL_STYLE}>Assigned To</Label>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-gray-200/50 mt-2">
+                                            {/* Row 3: Payment Method & Payment Status */}
+                                            <div className="space-y-1">
+                                                <Label className={LABEL_STYLE}>Payment Method</Label>
                                                 <div className="relative group/select">
-                                                    <Select
-                                                        value={assignedTo || 'unassigned'}
-                                                        onValueChange={(val: string) => setAssignedTo(val === 'unassigned' ? undefined : val)}
-                                                    >
-                                                        <SelectTrigger className="bg-white border-gray-100/50 h-9 rounded-xl text-xs text-gray-900 shadow-sm pr-8">
-                                                            <SelectValue placeholder="Unassigned" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="unassigned">Unassigned</SelectItem>
-                                                            {user?.username && (
-                                                                <SelectItem value={user.username}>{user.username}</SelectItem>
-                                                            )}
-                                                            <SelectItem value="staff">staff</SelectItem>
-                                                            <SelectItem value="staff1">staff1</SelectItem>
-                                                            <SelectItem value="staff2">staff2</SelectItem>
-                                                            <SelectItem value="technician">technician</SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                    {assignedTo && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setAssignedTo(undefined);
-                                                            }}
-                                                            className="absolute right-8 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors opacity-0 group-hover/select:opacity-100"
-                                                        >
-                                                            <X size={12} />
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <div className="space-y-1 col-span-1 md:col-span-3">
-                                                <Label className={LABEL_STYLE}>Payment Status</Label>
-                                                <div className="relative group/select">
-                                                    <Select value={paymentStatus} onValueChange={(value: PaymentStatus) => setPaymentStatus(value)}>
-                                                        <SelectTrigger className="bg-white border-gray-100/50 h-9 rounded-xl text-xs text-gray-900 shadow-sm pr-8">
+                                                    <Select value={paymentMethod} onValueChange={(value: PaymentMethod) => setPaymentMethod(value)}>
+                                                        <SelectTrigger className="bg-white border-gray-100/50 h-9 rounded-xl text-xs shadow-sm pr-8">
                                                             <SelectValue />
                                                         </SelectTrigger>
                                                         <SelectContent>
-                                                            <SelectItem value="unpaid">Unpaid</SelectItem>
-                                                            <SelectItem value="partial">Partial</SelectItem>
-                                                            <SelectItem value="paid">Paid</SelectItem>
+                                                            <SelectItem value="cash">Cash</SelectItem>
+                                                            <SelectItem value="gcash">GCash</SelectItem>
+                                                            <SelectItem value="maya">Maya</SelectItem>
                                                         </SelectContent>
                                                     </Select>
-                                                    {paymentStatus !== 'unpaid' && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setPaymentStatus('unpaid');
-                                                            }}
-                                                            className="absolute right-8 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors opacity-0 group-hover/select:opacity-100"
-                                                        >
-                                                            <X size={12} />
-                                                        </button>
-                                                    )}
                                                 </div>
                                             </div>
-                                        </div>
 
-                                        <div className="grid grid-cols-1 md:grid-cols-6 gap-2 pt-0">
-                                            {/* Row 3: Payment Method & Reference Number */}
-                                            {paymentStatus !== 'unpaid' && (
-                                                <>
-                                                    <div className={`space-y-1 ${paymentMethod === 'cash' ? 'col-span-1 md:col-span-6' : 'col-span-1 md:col-span-3'}`}>
-                                                        <Label className={LABEL_STYLE}>Payment Method</Label>
-                                                        <div className="relative group/select">
-                                                            <Select value={paymentMethod} onValueChange={(value: PaymentMethod) => setPaymentMethod(value)}>
-                                                                <SelectTrigger className="bg-white border-gray-100/50 h-9 rounded-xl text-xs shadow-sm pr-8">
-                                                                    <SelectValue />
-                                                                </SelectTrigger>
-                                                                <SelectContent>
-                                                                    <SelectItem value="cash">Cash</SelectItem>
-                                                                    <SelectItem value="gcash">GCash</SelectItem>
-                                                                    <SelectItem value="maya">Maya</SelectItem>
-                                                                </SelectContent>
-                                                            </Select>
-                                                            {paymentMethod && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        setPaymentMethod('cash'); // Reset to default cash
-                                                                    }}
-                                                                    className="absolute right-8 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors opacity-0 group-hover/select:opacity-100"
-                                                                >
-                                                                    <X size={12} />
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                    {['gcash', 'maya'].includes(paymentMethod) && (paymentStatus === 'paid' || paymentStatus === 'partial') && (
-                                                        <div className="space-y-1 col-span-1 md:col-span-3">
-                                                            <Label htmlFor="refNo" className={LABEL_STYLE}>Reference Number</Label>
-                                                            <ClearableInput
-                                                                id="refNo"
-                                                                value={referenceNo}
-                                                                onChange={(e: any) => setReferenceNo(formatReferenceNo(e.target.value))}
-                                                                placeholder="XXXX-XXXX-XXXX"
-                                                                className="bg-white border-gray-100/50 h-9 rounded-xl text-xs shadow-sm"
-                                                            />
-                                                        </div>
-                                                    )}
-                                                </>
+                                            <div className="space-y-1">
+                                                <Label className={LABEL_STYLE}>Payment Status</Label>
+                                                <Select value={paymentStatus} onValueChange={(value: PaymentStatus) => setPaymentStatus(value)}>
+                                                    <SelectTrigger className="bg-white border-gray-100/50 h-9 rounded-xl text-xs text-gray-900 shadow-sm pr-8">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="downpayment">Downpayment</SelectItem>
+                                                        <SelectItem value="fully-paid">Fully Paid</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+
+                                            {/* Row 4: Reference Number */}
+                                            {['gcash', 'maya'].includes(paymentMethod) && (paymentStatus === 'fully-paid' || paymentStatus === 'downpayment') && (
+                                                <div className="space-y-1 sm:col-span-2">
+                                                    <Label htmlFor="refNo" className={LABEL_STYLE}>Reference Number</Label>
+                                                    <ClearableInput
+                                                        id="refNo"
+                                                        value={referenceNo}
+                                                        onChange={(e: any) => setReferenceNo(formatReferenceNo(e.target.value))}
+                                                        placeholder="XXXX-XXXX-XXXX"
+                                                        className="bg-white border-gray-100/50 h-9 rounded-xl text-xs shadow-sm"
+                                                    />
+                                                </div>
                                             )}
 
-                                            {/* Row 4: Amount Received & Result Field */}
+                                            {/* Row 5: Amount Received & Result Field */}
                                             {showAmountRec && (
                                                 <>
-                                                    <div className="space-y-1 col-span-1 md:col-span-3">
+                                                    <div className="space-y-1">
                                                         <Label htmlFor="amountRec" className={LABEL_STYLE}>Amount Received</Label>
                                                         <div className="relative">
                                                             <span className="absolute left-3 top-2.5 text-gray-900 text-xs font-black">{'\u20B1'}</span>
@@ -1325,7 +1371,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                                                         </div>
                                                     </div>
 
-                                                    <div className="space-y-1 col-span-1 md:col-span-3">
+                                                    <div className="space-y-1">
                                                         {isPartial ? (
                                                             <>
                                                                 <Label htmlFor="depositAmt" className={LABEL_STYLE}>Deposit Amount</Label>
@@ -1357,10 +1403,10 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                                                 </>
                                             )}
 
-                                            {/* Row 5: Amount Change & Remaining Balance (Partial Only) */}
+                                            {/* Row 6: Amount Change & Remaining Balance (Partial Only) */}
                                             {isPartial && (
                                                 <>
-                                                    <div className="space-y-1 col-span-1 md:col-span-3">
+                                                    <div className="space-y-1">
                                                         <Label className={LABEL_STYLE}>Amount Change</Label>
                                                         <div className="relative">
                                                             <span className="absolute left-3 top-2.5 text-gray-900 text-xs font-black">{'\u20B1'}</span>
@@ -1372,7 +1418,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                                                             />
                                                         </div>
                                                     </div>
-                                                    <div className="space-y-1 col-span-1 md:col-span-3">
+                                                    <div className="space-y-1">
                                                         <Label className={LABEL_STYLE}>Remaining Balance</Label>
                                                         <div className="relative">
                                                             <span className="absolute left-3 top-2.5 text-gray-900 text-xs font-black">{'\u20B1'}</span>
@@ -1410,8 +1456,8 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                                         <span className="text-gray-500 font-medium">Add-ons Subtotal</span>
                                         <span className="font-bold text-gray-800">{formatPeso(addOnsTotal)}</span>
                                     </div>
-                                    <div className="flex justify-between items-center text-[13px]">
-                                        <span className="text-gray-500 font-medium">Total Quantity</span>
+                                    <div className="flex justify-between items-center text-[13px] pt-2 border-t border-gray-100">
+                                        <span className="text-gray-500 font-medium">Total Quantity (Per Unit)</span>
                                         <span className="font-bold text-gray-800">{shoes.reduce((sum, s) => sum + s.quantity, 0)} Units</span>
                                     </div>
                                 </div>

@@ -193,16 +193,16 @@ export default function UserManagement({ onSetHeaderAction }: { onSetHeaderActio
               </div>
             </div>
 
-            <DialogFooter className="flex justify-center gap-4 pt-4 pb-2">
+            <DialogFooter className="pt-4 flex w-full gap-3 sm:space-x-0">
               <Button
                 variant="outline"
                 onClick={handleResetFilters}
-                className="h-11 px-8 min-w-[160px] font-bold uppercase tracking-wider bg-slate-50 border-gray-200 hover:bg-slate-100"
+                className="flex-1 h-9 font-bold text-xs border border-gray-300 bg-gray-200 hover:bg-gray-700 text-gray-700 hover:text-white transition-all uppercase tracking-widest"
               >
                 Reset
               </Button>
               <Button
-                className="bg-red-600 hover:bg-red-700 h-11 px-8 min-w-[160px] font-bold uppercase tracking-wider shadow-md"
+                className="bg-red-600 hover:bg-red-700 text-white font-bold flex-1 h-9 text-xs uppercase tracking-widest shadow-md"
                 onClick={() => setIsFilterOpen(false)}
               >
                 Apply

@@ -14,7 +14,7 @@ import {
 import {
     Popover,
     PopoverContent,
-    PopoverTrigger,
+    PopoverAnchor,
 } from "./popover"
 
 interface CreatableComboboxProps {
@@ -50,7 +50,7 @@ export function CreatableCombobox({
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
+            <PopoverAnchor asChild>
                 <div className="relative w-full group">
                     <div className="relative">
                         <input
@@ -87,16 +87,31 @@ export function CreatableCombobox({
                                     <X size={12} />
                                 </button>
                             )}
-                            <ChevronsUpDown className="h-3 w-3 opacity-50 shrink-0" />
+                            <button
+                                type="button"
+                                onPointerDown={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setOpen(!open);
+                                }}
+                                className="p-1 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+                            >
+                                <ChevronsUpDown className="h-3 w-3 opacity-50 shrink-0" />
+                            </button>
                         </div>
                     </div>
                 </div>
-            </PopoverTrigger>
+            </PopoverAnchor>
             <PopoverContent
                 className="w-[var(--radix-popover-trigger-width)] p-0"
                 align="start"
                 onOpenAutoFocus={(e) => e.preventDefault()}
-                onInteractOutside={() => {
+                onInteractOutside={(e) => {
+                    const target = e.target as HTMLElement;
+                    if (inputRef.current?.parentElement?.parentElement?.contains(target)) {
+                        e.preventDefault();
+                        return;
+                    }
                     // Reset search value when closing
                     setSearchValue("")
                 }}

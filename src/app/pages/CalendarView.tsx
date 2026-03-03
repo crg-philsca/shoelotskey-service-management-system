@@ -3,7 +3,8 @@ import { Calendar } from '@/app/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/app/components/ui/popover';
 import { Label } from '@/app/components/ui/label';
 import { useMemo, useState, useEffect } from 'react';
-import { mockJobOrders, mockServices } from '@/app/lib/mockData';
+import { mockJobOrders } from '@/app/lib/mockData';
+import { useServices } from '@/app/context/ServiceContext';
 import { Calendar as CalendarIcon, Package, User, CreditCard, ClipboardList, FileText, ChevronLeft, ChevronRight, Search, Filter, Phone, MapPin, Tag, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
@@ -19,6 +20,7 @@ interface CalendarViewProps {
 
 export default function CalendarView({ onSetHeaderActionRight }: CalendarViewProps) {
   const navigate = useNavigate();
+  const { services } = useServices();
   const forReleaseOrders = mockJobOrders.filter(job => job.status === 'for-release');
 
   // Collect unique predicted completion dates for release orders so we can highlight them and default to the first one.
@@ -160,8 +162,8 @@ export default function CalendarView({ onSetHeaderActionRight }: CalendarViewPro
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="all" className="text-xs focus:bg-red-50 focus:text-red-900 cursor-pointer">All</SelectItem>
-                                <SelectItem value="paid" className="text-xs focus:bg-red-50 focus:text-red-900 cursor-pointer">Paid</SelectItem>
-                                <SelectItem value="unpaid" className="text-xs focus:bg-red-50 focus:text-red-900 cursor-pointer">Unpaid</SelectItem>
+                                <SelectItem value="fully-paid" className="text-xs focus:bg-red-50 focus:text-red-900 cursor-pointer">Paid</SelectItem>
+                                <SelectItem value="downpayment" className="text-xs focus:bg-red-50 focus:text-red-900 cursor-pointer">Unpaid</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
@@ -191,7 +193,7 @@ export default function CalendarView({ onSetHeaderActionRight }: CalendarViewPro
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="all" className="text-xs focus:bg-red-50 focus:text-red-900 cursor-pointer">All</SelectItem>
-                                {mockServices.filter(s => s.category === 'base').map(service => (
+                                {services.filter(s => s.category === 'base' && s.active).map(service => (
                                   <SelectItem key={service.id} value={service.name} className="text-xs focus:bg-red-50 focus:text-red-900 cursor-pointer">
                                     {service.name.replace(' (with basic cleaning)', '')}
                                   </SelectItem>
@@ -362,7 +364,7 @@ export default function CalendarView({ onSetHeaderActionRight }: CalendarViewPro
                           </div>
                           <div className="min-w-0">
                             <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-none mb-0.5">Payment Status</p>
-                            <p className={`text-[9px] font-black uppercase tracking-tight ${job.paymentStatus === 'paid' ? 'text-green-600' : 'text-red-500'}`}>
+                            <p className={`text-[9px] font-black uppercase tracking-tight ${job.paymentStatus === 'fully-paid' ? 'text-green-600' : 'text-red-500'}`}>
                               {job.paymentStatus}
                             </p>
                           </div>
@@ -632,7 +634,7 @@ export default function CalendarView({ onSetHeaderActionRight }: CalendarViewPro
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                  {selectedOrder.paymentStatus !== 'unpaid' && (
+                  {selectedOrder.paymentStatus !== 'downpayment' && (
                     <div>
                       <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Method</Label>
                       <p className="text-sm font-bold text-gray-800 uppercase">
@@ -642,19 +644,19 @@ export default function CalendarView({ onSetHeaderActionRight }: CalendarViewPro
                   )}
                   <div>
                     <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Payment Status</Label>
-                    <span className={`text-sm font-black uppercase ${selectedOrder.paymentStatus === 'paid' ? 'text-green-600' :
-                      selectedOrder.paymentStatus === 'partial' ? 'text-yellow-600' : 'text-red-500'
+                    <span className={`text-sm font-black uppercase ${selectedOrder.paymentStatus === 'fully-paid' ? 'text-green-600' :
+                      selectedOrder.paymentStatus === 'downpayment' ? 'text-yellow-600' : 'text-red-500'
                       }`}>
                       {selectedOrder.paymentStatus}
                     </span>
                   </div>
-                  {['gcash', 'maya'].includes(selectedOrder.paymentMethod?.toLowerCase()) && (selectedOrder.paymentStatus === 'paid' || selectedOrder.paymentStatus === 'partial') && (
+                  {['gcash', 'maya'].includes(selectedOrder.paymentMethod?.toLowerCase()) && (selectedOrder.paymentStatus === 'fully-paid' || selectedOrder.paymentStatus === 'downpayment') && (
                     <div className="col-span-2">
                       <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Reference Number</Label>
                       <p className="text-sm font-bold text-gray-800 font-mono tracking-tight">{selectedOrder.referenceNo || '-'}</p>
                     </div>
                   )}
-                  {selectedOrder.paymentStatus !== 'unpaid' && (
+                  {selectedOrder.paymentStatus !== 'downpayment' && (
                     <>
                       <div>
                         <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Amount Received</Label>
@@ -666,7 +668,7 @@ export default function CalendarView({ onSetHeaderActionRight }: CalendarViewPro
                       </div>
                     </>
                   )}
-                  {(selectedOrder.paymentStatus === 'unpaid' || selectedOrder.paymentStatus === 'partial') && (
+                  {(selectedOrder.paymentStatus === 'downpayment') && (
                     <div>
                       <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Remaining Balance</Label>
                       <p className="text-sm font-black uppercase tracking-wider text-red-600">

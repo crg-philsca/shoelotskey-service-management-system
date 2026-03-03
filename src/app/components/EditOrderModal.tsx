@@ -7,7 +7,7 @@ import { Label } from '@/app/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { Checkbox } from '@/app/components/ui/checkbox';
 import { History } from 'lucide-react';
-import { mockServices } from '@/app/lib/mockData';
+import { useServices } from '@/app/context/ServiceContext';
 import type { JobOrder, JobStatus, PaymentStatus, PaymentMethod } from '@/app/types';
 
 interface EditOrderModalProps {
@@ -39,8 +39,9 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave, hide
 
     if (!formData) return null;
 
-    const baseServices = mockServices.filter(s => s.category === 'base');
-    const addOnServices = mockServices.filter(s => s.category === 'addon');
+    const { services } = useServices();
+    const baseServices = services.filter(s => s.category === 'base' && s.active);
+    const addOnServices = services.filter(s => s.category === 'addon' && s.active);
 
     const recalculateTotals = (data: JobOrder) => {
         let basePrice = 0;
@@ -498,16 +499,16 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave, hide
                                         <div className="grid grid-cols-2 gap-4">
                                             <div>
                                                 <Label className={LABEL_STYLE}>Payment Status</Label>
-                                                <div className={`grid ${formData.paymentStatus === 'unpaid' ? 'grid-cols-1' : 'grid-cols-2'} gap-2`}>
+                                                <div className={`grid ${formData.paymentStatus === 'downpayment' ? 'grid-cols-1' : 'grid-cols-2'} gap-2`}>
                                                     <Select value={formData.paymentStatus} onValueChange={(val: PaymentStatus) => setFormData({ ...formData, paymentStatus: val })}>
                                                         <SelectTrigger className="h-9 text-xs bg-white border-gray-200"><SelectValue /></SelectTrigger>
                                                         <SelectContent>
-                                                            <SelectItem value="unpaid">Unpaid</SelectItem>
-                                                            <SelectItem value="partial">Partial</SelectItem>
-                                                            <SelectItem value="paid">Paid</SelectItem>
+                                                            <SelectItem value="downpayment">Unpaid</SelectItem>
+                                                            <SelectItem value="downpayment">Partial</SelectItem>
+                                                            <SelectItem value="fully-paid">Paid</SelectItem>
                                                         </SelectContent>
                                                     </Select>
-                                                    {formData.paymentStatus !== 'unpaid' && (
+                                                    {formData.paymentStatus !== 'downpayment' && (
                                                         <Select value={formData.paymentMethod} onValueChange={(val: PaymentMethod) => setFormData({ ...formData, paymentMethod: val })}>
                                                             <SelectTrigger className="h-9 text-xs bg-white border-gray-200"><SelectValue placeholder="Method" /></SelectTrigger>
                                                             <SelectContent>
@@ -534,7 +535,7 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave, hide
                                             </div>
                                         </div>
 
-                                        {['gcash', 'maya'].includes(formData.paymentMethod) && (formData.paymentStatus === 'paid' || formData.paymentStatus === 'partial') && (
+                                        {['gcash', 'maya'].includes(formData.paymentMethod) && (formData.paymentStatus === 'fully-paid' || formData.paymentStatus === 'downpayment') && (
                                             <div className="pt-2">
                                                 <Label className={LABEL_STYLE}>Reference Number</Label>
                                                 <Input

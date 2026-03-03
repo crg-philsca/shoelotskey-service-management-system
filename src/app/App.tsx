@@ -7,6 +7,7 @@ import ResetPassword from '@/app/pages/ResetPassword';
 import Layout from '@/app/components/Layout';
 import { OrderProvider } from '@/app/context/OrderContext';
 import { ExpenseProvider } from '@/app/context/ExpenseContext';
+import { ServiceProvider } from '@/app/context/ServiceContext';
 
 // Lazy-loaded pages for code splitting
 const Dashboard = lazy(() => import('@/app/pages/Dashboard'));
@@ -22,8 +23,6 @@ const ActivityHistory = lazy(() => import('@/app/pages/ActivityHistory'));
 const TotalSales = lazy(() => import('@/app/pages/TotalSales'));
 const TotalOrders = lazy(() => import('@/app/pages/TotalOrders'));
 const Expenses = lazy(() => import('@/app/pages/Expenses'));
-const ProfileSettings = lazy(() => import('@/app/pages/ProfileSettings'));
-
 // Loading fallback component
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-screen">
@@ -52,12 +51,6 @@ export default function App() {
     setUser({ username, email: `${username}@shoelotskey.com`, role });
   };
 
-  const handleUpdateUser = (username: string, email: string) => {
-    if (user) {
-      setUser({ ...user, username, email });
-    }
-  };
-
   const handleLogout = () => {
     setUser(null);
   };
@@ -80,34 +73,35 @@ export default function App() {
     <BrowserRouter>
       <OrderProvider>
         <ExpenseProvider>
-          <Layout user={user} onLogout={handleLogout} headerAction={headerActionRight}>
-            <Suspense fallback={<PageLoader />}>
-              <Routes>
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                <Route
-                  path="/dashboard"
-                  element={<Dashboard user={user} onSetHeaderActionRight={setHeaderActionRight} />}
-                />
-                <Route path="/service-intake" element={<ServiceIntake user={user} onSetHeaderActionRight={setHeaderActionRight} />} />
-                <Route path="/job-orders" element={<JobOrders user={user} onSetHeaderAction={setHeaderActionRight} />} />
-                <Route path="/calendar" element={<CalendarView onSetHeaderActionRight={setHeaderActionRight} />} />
-                <Route path="/claim-monitoring" element={<ClaimMonitoring />} />
-                <Route path="/activity-history" element={<ActivityHistory />} />
-                <Route path="/total-sales" element={<TotalSales onSetHeaderActionRight={setHeaderActionRight} />} />
-                <Route path="/total-orders" element={<TotalOrders onSetHeaderActionRight={setHeaderActionRight} />} />
-                <Route path="/expenses" element={<Expenses onSetHeaderActionRight={setHeaderActionRight} />} />
-                <Route path="/settings" element={<ProfileSettings user={user} onUpdateUser={handleUpdateUser} />} />
-                {user.role === 'owner' && (
-                  <>
-                    <Route path="/reports" element={<Reports onSetHeaderActionRight={setHeaderActionRight} />} />
-                    <Route path="/service-management" element={<ServiceManagement onSetHeaderActionRight={setHeaderActionRight} />} />
-                    <Route path="/user-management" element={<UserManagement onSetHeaderAction={setHeaderActionRight} />} />
-                  </>
-                )}
-                <Route path="*" element={<Navigate to="/dashboard" replace />} />
-              </Routes>
-            </Suspense>
-          </Layout>
+          <ServiceProvider>
+            <Layout user={user} onLogout={handleLogout} headerAction={headerActionRight}>
+              <Suspense fallback={<PageLoader />}>
+                <Routes>
+                  <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                  <Route
+                    path="/dashboard"
+                    element={<Dashboard user={user} onSetHeaderActionRight={setHeaderActionRight} />}
+                  />
+                  <Route path="/service-intake" element={<ServiceIntake user={user} onSetHeaderActionRight={setHeaderActionRight} />} />
+                  <Route path="/job-orders" element={<JobOrders user={user} onSetHeaderAction={setHeaderActionRight} />} />
+                  <Route path="/calendar" element={<CalendarView onSetHeaderActionRight={setHeaderActionRight} />} />
+                  <Route path="/claim-monitoring" element={<ClaimMonitoring />} />
+                  <Route path="/activity-history" element={<ActivityHistory />} />
+                  <Route path="/total-sales" element={<TotalSales onSetHeaderActionRight={setHeaderActionRight} />} />
+                  <Route path="/total-orders" element={<TotalOrders onSetHeaderActionRight={setHeaderActionRight} />} />
+                  <Route path="/expenses" element={<Expenses onSetHeaderActionRight={setHeaderActionRight} />} />
+                  {user.role === 'owner' && (
+                    <>
+                      <Route path="/reports" element={<Reports onSetHeaderActionRight={setHeaderActionRight} />} />
+                      <Route path="/service-management" element={<ServiceManagement onSetHeaderActionRight={setHeaderActionRight} />} />
+                      <Route path="/user-management" element={<UserManagement onSetHeaderAction={setHeaderActionRight} />} />
+                    </>
+                  )}
+                  <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                </Routes>
+              </Suspense>
+            </Layout>
+          </ServiceProvider>
         </ExpenseProvider>
       </OrderProvider>
       <Toaster className="dashboard-toaster" />

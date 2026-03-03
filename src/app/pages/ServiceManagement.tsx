@@ -2,21 +2,19 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
-
-import { mockServices } from '@/app/lib/mockData';
 import { Badge } from '@/app/components/ui/badge';
 import { PlusCircle, Edit, Trash, History } from 'lucide-react';
 import ServiceModal from '@/app/components/ServiceModal';
 
 import { Service } from '@/app/types';
-
+import { useServices } from '@/app/context/ServiceContext';
 
 interface ServiceManagementProps {
   onSetHeaderActionRight?: (action: React.ReactNode | null) => void;
 }
 
 export default function ServiceManagement({ onSetHeaderActionRight }: ServiceManagementProps) {
-  const [services, setServices] = useState<Service[]>(mockServices);
+  const { services, addService, updateService, deleteService } = useServices();
   const [serviceModalOpen, setServiceModalOpen] = useState(false); // Renamed from isModalOpen
   const [selectedService, setSelectedService] = useState<Service | null>(null); // Renamed from editingService
   const navigate = useNavigate();
@@ -50,13 +48,12 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
   }, [onSetHeaderActionRight]);
 
   const handleSaveService = (service: Service) => {
-    setServices(prev => {
-      const exists = prev.find(s => s.id === service.id);
-      if (exists) {
-        return prev.map(s => s.id === service.id ? service : s);
-      }
-      return [...prev, service];
-    });
+    const exists = services.find(s => s.id === service.id);
+    if (exists) {
+      updateService(service.id, service);
+    } else {
+      addService(service);
+    }
   };
 
   const handleEditService = (service: Service) => {
@@ -66,7 +63,7 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
 
   const handleDeleteService = (id: string) => {
     if (confirm('Are you sure you want to delete this service?')) {
-      setServices(prev => prev.filter(s => s.id !== id));
+      deleteService(id);
     }
   };
 

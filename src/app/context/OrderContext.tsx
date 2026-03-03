@@ -13,7 +13,7 @@ const OrderContext = createContext<OrderContextType | undefined>(undefined);
 export function OrderProvider({ children }: { children: ReactNode }) {
     // Initialize with saved data or mock data
     const [orders, setOrders] = useState<JobOrder[]>(() => {
-        const saved = localStorage.getItem('jobOrders_v17');
+        const saved = localStorage.getItem('jobOrders_v19');
         if (saved) {
             const parsed = JSON.parse(saved);
             return parsed.map((order: any) => ({
@@ -34,7 +34,7 @@ export function OrderProvider({ children }: { children: ReactNode }) {
 
     // Persist to localStorage whenever orders change
     useEffect(() => {
-        localStorage.setItem('jobOrders_v17', JSON.stringify(orders));
+        localStorage.setItem('jobOrders_v19', JSON.stringify(orders));
     }, [orders]);
 
     const addOrder = (order: JobOrder) => {

@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
-import { mockServices } from '@/app/lib/mockData';
+import { useServices } from '@/app/context/ServiceContext';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { useState, useEffect, useMemo } from 'react';
 
@@ -22,6 +22,7 @@ export default function Reports({ onSetHeaderActionRight }: ReportsProps) {
   const navigate = useNavigate();
   const { orders: allOrders } = useOrders();
   const { expenses } = useExpenses();
+  const { services } = useServices();
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('all');
   const [dateRange, setDateRange] = useState<string>('daily');
 
@@ -63,7 +64,7 @@ export default function Reports({ onSetHeaderActionRight }: ReportsProps) {
 
   // Total Sales & Analytics Data (All Paid Orders)
   const totalSalesData = useMemo(() => {
-    return filteredOrdersByDate.filter((order: JobOrder) => order.paymentStatus === 'paid');
+    return filteredOrdersByDate.filter((order: JobOrder) => order.paymentStatus === 'fully-paid');
   }, [filteredOrdersByDate]);
 
   // 3. CHART & METRIC DATA
@@ -109,8 +110,8 @@ export default function Reports({ onSetHeaderActionRight }: ReportsProps) {
 
   // Sales by Service Type (Total Sales)
   const serviceVolume = useMemo(() => {
-    return mockServices
-      .filter(s => s.category === 'base')
+    return services
+      .filter(s => s.category === 'base' && s.active)
       .map((service) => {
         const cleanName = service.name.replace(' (with basic cleaning)', '');
         let fillColor = '#dc2626'; // default

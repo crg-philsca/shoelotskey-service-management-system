@@ -14,12 +14,10 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/app/components/ui/dropdown-menu';
 import { toast } from 'sonner';
-import { mockServices } from '@/app/lib/mockData';
+import { useServices } from '@/app/context/ServiceContext';
 import { useOrders } from '@/app/context/OrderContext';
 import { useExpenses } from '@/app/context/ExpenseContext';
 import AddExpenseModal from '@/app/components/AddExpenseModal';
@@ -34,7 +32,6 @@ import {
   Edit,
   ArrowRight,
   PlusCircle,
-  X,
   Filter,
   RotateCcw,
   Clock7,
@@ -92,9 +89,10 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
   const [processClaimOrder, setProcessClaimOrder] = useState<JobOrder | null>(null);
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const { expenses, addExpense } = useExpenses();
+  const { services } = useServices();
   const itemsPerPage = 10;
 
-  const baseServices = mockServices.filter(s => s.category === 'base');
+  const baseServices = services.filter(s => s.category === 'base' && s.active);
 
   const filteredOrders = useMemo(() => {
     const now = new Date();
@@ -128,7 +126,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
 
   const totalPendingPayments = useMemo(() => {
     return filteredOrders.reduce((sum, order) => {
-      if (order.paymentStatus === 'paid') return sum;
+      if (order.paymentStatus === 'fully-paid') return sum;
       return sum + (order.grandTotal - (order.amountReceived || 0));
     }, 0);
   }, [filteredOrders]);
@@ -763,8 +761,11 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
 
                     // Sort: Recently updated/created first, then by priority, then by Order Number descending
                     filtered.sort((a, b) => {
-                      const timeA = new Date(a.updatedAt || a.createdAt).getTime();
-                      const timeB = new Date(b.updatedAt || b.createdAt).getTime();
+                      const lastStatusTimeA = a.statusHistory?.length ? new Date(a.statusHistory[a.statusHistory.length - 1].timestamp).getTime() : 0;
+                      const timeA = lastStatusTimeA || new Date(a.updatedAt || a.createdAt).getTime();
+
+                      const lastStatusTimeB = b.statusHistory?.length ? new Date(b.statusHistory[b.statusHistory.length - 1].timestamp).getTime() : 0;
+                      const timeB = lastStatusTimeB || new Date(b.updatedAt || b.createdAt).getTime();
 
                       const validA = !isNaN(timeA) ? timeA : 0;
                       const validB = !isNaN(timeB) ? timeB : 0;
@@ -1175,7 +1176,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
-                      {selectedOrder.paymentMethod && selectedOrder.paymentStatus !== 'unpaid' && (
+                      {selectedOrder.paymentMethod && selectedOrder.paymentStatus !== 'downpayment' && (
                         <div>
                           <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Method</Label>
                           <p className="text-sm font-bold text-gray-800 uppercase">
@@ -1185,19 +1186,19 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                       )}
                       <div>
                         <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Payment Status</Label>
-                        <span className={`text-sm font-black uppercase ${selectedOrder.paymentStatus === 'paid' ? 'text-green-600' :
-                          selectedOrder.paymentStatus === 'partial' ? 'text-yellow-600' : 'text-red-500'
+                        <span className={`text-sm font-black uppercase ${selectedOrder.paymentStatus === 'fully-paid' ? 'text-green-600' :
+                          selectedOrder.paymentStatus === 'downpayment' ? 'text-yellow-600' : 'text-red-500'
                           }`}>
-                          {selectedOrder.paymentStatus || 'unpaid'}
+                          {selectedOrder.paymentStatus || 'downpayment'}
                         </span>
                       </div>
-                      {['gcash', 'maya'].includes(selectedOrder.paymentMethod?.toLowerCase()) && (selectedOrder.paymentStatus === 'paid' || selectedOrder.paymentStatus === 'partial') && (
+                      {['gcash', 'maya'].includes(selectedOrder.paymentMethod?.toLowerCase()) && (selectedOrder.paymentStatus === 'fully-paid' || selectedOrder.paymentStatus === 'downpayment') && (
                         <div className="col-span-2">
                           <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Reference Number</Label>
                           <p className="text-sm font-bold text-gray-800 font-mono tracking-tight">{selectedOrder.referenceNo || '-'}</p>
                         </div>
                       )}
-                      {selectedOrder.paymentStatus !== 'unpaid' && (
+                      {selectedOrder.paymentStatus !== 'downpayment' && (
                         <>
                           <div>
                             <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Amount Received</Label>
@@ -1209,7 +1210,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                           </div>
                         </>
                       )}
-                      {(selectedOrder.paymentStatus === 'unpaid' || selectedOrder.paymentStatus === 'partial') && (
+                      {(selectedOrder.paymentStatus === 'downpayment') && (
                         <div>
                           <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Remaining Balance</Label>
                           <p className="text-sm font-black uppercase tracking-wider text-red-600">
@@ -1486,7 +1487,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                               }}
                             />
                             <Bar dataKey="value" radius={[8, 8, 0, 0]}>
-                              {staffPerformance.data.map((item, idx) => (
+                              {staffPerformance.data.map((item) => (
                                 <Cell key={item.label} fill={item.color} />
                               ))}
                             </Bar>

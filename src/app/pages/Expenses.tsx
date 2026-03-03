@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useExpenses } from '@/app/context/ExpenseContext';
-import { ArrowLeft, ChevronLeft, PlusCircle, Receipt, Calendar as CalendarIcon, ChevronRight, Filter, Search, ChevronDown, Wallet, Gauge } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, PlusCircle, Receipt, Calendar as CalendarIcon, ChevronRight, Filter, Search, ChevronDown, Wallet } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/app/components/ui/table';
@@ -141,8 +141,6 @@ export default function Expenses({ onSetHeaderActionRight }: ExpensesProps) {
     }, [expenses, profitRange, filterCategory, startDate, endDate, minAmount, maxAmount, searchQuery]);
 
     const totalExpensesFiltered = filteredExpenses.reduce((sum, exp) => sum + exp.amount, 0);
-    const averageExpenseFiltered = filteredExpenses.length > 0 ? Math.round(totalExpensesFiltered / filteredExpenses.length) : 0;
-
 
     const totalPages = Math.ceil(filteredExpenses.length / itemsPerPage) || 1;
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -157,7 +155,7 @@ export default function Expenses({ onSetHeaderActionRight }: ExpensesProps) {
     return (
         <div className="space-y-6">
             {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Card className="border-none shadow-lg bg-gradient-to-br from-red-50 to-white overflow-hidden">
                     <CardContent className="pt-6 pb-4">
                         <div className="flex items-center gap-2 mb-2">
@@ -182,19 +180,7 @@ export default function Expenses({ onSetHeaderActionRight }: ExpensesProps) {
                     </CardContent>
                 </Card>
 
-                <Card className="border-none shadow-lg bg-gradient-to-br from-blue-50 to-white">
-                    <CardContent className="pt-6 pb-4">
-                        <div className="flex items-center gap-2 mb-2">
-                            <div className="p-2 rounded-lg bg-blue-100 text-blue-600">
-                                <Gauge size={18} />
-                            </div>
-                            <p className="text-xs font-black uppercase tracking-wider text-gray-500">Average Expense</p>
-                        </div>
-                        <p className="text-4xl font-black text-blue-600 tracking-tight">
-                            ₱{averageExpenseFiltered.toLocaleString()}
-                        </p>
-                    </CardContent>
-                </Card>
+
             </div>
 
             {/* Expenses Table */}

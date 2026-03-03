@@ -1,5 +1,5 @@
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, FileText, Calendar, Activity, Wrench, Users, LogOut, ChevronLeft, ChevronRight, Settings, Menu } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
+import { LayoutDashboard, FileText, Calendar, Activity, Wrench, Users, LogOut, ChevronLeft, ChevronRight, Menu } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/app/components/ui/tooltip';
 import { Sheet, SheetContent, SheetTrigger } from '@/app/components/ui/sheet';
@@ -15,7 +15,7 @@ interface LayoutProps {
 
 export default function Layout({ children, user, onLogout, headerAction, headerActionLeft }: LayoutProps) {
   const location = useLocation();
-  const navigate = useNavigate();
+
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -51,7 +51,6 @@ export default function Layout({ children, user, onLogout, headerAction, headerA
     '/expenses': 'Expenses',
     '/claim-monitoring': 'CLAIM RECORD',
     '/activity-history': 'Activity History',
-    '/settings': 'Profile Settings',
   };
 
   const menuItems = user.role === 'owner' ? ownerMenuItems : staffMenuItems;
@@ -115,28 +114,6 @@ export default function Layout({ children, user, onLogout, headerAction, headerA
 
       <div className={`border-t border-red-500 ${collapsed ? 'flex flex-col items-center gap-2 py-4' : 'p-4 space-y-2'}`}>
         <TooltipProvider>
-          <Tooltip delayDuration={300}>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={() => navigate('/settings')}
-                className={`${collapsed ? 'flex flex-col items-center justify-center gap-1 h-auto p-2 w-full' : 'flex flex-row items-center gap-3 px-4 py-3 w-full'} rounded-lg bg-transparent text-red-100 hover:bg-red-600 hover:text-white transition-colors`}
-              >
-                <Settings size={20} />
-                {collapsed ? (
-                  <span className="text-[10px] leading-tight text-center w-full break-normal font-bold">Settings</span>
-                ) : (
-                  <span className="text-sm font-bold">Profile Settings</span>
-                )}
-              </button>
-            </TooltipTrigger>
-            {collapsed && (
-              <TooltipContent side="right" className="bg-red-700 text-white border border-red-600">
-                Profile Settings
-              </TooltipContent>
-            )}
-          </Tooltip>
-
           <Tooltip delayDuration={300}>
             <TooltipTrigger asChild>
               <button

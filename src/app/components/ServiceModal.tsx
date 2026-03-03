@@ -19,6 +19,8 @@ export default function ServiceModal({ isOpen, onClose, service, onSave }: Servi
     const [price, setPrice] = useState('');
     const [category, setCategory] = useState<'base' | 'addon' | 'priority'>('base');
     const [active, setActive] = useState(true);
+    const [durationDays, setDurationDays] = useState('');
+    const [code, setCode] = useState('');
 
     // Initialize form when service prop changes or modal opens
     useEffect(() => {
@@ -28,12 +30,16 @@ export default function ServiceModal({ isOpen, onClose, service, onSave }: Servi
                 setPrice(service.price.toString());
                 setCategory(service.category);
                 setActive(service.active);
+                setDurationDays(service.durationDays !== undefined ? service.durationDays.toString() : '');
+                setCode(service.code || '');
             } else {
                 // Reset for new service
                 setName('');
                 setPrice('');
                 setCategory('base');
                 setActive(true);
+                setDurationDays('');
+                setCode('');
             }
         }
     }, [isOpen, service]);
@@ -48,7 +54,9 @@ export default function ServiceModal({ isOpen, onClose, service, onSave }: Servi
             name,
             price: parseFloat(price),
             category,
-            active
+            active,
+            ...(durationDays ? { durationDays: durationDays } : {}),
+            ...(code ? { code } : {})
         };
 
         onSave(newService);
@@ -106,6 +114,42 @@ export default function ServiceModal({ isOpen, onClose, service, onSave }: Servi
                                     <SelectItem value="priority">Priority Fee</SelectItem>
                                 </SelectContent>
                             </Select>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="durationDays" className="text-xs font-bold uppercase tracking-widest text-gray-500">
+                                Service Duration (Days)
+                            </Label>
+                            <p className="text-[10px] text-gray-400 mt-0 leading-tight">
+                                {category === 'priority' ? 'Use negative values for rush reduction (e.g., -1)' : 'Positive values extend service duration'}
+                            </p>
+                            <Input
+                                id="durationDays"
+                                type="text"
+                                value={durationDays}
+                                onChange={(e) => setDurationDays(e.target.value)}
+                                className="font-medium border-red-200 focus-visible:ring-0 focus-visible:border-red-600"
+                                placeholder={category === 'priority' ? '-1' : '10 or 7-10'}
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="serviceCode" className="text-xs font-bold uppercase tracking-widest text-gray-500">
+                                Service Code
+                            </Label>
+                            <p className="text-[10px] text-gray-400 mt-0 leading-tight">
+                                Optional code indicator for the service
+                            </p>
+                            <Input
+                                id="serviceCode"
+                                type="text"
+                                value={code}
+                                onChange={(e) => setCode(e.target.value)}
+                                className="font-medium border-red-200 focus-visible:ring-0 focus-visible:border-red-600 uppercase"
+                                placeholder="e.g. BC"
+                            />
                         </div>
                     </div>
 

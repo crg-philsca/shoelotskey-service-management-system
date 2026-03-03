@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/app/componen
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu';
 import { Search, Filter, MoreVertical, Edit, ArrowRight, RotateCcw, User, Phone, Clock, CreditCard, Tag, MapPin, UserPlus, Calendar as CalendarIcon } from 'lucide-react';
 import { format as dateFnsFormat } from 'date-fns';
-import { mockServices } from '@/app/lib/mockData';
+import { useServices } from '@/app/context/ServiceContext';
 import EditOrderModal from '@/app/components/EditOrderModal';
 import ServiceIntakeModal from '@/app/components/ServiceIntakeModal';
 import { toast } from 'sonner';
@@ -23,6 +23,7 @@ interface JobOrdersProps {
 
 export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
     const { orders, updateOrder } = useOrders();
+    const { services } = useServices();
     const [searchQuery, setSearchQuery] = useState('');
     const [filterStatus, setFilterStatus] = useState<string>('all');
     const [filterService, setFilterService] = useState<string>('all');
@@ -74,8 +75,11 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
 
     // Sort: Recently updated first (move to status moves to top), then rush, then sequence
     filteredOrders.sort((a: JobOrder, b: JobOrder) => {
-        const timeA = new Date(a.updatedAt || a.createdAt).getTime();
-        const timeB = new Date(b.updatedAt || b.createdAt).getTime();
+        const lastStatusTimeA = a.statusHistory?.length ? new Date(a.statusHistory[a.statusHistory.length - 1].timestamp).getTime() : 0;
+        const timeA = lastStatusTimeA || new Date(a.updatedAt || a.createdAt).getTime();
+
+        const lastStatusTimeB = b.statusHistory?.length ? new Date(b.statusHistory[b.statusHistory.length - 1].timestamp).getTime() : 0;
+        const timeB = lastStatusTimeB || new Date(b.updatedAt || b.createdAt).getTime();
 
         const validA = !isNaN(timeA) ? timeA : 0;
         const validB = !isNaN(timeB) ? timeB : 0;
@@ -95,7 +99,7 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
     const startIdx = (currentPage - 1) * itemsPerPage;
     const paginatedOrders = filteredOrders.slice(startIdx, startIdx + itemsPerPage);
 
-    const baseServices = mockServices.filter(s => s.category === 'base');
+    const baseServices = services.filter(s => s.category === 'base' && s.active);
 
     const handleSelectAll = (checked: boolean) => {
         if (checked) {
@@ -239,8 +243,8 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                                 </span>
                                             </td>
                                             <td className="p-4">
-                                                <span className={`text-xs font-bold ${order.paymentStatus === 'paid' ? 'text-green-600' :
-                                                    order.paymentStatus === 'partial' ? 'text-yellow-600' : 'text-red-600'
+                                                <span className={`text-xs font-bold ${order.paymentStatus === 'fully-paid' ? 'text-green-600' :
+                                                    order.paymentStatus === 'downpayment' ? 'text-yellow-600' : 'text-red-600'
                                                     }`}>
                                                     {order.paymentStatus.toUpperCase()}
                                                 </span>
@@ -585,7 +589,7 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">
-                                    {selectedOrder.paymentMethod && selectedOrder.paymentStatus !== 'unpaid' && (
+                                    {selectedOrder.paymentMethod && selectedOrder.paymentStatus !== 'downpayment' && (
                                         <div>
                                             <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Method</Label>
                                             <p className="text-sm font-bold text-gray-800 uppercase">
@@ -595,19 +599,19 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                     )}
                                     <div>
                                         <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Payment Status</Label>
-                                        <span className={`text-sm font-black uppercase ${selectedOrder.paymentStatus === 'paid' ? 'text-green-600' :
-                                            selectedOrder.paymentStatus === 'partial' ? 'text-yellow-600' : 'text-red-500'
+                                        <span className={`text-sm font-black uppercase ${selectedOrder.paymentStatus === 'fully-paid' ? 'text-green-600' :
+                                            selectedOrder.paymentStatus === 'downpayment' ? 'text-yellow-600' : 'text-red-500'
                                             }`}>
-                                            {selectedOrder.paymentStatus || 'unpaid'}
+                                            {selectedOrder.paymentStatus || 'downpayment'}
                                         </span>
                                     </div>
-                                    {['gcash', 'maya'].includes(selectedOrder.paymentMethod?.toLowerCase()) && (selectedOrder.paymentStatus === 'paid' || selectedOrder.paymentStatus === 'partial') && (
+                                    {['gcash', 'maya'].includes(selectedOrder.paymentMethod?.toLowerCase()) && (selectedOrder.paymentStatus === 'fully-paid' || selectedOrder.paymentStatus === 'downpayment') && (
                                         <div className="col-span-2">
                                             <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Reference Number</Label>
                                             <p className="text-sm font-bold text-gray-800 font-mono tracking-tight">{selectedOrder.referenceNo || '-'}</p>
                                         </div>
                                     )}
-                                    {selectedOrder.paymentStatus !== 'unpaid' && (
+                                    {selectedOrder.paymentStatus !== 'downpayment' && (
                                         <>
                                             <div>
                                                 <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Amount Received</Label>
@@ -619,7 +623,7 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                             </div>
                                         </>
                                     )}
-                                    {(selectedOrder.paymentStatus === 'unpaid' || selectedOrder.paymentStatus === 'partial') && (
+                                    {(selectedOrder.paymentStatus === 'downpayment') && (
                                         <div>
                                             <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Remaining Balance</Label>
                                             <p className="text-sm font-black uppercase tracking-wider text-red-600">

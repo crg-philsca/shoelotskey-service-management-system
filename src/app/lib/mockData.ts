@@ -3,24 +3,28 @@ import { Service, JobOrder, JobStatus, Shelf, Priority, PaymentMethod } from '@/
 // Services based on the pricing image
 export const mockServices: Service[] = [
   // Base Services
-  { id: '1', name: 'Basic Cleaning', price: 325, category: 'base', active: true, description: 'Standard shoe cleaning service' },
-  { id: '2', name: 'Minor Reglue', price: 125, category: 'base', active: true, description: 'Minor regluing' },
-  { id: '3', name: 'Full Reglue', price: 250, category: 'base', active: true, description: 'Full regluing' },
-  { id: '4', name: 'Color Renewal', price: 325, category: 'base', active: true },
+  { id: '1', name: 'Basic Cleaning', price: 325, category: 'base', active: true, description: 'Standard shoe cleaning service', durationDays: 10, code: 'BCN' },
+  { id: '2', name: 'Minor Reglue', price: 125, category: 'base', active: true, description: 'Minor regluing', durationDays: 25, code: 'MRG' },
+  { id: '3', name: 'Full Reglue', price: 250, category: 'base', active: true, description: 'Full regluing', durationDays: 25, code: 'FRG' },
+  { id: '4', name: 'Color Renewal', price: 325, category: 'base', active: true, durationDays: 15, code: 'CR2' },
 
   // Add-ons
-  { id: '6', name: 'Unyellowing', price: 125, category: 'addon', active: true },
-  { id: '12', name: 'White Paint', price: 150, category: 'addon', active: true },
-  { id: '7', name: 'Minor Retouch', price: 125, category: 'addon', active: true },
-  { id: '8', name: 'Another Layer', price: 150, category: 'addon', active: true },
-  { id: '9', name: 'Minor Restoration', price: 225, category: 'addon', active: true },
-  { id: '10', name: '2 Colors', price: 375, category: 'addon', active: true },
-  { id: '11', name: '3 Colors', price: 475, category: 'addon', active: true },
-  { id: '17', name: 'Premium Glue', price: 1530, category: 'addon', active: true },
-  { id: '13', name: 'Rush Fee (Basic Cleaning)', price: 150, category: 'priority', active: true },
-  { id: '14', name: 'Rush Fee (Minor Reglue)', price: 250, category: 'priority', active: true },
-  { id: '15', name: 'Rush Fee (Full Reglue)', price: 250, category: 'priority', active: true },
-  { id: '16', name: 'Premium Fee (Color Renewal)', price: 1000, category: 'priority', active: true },
+  { id: '6', name: 'Unyellowing', price: 125, category: 'addon', active: true, durationDays: 5, code: 'UNY' },
+  { id: '12', name: 'White Paint', price: 150, category: 'addon', active: true, durationDays: 2, code: 'WPT' },
+  { id: '7', name: 'Minor Retouch', price: 125, category: 'addon', active: true, durationDays: 5, code: 'MRT' },
+  { id: '8', name: 'Add Glue Layer', price: 150, category: 'addon', active: true, durationDays: 1, code: 'AGL' },
+  { id: '9', name: 'Minor Restoration', price: 225, category: 'addon', active: true, durationDays: 5, code: 'MRS' },
+  { id: '10', name: '2 Colors', price: 375, category: 'addon', active: true, durationDays: 25, code: 'CR2' },
+  { id: '11', name: '3 Colors', price: 475, category: 'addon', active: true, durationDays: 25, code: 'CR3' },
+  { id: '17', name: 'Premium Glue', price: 1530, category: 'addon', active: true, durationDays: 25, code: 'PMG' },
+  { id: '18', name: 'Middlesole Glue', price: 150, category: 'addon', active: true, durationDays: 25, code: 'FMG' },
+  { id: '19', name: 'Undersole Glue', price: 150, category: 'addon', active: true, durationDays: 25, code: 'FUG' },
+
+  // Priority
+  { id: '13', name: 'Rush Fee (Basic Cleaning)', price: 150, category: 'priority', active: true, durationDays: -9 }, // (reduces 10 to 1 ideally, but wait if handled additively it's -9 days)
+  { id: '14', name: 'Rush Fee (Minor Reglue)', price: 250, category: 'priority', active: true, durationDays: -1 }, // "-1 day reduction" based on prompt
+  { id: '15', name: 'Rush Fee (Full Reglue)', price: 250, category: 'priority', active: true, durationDays: -1 },
+  { id: '16', name: 'Premium Fee (Color Renewal)', price: 1000, category: 'priority', active: true, durationDays: -2 },
 ];
 
 const customerNames = [
@@ -61,15 +65,13 @@ function generateMockOrders(): JobOrder[] {
   return orderConfigs.map((config, i) => {
     const sequenceId = i + 1;
     const orderTime = new Date(today);
+    orderTime.setHours(0, 1, 0, 0); // Start of day
 
-    // Spreading intake from 09:00 to 18:00
-    if (i === 0) {
-      orderTime.setHours(9, 38, 0, 0);
-    } else {
-      const hour = 9 + Math.floor((i * 9) / 14);
-      const minute = (i * 17) % 60;
-      orderTime.setHours(hour, minute, 0, 0);
-    }
+    // Spread orders evenly up to 2.5 hours ago to ensure 'claims' (+2 hours) stay in the past relative to right now.
+    // If it's very early morning, they will just be packed around midnight.
+    const availableMs = Math.max(0, today.getTime() - orderTime.getTime() - (2.5 * 60 * 60 * 1000));
+    const offset = (availableMs / 14) * i;
+    orderTime.setTime(orderTime.getTime() + offset);
 
     const customerName = customerNames[i % customerNames.length];
     const baseService = mockServices.find(s => s.name === config.service)!;
@@ -121,7 +123,7 @@ function generateMockOrders(): JobOrder[] {
       grandTotal,
       shippingPreference: 'pickup',
       paymentMethod: config.paymentMethod || 'cash',
-      paymentStatus: isClaimed ? 'paid' : (i % 3 === 0 ? 'paid' : 'unpaid'),
+      paymentStatus: isClaimed ? 'fully-paid' : (i % 3 === 0 ? 'fully-paid' : 'downpayment'),
       amountReceived: isClaimed || (i % 3 === 0) ? grandTotal : 0,
       transactionDate: orderTime,
       createdAt: orderTime,

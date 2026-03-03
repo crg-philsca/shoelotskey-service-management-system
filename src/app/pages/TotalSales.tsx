@@ -11,11 +11,10 @@ import {
     Search,
     Calendar as CalendarIcon,
     ChevronDown,
-    Wallet,
+
     LineChart,
-    Activity,
+
     TrendingUp,
-    TrendingDown,
 } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
@@ -24,7 +23,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/app/componen
 import { Input } from '@/app/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu';
-import { mockServices } from '@/app/lib/mockData';
+import { useServices } from '@/app/context/ServiceContext';
 
 type TotalSalesProps = {
     onSetHeaderActionRight?: (action: ReactNode | null) => void;
@@ -54,7 +53,8 @@ export default function TotalSales({ onSetHeaderActionRight }: TotalSalesProps) 
         return `${mm}/${dd}/${yy} ${hh}:${min}`;
     };
 
-    const baseServices = mockServices.filter((s) => s.category === 'base');
+    const { services } = useServices();
+    const baseServices = services.filter((s) => s.category === 'base' && s.active);
 
     useEffect(() => {
         if (!onSetHeaderActionRight) return;
@@ -107,7 +107,7 @@ export default function TotalSales({ onSetHeaderActionRight }: TotalSalesProps) 
         };
 
         return orders
-            .filter((order: JobOrder) => order.paymentStatus === 'paid')
+            .filter((order: JobOrder) => order.paymentStatus === 'fully-paid')
             .filter((order: JobOrder) => isWithinRange(new Date(order.transactionDate || order.createdAt)));
     }, [orders, profitRange]);
 
@@ -141,8 +141,11 @@ export default function TotalSales({ onSetHeaderActionRight }: TotalSalesProps) 
 
         // Sort: Recently updated/created first, then by priority, then by Order Number descending
         filtered.sort((a, b) => {
-            const timeA = new Date(a.updatedAt || a.createdAt).getTime();
-            const timeB = new Date(b.updatedAt || b.createdAt).getTime();
+            const lastStatusTimeA = a.statusHistory?.length ? new Date(a.statusHistory[a.statusHistory.length - 1].timestamp).getTime() : 0;
+            const timeA = lastStatusTimeA || new Date(a.updatedAt || a.createdAt).getTime();
+
+            const lastStatusTimeB = b.statusHistory?.length ? new Date(b.statusHistory[b.statusHistory.length - 1].timestamp).getTime() : 0;
+            const timeB = lastStatusTimeB || new Date(b.updatedAt || b.createdAt).getTime();
 
             const validA = !isNaN(timeA) ? timeA : 0;
             const validB = !isNaN(timeB) ? timeB : 0;
@@ -162,8 +165,6 @@ export default function TotalSales({ onSetHeaderActionRight }: TotalSalesProps) 
     }, [salesOrders, filterService, filterPriority, startDate, endDate, searchQuery]);
 
     const totalSales = filteredOrders.reduce((sum: number, order: JobOrder) => sum + (order.amountReceived || 0), 0);
-    const averageSale = filteredOrders.length > 0 ? totalSales / filteredOrders.length : 0;
-
     const totalPages = Math.ceil(filteredOrders.length / itemsPerPage) || 1;
     const startIndex = (currentPage - 1) * itemsPerPage;
     const paginatedOrders = filteredOrders.slice(startIndex, startIndex + itemsPerPage);
@@ -181,7 +182,7 @@ export default function TotalSales({ onSetHeaderActionRight }: TotalSalesProps) 
 
     return (
         <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <Card className="border-none shadow-lg bg-gradient-to-br from-green-50 to-white">
                     <CardContent className="pt-6 pb-4">
                         <div className="flex items-center gap-2 mb-2">
@@ -191,30 +192,6 @@ export default function TotalSales({ onSetHeaderActionRight }: TotalSalesProps) 
                             <p className="text-xs font-black uppercase tracking-wider text-gray-500">Total Sales</p>
                         </div>
                         <p className="text-3xl font-black text-green-700 tracking-tight">₱{totalSales.toLocaleString()}</p>
-                    </CardContent>
-                </Card>
-
-                <Card className="border-none shadow-lg bg-gradient-to-br from-blue-50 to-white">
-                    <CardContent className="pt-6 pb-4">
-                        <div className="flex items-center gap-2 mb-2">
-                            <div className="p-2 rounded-lg bg-blue-100 text-blue-700">
-                                <Wallet className="h-4 w-4" />
-                            </div>
-                            <p className="text-xs font-black uppercase tracking-wider text-gray-500">Paid Orders</p>
-                        </div>
-                        <p className="text-3xl font-black text-blue-700 tracking-tight">{filteredOrders.length}</p>
-                    </CardContent>
-                </Card>
-
-                <Card className="border-none shadow-lg bg-gradient-to-br from-purple-50 to-white">
-                    <CardContent className="pt-6 pb-4">
-                        <div className="flex items-center gap-2 mb-2">
-                            <div className="p-2 rounded-lg bg-purple-100 text-purple-700">
-                                <Activity className="h-4 w-4" />
-                            </div>
-                            <p className="text-xs font-black uppercase tracking-wider text-gray-500">Average Sale</p>
-                        </div>
-                        <p className="text-3xl font-black text-purple-700 tracking-tight">₱{Math.round(averageSale).toLocaleString()}</p>
                     </CardContent>
                 </Card>
 
@@ -342,8 +319,8 @@ export default function TotalSales({ onSetHeaderActionRight }: TotalSalesProps) 
                                         else if (status === 'on-going') badgeClass = 'bg-blue-100 text-blue-700';
                                         else if (status === 'for-release') badgeClass = 'bg-orange-100 text-orange-700';
                                         else if (status === 'claimed') badgeClass = 'bg-gray-200 text-gray-800';
-                                        else if (status === 'paid') badgeClass = 'bg-green-100 text-green-700';
-                                        else if (status === 'unpaid') badgeClass = 'bg-red-100 text-red-700';
+                                        else if (status === 'fully-paid') badgeClass = 'bg-green-100 text-green-700';
+                                        else if (status === 'downpayment') badgeClass = 'bg-red-100 text-red-700';
 
                                         const statusLabel = status.replace('-', ' ');
 

@@ -543,7 +543,7 @@ function SidebarMenuButton({
   // Close tooltip on mouse leave
   const handleMouseLeave = () => setIsOpen(false);
   // Only open tooltip on hover/focus when collapsed
-  const handleOpenChange = (open) => {
+  const handleOpenChange = (open: boolean) => {
     if (state === "collapsed" && !isMobile) {
       setIsOpen(open);
     } else {
@@ -591,7 +591,7 @@ function SidebarMenuAction({
         "peer-data-[size=lg]/menu-button:top-2.5",
         "group-data-[collapsible=icon]:hidden",
         showOnHover &&
-          "peer-data-[active=true]/menu-button:text-sidebar-accent-foreground group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-[state=open]:opacity-100 md:opacity-0",
+        "peer-data-[active=true]/menu-button:text-sidebar-accent-foreground group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-[state=open]:opacity-100 md:opacity-0",
         className,
       )}
       {...props}

@@ -34,7 +34,7 @@ export default function ClaimMonitoring() {
     const navigate = useNavigate();
     const { orders } = useOrders();
     const [searchTerm, setSearchTerm] = useState('');
-    const [paymentFilter, setPaymentFilter] = useState<'all' | 'paid' | 'unpaid'>('all');
+    const [paymentFilter, setPaymentFilter] = useState<'all' | 'fully-paid' | 'downpayment'>('all');
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 15;
 
@@ -63,12 +63,12 @@ export default function ClaimMonitoring() {
                     order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase());
 
                 const balance = order.grandTotal - (order.amountReceived || 0);
-                const isPaid = balance <= 0 && order.paymentStatus === 'paid';
+                const isPaid = balance <= 0 && order.paymentStatus === 'fully-paid';
 
                 const matchesPayment =
                     paymentFilter === 'all' ||
-                    (paymentFilter === 'paid' && isPaid) ||
-                    (paymentFilter === 'unpaid' && !isPaid);
+                    (paymentFilter === 'fully-paid' && isPaid) ||
+                    (paymentFilter === 'downpayment' && !isPaid);
 
                 const matchesPaymentMethod =
                     filters.paymentMethod === 'all' ||
@@ -123,7 +123,7 @@ export default function ClaimMonitoring() {
         setCurrentPage(1);
     };
 
-    const handleFilterChange = (filter: 'all' | 'paid' | 'unpaid') => {
+    const handleFilterChange = (filter: 'all' | 'fully-paid' | 'downpayment') => {
         setPaymentFilter(filter);
         setCurrentPage(1);
     };
@@ -206,7 +206,7 @@ export default function ClaimMonitoring() {
                                 ) : (
                                     paginatedOrders.map((order: JobOrder) => {
                                         const balance = order.grandTotal - (order.amountReceived || 0);
-                                        const isFullyPaid = balance <= 0 && order.paymentStatus === 'paid';
+                                        const isFullyPaid = balance <= 0 && order.paymentStatus === 'fully-paid';
                                         const releaseDate = order.actualCompletionDate ? dateFnsFormat(new Date(order.actualCompletionDate), 'MM/dd/yy HH:mm') : '-';
 
                                         return (
@@ -331,8 +331,8 @@ export default function ClaimMonitoring() {
                                         <SelectContent>
                                             <SelectGroup>
                                                 <SelectItem value="all" className="focus:bg-red-50 focus:text-red-900">All</SelectItem>
-                                                <SelectItem value="paid" className="focus:bg-red-50 focus:text-red-900">Paid</SelectItem>
-                                                <SelectItem value="unpaid" className="focus:bg-red-50 focus:text-red-900">Unpaid</SelectItem>
+                                                <SelectItem value="fully-paid" className="focus:bg-red-50 focus:text-red-900">Paid</SelectItem>
+                                                <SelectItem value="downpayment" className="focus:bg-red-50 focus:text-red-900">Unpaid</SelectItem>
                                             </SelectGroup>
                                         </SelectContent>
                                     </Select>

@@ -2,7 +2,7 @@ export type JobStatus = 'new-order' | 'on-going' | 'for-release' | 'claimed';
 export type Priority = 'regular' | 'rush' | 'premium';
 export type ShippingPreference = 'pickup' | 'delivery';
 export type PaymentMethod = 'cash' | 'gcash' | 'maya';
-export type PaymentStatus = 'unpaid' | 'paid' | 'partial';
+export type PaymentStatus = 'fully-paid' | 'downpayment';
 
 export interface ServiceIntakeData {
   // Customer Information
@@ -101,6 +101,8 @@ export interface Service {
   category: 'base' | 'addon' | 'priority';
   active: boolean;
   description?: string;
+  durationDays?: string | number;
+  code?: string;
 }
 
 export interface User {

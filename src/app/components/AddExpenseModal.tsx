@@ -15,14 +15,15 @@ interface AddExpenseModalProps {
 }
 
 const EXPENSE_CATEGORIES = [
-    'Water',
-    'Internet',
-    'Staff Salary',
-    'Logistics',
-    'Cleaning Materials',
-    'Cleaning Aids',
-    'Chemicals',
-    'Food',
+    'Water (Monthly)',
+    'Internet (Monthly)',
+    'Staff Salary (Weekly)',
+    'Staff Salary (Monthly)',
+    'Logistics (Daily)',
+    'Cleaning Materials (Monthly)',
+    'Cleaning Aids (Monthly)',
+    'Chemicals (Monthly)',
+    'Food (Daily)',
     'Other (Manual Insert)'
 ];
 
@@ -35,6 +36,7 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense }: AddEx
     const [categorySearch, setCategorySearch] = useState('');
     const [amount, setAmount] = useState('');
     const [date, setDate] = useState('');
+    const [time, setTime] = useState('');
     const [notes, setNotes] = useState('');
 
     // Pre-populate with current date and time
@@ -42,8 +44,9 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense }: AddEx
         if (isOpen) {
             const now = new Date();
             const offset = now.getTimezoneOffset() * 60000;
-            const localISOTime = new Date(now.getTime() - offset).toISOString().slice(0, 16);
-            setDate(localISOTime);
+            const localISO = new Date(now.getTime() - offset).toISOString();
+            setDate(localISO.slice(0, 10)); // YYYY-MM-DD for date input
+            setTime(localISO.slice(11, 16)); // HH:mm for time input (military)
         }
     }, [isOpen]);
 
@@ -90,7 +93,7 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense }: AddEx
                 id: Math.random().toString(36).substr(2, 9),
                 category: finalCategory,
                 amount: finalAmount,
-                date,
+                date: `${date}T${time}`,
                 notes
             });
         }
@@ -111,59 +114,61 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense }: AddEx
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-[500px]">
                 <DialogHeader>
                     <DialogTitle className="text-xl font-bold text-red-600 uppercase text-center w-full">Log New Expense</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-                    <div className="space-y-2">
-                        <Label htmlFor="category" className={LABEL_STYLE}>Category</Label>
-                        <Select value={category} onValueChange={setCategory}>
-                            <SelectTrigger id="category" className={INPUT_STYLE}>
-                                <SelectValue placeholder="Select expense type" />
-                            </SelectTrigger>
-                            <SelectContent className="rounded-xl border-gray-100 shadow-xl p-1">
-                                <div className="relative px-2 py-2 mb-1">
-                                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
-                                    <input
-                                        className="w-full pl-8 pr-4 py-1.5 bg-gray-50 border border-gray-100 rounded-md text-[11px] font-bold focus:outline-none focus:ring-1 focus:ring-red-100 transition-all"
-                                        placeholder="Search categories..."
-                                        value={categorySearch}
-                                        onChange={(e) => setCategorySearch(e.target.value)}
-                                        onKeyDown={(e) => e.stopPropagation()}
-                                    />
-                                </div>
-                                <div className="max-h-[180px] overflow-y-auto">
-                                    {filteredCategories.length > 0 ? (
-                                        filteredCategories.map((cat) => (
-                                            <SelectItem key={cat} value={cat} className="text-xs font-bold text-gray-600 focus:bg-red-100 focus:text-red-700">
-                                                {cat}
-                                            </SelectItem>
-                                        ))
-                                    ) : (
-                                        <div className="px-4 py-2 text-[10px] text-gray-400 italic">No results</div>
-                                    )}
-                                </div>
-                            </SelectContent>
-                        </Select>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className={`space-y-2 ${category === 'Other (Manual Insert)' ? 'col-span-1' : 'col-span-2'}`}>
+                            <Label htmlFor="category" className={LABEL_STYLE}>Category</Label>
+                            <Select value={category} onValueChange={setCategory}>
+                                <SelectTrigger id="category" className={INPUT_STYLE}>
+                                    <SelectValue placeholder="Select expense type" />
+                                </SelectTrigger>
+                                <SelectContent className="rounded-xl border-gray-100 shadow-xl p-1">
+                                    <div className="relative px-2 py-2 mb-1">
+                                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                                        <input
+                                            className="w-full pl-8 pr-4 py-1.5 bg-gray-50 border border-gray-100 rounded-md text-[11px] font-bold focus:outline-none focus:ring-1 focus:ring-red-100 transition-all"
+                                            placeholder="Search categories..."
+                                            value={categorySearch}
+                                            onChange={(e) => setCategorySearch(e.target.value)}
+                                            onKeyDown={(e) => e.stopPropagation()}
+                                        />
+                                    </div>
+                                    <div className="max-h-[180px] overflow-y-auto">
+                                        {filteredCategories.length > 0 ? (
+                                            filteredCategories.map((cat) => (
+                                                <SelectItem key={cat} value={cat} className="text-xs font-bold text-gray-600 focus:bg-red-100 focus:text-red-700">
+                                                    {cat}
+                                                </SelectItem>
+                                            ))
+                                        ) : (
+                                            <div className="px-4 py-2 text-[10px] text-gray-400 italic">No results</div>
+                                        )}
+                                    </div>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {category === 'Other (Manual Insert)' && (
+                            <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                                <Label htmlFor="customCategory" className={LABEL_STYLE}>Custom Category Name</Label>
+                                <Input
+                                    id="customCategory"
+                                    placeholder="e.g., Rent, Repair, etc."
+                                    value={customCategory}
+                                    onChange={(e) => setCustomCategory(e.target.value)}
+                                    className={INPUT_STYLE}
+                                    required
+                                />
+                            </div>
+                        )}
                     </div>
 
-                    {category === 'Other (Manual Insert)' && (
-                        <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                            <Label htmlFor="customCategory" className={LABEL_STYLE}>Custom Category Name</Label>
-                            <Input
-                                id="customCategory"
-                                placeholder="e.g., Rent, Repair, etc."
-                                value={customCategory}
-                                onChange={(e) => setCustomCategory(e.target.value)}
-                                className={INPUT_STYLE}
-                                required
-                            />
-                        </div>
-                    )}
-
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
+                    <div className="grid grid-cols-12 gap-4">
+                        <div className="col-span-4 space-y-2">
                             <Label htmlFor="amount" className={LABEL_STYLE}>Amount</Label>
                             <div className="relative group">
                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-sm">₱</span>
@@ -179,14 +184,25 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense }: AddEx
                                 />
                             </div>
                         </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="date" className={LABEL_STYLE}>Date & Time</Label>
+                        <div className="col-span-4 space-y-2">
+                            <Label htmlFor="date" className={LABEL_STYLE}>Date <span className="lowercase opacity-70">(mm/dd/yyyy)</span></Label>
                             <Input
                                 id="date"
-                                type="datetime-local"
+                                type="date"
                                 value={date}
                                 onChange={(e) => setDate(e.target.value)}
-                                className={`${INPUT_STYLE} pr-2 uppercase accent-red-600`}
+                                className={`${INPUT_STYLE} accent-red-600`}
+                                required
+                            />
+                        </div>
+                        <div className="col-span-4 space-y-2">
+                            <Label htmlFor="time" className={LABEL_STYLE}>Time <span className="lowercase opacity-70">(24h)</span></Label>
+                            <Input
+                                id="time"
+                                type="time"
+                                value={time}
+                                onChange={(e) => setTime(e.target.value)}
+                                className={`${INPUT_STYLE} accent-red-600`}
                                 required
                             />
                         </div>
@@ -204,11 +220,11 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense }: AddEx
                     </div>
 
                     <DialogFooter className="pt-2 flex flex-row gap-3 sm:justify-between">
-                        <Button type="button" variant="outline" onClick={onClose} className="flex-1 h-9 font-bold text-xs border border-gray-300 bg-gray-200 hover:bg-gray-700 text-gray-700 hover:text-white transition-all">
-                            Cancel
+                        <Button type="button" variant="outline" onClick={onClose} className="flex-1 h-9 font-bold text-xs border border-gray-300 bg-gray-200 hover:bg-gray-700 text-gray-700 hover:text-white transition-all uppercase tracking-widest">
+                            CANCEL
                         </Button>
                         <Button type="submit" className="flex-1 h-9 bg-red-600 hover:bg-red-700 text-white font-bold text-xs uppercase tracking-widest">
-                            Record
+                            RECORD
                         </Button>
                     </DialogFooter>
                 </form>
