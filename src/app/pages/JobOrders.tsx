@@ -11,7 +11,7 @@ import { Search, Filter, MoreVertical, Edit, ArrowRight, RotateCcw, User, Phone,
 import { format as dateFnsFormat } from 'date-fns';
 import { useServices } from '@/app/context/ServiceContext';
 import EditOrderModal from '@/app/components/EditOrderModal';
-import ServiceIntakeModal from '@/app/components/ServiceIntakeModal';
+import JobOrderFormModal from '@/app/components/JobOrderFormModal';
 import { toast } from 'sonner';
 import { Label } from '@/app/components/ui/label';
 import { Checkbox } from '@/app/components/ui/checkbox';
@@ -40,7 +40,7 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
 
     // Set header action
     useEffect(() => {
-        onSetHeaderAction(<ServiceIntakeModal />);
+        onSetHeaderAction(<JobOrderFormModal />);
         return () => onSetHeaderAction(null);
     }, [onSetHeaderAction]);
 

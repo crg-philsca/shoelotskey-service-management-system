@@ -12,13 +12,13 @@ import { useExpenses } from '@/app/context/ExpenseContext';
 import { useOrders } from '@/app/context/OrderContext';
 import type { JobOrder } from '@/app/types';
 
-interface ReportsProps {
+interface SalesReportProps {
   onSetHeaderActionRight?: (action: React.ReactNode | null) => void;
 }
 
 
 
-export default function Reports({ onSetHeaderActionRight }: ReportsProps) {
+export default function SalesReport({ onSetHeaderActionRight }: SalesReportProps) {
   const navigate = useNavigate();
   const { orders: allOrders } = useOrders();
   const { expenses } = useExpenses();

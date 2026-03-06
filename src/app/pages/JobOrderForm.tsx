@@ -1,15 +1,15 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import ServiceIntakeForm from '../components/ServiceIntakeForm';
+import JobOrderFormComponent from '../components/JobOrderForm';
 import { Button } from '@/app/components/ui/button';
 import { ClipboardList } from 'lucide-react';
 
-interface ServiceIntakeProps {
+interface JobOrderFormProps {
     user: { username: string; role: 'owner' | 'staff' };
     onSetHeaderActionRight: (node: React.ReactNode) => void;
 }
 
-export default function ServiceIntake({ user, onSetHeaderActionRight }: ServiceIntakeProps) {
+export default function JobOrderForm({ user, onSetHeaderActionRight }: JobOrderFormProps) {
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -30,7 +30,7 @@ export default function ServiceIntake({ user, onSetHeaderActionRight }: ServiceI
     return (
         <div className="min-h-screen bg-[#F8F9FA] pb-20">
             <div className="max-w-5xl mx-auto px-6 py-1">
-                <ServiceIntakeForm
+                <JobOrderFormComponent
                     user={user}
                     onSuccess={() => navigate('/dashboard')}
                     onCancel={() => navigate('/dashboard')}

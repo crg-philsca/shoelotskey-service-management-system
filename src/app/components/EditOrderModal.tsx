@@ -63,7 +63,7 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave, hide
         let priorityFee = 0;
         if (data.priorityLevel === 'rush') {
             // New Array Logic: Check max fee among all selected services?
-            // Replicating Logic from ServiceIntakeForm:
+            // Replicating Logic from JobOrderForm:
             let maxFee = 0;
             if (baseServicesArr.some(s => s.includes('Reglue'))) {
                 maxFee = 250;

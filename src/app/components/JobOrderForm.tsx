@@ -13,6 +13,8 @@ import { useServices } from '../context/ServiceContext';
 import type { ShippingPreference, PaymentMethod, PaymentStatus, Priority } from '@/app/types';
 import { format as dateFnsFormat } from 'date-fns';
 import { CreatableCombobox } from './ui/creatable-combobox';
+import { useActivities } from '@/app/context/ActivityContext';
+import { trainPredictionModel, predictCompletionDays } from '@/app/lib/mlPredictor';
 
 // Dropdown options
 const SHOE_BRANDS = [
@@ -39,7 +41,7 @@ interface ShoeEntry {
     condition: {
         scratches: boolean;
         ripsHoles: boolean;
-        fadedWorn: boolean;
+        wornOut: boolean;
         soleSeparation: boolean;
         yellowing: boolean;
         deepStains: boolean;
@@ -49,7 +51,7 @@ interface ShoeEntry {
     addOns: { name: string; quantity?: number }[];
 }
 
-interface ServiceIntakeFormProps {
+interface JobOrderFormProps {
     user?: { username: string; role: string };
     onSuccess?: () => void;
     onCancel?: () => void;
@@ -86,9 +88,10 @@ function ClearableInput({ id, value, onChange, placeholder, className, required,
     );
 }
 
-export default function ServiceIntakeForm({ user, onSuccess, onCancel }: ServiceIntakeFormProps) {
+export default function JobOrderFormComponent({ user, onSuccess, onCancel }: JobOrderFormProps) {
     const { addOrder, orders } = useOrders();
     const { services } = useServices();
+    const { addActivity } = useActivities();
     const [customerName, setCustomerName] = useState('');
     const [contactNumber, setContactNumber] = useState('');
     // State for Shipping Preference
@@ -99,14 +102,14 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
 
 
     const [shoes, setShoes] = useState<ShoeEntry[]>([{
-        id: '1',
+        id: Date.now().toString(),
         brand: '',
         shoeMaterial: '',
         quantity: 1,
         condition: {
             scratches: false,
             ripsHoles: false,
-            fadedWorn: false,
+            wornOut: false,
             soleSeparation: false,
             yellowing: false,
             deepStains: false,
@@ -115,6 +118,14 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
         baseService: [],
         addOns: [],
     }]);
+
+    // Train ML predictor with historical data
+    useEffect(() => {
+        if (orders && orders.length > 0) {
+            trainPredictionModel(orders);
+        }
+    }, [orders]);
+
     const [priorityLevel, setPriorityLevel] = useState<Priority>('regular');
     const [deliveryAddress, setDeliveryAddress] = useState({
         houseNo: '',
@@ -301,7 +312,14 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
     };
 
     const mlBreakdown = calculatePredictedDaysBreakdown();
-    const calculatePredictedDays = () => mlBreakdown.totalDays;
+    const calculatePredictedDays = () => {
+        const tempOrder = {
+            items: shoes,
+            priorityLevel: priorityLevel
+        };
+        // Use Random forest model if available, otherwise fallback to basic heuristic
+        return predictCompletionDays(tempOrder, mlBreakdown.totalDays);
+    };
 
     const getShoeTotal = (shoe: ShoeEntry) => {
         let total = 0;
@@ -400,7 +418,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
             condition: {
                 scratches: false,
                 ripsHoles: false,
-                fadedWorn: false,
+                wornOut: false,
                 soleSeparation: false,
                 yellowing: false,
                 deepStains: false,
@@ -561,6 +579,13 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
             newOrder.grandTotal = (newOrder.baseServiceFee + newOrder.addOnsTotal + (shoeRushFee * shoe.quantity));
 
             addOrder(newOrder);
+
+            addActivity({
+                user: user?.username || 'Current User',
+                action: 'New Order',
+                details: `Created new job order #${newOrder.orderNumber} for ${customerName}`,
+                type: 'order'
+            });
         });
 
         toast.success('Order created successfully!');
@@ -917,7 +942,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                                                                     ripsHoles: false,
                                                                     deepStains: false,
                                                                     soleSeparation: false,
-                                                                    fadedWorn: false,
+                                                                    wornOut: false,
                                                                     others: ''
                                                                 }
                                                             })}
@@ -936,7 +961,7 @@ export default function ServiceIntakeForm({ user, onSuccess, onCancel }: Service
                                                             { id: 'ripsHoles', label: 'Rips/Holes' },
                                                             { id: 'deepStains', label: 'Deep Stains' },
                                                             { id: 'soleSeparation', label: 'Sole Separation' },
-                                                            { id: 'fadedWorn', label: 'Faded/Worn' },
+                                                            { id: 'wornOut', label: 'Faded/Worn' },
                                                         ].map((cond) => (
                                                             <div key={cond.id} className="flex items-center space-x-3">
                                                                 <Checkbox

@@ -4,25 +4,11 @@ import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Badge } from '@/app/components/ui/badge';
 
-interface ActivityLog {
-    id: string;
-    timestamp: string;
-    user: string;
-    action: string;
-    details: string;
-    type: 'service' | 'order' | 'system';
-}
-
-const mockActivities: ActivityLog[] = [
-    { id: '1', timestamp: '2024-01-28 08:30 AM', user: 'Owner', action: 'Update Service', details: 'Changed price of "Deep Clean" from 500 to 550', type: 'service' },
-    { id: '2', timestamp: '2024-01-28 09:15 AM', user: 'Staff1', action: 'Status Change', details: 'Order #JO-1025 moved to "On-Going"', type: 'order' },
-    { id: '3', timestamp: '2024-01-27 04:45 PM', user: 'Technician', action: 'Service Added', details: 'Added "Unyellowing" to Order #JO-1024', type: 'order' },
-    { id: '4', timestamp: '2024-01-27 02:20 PM', user: 'Owner', action: 'User Created', details: 'Created new account for "Staff2"', type: 'system' },
-    { id: '5', timestamp: '2024-01-26 11:00 AM', user: 'Staff1', action: 'Delete Service', details: 'Removed "Old Promo" from Add-ons', type: 'service' },
-];
+import { useActivities } from '@/app/context/ActivityContext';
 
 export default function ActivityHistory() {
     const navigate = useNavigate();
+    const { activities } = useActivities();
 
     return (
         <div className="space-y-4">
@@ -56,30 +42,41 @@ export default function ActivityHistory() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200 bg-white">
-                                {mockActivities.map((activity) => (
-                                    <tr key={activity.id} className="hover:bg-gray-50 transition-colors">
-                                        <td className="px-6 py-4 text-sm text-gray-500 font-medium">{activity.timestamp}</td>
-                                        <td className="px-6 py-4 text-sm font-bold text-gray-800">{activity.user}</td>
-                                        <td className="px-6 py-4 text-sm">
-                                            <Badge variant="outline" className={
-                                                activity.type === 'service' ? 'border-blue-500 text-blue-700 bg-blue-50' :
-                                                    activity.type === 'order' ? 'border-green-500 text-green-700 bg-green-50' :
-                                                        'border-gray-500 text-gray-700 bg-gray-50'
-                                            }>
-                                                {activity.action}
-                                            </Badge>
+                                {activities.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={4} className="px-6 py-8 text-center text-sm text-gray-500 font-medium">
+                                            No recent activities.
                                         </td>
-                                        <td className="px-6 py-4 text-sm text-gray-700 whitespace-normal break-words max-w-lg leading-relaxed">{activity.details}</td>
                                     </tr>
-                                ))}
+                                ) : (
+                                    activities.slice(0, 50).map((activity) => (
+                                        <tr key={activity.id} className="hover:bg-gray-50 transition-colors">
+                                            <td className="px-6 py-4 text-sm text-gray-500 font-medium">{activity.timestamp}</td>
+                                            <td className="px-6 py-4 text-sm font-bold text-gray-800">{activity.user}</td>
+                                            <td className="px-6 py-4 text-sm">
+                                                <Badge variant="outline" className={
+                                                    activity.type === 'service' ? 'border-blue-500 text-blue-700 bg-blue-50' :
+                                                        activity.type === 'order' ? 'border-green-500 text-green-700 bg-green-50' :
+                                                            activity.type === 'expense' ? 'border-orange-500 text-orange-700 bg-orange-50' :
+                                                                'border-gray-500 text-gray-700 bg-gray-50'
+                                                }>
+                                                    {activity.action}
+                                                </Badge>
+                                            </td>
+                                            <td className="px-6 py-4 text-sm text-gray-700 whitespace-normal break-words max-w-lg leading-relaxed">{activity.details}</td>
+                                        </tr>
+                                    ))
+                                )}
                             </tbody>
                         </table>
                     </div>
-                    <div className="p-4 bg-gray-50 border-t border-gray-200 rounded-b-xl text-center">
-                        <span className="text-xs text-gray-400 font-medium">End of log. Showing last 5 activities.</span>
-                    </div>
+                    {activities.length > 50 && (
+                        <div className="p-4 bg-gray-50 border-t border-gray-200 rounded-b-xl text-center">
+                            <span className="text-xs text-gray-400 font-medium">End of log. Showing last 50 activities.</span>
+                        </div>
+                    )}
                 </CardContent>
             </Card>
-        </div>
+        </div >
     );
 }

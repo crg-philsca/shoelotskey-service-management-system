@@ -4,7 +4,7 @@ export type ShippingPreference = 'pickup' | 'delivery';
 export type PaymentMethod = 'cash' | 'gcash' | 'maya';
 export type PaymentStatus = 'fully-paid' | 'downpayment';
 
-export interface ServiceIntakeData {
+export interface BaseJobOrderData {
   // Customer Information
   customerName: string;
   contactNumber: string;
@@ -75,7 +75,7 @@ export interface ShoeItem {
   addOns: { name: string; quantity: number }[];
 }
 
-export interface JobOrder extends ServiceIntakeData {
+export interface JobOrder extends BaseJobOrderData {
   id: string;
   orderNumber: string;
   status: JobStatus;

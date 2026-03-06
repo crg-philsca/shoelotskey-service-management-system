@@ -22,6 +22,7 @@ import {
 import UserModal from '@/app/components/UserModal';
 import { User } from '@/app/types';
 import { toast } from 'sonner';
+import { useActivities } from '@/app/context/ActivityContext';
 
 export default function UserManagement({ onSetHeaderAction }: { onSetHeaderAction?: (action: React.ReactNode) => void }) {
   const [currentPage, setCurrentPage] = useState(1);
@@ -39,6 +40,8 @@ export default function UserManagement({ onSetHeaderAction }: { onSetHeaderActio
   ]);
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const { addActivity } = useActivities();
+  const currentUser = JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}').username;
 
   // Filter users based on search and filters
   const filteredUsers = useMemo(() => {
@@ -90,6 +93,12 @@ export default function UserManagement({ onSetHeaderAction }: { onSetHeaderActio
   const handleSaveUser = (userData: Partial<User>) => {
     if (editingUser) {
       setUsers(prev => prev.map(u => u.id === editingUser.id ? { ...u, ...userData } as User : u));
+      addActivity({
+        user: currentUser,
+        action: 'Update User',
+        details: `Updated details for ${userData.username}`,
+        type: 'system'
+      });
       toast.success('User updated successfully');
     } else {
       const newUser: User = {
@@ -101,6 +110,12 @@ export default function UserManagement({ onSetHeaderAction }: { onSetHeaderActio
         // password not stored in frontend list
       };
       setUsers(prev => [...prev, newUser]);
+      addActivity({
+        user: currentUser,
+        action: 'Create User',
+        details: `Created new account for ${userData.username}`,
+        type: 'system'
+      });
       toast.success('User created successfully');
     }
     setUserModalOpen(false);
@@ -108,7 +123,14 @@ export default function UserManagement({ onSetHeaderAction }: { onSetHeaderActio
 
   const handleDeleteUser = (id: string) => {
     if (confirm('Are you sure you want to delete this user?')) {
+      const uToDelete = users.find(u => u.id === id);
       setUsers(prev => prev.filter(u => u.id !== id));
+      addActivity({
+        user: currentUser,
+        action: 'Delete User',
+        details: `Deleted user account ${uToDelete?.username || id}`,
+        type: 'system'
+      });
       toast.success('User deleted successfully');
     }
   };

@@ -8,6 +8,7 @@ import ServiceModal from '@/app/components/ServiceModal';
 
 import { Service } from '@/app/types';
 import { useServices } from '@/app/context/ServiceContext';
+import { useActivities } from '@/app/context/ActivityContext';
 
 interface ServiceManagementProps {
   onSetHeaderActionRight?: (action: React.ReactNode | null) => void;
@@ -15,9 +16,12 @@ interface ServiceManagementProps {
 
 export default function ServiceManagement({ onSetHeaderActionRight }: ServiceManagementProps) {
   const { services, addService, updateService, deleteService } = useServices();
+  const { addActivity } = useActivities();
   const [serviceModalOpen, setServiceModalOpen] = useState(false); // Renamed from isModalOpen
   const [selectedService, setSelectedService] = useState<Service | null>(null); // Renamed from editingService
   const navigate = useNavigate();
+
+  const currentUser = JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}').username;
 
   useEffect(() => {
     if (onSetHeaderActionRight) {
@@ -51,8 +55,20 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
     const exists = services.find(s => s.id === service.id);
     if (exists) {
       updateService(service.id, service);
+      addActivity({
+        user: currentUser,
+        action: 'Update Service',
+        details: `Updated details for ${service.name}`,
+        type: 'service'
+      });
     } else {
       addService(service);
+      addActivity({
+        user: currentUser,
+        action: 'Create Service',
+        details: `Created new service ${service.name} (${service.category})`,
+        type: 'service'
+      });
     }
   };
 
@@ -63,7 +79,14 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
 
   const handleDeleteService = (id: string) => {
     if (confirm('Are you sure you want to delete this service?')) {
+      const serviceToDelete = services.find(s => s.id === id);
       deleteService(id);
+      addActivity({
+        user: currentUser,
+        action: 'Delete Service',
+        details: `Deleted service ${serviceToDelete?.name || id}`,
+        type: 'service'
+      });
     }
   };
 

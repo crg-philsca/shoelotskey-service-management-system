@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { JobOrder } from '@/app/types';
 import { mockJobOrders } from '@/app/lib/mockData';
+import { useActivities } from './ActivityContext';
 
 interface OrderContextType {
     orders: JobOrder[];
@@ -11,6 +12,7 @@ interface OrderContextType {
 const OrderContext = createContext<OrderContextType | undefined>(undefined);
 
 export function OrderProvider({ children }: { children: ReactNode }) {
+    const { addActivity } = useActivities();
     // Initialize with saved data or mock data
     const [orders, setOrders] = useState<JobOrder[]>(() => {
         const saved = localStorage.getItem('jobOrders_v19');
@@ -39,6 +41,9 @@ export function OrderProvider({ children }: { children: ReactNode }) {
 
     const addOrder = (order: JobOrder) => {
         setOrders((prev) => [{ ...order, updatedAt: new Date() }, ...prev]);
+
+        // Log activity (but maybe skipped if JobOrderFormComponent already does it)
+        // We'll log it if we didn't add the addActivity call inside form
     };
 
     const updateOrder = (id: string, updates: Partial<JobOrder>, statusUser?: string) => {
@@ -58,6 +63,19 @@ export function OrderProvider({ children }: { children: ReactNode }) {
                             user: statusUser || 'System'
                         }
                     ];
+                    addActivity({
+                        user: statusUser || 'System',
+                        action: 'Status Change',
+                        details: `Order #${order.orderNumber} moved to "${updates.status.replace('-', ' ')}"`,
+                        type: 'order'
+                    });
+                } else if (updates && !updates.status) {
+                    addActivity({
+                        user: statusUser || 'System',
+                        action: 'Order Updated',
+                        details: `Updated details for Order #${order.orderNumber}`,
+                        type: 'order'
+                    });
                 }
                 return newOrder;
             }

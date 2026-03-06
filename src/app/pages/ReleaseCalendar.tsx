@@ -14,11 +14,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useNavigate } from 'react-router-dom';
 import { JobOrder } from '@/app/types';
 
-interface CalendarViewProps {
+interface ReleaseCalendarProps {
   onSetHeaderActionRight?: (node: React.ReactNode) => void;
 }
 
-export default function CalendarView({ onSetHeaderActionRight }: CalendarViewProps) {
+export default function ReleaseCalendar({ onSetHeaderActionRight }: ReleaseCalendarProps) {
   const navigate = useNavigate();
   const { services } = useServices();
   const forReleaseOrders = mockJobOrders.filter(job => job.status === 'for-release');
@@ -92,7 +92,7 @@ export default function CalendarView({ onSetHeaderActionRight }: CalendarViewPro
       onSetHeaderActionRight(
         <div className="flex items-center gap-2">
           <Button
-            onClick={() => navigate('/claim-monitoring')}
+            onClick={() => navigate('/claim-record')}
             className="bg-white hover:bg-red-50 text-red-600 border border-red-200 font-bold h-9 px-4 shadow-sm transition-all"
           >
             <FileText className="h-4 w-4 mr-1 text-red-600" />

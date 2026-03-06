@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { Expense, mockExpenses } from '@/app/lib/mockData';
+import { useActivities } from './ActivityContext';
 
 interface ExpenseContextType {
     expenses: Expense[];
@@ -9,6 +10,9 @@ interface ExpenseContextType {
 const ExpenseContext = createContext<ExpenseContextType | undefined>(undefined);
 
 export function ExpenseProvider({ children }: { children: ReactNode }) {
+    const { addActivity } = useActivities();
+    const currentUser = JSON.parse(localStorage.getItem('user') || '{"username": "System"}').username;
+
     const [expenses, setExpenses] = useState<Expense[]>(() => {
         const saved = localStorage.getItem('expenses');
         if (saved) {
@@ -27,6 +31,12 @@ export function ExpenseProvider({ children }: { children: ReactNode }) {
 
     const addExpense = (expense: Expense) => {
         setExpenses((prev) => [expense, ...prev]);
+        addActivity({
+            user: currentUser,
+            action: 'Add Expense',
+            details: `Logged new expense: ${expense.category} - ${expense.amount}`,
+            type: 'expense'
+        });
     };
 
     return (

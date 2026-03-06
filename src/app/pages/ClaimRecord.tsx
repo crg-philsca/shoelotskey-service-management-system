@@ -30,7 +30,7 @@ import {
 } from "@/app/components/ui/popover";
 import { cn } from "@/app/components/ui/utils";
 
-export default function ClaimMonitoring() {
+export default function ClaimRecord() {
     const navigate = useNavigate();
     const { orders } = useOrders();
     const [searchTerm, setSearchTerm] = useState('');
@@ -143,7 +143,7 @@ export default function ClaimMonitoring() {
                             <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => navigate('/calendar')}
+                                onClick={() => navigate('/release-calendar')}
                                 className="bg-red-600 hover:bg-red-700 text-white hover:text-white border-red-600 font-black h-9 px-3 flex-shrink-0 uppercase text-[10px] tracking-wider"
                             >
                                 <ArrowLeft className="h-4 w-4 mr-1" />

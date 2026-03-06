@@ -8,17 +8,18 @@ import Layout from '@/app/components/Layout';
 import { OrderProvider } from '@/app/context/OrderContext';
 import { ExpenseProvider } from '@/app/context/ExpenseContext';
 import { ServiceProvider } from '@/app/context/ServiceContext';
+import { ActivityProvider } from '@/app/context/ActivityContext';
 
 // Lazy-loaded pages for code splitting
 const Dashboard = lazy(() => import('@/app/pages/Dashboard'));
-const ServiceIntake = lazy(() => import('@/app/pages/ServiceIntake'));
+const JobOrderForm = lazy(() => import('@/app/pages/JobOrderForm'));
 const JobOrders = lazy(() => import('@/app/pages/JobOrders'));
-const Reports = lazy(() => import('@/app/pages/Reports'));
+const SalesReport = lazy(() => import('@/app/pages/SalesReport'));
 const ServiceManagement = lazy(() => import('@/app/pages/ServiceManagement'));
 const UserManagement = lazy(() => import('@/app/pages/UserManagement'));
 
-const CalendarView = lazy(() => import('@/app/pages/CalendarView'));
-const ClaimMonitoring = lazy(() => import('@/app/pages/ClaimMonitoring'));
+const ReleaseCalendar = lazy(() => import('@/app/pages/ReleaseCalendar'));
+const ClaimRecord = lazy(() => import('@/app/pages/ClaimRecord'));
 const ActivityHistory = lazy(() => import('@/app/pages/ActivityHistory'));
 const TotalSales = lazy(() => import('@/app/pages/TotalSales'));
 const TotalOrders = lazy(() => import('@/app/pages/TotalOrders'));
@@ -71,39 +72,41 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <OrderProvider>
-        <ExpenseProvider>
-          <ServiceProvider>
-            <Layout user={user} onLogout={handleLogout} headerAction={headerActionRight}>
-              <Suspense fallback={<PageLoader />}>
-                <Routes>
-                  <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                  <Route
-                    path="/dashboard"
-                    element={<Dashboard user={user} onSetHeaderActionRight={setHeaderActionRight} />}
-                  />
-                  <Route path="/service-intake" element={<ServiceIntake user={user} onSetHeaderActionRight={setHeaderActionRight} />} />
-                  <Route path="/job-orders" element={<JobOrders user={user} onSetHeaderAction={setHeaderActionRight} />} />
-                  <Route path="/calendar" element={<CalendarView onSetHeaderActionRight={setHeaderActionRight} />} />
-                  <Route path="/claim-monitoring" element={<ClaimMonitoring />} />
-                  <Route path="/activity-history" element={<ActivityHistory />} />
-                  <Route path="/total-sales" element={<TotalSales onSetHeaderActionRight={setHeaderActionRight} />} />
-                  <Route path="/total-orders" element={<TotalOrders onSetHeaderActionRight={setHeaderActionRight} />} />
-                  <Route path="/expenses" element={<Expenses onSetHeaderActionRight={setHeaderActionRight} />} />
-                  {user.role === 'owner' && (
-                    <>
-                      <Route path="/reports" element={<Reports onSetHeaderActionRight={setHeaderActionRight} />} />
-                      <Route path="/service-management" element={<ServiceManagement onSetHeaderActionRight={setHeaderActionRight} />} />
-                      <Route path="/user-management" element={<UserManagement onSetHeaderAction={setHeaderActionRight} />} />
-                    </>
-                  )}
-                  <Route path="*" element={<Navigate to="/dashboard" replace />} />
-                </Routes>
-              </Suspense>
-            </Layout>
-          </ServiceProvider>
-        </ExpenseProvider>
-      </OrderProvider>
+      <ActivityProvider>
+        <OrderProvider>
+          <ExpenseProvider>
+            <ServiceProvider>
+              <Layout user={user} onLogout={handleLogout} headerAction={headerActionRight}>
+                <Suspense fallback={<PageLoader />}>
+                  <Routes>
+                    <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                    <Route
+                      path="/dashboard"
+                      element={<Dashboard user={user} onSetHeaderActionRight={setHeaderActionRight} />}
+                    />
+                    <Route path="/job-order-form" element={<JobOrderForm user={user} onSetHeaderActionRight={setHeaderActionRight} />} />
+                    <Route path="/job-orders" element={<JobOrders user={user} onSetHeaderAction={setHeaderActionRight} />} />
+                    <Route path="/release-calendar" element={<ReleaseCalendar onSetHeaderActionRight={setHeaderActionRight} />} />
+                    <Route path="/claim-record" element={<ClaimRecord />} />
+                    <Route path="/activity-history" element={<ActivityHistory />} />
+                    <Route path="/total-sales" element={<TotalSales onSetHeaderActionRight={setHeaderActionRight} />} />
+                    <Route path="/total-orders" element={<TotalOrders onSetHeaderActionRight={setHeaderActionRight} />} />
+                    <Route path="/expenses" element={<Expenses onSetHeaderActionRight={setHeaderActionRight} />} />
+                    {user.role === 'owner' && (
+                      <>
+                        <Route path="/sales-report" element={<SalesReport onSetHeaderActionRight={setHeaderActionRight} />} />
+                        <Route path="/service-management" element={<ServiceManagement onSetHeaderActionRight={setHeaderActionRight} />} />
+                        <Route path="/user-management" element={<UserManagement onSetHeaderAction={setHeaderActionRight} />} />
+                      </>
+                    )}
+                    <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                  </Routes>
+                </Suspense>
+              </Layout>
+            </ServiceProvider>
+          </ExpenseProvider>
+        </OrderProvider>
+      </ActivityProvider>
       <Toaster className="dashboard-toaster" />
     </BrowserRouter>
   );

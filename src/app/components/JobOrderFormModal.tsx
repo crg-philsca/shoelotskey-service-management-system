@@ -1,14 +1,14 @@
 import { Dialog, DialogContent, DialogTrigger } from "@/app/components/ui/dialog";
-import ServiceIntakeForm from "./ServiceIntakeForm";
+import JobOrderFormComponent from "./JobOrderForm";
 import { CopyPlus } from "lucide-react";
 import { Button } from "@/app/components/ui/button";
 import { useState } from "react";
 
-interface ServiceIntakeModalProps {
+interface JobOrderFormModalProps {
 
 }
 
-export default function ServiceIntakeModal({ }: ServiceIntakeModalProps) {
+export default function JobOrderFormModal({ }: JobOrderFormModalProps) {
     const [open, setOpen] = useState(false);
 
     return (
@@ -21,7 +21,7 @@ export default function ServiceIntakeModal({ }: ServiceIntakeModalProps) {
             </DialogTrigger>
             <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-[#F8F9FA] p-0 gap-0 rounded-2xl border-none shadow-2xl">
                 <div className="p-6">
-                    <ServiceIntakeForm onSuccess={() => setOpen(false)} onCancel={() => setOpen(false)} />
+                    <JobOrderFormComponent onSuccess={() => setOpen(false)} onCancel={() => setOpen(false)} />
                 </div>
             </DialogContent>
         </Dialog>

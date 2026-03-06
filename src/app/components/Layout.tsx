@@ -26,30 +26,30 @@ export default function Layout({ children, user, onLogout, headerAction, headerA
 
   const ownerMenuItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', shortLabel: 'Dashboard' },
-    { path: '/service-intake', icon: FileText, label: 'Job Order Form', shortLabel: 'Job Order' },
-    { path: '/calendar', icon: Calendar, label: 'Release Calendar', shortLabel: 'Calendar' },
-    { path: '/reports', icon: Activity, label: 'Sales Report', shortLabel: 'Sales' },
+    { path: '/job-order-form', icon: FileText, label: 'Job Order Form', shortLabel: 'Job Order' },
+    { path: '/release-calendar', icon: Calendar, label: 'Release Calendar', shortLabel: 'Calendar' },
+    { path: '/sales-report', icon: Activity, label: 'Sales Report', shortLabel: 'Sales' },
     { path: '/service-management', icon: Wrench, label: 'Service Management', shortLabel: 'Service' },
     { path: '/user-management', icon: Users, label: 'User Management', shortLabel: 'Users' },
   ];
 
   const staffMenuItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', shortLabel: 'Dashboard' },
-    { path: '/service-intake', icon: FileText, label: 'Job Order Form', shortLabel: 'Job Order' },
-    { path: '/calendar', icon: Calendar, label: 'Release Calendar', shortLabel: 'Calendar' },
+    { path: '/job-order-form', icon: FileText, label: 'Job Order Form', shortLabel: 'Job Order' },
+    { path: '/release-calendar', icon: Calendar, label: 'Release Calendar', shortLabel: 'Calendar' },
   ];
 
   const pageTitles: Record<string, string> = {
     '/dashboard': 'Dashboard',
-    '/service-intake': 'Job Order Form',
-    '/calendar': 'Release Calendar',
-    '/reports': 'Sales Report',
+    '/job-order-form': 'Job Order Form',
+    '/release-calendar': 'Release Calendar',
+    '/sales-report': 'Sales Report',
     '/service-management': 'Service Management',
     '/user-management': 'User Management',
     '/total-sales': 'Total Sales',
     '/total-orders': 'Total Orders',
     '/expenses': 'Expenses',
-    '/claim-monitoring': 'CLAIM RECORD',
+    '/claim-record': 'CLAIM RECORD',
     '/activity-history': 'Activity History',
   };
 
