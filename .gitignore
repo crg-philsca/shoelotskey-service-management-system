@@ -1,11 +1,11 @@
-# Logs (Cleans up your 'ts.log', 'typescript_errors.txt', etc.)
+# Logs
 *.log
 typescript_errors.txt
 typescript_errors.log
 fix-*.js
 fix-*.cjs
 
-# Production (Ensures your 'dist' folder doesn't get pushed)
+# Production
 dist/
 dist-ssr/
 *.local
@@ -13,10 +13,30 @@ dist-ssr/
 # Node
 node_modules/
 
-# Environment Variables (Crucial for SME security)
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.db
+*.sqlite3
+
+# Environment Variables
 .env
 .env.*
 !.env.example
+
+# Diagnostic Scripts (Local ONLY)
+check_cols.py
+check_db.py
+diagnose.py
+force_rebuild.py
+hard_reset_db.py
+recreate_db.py
+seed_now.py
+tmp_rebuild.txt
 
 # IDE / System
 .vscode/

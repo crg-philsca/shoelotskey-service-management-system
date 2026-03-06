@@ -1,12 +1,22 @@
 @echo off
-echo Starting Python Backend...
-if not exist "venv" (
-    echo Virtual environment not found. Please run:
-    echo python -m venv venv
-    echo .\venv\Scripts\pip install -r backend\requirements.txt
-    exit /b 1
-)
+echo Starting Python Backend with MySQL...
 
-call venv\Scripts\activate.bat
+:: Use the current folder for everything
+set "BASE_DIR=%~dp0"
+cd /d "%BASE_DIR%"
+
+:: Check if venv exists without complex IF blocks
+if exist "venv\Scripts\python.exe" goto :RUN_BACKEND
+
+echo [ERROR] Virtual environment (venv) not found!
+echo Please run: python -m venv venv
+pause
+exit /b 1
+
+:RUN_BACKEND
+echo Verifying dependencies...
+".\venv\Scripts\python.exe" -m pip install -q -r backend\requirements.txt
+
+:: Start Server
 cd backend
-uvicorn main:app --reload --host 127.0.0.1 --port 8000
+"..\venv\Scripts\python.exe" -m uvicorn main:app --reload --host 127.0.0.1 --port 8000

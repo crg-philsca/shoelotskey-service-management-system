@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader } from '@/app/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/app/components/ui/card';
 import { Checkbox } from '@/app/components/ui/checkbox';
 import { toast } from 'sonner';
 import { Eye, EyeOff, User, Lock } from 'lucide-react';
@@ -19,55 +19,55 @@ export default function Login({ onLogin }: LoginProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
 
+  const [isLoading, setIsLoading] = useState(false);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('[DEBUG] Login attempt started for:', username);
+    setIsLoading(true);
 
     // SOLID: Validation Responsibility should be local to UI
     if (!username.trim()) {
-      toast.error('Please enter your username', {
-        style: { background: '#fef2f2', color: '#dc2626' }
-      });
+      toast.error('Please enter your username');
+      setIsLoading(false);
       return;
     }
 
     if (!password.trim()) {
-      toast.error('Please enter your password', {
-        style: { background: '#fef2f2', color: '#dc2626' }
-      });
+      toast.error('Please enter your password');
+      setIsLoading(false);
       return;
     }
 
     try {
-      // SECURITY: Backend handles the 3-attempt limit and lockout
+      console.log('[DEBUG] Fetching from backend...');
       const response = await fetch('http://127.0.0.1:8000/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
       });
 
+      console.log('[DEBUG] Backend response status:', response.status);
+
       if (response.ok) {
         const data = await response.json();
-        toast.success(`Welcome, ${data.username}!`, {
-          style: { background: '#f0fdf4', color: '#166534' }
-        });
+        console.log('[DEBUG] Login successful:', data.username);
+        toast.success(`Welcome, ${data.username}!`);
         onLogin(data.username, data.role as 'owner' | 'staff');
       } else {
         const err = await response.json();
+        console.warn('[DEBUG] Login failed:', err.detail);
         if (response.status === 403) {
-          // Locked account (SECURITY: Limited attempts)
-          toast.error(err.detail, {
-            style: { background: '#fff7ed', color: '#c2410c' },
-            duration: 5000
-          });
+          toast.error(err.detail, { duration: 5000 });
         } else {
-          toast.error(err.detail || 'Invalid username or password', {
-            style: { background: '#fef2f2', color: '#dc2626' }
-          });
+          toast.error(err.detail || 'Invalid username or password');
         }
       }
     } catch (err) {
-      console.error(err);
-      toast.error('Failed to connect to authentication server. Is the backend running?');
+      console.error('[DEBUG] Connection error:', err);
+      toast.error('Cannot connect to server. Check if backend is running (Terminal 2).');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -75,7 +75,6 @@ export default function Login({ onLogin }: LoginProps) {
     <div className="h-screen flex flex-col bg-gradient-to-r from-red-200 via-white to-red-200 overflow-y-auto">
       {/* Main Content */}
       <div className="flex flex-col flex-grow items-center justify-center w-full py-8 px-2 sm:px-4 md:px-6 mt-8">
-        {/* Login Card - Center */}
         <Card className="w-full max-w-xs sm:max-w-sm md:max-w-md shadow-2xl mx-auto">
           <CardHeader className="space-y-0 text-center pb-0 mb-0" style={{ marginBottom: '-4px', paddingBottom: 0 }}>
             <img
@@ -84,9 +83,6 @@ export default function Login({ onLogin }: LoginProps) {
               className="h-32 xs:h-36 sm:h-40 md:h-48 w-auto object-contain mx-auto transform -translate-x-0.5"
               loading="lazy"
             />
-            <CardDescription className="text-base xs:text-lg md:text-xl font-semibold text-black">
-
-            </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-3">
@@ -97,6 +93,7 @@ export default function Login({ onLogin }: LoginProps) {
                   <Input
                     id="username"
                     type="text"
+                    disabled={isLoading}
                     placeholder="Enter username or email"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
@@ -112,6 +109,7 @@ export default function Login({ onLogin }: LoginProps) {
                   <Input
                     id="password"
                     type={showPassword ? 'text' : 'password'}
+                    disabled={isLoading}
                     placeholder="Enter password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -131,6 +129,7 @@ export default function Login({ onLogin }: LoginProps) {
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="remember"
+                    disabled={isLoading}
                     checked={rememberMe}
                     onCheckedChange={(checked) => setRememberMe(checked as boolean)}
                     className="cursor-pointer"
@@ -141,14 +140,22 @@ export default function Login({ onLogin }: LoginProps) {
                 </div>
                 <button
                   type="button"
+                  disabled={isLoading}
                   className="text-sm text-black hover:text-red-600 hover:underline transition-colors font-normal hover:cursor-pointer"
                   onClick={() => navigate('/forgot-password')}
                 >
                   Forgot password?
                 </button>
               </div>
-              <Button type="submit" className="w-full bg-red-600 hover:bg-red-700 cursor-pointer text-base">
-                Login
+              <Button
+                type="submit"
+                disabled={isLoading}
+                className="w-full bg-red-600 hover:bg-red-700 cursor-pointer text-base flex items-center justify-center gap-2"
+              >
+                {isLoading ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white" />
+                ) : null}
+                {isLoading ? 'Verifying...' : 'Login'}
               </Button>
             </form>
           </CardContent>

@@ -1,55 +1,77 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional, Any, Dict
 
+class UserSchema(BaseModel):
+    id: str
+    username: str
+    role: str
+    email: Optional[str] = None
+    active: bool
+    failed_login_attempts: Optional[int] = 0
+    locked_until: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+class CustomerSchema(BaseModel):
+    id: Optional[int] = None
+    fullName: str
+    contactNumber: Optional[str] = None
+    email: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    province: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class OrderItemSchema(BaseModel):
+    id: Optional[int] = None
+    brand: Optional[str] = None
+    shoeType: Optional[str] = None
+    material: Optional[str] = None
+    quantity: int = 1
+    conditionData: Optional[Dict[str, Any]] = None
+
+    class Config:
+        from_attributes = True
+
 class JobOrderSchema(BaseModel):
     id: str
     orderNumber: str
-    customerName: str
-    contactNumber: str
-    brand: str
-    shoeType: str
-    shoeMaterial: str
-    quantity: int
-    condition: Dict[str, Any]
-    baseService: List[str]
-    addOns: List[Dict[str, Any]]
-    priorityLevel: str
-    baseServiceFee: float
-    addOnsTotal: float
-    grandTotal: float
-    shippingPreference: str
-    deliveryAddress: Optional[str] = None
-    deliveryCourier: Optional[str] = None
-    province: Optional[str] = None
-    city: Optional[str] = None
-    barangay: Optional[str] = None
-    zipCode: Optional[str] = None
-    paymentMethod: str
-    paymentStatus: str
-    amountReceived: Optional[float] = 0.0
-    change: Optional[float] = 0.0
-    transactionDate: str
-    processedBy: str
     status: str
-    predictedCompletionDate: Optional[str] = None
-    actualCompletionDate: Optional[str] = None
-    createdAt: str
-    updatedAt: str
-    items: Optional[List[Dict[str, Any]]] = None
-    releaseTime: Optional[str] = None
-    claimedBy: Optional[str] = None
-    assignedTo: Optional[str] = None
-    statusHistory: List[Dict[str, Any]]
+    priorityLevel: str
+    totalAmount: float
+    amountReceived: float
+    paymentMethod: Optional[str] = None
+    paymentStatus: str
+    transactionDate: str
+    predictedCompletion: Optional[str] = None
+    actualCompletion: Optional[str] = None
+    shippingPreference: Optional[str] = None
+    
+    customerId: int
+    processedBy: str
+    
+    # 3NF Relation Mapping
+    customer: Optional[CustomerSchema] = None
+    items: List[OrderItemSchema] = []
+
+    class Config:
+        from_attributes = True
 
 class ServiceSchema(BaseModel):
     id: str
     name: str
-    price: float
+    basePrice: float
     category: str
     active: bool
     description: Optional[str] = None
-    durationDays: Optional[Any] = None
+    durationDays: Optional[int] = None
     code: Optional[str] = None
+
+    class Config:
+        from_attributes = True
 
 class ExpenseSchema(BaseModel):
     id: str
@@ -58,24 +80,19 @@ class ExpenseSchema(BaseModel):
     date: str
     notes: Optional[str] = None
 
+    class Config:
+        from_attributes = True
+
 class ActivityLogSchema(BaseModel):
-    id: str
+    id: int
     timestamp: str
-    user: str
+    userId: str
     action: str
     details: str
-    type: str
+    logType: str
 
-class UserSchema(BaseModel):
-    id: str
-    username: str
-    role: str
-    email: Optional[str] = None
-    password: Optional[str] = None
-    active: bool
-    failed_login_attempts: Optional[int] = 0
-    locked_until: Optional[str] = None
-    reset_token: Optional[str] = None
+    class Config:
+        from_attributes = True
 
 class LoginRequest(BaseModel):
     username: str
