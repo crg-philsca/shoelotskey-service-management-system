@@ -9,7 +9,7 @@ This document explains the core architectural changes made for security, verific
 - Every failed request increments the counter.
 - On the 3rd fail, `locked_until` is set to 15 minutes in the future.
 - The system rejects all requests until the time expires or the owner manually resets the DB.
-**How to fix/reset:** If an account is locked, an admin can manually update the `locked_until` to `NULL` in the `sqlite` database or wait for the timer.
+**How to fix/reset via phpMyAdmin:** If an account is locked, use **phpMyAdmin** to find the `shoelotskey_db` -> `users` table. Manually set `locked_until` to `NULL` (empty) or wait for the timer.
 
 ## 2. Password Reset (Email Simulation)
 **Where it's changed:** `backend/main.py` -> `forgot_password()` and `reset_password()`.
