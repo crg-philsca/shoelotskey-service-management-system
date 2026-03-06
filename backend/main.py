@@ -1,50 +1,85 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Dict, Any
 from datetime import datetime, timedelta
 import uuid
+import json
 
-from models import Base, JobOrder, Service, Expense, ActivityLog, User, Customer, OrderItem
+from models import Base, Order, Item, Service, Expense, StatusLog, User, Customer, Role, Status, Condition, AuditLog, ItemServiceMapping
 from schemas import (
-    JobOrderSchema, ServiceSchema, ExpenseSchema, ActivityLogSchema, 
-    UserSchema, LoginRequest, ForgotPasswordRequest, ResetPasswordRequest
+    OrderSchema, ServiceSchema, ExpenseSchema, UserSchema, LoginRequest, ForgotPasswordRequest, ResetPasswordRequest,
+    RoleSchema, StatusSchema, ConditionSchema, ItemSchema
 )
 from database import engine, get_db, SessionLocal
 
-# Force table creation (Ensures MySQL is up to date with 3NF model)
+# ==========================================
+# 0. DATABASE INITIALIZATION & SEEDING
+# ==========================================
+
 Base.metadata.create_all(bind=engine)
 
-def seed_services(db: Session):
-    if db.query(Service).count() == 0:
-        from lib.initial_data import mock_services
-        for s_data in mock_services:
-            db_service = Service(
-                id=s_data.get("id"),
-                name=s_data.get("name"),
-                basePrice=s_data.get("price"),
-                category=s_data.get("category"),
-                active=s_data.get("active", True),
-                description=s_data.get("description"),
-                durationDays=int(s_data.get("durationDays", 0)) if s_data.get("durationDays") else 0,
-                code=s_data.get("code")
-            )
-            db.add(db_service)
+def seed_lookups(db: Session):
+    # Seed Roles
+    if db.query(Role).count() == 0:
+        roles = [Role(role_name="owner"), Role(role_name="staff")]
+        db.add_all(roles)
         db.commit()
 
-app = FastAPI(title="Shoelotskey 3NF & ML API")
+    # Seed Statuses
+    if db.query(Status).count() == 0:
+        statuses = [
+            Status(status_name="Pending"),
+            Status(status_name="In Progress"),
+            Status(status_name="Completed"),
+            Status(status_name="Cancelled"),
+            Status(status_name="Claimed")
+        ]
+        db.add_all(statuses)
+        db.commit()
+
+    # Seed Conditions
+    if db.query(Condition).count() == 0:
+        conditions = [
+            Condition(condition_name="Good Condition"),
+            Condition(condition_name="Stains Detected"),
+            Condition(condition_name="Sole Wear Detected"),
+            Condition(condition_name="Color Discloration"),
+            Condition(condition_name="Regluing Required")
+        ]
+        db.add_all(conditions)
+        db.commit()
+
+    # Seed Services
+    if db.query(Service).count() == 0:
+        services = [
+            Service(service_name="Basic Cleaning", base_price=325.00),
+            Service(service_name="Unyellowing", base_price=125.00),
+            Service(service_name="Full Reglue", base_price=250.00),
+            Service(service_name="Deep Cleaning", base_price=450.00)
+        ]
+        db.add_all(services)
+        db.commit()
+
+    # Seed Users
+    if db.query(User).count() == 0:
+        role_owner = db.query(Role).filter(Role.role_name == "owner").first()
+        role_staff = db.query(Role).filter(Role.role_name == "staff").first()
+        if role_owner:
+            owner = User(username="owner", email="owner@shoelotskey.com", password_hash="owner123", role_id=role_owner.role_id)
+            db.add(owner)
+        if role_staff:
+            staff = User(username="staff", email="staff@shoelotskey.com", password_hash="staff123", role_id=role_staff.role_id)
+            db.add(staff)
+        db.commit()
+
+app = FastAPI(title="Shoelotskey 3NF & ML Aligned API")
 
 @app.on_event("startup")
 def startup_event():
     db = SessionLocal()
     try:
-        seed_services(db)
-        # Seed users if missing
-        if db.query(User).count() == 0:
-            owner = User(id="u1", username="owner", password="owner123", role="owner", email="owner@shoelotskey.com")
-            staff = User(id="u2", username="staff", password="staff123", role="staff", email="staff@shoelotskey.com")
-            db.add_all([owner, staff])
-            db.commit()
+        seed_lookups(db)
     finally:
         db.close()
 
@@ -56,124 +91,119 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# -----------------
-# JOB ORDERS (3NF & ML Logic)
-# -----------------
-@app.get("/api/orders", response_model=List[JobOrderSchema])
+# ==========================================
+# 1. AUTHENTICATION & SECURITY
+# ==========================================
+
+@app.post("/api/login")
+def login(request: LoginRequest, db: Session = Depends(get_db)):
+    db_user = db.query(User).options(joinedload(User.role)).filter(User.username == request.username).first()
+    if not db_user:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    if db_user.password_hash == request.password:
+        return {
+            "user_id": db_user.user_id,
+            "username": db_user.username,
+            "role": db_user.role.role_name,
+            "email": db_user.email
+        }
+    else:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+
+# ==========================================
+# 2. JOB ORDERS (Complex 3NF Logic)
+# ==========================================
+
+@app.get("/api/orders", response_model=List[OrderSchema])
 def read_orders(db: Session = Depends(get_db)):
-    # joinedload ensures we get customer and items for ML/UI context
-    orders = db.query(JobOrder).options(joinedload(JobOrder.customer), joinedload(JobOrder.items)).all()
+    orders = db.query(Order).options(
+        joinedload(Order.customer), 
+        joinedload(Order.status), 
+        joinedload(Order.items).joinedload(Item.conditions),
+        joinedload(Order.items).joinedload(Item.services)
+    ).all()
     return orders
 
-@app.post("/api/orders", response_model=JobOrderSchema)
+@app.post("/api/orders", response_model=OrderSchema)
 def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db)):
+    """
+    Complex 3NF Order Creation:
+    1. Handle Customer (Find/Create)
+    2. Handle Status (Lookup)
+    3. Create Order
+    4. Handle Items, conditions, and services
+    5. Audit logging (Triggers handle DB level, we can add logic if needed)
+    """
     try:
-        # 1. 3NF NORMALIZATION: Handle/Create Customer
-        fullname = order_data.get("customerName", "Unknown")
+        # 1. Handle Customer
+        customer_name = order_data.get("customerName", "Unknown")
         contact = order_data.get("contactNumber", "")
-        
-        db_customer = db.query(Customer).filter(Customer.fullName == fullname, Customer.contactNumber == contact).first()
+        db_customer = db.query(Customer).filter(Customer.customer_name == customer_name, Customer.contact_number == contact).first()
         if not db_customer:
-            db_customer = Customer(
-                fullName=fullname,
-                contactNumber=contact,
-                email=order_data.get("email"),
-                city=order_data.get("city"),
-                province=order_data.get("province"),
-                address=order_data.get("deliveryAddress")
-            )
+            db_customer = Customer(customer_name=customer_name, contact_number=contact)
             db.add(db_customer)
             db.flush()
 
-        # 2. 3NF/ML Header: Job Order Creation
-        new_id = order_data.get("id") or str(uuid.uuid4())
-        db_order = JobOrder(
-            id=new_id,
-            orderNumber=order_data.get("orderNumber"),
-            status=order_data.get("status", "Pending"),
-            priorityLevel=order_data.get("priorityLevel", "Standard"),
-            totalAmount=order_data.get("grandTotal", 0.0),
-            amountReceived=order_data.get("amountReceived", 0.0),
-            paymentMethod=order_data.get("paymentMethod"),
-            paymentStatus=order_data.get("paymentStatus", "Unpaid"),
-            transactionDate=order_data.get("transactionDate", datetime.now().isoformat()),
-            predictedCompletion=order_data.get("predictedCompletionDate"), # ML Output
-            actualCompletion=order_data.get("actualCompletionDate"), # ML Target
-            shippingPreference=order_data.get("shippingPreference"),
-            customerId=db_customer.id,
-            processedBy=order_data.get("processedBy", "u1")
+        # 2. Get Status
+        status_name = order_data.get("status", "Pending")
+        db_status = db.query(Status).filter(Status.status_name == status_name).first()
+        if not db_status:
+            db_status = db.query(Status).first()
+
+        # 3. Create Order
+        db_order = Order(
+            order_number=order_data.get("orderNumber") or str(uuid.uuid4())[:8],
+            customer_id=db_customer.customer_id,
+            status_id=db_status.status_id,
+            priority=order_data.get("priorityLevel") if order_data.get("priorityLevel") in ['Regular', 'Rush'] else 'Regular',
+            grand_total=order_data.get("grandTotal", 0.0),
+            expected_at=datetime.utcnow() + timedelta(days=order_data.get("durationDays", 7)),
+            user_id=order_data.get("userId", 1) # Authenticated user ID
         )
         db.add(db_order)
+        db.flush()
 
-        # 3. 3NF/ML Items: Order Items for categorical prediction
-        items_payload = order_data.get("items", [])
-        if not items_payload:
-            items_payload = [{
-                "brand": order_data.get("brand"),
-                "shoeType": order_data.get("shoeType"),
-                "material": order_data.get("shoeMaterial"),
-                "quantity": order_data.get("quantity", 1),
-                "condition": order_data.get("condition")
-            }]
-
-        for item in items_payload:
-            db_item = OrderItem(
-                orderId=new_id,
-                brand=item.get("brand"),
-                shoeType=item.get("shoeType"),
-                material=item.get("material") or item.get("shoeMaterial"),
-                quantity=item.get("quantity", 1),
-                conditionData=item.get("condition") # ML Features
-            )
+        # 4. Handle Items (Assuming data from UI format)
+        brand = order_data.get("brand")
+        material = order_data.get("shoeMaterial")
+        if brand or material:
+            db_item = Item(order_id=db_order.order_id, brand=brand, material=material)
             db.add(db_item)
+            db.flush()
+            
+            # Map default condition if possible
+            cond = db.query(Condition).first()
+            if cond:
+                db_item.conditions.append(cond)
+            
+            # Map services
+            # (In a real 3NF flow, you'd iterate through selected services from UI)
+            # This is a demo fallback:
+            serv = db.query(Service).first()
+            if serv:
+                mapping = ItemServiceMapping(item_id=db_item.item_id, service_id=serv.service_id, actual_price=serv.base_price)
+                db.add(mapping)
 
         db.commit()
         db.refresh(db_order)
         return db_order
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=f"Creation Error: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Creation failure: {str(e)}")
 
-@app.delete("/api/orders/{order_id}")
-def delete_order(order_id: str, db: Session = Depends(get_db)):
-    db_order = db.query(JobOrder).filter(JobOrder.id == order_id).first()
-    if db_order:
-        db.delete(db_order)
-        db.commit()
-    return {"ok": True}
+# ==========================================
+# 3. UTILITIES & LOOKUPS
+# ==========================================
 
-# -----------------
-# SERVICES
-# -----------------
 @app.get("/api/services", response_model=List[ServiceSchema])
 def read_services(db: Session = Depends(get_db)):
     return db.query(Service).all()
 
-# -----------------
-# AUTHENTICATION
-# -----------------
-@app.post("/api/login")
-def login(request: LoginRequest, db: Session = Depends(get_db)):
-    db_user = db.query(User).filter(User.username == request.username).first()
-    if not db_user:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+@app.get("/api/lookups/statuses", response_model=List[StatusSchema])
+def read_statuses(db: Session = Depends(get_db)):
+    return db.query(Status).all()
 
-    if db_user.locked_until:
-        locked_time = datetime.fromisoformat(db_user.locked_until)
-        if datetime.utcnow() < locked_time:
-            raise HTTPException(status_code=403, detail="Account locked.")
-        else:
-            db_user.locked_until = None
-            db_user.failed_login_attempts = 0
-            db.commit()
-
-    if db_user.password == request.password:
-        db_user.failed_login_attempts = 0
-        db.commit()
-        return {"username": db_user.username, "role": db_user.role, "id": db_user.id}
-    else:
-        db_user.failed_login_attempts += 1
-        if db_user.failed_login_attempts >= 3:
-            db_user.locked_until = (datetime.utcnow() + timedelta(minutes=15)).isoformat()
-        db.commit()
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+@app.get("/api/lookups/conditions", response_model=List[ConditionSchema])
+def read_conditions(db: Session = Depends(get_db)):
+    return db.query(Condition).all()
