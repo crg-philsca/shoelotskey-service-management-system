@@ -90,3 +90,6 @@ class User(Base):
     email = Column(String, nullable=True)
     password = Column(String, nullable=True)
     active = Column(Boolean, default=True)
+    failed_login_attempts = Column(Integer, default=0)
+    locked_until = Column(String, nullable=True)
+    reset_token = Column(String, nullable=True)

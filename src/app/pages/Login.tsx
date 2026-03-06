@@ -19,10 +19,10 @@ export default function Login({ onLogin }: LoginProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validate empty fields
+    // SOLID: Validation Responsibility should be local to UI
     if (!username.trim()) {
       toast.error('Please enter your username', {
         style: { background: '#fef2f2', color: '#dc2626' }
@@ -37,21 +37,37 @@ export default function Login({ onLogin }: LoginProps) {
       return;
     }
 
-    // Mock login logic
-    if (username === 'owner' && password === 'owner123') {
-      toast.success('Welcome, Owner!', {
-        style: { background: '#f0fdf4', color: '#166534' }
+    try {
+      // SECURITY: Backend handles the 3-attempt limit and lockout
+      const response = await fetch('http://127.0.0.1:8000/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
       });
-      onLogin(username, 'owner');
-    } else if (username === 'staff' && password === 'staff123') {
-      toast.success('Welcome, Staff!', {
-        style: { background: '#f0fdf4', color: '#166534' }
-      });
-      onLogin(username, 'staff');
-    } else {
-      toast.error('Invalid username or password. Try again.', {
-        style: { background: '#fef2f2', color: '#dc2626' }
-      });
+
+      if (response.ok) {
+        const data = await response.json();
+        toast.success(`Welcome, ${data.username}!`, {
+          style: { background: '#f0fdf4', color: '#166534' }
+        });
+        onLogin(data.username, data.role as 'owner' | 'staff');
+      } else {
+        const err = await response.json();
+        if (response.status === 403) {
+          // Locked account (SECURITY: Limited attempts)
+          toast.error(err.detail, {
+            style: { background: '#fff7ed', color: '#c2410c' },
+            duration: 5000
+          });
+        } else {
+          toast.error(err.detail || 'Invalid username or password', {
+            style: { background: '#fef2f2', color: '#dc2626' }
+          });
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to connect to authentication server. Is the backend running?');
     }
   };
 

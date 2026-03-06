@@ -73,3 +73,17 @@ class UserSchema(BaseModel):
     email: Optional[str] = None
     password: Optional[str] = None
     active: bool
+    failed_login_attempts: Optional[int] = 0
+    locked_until: Optional[str] = None
+    reset_token: Optional[str] = None
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str

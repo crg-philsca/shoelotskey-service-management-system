@@ -18,46 +18,51 @@ export default function ResetPassword() {
 
   const token = searchParams.get('token'); // Get token from URL params
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validate passwords
     if (!password.trim()) {
-      toast.error('Please enter a new password', {
-        style: { background: '#fef2f2', color: '#dc2626' }
-      });
+      toast.error('Please enter a new password');
       return;
     }
 
     if (password.length < 6) {
-      toast.error('Password must be at least 6 characters long', {
-        style: { background: '#fef2f2', color: '#dc2626' }
-      });
+      toast.error('Password must be at least 6 characters long');
       return;
     }
 
     if (password !== confirmPassword) {
-      toast.error('Passwords do not match', {
-        style: { background: '#fef2f2', color: '#dc2626' }
-      });
+      toast.error('Passwords do not match');
       return;
     }
 
-    // Mock password reset logic
-    if (token) {
-      toast.success('Password reset successfully!', {
-        style: { background: '#f0fdf4', color: '#166534' }
-      });
-      setSubmitted(true);
+    if (!token) {
+      toast.error('Invalid or missing reset token');
+      return;
+    }
 
-      // Redirect to login after 2 seconds
-      setTimeout(() => {
-        navigate('/');
-      }, 2000);
-    } else {
-      toast.error('Invalid or expired reset link', {
-        style: { background: '#fef2f2', color: '#dc2626' }
+    setLoading(true);
+    try {
+      const response = await fetch('http://127.0.0.1:8000/api/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, new_password: password })
       });
+
+      if (response.ok) {
+        toast.success('Password updated successfully!');
+        setSubmitted(true);
+        setTimeout(() => navigate('/'), 2000);
+      } else {
+        const err = await response.json();
+        toast.error(err.detail || 'Failed to reset password');
+      }
+    } catch (err) {
+      toast.error('Connection error.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -128,8 +133,8 @@ export default function ResetPassword() {
                     </button>
                   </div>
                 </div>
-                <Button type="submit" className="w-full bg-red-600 hover:bg-red-700 cursor-pointer text-base mt-4">
-                  Reset
+                <Button type="submit" disabled={loading} className="w-full bg-red-600 hover:bg-red-700 cursor-pointer text-base mt-4">
+                  {loading ? 'Resetting...' : 'Reset'}
                 </Button>
                 <div className="mt-2 flex justify-center">
                   <button
