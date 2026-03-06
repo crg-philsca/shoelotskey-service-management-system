@@ -17,14 +17,23 @@ interface ActivityContextType {
 const ActivityContext = createContext<ActivityContextType | undefined>(undefined);
 
 export function ActivityProvider({ children }: { children: ReactNode }) {
-    const [activities, setActivities] = useState<ActivityLog[]>(() => {
-        const saved = localStorage.getItem('shoelotskey_activities');
-        return saved ? JSON.parse(saved) : [];
-    });
+    const [activities, setActivities] = useState<ActivityLog[]>([]);
 
     useEffect(() => {
-        localStorage.setItem('shoelotskey_activities', JSON.stringify(activities));
-    }, [activities]);
+        fetch('http://127.0.0.1:8000/api/activities')
+            .then(res => res.json())
+            .then(data => {
+                if (Array.isArray(data)) {
+                    // Reverse to show newest first, assuming DB returns in insert order
+                    setActivities(data.reverse());
+                }
+            })
+            .catch(err => {
+                console.error("Failed to fetch activities from backend", err);
+                const saved = localStorage.getItem('shoelotskey_activities');
+                if (saved) setActivities(JSON.parse(saved));
+            });
+    }, []);
 
     const addActivity = (activity: Omit<ActivityLog, 'id' | 'timestamp'>) => {
         const timestamp = new Date().toLocaleString('en-US', {
@@ -42,7 +51,19 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
             timestamp,
         };
 
-        setActivities(prev => [newActivity, ...prev]);
+        fetch('http://127.0.0.1:8000/api/activities', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newActivity)
+        })
+            .then(res => res.json())
+            .then(data => {
+                setActivities(prev => [data, ...prev]);
+            })
+            .catch(err => {
+                console.error(err);
+                setActivities(prev => [newActivity, ...prev]); // Fallback
+            });
     };
 
     return (

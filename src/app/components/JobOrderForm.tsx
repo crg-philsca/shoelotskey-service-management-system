@@ -171,7 +171,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
             condition: {
                 scratches: false,
                 ripsHoles: false,
-                fadedWorn: false,
+                wornOut: false,
                 soleSeparation: false,
                 yellowing: false,
                 deepStains: false,
@@ -314,7 +314,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
     const mlBreakdown = calculatePredictedDaysBreakdown();
     const calculatePredictedDays = () => {
         const tempOrder = {
-            items: shoes,
+            items: shoes as any,
             priorityLevel: priorityLevel
         };
         // Use Random forest model if available, otherwise fallback to basic heuristic
@@ -606,7 +606,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
             condition: {
                 scratches: false,
                 ripsHoles: false,
-                fadedWorn: false,
+                wornOut: false,
                 soleSeparation: false,
                 yellowing: false,
                 deepStains: false,

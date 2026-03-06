@@ -13,30 +13,45 @@ export function ExpenseProvider({ children }: { children: ReactNode }) {
     const { addActivity } = useActivities();
     const currentUser = JSON.parse(localStorage.getItem('user') || '{"username": "System"}').username;
 
-    const [expenses, setExpenses] = useState<Expense[]>(() => {
-        const saved = localStorage.getItem('expenses');
-        if (saved) {
-            const parsed = JSON.parse(saved);
-            return parsed.map((exp: any) => ({
-                ...exp,
-                date: new Date(exp.date).toISOString() // Keeping it as ISO string as per original type but ensuring it's valid
-            }));
-        }
-        return mockExpenses;
-    });
+    const [expenses, setExpenses] = useState<Expense[]>([]);
 
     useEffect(() => {
-        localStorage.setItem('expenses', JSON.stringify(expenses));
-    }, [expenses]);
+        fetch('http://127.0.0.1:8000/api/expenses')
+            .then(res => res.json())
+            .then(data => {
+                if (Array.isArray(data)) {
+                    // sort by date descending to match original behavior
+                    data.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                    setExpenses(data);
+                }
+            })
+            .catch(err => {
+                console.error("Failed to fetch expenses from backend, falling back to mock", err);
+                setExpenses(mockExpenses);
+            });
+    }, []);
 
     const addExpense = (expense: Expense) => {
-        setExpenses((prev) => [expense, ...prev]);
-        addActivity({
-            user: currentUser,
-            action: 'Add Expense',
-            details: `Logged new expense: ${expense.category} - ${expense.amount}`,
-            type: 'expense'
-        });
+        fetch('http://127.0.0.1:8000/api/expenses', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(expense)
+        })
+            .then(res => res.json())
+            .then(data => {
+                setExpenses((prev) => [data, ...prev]);
+                addActivity({
+                    user: currentUser,
+                    action: 'Add Expense',
+                    details: `Logged new expense: ${data.category} - ${data.amount}`,
+                    type: 'expense'
+                });
+            })
+            .catch(err => {
+                console.error(err);
+                // Fallback for offline mode
+                setExpenses((prev) => [expense, ...prev]);
+            });
     };
 
     return (
