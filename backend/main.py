@@ -14,10 +14,8 @@ from schemas import (
 from database import engine, get_db, SessionLocal
 
 # ==========================================
-# 0. DATABASE INITIALIZATION & SEEDING
+# 0. DATABASE INITIALIZATION & SEEDING (on startup only)
 # ==========================================
-
-Base.metadata.create_all(bind=engine)
 
 def seed_lookups(db: Session):
     # Seed Roles
@@ -77,11 +75,18 @@ app = FastAPI(title="Shoelotskey 3NF & ML Aligned API")
 
 @app.on_event("startup")
 def startup_event():
-    db = SessionLocal()
+    print("Backend Starting...")
     try:
-        seed_lookups(db)
-    finally:
-        db.close()
+        # Create all tables securely (IF NOT EXISTS)
+        Base.metadata.create_all(bind=engine)
+        db = SessionLocal()
+        try:
+            seed_lookups(db)
+            print("Database initialization complete.")
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"Startup Notification: Server starting (Re-using existing DB): {e}")
 
 app.add_middleware(
     CORSMiddleware,
@@ -97,11 +102,14 @@ app.add_middleware(
 
 @app.post("/api/login")
 def login(request: LoginRequest, db: Session = Depends(get_db)):
+    print(f"Login attempt for user: {request.username}")
     db_user = db.query(User).options(joinedload(User.role)).filter(User.username == request.username).first()
     if not db_user:
+        print(f"Login failed: User {request.username} not found")
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
     if db_user.password_hash == request.password:
+        print(f"Login success: {request.username}")
         return {
             "user_id": db_user.user_id,
             "username": db_user.username,
@@ -109,6 +117,7 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
             "email": db_user.email
         }
     else:
+        print(f"Login failed: Incorrect password for {request.username}")
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
 # ==========================================

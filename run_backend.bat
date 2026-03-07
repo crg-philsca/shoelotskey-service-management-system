@@ -14,9 +14,6 @@ pause
 exit /b 1
 
 :RUN_BACKEND
-echo Verifying dependencies...
-".\venv\Scripts\python.exe" -m pip install -q -r backend\requirements.txt
-
-:: Start Server
+echo Backend Starting...
 cd backend
 "..\venv\Scripts\python.exe" -m uvicorn main:app --reload --host 127.0.0.1 --port 8000

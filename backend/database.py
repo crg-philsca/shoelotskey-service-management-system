@@ -7,8 +7,10 @@ SQLALCHEMY_DATABASE_URL = "mysql+pymysql://root:@localhost/shoelotskey_db"
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
-    # MySQL specific connection settings (optional but good for stability)
-    pool_pre_ping=True
+    pool_size=10,            # Maintain 10 active connections
+    max_overflow=20,         # Allow up to 30 total connections
+    pool_recycle=3600,       # Reset connections every hour
+    pool_pre_ping=True       # Check if connection is alive before using
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
