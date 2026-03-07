@@ -1,3 +1,10 @@
+"""
+DATA SCHEMAS - PYDANTIC MODELS
+==============================
+This module handles data validation, serialization, and type-hinting.
+It defines the contracts between the React Frontend and Python Backend.
+"""
+
 from pydantic import BaseModel
 from typing import List, Optional, Any, Dict
 from datetime import datetime
@@ -8,18 +15,21 @@ from decimal import Decimal
 # ==========================================
 
 class RoleSchema(BaseModel):
+    """Schema for user roles."""
     role_id: Optional[int] = None
     role_name: str
     class Config:
         from_attributes = True
 
 class StatusSchema(BaseModel):
+    """Schema for order status (e.g., Pending)."""
     status_id: Optional[int] = None
     status_name: str
     class Config:
         from_attributes = True
 
 class ConditionSchema(BaseModel):
+    """Schema for shoe conditions (ML feature)."""
     condition_id: Optional[int] = None
     condition_name: str
     class Config:
@@ -30,6 +40,7 @@ class ConditionSchema(BaseModel):
 # ==========================================
 
 class UserSchema(BaseModel):
+    """Detailed User information for session management."""
     user_id: Optional[int] = None
     username: str
     email: str
@@ -41,6 +52,7 @@ class UserSchema(BaseModel):
         from_attributes = True
 
 class CustomerSchema(BaseModel):
+    """Customer profile information."""
     customer_id: Optional[int] = None
     customer_name: str
     contact_number: str
@@ -53,6 +65,7 @@ class CustomerSchema(BaseModel):
 # ==========================================
 
 class ServiceSchema(BaseModel):
+    """Available cleaning/repair services."""
     service_id: Optional[int] = None
     service_name: str
     base_price: Decimal
@@ -61,6 +74,7 @@ class ServiceSchema(BaseModel):
         from_attributes = True
 
 class ExpenseSchema(BaseModel):
+    """Business overhead logging."""
     expense_id: Optional[int] = None
     amount: Decimal
     description: Optional[str] = None
@@ -71,10 +85,11 @@ class ExpenseSchema(BaseModel):
         from_attributes = True
 
 # ==========================================
-# 4. ORDERS & ITEMS
+# 4. ORDERS & ITEMS (3NF Nesting)
 # ==========================================
 
 class ItemSchema(BaseModel):
+    """Individual shoe details within an order."""
     item_id: Optional[int] = None
     order_id: Optional[int] = None
     brand: Optional[str] = None
@@ -85,6 +100,7 @@ class ItemSchema(BaseModel):
         from_attributes = True
 
 class OrderSchema(BaseModel):
+    """Comprehensive Order Header with nested Items and Customer data."""
     order_id: Optional[int] = None
     order_number: str
     customer_id: int
@@ -98,6 +114,7 @@ class OrderSchema(BaseModel):
     updated_at: Optional[datetime] = None
     user_id: int
     
+    # 3NF Relationship hydration
     customer: Optional[CustomerSchema] = None
     status: Optional[StatusSchema] = None
     items: List[ItemSchema] = []
@@ -105,10 +122,11 @@ class OrderSchema(BaseModel):
         from_attributes = True
 
 # ==========================================
-# 5. LOGGING
+# 5. LOGGING SCHEMAS
 # ==========================================
 
 class StatusLogSchema(BaseModel):
+    """Historical trace of order status changes."""
     status_log_id: Optional[int] = None
     order_id: int
     status_id: int
@@ -118,6 +136,7 @@ class StatusLogSchema(BaseModel):
         from_attributes = True
 
 class AuditLogSchema(BaseModel):
+    """Generic audit trail entry."""
     audit_log_id: Optional[int] = None
     user_id: int
     action_type: str
@@ -130,16 +149,19 @@ class AuditLogSchema(BaseModel):
         from_attributes = True
 
 # ==========================================
-# 6. REQUEST SCHEMAS
+# 6. REQUEST SCHEMAS (Client Input)
 # ==========================================
 
 class LoginRequest(BaseModel):
+    """Payload for user authentication."""
     username: str
     password: str
 
 class ForgotPasswordRequest(BaseModel):
+    """Payload for password recovery."""
     email: str
 
 class ResetPasswordRequest(BaseModel):
+    """Payload for password update."""
     token: str
     new_password: str

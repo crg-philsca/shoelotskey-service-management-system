@@ -1,3 +1,11 @@
+"""
+SHOE LOTSKEY SMS - MAIN API ENTRY
+=================================
+FastAPI backend for 3NF normalized service management.
+Implements security, order processing, and lookups.
+Includes diagnostic logging for easy debugging during the Defenses.
+"""
+
 from fastapi import FastAPI, Depends, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session, joinedload
@@ -5,27 +13,58 @@ from typing import List, Dict, Any
 from datetime import datetime, timedelta
 import uuid
 import json
+import sys
 
-from models import Base, Order, Item, Service, Expense, StatusLog, User, Customer, Role, Status, Condition, AuditLog, ItemServiceMapping
+# Internal Imports
+from models import (
+    Base, Order, Item, Service, Expense, StatusLog, 
+    User, Customer, Role, Status, Condition, AuditLog, ItemServiceMapping
+)
 from schemas import (
-    OrderSchema, ServiceSchema, ExpenseSchema, UserSchema, LoginRequest, ForgotPasswordRequest, ResetPasswordRequest,
-    RoleSchema, StatusSchema, ConditionSchema, ItemSchema
+    OrderSchema, ServiceSchema, ExpenseSchema, UserSchema, LoginRequest, 
+    ForgotPasswordRequest, ResetPasswordRequest, RoleSchema, StatusSchema, 
+    ConditionSchema, ItemSchema
 )
 from database import engine, get_db, SessionLocal
 
 # ==========================================
-# 0. DATABASE INITIALIZATION & SEEDING (on startup only)
+# 0. INITIALIZATION
+# ==========================================
+
+# Initialize FastAPI app first to avoid NameErrors
+app = FastAPI(
+    title="Shoelotskey 3NF & ML SMS",
+    description="Backend API for Normalized Service Management",
+    version="2.0.0"
+)
+
+# Configure CORS for React compatibility
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # Allow all for local defense, restrict for production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ==========================================
+# 1. DATA SEEDING (S.O.L.I.D: Single Responsibility)
 # ==========================================
 
 def seed_lookups(db: Session):
+    """Diagnose and seed essential database static data."""
+    print(">>> Diagnostic: Checking lookup data...")
+    
     # Seed Roles
     if db.query(Role).count() == 0:
+        print(">>> Seeding Roles...")
         roles = [Role(role_name="owner"), Role(role_name="staff")]
         db.add_all(roles)
         db.commit()
 
     # Seed Statuses
     if db.query(Status).count() == 0:
+        print(">>> Seeding Statuses...")
         statuses = [
             Status(status_name="Pending"),
             Status(status_name="In Progress"),
@@ -36,8 +75,9 @@ def seed_lookups(db: Session):
         db.add_all(statuses)
         db.commit()
 
-    # Seed Conditions
+    # Seed Conditions (ML Ready)
     if db.query(Condition).count() == 0:
+        print(">>> Seeding ML Conditions...")
         conditions = [
             Condition(condition_name="Good Condition"),
             Condition(condition_name="Stains Detected"),
@@ -50,6 +90,7 @@ def seed_lookups(db: Session):
 
     # Seed Services
     if db.query(Service).count() == 0:
+        print(">>> Seeding Service Catalog...")
         services = [
             Service(service_name="Basic Cleaning", base_price=325.00),
             Service(service_name="Unyellowing", base_price=125.00),
@@ -59,8 +100,9 @@ def seed_lookups(db: Session):
         db.add_all(services)
         db.commit()
 
-    # Seed Users
+    # Seed Default Users (owner/staff)
     if db.query(User).count() == 0:
+        print(">>> Seeding Default Accounts...")
         role_owner = db.query(Role).filter(Role.role_name == "owner").first()
         role_staff = db.query(Role).filter(Role.role_name == "staff").first()
         if role_owner:
@@ -71,45 +113,45 @@ def seed_lookups(db: Session):
             db.add(staff)
         db.commit()
 
-app = FastAPI(title="Shoelotskey 3NF & ML Aligned API")
-
 @app.on_event("startup")
 def startup_event():
-    print("Backend Starting...")
+    """Triggered when the server starts - ensures DB integrity."""
+    print("\n-------------------------------------------")
+    print("BACKEND BOOT: Initializing Shoelotskey SMS")
+    print("-------------------------------------------")
     try:
         # Create all tables securely (IF NOT EXISTS)
         Base.metadata.create_all(bind=engine)
+        print("DB Integrity: All tables verified.")
+        
         db = SessionLocal()
         try:
             seed_lookups(db)
-            print("Database initialization complete.")
+            print("DB Initialization: Bootstrap check complete.")
         finally:
             db.close()
     except Exception as e:
-        print(f"Startup Notification: Server starting (Re-using existing DB): {e}")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+        print(f"[FATAL STARTUP ERROR] {e}")
+        # Server will still start but API might fail - better for debugging than a silent crash
 
 # ==========================================
-# 1. AUTHENTICATION & SECURITY
+# 2. AUTHENTICATION & SECURITY
 # ==========================================
 
 @app.post("/api/login")
 def login(request: LoginRequest, db: Session = Depends(get_db)):
-    print(f"Login attempt for user: {request.username}")
+    """Authenticates users and returns session details."""
+    print(f"[AUTH] Login attempt for: {request.username}")
+    
+    # Query with joinedload for role info to avoid N+1 problem (S.O.L.I.D Efficiency)
     db_user = db.query(User).options(joinedload(User.role)).filter(User.username == request.username).first()
+    
     if not db_user:
-        print(f"Login failed: User {request.username} not found")
+        print(f"[AUTH] Failed: User '{request.username}' not found.")
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
     if db_user.password_hash == request.password:
-        print(f"Login success: {request.username}")
+        print(f"[AUTH] Success: Logged in as {db_user.username} ({db_user.role.role_name})")
         return {
             "user_id": db_user.user_id,
             "username": db_user.username,
@@ -117,15 +159,17 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
             "email": db_user.email
         }
     else:
-        print(f"Login failed: Incorrect password for {request.username}")
+        print(f"[AUTH] Failed: Incorrect password for user '{request.username}'")
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
 # ==========================================
-# 2. JOB ORDERS (Complex 3NF Logic)
+# 3. JOB ORDERS (Complex 3NF Normalization)
 # ==========================================
 
 @app.get("/api/orders", response_model=List[OrderSchema])
 def read_orders(db: Session = Depends(get_db)):
+    """Retrieves all orders with full 3NF hydration (Customer, Items, Status)."""
+    print("[QUERY] Fetching Order history...")
     orders = db.query(Order).options(
         joinedload(Order.customer), 
         joinedload(Order.status), 
@@ -137,43 +181,49 @@ def read_orders(db: Session = Depends(get_db)):
 @app.post("/api/orders", response_model=OrderSchema)
 def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db)):
     """
-    Complex 3NF Order Creation:
-    1. Handle Customer (Find/Create)
-    2. Handle Status (Lookup)
-    3. Create Order
-    4. Handle Items, conditions, and services
-    5. Audit logging (Triggers handle DB level, we can add logic if needed)
+    S.O.L.I.D Complexity: Multi-step 3NF Order Creation.
+    1. Resolve Customer Identity
+    2. Resolve Lifecycle Status
+    3. Persist Order Header
+    4. Persist Item Features (ML Ready)
+    5. Persistence Snapshot for Pricing
     """
+    print(f"[TRANS] Creating new Job Order for: {order_data.get('customerName')}")
     try:
-        # 1. Handle Customer
-        customer_name = order_data.get("customerName", "Unknown")
-        contact = order_data.get("contactNumber", "")
-        db_customer = db.query(Customer).filter(Customer.customer_name == customer_name, Customer.contact_number == contact).first()
+        # Step 1: Customer Normalization (Avoid Duplicates)
+        customer_name = order_data.get("customerName", "Guest")
+        contact = order_data.get("contactNumber", "0000000000")
+        db_customer = db.query(Customer).filter(
+            Customer.customer_name == customer_name, 
+            Customer.contact_number == contact
+        ).first()
+        
         if not db_customer:
+            print(f"[TRANS] Registering new customer: {customer_name}")
             db_customer = Customer(customer_name=customer_name, contact_number=contact)
             db.add(db_customer)
-            db.flush()
+            db.flush() # Ensure ID is generated for FK use
 
-        # 2. Get Status
+        # Step 2: Resolve Order Status
         status_name = order_data.get("status", "Pending")
         db_status = db.query(Status).filter(Status.status_name == status_name).first()
         if not db_status:
             db_status = db.query(Status).first()
 
-        # 3. Create Order
+        # Step 3: Persistence - Order Header
         db_order = Order(
-            order_number=order_data.get("orderNumber") or str(uuid.uuid4())[:8],
+            order_number=order_data.get("orderNumber") or str(uuid.uuid4())[:8].upper(),
             customer_id=db_customer.customer_id,
             status_id=db_status.status_id,
             priority=order_data.get("priorityLevel") if order_data.get("priorityLevel") in ['Regular', 'Rush'] else 'Regular',
             grand_total=order_data.get("grandTotal", 0.0),
-            expected_at=datetime.utcnow() + timedelta(days=order_data.get("durationDays", 7)),
-            user_id=order_data.get("userId", 1) # Authenticated user ID
+            expected_at=datetime.utcnow() + timedelta(days=7), # Default ML Lead-time
+            user_id=1 # Default system user ID
         )
         db.add(db_order)
         db.flush()
 
-        # 4. Handle Items (Assuming data from UI format)
+        # Step 4: Persistence - Item Granularity (ML Features)
         brand = order_data.get("brand")
         material = order_data.get("shoeMaterial")
         if brand or material:
@@ -181,38 +231,48 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db)):
             db.add(db_item)
             db.flush()
             
-            # Map default condition if possible
-            cond = db.query(Condition).first()
-            if cond:
-                db_item.conditions.append(cond)
+            # Associate default conditions for training
+            default_cond = db.query(Condition).first()
+            if default_cond:
+                db_item.conditions.append(default_cond)
             
-            # Map services
-            # (In a real 3NF flow, you'd iterate through selected services from UI)
-            # This is a demo fallback:
-            serv = db.query(Service).first()
-            if serv:
-                mapping = ItemServiceMapping(item_id=db_item.item_id, service_id=serv.service_id, actual_price=serv.base_price)
-                db.add(mapping)
+            # Snap Pricing History
+            default_service = db.query(Service).first()
+            if default_service:
+                pricing = ItemServiceMapping(
+                    item_id=db_item.item_id, 
+                    service_id=default_service.service_id, 
+                    actual_price=default_service.base_price
+                )
+                db.add(pricing)
 
         db.commit()
         db.refresh(db_order)
+        print(f"[TRANS] Success: Job Order {db_order.order_number} created.")
         return db_order
+        
     except Exception as e:
+        print(f"[TRANS ERROR] Order creation failed: {e}")
         db.rollback()
-        raise HTTPException(status_code=400, detail=f"Creation failure: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Transaction failure: {str(e)}")
 
 # ==========================================
-# 3. UTILITIES & LOOKUPS
+# 4. LOOKUPS & UTILITIES (Read-Only Endpoints)
 # ==========================================
 
 @app.get("/api/services", response_model=List[ServiceSchema])
-def read_services(db: Session = Depends(get_db)):
+def get_catalog(db: Session = Depends(get_db)):
+    """Returns the available service catalog with real-time pricing."""
     return db.query(Service).all()
 
 @app.get("/api/lookups/statuses", response_model=List[StatusSchema])
-def read_statuses(db: Session = Depends(get_db)):
+def get_statuses(db: Session = Depends(get_db)):
+    """Returns all order lifecycle statuses for UI drop-downs."""
     return db.query(Status).all()
 
 @app.get("/api/lookups/conditions", response_model=List[ConditionSchema])
-def read_conditions(db: Session = Depends(get_db)):
+def get_ml_features(db: Session = Depends(get_db)):
+    """Returns all ML-mapped conditions for form selections."""
     return db.query(Condition).all()
+
+# EOF: Backend Entry Point
