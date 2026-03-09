@@ -60,6 +60,24 @@ app.add_middleware(
 def on_startup():
     """Logic executed when the server starts."""
     print(">>> System Boot: Initializing Database Schema...")
+    
+    # 0. PRE-BREAD: Robust migrations before ANY ORM work
+    from sqlalchemy import text, inspect
+    try:
+        inspector = inspect(engine)
+        if "users" in inspector.get_table_names():
+            cols = [c['name'] for c in inspector.get_columns("users")]
+            with engine.connect() as conn:
+                with conn.begin():
+                    if "reset_token" not in cols:
+                        print(">>> Migration: Force adding reset_token column")
+                        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token VARCHAR(255)"))
+                    if "reset_token_expiry" not in cols:
+                        print(">>> Migration: Force adding reset_token_expiry column")
+                        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expiry TIMESTAMP"))
+    except Exception as e:
+        print(f">>> Pre-migration Warning: {e}")
+
     # Create tables if they don't exist
     Base.metadata.create_all(bind=engine)
     
