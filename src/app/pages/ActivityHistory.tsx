@@ -6,9 +6,17 @@ import { Badge } from '@/app/components/ui/badge';
 
 import { useActivities } from '@/app/context/ActivityContext';
 
+/**
+ * COMPONENT: ActivityHistory
+ * PURPOSE: Displays a list of system-wide activities (Audit Trail).
+ * DATA SOURCE: ActivityContext (Synced with AuditLog backend table).
+ */
 export default function ActivityHistory() {
     const navigate = useNavigate();
+
+    // DEBUG: Log activities for programmer visibility
     const { activities } = useActivities();
+    console.log('[DEBUG] ActivityHistory active. Count:', activities.length);
 
     return (
         <div className="space-y-4">

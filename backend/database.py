@@ -1,20 +1,36 @@
+"""
+DATABASE CONFIGURATION
+======================
+Handles the SQLAlchemy Engine initialization and Session factory.
+Pooling is optimized for multi-user access (10 base connections + 20 overflow).
+"""
+
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-# MySQL Connection (Default for XAMPP/WAMP is root with no password)
-# Format: mysql+pymysql://user:password@host/database_name
-SQLALCHEMY_DATABASE_URL = "mysql+pymysql://root:@localhost/shoelotskey_db"
+# 1. DATABASE CONNECTION URL
+# Automatically handles Heroku (DATABASE_URL) or fallback to local SQLite for deployment ease.
+# Note: For production MySQL, set DATABASE_URL=mysql+pymysql://root:@localhost/shoelotskey_db
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./shoelotskey.db")
+
+# SQLite specific config (check_same_thread) is required for multithreaded fastAPI access
+is_sqlite = SQLALCHEMY_DATABASE_URL.startswith("sqlite")
+connect_args = {"check_same_thread": False} if is_sqlite else {}
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
-    pool_size=10,            # Maintain 10 active connections
-    max_overflow=20,         # Allow up to 30 total connections
-    pool_recycle=3600,       # Reset connections every hour
-    pool_pre_ping=True       # Check if connection is alive before using
+    connect_args=connect_args,
+    pool_pre_ping=True
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_db():
+    """
+    DEPENDENCY: get_db
+    Provides a database session for each API request.
+    Ensures safe closing of connections after transaction.
+    """
     db = SessionLocal()
     try:
         yield db

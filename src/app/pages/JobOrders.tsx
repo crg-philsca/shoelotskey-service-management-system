@@ -7,7 +7,7 @@ import { Input } from '@/app/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu';
-import { Search, Filter, MoreVertical, Edit, ArrowRight, RotateCcw, User, Phone, Clock, CreditCard, Tag, MapPin, UserPlus, Calendar as CalendarIcon } from 'lucide-react';
+import { Search, Filter, MoreVertical, Edit, ArrowRight, RotateCcw, User, Phone, Clock, CreditCard, Tag, MapPin, UserPlus, Calendar as CalendarIcon, Truck } from 'lucide-react';
 import { format as dateFnsFormat } from 'date-fns';
 import { useServices } from '@/app/context/ServiceContext';
 import EditOrderModal from '@/app/components/EditOrderModal';
@@ -21,6 +21,15 @@ interface JobOrdersProps {
     onSetHeaderAction: (action: React.ReactNode) => void;
 }
 
+/**
+ * PAGE: JobOrders
+ * PURPOSE: Main directory for tracking and managing all service orders.
+ * FEATURES: 
+ * - Multi-criteria Filtering (Status, Service, Date)
+ * - Sorting (Status Recency + Rush Priority)
+ * - Bulk Actions (Assign Staff to multiple orders)
+ * - Detailed Order View & Inline Editing
+ */
 export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
     const { orders, updateOrder } = useOrders();
     const { services } = useServices();
@@ -40,9 +49,9 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
 
     // Set header action
     useEffect(() => {
-        onSetHeaderAction(<JobOrderFormModal />);
+        onSetHeaderAction(<JobOrderFormModal user={user} />);
         return () => onSetHeaderAction(null);
-    }, [onSetHeaderAction]);
+    }, [onSetHeaderAction, user]);
 
     // Filter logic
     const filteredOrders = orders.filter((order: JobOrder) => {
@@ -185,7 +194,7 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                     <th className="h-10 px-4 text-left font-medium text-gray-500">Order #</th>
                                     <th className="h-10 px-4 text-left font-medium text-gray-500">Customer</th>
                                     <th className="h-10 px-4 text-left font-medium text-gray-500">Service</th>
-                                    <th className="h-10 px-4 text-left font-medium text-gray-500">Assigned To</th>
+                                    <th className="h-10 px-4 text-left font-medium text-gray-500">Total Qty</th>
                                     <th className="h-10 px-4 text-left font-medium text-gray-500">Status</th>
                                     <th className="h-10 px-4 text-left font-medium text-gray-500">Priority</th>
                                     <th className="h-10 px-4 text-left font-medium text-gray-500">Payment</th>
@@ -220,8 +229,8 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                                 <div className="font-medium text-gray-900">{order.customerName}</div>
                                                 <div className="text-xs text-gray-500">{order.contactNumber}</div>
                                             </td>
-                                            <td className="p-4 text-gray-600">{order.baseService}</td>
-                                            <td className="p-4 font-semibold text-blue-600 uppercase">{order.assignedTo || '-'}</td>
+                                            <td className="p-4 text-gray-600">{Array.isArray(order.baseService) ? order.baseService.join(', ') : order.baseService}</td>
+                                            <td className="p-4 font-bold text-gray-700">{order.quantity || 1} {(order.quantity || 1) === 1 ? 'Pair' : 'Pairs'}</td>
                                             <td className="p-4">
                                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase border whitespace-nowrap
                                                     ${order.status === 'new-order' ? 'bg-purple-50 text-purple-700 border-purple-100' :
@@ -393,7 +402,6 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
             {selectedOrder && (
                 <EditOrderModal
                     open={isEditing}
-                    hideHistory={user.role === 'staff'}
                     onOpenChange={(open) => {
                         setIsEditing(open);
                         if (!open) setSelectedOrder(null);
@@ -446,7 +454,10 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                         <div className="flex items-center gap-2">
                                             <CalendarIcon size={12} className="text-gray-400" />
                                             <p className="text-sm font-medium text-gray-600">
-                                                {dateFnsFormat(new Date(selectedOrder.transactionDate || selectedOrder.createdAt), 'MM/dd/yy HH:mm')}
+                                                {(() => {
+                                                    const d = new Date(selectedOrder.transactionDate || selectedOrder.createdAt);
+                                                    return isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy HH:mm');
+                                                })()}
                                             </p>
                                         </div>
                                     </div>
@@ -455,7 +466,11 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                         <div className="flex items-center gap-2">
                                             <Clock size={12} className="text-gray-400" />
                                             <p className="text-sm font-bold text-gray-800">
-                                                {selectedOrder.predictedCompletionDate ? dateFnsFormat(new Date(selectedOrder.predictedCompletionDate), 'MM/dd/yy HH:mm') : '-'}
+                                                {(() => {
+                                                    if (!selectedOrder.predictedCompletionDate) return '-';
+                                                    const d = new Date(selectedOrder.predictedCompletionDate);
+                                                    return isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy HH:mm');
+                                                })()}
                                                 {['for-release', 'claimed'].includes(selectedOrder.status) && selectedOrder.releaseTime && (
                                                     <span className="text-xs text-gray-500 ml-1 font-normal">
                                                         @ {selectedOrder.releaseTime}
@@ -466,15 +481,38 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                     </div>
                                 </div>
 
-                                {selectedOrder.shippingPreference === 'delivery' && (
-                                    <div>
-                                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Delivery Address</Label>
-                                        <div className="flex items-start gap-2">
-                                            <MapPin size={12} className="text-gray-400 mt-0.5" />
-                                            <p className="text-sm font-medium text-gray-600 leading-snug">{selectedOrder.deliveryAddress || 'No address provided'}</p>
-                                        </div>
+                                {/* Shipping Details */}
+                                <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-3">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <Truck size={16} className="text-red-500" />
+                                        <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Shipping Details</h4>
                                     </div>
-                                )}
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Preference</Label>
+                                            <p className="text-sm font-bold text-gray-800 uppercase">{selectedOrder.shippingPreference || 'Pickup'}</p>
+                                        </div>
+                                        {selectedOrder.shippingPreference === 'delivery' && selectedOrder.deliveryCourier && (
+                                            <div>
+                                                <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Courier</Label>
+                                                <div className="flex items-center gap-2">
+                                                    <p className="text-sm font-bold text-gray-800">{selectedOrder.deliveryCourier}</p>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {selectedOrder.shippingPreference === 'delivery' && (
+                                        <div className="pt-2 border-t border-gray-200/50">
+                                            <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Full Delivery Address</Label>
+                                            <div className="flex items-start gap-2">
+                                                <MapPin size={12} className="text-gray-400 mt-0.5" />
+                                                <p className="text-sm font-medium text-gray-600 leading-snug">{selectedOrder.deliveryAddress || 'No address provided'}</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
                             {/* Items Loop */}
@@ -500,13 +538,13 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                             </div>
                                             <div>
                                                 <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Quantity</Label>
-                                                <p className="text-sm font-bold text-gray-800">{item.quantity || 1} Pair(s)</p>
+                                                <p className="text-sm font-bold text-gray-800">{item.quantity || 1} {(item.quantity || 1) === 1 ? 'Pair' : 'Pairs'}</p>
                                             </div>
                                         </div>
 
-                                        {/* Physical Condition */}
+                                        {/* Shoe Condition */}
                                         <div className="pt-2 border-t border-gray-200/50">
-                                            <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">Physical Condition</Label>
+                                            <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">Shoe Condition</Label>
                                             <div className="flex flex-wrap gap-1.5">
                                                 {Object.entries(item.condition || {}).map(([key, value]) => {
                                                     if (key === 'others' && value) return <span key={key} className="px-2 py-1 bg-white border border-gray-200 rounded-xl text-[10px] font-bold text-gray-600 shadow-sm">Note: {String(value)}</span>;
@@ -575,8 +613,8 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                         )}
                                     </div>
                                     <div>
-                                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Assigned To</Label>
-                                        <p className="text-sm font-medium text-gray-700">{selectedOrder.assignedTo || 'Unassigned'}</p>
+                                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Processed By</Label>
+                                        <p className="text-sm font-bold text-gray-700">{selectedOrder.processedBy || 'Current User'}</p>
                                     </div>
                                 </div>
                             </div>
@@ -611,23 +649,29 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                             <p className="text-sm font-bold text-gray-800 font-mono tracking-tight">{selectedOrder.referenceNo || '-'}</p>
                                         </div>
                                     )}
-                                    {selectedOrder.paymentStatus !== 'downpayment' && (
+                                    {selectedOrder.paymentStatus && (
                                         <>
                                             <div>
                                                 <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Amount Received</Label>
-                                                <p className="text-sm font-bold text-gray-800">₱{(selectedOrder.amountReceived || 0).toFixed(2)}</p>
+                                                <p className="text-sm font-bold text-gray-800">₱{(selectedOrder.amountReceived || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                             </div>
-                                            <div>
-                                                <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Change</Label>
-                                                <p className="text-sm font-bold text-gray-800">₱{(selectedOrder.change || 0).toFixed(2)}</p>
-                                            </div>
+                                            {selectedOrder.change !== undefined && selectedOrder.change > 0 && (
+                                                <div className="col-span-2 pt-2 border-t border-gray-100 mt-1">
+                                                    <div className="flex justify-between items-center">
+                                                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Customer Change</Label>
+                                                        <p className="text-sm font-bold text-green-600 underline decoration-dotted underline-offset-4">
+                                                            ₱{(selectedOrder.change || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </>
                                     )}
-                                    {(selectedOrder.paymentStatus === 'downpayment') && (
-                                        <div>
-                                            <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Remaining Balance</Label>
-                                            <p className="text-sm font-black uppercase tracking-wider text-red-600">
-                                                ₱{(selectedOrder.grandTotal - (selectedOrder.amountReceived || 0)).toFixed(2)}
+                                    {selectedOrder.paymentStatus !== 'fully-paid' && (
+                                        <div className="pt-2 border-t border-gray-200/50 col-span-2 flex justify-between items-center">
+                                            <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Remaining Balance</Label>
+                                            <p className={`text-sm font-black ${((selectedOrder.grandTotal || 0) - (selectedOrder.amountReceived || 0)) > 0.01 ? 'text-red-500' : 'text-green-600'}`}>
+                                                ₱{Math.max(0, (selectedOrder.grandTotal || 0) - (selectedOrder.amountReceived || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                             </p>
                                         </div>
                                     )}
@@ -637,22 +681,26 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                             {/* Pricing Summary */}
                             <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-2 mt-2">
                                 <div className="flex justify-between items-center text-gray-600/80">
+                                    <span className="text-xs font-medium uppercase tracking-wide">Total Quantity</span>
+                                    <span className="text-sm font-bold text-gray-800">{selectedOrder.quantity || 1} {(selectedOrder.quantity || 1) === 1 ? 'Pair' : 'Pairs'}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-gray-600/80">
                                     <span className="text-xs font-medium uppercase tracking-wide">Base Service Fee</span>
-                                    <span className="text-sm font-bold text-gray-800">₱{selectedOrder.baseServiceFee.toFixed(2)}</span>
+                                    <span className="text-sm font-bold text-gray-800">₱{(selectedOrder.baseServiceFee || 0).toFixed(2)}</span>
                                 </div>
                                 <div className="flex justify-between items-center text-gray-600/80">
                                     <span className="text-xs font-medium uppercase tracking-wide">Add-ons Total</span>
-                                    <span className="text-sm font-bold text-gray-800">₱{selectedOrder.addOnsTotal.toFixed(2)}</span>
+                                    <span className="text-sm font-bold text-gray-800">₱{(selectedOrder.addOnsTotal || 0).toFixed(2)}</span>
                                 </div>
                                 {selectedOrder.priorityLevel === 'rush' && (
                                     <div className="flex justify-between items-center text-gray-600/80">
                                         <span className="text-xs font-medium uppercase tracking-wide">Rush Fee</span>
-                                        <span className="text-sm font-bold text-gray-800">₱{(selectedOrder.grandTotal - (selectedOrder.baseServiceFee + selectedOrder.addOnsTotal)).toFixed(2)}</span>
+                                        <span className="text-sm font-bold text-gray-800">₱{(selectedOrder.grandTotal - ((selectedOrder.baseServiceFee || 0) + (selectedOrder.addOnsTotal || 0))).toFixed(2)}</span>
                                     </div>
                                 )}
                                 <div className="flex justify-between items-center pt-3 border-t border-gray-200 mt-2">
                                     <span className="text-base font-black text-gray-900 uppercase tracking-tight">Grand Total</span>
-                                    <span className="text-lg font-black text-red-600 tracking-tight">₱{selectedOrder.grandTotal.toFixed(2)}</span>
+                                    <span className="text-lg font-black text-red-600 tracking-tight">₱{(selectedOrder.grandTotal || 0).toFixed(2)}</span>
                                 </div>
                             </div>
 

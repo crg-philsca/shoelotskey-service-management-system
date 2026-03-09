@@ -101,7 +101,8 @@ export default function TotalOrders({ onSetHeaderActionRight }: TotalOrdersProps
             }
             if (profitRange === 'Weekly') return diffDays < 7;
             if (profitRange === 'Quarterly') return diffDays < 90;
-            return diffDays < 365;
+            if (profitRange === 'Annually') return diffDays < 365;
+            return true;
         };
 
         let filtered = orders.filter((order: JobOrder) => isWithinRange(new Date(order.createdAt)));
@@ -145,9 +146,9 @@ export default function TotalOrders({ onSetHeaderActionRight }: TotalOrdersProps
             if (validA !== validB) return validB - validA;
 
             // Priority Level fallback (Rush first)
-            const priorityOrder = { rush: 0, premium: 1, regular: 2 };
-            const priorityA = priorityOrder[a.priorityLevel as keyof typeof priorityOrder] ?? 3;
-            const priorityB = priorityOrder[b.priorityLevel as keyof typeof priorityOrder] ?? 3;
+            const priorityOrder = { rush: 0, regular: 1 };
+            const priorityA = priorityOrder[a.priorityLevel as keyof typeof priorityOrder] ?? 2;
+            const priorityB = priorityOrder[b.priorityLevel as keyof typeof priorityOrder] ?? 2;
             if (priorityA !== priorityB) return priorityA - priorityB;
 
             return b.orderNumber.localeCompare(a.orderNumber);
@@ -303,9 +304,7 @@ export default function TotalOrders({ onSetHeaderActionRight }: TotalOrdersProps
                                                     ? 'Rush'
                                                     : order.priorityLevel === 'regular'
                                                         ? 'Regular'
-                                                        : order.priorityLevel === 'premium'
-                                                            ? 'Premium'
-                                                            : order.priorityLevel}
+                                                        : order.priorityLevel}
                                             </TableCell>
                                             <TableCell className="text-sm font-semibold text-gray-800">
                                                 {order.paymentStatus}
@@ -408,7 +407,6 @@ export default function TotalOrders({ onSetHeaderActionRight }: TotalOrdersProps
                                     <SelectItem value="all" className="text-xs focus:bg-red-50 focus:text-red-700">All Priority</SelectItem>
                                     <SelectItem value="regular" className="text-xs hover:bg-red-50 focus:bg-red-50 focus:text-red-700">Regular</SelectItem>
                                     <SelectItem value="rush" className="text-xs hover:bg-red-50 focus:bg-red-50 focus:text-red-700">Rush</SelectItem>
-                                    <SelectItem value="premium" className="text-xs hover:bg-red-50 focus:bg-red-50 focus:text-red-700">Premium</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>

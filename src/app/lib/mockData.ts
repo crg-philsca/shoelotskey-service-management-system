@@ -17,14 +17,13 @@ export const mockServices: Service[] = [
   { id: '10', name: '2 Colors', price: 375, category: 'addon', active: true, durationDays: 25, code: 'CR2' },
   { id: '11', name: '3 Colors', price: 475, category: 'addon', active: true, durationDays: 25, code: 'CR3' },
   { id: '17', name: 'Premium Glue', price: 1530, category: 'addon', active: true, durationDays: 25, code: 'PMG' },
-  { id: '18', name: 'Middlesole Glue', price: 150, category: 'addon', active: true, durationDays: 25, code: 'FMG' },
-  { id: '19', name: 'Undersole Glue', price: 150, category: 'addon', active: true, durationDays: 25, code: 'FUG' },
+  { id: '18', name: 'Midsole', price: 150, category: 'addon', active: true, durationDays: 25, code: 'FMG' },
+  { id: '19', name: 'Undersole', price: 150, category: 'addon', active: true, durationDays: 25, code: 'FUG' },
 
   // Priority
-  { id: '13', name: 'Rush Fee (Basic Cleaning)', price: 150, category: 'priority', active: true, durationDays: -9 }, // (reduces 10 to 1 ideally, but wait if handled additively it's -9 days)
-  { id: '14', name: 'Rush Fee (Minor Reglue)', price: 250, category: 'priority', active: true, durationDays: -1 }, // "-1 day reduction" based on prompt
-  { id: '15', name: 'Rush Fee (Full Reglue)', price: 250, category: 'priority', active: true, durationDays: -1 },
-  { id: '16', name: 'Premium Fee (Color Renewal)', price: 1000, category: 'priority', active: true, durationDays: -2 },
+  { id: '13', name: 'Rush Fee (Basic Cleaning)', price: 150, category: 'priority', active: true, durationDays: -9 },
+  { id: '14', name: 'Rush Fee (Minor Reglue)', price: 250, category: 'priority', active: false, durationDays: -1 },
+  { id: '16', name: 'Rush Fee (Full Reglue)', price: 250, category: 'priority', active: false, durationDays: -1 }
 ];
 
 const customerNames = [
@@ -111,10 +110,10 @@ function generateMockOrders(): JobOrder[] {
       customerName,
       contactNumber: `09${Math.floor(100000000 + Math.random() * 900000000)}`,
       brand: 'Nike',
-      shoeType: 'Sneakers',
+      shoeModel: 'Sneakers',
       shoeMaterial: 'Leather',
       quantity: 1,
-      condition: { scratches: false, ripsHoles: false, soleSeparation: false, yellowing: false, wornOut: false, others: '' },
+      condition: { scratches: false, ripsHoles: false, soleSeparation: false, yellowing: false, wornOut: false, deepStains: false, others: '' },
       baseService: [baseService.name],
       addOns: [],
       priorityLevel: config.priority || 'regular',

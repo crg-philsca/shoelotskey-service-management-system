@@ -92,7 +92,8 @@ export default function Expenses({ onSetHeaderActionRight }: ExpensesProps) {
             }
             if (profitRange === 'Weekly') return diffDays < 7;
             if (profitRange === 'Quarterly') return diffDays < 90;
-            return diffDays < 365;
+            if (profitRange === 'Annually') return diffDays < 365;
+            return true;
         };
 
         let filtered = expenses

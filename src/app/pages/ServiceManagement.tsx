@@ -32,7 +32,7 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
             className="border-red-600 text-red-600 hover:bg-red-50 hover:text-red-700 font-bold"
             onClick={() => navigate('/activity-history')}
           >
-            <History size={16} className="mr-0" />
+            <History size={16} className="mr-2" />
             View History
           </Button>
           <Button
@@ -42,7 +42,7 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
               setServiceModalOpen(true);
             }}
           >
-            <PlusCircle size={16} className="mr-0" />
+            <PlusCircle size={16} className="mr-2" />
             New Service
           </Button>
         </div>
@@ -66,7 +66,7 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
       addActivity({
         user: currentUser,
         action: 'Create Service',
-        details: `Created new service ${service.name} (${service.category})`,
+        details: `Created new service ${service.name}`,
         type: 'service'
       });
     }
@@ -131,7 +131,7 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
             </CardHeader>
             <CardContent className="pt-0">
               <div className="space-y-3 -mt-2 pr-1 max-h-[180px] overflow-y-scroll custom-scrollbar">
-                {services.filter(s => s.category === 'priority').map(service => (
+                {services.filter(s => s.category === 'priority' && !s.name.includes('Premium')).map(service => (
                   <div key={service.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border-none gap-3">
                     <div className="min-w-0">
                       <p className="font-bold text-gray-900 text-[13px] leading-tight">{service.name}</p>
@@ -156,8 +156,6 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
             </CardContent>
           </Card>
         </div>
-
-
 
         <Card className="border-none shadow-md h-full">
           <CardHeader className="pt-3 pb-0 px-4">
@@ -200,6 +198,6 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
         service={selectedService}
         onSave={handleSaveService}
       />
-    </div >
+    </div>
   );
 }

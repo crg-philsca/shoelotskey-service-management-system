@@ -9,6 +9,11 @@ interface JobOrderFormProps {
     onSetHeaderActionRight: (node: React.ReactNode) => void;
 }
 
+/**
+ * PAGE: JobOrderForm
+ * PURPOSE: Wrapper for the JobOrderFormComponent.
+ * FUNCTION: Manages header actions and layout for the intake form.
+ */
 export default function JobOrderForm({ user, onSetHeaderActionRight }: JobOrderFormProps) {
     const navigate = useNavigate();
 

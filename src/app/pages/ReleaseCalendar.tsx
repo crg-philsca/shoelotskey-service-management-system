@@ -3,8 +3,8 @@ import { Calendar } from '@/app/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/app/components/ui/popover';
 import { Label } from '@/app/components/ui/label';
 import { useMemo, useState, useEffect } from 'react';
-import { mockJobOrders } from '@/app/lib/mockData';
 import { useServices } from '@/app/context/ServiceContext';
+import { useOrders } from '@/app/context/OrderContext';
 import { Calendar as CalendarIcon, Package, User, CreditCard, ClipboardList, FileText, ChevronLeft, ChevronRight, Search, Filter, Phone, MapPin, Tag, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
@@ -21,16 +21,23 @@ interface ReleaseCalendarProps {
 export default function ReleaseCalendar({ onSetHeaderActionRight }: ReleaseCalendarProps) {
   const navigate = useNavigate();
   const { services } = useServices();
-  const forReleaseOrders = mockJobOrders.filter(job => job.status === 'for-release');
+  const { orders } = useOrders();
 
-  // Collect unique predicted completion dates for release orders so we can highlight them and default to the first one.
+  // FILTER: Only show orders ready for release
+  const forReleaseOrders = orders.filter((job: JobOrder) => job.status === 'for-release');
+
+  /**
+   * MEMO: releaseDates
+   * Identifies all unique dates where orders are scheduled for release.
+   * This is used to add "dot indicators" to the calendar component.
+   */
   const releaseDates = useMemo(() => {
     const dates = forReleaseOrders
-      .map(job => job.predictedCompletionDate)
-      .filter((d): d is Date => Boolean(d))
-      .sort((a, b) => a.getTime() - b.getTime());
+      .map((job: JobOrder) => job.predictedCompletionDate)
+      .filter((d: any): d is Date => Boolean(d))
+      .sort((a: Date, b: Date) => a.getTime() - b.getTime());
 
-    return Array.from(new Map(dates.map(d => [d.toDateString(), d])).values());
+    return Array.from(new Map(dates.map((d: Date) => [d.toDateString(), d])).values());
   }, [forReleaseOrders]);
 
   const [date, setDate] = useState<Date | undefined>(releaseDates[0] ?? new Date());
@@ -51,7 +58,12 @@ export default function ReleaseCalendar({ onSetHeaderActionRight }: ReleaseCalen
     setCurrentPage(1);
   };
 
-  const jobsOnDate = forReleaseOrders.filter(job => {
+  /**
+   * FILTER LOGIC: jobsOnDate
+   * Dynamically filters orders based on the clicked calendar date 
+   * and additional UI filters (Priority, Payment, Service Type).
+   */
+  const jobsOnDate = forReleaseOrders.filter((job: JobOrder) => {
     if (!date || !job.predictedCompletionDate) return false;
     const matchesDate = isSameDay(job.predictedCompletionDate, date);
     if (!matchesDate) return false;
@@ -68,7 +80,7 @@ export default function ReleaseCalendar({ onSetHeaderActionRight }: ReleaseCalen
     // Filter by Service Type
     if (filterServiceType !== 'all') {
       const services = Array.isArray(job.baseService) ? job.baseService : [job.baseService];
-      if (!services.some(s => s === filterServiceType)) return false;
+      if (!services.some((s: string) => s === filterServiceType)) return false;
     }
 
     if (!searchTerm) return true;
@@ -79,8 +91,9 @@ export default function ReleaseCalendar({ onSetHeaderActionRight }: ReleaseCalen
     );
   });
 
-  const sortedJobsOnDate = [...jobsOnDate].sort((a, b) => {
-    const priorityOrder = { rush: 0, premium: 1, regular: 2 };
+  const sortedJobsOnDate = [...jobsOnDate].sort((a: JobOrder, b: JobOrder) => {
+    // Sort logic: Rush orders always appear at the top
+    const priorityOrder: Record<string, number> = { rush: 0, premium: 1, regular: 2 };
     return (priorityOrder[a.priorityLevel] ?? 2) - (priorityOrder[b.priorityLevel] ?? 2);
   });
 
@@ -253,7 +266,7 @@ export default function ReleaseCalendar({ onSetHeaderActionRight }: ReleaseCalen
                   onSelect={handleDateChange}
                   showOutsideDays={true}
                   fixedWeeks
-                  modifiers={{ releaseDay: releaseDates }}
+                  modifiers={{ releaseDay: releaseDates as Date[] }}
                   modifiersClassNames={{
                     releaseDay:
                       'relative after:content-[""] after:absolute after:left-1/2 after:-translate-x-1/2 after:bottom-0.5 after:h-[4px] after:w-[4px] after:rounded-full after:bg-red-600 font-bold text-red-700'
@@ -352,7 +365,7 @@ export default function ReleaseCalendar({ onSetHeaderActionRight }: ReleaseCalen
                             <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-none mb-0.5">Service Type</p>
                             <p className="text-[11px] font-bold text-gray-600 leading-tight">
                               {Array.isArray(job.baseService)
-                                ? job.baseService.map(s => s.replace(' (with basic cleaning)', '')).join(', ')
+                                ? job.baseService.map((s: string) => s.replace(' (with basic cleaning)', '')).join(', ')
                                 : String(job.baseService).replace(' (with basic cleaning)', '')}
                             </p>
                           </div>

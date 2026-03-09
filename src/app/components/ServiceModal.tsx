@@ -55,7 +55,7 @@ export default function ServiceModal({ isOpen, onClose, service, onSave }: Servi
             price: parseFloat(price),
             category,
             active,
-            ...(durationDays ? { durationDays: durationDays } : {}),
+            durationDays: parseInt(durationDays) || 0,
             ...(code ? { code } : {})
         };
 
@@ -131,7 +131,7 @@ export default function ServiceModal({ isOpen, onClose, service, onSave }: Servi
                                 value={durationDays}
                                 onChange={(e) => setDurationDays(e.target.value)}
                                 className="font-medium border-red-200 focus-visible:ring-0 focus-visible:border-red-600"
-                                placeholder={category === 'priority' ? '-1' : '10 or 7-10'}
+                                placeholder={category === 'priority' ? '-1' : '5'}
                             />
                         </div>
 

@@ -53,7 +53,14 @@ export default function ClaimRecord() {
     });
     const [tempFilters, setTempFilters] = useState({ ...filters });
 
-    // Filter and Search logic
+    /**
+     * MEMO: filteredOrders
+     * Handles complex multi-criteria filtering:
+     * 1. Status: Filter for 'claimed' only.
+     * 2. Search: Matches Order # or Customer Name.
+     * 3. Financials: Checks for 'fully-paid' vs 'downpayment' balances.
+     * 4. Dates: Filters by the actual release/completion date range.
+     */
     const filteredOrders = useMemo(() => {
         return orders
             .filter((order: JobOrder) => order.status === 'claimed')
@@ -91,7 +98,10 @@ export default function ClaimRecord() {
             });
     }, [orders, searchTerm, paymentFilter, filters]);
 
-    // Pagination logic
+    /**
+     * LOGIC: Pagination
+     * Ensures we only render 15 items per page to maintain UI performance.
+     */
     const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
     const paginatedOrders = filteredOrders.slice(
         (currentPage - 1) * itemsPerPage,

@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "dev": "vite"
+    "dev": "vite",
+    "server": "cmd /c \"cd backend && ..\\venv\\Scripts\\python.exe -m uvicorn main:app --reload --host 127.0.0.1 --port 8000\"",
+    "monolith": "npx concurrently -n \"Vite-UI,FastAPI-BE\" -c \"red,cyan\" \"npm run dev\" \"npm run server\""
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
@@ -73,6 +75,7 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "4.7.0",
+    "concurrently": "^9.2.1",
     "tailwindcss": "4.1.12",
     "typescript": "^5.9.3",
     "vite": "^6.4.1"

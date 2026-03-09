@@ -4,7 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { useState, useEffect, useMemo } from 'react';
 
 import { TrendingUp, ShoppingBag, Filter, Calendar, TrendingDown, ChevronDown, Wallet, CircleAlert } from 'lucide-react';
-import { isSameDay, isSameWeek, isSameMonth, isSameYear } from 'date-fns';
+
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { useNavigate } from 'react-router-dom';
@@ -24,17 +24,23 @@ export default function SalesReport({ onSetHeaderActionRight }: SalesReportProps
   const { expenses } = useExpenses();
   const { services } = useServices();
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('all');
-  const [dateRange, setDateRange] = useState<string>('daily');
+  const [dateRange, setDateRange] = useState<string>('Daily');
 
   // 1. GLOBAL DATE FILTERING
   const filteredOrdersByDate = useMemo(() => {
     const now = new Date();
     return allOrders.filter(order => {
-      const date = order.transactionDate || new Date();
-      if (dateRange === 'daily') return isSameDay(date, now);
-      if (dateRange === 'weekly') return isSameWeek(date, now);
-      if (dateRange === 'monthly') return isSameMonth(date, now);
-      if (dateRange === 'yearly') return isSameYear(date, now);
+      const date = order.transactionDate ? new Date(order.transactionDate) : new Date(order.createdAt);
+      const diffDays = (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24);
+
+      if (dateRange === 'Daily') {
+        const startOfToday = new Date(now);
+        startOfToday.setHours(0, 0, 0, 0);
+        return date >= startOfToday;
+      }
+      if (dateRange === 'Weekly') return diffDays < 7;
+      if (dateRange === 'Quarterly') return diffDays < 90;
+      if (dateRange === 'Annually') return diffDays < 365;
       return true;
     });
   }, [dateRange]);
@@ -43,10 +49,16 @@ export default function SalesReport({ onSetHeaderActionRight }: SalesReportProps
     const now = new Date();
     return expenses.filter(exp => {
       const date = new Date(exp.date);
-      if (dateRange === 'daily') return isSameDay(date, now);
-      if (dateRange === 'weekly') return isSameWeek(date, now);
-      if (dateRange === 'monthly') return isSameMonth(date, now);
-      if (dateRange === 'yearly') return isSameYear(date, now);
+      const diffDays = (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24);
+
+      if (dateRange === 'Daily') {
+        const startOfToday = new Date(now);
+        startOfToday.setHours(0, 0, 0, 0);
+        return date >= startOfToday;
+      }
+      if (dateRange === 'Weekly') return diffDays < 7;
+      if (dateRange === 'Quarterly') return diffDays < 90;
+      if (dateRange === 'Annually') return diffDays < 365;
       return true;
     });
   }, [dateRange, expenses]);
@@ -143,17 +155,17 @@ export default function SalesReport({ onSetHeaderActionRight }: SalesReportProps
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
-              className="w-32 flex items-center justify-between rounded-md border border-red-600 bg-red-600 px-3 py-2 text-sm font-semibold uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:border-white focus:outline-none focus:ring-2 focus:ring-red-500"
-              aria-label="Select range"
               type="button"
+              aria-label="Select range"
+              className="w-10 h-10 md:w-40 flex items-center justify-center md:justify-between rounded-md border border-red-600 bg-red-600 px-2 md:px-3 py-2 text-sm font-semibold uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:border-white focus:outline-none focus:ring-2 focus:ring-red-500"
             >
-              <Calendar className="h-4 w-4 mr-1" aria-hidden="true" />
-              {dateRange}
-              <ChevronDown className="ml-2 h-4 w-4 text-white" aria-hidden="true" />
+              <Calendar className="h-4 w-4 md:mr-1 shrink-0" aria-hidden="true" />
+              <span className="hidden md:inline truncate mx-1 flex-1 text-center">{dateRange}</span>
+              <ChevronDown className="hidden md:block h-4 w-4 text-white shrink-0" aria-hidden="true" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-32 p-0 rounded-md border border-red-600 bg-white shadow-lg">
-            {['daily', 'weekly', 'monthly', 'yearly'].map((range) => (
+          <DropdownMenuContent align="end" className="w-40 p-0 rounded-xl border border-red-600 bg-white shadow-lg overflow-hidden">
+            {['Daily', 'Weekly', 'Quarterly', 'Annually'].map((range) => (
               <DropdownMenuItem
                 key={range}
                 onClick={() => setDateRange(range as typeof dateRange)}
@@ -186,9 +198,9 @@ export default function SalesReport({ onSetHeaderActionRight }: SalesReportProps
                 <TrendingUp size={48} className="text-green-600" />
               </div>
               <CardContent className="pt-6">
-                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">Total Sales</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">{dateRange} Sales</p>
                 <p className="text-2xl font-black text-green-600 tracking-tight">
-                  ₱{totalSalesAmount.toLocaleString()}
+                  ₱{(totalSalesAmount || 0).toLocaleString()}
                 </p>
               </CardContent>
             </Card>
@@ -201,9 +213,9 @@ export default function SalesReport({ onSetHeaderActionRight }: SalesReportProps
                 <ShoppingBag size={48} className="text-purple-600" />
               </div>
               <CardContent className="pt-6">
-                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">Total Orders</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">{dateRange} Orders</p>
                 <p className="text-2xl font-black text-purple-600 tracking-tight">
-                  {totalOrdersCount.toLocaleString()}
+                  {(totalOrdersCount || 0).toLocaleString()}
                 </p>
               </CardContent>
             </Card>
@@ -216,9 +228,9 @@ export default function SalesReport({ onSetHeaderActionRight }: SalesReportProps
                 <TrendingDown size={48} className="text-orange-600" />
               </div>
               <CardContent className="pt-6">
-                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">Total Expenses</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">{dateRange} Expenses</p>
                 <p className="text-2xl font-black text-orange-600 tracking-tight">
-                  ₱{totalExpensesAmount.toLocaleString()}
+                  ₱{(totalExpensesAmount || 0).toLocaleString()}
                 </p>
               </CardContent>
             </Card>

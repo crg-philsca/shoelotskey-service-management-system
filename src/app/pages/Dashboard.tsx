@@ -48,12 +48,17 @@ import {
   CreditCard,
   Tag,
   MapPin,
+  Truck,
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Cell } from 'recharts';
 import type { JobOrder } from '@/app/types';
 
-// ... (keep commented code)
-
+/**
+ * INTERFACE: DashboardProps
+ * Defines the properties passed to the Dashboard component.
+ * @param user - Information about the currently logged-in user.
+ * @param onSetHeaderActionRight - Function to inject components into the global header's right action area.
+ */
 interface DashboardProps {
   user: { username: string; role: 'owner' | 'staff' };
   onSetHeaderActionRight?: (action: ReactNode | null) => void;
@@ -64,9 +69,9 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
   const { orders, updateOrder } = useOrders();
   const [isEditing, setIsEditing] = useState(false);
   const [profitRange, setProfitRange] = useState<'Daily' | 'Weekly' | 'Quarterly' | 'Annually'>('Daily');
-  // const [intakeDialogOpen, setIntakeDialogOpen] = useState(false);
-
-  // Removed unused Service Intake Modal state and related variables
+  // STATE: Drill-down status filter
+  // When a user clicks a status card (e.g., 'New Order'), this state is set
+  // and the dashboard switches to show a detailed table for that status.
   const location = useLocation();
   const [selectedStatus, setSelectedStatus] = useState<'new-order' | 'on-going' | 'for-release' | 'claimed' | null>(() => {
     return (location.state as any)?.status || null;
@@ -111,6 +116,10 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
     return orders.filter(order => isWithinRange(new Date(order.createdAt)));
   }, [orders, profitRange]);
 
+  /**
+   * MEMO: overviewOrders
+   * Filtered list of orders based on the current drill-down status (e.g., just 'New Orders').
+   */
   const overviewOrders = useMemo(() => {
     if (!selectedStatus) return filteredOrders;
     return filteredOrders.filter(order => order.status === selectedStatus);
@@ -184,6 +193,11 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
     };
   }, [filteredOrders, user.username]);
 
+  /**
+   * MEMO: serviceVolumeData
+   * Aggregates order data into service categories for the volume and sales charts.
+   * Maps specific sub-services (like 'Minor Reglue (with cleaning)') into parent groups.
+   */
   const serviceVolumeData = useMemo(() => {
     const groupings = {
       'Basic Cleaning': ['Basic Cleaning', 'Unyellowing', 'Minor Retouch', 'Minor Restoration', 'Counter'],
@@ -212,50 +226,65 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
     ];
 
     filteredOrders.forEach(order => {
-      const base = Array.isArray(order.baseService) ? order.baseService[0] : order.baseService || 'Other';
-      const totalAmount = order.grandTotal;
-      const addOnNames = (order.addOns || []).map(addon => (typeof addon === 'string' ? addon : addon.name));
+      const items = order.items?.length ? order.items : [{
+        baseService: Array.isArray(order.baseService) ? order.baseService : [order.baseService],
+        addOns: order.addOns || []
+      }];
 
-      if (groupings['Basic Cleaning'].includes(base)) {
-        result[0].value += 1;
-        result[0].sales += totalAmount;
-        if (basicCleaningBreakdown.hasOwnProperty(base)) {
-          basicCleaningBreakdown[base as keyof typeof basicCleaningBreakdown] += 1;
-        }
-        addOnNames.forEach(addon => {
-          if (basicCleaningBreakdown.hasOwnProperty(addon)) {
-            basicCleaningBreakdown[addon as keyof typeof basicCleaningBreakdown] += 1;
+      items.forEach(item => {
+        const itemBaseServices = Array.isArray(item.baseService) ? item.baseService : [item.baseService];
+        const primaryBase = itemBaseServices[0] || 'Other';
+        const addOnNames = (item.addOns || []).map((addon: any) => (typeof addon === 'string' ? addon : addon.name));
+
+        // Attribution logic: If an item has multiple services, we attribute the 'value' to the primary base
+        // and sales proportionately if needed, but for volume chart we count primary base.
+
+        if (groupings['Basic Cleaning'].includes(primaryBase)) {
+          result[0].value += 1;
+          result[0].sales += (order.grandTotal / (items.length || 1)); // Distribute sales across items
+          if (basicCleaningBreakdown.hasOwnProperty(primaryBase)) {
+            basicCleaningBreakdown[primaryBase as keyof typeof basicCleaningBreakdown] += 1;
           }
-        });
-      }
-
-      if (groupings['Minor Reglue'].includes(base)) {
-        result[1].value += 1;
-        result[1].sales += totalAmount;
-      }
-
-      if (groupings['Full Reglue'].includes(base)) {
-        result[2].value += 1;
-        result[2].sales += totalAmount;
-      }
-
-      if (groupings['Color Renewal'].includes(base)) {
-        result[3].value += 1;
-        result[3].sales += totalAmount;
-        if (colorRenewalBreakdown.hasOwnProperty(base)) {
-          colorRenewalBreakdown[base as keyof typeof colorRenewalBreakdown] += 1;
+          addOnNames.forEach(addon => {
+            if (basicCleaningBreakdown.hasOwnProperty(addon)) {
+              basicCleaningBreakdown[addon as keyof typeof basicCleaningBreakdown] += 1;
+            }
+          });
         }
-        addOnNames.forEach(addon => {
-          if (colorRenewalBreakdown.hasOwnProperty(addon)) {
-            colorRenewalBreakdown[addon as keyof typeof colorRenewalBreakdown] += 1;
+
+        if (groupings['Minor Reglue'].includes(primaryBase)) {
+          result[1].value += 1;
+          result[1].sales += (order.grandTotal / (items.length || 1));
+        }
+
+        if (groupings['Full Reglue'].includes(primaryBase)) {
+          result[2].value += 1;
+          result[2].sales += (order.grandTotal / (items.length || 1));
+        }
+
+        if (groupings['Color Renewal'].includes(primaryBase)) {
+          result[3].value += 1;
+          result[3].sales += (order.grandTotal / (items.length || 1));
+          if (colorRenewalBreakdown.hasOwnProperty(primaryBase)) {
+            colorRenewalBreakdown[primaryBase as keyof typeof colorRenewalBreakdown] += 1;
           }
-        });
-      }
+          addOnNames.forEach(addon => {
+            if (colorRenewalBreakdown.hasOwnProperty(addon)) {
+              colorRenewalBreakdown[addon as keyof typeof colorRenewalBreakdown] += 1;
+            }
+          });
+        }
+      });
     });
 
     return result;
   }, [filteredOrders]);
 
+  /**
+   * MEMO: timeSeriesData
+   * Prepares sequential data points for the TREND charts.
+   * Adapts automatically based on profitRange (Hours for Daily, Days for Weekly, etc.).
+   */
   const timeSeriesData = useMemo(() => {
     const now = new Date();
 
@@ -373,7 +402,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
               type="button"
             >
               <CalendarIcon className="h-4 w-4 md:mr-1 shrink-0" aria-hidden="true" />
-              <span className="hidden md:inline truncate mx-1">{profitRange}</span>
+              <span className="hidden md:inline truncate mx-1 flex-1 text-center">{profitRange}</span>
               <ChevronDown className="hidden md:block h-4 w-4 text-white shrink-0" aria-hidden="true" />
             </button>
           </DropdownMenuTrigger>
@@ -401,7 +430,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
               type="button"
             >
               <CalendarIcon className="h-4 w-4 md:mr-1 shrink-0" aria-hidden="true" />
-              <span className="hidden md:inline truncate mx-1">{profitRange}</span>
+              <span className="hidden md:inline truncate mx-1 flex-1 text-center">{profitRange}</span>
               <ChevronDown className="hidden md:block h-4 w-4 text-white shrink-0" aria-hidden="true" />
             </button>
           </DropdownMenuTrigger>
@@ -524,35 +553,35 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                   {role === 'owner' && (
                     <>
                       {/* Card 2: Pending Payments (Red) */}
-                      <Card className="border-none shadow-md bg-white overflow-hidden relative col-span-1">
+                      <Card className="border-none shadow-md bg-white overflow-hidden relative col-span-1 border-t-4 border-red-500">
                         <div className="absolute top-0 right-0 p-4 opacity-10">
                           <CircleAlert size={48} className="text-red-600" />
                         </div>
                         <CardContent className="pt-6">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">Pending Payments</p>
-                          <p className="text-2xl font-black text-red-600 tracking-tight">{'\u20B1'}{parseFloat(totalPendingPayments.toFixed(2)).toLocaleString()}</p>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">{profitRange} Pending Payments</p>
+                          <p className="text-2xl font-black text-red-600 tracking-tight">{'\u20B1'}{(totalPendingPayments || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                         </CardContent>
                       </Card>
 
                       {/* Card 3: Total Sales (Green) */}
-                      <Card className="border-none shadow-md bg-white overflow-hidden relative col-span-1">
+                      <Card className="border-none shadow-md bg-white overflow-hidden relative col-span-1 border-t-4 border-green-500">
                         <div className="absolute top-0 right-0 p-4 opacity-10">
                           <TrendingUp size={48} className="text-green-600" />
                         </div>
                         <CardContent className="pt-6">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">Total Sales</p>
-                          <p className="text-2xl font-black text-green-600 tracking-tight">{'\u20B1'}{parseFloat(totalSales.toFixed(2)).toLocaleString()}</p>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">{profitRange} Total Sales</p>
+                          <p className="text-2xl font-black text-green-600 tracking-tight">{'\u20B1'}{(totalSales || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                         </CardContent>
                       </Card>
 
                       {/* Card 4: Total Expenses (Orange) */}
-                      <Card className="border-none shadow-md bg-white overflow-hidden relative col-span-1">
+                      <Card className="border-none shadow-md bg-white overflow-hidden relative col-span-1 border-t-4 border-orange-500">
                         <div className="absolute top-0 right-0 p-4 opacity-10">
                           <TrendingDown size={48} className="text-orange-600" />
                         </div>
                         <CardContent className="pt-6">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">Total Expenses</p>
-                          <p className="text-2xl font-black text-orange-600 tracking-tight">{'\u20B1'}{parseFloat(totalExpenses.toFixed(2)).toLocaleString()}</p>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">{profitRange} Total Expenses</p>
+                          <p className="text-2xl font-black text-orange-600 tracking-tight">{'\u20B1'}{(totalExpenses || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                         </CardContent>
                       </Card>
                     </>
@@ -759,7 +788,12 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                       );
                     }
 
-                    // Sort: Recently updated/created first, then by priority, then by Order Number descending
+                    /**
+                     * SORTING LOGIC:
+                     * 1. Status Recency: Orders with the most recent status update appear first.
+                     * 2. Priority: If update times match, Rush/Premium orders take precedence.
+                     * 3. Order Number: Final fallback to descending Order Number sequence.
+                     */
                     filtered.sort((a, b) => {
                       const lastStatusTimeA = a.statusHistory?.length ? new Date(a.statusHistory[a.statusHistory.length - 1].timestamp).getTime() : 0;
                       const timeA = lastStatusTimeA || new Date(a.updatedAt || a.createdAt).getTime();
@@ -794,6 +828,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                                 <th className="px-3 py-3 text-center text-[10px] md:text-xs font-bold text-gray-600 uppercase">Order #</th>
                                 <th className="px-3 py-3 text-center text-[10px] md:text-xs font-bold text-gray-600 uppercase">Customer Name</th>
                                 <th className="px-3 py-3 text-center text-[10px] md:text-xs font-bold text-gray-600 uppercase">Service Type</th>
+                                <th className="px-3 py-3 text-center text-[10px] md:text-xs font-bold text-gray-600 uppercase">Total Qty</th>
                                 <th className="px-3 py-3 text-center text-[10px] md:text-xs font-bold text-gray-600 uppercase">Order Date</th>
                                 <th className="px-3 py-3 text-center text-[10px] md:text-xs font-bold text-gray-600 uppercase">Release Date</th>
                                 <th className="px-3 py-3 text-center text-[10px] md:text-xs font-bold text-gray-600 uppercase">Priority Level</th>
@@ -823,6 +858,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                                       ? order.baseService.map(s => s.replace(' (with basic cleaning)', '')).join(', ')
                                       : String(order.baseService).replace(' (with basic cleaning)', '')}
                                   </td>
+                                  <td className="px-3 py-3 text-xs text-center text-gray-700">{order.quantity || 1} {(order.quantity || 1) === 1 ? 'Pair' : 'Pairs'}</td>
                                   <td className="px-3 py-3 text-xs text-center">{dateFnsFormat(new Date(order.createdAt), 'MM/dd/yy')}</td>
                                   <td className="px-3 py-3 text-xs text-center">
                                     {order.predictedCompletionDate ? dateFnsFormat(new Date(order.predictedCompletionDate), 'MM/dd/yy') : '-'}
@@ -1005,7 +1041,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
               </DialogHeader>
 
               {selectedOrder && (
-                <div className="space-y-6 pt-2 max-h-[70vh] overflow-y-auto px-1 pr-2 no-scrollbar">
+                <div className="space-y-6 pt-2 max-h-[75vh] overflow-y-auto px-1 pr-2 pb-10">
                   {/* Customer Section */}
                   <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-3">
                     <div className="flex items-center gap-2 mb-2">
@@ -1033,7 +1069,10 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                         <div className="flex items-center gap-2">
                           <CalendarIcon size={12} className="text-gray-400" />
                           <p className="text-sm font-medium text-gray-600">
-                            {dateFnsFormat(new Date(selectedOrder.transactionDate || selectedOrder.createdAt), 'MM/dd/yy HH:mm')}
+                            {(() => {
+                              const d = new Date(selectedOrder.transactionDate || selectedOrder.createdAt);
+                              return isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy HH:mm');
+                            })()}
                           </p>
                         </div>
                       </div>
@@ -1042,7 +1081,11 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                         <div className="flex items-center gap-2">
                           <Clock size={12} className="text-gray-400" />
                           <p className="text-sm font-bold text-gray-800">
-                            {selectedOrder.predictedCompletionDate ? dateFnsFormat(new Date(selectedOrder.predictedCompletionDate), 'MM/dd/yy') : '-'}
+                            {(() => {
+                              if (!selectedOrder.predictedCompletionDate) return '-';
+                              const d = new Date(selectedOrder.predictedCompletionDate);
+                              return isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy');
+                            })()}
                             {['for-release', 'claimed'].includes(selectedOrder.status) && selectedOrder.releaseTime && (
                               <span className="text-xs text-gray-500 ml-1 font-normal">
                                 @ {selectedOrder.releaseTime}
@@ -1051,11 +1094,45 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                           </p>
                         </div>
                       </div>
+                      {selectedOrder.status === 'claimed' && selectedOrder.actualCompletionDate && (
+                        <div>
+                          <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Actual Claim Date</Label>
+                          <div className="flex items-center gap-2">
+                            <ClipboardCheck size={12} className="text-green-500" />
+                            <p className="text-sm font-bold text-green-700">
+                              {dateFnsFormat(new Date(selectedOrder.actualCompletionDate), 'MM/dd/yy HH:mm')}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Shipping Preference */}
+                  <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Truck size={16} className="text-red-500" />
+                      <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Shipping Details</h4>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Preference</Label>
+                        <p className="text-sm font-bold text-gray-800 uppercase">{selectedOrder.shippingPreference || 'Pickup'}</p>
+                      </div>
+                      {selectedOrder.shippingPreference === 'delivery' && selectedOrder.deliveryCourier && (
+                        <div>
+                          <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Courier</Label>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-bold text-gray-800">{selectedOrder.deliveryCourier}</p>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {selectedOrder.shippingPreference === 'delivery' && (
-                      <div>
-                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Delivery Address</Label>
+                      <div className="pt-2 border-t border-gray-200/50">
+                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Full Delivery Address</Label>
                         <div className="flex items-start gap-2">
                           <MapPin size={12} className="text-gray-400 mt-0.5" />
                           <p className="text-sm font-medium text-gray-600 leading-snug">{selectedOrder.deliveryAddress || 'No address provided'}</p>
@@ -1076,10 +1153,14 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                         </div>
 
                         {/* Shoe Details */}
-                        <div className="grid grid-cols-3 gap-4">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                           <div>
                             <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Brand</Label>
                             <p className="text-sm font-bold text-gray-800">{item.brand || '-'}</p>
+                          </div>
+                          <div>
+                            <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Model</Label>
+                            <p className="text-sm font-bold text-gray-800">{item.shoeModel || '-'}</p>
                           </div>
                           <div>
                             <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Material</Label>
@@ -1087,13 +1168,13 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                           </div>
                           <div>
                             <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Quantity</Label>
-                            <p className="text-sm font-bold text-gray-800">{item.quantity || 1} Pair(s)</p>
+                            <p className="text-sm font-bold text-gray-800">{item.quantity || 1} {(item.quantity || 1) === 1 ? 'Pair' : 'Pairs'}</p>
                           </div>
                         </div>
 
-                        {/* Physical Condition */}
+                        {/* Shoe Condition */}
                         <div className="pt-2 border-t border-gray-200/50">
-                          <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">Physical Condition</Label>
+                          <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">Shoe Condition</Label>
                           <div className="flex flex-wrap gap-1.5">
                             {Object.entries(item.condition || {}).map(([key, value]) => {
                               if (key === 'others' && value) return <span key={key} className="px-2 py-1 bg-white border border-gray-200 rounded-md text-[10px] font-bold text-gray-600 shadow-sm">Note: {String(value)}</span>;
@@ -1140,7 +1221,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
 
                   {/* Order Status & Priority (Global) */}
                   <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-3 mt-2">
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <div>
                         <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Order Status</Label>
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize border
@@ -1162,8 +1243,11 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                         )}
                       </div>
                       <div>
-                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Assigned To</Label>
-                        <p className="text-sm font-medium text-gray-700">{selectedOrder.assignedTo || 'Unassigned'}</p>
+                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Shelf Location removed</Label>
+                      </div>
+                      <div>
+                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Processed By</Label>
+                        <p className="text-sm font-bold text-gray-700">{selectedOrder.processedBy || 'Current User'}</p>
                       </div>
                     </div>
                   </div>
@@ -1198,23 +1282,29 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                           <p className="text-sm font-bold text-gray-800 font-mono tracking-tight">{selectedOrder.referenceNo || '-'}</p>
                         </div>
                       )}
-                      {selectedOrder.paymentStatus !== 'downpayment' && (
+                      {selectedOrder.paymentStatus && (
                         <>
                           <div>
                             <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Amount Received</Label>
-                            <p className="text-sm font-bold text-gray-800">₱{(selectedOrder.amountReceived || 0).toFixed(2)}</p>
+                            <p className="text-sm font-bold text-gray-800">₱{(selectedOrder.amountReceived || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                           </div>
-                          <div>
-                            <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Change</Label>
-                            <p className="text-sm font-bold text-gray-800">₱{(selectedOrder.change || 0).toFixed(2)}</p>
-                          </div>
+                          {selectedOrder.change !== undefined && selectedOrder.change > 0 && (
+                            <div className="col-span-2 pt-2 border-t border-gray-100 mt-1">
+                              <div className="flex justify-between items-center">
+                                <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Customer Change</Label>
+                                <p className="text-sm font-bold text-green-600 underline decoration-dotted underline-offset-4">
+                                  ₱{(selectedOrder.change || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </p>
+                              </div>
+                            </div>
+                          )}
                         </>
                       )}
-                      {(selectedOrder.paymentStatus === 'downpayment') && (
-                        <div>
-                          <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Remaining Balance</Label>
-                          <p className="text-sm font-black uppercase tracking-wider text-red-600">
-                            ₱{(selectedOrder.grandTotal - (selectedOrder.amountReceived || 0)).toFixed(2)}
+                      {selectedOrder.paymentStatus !== 'fully-paid' && (
+                        <div className="pt-2 border-t border-gray-200/50 col-span-2 flex justify-between items-center">
+                          <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Remaining Balance</Label>
+                          <p className={`text-sm font-black ${((selectedOrder.grandTotal || 0) - (selectedOrder.amountReceived || 0)) > 0.01 ? 'text-red-500' : 'text-green-600'}`}>
+                            ₱{Math.max(0, (selectedOrder.grandTotal || 0) - (selectedOrder.amountReceived || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </p>
                         </div>
                       )}
@@ -1224,41 +1314,40 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                   {/* Pricing Summary */}
                   <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-2 mt-2">
                     <div className="flex justify-between items-center text-gray-600/80">
+                      <span className="text-xs font-medium uppercase tracking-wide">Total Quantity</span>
+                      <span className="text-sm font-bold text-gray-800">{selectedOrder.quantity || 1} {(selectedOrder.quantity || 1) === 1 ? 'Pair' : 'Pairs'}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-gray-600/80">
                       <span className="text-xs font-medium uppercase tracking-wide">Base Service Fee</span>
-                      <span className="text-sm font-bold text-gray-800">₱{selectedOrder.baseServiceFee.toFixed(2)}</span>
+                      <span className="text-sm font-bold text-gray-800">₱{(selectedOrder.baseServiceFee || 0).toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between items-center text-gray-600/80">
                       <span className="text-xs font-medium uppercase tracking-wide">Add-ons Total</span>
-                      <span className="text-sm font-bold text-gray-800">₱{selectedOrder.addOnsTotal.toFixed(2)}</span>
+                      <span className="text-sm font-bold text-gray-800">₱{(selectedOrder.addOnsTotal || 0).toFixed(2)}</span>
                     </div>
                     {selectedOrder.priorityLevel === 'rush' && (
                       <div className="flex justify-between items-center text-gray-600/80">
                         <span className="text-xs font-medium uppercase tracking-wide">Rush Fee</span>
-                        <span className="text-sm font-bold text-gray-800">₱{(selectedOrder.grandTotal - (selectedOrder.baseServiceFee + selectedOrder.addOnsTotal)).toFixed(2)}</span>
+                        <span className="text-sm font-bold text-gray-800">₱{(selectedOrder.grandTotal - ((selectedOrder.baseServiceFee || 0) + (selectedOrder.addOnsTotal || 0))).toFixed(2)}</span>
                       </div>
                     )}
                     <div className="flex justify-between items-center pt-3 border-t border-gray-200 mt-2">
                       <span className="text-base font-black text-gray-900 uppercase tracking-tight">Grand Total</span>
-                      <span className="text-lg font-black text-red-600 tracking-tight">₱{selectedOrder.grandTotal.toFixed(2)}</span>
+                      <span className="text-lg font-black text-red-600 tracking-tight">₱{(selectedOrder.grandTotal || 0).toFixed(2)}</span>
                     </div>
                   </div>
                 </div>
               )}
             </DialogContent>
-          </Dialog>
+          </Dialog >
 
           {/* Edit Order Modal */}
           <EditOrderModal
             order={selectedOrder}
             open={!!selectedOrder && isEditing}
-            hideHistory={role === 'staff'}
             onOpenChange={(open) => {
               if (!open) {
                 setIsEditing(false);
-                // Optional: if cancel edit, go back to read-only? 
-                // Logic: if open=false, setIsEditing(false). 
-                // Since selectedOrder is still true, ReadOnly modal pops up (open={!!selectedOrder && !isEditing}).
-                // This is desired behavior: Cancel Edit -> Show ReadOnly.
               }
             }}
             onSave={(id, updates) => {
@@ -1268,7 +1357,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
             }}
           />
 
-          <ProcessClaimModal
+          < ProcessClaimModal
             order={processClaimOrder}
             open={!!processClaimOrder}
             onOpenChange={(open) => !open && setProcessClaimOrder(null)}
@@ -1280,229 +1369,231 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
           />
 
           {/* Charts and Recent Orders - Only Show When No Status Selected */}
-          {!selectedStatus && (
-            <>
-              {/* Charts - Owner Only */}
-              {role === 'owner' && (
-                <div className="grid grid-cols-1 gap-6">
-                  <Card>
-                    <CardHeader className="flex flex-col md:flex-row items-center md:items-start justify-between mt-3 py-6 gap-4">
-                      <CardTitle className="text-center md:text-left text-base font-black uppercase whitespace-nowrap tracking-tight">Service Volume by Type</CardTitle>
-                      <div className="grid grid-cols-2 sm:flex sm:flex-wrap justify-center md:justify-end gap-x-6 gap-y-1.5 text-left md:text-right">
-                        <div className="flex items-center gap-2 text-[10px] md:text-[11px] font-bold text-gray-600 uppercase tracking-tight whitespace-nowrap">
-                          <div className="w-2.5 h-2.5 bg-[#84b6af] rounded-full shrink-0"></div>
-                          <span>BASIC CLEANING</span>
+          {
+            !selectedStatus && (
+              <>
+                {/* Charts - Owner Only */}
+                {role === 'owner' && (
+                  <div className="grid grid-cols-1 gap-6">
+                    <Card>
+                      <CardHeader className="flex flex-col md:flex-row items-center md:items-start justify-between mt-3 py-6 gap-4">
+                        <CardTitle className="text-center md:text-left text-base font-black uppercase whitespace-nowrap tracking-tight">Service Volume by Type</CardTitle>
+                        <div className="grid grid-cols-2 sm:flex sm:flex-wrap justify-center md:justify-end gap-x-6 gap-y-1.5 text-left md:text-right">
+                          <div className="flex items-center gap-2 text-[10px] md:text-[11px] font-bold text-gray-600 uppercase tracking-tight whitespace-nowrap">
+                            <div className="w-2.5 h-2.5 bg-[#84b6af] rounded-full shrink-0"></div>
+                            <span>BASIC CLEANING</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-[10px] md:text-[11px] font-bold text-gray-600 uppercase tracking-tight whitespace-nowrap">
+                            <div className="w-2.5 h-2.5 bg-[#c084fc] rounded-full shrink-0"></div>
+                            <span>FULL REGLUE</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-[10px] md:text-[11px] font-bold text-gray-600 uppercase tracking-tight whitespace-nowrap">
+                            <div className="w-2.5 h-2.5 bg-[#a78bfa] rounded-full shrink-0"></div>
+                            <span>MINOR REGLUE</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-[10px] md:text-[11px] font-bold text-gray-600 uppercase tracking-tight whitespace-nowrap">
+                            <div className="w-2.5 h-2.5 bg-[#fbbf24] rounded-full shrink-0"></div>
+                            <span>COLOR RENEWAL</span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2 text-[10px] md:text-[11px] font-bold text-gray-600 uppercase tracking-tight whitespace-nowrap">
-                          <div className="w-2.5 h-2.5 bg-[#c084fc] rounded-full shrink-0"></div>
-                          <span>FULL REGLUE</span>
+                      </CardHeader>
+                      <CardContent className="mt-8 ml-0 mb-1">
+                        {serviceVolumeData.length === 0 ? (
+                          <p className="text-sm text-gray-500">No orders in the selected range.</p>
+                        ) : (
+                          <ResponsiveContainer width="90%" height={250}>
+                            <BarChart data={serviceVolumeData} margin={{ left: 15, right: 5, bottom: 24 }}>
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis
+                                dataKey="name"
+                                axisLine={false}
+                                tickLine={false}
+                                tick={{ fill: '#64748b', fontSize: 11, fontWeight: 500 }}
+                                interval={0}
+                                angle={-20}
+                                textAnchor="end"
+                                height={60}
+                              />
+                              <YAxis allowDecimals={false} />
+                              <Tooltip
+                                content={(props) => {
+                                  if (!props.active || !props.payload || !props.payload.length) return null;
+                                  const data = props.payload[0].payload as {
+                                    name: string;
+                                    value: number;
+                                    sales: number;
+                                    breakdown?: Record<string, number>
+                                  };
+
+                                  return (
+                                    <div className="bg-white p-3 border rounded shadow-lg max-w-xs">
+                                      <p className="font-semibold text-gray-900 mb-2">{data.name}</p>
+                                      <p className="text-sm text-gray-600">Total Orders: {data.value}</p>
+                                      <p className="text-sm text-gray-600 mb-2">Revenue: {'\u20B1'}{data.sales.toLocaleString()}</p>
+
+                                      {/* Show breakdown for Basic Cleaning */}
+                                      {data.name === 'Basic Cleaning' && data.breakdown && (
+                                        <div className="border-t pt-2 mt-2">
+                                          <p className="text-xs font-medium text-gray-700 mb-1">Service Breakdown:</p>
+                                          <div className="space-y-1">
+                                            <p className="text-xs text-gray-600">Basic Cleaning: {data.breakdown['Basic Cleaning'] || 0}</p>
+                                            <p className="text-xs text-gray-600">Unyellowing: {data.breakdown['Unyellowing'] || 0}</p>
+                                            <p className="text-xs text-gray-600">Minor Retouch: {data.breakdown['Minor Retouch'] || 0}</p>
+                                            <p className="text-xs text-gray-600">Minor Restoration: {data.breakdown['Minor Restoration'] || 0}</p>
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* Show breakdown for Color Renewal */}
+                                      {data.name === 'Color Renewal' && data.breakdown && (
+                                        <div className="border-t pt-2 mt-2">
+                                          <p className="text-xs font-medium text-gray-700 mb-1">Service Breakdown:</p>
+                                          <div className="space-y-1">
+                                            <p className="text-xs text-gray-600">2 Colors: {data.breakdown['2 Colors'] || 0}</p>
+                                            <p className="text-xs text-gray-600">3 Colors: {data.breakdown['3 Colors'] || 0}</p>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                }}
+                              />
+                              <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                                {serviceVolumeData.map((entry, index) => {
+                                  let fillColor = '#dc2626'; // default red
+                                  if (entry.name === 'Basic Cleaning') fillColor = '#0d948880'; // teal-700 with 50% opacity
+                                  else if (entry.name === 'Minor Reglue') fillColor = '#6366f180'; // indigo-500 with 50% opacity
+                                  else if (entry.name === 'Full Reglue') fillColor = '#c026d380'; // violet-600 with 50% opacity
+                                  else if (entry.name === 'Color Renewal') fillColor = '#f59e0b80'; // amber-500 with 50% opacity
+                                  return <Cell key={`cell-${index}`} fill={fillColor} />;
+                                })}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader className="flex flex-col md:flex-row items-center md:items-start justify-between mt-3 py-6 gap-4">
+                        <CardTitle className="text-center md:text-left text-base font-black uppercase whitespace-nowrap tracking-tight">{chartTitle}</CardTitle>
+                        <div className="flex flex-row flex-wrap items-center justify-center md:justify-end gap-x-6 gap-y-1.5">
+                          <div className="flex items-center gap-2 text-[10px] md:text-[11px] font-bold text-gray-600 uppercase tracking-tight whitespace-nowrap mt-1">
+                            <div className="w-2.5 h-2.5 bg-purple-500 rounded-full shrink-0"></div>
+                            <span>Orders Created</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-[10px] md:text-[11px] font-bold text-gray-600 uppercase tracking-tight whitespace-nowrap mt-1">
+                            <div className="w-2.5 h-2.5 bg-green-500 rounded-full shrink-0"></div>
+                            <span>Orders Released</span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2 text-[10px] md:text-[11px] font-bold text-gray-600 uppercase tracking-tight whitespace-nowrap">
-                          <div className="w-2.5 h-2.5 bg-[#a78bfa] rounded-full shrink-0"></div>
-                          <span>MINOR REGLUE</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-[10px] md:text-[11px] font-bold text-gray-600 uppercase tracking-tight whitespace-nowrap">
-                          <div className="w-2.5 h-2.5 bg-[#fbbf24] rounded-full shrink-0"></div>
-                          <span>COLOR RENEWAL</span>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="mt-8 ml-0 mb-1">
-                      {serviceVolumeData.length === 0 ? (
-                        <p className="text-sm text-gray-500">No orders in the selected range.</p>
-                      ) : (
+                      </CardHeader>
+                      <CardContent className="mt-6 ml-6 mb-2 ">
                         <ResponsiveContainer width="90%" height={250}>
-                          <BarChart data={serviceVolumeData} margin={{ left: 15, right: 5, bottom: 24 }}>
+                          <LineChart data={timeSeriesData}>
                             <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis
-                              dataKey="name"
-                              axisLine={false}
-                              tickLine={false}
-                              tick={{ fill: '#64748b', fontSize: 11, fontWeight: 500 }}
-                              interval={0}
-                              angle={-20}
-                              textAnchor="end"
-                              height={60}
-                            />
-                            <YAxis allowDecimals={false} />
+                            <XAxis dataKey="period" />
+                            <YAxis />
                             <Tooltip
                               content={(props) => {
                                 if (!props.active || !props.payload || !props.payload.length) return null;
                                 const data = props.payload[0].payload as {
-                                  name: string;
-                                  value: number;
-                                  sales: number;
-                                  breakdown?: Record<string, number>
+                                  period: string;
+                                  newOrders: number;
+                                  releasedOrders: number;
                                 };
 
                                 return (
-                                  <div className="bg-white p-3 border rounded shadow-lg max-w-xs">
-                                    <p className="font-semibold text-gray-900 mb-2">{data.name}</p>
-                                    <p className="text-sm text-gray-600">Total Orders: {data.value}</p>
-                                    <p className="text-sm text-gray-600 mb-2">Revenue: {'\u20B1'}{data.sales.toLocaleString()}</p>
-
-                                    {/* Show breakdown for Basic Cleaning */}
-                                    {data.name === 'Basic Cleaning' && data.breakdown && (
-                                      <div className="border-t pt-2 mt-2">
-                                        <p className="text-xs font-medium text-gray-700 mb-1">Service Breakdown:</p>
-                                        <div className="space-y-1">
-                                          <p className="text-xs text-gray-600">Basic Cleaning: {data.breakdown['Basic Cleaning'] || 0}</p>
-                                          <p className="text-xs text-gray-600">Unyellowing: {data.breakdown['Unyellowing'] || 0}</p>
-                                          <p className="text-xs text-gray-600">Minor Retouch: {data.breakdown['Minor Retouch'] || 0}</p>
-                                          <p className="text-xs text-gray-600">Minor Restoration: {data.breakdown['Minor Restoration'] || 0}</p>
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {/* Show breakdown for Color Renewal */}
-                                    {data.name === 'Color Renewal' && data.breakdown && (
-                                      <div className="border-t pt-2 mt-2">
-                                        <p className="text-xs font-medium text-gray-700 mb-1">Service Breakdown:</p>
-                                        <div className="space-y-1">
-                                          <p className="text-xs text-gray-600">2 Colors: {data.breakdown['2 Colors'] || 0}</p>
-                                          <p className="text-xs text-gray-600">3 Colors: {data.breakdown['3 Colors'] || 0}</p>
-                                        </div>
-                                      </div>
-                                    )}
+                                  <div className="bg-white p-3 border rounded shadow-lg">
+                                    <p className="font-semibold text-gray-900 mb-2">{data.period}</p>
+                                    <div className="space-y-1">
+                                      <p className="text-sm text-purple-600 font-bold">Orders Created: {data.newOrders}</p>
+                                      <p className="text-sm text-green-600 font-bold">Orders Released: {data.releasedOrders}</p>
+                                    </div>
                                   </div>
                                 );
                               }}
                             />
-                            <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                              {serviceVolumeData.map((entry, index) => {
-                                let fillColor = '#dc2626'; // default red
-                                if (entry.name === 'Basic Cleaning') fillColor = '#0d948880'; // teal-700 with 50% opacity
-                                else if (entry.name === 'Minor Reglue') fillColor = '#6366f180'; // indigo-500 with 50% opacity
-                                else if (entry.name === 'Full Reglue') fillColor = '#c026d380'; // violet-600 with 50% opacity
-                                else if (entry.name === 'Color Renewal') fillColor = '#f59e0b80'; // amber-500 with 50% opacity
-                                return <Cell key={`cell-${index}`} fill={fillColor} />;
-                              })}
-                            </Bar>
-                          </BarChart>
+                            <Line type="monotone" dataKey="newOrders" stroke="#8b5cf6" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                            <Line type="monotone" dataKey="releasedOrders" stroke="#22c55e" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                          </LineChart>
                         </ResponsiveContainer>
-                      )}
-                    </CardContent>
-                  </Card>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
 
-                  <Card>
-                    <CardHeader className="flex flex-col md:flex-row items-center md:items-start justify-between mt-3 py-6 gap-4">
-                      <CardTitle className="text-center md:text-left text-base font-black uppercase whitespace-nowrap tracking-tight">{chartTitle}</CardTitle>
-                      <div className="flex flex-row flex-wrap items-center justify-center md:justify-end gap-x-6 gap-y-1.5">
-                        <div className="flex items-center gap-2 text-[10px] md:text-[11px] font-bold text-gray-600 uppercase tracking-tight whitespace-nowrap mt-1">
-                          <div className="w-2.5 h-2.5 bg-purple-500 rounded-full shrink-0"></div>
-                          <span>Orders Created</span>
+                {role === 'staff' && (
+                  <div className="grid grid-cols-1 gap-6">
+                    <Card>
+                      <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                        <div>
+                          <CardTitle className="text-base font-black uppercase tracking-tight">Staff Performance</CardTitle>
+                          <p className="text-xs text-gray-500">Based on assigned orders within the selected range</p>
                         </div>
-                        <div className="flex items-center gap-2 text-[10px] md:text-[11px] font-bold text-gray-600 uppercase tracking-tight whitespace-nowrap mt-1">
-                          <div className="w-2.5 h-2.5 bg-green-500 rounded-full shrink-0"></div>
-                          <span>Orders Released</span>
+                        <div className="flex flex-col md:flex-row md:items-stretch gap-3 w-full md:w-auto">
+                          <div className="bg-white border border-gray-100 rounded-xl px-3 py-2 shadow-sm md:min-w-[150px]">
+                            <p className="text-[10px] font-black uppercase text-gray-400 tracking-wide">Assigned</p>
+                            <p className="text-lg font-black text-gray-800 leading-tight">{staffPerformance.totalAssigned}</p>
+                          </div>
+                          <div className="bg-white border border-gray-100 rounded-xl px-3 py-2 shadow-sm md:min-w-[150px]">
+                            <p className="text-[10px] font-black uppercase text-gray-400 tracking-wide">Completed</p>
+                            <p className="text-lg font-black text-green-600 leading-tight">{staffPerformance.completed}</p>
+                          </div>
+                          <div className="bg-white border border-gray-100 rounded-xl px-3 py-2 shadow-sm md:min-w-[150px]">
+                            <p className="text-[10px] font-black uppercase text-gray-400 tracking-wide">In Progress</p>
+                            <p className="text-lg font-black text-blue-600 leading-tight">{staffPerformance.inProgress}</p>
+                          </div>
+                          <div className="bg-white border border-gray-100 rounded-xl px-3 py-2 shadow-sm md:min-w-[150px]">
+                            <p className="text-[10px] font-black uppercase text-gray-400 tracking-wide">Completion Rate</p>
+                            <p className="text-lg font-black text-emerald-600 leading-tight">{staffPerformance.completionRate}%</p>
+                          </div>
                         </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="mt-6 ml-6 mb-2 ">
-                      <ResponsiveContainer width="90%" height={250}>
-                        <LineChart data={timeSeriesData}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="period" />
-                          <YAxis />
-                          <Tooltip
-                            content={(props) => {
-                              if (!props.active || !props.payload || !props.payload.length) return null;
-                              const data = props.payload[0].payload as {
-                                period: string;
-                                newOrders: number;
-                                releasedOrders: number;
-                              };
+                      </CardHeader>
+                      <CardContent>
+                        {staffPerformance.totalAssigned === 0 ? (
+                          <p className="text-sm text-gray-500">No assigned orders in this range.</p>
+                        ) : (
+                          <ResponsiveContainer width="100%" height={260}>
+                            <BarChart data={staffPerformance.data} margin={{ left: 8, right: 8, bottom: 12 }}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                              <XAxis
+                                dataKey="label"
+                                tick={{ fontSize: 11, fontWeight: 600, fill: '#4b5563' }}
+                                axisLine={false}
+                                tickLine={false}
+                              />
+                              <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#6b7280' }} />
+                              <Tooltip
+                                cursor={{ fill: 'rgba(248, 113, 113, 0.05)' }}
+                                content={({ active, payload }) => {
+                                  if (!active || !payload || !payload.length) return null;
+                                  const item = payload[0].payload as { label: string; value: number };
+                                  return (
+                                    <div className="bg-white px-3 py-2 border border-gray-100 rounded-lg shadow-sm text-sm font-semibold text-gray-700">
+                                      {item.label}: {item.value}
+                                    </div>
+                                  );
+                                }}
+                              />
+                              <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+                                {staffPerformance.data.map((item) => (
+                                  <Cell key={item.label} fill={item.color} />
+                                ))}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
 
-                              return (
-                                <div className="bg-white p-3 border rounded shadow-lg">
-                                  <p className="font-semibold text-gray-900 mb-2">{data.period}</p>
-                                  <div className="space-y-1">
-                                    <p className="text-sm text-purple-600 font-bold">Orders Created: {data.newOrders}</p>
-                                    <p className="text-sm text-green-600 font-bold">Orders Released: {data.releasedOrders}</p>
-                                  </div>
-                                </div>
-                              );
-                            }}
-                          />
-                          <Line type="monotone" dataKey="newOrders" stroke="#8b5cf6" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                          <Line type="monotone" dataKey="releasedOrders" stroke="#22c55e" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </CardContent>
-                  </Card>
-                </div>
-              )}
+              </>
+            )
+          }
 
-              {role === 'staff' && (
-                <div className="grid grid-cols-1 gap-6">
-                  <Card>
-                    <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                      <div>
-                        <CardTitle className="text-base font-black uppercase tracking-tight">Staff Performance</CardTitle>
-                        <p className="text-xs text-gray-500">Based on assigned orders within the selected range</p>
-                      </div>
-                      <div className="flex flex-col md:flex-row md:items-stretch gap-3 w-full md:w-auto">
-                        <div className="bg-white border border-gray-100 rounded-xl px-3 py-2 shadow-sm md:min-w-[150px]">
-                          <p className="text-[10px] font-black uppercase text-gray-400 tracking-wide">Assigned</p>
-                          <p className="text-lg font-black text-gray-800 leading-tight">{staffPerformance.totalAssigned}</p>
-                        </div>
-                        <div className="bg-white border border-gray-100 rounded-xl px-3 py-2 shadow-sm md:min-w-[150px]">
-                          <p className="text-[10px] font-black uppercase text-gray-400 tracking-wide">Completed</p>
-                          <p className="text-lg font-black text-green-600 leading-tight">{staffPerformance.completed}</p>
-                        </div>
-                        <div className="bg-white border border-gray-100 rounded-xl px-3 py-2 shadow-sm md:min-w-[150px]">
-                          <p className="text-[10px] font-black uppercase text-gray-400 tracking-wide">In Progress</p>
-                          <p className="text-lg font-black text-blue-600 leading-tight">{staffPerformance.inProgress}</p>
-                        </div>
-                        <div className="bg-white border border-gray-100 rounded-xl px-3 py-2 shadow-sm md:min-w-[150px]">
-                          <p className="text-[10px] font-black uppercase text-gray-400 tracking-wide">Completion Rate</p>
-                          <p className="text-lg font-black text-emerald-600 leading-tight">{staffPerformance.completionRate}%</p>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      {staffPerformance.totalAssigned === 0 ? (
-                        <p className="text-sm text-gray-500">No assigned orders in this range.</p>
-                      ) : (
-                        <ResponsiveContainer width="100%" height={260}>
-                          <BarChart data={staffPerformance.data} margin={{ left: 8, right: 8, bottom: 12 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                            <XAxis
-                              dataKey="label"
-                              tick={{ fontSize: 11, fontWeight: 600, fill: '#4b5563' }}
-                              axisLine={false}
-                              tickLine={false}
-                            />
-                            <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#6b7280' }} />
-                            <Tooltip
-                              cursor={{ fill: 'rgba(248, 113, 113, 0.05)' }}
-                              content={({ active, payload }) => {
-                                if (!active || !payload || !payload.length) return null;
-                                const item = payload[0].payload as { label: string; value: number };
-                                return (
-                                  <div className="bg-white px-3 py-2 border border-gray-100 rounded-lg shadow-sm text-sm font-semibold text-gray-700">
-                                    {item.label}: {item.value}
-                                  </div>
-                                );
-                              }}
-                            />
-                            <Bar dataKey="value" radius={[8, 8, 0, 0]}>
-                              {staffPerformance.data.map((item) => (
-                                <Cell key={item.label} fill={item.color} />
-                              ))}
-                            </Bar>
-                          </BarChart>
-                        </ResponsiveContainer>
-                      )}
-                    </CardContent>
-                  </Card>
-                </div>
-              )}
-
-            </>
-          )}
-
-        </div>
+        </div >
       </div >
 
       <AddExpenseModal

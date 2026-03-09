@@ -31,8 +31,17 @@ const PageLoader = () => (
   </div>
 );
 
+/**
+ * ROOT COMPONENT: App
+ * PURPOSE: Main entry point for the Shoelotskey SMS Frontend.
+ * ARCHITECTURE: 
+ * - Handles Client-side Routing (React Router)
+ * - Manages Global User Auth State (Synced with Backend LoginRequest)
+ * - Wraps application in Context Providers for 3NF Data (Orders, Services, Expenses, Activities)
+ */
 export default function App() {
-  const [user, setUser] = useState<{ username: string; email?: string; role: 'owner' | 'staff' } | null>(() => {
+  const [user, setUser] = useState<{ id?: number; username: string; email?: string; role: 'owner' | 'staff' } | null>(() => {
+
     // Initialize from localStorage
     const saved = localStorage.getItem('user');
     return saved ? JSON.parse(saved) : null;
@@ -48,9 +57,10 @@ export default function App() {
     }
   }, [user]);
 
-  const handleLogin = (username: string, role: 'owner' | 'staff') => {
-    setUser({ username, email: `${username}@shoelotskey.com`, role });
+  const handleLogin = (id: number, username: string, role: 'owner' | 'staff') => {
+    setUser({ id, username, email: `${username}@shoelotskey.com`, role });
   };
+
 
   const handleLogout = () => {
     setUser(null);
@@ -73,7 +83,8 @@ export default function App() {
   return (
     <BrowserRouter>
       <ActivityProvider>
-        <OrderProvider>
+        <OrderProvider user={user}>
+
           <ExpenseProvider>
             <ServiceProvider>
               <Layout user={user} onLogout={handleLogout} headerAction={headerActionRight}>

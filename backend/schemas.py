@@ -69,6 +69,10 @@ class ServiceSchema(BaseModel):
     service_id: Optional[int] = None
     service_name: str
     base_price: Decimal
+    category: str = 'base'
+    description: Optional[str] = None
+    duration_days: int = 0
+    service_code: Optional[str] = None
     is_active: bool = True
     class Config:
         from_attributes = True
@@ -93,7 +97,10 @@ class ItemSchema(BaseModel):
     item_id: Optional[int] = None
     order_id: Optional[int] = None
     brand: Optional[str] = None
+    shoe_model: Optional[str] = None
     material: Optional[str] = None
+    quantity: int = 1
+    item_notes: Optional[str] = None
     conditions: List[ConditionSchema] = []
     services: List[ServiceSchema] = []
     class Config:
@@ -107,6 +114,24 @@ class OrderSchema(BaseModel):
     status_id: int
     priority: str = 'Regular'
     grand_total: Decimal
+    
+    # --- Payment & Shipping ---
+    payment_method: str = 'cash'
+    payment_status: str = 'fully-paid'
+    shipping_preference: str = 'pickup'
+    delivery_address: Optional[str] = None
+    delivery_courier: Optional[str] = None
+    amount_received: Decimal = 0.0
+    balance: Decimal = 0.0
+    reference_no: Optional[str] = None
+    # shelf_location removed
+    deposit_amount: Decimal = 0.0
+    release_time: Optional[str] = None
+    province: Optional[str] = None
+    city: Optional[str] = None
+    barangay: Optional[str] = None
+    zip_code: Optional[str] = None
+
     expected_at: datetime
     released_at: Optional[datetime] = None
     claimed_at: Optional[datetime] = None
@@ -117,7 +142,11 @@ class OrderSchema(BaseModel):
     # 3NF Relationship hydration
     customer: Optional[CustomerSchema] = None
     status: Optional[StatusSchema] = None
+    processor: Optional[UserSchema] = None
     items: List[ItemSchema] = []
+    status_logs: List[StatusLogSchema] = []
+
+
     class Config:
         from_attributes = True
 
@@ -132,6 +161,11 @@ class StatusLogSchema(BaseModel):
     status_id: int
     user_id: int
     changed_at: datetime
+    
+    # Relationships
+    status: Optional[StatusSchema] = None
+    user: Optional[UserSchema] = None
+
     class Config:
         from_attributes = True
 

@@ -88,6 +88,10 @@ class Service(Base):
     service_id = Column(Integer, primary_key=True, autoincrement=True)
     service_name = Column(String(100), nullable=False)
     base_price = Column(DECIMAL(10, 2), nullable=False)
+    category = Column(Enum('base', 'addon', 'priority'), default='base')
+    description = Column(Text, nullable=True)
+    duration_days = Column(Integer, default=0)
+    service_code = Column(String(20), nullable=True)
     is_active = Column(Boolean, default=True)
 
 class Expense(Base):
@@ -118,6 +122,25 @@ class Order(Base):
     status_id = Column(Integer, ForeignKey("status.status_id"), nullable=False)
     priority = Column(Enum('Regular', 'Rush'), default='Regular')
     grand_total = Column(DECIMAL(10, 2), nullable=False)
+    
+    # --- PAYMENT & SHIPPING ---
+    payment_method = Column(String(20), default='cash')
+    payment_status = Column(String(20), default='fully-paid')
+    shipping_preference = Column(String(20), default='pickup')
+    delivery_address = Column(Text, nullable=True)
+    delivery_courier = Column(String(50), nullable=True)
+    amount_received = Column(DECIMAL(10, 2), default=0.0)
+    balance = Column(DECIMAL(10, 2), default=0.0)
+    reference_no = Column(String(100), nullable=True)
+    # shelf_location removed
+    deposit_amount = Column(DECIMAL(10, 2), default=0.0)
+    release_time = Column(String(20), nullable=True)
+    
+    # Address Components
+    province = Column(String(100), nullable=True)
+    city = Column(String(100), nullable=True)
+    barangay = Column(String(100), nullable=True)
+    zip_code = Column(String(20), nullable=True)
     
     # --- MACHINE LEARNING FEATURE BLOCK ---
     expected_at = Column(DateTime, nullable=False)  # Prediction Target / Deadline
@@ -161,9 +184,12 @@ class Item(Base):
     item_id = Column(Integer, primary_key=True, autoincrement=True)
     order_id = Column(Integer, ForeignKey("orders.order_id", ondelete="CASCADE"), nullable=False)
     
-    # ML Features: Brand, Material, Type
+    # ML Features: Brand, Material, Model
     brand = Column(String(50), index=True)
     material = Column(String(50))
+    shoe_model = Column(String(50))
+    quantity = Column(Integer, default=1)
+    item_notes = Column(Text, nullable=True)
     
     # Multi-valued attributes
     order = relationship("Order", back_populates="items")

@@ -8,10 +8,12 @@ import { JobOrder } from '@/app/types';
  * 0: Total number of shoes
  * 1: Is Rush? (1 or 0)
  * 2: Is Premium? (1 or 0)
- * 3: Number of different services applied
- * 4: Number of add-ons applied
+ * 3: Total Services Count
+ * 4: Total Add-ons Count
+ * 5: Current Workload (Active orders in systems)
+ * 6: Heuristic Recommendation (Days based on service types)
  */
-export function extractFeatures(order: JobOrder): number[] {
+export function extractFeatures(order: JobOrder, workload: number = 0, baseDays: number = 0): number[] {
     const totalShoes = order.items ? order.items.reduce((acc: number, item: any) => acc + (item.quantity || 1), 0) : 1;
     const isRush = order.priorityLevel === 'rush' ? 1 : 0;
     const isPremium = order.priorityLevel === 'premium' ? 1 : 0;
@@ -33,7 +35,7 @@ export function extractFeatures(order: JobOrder): number[] {
         }
     });
 
-    return [totalShoes, isRush, isPremium, totalServicesCount, totalAddonsCount];
+    return [totalShoes, isRush, isPremium, totalServicesCount, totalAddonsCount, workload, baseDays];
 }
 
 let model: RandomForestRegression | null = null;
@@ -53,7 +55,8 @@ export function trainPredictionModel(orders: JobOrder[]) {
 
     if (completedOrders.length > 5) {
         completedOrders.forEach(o => {
-            const features = extractFeatures(o);
+            // Need historical workload for real accuracy, but for now we use 0 or current
+            const features = extractFeatures(o, 0, 10); // Dummy fallback values for historical
             const start = new Date(o.transactionDate || o.createdAt).getTime();
             const end = new Date(o.actualCompletionDate!).getTime();
             const diffDays = Math.max(1, (end - start) / (1000 * 60 * 60 * 24));
@@ -62,28 +65,35 @@ export function trainPredictionModel(orders: JobOrder[]) {
             trainingY.push(diffDays);
         });
     } else {
-        // Generate synthetic baseline data to ensure the model has something to learn
-        // This simulates a baseline behavior roughly matching the fixed heuristic logic
+        // Generate synthetic baseline data including workload [5] and heuristic [6]
         const syntheticRules = [
-            // [shoes, isRush, isPremium, services, addons], expectedDays
-            [[1, 0, 0, 1, 0], 10], // 1 shoe, regular, 1 service, 0 addons -> 10 days
-            [[2, 0, 0, 2, 0], 12], // 2 shoes, regular, 2 services, 0 addons -> 12 days
-            [[1, 1, 0, 1, 0], 5],  // 1 shoe, rush -> 5 days
-            [[1, 0, 1, 1, 1], 8],  // premium -> 8 days
-            [[3, 0, 0, 3, 2], 15],
-            [[1, 0, 0, 1, 1], 11],
-            [[1, 1, 0, 2, 2], 7],
-            [[5, 0, 0, 5, 5], 20], // bulk regular
-            [[5, 1, 0, 5, 5], 10], // bulk rush
-            [[1, 0, 0, 0, 0], 5] // dummy fallback
+            // [shoes, isRush, isPremium, services, addons, workload, heuristic], expectedDays
+            [[1, 0, 0, 1, 0, 5, 10], 11], // low workload + baseline
+            [[1, 0, 0, 1, 0, 25, 10], 15], // high workload -> +4 days delay
+            [[2, 0, 0, 2, 0, 10, 12], 14],
+            [[1, 1, 0, 1, 0, 10, 5], 5],  // rush still prioritizes fast
+            [[1, 0, 1, 1, 1, 10, 8], 9],
+            [[3, 0, 0, 3, 2, 20, 15], 20], // heavy bulk + heavy workload
+            [[1, 0, 0, 1, 1, 5, 11], 12],
+            [[1, 1, 0, 2, 2, 40, 7], 10], // rush but EXTREME workload
+            [[5, 0, 0, 5, 5, 10, 20], 25], // bulk regular
+            [[5, 1, 0, 5, 5, 10, 10], 12]  // bulk rush
         ];
 
-        // Populate enough samples for the random forest
-        for (let i = 0; i < 50; i++) {
+        // Populate samples
+        for (let i = 0; i < 60; i++) {
             const rule = syntheticRules[i % syntheticRules.length];
-            // Add a little bit of noise for variance
-            const noiseX = [(rule[0] as number[])[0] + Math.floor(Math.random() * 2), (rule[0] as number[])[1], (rule[0] as number[])[2], (rule[0] as number[])[3], (rule[0] as number[])[4]];
-            const noiseY = (rule[1] as number) + (Math.random() * 2 - 1);
+            const baseFeats = rule[0] as number[];
+            const noiseX = [
+                baseFeats[0] + Math.floor(Math.random() * 2),
+                baseFeats[1],
+                baseFeats[2],
+                baseFeats[3],
+                baseFeats[4],
+                baseFeats[5] + Math.floor(Math.random() * 5), // workload drift
+                baseFeats[6] // heuristic baseline
+            ];
+            const noiseY = (rule[1] as number) + (Math.random() * 1.5 - 0.75);
 
             trainingX.push(noiseX);
             trainingY.push(Math.max(1, noiseY));
@@ -111,13 +121,13 @@ export function trainPredictionModel(orders: JobOrder[]) {
 /**
  * Expects a JobOrder object or similar structure to extract features from and predict completion days.
  */
-export function predictCompletionDays(order: Partial<JobOrder>, fallbackLogicDays: number): number {
+export function predictCompletionDays(order: Partial<JobOrder>, fallbackLogicDays: number, currentWorkload: number = 0): number {
     if (!model) {
         return fallbackLogicDays;
     }
 
     try {
-        const features = extractFeatures(order as JobOrder);
+        const features = extractFeatures(order as JobOrder, currentWorkload, fallbackLogicDays);
         const prediction = model.predict([features]);
         // prediction[0] should be our predicted number of days
         const predictedDays = Math.ceil(prediction[0]);

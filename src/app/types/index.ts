@@ -11,7 +11,7 @@ export interface BaseJobOrderData {
 
   // Shoe Details
   brand: string;
-  shoeType: string;
+  shoeModel: string;
   shoeMaterial: string;
   quantity: number;
   condition: {
@@ -20,6 +20,7 @@ export interface BaseJobOrderData {
     wornOut: boolean;
     soleSeparation: boolean;
     yellowing: boolean;
+    deepStains: boolean;
     others: string;
   };
 
@@ -48,9 +49,8 @@ export interface BaseJobOrderData {
   amountReceived?: number;
   change?: number;
   referenceNo?: string;
-
-  // Storage
-  shelfLocation?: string;
+  depositAmount?: number;
+  releaseTime?: string;
 
   // Metadata
   transactionDate: Date;
@@ -60,6 +60,7 @@ export interface BaseJobOrderData {
 export interface ShoeItem {
   id: string;
   brand: string;
+  shoeModel: string;
   shoeMaterial: string;
   quantity: number;
   condition: {

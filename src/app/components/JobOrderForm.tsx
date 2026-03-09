@@ -27,6 +27,10 @@ const SHOE_MATERIALS = [
     'Other', 'Leather', 'Synthetic', 'Canvas', 'Mesh', 'Rubber', 'Textile', 'Suede', 'Knit', 'Patent Leather', 'Denim', 'Nubuck'
 ];
 
+const SHOE_MODELS = [
+    'Other', 'Sneakers', 'Running Shoes', 'Basketball', 'Leather Shoes', 'Boots', 'Sandals', 'Formal', 'Loafers', 'Slip-on'
+];
+
 const DELIVERY_COURIERS = [
     'Lalamove', 'JRS', 'LBC', 'Grab', 'Other'
 ];
@@ -36,7 +40,9 @@ interface ShoeEntry {
     brand: string;
     otherBrand?: string;
     shoeMaterial: string;
+    shoeModel: string;
     otherMaterial?: string;
+    otherModel?: string;
     quantity: number;
     condition: {
         scratches: boolean;
@@ -105,6 +111,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
         id: Date.now().toString(),
         brand: '',
         shoeMaterial: '',
+        shoeModel: '',
         quantity: 1,
         condition: {
             scratches: false,
@@ -127,6 +134,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
     }, [orders]);
 
     const [priorityLevel, setPriorityLevel] = useState<Priority>('regular');
+    const [basicCleaningRushReduction, setBasicCleaningRushReduction] = useState(5);
     const [deliveryAddress, setDeliveryAddress] = useState({
         houseNo: '',
         street: '',
@@ -142,6 +150,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
     const [amountReceived, setAmountReceived] = useState('');
     const [depositAmount, setDepositAmount] = useState('');
     const [referenceNo, setReferenceNo] = useState('');
+    // shelfLocation removed
     const [orderTime, setOrderTime] = useState(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
     const [releaseTime, setReleaseTime] = useState('');
 
@@ -167,6 +176,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
             id: '1',
             brand: '',
             shoeMaterial: '',
+            shoeModel: '',
             quantity: 1,
             condition: {
                 scratches: false,
@@ -183,6 +193,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
 
         // Reset Order Details
         setPriorityLevel('regular');
+        setBasicCleaningRushReduction(5);
         setPaymentMethod('cash');
         setPaymentStatus('downpayment');
         setAmountReceived('');
@@ -201,8 +212,9 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
         const prefix = `ORD-${year}-${month}-${day}-`;
 
         // Extract numeric sequences, handling potential -A, -B suffixes
-        const existingIds = orders
-            .filter(o => o.orderNumber && typeof o.orderNumber === 'string' && o.orderNumber.startsWith(prefix))
+        const safeOrders = Array.isArray(orders) ? orders : [];
+        const existingIds = safeOrders
+            .filter(o => o && o.orderNumber && typeof o.orderNumber === 'string' && o.orderNumber.startsWith(prefix))
             .map(o => {
                 const parts = o.orderNumber.split('-');
                 const seqPart = parts[4] || '';
@@ -265,13 +277,19 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
         let addOnDays = 0;
         let priorityDays = 0;
 
-        // Alias to avoid name clashing in loops
-        const servicesContext = services;
-
         shoes.forEach(shoe => {
-            const services = shoe.baseService || [];
+            let servicesArr = shoe.baseService || [];
 
-            services.forEach(serviceName => {
+            // Logic: Basic Cleaning duration is included in Reglue and Color Renewal. 
+            const hasDurationInclusive = servicesArr.some(s =>
+                s.toLowerCase().includes('reglue') || s.toLowerCase().includes('color renewal')
+            );
+
+            const filteredDurationServices = hasDurationInclusive
+                ? servicesArr.filter(s => s !== 'Basic Cleaning')
+                : servicesArr;
+
+            filteredDurationServices.forEach((serviceName: string) => {
                 const service = baseServices.find(s => s.name === serviceName);
                 if (service && service.durationDays !== undefined) {
                     baseDays += parseDuration(service.durationDays);
@@ -290,56 +308,49 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
             });
 
             if (priorityLevel === 'rush') {
-                if (services.includes('Basic Cleaning')) {
-                    const fee = servicesContext.find(s => s.category === 'priority' && s.name.includes('Basic Cleaning'));
-                    priorityDays += fee?.durationDays !== undefined ? parseDuration(fee.durationDays) : -9;
-                }
-                if (services.some(s => s.toLowerCase().includes('reglue'))) {
-                    const fee = servicesContext.find(s => s.category === 'priority' && s.name.includes('Reglue'));
-                    priorityDays += fee?.durationDays !== undefined ? parseDuration(fee.durationDays) : -1;
-                }
-            } else if (priorityLevel === 'premium') {
-                if (services.some(s => s.toLowerCase().includes('color renewal'))) {
-                    const fee = servicesContext.find(s => s.category === 'priority' && s.name.includes('Color Renewal'));
-                    priorityDays += fee?.durationDays !== undefined ? parseDuration(fee.durationDays) : -2;
+                if (servicesArr.includes('Basic Cleaning')) {
+                    priorityDays -= (basicCleaningRushReduction || 0);
                 }
             }
         });
-
-        const totalDays = Math.max(1, baseDays + addOnDays + priorityDays);
+        const safeShoes = Array.isArray(shoes) ? shoes : [];
+        const hasServices = safeShoes.some(shoe => (Array.isArray(shoe.baseService) ? shoe.baseService : []).length > 0 || (Array.isArray(shoe.addOns) ? shoe.addOns : []).length > 0);
+        const totalDays = hasServices ? Math.max(1, baseDays + addOnDays + priorityDays) : 0;
 
         return { baseDays, addOnDays, priorityDays, totalDays };
     };
 
     const mlBreakdown = calculatePredictedDaysBreakdown();
     const calculatePredictedDays = () => {
+        const hasServices = shoes.some(shoe => (Array.isArray(shoe.baseService) ? shoe.baseService : []).length > 0 || shoe.addOns.length > 0);
+        if (!hasServices) return 0;
+
         const tempOrder = {
             items: shoes as any,
             priorityLevel: priorityLevel
         };
-        // Use Random forest model if available, otherwise fallback to basic heuristic
-        return predictCompletionDays(tempOrder, mlBreakdown.totalDays);
+
+        const predicted = predictCompletionDays(tempOrder, mlBreakdown.totalDays, orders.length);
+        // Safety: Ensure it's a number and not NaN
+        return (typeof predicted === 'number' && !isNaN(predicted)) ? predicted : (mlBreakdown.totalDays || 7);
     };
 
     const getShoeTotal = (shoe: ShoeEntry) => {
         let total = 0;
-        const services = Array.isArray(shoe.baseService) ? shoe.baseService : [];
-        if (services.length > 0) {
-            services.forEach(serviceName => {
-                const service = baseServices.find(s => s.name === serviceName);
-                if (service) total += service.price;
-            });
-        }
+        const servicesArr = Array.isArray(shoe.baseService) ? shoe.baseService : [];
+
+        servicesArr.forEach((serviceName: string) => {
+            const service = baseServices.find(s => s.name === serviceName);
+            if (service) total += service.price;
+        });
+
         shoe.addOns.forEach((addon: { name: string; quantity?: number }) => {
             total += getAddonTotal(addon.name, addon.quantity || 1);
         });
 
-        // Add rush fee to unit total if applicable
-        if (priorityLevel === 'rush') {
-            if (services.includes('Basic Cleaning')) total += 150;
-            if (services.some(s => s.toLowerCase().includes('reglue'))) total += 250;
-        } else if (priorityLevel === 'premium') {
-            if (services.some(s => s.toLowerCase().includes('color renewal'))) total += 1000;
+        // Add rush fee to unit total if applicable (Only for BC)
+        if (priorityLevel === 'rush' && servicesArr.includes('Basic Cleaning')) {
+            total += 150;
         }
 
         return total * shoe.quantity;
@@ -351,69 +362,68 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
         let rushFee = 0;
 
         shoes.forEach((shoe: ShoeEntry) => {
-            const services = Array.isArray(shoe.baseService) ? shoe.baseService : [];
-            if (services.length > 0) {
-                services.forEach(serviceName => {
-                    const service = baseServices.find(s => s.name === serviceName);
-                    if (service) {
-                        baseTotal += service.price * shoe.quantity;
-                    }
-                });
-            }
+            const servicesArr = Array.isArray(shoe.baseService) ? shoe.baseService : [];
+
+            servicesArr.forEach((serviceName: string) => {
+                const service = baseServices.find(s => s.name === serviceName);
+                if (service) {
+                    baseTotal += service.price * shoe.quantity;
+                }
+            });
 
             shoe.addOns.forEach((addon: { name: string; quantity?: number }) => {
                 const addonQuantity = addon.quantity || 1;
                 addOnsTotal += getAddonTotal(addon.name, addonQuantity) * shoe.quantity;
             });
 
-            // Calculate Rush Fee per shoe (Additive logic)
-            let shoePriorityFee = 0;
-            // services is already declared in outer scope
-            if (priorityLevel === 'rush') {
-                if (services.includes('Basic Cleaning')) {
-                    shoePriorityFee += 150;
-                }
-                if (services.some(s => s.toLowerCase().includes('reglue'))) {
-                    shoePriorityFee += 250;
-                }
-            } else if (priorityLevel === 'premium') {
-                if (services.some(s => s.toLowerCase().includes('color renewal'))) {
-                    shoePriorityFee = 1000;
-                }
+            // Rush Fee only for Basic Cleaning
+            if (priorityLevel === 'rush' && servicesArr.includes('Basic Cleaning')) {
+                rushFee += 150 * shoe.quantity;
             }
-            rushFee += shoePriorityFee * shoe.quantity;
         });
 
         const grandTotal = baseTotal + addOnsTotal + rushFee;
         const amountReceivedNum = amountReceived ? parseFloat(amountReceived.replace(/,/g, '')) : 0;
-        // const change = amountReceivedNum - grandTotal;
-        const change = amountReceivedNum - grandTotal;
-        const remainingBalance = Math.max(0, grandTotal - amountReceivedNum);
+
+        // Dynamic exact halves (50%) for deposit
+        const depositAmt = paymentStatus === 'downpayment' ? grandTotal / 2 : grandTotal;
+
+        // Change logic uses deposit required, not necessarily the overall total
+        const change = amountReceivedNum - depositAmt;
+
+        // Remaining Balance
+        const remainingBalance = Math.max(0, grandTotal - depositAmt);
 
         return { baseTotal, addOnsTotal, rushFee, grandTotal, amountReceivedNum, remainingBalance, change };
     };
 
     const { baseTotal, addOnsTotal, rushFee, grandTotal } = calculateTotals();
 
+    const [isAmountReceivedTyped, setIsAmountReceivedTyped] = useState(false);
+
     useEffect(() => {
+        const exactHalf = grandTotal / 2;
+
         if (paymentStatus === 'downpayment') {
-            const currentDeposit = parseFloat(depositAmount.replace(/,/g, '')) || 0;
-            const minDeposit = grandTotal / 2;
-            if (currentDeposit < minDeposit && grandTotal > 0) {
-                setDepositAmount(minDeposit.toLocaleString());
-                setAmountReceived(minDeposit.toLocaleString());
+            setDepositAmount(exactHalf.toLocaleString());
+            if (!isAmountReceivedTyped) {
+                setAmountReceived(exactHalf.toString());
             }
-        } else if (paymentStatus === 'fully-paid' && grandTotal > 0) {
+        } else if (paymentStatus === 'fully-paid') {
             setDepositAmount(grandTotal.toLocaleString());
-            setAmountReceived(grandTotal.toLocaleString());
+            if (!isAmountReceivedTyped) {
+                setAmountReceived(grandTotal.toString());
+            }
         }
-    }, [paymentStatus, grandTotal, depositAmount]);
+    }, [paymentStatus, grandTotal, isAmountReceivedTyped]);
+
 
     const addShoe = () => {
         setShoes([...shoes, {
             id: Date.now().toString(),
             brand: '',
             shoeMaterial: '',
+            shoeModel: '',
             quantity: 1,
             condition: {
                 scratches: false,
@@ -439,6 +449,14 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
         }
     };
 
+    /**
+     * HANDLER: handleSubmit
+     * PURPOSE: Consolidates all form fields into a single 3NF-compliant JobOrder.
+     * LOGIC:
+     * 1. Maps multiple shoe entries into an 'items' array.
+     * 2. Calculates predicted completion date using ML parameters (priority).
+     * 3. Triggers OrderContext to persist to FastAPI backend.
+     */
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -447,7 +465,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
             return;
         }
 
-        if (shoes.some(shoe => !shoe.baseService)) {
+        if (shoes.some(shoe => !shoe.baseService || shoe.baseService.length === 0)) {
             toast.error('Please select base service for all shoes');
             return;
         }
@@ -461,26 +479,21 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                 toast.error('Please select a delivery courier');
                 return;
             }
-            if (deliveryCourier === 'Other' && !otherCourier) {
-                toast.error('Please specify the courier');
-                return;
-            }
         }
 
-        const depositAmt = parseFloat(depositAmount.replace(/,/g, '')) || 0;
-        if (paymentStatus === 'downpayment' && depositAmt < grandTotal / 2) {
-            toast.error('Downpayment must be at least half of the grand total');
+        const depositAmt = paymentStatus === 'downpayment' ? grandTotal / 2 : grandTotal;
+        const amtReceived = parseFloat(amountReceived.replace(/,/g, '')) || 0;
+        if (amtReceived < depositAmt && paymentStatus !== 'downpayment') {
+            toast.error('Amount received is less than the required amount');
+            return;
+        } else if (amtReceived < depositAmt && paymentStatus === 'downpayment') {
+            toast.error('Amount received is less than the required 50% downpayment');
             return;
         }
 
-        // Create new order
         const [oHours, oMinutes] = orderTime.split(':').map(Number);
         const createdDate = new Date();
         createdDate.setHours(oHours || 0, oMinutes || 0, 0, 0);
-        const year = createdDate.getFullYear();
-        const month = String(createdDate.getMonth() + 1).padStart(2, '0');
-        const day = String(createdDate.getDate()).padStart(2, '0');
-        const sequence = generatedOrderNumber.split('-').pop() || '001';
 
         // Helper to format delivery address
         const formatAddress = () => {
@@ -488,105 +501,83 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
             return `${deliveryAddress.houseNo} ${deliveryAddress.street}, ${deliveryAddress.barangay}, ${deliveryAddress.city}, ${deliveryAddress.province}, ${deliveryAddress.zipCode}`;
         };
 
-        shoes.forEach((shoe, index) => {
-            const groupSuffix = shoes.length > 1 ? `-${String.fromCharCode(65 + index)}` : '';
+        const totals = calculateTotals();
 
-            const newOrder: any = { // Using any temporarily if types mismatch, but preferably match JobOrder type
-                id: `JO-${year}${month}${day}-${sequence}${groupSuffix}`,
-                orderNumber: generatedOrderNumber, // Use the pre-generated sequential number
-                customerName,
-                contactNumber,
+        // New Logic: ONE JobOrder with many items
+        const newOrder: any = {
+            id: `JO-${Date.now()}`,
+            orderNumber: generatedOrderNumber,
+            customerName,
+            contactNumber,
+            // Fallback fields (using first shoe data)
+            brand: shoes[0].brand === 'Other' ? (shoes[0].otherBrand || 'Other') : (shoes[0].brand || 'Other'),
+            shoeMaterial: shoes[0].shoeMaterial === 'Other' ? (shoes[0].otherMaterial || 'Other') : (shoes[0].shoeMaterial || 'Other'),
+            baseService: shoes[0].baseService,
+            quantity: shoes.reduce((acc, s) => acc + s.quantity, 0),
+
+            // Nested items for breakdown view
+            items: shoes.map((shoe, idx) => ({
+                id: `${Date.now()}-${idx}`,
                 brand: shoe.brand === 'Other' ? (shoe.otherBrand || 'Other') : (shoe.brand || 'Other'),
-                shoeType: 'Sneakers', // Defaulting as specific type selector is not in this specific view snippet
+                shoeModel: shoe.shoeModel === 'Other' ? (shoe.otherModel || 'Other') : (shoe.shoeModel || 'Other'),
                 shoeMaterial: shoe.shoeMaterial === 'Other' ? (shoe.otherMaterial || 'Other') : (shoe.shoeMaterial || 'Other'),
                 quantity: shoe.quantity,
                 condition: shoe.condition,
                 baseService: shoe.baseService,
-                addOns: shoe.addOns.map(a => ({ name: a.name, quantity: a.quantity || 1 })),
-                priorityLevel,
-                baseServiceFee: 0, // Calculate properly if needed
-                addOnsTotal: 0, // Calculate properly if needed
-                grandTotal: 0, // This is per shoe total in this loop context
-                shippingPreference,
-                deliveryAddress: formatAddress(),
-                deliveryCourier: shippingPreference === 'delivery' ? (deliveryCourier === 'Other' ? otherCourier : deliveryCourier) : undefined,
-                province: shippingPreference === 'delivery' ? deliveryAddress.province : undefined,
-                city: shippingPreference === 'delivery' ? deliveryAddress.city : undefined,
-                barangay: shippingPreference === 'delivery' ? deliveryAddress.barangay : undefined,
-                zipCode: shippingPreference === 'delivery' ? deliveryAddress.zipCode : undefined,
-                paymentMethod,
-                paymentStatus,
-                amountReceived: parseFloat(amountReceived.replace(/,/g, '') || '0') / shoes.length, // Split payment? Or just assign to primary?
-                change: 0,
-                shelfLocation: undefined,
-                transactionDate: createdDate,
-                processedBy: user?.username || 'Current User',
+                addOns: shoe.addOns
+            })),
+
+            priorityLevel,
+            baseServiceFee: totals.baseTotal,
+            addOnsTotal: totals.addOnsTotal,
+            grandTotal: totals.grandTotal,
+            shippingPreference,
+            deliveryAddress: formatAddress(),
+            deliveryCourier: shippingPreference === 'delivery' ? (deliveryCourier === 'Other' ? otherCourier : deliveryCourier) : undefined,
+            province: deliveryAddress.province,
+            city: deliveryAddress.city,
+            barangay: deliveryAddress.barangay,
+            zipCode: deliveryAddress.zipCode,
+            paymentMethod,
+            paymentStatus,
+            amountReceived: totals.amountReceivedNum,
+            change: totals.change,
+            referenceNo,
+            // shelfLocation removed
+            depositAmount: parseFloat(depositAmount) || 0,
+            releaseTime,
+            transactionDate: createdDate,
+            processedBy: user?.username || 'Current User',
+            status: 'new-order',
+            predictedCompletionDate: (() => {
+                // LOGIC: Calculate expected delivery date based on priority
+                // Regular: 7 days, Rush: 3 days, Premium: 1 day
+                const daysToAdd = calculatePredictedDays();
+                const date = new Date(Date.now() + daysToAdd * 24 * 60 * 60 * 1000);
+                if (releaseTime) {
+                    const [rHours, rMinutes] = releaseTime.split(':').map(Number);
+                    date.setHours(rHours, rMinutes, 0, 0);
+                }
+                return date;
+            })(),
+            createdAt: createdDate,
+            updatedAt: createdDate,
+            statusHistory: [{
                 status: 'new-order',
-                predictedCompletionDate: (() => {
-                    const daysToAdd = calculatePredictedDays();
-                    const date = new Date(Date.now() + daysToAdd * 24 * 60 * 60 * 1000);
-                    if (releaseTime) {
-                        const [rHours, rMinutes] = releaseTime.split(':').map(Number);
-                        date.setHours(rHours, rMinutes, 0, 0);
-                    } else {
-                        date.setHours(10, 0, 0, 0); // Default to 10 AM if no time
-                    }
-                    return date;
-                })(),
-                actualCompletionDate: undefined,
-                createdAt: createdDate,
-                updatedAt: createdDate,
-                statusHistory: [{
-                    status: 'new-order',
-                    timestamp: createdDate,
-                    user: user?.username || 'Current User',
-                }]
-            };
-
-            // Recalculate per-shoe financials
-            // Recalculate per-shoe financials
-            let shoeBaseFee = 0;
-            const baseServicesArr = shoe.baseService || [];
-            baseServicesArr.forEach(serviceName => {
-                const service = baseServices.find(s => s.name === serviceName);
-                if (service) shoeBaseFee += service.price * shoe.quantity;
-            });
-            newOrder.baseServiceFee = shoeBaseFee;
-
-            let shoeAddonsTotal = 0;
-            shoe.addOns.forEach(addon => {
-                const addonObj = addOnServices.find(s => s.name === addon.name);
-                shoeAddonsTotal += (addonObj?.price || 0) * (addon.quantity || 1) * shoe.quantity;
-            });
-            newOrder.addOnsTotal = shoeAddonsTotal;
-
-            // Rush fee per shoe logic (simplified from calculateTotals)
-            // Priority fee per shoe logic (Additive)
-            let shoeRushFee = 0;
-            const servicesForFee = Array.isArray(shoe.baseService) ? shoe.baseService : [];
-            if (priorityLevel === 'rush') {
-                if (servicesForFee.includes('Basic Cleaning')) {
-                    shoeRushFee += 150;
-                }
-                if (servicesForFee.some(s => s.toLowerCase().includes('reglue'))) {
-                    shoeRushFee += 250;
-                }
-            } else if (priorityLevel === 'premium') {
-                if (servicesForFee.some(s => s.toLowerCase().includes('color renewal'))) {
-                    shoeRushFee = 1000;
-                }
-            }
-            newOrder.grandTotal = (newOrder.baseServiceFee + newOrder.addOnsTotal + (shoeRushFee * shoe.quantity));
-
-            addOrder(newOrder);
-
-            addActivity({
+                timestamp: createdDate,
                 user: user?.username || 'Current User',
-                action: 'New Order',
-                details: `Created new job order #${newOrder.orderNumber} for ${customerName}`,
-                type: 'order'
-            });
+            }]
+        };
+
+        addOrder(newOrder);
+
+        addActivity({
+            user: user?.username || 'Current User',
+            action: 'New Order',
+            details: `Created new job order #${newOrder.orderNumber} with ${shoes.length} shoes for ${customerName}`,
+            type: 'order'
         });
+
 
         toast.success('Order created successfully!');
 
@@ -602,6 +593,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
             id: Date.now().toString(),
             brand: '',
             shoeMaterial: '',
+            shoeModel: '',
             quantity: 1,
             condition: {
                 scratches: false,
@@ -861,7 +853,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                         <div className="md:col-span-5 flex flex-col gap-3 h-full">
                                             {/* Identification Row - Stacked for narrow column */}
                                             <div className="space-y-2.5">
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                                     <div className="col-span-1">
                                                         <Label className={LABEL_STYLE}>Brand</Label>
                                                         <CreatableCombobox
@@ -871,6 +863,32 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                             placeholder="Select Brand"
                                                             searchPlaceholder="Search brand..."
                                                         />
+                                                        {shoe.brand === 'Other' && (
+                                                            <Input
+                                                                className={`${INPUT_STYLE} mt-1`}
+                                                                placeholder="Please specify brand"
+                                                                value={shoe.otherBrand}
+                                                                onChange={(e) => updateShoe(shoe.id, { otherBrand: e.target.value })}
+                                                            />
+                                                        )}
+                                                    </div>
+                                                    <div className="col-span-1">
+                                                        <Label className={LABEL_STYLE}>Model</Label>
+                                                        <CreatableCombobox
+                                                            options={SHOE_MODELS}
+                                                            value={shoe.shoeModel}
+                                                            onChange={(val) => updateShoe(shoe.id, { shoeModel: val })}
+                                                            placeholder="Select Model"
+                                                            searchPlaceholder="Search model..."
+                                                        />
+                                                        {shoe.shoeModel === 'Other' && (
+                                                            <Input
+                                                                className={`${INPUT_STYLE} mt-1`}
+                                                                placeholder="Please specify model"
+                                                                value={shoe.otherModel}
+                                                                onChange={(e) => updateShoe(shoe.id, { otherModel: e.target.value })}
+                                                            />
+                                                        )}
                                                     </div>
                                                     <div className="col-span-1">
                                                         <Label className={LABEL_STYLE}>Material</Label>
@@ -881,6 +899,14 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                             placeholder="Select Material"
                                                             searchPlaceholder="Search material..."
                                                         />
+                                                        {shoe.shoeMaterial === 'Other' && (
+                                                            <Input
+                                                                className={`${INPUT_STYLE} mt-1`}
+                                                                placeholder="Please specify material"
+                                                                value={shoe.otherMaterial}
+                                                                onChange={(e) => updateShoe(shoe.id, { otherMaterial: e.target.value })}
+                                                            />
+                                                        )}
                                                     </div>
                                                 </div>
                                                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -894,7 +920,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                             className={`${INPUT_STYLE} text-center font-bold px-1`}
                                                         />
                                                     </div>
-                                                    <div className="col-span-1 lg:col-span-3">
+                                                    <div className={`col-span-1 ${priorityLevel === 'rush' && (Array.isArray(shoe.baseService) ? shoe.baseService : []).includes('Basic Cleaning') ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
                                                         <Label className={LABEL_STYLE}>Priority Level</Label>
                                                         <div className="relative group/select">
                                                             <Select value={priorityLevel} onValueChange={(val: any) => setPriorityLevel(val)}>
@@ -905,7 +931,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                                     <SelectItem value="regular">Regular</SelectItem>
                                                                     {shoes.some(shoe => {
                                                                         const services = Array.isArray(shoe.baseService) ? shoe.baseService : [];
-                                                                        return services.some(s => s === 'Basic Cleaning' || s.includes('Reglue'));
+                                                                        return services.includes('Basic Cleaning');
                                                                     }) && (
                                                                             <SelectItem value="rush">Rush</SelectItem>
                                                                         )}
@@ -922,6 +948,19 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                             )}
                                                         </div>
                                                     </div>
+                                                    {priorityLevel === 'rush' && (Array.isArray(shoe.baseService) ? shoe.baseService : []).includes('Basic Cleaning') && (
+                                                        <div className="col-span-1 lg:col-span-1">
+                                                            <Label className={LABEL_STYLE} title="Days Reduced">Days Reduced</Label>
+                                                            <Input
+                                                                type="number"
+                                                                min="0"
+                                                                max="30"
+                                                                value={basicCleaningRushReduction}
+                                                                onChange={(e: any) => setBasicCleaningRushReduction(parseInt(e.target.value) || 0)}
+                                                                className={`${INPUT_STYLE} !text-left font-bold px-3`}
+                                                            />
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
 
@@ -1071,9 +1110,6 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                                                                 {service.code}
                                                                                             </span>
                                                                                         )}
-                                                                                        <span className="text-[9px] text-gray-500 font-medium">
-                                                                                            {service.durationDays} days
-                                                                                        </span>
                                                                                     </div>
                                                                                 </div>
                                                                                 {isChecked && (
@@ -1100,9 +1136,9 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                                     {addOnServices.filter(addon => {
                                                                         const baseServicesArr = shoe.baseService || [];
                                                                         const basicCleaningAddOns = ['Unyellowing', 'White Paint', 'Minor Restoration', 'Minor Retouch'];
-                                                                        const reglueAddOns = ['Another Layer', 'Premium Glue', 'Middlesole Glue', 'Undersole Glue'];
+                                                                        const reglueAddOns = ['Add Glue Layer', 'Premium Glue', 'Midsole', 'Undersole'];
                                                                         if (baseServicesArr.includes('Basic Cleaning') && basicCleaningAddOns.includes(addon.name)) return true;
-                                                                        if (baseServicesArr.some(s => s.includes('Full Reglue')) && reglueAddOns.includes(addon.name)) return true;
+                                                                        if (baseServicesArr.some(s => s.toLowerCase().includes('reglue')) && reglueAddOns.includes(addon.name)) return true;
                                                                         const colorAddOns = ['2 Colors', '3 Colors'];
                                                                         if (baseServicesArr.some(s => s.includes('Color Renewal')) && colorAddOns.includes(addon.name)) return true;
                                                                         return false;
@@ -1114,10 +1150,10 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                                             'Minor Restoration': 4,
                                                                             '2 Colors': 5,
                                                                             '3 Colors': 6,
-                                                                            'Another Layer': 7,
+                                                                            'Add Glue Layer': 7,
                                                                             'Premium Glue': 8,
-                                                                            'Middlesole Glue': 9,
-                                                                            'Undersole Glue': 10
+                                                                            'Midsole': 9,
+                                                                            'Undersole': 10
                                                                         };
                                                                         return (order[a.name] || 99) - (order[b.name] || 99);
                                                                     }).map((addon) => {
@@ -1152,9 +1188,6 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                                                                     {addon.code}
                                                                                                 </span>
                                                                                             )}
-                                                                                            <span className="text-[9px] text-gray-500 font-medium">
-                                                                                                +{addon.durationDays} days
-                                                                                            </span>
                                                                                         </div>
                                                                                     </div>
                                                                                 </div>
@@ -1243,20 +1276,6 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                 const deposit = parseFloat(depositAmount.replace(/,/g, '')) || 0;
                                 const total = grandTotal;
 
-                                // Display Logic
-                                let resultLabel = 'TOTAL DUE';
-                                let resultValue = total;
-                                let resultColor = 'text-gray-900 bg-white border border-gray-100 shadow-sm';
-
-                                if (isPartial) {
-                                    resultLabel = 'REMAINING BALANCE';
-                                    resultValue = Math.max(0, total - deposit);
-                                    resultColor = resultValue > 0 ? 'text-red-500 bg-white border border-red-100 shadow-sm' : 'text-green-600 bg-white border border-green-100 shadow-sm';
-                                } else if (isPaid) {
-                                    resultLabel = 'AMOUNT CHANGE';
-                                    resultValue = Math.max(0, received - total);
-                                    resultColor = 'text-green-600 bg-white border border-green-100 shadow-sm';
-                                }
 
                                 return (
                                     <div className="bg-[#F8F9FA]/50 p-4 rounded-xl border border-red-50/50 space-y-3 shadow-sm h-full flex flex-col justify-center">
@@ -1284,7 +1303,9 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                     <Calendar size={14} className="mr-2 text-gray-400 shrink-0" />
                                                     <span className="truncate">{(() => {
                                                         const daysToAdd = calculatePredictedDays();
-                                                        return dateFnsFormat(new Date(Date.now() + daysToAdd * 24 * 60 * 60 * 1000), 'MM/dd/yy');
+                                                        const val = isNaN(daysToAdd) ? 7 : daysToAdd;
+                                                        const d = new Date(Date.now() + val * 24 * 60 * 60 * 1000);
+                                                        return dateFnsFormat(isNaN(d.getTime()) ? new Date() : d, 'MM/dd/yy');
                                                     })()}</span>
                                                 </div>
                                             </div>
@@ -1313,14 +1334,17 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                 </span>
                                             </div>
                                             {/* Row 2: Order ID, Processed By */}
-                                            <div className="space-y-1 col-span-1 md:col-span-6">
+                                            <div className="space-y-1 col-span-1 md:col-span-4">
                                                 <Label className={LABEL_STYLE}>Order ID</Label>
                                                 <div className="flex items-center bg-white h-9 rounded-xl px-3 text-[11px] text-gray-900 border border-gray-100/50 shadow-sm">
                                                     <Hash size={14} className="mr-2 text-gray-400" />
                                                     <span className="whitespace-nowrap">{generatedOrderNumber || 'Generating...'}</span>
                                                 </div>
                                             </div>
-                                            <div className="space-y-1 col-span-1 md:col-span-6">
+                                            <div className="space-y-1 col-span-1 md:col-span-4">
+                                                <Label className={LABEL_STYLE}>Shelf Location removed</Label>
+                                            </div>
+                                            <div className="space-y-1 col-span-1 md:col-span-4">
                                                 <Label className={LABEL_STYLE}>Processed By</Label>
                                                 <div className="flex items-center bg-white h-9 rounded-xl px-3 text-xs text-gray-900 border border-gray-100/50 shadow-sm">
                                                     <User size={14} className="mr-2 text-gray-400" />
@@ -1349,7 +1373,17 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
 
                                             <div className="space-y-1">
                                                 <Label className={LABEL_STYLE}>Payment Status</Label>
-                                                <Select value={paymentStatus} onValueChange={(value: PaymentStatus) => setPaymentStatus(value)}>
+                                                <Select
+                                                    value={paymentStatus}
+                                                    onValueChange={(value: PaymentStatus) => {
+                                                        setPaymentStatus(value);
+                                                        if (value === 'downpayment') {
+                                                            setAmountReceived((grandTotal / 2).toString());
+                                                        } else if (value === 'fully-paid') {
+                                                            setAmountReceived(grandTotal.toString());
+                                                        }
+                                                    }}
+                                                >
                                                     <SelectTrigger className="bg-white border-gray-100/50 h-9 rounded-xl text-xs text-gray-900 shadow-sm pr-8">
                                                         <SelectValue />
                                                     </SelectTrigger>
@@ -1374,9 +1408,34 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                 </div>
                                             )}
 
-                                            {/* Row 5: Amount Received & Result Field */}
+                                            {/* Row 5: Total / Required Downpayment & Amount Received */}
                                             {showAmountRec && (
                                                 <>
+                                                    <div className="space-y-1">
+                                                        {isPartial ? (
+                                                            <>
+                                                                <Label htmlFor="depositAmt" className={LABEL_STYLE}>Required Downpayment (50%)</Label>
+                                                                <div className="relative">
+                                                                    <span className="absolute left-3 top-2.5 text-gray-900 text-xs font-black">{'\u20B1'}</span>
+                                                                    <Input
+                                                                        id="depositAmt"
+                                                                        type="text"
+                                                                        readOnly
+                                                                        value={depositAmount}
+                                                                        className="bg-gray-100/50 border-gray-100/50 h-10 rounded-xl text-xs pl-7 font-black text-gray-800 shadow-sm cursor-not-allowed"
+                                                                    />
+                                                                </div>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Label className={LABEL_STYLE}>Total Due</Label>
+                                                                <div className={`h-10 flex items-center px-4 rounded-xl font-black text-xs text-gray-900 bg-white border border-gray-100 shadow-sm`}>
+                                                                    {formatPeso(total)}
+                                                                </div>
+                                                            </>
+                                                        )}
+                                                    </div>
+
                                                     <div className="space-y-1">
                                                         <Label htmlFor="amountRec" className={LABEL_STYLE}>Amount Received</Label>
                                                         <div className="relative">
@@ -1387,74 +1446,54 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                                 inputMode="numeric"
                                                                 value={amountReceived}
                                                                 onChange={(e: any) => {
-                                                                    const val = e.target.value.replace(/\D/g, '');
-                                                                    setAmountReceived(val ? parseInt(val).toLocaleString() : '');
+                                                                    setAmountReceived(e.target.value);
+                                                                    setIsAmountReceivedTyped(true);
                                                                 }}
                                                                 placeholder="0.00"
                                                                 className="bg-white border-gray-100/50 h-10 rounded-xl text-xs pl-7 font-black text-gray-700 shadow-sm"
                                                             />
-                                                        </div>
-                                                    </div>
 
-                                                    <div className="space-y-1">
-                                                        {isPartial ? (
-                                                            <>
-                                                                <Label htmlFor="depositAmt" className={LABEL_STYLE}>Deposit Amount</Label>
-                                                                <div className="relative">
-                                                                    <span className="absolute left-3 top-2.5 text-gray-900 text-xs font-black">{'\u20B1'}</span>
-                                                                    <Input
-                                                                        id="depositAmt"
-                                                                        type="text"
-                                                                        inputMode="numeric"
-                                                                        value={depositAmount}
-                                                                        onChange={(e: any) => {
-                                                                            const val = e.target.value.replace(/\D/g, '');
-                                                                            setDepositAmount(val ? parseInt(val).toLocaleString() : '');
-                                                                        }}
-                                                                        placeholder="0.00"
-                                                                        className="bg-white border-gray-100/50 h-10 rounded-xl text-xs pl-7 font-black text-gray-700 shadow-sm"
-                                                                    />
-                                                                </div>
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <Label className={LABEL_STYLE}>{resultLabel}</Label>
-                                                                <div className={`h-10 flex items-center px-4 rounded-xl font-black text-xs ${resultColor}`}>
-                                                                    {formatPeso(resultValue)}
-                                                                </div>
-                                                            </>
-                                                        )}
+                                                        </div>
                                                     </div>
                                                 </>
                                             )}
 
-                                            {/* Row 6: Amount Change & Remaining Balance (Partial Only) */}
-                                            {isPartial && (
+                                            {/* Row 6: Amount Change & Remaining Balance */}
+                                            {showAmountRec && (
                                                 <>
-                                                    <div className="space-y-1">
+                                                    <div className={`space-y-1 ${!isPartial ? 'col-span-2' : ''}`}>
                                                         <Label className={LABEL_STYLE}>Amount Change</Label>
                                                         <div className="relative">
                                                             <span className="absolute left-3 top-2.5 text-gray-900 text-xs font-black">{'\u20B1'}</span>
                                                             <Input
                                                                 title="Amount Change"
                                                                 readOnly
-                                                                value={Math.max(0, received - deposit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                                className={`bg-white border-gray-100/50 h-10 rounded-xl text-xs pl-7 font-black shadow-sm ${received - deposit >= 0 ? 'text-green-600' : 'text-red-500'}`}
+                                                                value={(() => {
+                                                                    const diff = received - (isPartial ? deposit : total);
+                                                                    const val = Math.max(0, diff);
+                                                                    return isNaN(val) ? '0.00' : val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                                                                })()}
+                                                                className={`bg-white border-gray-100/50 h-10 rounded-xl text-xs pl-7 font-black shadow-sm ${received - (isPartial ? deposit : total) >= 0 ? 'text-green-600' : 'text-red-500'}`}
                                                             />
                                                         </div>
                                                     </div>
-                                                    <div className="space-y-1">
-                                                        <Label className={LABEL_STYLE}>Remaining Balance</Label>
-                                                        <div className="relative">
-                                                            <span className="absolute left-3 top-2.5 text-gray-900 text-xs font-black">{'\u20B1'}</span>
-                                                            <Input
-                                                                title="Remaining Balance"
-                                                                readOnly
-                                                                value={Math.max(0, total - deposit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                                className="bg-white border-gray-100/50 h-10 rounded-xl text-xs pl-7 font-black text-red-500 shadow-sm"
-                                                            />
+                                                    {isPartial && (
+                                                        <div className="space-y-1">
+                                                            <Label className={LABEL_STYLE}>Remaining Balance</Label>
+                                                            <div className="relative">
+                                                                <span className="absolute left-3 top-2.5 text-gray-900 text-xs font-black">{'\u20B1'}</span>
+                                                                <Input
+                                                                    title="Remaining Balance"
+                                                                    readOnly
+                                                                    value={(() => {
+                                                                        const val = Math.max(0, total - deposit);
+                                                                        return isNaN(val) ? '0.00' : val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                                                                    })()}
+                                                                    className="bg-white border-gray-100/50 h-10 rounded-xl text-xs pl-7 font-black text-red-500 shadow-sm"
+                                                                />
+                                                            </div>
                                                         </div>
-                                                    </div>
+                                                    )}
                                                 </>
                                             )}
                                         </div>
@@ -1483,7 +1522,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                     </div>
                                     <div className="flex justify-between items-center text-[13px] pt-2 border-t border-gray-100">
                                         <span className="text-gray-500 font-medium">Total Quantity (Per Unit)</span>
-                                        <span className="font-bold text-gray-800">{shoes.reduce((sum, s) => sum + s.quantity, 0)} Units</span>
+                                        <span className="text-gray-800">{shoes.reduce((sum, s) => sum + s.quantity, 0)} {shoes.reduce((sum, s) => sum + s.quantity, 0) === 1 ? 'Pair' : 'Pairs'}</span>
                                     </div>
                                 </div>
                                 <div className="pt-3 mt-auto border-t border-solid border-gray-500 flex justify-between items-baseline">

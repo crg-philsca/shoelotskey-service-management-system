@@ -92,11 +92,18 @@ export default function UserManagement({ onSetHeaderAction }: { onSetHeaderActio
 
   const handleSaveUser = (userData: Partial<User>) => {
     if (editingUser) {
+      const changes: string[] = [];
+      if (editingUser.username !== userData.username) changes.push(`Username: ${editingUser.username} -> ${userData.username}`);
+      if (editingUser.email !== userData.email) changes.push(`Email: ${editingUser.email || 'N/A'} -> ${userData.email}`);
+      if (editingUser.role !== userData.role) changes.push(`Role: ${editingUser.role} -> ${userData.role}`);
+      if (editingUser.active !== userData.active) changes.push(`Status: ${editingUser.active ? 'Active' : 'Inactive'} -> ${userData.active ? 'Active' : 'Inactive'}`);
+      const diffString = changes.length > 0 ? changes.join(' | ') : 'No properties changed';
+
       setUsers(prev => prev.map(u => u.id === editingUser.id ? { ...u, ...userData } as User : u));
       addActivity({
         user: currentUser,
         action: 'Update User',
-        details: `Updated details for ${userData.username}`,
+        details: `Updated details for ${userData.username}. Changes: ${diffString}`,
         type: 'system'
       });
       toast.success('User updated successfully');

@@ -9,8 +9,9 @@ import { Eye, EyeOff, User, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface LoginProps {
-  onLogin: (username: string, role: 'owner' | 'staff') => void;
+  onLogin: (id: number, username: string, role: 'owner' | 'staff') => void;
 }
+
 
 export default function Login({ onLogin }: LoginProps) {
   const navigate = useNavigate();
@@ -18,55 +19,71 @@ export default function Login({ onLogin }: LoginProps) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-
   const [isLoading, setIsLoading] = useState(false);
 
+  /**
+   * HANDLER: handleSubmit
+   * Logic: 1. Validate local UI state -> 2. POST to Auth API -> 3. Handle Session
+   * SOLID: Single Responsibility - this handles UI login submission only.
+   */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('[DEBUG] Login attempt started for:', username);
+
+    // DEBUG: Log start of attempt for programmer visibility
+    console.log('[AUTH_DEBUG] Login attempt initiated:', { username, timestamp: new Date().toISOString() });
     setIsLoading(true);
 
-    // SOLID: Validation Responsibility should be local to UI
-    if (!username.trim()) {
-      toast.error('Please enter your username');
-      setIsLoading(false);
-      return;
-    }
-
-    if (!password.trim()) {
-      toast.error('Please enter your password');
-      setIsLoading(false);
-      return;
-    }
-
     try {
-      console.log('[DEBUG] Fetching from backend...');
+      // 1. INPUT VALIDATION (Local Responsibility)
+      if (!username.trim() || !password.trim()) {
+        const missing = !username.trim() ? 'Username' : 'Password';
+        console.warn(`[AUTH_DEBUG] Validation failed: Missing ${missing}`);
+        toast.error(`Please enter your ${missing.toLowerCase()}`);
+        setIsLoading(false);
+        return;
+      }
+
+      // 2. BACKEND COMMUNICATION (I/O Operation)
+      console.log('[AUTH_DEBUG] Sending credentials to backend...');
       const response = await fetch('http://127.0.0.1:8000/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
       });
 
-      console.log('[DEBUG] Backend response status:', response.status);
+      // 3. RESPONSE HANDLING
+      console.log('[AUTH_DEBUG] Backend responded with status:', response.status);
 
       if (response.ok) {
+        // SUCCESS: Parse user session data
         const data = await response.json();
-        console.log('[DEBUG] Login successful:', data.username);
-        toast.success(`Welcome, ${data.username}!`);
-        onLogin(data.username, data.role as 'owner' | 'staff');
+        console.log('[AUTH_DEBUG] Auth Success. Payload:', data);
+
+        toast.success(`Welcome back, ${data.username}!`);
+
+        // Pass to App-level state management
+        onLogin(data.user_id, data.username, data.role as 'owner' | 'staff');
+
       } else {
+        // FAIL: Handle specific status codes (e.g., 401 Unauthorized, 403 Forbidden)
         const err = await response.json();
-        console.warn('[DEBUG] Login failed:', err.detail);
+        console.error('[AUTH_DEBUG] Auth Denied:', err.detail);
+
         if (response.status === 403) {
-          toast.error(err.detail, { duration: 5000 });
+          toast.error(`Security Block: ${err.detail}`, { duration: 6000 });
         } else {
           toast.error(err.detail || 'Invalid username or password');
         }
       }
     } catch (err) {
-      console.error('[DEBUG] Connection error:', err);
-      toast.error('Cannot connect to server. Check if backend is running (Terminal 2).');
+      /**
+       * CATCH: Network/Connection Exceptions
+       * Triggered if: Backend is offline, CORS issues, or DNS failure.
+       */
+      console.error('[AUTH_FATAL] Network/Server Exception:', err);
+      toast.error('System Offline: Please ensure the Monolith (Terminal) is running.');
     } finally {
+      // Cleanup UI state regardless of outcome
       setIsLoading(false);
     }
   };
