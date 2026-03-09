@@ -80,7 +80,12 @@ def on_startup():
             except: pass
             try: conn.execute(text("ALTER TABLE items ADD COLUMN cond_wornout BOOLEAN DEFAULT FALSE"))
             except: pass
-            print(">>> DB Migration: Added condition columns to items table.")
+            
+            # Migration: Add reset_token to users table
+            try: conn.execute(text("ALTER TABLE users ADD COLUMN reset_token VARCHAR(255)"))
+            except: pass
+            
+            print(">>> DB Migration: Added reset_token and condition columns.")
             
             # Migration 2: Payments and Deliveries Extraction
             try: conn.execute(text("""
