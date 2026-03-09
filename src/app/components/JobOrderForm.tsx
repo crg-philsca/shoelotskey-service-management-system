@@ -27,11 +27,50 @@ const SHOE_MATERIALS = [
     'Other', 'Leather', 'Synthetic', 'Canvas', 'Mesh', 'Rubber', 'Textile', 'Suede', 'Knit', 'Patent Leather', 'Denim', 'Nubuck'
 ];
 
-const SHOE_MODELS = [
-    'Air Force 1', 'Air Jordan 1', 'Dunk Low', 'Superstar', 'Stan Smith',
-    'Ultraboost', 'Yeezy Boost 350', 'Chuck Taylor', 'Old Skool', 'Air Max 90',
-    'Gel-Kayano', 'Samba', 'New Balance 550', 'Cortez', 'Blazer', 'Other'
+const BRAND_MODELS: Record<string, string[]> = {
+    'Nike': ['Air Force 1', 'Dunk Low', 'Air Max 90', 'Air Max 97', 'Cortez', 'Blazer', 'Pegasus', 'Other'],
+    'Jordan': ['Air Jordan 1', 'Air Jordan 3', 'Air Jordan 4', 'Air Jordan 11', 'Other'],
+    'Adidas': ['Superstar', 'Stan Smith', 'Ultraboost', 'Yeezy Boost 350', 'Samba', 'Gazelle', 'NMD', 'Other'],
+    'Vans': ['Old Skool', 'Slip-On', 'Sk8-Hi', 'Authentic', 'Era', 'Other'],
+    'Converse': ['Chuck Taylor All Star', 'Chuck 70', 'One Star', 'Run Star Hike', 'Other'],
+    'New Balance': ['550', '990', '2002R', '574', '327', '9060', 'Other'],
+    'Asics': ['Gel-Kayano', 'Gel-Lyte III', 'Gel-Nimbus', 'Other'],
+    'Puma': ['Suede', 'RS-X', 'Cali', 'Rider', 'Other'],
+    'Reebok': ['Club C 85', 'Classic Leather', 'Instapump Fury', 'Other'],
+    'Under Armour': ['Curry', 'HOVR', 'Charged', 'Other'],
+    'Timberland': ['6-Inch Premium Boot', 'Chukka', 'Boat Shoe', 'Other'],
+    'Dr. Martens': ['1460 8-Eye Boot', '1461 3-Eye Shoe', 'Jadon', 'Chelsea Boot', 'Other'],
+    'Salomon': ['XT-6', 'Speedcross', 'Other'],
+    'Merrell': ['Moab', 'Jungle Moc', 'Other'],
+    'Skechers': ['D\'Lites', 'Go Walk', 'Uno', 'Other'],
+    'Mizuno': ['Wave Rider', 'Wave Inspire', 'Other'],
+    'Brooks': ['Ghost', 'Adrenaline GTS', 'Glycerin', 'Other'],
+    'Saucony': ['Jazz Original', 'Kinvara', 'Shadow', 'Other'],
+    'Hoka': ['Clifton', 'Bondi', 'Speedgoat', 'Other']
+};
+
+const DEFAULT_MODELS = [
+    'Sneakers', 'Running Shoes', 'Basketball', 'Leather Shoes', 'Boots', 'Sandals', 'Formal', 'Slip-on', 'Other'
 ];
+
+const MODEL_MATERIALS: Record<string, string> = {
+    'Air Force 1': 'Leather',
+    'Dunk Low': 'Leather',
+    'Air Jordan 1': 'Leather',
+    'Superstar': 'Leather',
+    'Stan Smith': 'Leather',
+    'Samba': 'Leather',
+    'Club C 85': 'Leather',
+    'Classic Leather': 'Leather',
+    '6-Inch Premium Boot': 'Nubuck',
+    '1460 8-Eye Boot': 'Leather',
+    '1461 3-Eye Shoe': 'Leather',
+    'Chuck Taylor All Star': 'Canvas',
+    'Chuck 70': 'Canvas',
+    'Old Skool': 'Suede',
+    'Slip-On': 'Canvas',
+    'Authentic': 'Canvas'
+};
 
 const DELIVERY_COURIERS = [
     'Lalamove', 'JRS', 'LBC', 'Grab', 'Other'
@@ -877,9 +916,15 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                     <div className="col-span-1">
                                                         <Label className={LABEL_STYLE}>Model</Label>
                                                         <CreatableCombobox
-                                                            options={SHOE_MODELS}
+                                                            options={BRAND_MODELS[shoe.brand] || DEFAULT_MODELS}
                                                             value={shoe.shoeModel}
-                                                            onChange={(val) => updateShoe(shoe.id, { shoeModel: val })}
+                                                            onChange={(val) => {
+                                                                const updates: Partial<ShoeEntry> = { shoeModel: val };
+                                                                if (MODEL_MATERIALS[val]) {
+                                                                    updates.shoeMaterial = MODEL_MATERIALS[val];
+                                                                }
+                                                                updateShoe(shoe.id, updates);
+                                                            }}
                                                             placeholder="Select Model"
                                                             searchPlaceholder="Search model..."
                                                         />
