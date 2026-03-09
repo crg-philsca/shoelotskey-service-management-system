@@ -1257,7 +1257,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
-                      {selectedOrder.paymentMethod && selectedOrder.paymentStatus !== 'downpayment' && (
+                      {selectedOrder.paymentMethod && (
                         <div>
                           <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Method</Label>
                           <p className="text-sm font-bold text-gray-800 uppercase">
