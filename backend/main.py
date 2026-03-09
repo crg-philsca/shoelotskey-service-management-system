@@ -27,7 +27,7 @@ from models import (
 from schemas import (
     OrderSchema, ServiceSchema, ExpenseSchema, UserSchema, LoginRequest, 
     ForgotPasswordRequest, ResetPasswordRequest, RoleSchema, StatusSchema, 
-    ItemSchema, PaymentSchema, DeliverySchema
+    ItemSchema, PaymentSchema, DeliverySchema, UserCreateSchema, UserUpdateSchema
 )
 from database import engine, get_db, SessionLocal
 
@@ -239,6 +239,91 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     except Exception as e:
         print(f"[FATAL ERROR] Auth System Failure: {e}")
         raise HTTPException(status_code=500, detail="Internal Authentication Error")
+
+# ==========================================
+# 2.5 USER MANAGEMENT
+# ==========================================
+
+@app.get("/api/users", response_model=List[UserSchema])
+def get_users(db: Session = Depends(get_db)):
+    """Fetch all users along with their roles."""
+    users = db.query(User).options(joinedload(User.role)).all()
+    return users
+
+@app.post("/api/users", response_model=UserSchema)
+def create_user(user_data: UserCreateSchema, db: Session = Depends(get_db)):
+    """Create a new staff or owner account."""
+    if db.query(User).filter(User.username == user_data.username).first():
+        raise HTTPException(status_code=400, detail="Username already exists")
+    if db.query(User).filter(User.email == user_data.email).first():
+        raise HTTPException(status_code=400, detail="Email already exists")
+        
+    db_role = db.query(Role).filter(Role.role_name == user_data.role_name).first()
+    if not db_role:
+        raise HTTPException(status_code=400, detail="Invalid role specified")
+
+    new_user = User(
+        username=user_data.username,
+        email=user_data.email,
+        password_hash=user_data.password, # Note: using plaintext based on current architecture
+        role_id=db_role.role_id,
+        is_active=user_data.is_active
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+
+@app.put("/api/users/{user_id}", response_model=UserSchema)
+def update_user(user_id: int, user_update: UserUpdateSchema, db: Session = Depends(get_db)):
+    """Update user details."""
+    db_user = db.query(User).filter(User.user_id == user_id).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    if user_update.username:
+        # Check uniqueness
+        if db.query(User).filter(User.username == user_update.username, User.user_id != user_id).first():
+            raise HTTPException(status_code=400, detail="Username already exists")
+        db_user.username = user_update.username
+        
+    if user_update.email:
+        if db.query(User).filter(User.email == user_update.email, User.user_id != user_id).first():
+            raise HTTPException(status_code=400, detail="Email already exists")
+        db_user.email = user_update.email
+        
+    if user_update.password:
+        db_user.password_hash = user_update.password
+        
+    if user_update.role_name:
+        db_role = db.query(Role).filter(Role.role_name == user_update.role_name).first()
+        if not db_role:
+            raise HTTPException(status_code=400, detail="Invalid role specified")
+        db_user.role_id = db_role.role_id
+        
+    if user_update.is_active is not None:
+        db_user.is_active = user_update.is_active
+
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+@app.delete("/api/users/{user_id}")
+def delete_user(user_id: int, db: Session = Depends(get_db)):
+    """Remove user access."""
+    db_user = db.query(User).filter(User.user_id == user_id).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    # Prevent deleting the last owner
+    if db_user.role.role_name == 'owner':
+        owner_count = db.query(User).join(Role).filter(Role.role_name == 'owner').count()
+        if owner_count <= 1:
+            raise HTTPException(status_code=400, detail="Cannot delete the last owner account")
+            
+    db.delete(db_user)
+    db.commit()
+    return {"status": "success", "message": f"User {user_id} deleted"}
 
 # ==========================================
 # 3. JOB ORDERS (Complex 3NF Normalization)

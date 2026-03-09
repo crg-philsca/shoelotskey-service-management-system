@@ -46,6 +46,22 @@ class UserSchema(BaseModel):
     class Config:
         from_attributes = True
 
+class UserCreateSchema(BaseModel):
+    """Schema for creating a new user."""
+    username: str
+    email: str
+    password: str
+    role_name: str = 'staff'
+    is_active: bool = True
+
+class UserUpdateSchema(BaseModel):
+    """Schema for updating an existing user."""
+    username: Optional[str] = None
+    email: Optional[str] = None
+    password: Optional[str] = None
+    role_name: Optional[str] = None
+    is_active: Optional[bool] = None
+
 class CustomerSchema(BaseModel):
     """Customer profile information."""
     customer_id: Optional[int] = None
