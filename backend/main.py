@@ -315,6 +315,7 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db)):
         if not items_list and (order_data.get("brand") or order_data.get("shoeMaterial")):
             items_list = [{
                 "brand": order_data.get("brand"),
+                "shoeModel": order_data.get("shoeModel"),
                 "shoeMaterial": order_data.get("shoeMaterial"),
                 "quantity": order_data.get("quantity", 1),
                 "condition": order_data.get("condition", {}),

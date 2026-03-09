@@ -212,9 +212,6 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <div>
-                                <Label className={LABEL_STYLE}>Shelf Location removed</Label>
-                            </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">

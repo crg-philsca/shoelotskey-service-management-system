@@ -1159,7 +1159,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                             <p className="text-sm font-bold text-gray-800">{item.brand || '-'}</p>
                           </div>
                           <div>
-                            <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Model</Label>
+                            <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Shoe Model</Label>
                             <p className="text-sm font-bold text-gray-800">{item.shoeModel || '-'}</p>
                           </div>
                           <div>
@@ -1241,9 +1241,6 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                         ) : (
                           <span className="text-xs font-medium text-gray-500 capitalize">{selectedOrder.priorityLevel}</span>
                         )}
-                      </div>
-                      <div>
-                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Shelf Location removed</Label>
                       </div>
                       <div>
                         <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Processed By</Label>

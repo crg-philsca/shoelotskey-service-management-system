@@ -873,7 +873,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                         )}
                                                     </div>
                                                     <div className="col-span-1">
-                                                        <Label className={LABEL_STYLE}>Model</Label>
+                                                        <Label className={LABEL_STYLE}>Shoe Model</Label>
                                                         <CreatableCombobox
                                                             options={SHOE_MODELS}
                                                             value={shoe.shoeModel}
@@ -1340,9 +1340,6 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                     <Hash size={14} className="mr-2 text-gray-400" />
                                                     <span className="whitespace-nowrap">{generatedOrderNumber || 'Generating...'}</span>
                                                 </div>
-                                            </div>
-                                            <div className="space-y-1 col-span-1 md:col-span-4">
-                                                <Label className={LABEL_STYLE}>Shelf Location removed</Label>
                                             </div>
                                             <div className="space-y-1 col-span-1 md:col-span-4">
                                                 <Label className={LABEL_STYLE}>Processed By</Label>
