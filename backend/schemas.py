@@ -28,12 +28,7 @@ class StatusSchema(BaseModel):
     class Config:
         from_attributes = True
 
-class ConditionSchema(BaseModel):
-    """Schema for shoe conditions (ML feature)."""
-    condition_id: Optional[int] = None
-    condition_name: str
-    class Config:
-        from_attributes = True
+
 
 # ==========================================
 # 2. USERS & CUSTOMERS
@@ -101,7 +96,14 @@ class ItemSchema(BaseModel):
     material: Optional[str] = None
     quantity: int = 1
     item_notes: Optional[str] = None
-    conditions: List[ConditionSchema] = []
+    # Denormalized Conditions
+    cond_scratches: bool = False
+    cond_yellowing: bool = False
+    cond_ripsholes: bool = False
+    cond_deepstains: bool = False
+    cond_soleseparation: bool = False
+    cond_wornout: bool = False
+    
     services: List[ServiceSchema] = []
     class Config:
         from_attributes = True

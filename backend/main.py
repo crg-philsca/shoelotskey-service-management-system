@@ -21,12 +21,12 @@ from fastapi.responses import FileResponse
 # Internal Imports
 from models import (
     Base, Order, Item, Service, Expense, StatusLog, 
-    User, Customer, Role, Status, Condition, AuditLog, ItemServiceMapping
+    User, Customer, Role, Status, AuditLog, ItemServiceMapping
 )
 from schemas import (
     OrderSchema, ServiceSchema, ExpenseSchema, UserSchema, LoginRequest, 
     ForgotPasswordRequest, ResetPasswordRequest, RoleSchema, StatusSchema, 
-    ConditionSchema, ItemSchema
+    ItemSchema
 )
 from database import engine, get_db, SessionLocal
 
@@ -60,6 +60,27 @@ def on_startup():
     print(">>> System Boot: Initializing Database Schema...")
     # Create tables if they don't exist
     Base.metadata.create_all(bind=engine)
+    
+    # Auto-Migration for 'Too Normalized' database fix
+    from sqlalchemy import text
+    try:
+        with engine.begin() as conn:
+            # Add columns. Safe for Postgres, might fail softly on SQLite if they exist.
+            try: conn.execute(text("ALTER TABLE items ADD COLUMN cond_scratches BOOLEAN DEFAULT FALSE"))
+            except: pass
+            try: conn.execute(text("ALTER TABLE items ADD COLUMN cond_yellowing BOOLEAN DEFAULT FALSE"))
+            except: pass
+            try: conn.execute(text("ALTER TABLE items ADD COLUMN cond_ripsholes BOOLEAN DEFAULT FALSE"))
+            except: pass
+            try: conn.execute(text("ALTER TABLE items ADD COLUMN cond_deepstains BOOLEAN DEFAULT FALSE"))
+            except: pass
+            try: conn.execute(text("ALTER TABLE items ADD COLUMN cond_soleseparation BOOLEAN DEFAULT FALSE"))
+            except: pass
+            try: conn.execute(text("ALTER TABLE items ADD COLUMN cond_wornout BOOLEAN DEFAULT FALSE"))
+            except: pass
+            print(">>> DB Migration: Added condition columns to items table.")
+    except Exception as e:
+        print(f">>> DB Migration Note: {e}")
     
     # Seed lookup data
     db = SessionLocal()
@@ -97,19 +118,7 @@ def seed_lookups(db: Session):
         db.add_all(statuses)
         db.commit()
 
-    # Seed Conditions (Sync with UI Keys)
-    if db.query(Condition).count() == 0:
-        print(">>> Seeding ML Conditions...")
-        conditions = [
-            Condition(condition_name="scratches"),
-            Condition(condition_name="yellowing"),
-            Condition(condition_name="ripsholes"),
-            Condition(condition_name="deepstains"),
-            Condition(condition_name="soleseparation"),
-            Condition(condition_name="wornout")
-        ]
-        db.add_all(conditions)
-        db.commit()
+
 
     # Seed Services (Fully Normalized with Metadata)
     if db.query(Service).count() == 0:
@@ -338,16 +347,17 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db)):
             db.add(db_item)
             db.flush()
 
-            # Associate Conditions (ML Features)
+            # Associate Conditions (Denormalized)
             cond_data = item_data.get("condition", {})
             if isinstance(cond_data, dict):
-                for cond_key, is_present in cond_data.items():
-                    if is_present and cond_key != 'others':
-                        # Lowercase and strip whitespace to match seed_lookups
-                        lookup_name = cond_key.lower().replace(" ", "").replace("/", "")
-                        cond = db.query(Condition).filter(Condition.condition_name == lookup_name).first()
-                        if cond:
-                            db_item.conditions.append(cond)
+                db_item.cond_scratches = bool(cond_data.get("scratches", False))
+                db_item.cond_yellowing = bool(cond_data.get("yellowing", False))
+                db_item.cond_ripsholes = bool(cond_data.get("ripsHoles", False))
+                db_item.cond_deepstains = bool(cond_data.get("deepStains", False))
+                db_item.cond_soleseparation = bool(cond_data.get("soleSeparation", False))
+                db_item.cond_wornout = bool(cond_data.get("wornOut", False))
+            
+            db.flush()
 
             # Associate Services (Pricing Snapshots)
             services_applied = []
@@ -584,10 +594,6 @@ def get_statuses(db: Session = Depends(get_db)):
     """Returns all order lifecycle statuses for UI drop-downs."""
     return db.query(Status).all()
 
-@app.get("/api/lookups/conditions", response_model=List[ConditionSchema])
-def get_ml_features(db: Session = Depends(get_db)):
-    """Returns all ML-mapped conditions for form selections."""
-    return db.query(Condition).all()
 
 
 

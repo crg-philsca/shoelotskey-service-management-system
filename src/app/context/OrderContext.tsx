@@ -77,25 +77,14 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                 shoeModel: bi.shoe_model || 'Other',
                 shoeMaterial: bi.material || 'Other',
                 quantity: bi.quantity || 1,
-                condition: bi.conditions?.reduce((acc: any, c: any) => {
-                    const lookup: Record<string, string> = {
-                        'scratches': 'scratches',
-                        'yellowing': 'yellowing',
-                        'ripsholes': 'ripsHoles',
-                        'deepstains': 'deepStains',
-                        'soleseparation': 'soleSeparation',
-                        'wornout': 'wornOut'
-                    };
-                    const rawKey = c.condition_name?.toLowerCase().replace(/\s+/g, '').replace('/', '') || '';
-                    const key = lookup[rawKey] || rawKey;
-                    if (key) acc[key] = true;
-                    return acc;
-                }, {
-                    scratches: false, ripsHoles: false, wornOut: false,
-                    soleSeparation: false, yellowing: false, deepStains: false, others: bi.item_notes || ''
-                }) || {
-                    scratches: false, ripsHoles: false, wornOut: false,
-                    soleSeparation: false, yellowing: false, deepStains: false, others: bi.item_notes || ''
+                condition: {
+                    scratches: bi.cond_scratches || false,
+                    yellowing: bi.cond_yellowing || false,
+                    ripsHoles: bi.cond_ripsholes || false,
+                    deepStains: bi.cond_deepstains || false,
+                    soleSeparation: bi.cond_soleseparation || false,
+                    wornOut: bi.cond_wornout || false,
+                    others: bi.item_notes || ''
                 },
                 baseService: bi.services?.filter((s: any) => s.category === 'base').map((s: any) => s.service_name) || [],
                 addOns: bi.services?.filter((s: any) => s.category === 'addon').map((s: any) => ({
@@ -109,25 +98,14 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
             shoeModel: firstItem.shoe_model || 'Unknown',
             shoeMaterial: bo.items?.map((i: any) => i.material).filter(Boolean).join(', ') || 'Unknown',
             quantity: bo.items?.reduce((acc: number, item: any) => acc + (item.quantity || 1), 0) || 1,
-            condition: firstItem.conditions?.reduce((acc: any, c: any) => {
-                const lookup: Record<string, string> = {
-                    'scratches': 'scratches',
-                    'yellowing': 'yellowing',
-                    'ripsholes': 'ripsHoles',
-                    'deepstains': 'deepStains',
-                    'soleseparation': 'soleSeparation',
-                    'wornout': 'wornOut'
-                };
-                const rawKey = c.condition_name?.toLowerCase().replace(/\s+/g, '').replace('/', '') || '';
-                const key = lookup[rawKey] || rawKey;
-                if (key) acc[key] = true;
-                return acc;
-            }, {
-                scratches: false, ripsHoles: false, wornOut: false,
-                soleSeparation: false, yellowing: false, deepStains: false, others: firstItem.item_notes || ''
-            }) || {
-                scratches: false, ripsHoles: false, wornOut: false,
-                soleSeparation: false, yellowing: false, deepStains: false, others: firstItem.item_notes || ''
+            condition: {
+                scratches: firstItem.cond_scratches || false,
+                yellowing: firstItem.cond_yellowing || false,
+                ripsHoles: firstItem.cond_ripsholes || false,
+                deepStains: firstItem.cond_deepstains || false,
+                soleSeparation: firstItem.cond_soleseparation || false,
+                wornOut: firstItem.cond_wornout || false,
+                others: firstItem.item_notes || ''
             },
             baseService: Array.from(new Set(
                 bo.items?.flatMap((item: any) =>

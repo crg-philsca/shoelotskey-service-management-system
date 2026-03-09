@@ -40,11 +40,7 @@ class Status(Base):
     orders = relationship("Order", back_populates="status")
     logs = relationship("StatusLog", back_populates="status")
 
-class Condition(Base):
-    """Categorical shoe conditions for ML feature engineering."""
-    __tablename__ = "conditions"
-    condition_id = Column(Integer, primary_key=True, autoincrement=True)
-    condition_name = Column(String(50), unique=True, nullable=False)
+
 
 # ==========================================
 # 2. USERS & CUSTOMERS
@@ -163,13 +159,6 @@ class Order(Base):
 # 5. ITEMS & MAPPINGS (Granular ML Features)
 # ==========================================
 
-# Junction table for Item <-> Condition (Composite Primary Key)
-item_condition_mapping = Table(
-    'item_condition_mapping', Base.metadata,
-    Column('item_id', Integer, ForeignKey('items.item_id', ondelete="CASCADE"), primary_key=True),
-    Column('condition_id', Integer, ForeignKey('conditions.condition_id', ondelete="CASCADE"), primary_key=True)
-)
-
 # Junction table for Item <-> Service (Snapshotting prices at order time)
 class ItemServiceMapping(Base):
     """Complex mapping to handle dynamic pricing at the moment of order."""
@@ -191,9 +180,16 @@ class Item(Base):
     quantity = Column(Integer, default=1)
     item_notes = Column(Text, nullable=True)
     
-    # Multi-valued attributes
+    # Denormalized Condition Flags (Fixing 'too normalized' redundancy)
+    cond_scratches = Column(Boolean, default=False)
+    cond_yellowing = Column(Boolean, default=False)
+    cond_ripsholes = Column(Boolean, default=False)
+    cond_deepstains = Column(Boolean, default=False)
+    cond_soleseparation = Column(Boolean, default=False)
+    cond_wornout = Column(Boolean, default=False)
+    
+    # Relationships
     order = relationship("Order", back_populates="items")
-    conditions = relationship("Condition", secondary=item_condition_mapping)
     services = relationship("Service", secondary="item_service_mapping")
 
 # ==========================================
