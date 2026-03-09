@@ -81,11 +81,13 @@ def on_startup():
             try: conn.execute(text("ALTER TABLE items ADD COLUMN cond_wornout BOOLEAN DEFAULT FALSE"))
             except: pass
             
-            # Migration: Add reset_token to users table
+            # Migration: Add reset columns to users table
             try: conn.execute(text("ALTER TABLE users ADD COLUMN reset_token VARCHAR(255)"))
             except: pass
+            try: conn.execute(text("ALTER TABLE users ADD COLUMN reset_token_expiry TIMESTAMP"))
+            except: pass
             
-            print(">>> DB Migration: Added reset_token and condition columns.")
+            print(">>> DB Migration: Added reset columns and item conditions.")
             
             # Migration 2: Payments and Deliveries Extraction
             try: conn.execute(text("""
@@ -304,6 +306,8 @@ async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(
     # 1. Generate unique reset token
     token = str(uuid.uuid4())
     user.reset_token = token
+    # Token expires in 1 hour
+    user.reset_token_expiry = datetime.now() + timedelta(hours=1)
     db.commit()
 
     # 2. Construct link (Detect environment)
@@ -333,9 +337,18 @@ async def reset_password(request: ResetPasswordRequest, db: Session = Depends(ge
     if not user:
         raise HTTPException(status_code=400, detail="Invalid or expired reset token.")
 
+    # 2. Check Expiry
+    if user.reset_token_expiry and user.reset_token_expiry < datetime.now():
+        print(f"[AUTH] Expired token used for {user.username}")
+        user.reset_token = None
+        user.reset_token_expiry = None
+        db.commit()
+        raise HTTPException(status_code=400, detail="Reset link has expired. Please request a new one.")
+
     # 1. Update password
     user.password_hash = request.new_password # Plaintext as per current architecture
     user.reset_token = None # Clear token after use
+    user.reset_token_expiry = None
     db.commit()
     
     print(f"[AUTH] Password successfully updated for {user.username}")
