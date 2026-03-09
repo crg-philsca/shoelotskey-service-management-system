@@ -8,7 +8,7 @@ ML-Specific fields are explicitly labeled for easy feature extraction.
 
 from sqlalchemy import (
     Column, String, Float, Boolean, JSON, Integer, 
-    ForeignKey, Text, DateTime, DECIMAL, Enum, TIMESTAMP, Table, text
+    ForeignKey, Text, DateTime, DECIMAL, Enum, TIMESTAMP, Table, text, func
 )
 from sqlalchemy.orm import declarative_base, relationship
 from datetime import datetime
@@ -59,7 +59,7 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)
     role_id = Column(Integer, ForeignKey("roles.role_id"), nullable=False)
     is_active = Column(Boolean, default=True)
-    created_at = Column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
+    created_at = Column(TIMESTAMP, server_default=func.now())
     
     # Relationships
     role = relationship("Role", back_populates="users")
@@ -73,7 +73,7 @@ class Customer(Base):
     customer_id = Column(Integer, primary_key=True, autoincrement=True)
     customer_name = Column(String(100), nullable=False, index=True)
     contact_number = Column(String(20), nullable=False)
-    created_at = Column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
+    created_at = Column(TIMESTAMP, server_default=func.now())
     
     # Relationship to history
     orders = relationship("Order", back_populates="customer")
@@ -102,7 +102,7 @@ class Expense(Base):
     description = Column(Text)
     expense_date = Column(DateTime, nullable=False)
     user_id = Column(Integer, ForeignKey("users.user_id"), nullable=False)
-    created_at = Column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
+    created_at = Column(TIMESTAMP, server_default=func.now())
     
     user = relationship("User", back_populates="expenses")
 
@@ -148,8 +148,8 @@ class Order(Base):
     claimed_at = Column(DateTime, nullable=True)    # Handover verification
     # --------------------------------------
     
-    created_at = Column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
-    updated_at = Column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'))
+    created_at = Column(TIMESTAMP, server_default=func.now())
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
     user_id = Column(Integer, ForeignKey("users.user_id"), nullable=False) # Processing staff
     
     # Relationships (SOLID: Navigation properties)
@@ -207,7 +207,7 @@ class StatusLog(Base):
     order_id = Column(Integer, ForeignKey("orders.order_id"), nullable=False)
     status_id = Column(Integer, ForeignKey("status.status_id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.user_id"), nullable=False)
-    changed_at = Column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
+    changed_at = Column(TIMESTAMP, server_default=func.now())
     
     order = relationship("Order", back_populates="status_logs")
     status = relationship("Status", back_populates="logs")
@@ -223,4 +223,4 @@ class AuditLog(Base):
     record_id = Column(Integer, nullable=False)
     old_values = Column(JSON)
     new_values = Column(JSON)
-    created_at = Column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
+    created_at = Column(TIMESTAMP, server_default=func.now())
