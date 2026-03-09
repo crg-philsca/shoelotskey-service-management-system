@@ -6,6 +6,10 @@ Implements security, order processing, and lookups.
 Includes diagnostic logging for easy debugging during the Defenses.
 """
 
+print("\n" + "="*50)
+print("APP LOAD: main.py is being parsed by Gunicorn")
+print("="*50 + "\n")
+
 from fastapi import FastAPI, Depends, HTTPException, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session, joinedload
