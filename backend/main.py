@@ -15,6 +15,7 @@ import os
 import uuid
 import json
 import sys
+import requests
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
@@ -239,6 +240,106 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     except Exception as e:
         print(f"[FATAL ERROR] Auth System Failure: {e}")
         raise HTTPException(status_code=500, detail="Internal Authentication Error")
+
+# ==========================================
+# 2.2 PASSWORD RECOVERY (Brevo Integration)
+# ==========================================
+
+def send_reset_email(user_email, reset_link):
+    """Integrates with Brevo SMTP API to send real emails."""
+    url = "https://api.brevo.com/v3/smtp/email"
+    api_key = os.environ.get('BREVO_API_KEY')
+    
+    if not api_key:
+        print("[EMAIL ERROR] BREVO_API_KEY not found in environment.")
+        return 500
+
+    payload = {
+        "sender": {"name": "Shoelotskey Support", "email": "support@shoelotskey-villamor-pasay.app"},
+        "to": [{"email": user_email}],
+        "subject": "Reset Your Password",
+        "htmlContent": f"""
+        <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+                    <h2 style="color: #e11d48; text-align: center;">Shoelotskey SMS</h2>
+                    <p>Hello,</p>
+                    <p>We received a request to reset your password. Click the button below to proceed:</p>
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="{reset_link}" style="background-color: #e11d48; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Reset Password</a>
+                    </div>
+                    <p>If you did not request this, please ignore this email.</p>
+                    <hr style="border: 0; border-top: 1px solid #eee;" />
+                    <p style="font-size: 12px; color: #888; text-align: center;">Shoelotskey Pasay - Service Management System</p>
+                </div>
+            </body>
+        </html>
+        """
+    }
+    
+    headers = {
+        "accept": "application/json",
+        "content-type": "application/json",
+        "api-key": api_key
+    }
+
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        print(f"[EMAIL] Reset link sent to {user_email}. Status: {response.status_code}")
+        return response.status_code
+    except Exception as e:
+        print(f"[EMAIL ERROR] Failed to send: {e}")
+        return 500
+
+@app.post("/api/forgot-password")
+async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    """Generates a secure token and sends a reset email."""
+    print(f"[AUTH] Password recovery requested for: {request.email}")
+    user = db.query(User).filter(User.email == request.email).first()
+    
+    if not user:
+        # Security Best Practice: Don't reveal if email exist, but for defense we might return 404
+        raise HTTPException(status_code=404, detail="Email not found in our records.")
+
+    # 1. Generate unique reset token
+    token = str(uuid.uuid4())
+    user.reset_token = token
+    db.commit()
+
+    # 2. Construct link (Detect environment)
+    # Note: For Heroku, use the domain. For local, use localhost.
+    host = "shoelotskey-service-914df5a97576.herokuapp.com" # Replace with actual if known, or detect from request
+    reset_link = f"https://{host}/reset-password?token={token}"
+    
+    # Check if local for testing
+    if os.environ.get('PORT') is None:
+        reset_link = f"http://localhost:5173/reset-password?token={token}"
+
+    # 3. Send via Brevo
+    status = send_reset_email(user.email, reset_link)
+    
+    if status == 201:
+        return {"message": "Reset email sent successfully", "debug_token": token}
+    else:
+        # Fallback for defense if API key missing: still allow local reset via token
+        return {"message": "System: Mock recovery enabled (Brevo key missing)", "debug_token": token}
+
+@app.post("/api/reset-password")
+async def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
+    """Verifies the token and updates the password header."""
+    print(f"[AUTH] Verifying reset token...")
+    user = db.query(User).filter(User.reset_token == request.token).first()
+    
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token.")
+
+    # 1. Update password
+    user.password_hash = request.new_password # Plaintext as per current architecture
+    user.reset_token = None # Clear token after use
+    db.commit()
+    
+    print(f"[AUTH] Password successfully updated for {user.username}")
+    return {"message": "Password updated successfully"}
 
 # ==========================================
 # 2.5 USER MANAGEMENT

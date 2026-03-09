@@ -55,6 +55,7 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)
     role_id = Column(Integer, ForeignKey("roles.role_id"), nullable=False)
     is_active = Column(Boolean, default=True)
+    reset_token = Column(String(255), nullable=True)
     created_at = Column(TIMESTAMP, server_default=func.now())
     
     # Relationships
