@@ -77,19 +77,6 @@ export default function ForgotPassword() {
             {submitted ? (
               <div className="text-center text-green-700 font-medium my-0" style={{ marginTop: '-4px', marginBottom: 0 }}>
                 Check your email for a password reset link.
-                <br />
-                {debugToken && (
-                  <div className="mt-4 p-3 bg-gray-100 rounded border border-gray-300 text-xs text-left">
-                    <p className="font-bold text-black mb-1">DEFENSE DEMO (Simulated Email Content):</p>
-                    <p className="text-gray-600 break-all">Reset Link: http://localhost:5173/reset-password?token={debugToken}</p>
-                    <button
-                      onClick={() => navigate(`/reset-password?token=${debugToken}`)}
-                      className="mt-2 w-full bg-blue-600 text-white rounded py-1 hover:bg-blue-700 cursor-pointer"
-                    >
-                      Click to "Open Email Link"
-                    </button>
-                  </div>
-                )}
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-0">

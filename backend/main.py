@@ -296,31 +296,40 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
 def send_reset_email(user_email, reset_link):
     """Integrates with Mailgun API to send real emails."""
     api_key = os.environ.get('MAILGUN_API_KEY')
-    # Use the domain configured with the green checkmark in Mailgun
     domain = "www.shoelotskey-villamor-pasay.app" 
     
     if not api_key:
         print("[EMAIL ERROR] MAILGUN_API_KEY not found in environment.")
         return 500
 
+    # Extract base URL for the logo
+    # Example reset_link: https://domain.com/reset-password?token=...
+    try:
+        base_url = reset_link.split("/reset-password")[0]
+        logo_url = f"{base_url}/login.png"
+    except:
+        logo_url = "https://shoelotskey-villamor-pasay.herokuapp.com/login.png"
+
     url = f"https://api.mailgun.net/v3/{domain}/messages"
     
     payload = {
-        "from": f"Shoelotskey Support <postmaster@{domain}>",
+        "from": "Shoelotskey Support <postmaster@www.shoelotskey-villamor-pasay.app>",
         "to": [user_email],
         "subject": "Reset Your Shoelotskey Password",
         "html": f"""
-            <div style="font-family: Arial, sans-serif; border: 1px solid #ddd; padding: 20px; border-radius: 10px;">
-                <h2 style="color: #333; text-align: center;">Shoelotskey SMS</h2>
-                <h3 style="color: #e11d48;">Password Reset Request</h3>
-                <p>We received a request to reset your password for <strong>Shoelotskey</strong>.</p>
-                <p>Click the button below to set a new password. This link is unique to your account.</p>
-                <div style="text-align: center; margin: 30px 0;">
-                    <a href="{reset_link}" style="background-color: #e11d48; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">Reset My Password</a>
+            <div style="font-family: Arial, sans-serif; border: 1px solid #ddd; padding: 20px; border-radius: 10px; max-width: 500px; margin: 0 auto; background-color: white;">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <img src="{logo_url}" alt="Shoelotskey Logo" style="height: 100px; width: auto;" />
                 </div>
-                <p style="color: #777; font-size: 11px;">If you didn't request this, you can safely ignore this email. Your password will not change until you access the link above.</p>
-                <hr style="border: 0; border-top: 1px solid #eee;" />
-                <p style="font-size: 10px; color: #999; text-align: center;">Shoelotskey Pasay - Pasay City, Metro Manila</p>
+                <h3 style="color: #e11d48; text-align: center; margin-top: 0;">Password Reset Request</h3>
+                <p>We received a request to reset your password for your <strong>Shoelotskey</strong> account.</p>
+                <p>Click the button below to set a new password. This link is unique and will expire in 1 hour.</p>
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{reset_link}" style="background-color: #e11d48; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">Reset My Password</a>
+                </div>
+                <p style="color: #777; font-size: 11px; text-align: center;">If you didn't request this, you can safely ignore this email.</p>
+                <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
+                <p style="font-size: 11px; color: #999; text-align: center;">Shoelotskey Villamor - Pasay City, Metro Manila</p>
             </div>
         """
     }
