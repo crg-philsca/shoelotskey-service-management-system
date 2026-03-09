@@ -61,9 +61,12 @@ export default function Layout({ children, user, onLogout, headerAction, headerA
         <div className={collapsed ? 'flex justify-center w-full' : 'flex items-center gap-10 pl-4'}>
           <div className="h-12 w-12 rounded-full bg-white flex items-center justify-center flex-shrink-0">
             <img
-              src="/logo2.png"
+              src="/logo.png"
               alt="Shoelotskey logo"
               className="h-10 w-10 object-contain"
+              fetchPriority="high"
+              loading="eager"
+              decoding="async"
             />
           </div>
           {!collapsed && (

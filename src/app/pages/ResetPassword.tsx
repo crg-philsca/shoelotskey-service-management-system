@@ -76,10 +76,12 @@ export default function ResetPassword() {
         <Card className="w-full max-w-xs sm:max-w-sm md:max-w-md shadow-2xl mx-auto">
           <CardHeader className="space-y-0 text-center pb-0 mb-0" style={{ marginBottom: '-4px', paddingBottom: 0 }}>
             <img
-              src="/login.png"
+              src="/logo.png"
               alt="Shoelotskey logo"
               className="h-24 xs:h-28 sm:h-32 md:h-36 w-auto object-contain mx-auto transform -translate-x-0.5"
-              loading="lazy"
+              fetchPriority="high"
+              loading="eager"
+              decoding="async"
             />
             <CardDescription className="text-base xs:text-lg md:text-xl font-semibold text-black">
               RESET PASSWORD

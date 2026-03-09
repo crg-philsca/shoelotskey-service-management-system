@@ -99,10 +99,12 @@ export default function Login({ onLogin }: LoginProps) {
         <Card className="w-full max-w-xs sm:max-w-sm md:max-w-md shadow-2xl mx-auto">
           <CardHeader className="space-y-0 text-center pb-0 mb-0" style={{ marginBottom: '-4px', paddingBottom: 0 }}>
             <img
-              src="/login.png"
+              src="/logo.png"
               alt="Shoelotskey logo"
               className="h-32 xs:h-36 sm:h-40 md:h-48 w-auto object-contain mx-auto transform -translate-x-0.5"
-              loading="lazy"
+              fetchPriority="high"
+              loading="eager"
+              decoding="async"
             />
           </CardHeader>
           <CardContent>

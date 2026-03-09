@@ -16,7 +16,6 @@ export default function ForgotPassword() {
   const [submitted, setSubmitted] = useState(false);
   const navigate = useNavigate();
 
-  const [debugToken, setDebugToken] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -35,13 +34,8 @@ export default function ForgotPassword() {
       });
 
       if (response.ok) {
-        const data = await response.json();
         toast.success('Password reset link sent!');
         setSubmitted(true);
-        // FOR DEFENSE DEMO: Capture the token to show visually how it's handled
-        if (data.debug_token) {
-          setDebugToken(data.debug_token);
-        }
       } else {
         const err = await response.json();
         toast.error(err.detail || 'Email not found.');
@@ -59,10 +53,12 @@ export default function ForgotPassword() {
         <Card className="w-full max-w-xs sm:max-w-sm md:max-w-md shadow-2xl mx-auto">
           <CardHeader className="space-y-0 text-center pb-0 mb-0" style={{ marginBottom: '-4px', paddingBottom: 0 }}>
             <img
-              src="/login.png"
+              src="/logo.png"
               alt="Shoelotskey logo"
               className="h-24 xs:h-28 sm:h-32 md:h-36 w-auto object-contain mx-auto transform -translate-x-0.5"
-              loading="lazy"
+              fetchPriority="high"
+              loading="eager"
+              decoding="async"
             />
             <CardDescription className="text-base xs:text-lg md:text-xl font-semibold text-black">
               FORGOT PASSWORD
