@@ -27,7 +27,9 @@ const SHOE_MATERIALS = [
 ];
 
 const SHOE_MODELS = [
-    'Other', 'Sneakers', 'Running Shoes', 'Basketball', 'Leather Shoes', 'Boots', 'Sandals', 'Formal', 'Loafers', 'Slip-on'
+    'Air Force 1', 'Air Jordan 1', 'Dunk Low', 'Superstar', 'Stan Smith',
+    'Ultraboost', 'Yeezy Boost 350', 'Chuck Taylor', 'Old Skool', 'Air Max 90',
+    'Gel-Kayano', 'Samba', 'New Balance 550', 'Cortez', 'Blazer', 'Other'
 ];
 
 const DELIVERY_COURIERS = [
@@ -342,7 +344,7 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                     )}
                                 </div>
                                 <div>
-                                    <Label className={LABEL_STYLE}>Shoe Model</Label>
+                                    <Label className={LABEL_STYLE}>Model</Label>
                                     <Select
                                         value={SHOE_MODELS.includes(formData.shoeModel || '') ? formData.shoeModel : (formData.shoeModel ? 'Other' : undefined)}
                                         onValueChange={(val) => updateFormData({ shoeModel: val })}
