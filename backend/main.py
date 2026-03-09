@@ -64,51 +64,70 @@ def on_startup():
     Base.metadata.create_all(bind=engine)
     
     # Auto-Migration for 'Too Normalized' database fix
-    from sqlalchemy import text
+    from sqlalchemy import text, inspect
     try:
-        with engine.begin() as conn:
-            # Add columns. Safe for Postgres, might fail softly on SQLite if they exist.
-            try: conn.execute(text("ALTER TABLE items ADD COLUMN cond_scratches BOOLEAN DEFAULT FALSE"))
-            except: pass
-            try: conn.execute(text("ALTER TABLE items ADD COLUMN cond_yellowing BOOLEAN DEFAULT FALSE"))
-            except: pass
-            try: conn.execute(text("ALTER TABLE items ADD COLUMN cond_ripsholes BOOLEAN DEFAULT FALSE"))
-            except: pass
-            try: conn.execute(text("ALTER TABLE items ADD COLUMN cond_deepstains BOOLEAN DEFAULT FALSE"))
-            except: pass
-            try: conn.execute(text("ALTER TABLE items ADD COLUMN cond_soleseparation BOOLEAN DEFAULT FALSE"))
-            except: pass
-            try: conn.execute(text("ALTER TABLE items ADD COLUMN cond_wornout BOOLEAN DEFAULT FALSE"))
-            except: pass
-            
-            # Migration: Add reset columns to users table
-            try: conn.execute(text("ALTER TABLE users ADD COLUMN reset_token VARCHAR(255)"))
-            except: pass
-            try: conn.execute(text("ALTER TABLE users ADD COLUMN reset_token_expiry TIMESTAMP"))
-            except: pass
-            
-            print(">>> DB Migration: Added reset columns and item conditions.")
-            
-            # Migration 2: Payments and Deliveries Extraction
-            try: conn.execute(text("""
-                INSERT INTO payments (order_id, payment_method, payment_status, amount_received, balance, reference_no, deposit_amount)
-                SELECT order_id, payment_method, payment_status, amount_received, balance, reference_no, deposit_amount
-                FROM orders
-                WHERE order_id NOT IN (SELECT order_id FROM payments)
-            """))
-            except: pass
-            
-            try: conn.execute(text("""
-                INSERT INTO deliveries (order_id, shipping_preference, delivery_address, delivery_courier, release_time, province, city, barangay, zip_code)
-                SELECT order_id, shipping_preference, delivery_address, delivery_courier, release_time, province, city, barangay, zip_code
-                FROM orders
-                WHERE order_id NOT IN (SELECT order_id FROM deliveries)
-            """))
-            except: pass
-            print(">>> DB Migration: Extracted payments and deliveries logic.")
+        # Use inspector to check columns before blindly altering
+        inspector = inspect(engine)
+        
+        # 1. Items Table update
+        if "items" in inspector.get_table_names():
+            columns = [c['name'] for c in inspector.get_columns("items")]
+            missing = [
+                ("cond_scratches", "BOOLEAN DEFAULT FALSE"),
+                ("cond_yellowing", "BOOLEAN DEFAULT FALSE"),
+                ("cond_ripsholes", "BOOLEAN DEFAULT FALSE"),
+                ("cond_deepstains", "BOOLEAN DEFAULT FALSE"),
+                ("cond_soleseparation", "BOOLEAN DEFAULT FALSE"),
+                ("cond_wornout", "BOOLEAN DEFAULT FALSE")
+            ]
+            with engine.begin() as conn:
+                for col_name, col_type in missing:
+                    if col_name not in columns:
+                        print(f">>> Migration: Adding {col_name} to items")
+                        conn.execute(text(f"ALTER TABLE items ADD COLUMN {col_name} {col_type}"))
+        
+        # 2. Users Table update (Crucial for Forgot Password)
+        if "users" in inspector.get_table_names():
+            columns = [c['name'] for c in inspector.get_columns("users")]
+            with engine.begin() as conn:
+                if "reset_token" not in columns:
+                    print(">>> Migration: Adding reset_token to users")
+                    try: conn.execute(text("ALTER TABLE users ADD COLUMN reset_token VARCHAR(255)"))
+                    except Exception as e: print(f">>> Migration Warning: {e}")
+                
+                if "reset_token_expiry" not in columns:
+                    print(">>> Migration: Adding reset_token_expiry to users")
+                    try: conn.execute(text("ALTER TABLE users ADD COLUMN reset_token_expiry TIMESTAMP"))
+                    except Exception as e: print(f">>> Migration Warning: {e}")
+        
+        # 3. Data Extraction (Orders -> Payments/Deliveries)
+        if "payments" in inspector.get_table_names() and "deliveries" in inspector.get_table_names():
+            with engine.begin() as conn:
+                print(">>> Migration: Synchronizing payments/deliveries extraction...")
+                conn.execute(text("""
+                    INSERT INTO payments (order_id, payment_method, payment_status, amount_received, balance, reference_no, deposit_amount)
+                    SELECT order_id, payment_method, payment_status, amount_received, balance, reference_no, deposit_amount
+                    FROM orders
+                    WHERE order_id NOT IN (SELECT order_id FROM payments)
+                    ON CONFLICT DO NOTHING
+                """))
+                conn.execute(text("""
+                    INSERT INTO deliveries (order_id, shipping_preference, delivery_address, delivery_courier, release_time, province, city, barangay, zip_code)
+                    SELECT order_id, shipping_preference, delivery_address, delivery_courier, release_time, province, city, barangay, zip_code
+                    FROM orders
+                    WHERE order_id NOT IN (SELECT order_id FROM deliveries)
+                    ON CONFLICT DO NOTHING
+                """))
+                
+        print(">>> DB Migration: Schema check complete.")
             
     except Exception as e:
-        print(f">>> DB Migration Note: {e}")
+        print(f">>> DB Migration Critical failure: {e}")
+        # Log detail to help pinpoint UndefinedColumn errors
+        try:
+            inspector = inspect(engine)
+            print(f">>> Inspector Context - Available Tables: {inspector.get_table_names()}")
+        except: pass
     
     # Seed lookup data
     db = SessionLocal()
