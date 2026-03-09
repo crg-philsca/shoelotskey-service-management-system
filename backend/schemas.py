@@ -144,7 +144,7 @@ class OrderSchema(BaseModel):
     status: Optional[StatusSchema] = None
     processor: Optional[UserSchema] = None
     items: List[ItemSchema] = []
-    status_logs: List[StatusLogSchema] = []
+    status_logs: List['StatusLogSchema'] = []
 
 
     class Config:
