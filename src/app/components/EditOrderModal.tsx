@@ -19,7 +19,7 @@ interface EditOrderModalProps {
 const SHOE_BRANDS = [
     'Nike', 'Adidas', 'Asics', 'Puma', 'New Balance', 'Converse', 'Vans', 'Reebok', 'Jordan',
     'Under Armour', 'Timberland', 'Dr. Martens', 'Salomon', 'Merrell', 'Skechers', 'Mizuno',
-    'Brooks', 'Saucony', 'Hoka', 'Other'
+    'Brooks', 'Saucony', 'Hoka', 'On Cloud', 'Other'
 ];
 
 const SHOE_MATERIALS = [
@@ -45,7 +45,8 @@ const BRAND_MODELS: Record<string, string[]> = {
     'Mizuno': ['Wave Rider', 'Wave Inspire', 'Other'],
     'Brooks': ['Ghost', 'Adrenaline GTS', 'Glycerin', 'Other'],
     'Saucony': ['Jazz Original', 'Kinvara', 'Shadow', 'Other'],
-    'Hoka': ['Clifton', 'Bondi', 'Speedgoat', 'Other']
+    'Hoka': ['Clifton', 'Bondi', 'Speedgoat', 'Other'],
+    'On Cloud': ['Cloudmonster', 'Cloudnova', 'Cloudstratus', 'Cloud 5', 'Other']
 };
 
 const DEFAULT_MODELS = [
