@@ -23,6 +23,10 @@ const ActivityContext = createContext<ActivityContextType | undefined>(undefined
  * PERSISTENCE: Syncs with Backend API (/api/activities).
  * FALLBACK: Uses localStorage if backend is unreachable.
  */
+const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))
+    ? 'http://localhost:8000/api'
+    : '/api';
+
 export function ActivityProvider({ children }: { children: ReactNode }) {
     const [activities, setActivities] = useState<ActivityLog[]>([]);
 
@@ -34,7 +38,7 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
         const fetchLogs = async () => {
             try {
                 console.log('[DEBUG] ActivityContext: Fetching system logs...');
-                const res = await fetch('http://localhost:8000/api/activities');
+                const res = await fetch(`${API_BASE}/activities`);
                 if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
 
                 const data = await res.json();
@@ -73,7 +77,7 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
         };
 
         try {
-            const res = await fetch('http://localhost:8000/api/activities', {
+            const res = await fetch(`${API_BASE}/activities`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newActivity)

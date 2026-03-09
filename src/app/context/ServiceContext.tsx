@@ -11,11 +11,15 @@ interface ServiceContextType {
 
 const ServiceContext = createContext<ServiceContextType | undefined>(undefined);
 
+const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))
+    ? 'http://localhost:8000/api'
+    : '/api';
+
 export function ServiceProvider({ children }: { children: ReactNode }) {
     const [services, setServices] = useState<Service[]>([]);
 
     useEffect(() => {
-        fetch('http://localhost:8000/api/services')
+        fetch(`${API_BASE}/services`)
             .then(res => res.json())
             .then(data => {
                 if (Array.isArray(data)) {
@@ -50,7 +54,7 @@ export function ServiceProvider({ children }: { children: ReactNode }) {
             service_code: service.code || null
         };
 
-        fetch('http://localhost:8000/api/services', {
+        fetch(`${API_BASE}/services`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -88,7 +92,7 @@ export function ServiceProvider({ children }: { children: ReactNode }) {
         if (updates.durationDays !== undefined) payload.duration_days = updates.durationDays;
         if (updates.code !== undefined) payload.service_code = updates.code;
 
-        fetch(`http://localhost:8000/api/services/${id}`, {
+        fetch(`${API_BASE}/services/${id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -116,7 +120,7 @@ export function ServiceProvider({ children }: { children: ReactNode }) {
     };
 
     const deleteService = (id: string) => {
-        fetch(`http://localhost:8000/api/services/${id}`, {
+        fetch(`${API_BASE}/services/${id}`, {
             method: 'DELETE'
         })
             .then(() => {

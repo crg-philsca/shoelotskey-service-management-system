@@ -11,9 +11,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Dict, Any
 from datetime import datetime, timedelta
+import os
 import uuid
 import json
 import sys
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 # Internal Imports
 from models import (
@@ -585,5 +588,45 @@ def get_statuses(db: Session = Depends(get_db)):
 def get_ml_features(db: Session = Depends(get_db)):
     """Returns all ML-mapped conditions for form selections."""
     return db.query(Condition).all()
+
+
+# ==========================================
+# 4. FRONTEND MONOLITH HOSTING
+# ==========================================
+# This section allows FastAPI to serve the React/Vite build artifacts,
+# enabling a single-dyno deployment on Heroku.
+
+# Resolve path to the 'dist' directory (relative to backend/)
+# In Heroku: /app/backend -> /app/dist
+current_dir = os.path.dirname(os.path.abspath(__file__))
+dist_dir = os.path.join(current_dir, "..", "dist")
+
+if os.path.exists(dist_dir):
+    print(f"[BOOT] Frontend found at: {dist_dir}. Enabling monolith hosting.")
+    
+    # Mount assets sub-directory for CSS/JS stability
+    assets_dir = os.path.join(dist_dir, "assets")
+    if os.path.exists(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    # Root route serves the primary index.html
+    @app.get("/")
+    async def serve_root():
+        return FileResponse(os.path.join(dist_dir, "index.html"))
+
+    # SPA support: Any path that doesn't start with /api and isn't a file 
+    # should serve index.html to allow client-side routing (react-router).
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        if full_path.startswith("api"):
+            raise HTTPException(status_code=404, detail="API route not found")
+            
+        file_path = os.path.join(dist_dir, full_path)
+        if os.path.isfile(file_path):
+            return FileResponse(file_path)
+            
+        return FileResponse(os.path.join(dist_dir, "index.html"))
+else:
+    print(f"[BOOT] Warning: Frontend 'dist' not found at {dist_dir}. API-only mode active.")
 
 # EOF: Backend Entry Point

@@ -9,6 +9,10 @@ interface ExpenseContextType {
 
 const ExpenseContext = createContext<ExpenseContextType | undefined>(undefined);
 
+const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))
+    ? 'http://localhost:8000/api'
+    : '/api';
+
 export function ExpenseProvider({ children }: { children: ReactNode }) {
     const { addActivity } = useActivities();
     const currentUser = JSON.parse(localStorage.getItem('user') || '{"username": "System"}').username;
@@ -16,7 +20,7 @@ export function ExpenseProvider({ children }: { children: ReactNode }) {
     const [expenses, setExpenses] = useState<Expense[]>([]);
 
     useEffect(() => {
-        fetch('http://127.0.0.1:8000/api/expenses')
+        fetch(`${API_BASE}/expenses`)
             .then(res => res.json())
             .then(data => {
                 if (Array.isArray(data)) {
@@ -32,7 +36,7 @@ export function ExpenseProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const addExpense = (expense: Expense) => {
-        fetch('http://127.0.0.1:8000/api/expenses', {
+        fetch(`${API_BASE}/expenses`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(expense)
