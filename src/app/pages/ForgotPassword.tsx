@@ -7,6 +7,10 @@ import { Card, CardContent, CardDescription, CardHeader } from '@/app/components
 import { toast } from 'sonner';
 import { Mail, CheckCircle } from 'lucide-react';
 
+const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))
+  ? 'http://localhost:8000/api'
+  : '/api';
+
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
@@ -24,7 +28,7 @@ export default function ForgotPassword() {
 
     setLoading(true);
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/forgot-password', {
+      const response = await fetch(`${API_BASE}/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email })

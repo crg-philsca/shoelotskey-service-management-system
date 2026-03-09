@@ -13,6 +13,10 @@ interface LoginProps {
 }
 
 
+const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))
+  ? 'http://localhost:8000/api'
+  : '/api';
+
 export default function Login({ onLogin }: LoginProps) {
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
@@ -45,7 +49,7 @@ export default function Login({ onLogin }: LoginProps) {
 
       // 2. BACKEND COMMUNICATION (I/O Operation)
       console.log('[AUTH_DEBUG] Sending credentials to backend...');
-      const response = await fetch('http://127.0.0.1:8000/api/login', {
+      const response = await fetch(`${API_BASE}/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
