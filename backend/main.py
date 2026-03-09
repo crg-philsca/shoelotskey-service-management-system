@@ -6,10 +6,10 @@ Implements security, order processing, and lookups.
 Includes diagnostic logging for easy debugging during the Defenses.
 """
 
-from fastapi import FastAPI, Depends, HTTPException, Body
+from fastapi import FastAPI, Depends, HTTPException, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session, joinedload
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Union
 from datetime import datetime, timedelta
 import os
 import uuid
@@ -17,7 +17,7 @@ import json
 import sys
 import requests
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 # Internal Imports
 from models import (
@@ -331,39 +331,40 @@ def send_reset_email(user_email, reset_link):
         return 500
 
 @app.post("/api/forgot-password")
-async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db)):
+async def forgot_password(request: Request, body: ForgotPasswordRequest, db: Session = Depends(get_db)):
     """Generates a secure token and sends a reset email."""
-    print(f"[AUTH] Password recovery requested for: {request.email}")
-    user = db.query(User).filter(User.email == request.email).first()
+    print(f"[AUTH] Password recovery requested for: {body.email}")
+    user = db.query(User).filter(User.email == body.email).first()
     
     if not user:
-        # Security Best Practice: Don't reveal if email exist, but for defense we might return 404
         raise HTTPException(status_code=404, detail="Email not found in our records.")
 
-    # 1. Generate unique reset token
     token = str(uuid.uuid4())
     user.reset_token = token
-    # Token expires in 1 hour
     user.reset_token_expiry = datetime.now() + timedelta(hours=1)
     db.commit()
 
-    # 2. Construct link (Detect environment)
-    # Note: For Heroku, use the domain. For local, use localhost.
-    host = "shoelotskey-service-914df5a97576.herokuapp.com" # Replace with actual if known, or detect from request
-    reset_link = f"https://{host}/reset-password?token={token}"
+    # Dynamic Host Detection
+    requested_host = request.headers.get("host", "shoelotskey-villamor-pasay.herokuapp.com")
+    protocol = "https" if "herokuapp.com" in requested_host or ".app" in requested_host else "http"
     
-    # Check if local for testing
-    if os.environ.get('PORT') is None:
-        reset_link = f"http://localhost:5173/reset-password?token={token}"
+    # Construction: Reset Link
+    reset_link = f"{protocol}://{requested_host}/reset-password?token={token}"
+    
+    # Debug: Print for logs
+    print(f"[AUTH] Generated Reset Link: {reset_link}")
 
-    # 3. Send via Mailgun
     status = send_reset_email(user.email, reset_link)
     
     if status == 200:
         return {"message": "Reset email sent successfully", "debug_token": token}
     else:
-        # Fallback for defense if API key missing: still allow local reset via token
         return {"message": "System: Mock recovery enabled (Mailgun error: fallback to token)", "debug_token": token}
+
+@app.get("/api/health")
+def health_check():
+    """Simple probe to verify the server is alive."""
+    return {"status": "ok", "timestamp": str(datetime.now()), "environment": os.environ.get('PORT', 'local')}
 
 @app.post("/api/reset-password")
 async def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
