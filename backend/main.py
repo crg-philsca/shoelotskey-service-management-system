@@ -878,10 +878,26 @@ def get_statuses(db: Session = Depends(get_db)):
 # NOTE: Use '../dist' because main.py is inside the 'backend' folder.
 
 # 1. Mount the 'assets' (CSS/JS) so the browser can load them
-dist_assets = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dist", "assets"))
+# 1. Mount the 'assets' (CSS/JS) so the browser can load them
+base_dir = os.path.dirname(os.path.abspath(__file__))
+dist_path = os.path.abspath(os.path.join(base_dir, "..", "dist"))
+dist_assets = os.path.join(dist_path, "assets")
+
+print(f"[BOOT] Base path detected: {base_dir}")
+print(f"[BOOT] Looking for UI at: {dist_path}")
+
 if os.path.exists(dist_assets):
     app.mount("/assets", StaticFiles(directory=dist_assets), name="static")
-    print(f"[BOOT] Serving UI Assets from: {dist_assets}")
+    print(f"[BOOT] SUCCESS: Mounted UI Assets from: {dist_assets}")
+else:
+    print(f"[BOOT] WARNING: UI Assets folder NOT FOUND at {dist_assets}")
+    # List directory content to debug
+    try:
+        parent_dir = os.path.abspath(os.path.join(dist_path, ".."))
+        print(f"[BOOT] Parent directory content ({parent_dir}): {os.listdir(parent_dir)}")
+        if os.path.exists(dist_path):
+            print(f"[BOOT] Dist directory content ({dist_path}): {os.listdir(dist_path)}")
+    except: pass
 
 # 2. Serve the Dashboard UI on the root URL
 @app.get("/")
