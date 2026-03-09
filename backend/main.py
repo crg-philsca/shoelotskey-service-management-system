@@ -242,51 +242,46 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Internal Authentication Error")
 
 # ==========================================
-# 2.2 PASSWORD RECOVERY (Brevo Integration)
+# 2.2 PASSWORD RECOVERY (Mailgun Integration)
 # ==========================================
 
 def send_reset_email(user_email, reset_link):
-    """Integrates with Brevo SMTP API to send real emails."""
-    url = "https://api.brevo.com/v3/smtp/email"
-    api_key = os.environ.get('BREVO_API_KEY')
+    """Integrates with Mailgun API to send real emails."""
+    api_key = os.environ.get('MAILGUN_API_KEY')
+    # Use the domain configured with the green checkmark in Mailgun
+    domain = "www.shoelotskey-villamor-pasay.app" 
     
     if not api_key:
-        print("[EMAIL ERROR] BREVO_API_KEY not found in environment.")
+        print("[EMAIL ERROR] MAILGUN_API_KEY not found in environment.")
         return 500
 
-    payload = {
-        "sender": {"name": "Shoelotskey Support", "email": "support@shoelotskey-villamor-pasay.app"},
-        "to": [{"email": user_email}],
-        "subject": "Reset Your Password",
-        "htmlContent": f"""
-        <html>
-            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-                <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-                    <h2 style="color: #e11d48; text-align: center;">Shoelotskey SMS</h2>
-                    <p>Hello,</p>
-                    <p>We received a request to reset your password. Click the button below to proceed:</p>
-                    <div style="text-align: center; margin: 30px 0;">
-                        <a href="{reset_link}" style="background-color: #e11d48; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Reset Password</a>
-                    </div>
-                    <p>If you did not request this, please ignore this email.</p>
-                    <hr style="border: 0; border-top: 1px solid #eee;" />
-                    <p style="font-size: 12px; color: #888; text-align: center;">Shoelotskey Pasay - Service Management System</p>
-                </div>
-            </body>
-        </html>
-        """
-    }
+    url = f"https://api.mailgun.net/v3/{domain}/messages"
     
-    headers = {
-        "accept": "application/json",
-        "content-type": "application/json",
-        "api-key": api_key
+    payload = {
+        "from": f"Shoelotskey Support <postmaster@{domain}>",
+        "to": [user_email],
+        "subject": "Reset Your Shoelotskey Password",
+        "html": f"""
+            <div style="font-family: Arial, sans-serif; border: 1px solid #ddd; padding: 20px; border-radius: 10px;">
+                <h2 style="color: #333; text-align: center;">Shoelotskey SMS</h2>
+                <h3 style="color: #e11d48;">Password Reset Request</h3>
+                <p>We received a request to reset your password for <strong>Shoelotskey</strong>.</p>
+                <p>Click the button below to set a new password. This link is unique to your account.</p>
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{reset_link}" style="background-color: #e11d48; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">Reset My Password</a>
+                </div>
+                <p style="color: #777; font-size: 11px;">If you didn't request this, you can safely ignore this email. Your password will not change until you access the link above.</p>
+                <hr style="border: 0; border-top: 1px solid #eee;" />
+                <p style="font-size: 10px; color: #999; text-align: center;">Shoelotskey Pasay - Pasay City, Metro Manila</p>
+            </div>
+        """
     }
 
     try:
-        response = requests.post(url, json=payload, headers=headers)
+        # Mailgun uses HTTP Basic Auth; Brevo used API key in headers
+        response = requests.post(url, auth=("api", api_key), data=payload)
         print(f"[EMAIL] Reset link sent to {user_email}. Status: {response.status_code}")
-        return response.status_code
+        return response.status_code # 200 means success for Mailgun
     except Exception as e:
         print(f"[EMAIL ERROR] Failed to send: {e}")
         return 500
@@ -315,14 +310,14 @@ async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(
     if os.environ.get('PORT') is None:
         reset_link = f"http://localhost:5173/reset-password?token={token}"
 
-    # 3. Send via Brevo
+    # 3. Send via Mailgun
     status = send_reset_email(user.email, reset_link)
     
-    if status == 201:
+    if status == 200:
         return {"message": "Reset email sent successfully", "debug_token": token}
     else:
         # Fallback for defense if API key missing: still allow local reset via token
-        return {"message": "System: Mock recovery enabled (Brevo key missing)", "debug_token": token}
+        return {"message": "System: Mock recovery enabled (Mailgun error: fallback to token)", "debug_token": token}
 
 @app.post("/api/reset-password")
 async def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
