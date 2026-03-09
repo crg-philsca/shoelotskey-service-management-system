@@ -590,43 +590,45 @@ def get_ml_features(db: Session = Depends(get_db)):
     return db.query(Condition).all()
 
 
-# ==========================================
-# 4. FRONTEND MONOLITH HOSTING
-# ==========================================
-# This section allows FastAPI to serve the React/Vite build artifacts,
-# enabling a single-dyno deployment on Heroku.
 
-# Resolve path to the 'dist' directory (relative to backend/)
-# In Heroku: /app/backend -> /app/dist
-current_dir = os.path.dirname(os.path.abspath(__file__))
-dist_dir = os.path.join(current_dir, "..", "dist")
+# ==========================================
+# 4. PROPER MONOLITH FIX & UI HOSTING
+# ==========================================
+# Resolves paths relative to main.py to find the 'dist' folder correctly.
+# NOTE: Use '../dist' because main.py is inside the 'backend' folder.
 
-if os.path.exists(dist_dir):
-    print(f"[BOOT] Frontend found at: {dist_dir}. Enabling monolith hosting.")
+# 1. Mount the 'assets' (CSS/JS) so the browser can load them
+dist_assets = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dist", "assets"))
+if os.path.exists(dist_assets):
+    app.mount("/assets", StaticFiles(directory=dist_assets), name="static")
+    print(f"[BOOT] Serving UI Assets from: {dist_assets}")
+
+# 2. Serve the Dashboard UI on the root URL
+@app.get("/")
+async def read_index():
+    index_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dist", "index.html"))
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return {"status": "error", "message": "UI not found. Build is required."}
+
+# 3. SPA Support (Catch-all)
+# Ensures pages like /orders or /settings work even after a browser refresh.
+@app.get("/{full_path:path}")
+async def catch_all(full_path: str):
+    # Only serve the UI if it's NOT an API call
+    if full_path.startswith("api"):
+        raise HTTPException(status_code=404, detail="API route not found")
+        
+    index_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dist", "index.html"))
     
-    # Mount assets sub-directory for CSS/JS stability
-    assets_dir = os.path.join(dist_dir, "assets")
-    if os.path.exists(assets_dir):
-        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
-
-    # Root route serves the primary index.html
-    @app.get("/")
-    async def serve_root():
-        return FileResponse(os.path.join(dist_dir, "index.html"))
-
-    # SPA support: Any path that doesn't start with /api and isn't a file 
-    # should serve index.html to allow client-side routing (react-router).
-    @app.get("/{full_path:path}")
-    async def serve_spa(full_path: str):
-        if full_path.startswith("api"):
-            raise HTTPException(status_code=404, detail="API route not found")
-            
-        file_path = os.path.join(dist_dir, full_path)
-        if os.path.isfile(file_path):
-            return FileResponse(file_path)
-            
-        return FileResponse(os.path.join(dist_dir, "index.html"))
-else:
-    print(f"[BOOT] Warning: Frontend 'dist' not found at {dist_dir}. API-only mode active.")
+    # If the path looks like a static file that exists, serve it
+    file_candidate = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dist", full_path))
+    if os.path.isfile(file_candidate):
+        return FileResponse(file_candidate)
+        
+    # Default to index.html for React Router
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return {"status": "error", "message": "UI not found."}
 
 # EOF: Backend Entry Point
