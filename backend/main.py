@@ -266,7 +266,7 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db)):
 
         # Step 3: Persistence - Order Header
         priority_val = str(order_data.get("priorityLevel", "Regular")).capitalize()
-        if priority_val not in ["Regular", "Rush"]: priority_val = "Regular"
+        if priority_val not in ["Regular", "Rush", "Premium"]: priority_val = "Regular"
 
         # Predicted Completion Handling (ML Output Integration)
         # We parse the ISO date provided by the frontend's ML-based estimation logic.

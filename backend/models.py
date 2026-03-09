@@ -88,7 +88,7 @@ class Service(Base):
     service_id = Column(Integer, primary_key=True, autoincrement=True)
     service_name = Column(String(100), nullable=False)
     base_price = Column(DECIMAL(10, 2), nullable=False)
-    category = Column(Enum('base', 'addon', 'priority'), default='base')
+    category = Column(Enum('base', 'addon', 'priority', name='service_category_enum'), default='base')
     description = Column(Text, nullable=True)
     duration_days = Column(Integer, default=0)
     service_code = Column(String(20), nullable=True)
@@ -120,7 +120,7 @@ class Order(Base):
     order_number = Column(String(50), unique=True, nullable=False, index=True)
     customer_id = Column(Integer, ForeignKey("customers.customer_id"), nullable=False)
     status_id = Column(Integer, ForeignKey("status.status_id"), nullable=False)
-    priority = Column(Enum('Regular', 'Rush'), default='Regular')
+    priority = Column(Enum('Regular', 'Rush', 'Premium', name='order_priority_enum'), default='Regular')
     grand_total = Column(DECIMAL(10, 2), nullable=False)
     
     # --- PAYMENT & SHIPPING ---
@@ -218,7 +218,7 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
     audit_log_id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.user_id"), nullable=False)
-    action_type = Column(Enum('CREATE', 'UPDATE', 'DELETE', 'LOGIN'), nullable=False)
+    action_type = Column(Enum('CREATE', 'UPDATE', 'DELETE', 'LOGIN', name='audit_action_enum'), nullable=False)
     table_name = Column(String(50), nullable=False)
     record_id = Column(Integer, nullable=False)
     old_values = Column(JSON)
