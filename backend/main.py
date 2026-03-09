@@ -263,16 +263,19 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     print(f"[AUTH] Trace: Login attempt for '{request.username}'")
     
     try:
-        # 1. FETCH USER (Include Role for Authorization - S.O.L.I.D Efficiency)
-        db_user = db.query(User).options(joinedload(User.role)).filter(User.username == request.username).first()
+        # 1. FETCH USER (Allow Login via Username OR Email for flexibility)
+        from sqlalchemy import or_
+        db_user = db.query(User).options(joinedload(User.role)).filter(
+            or_(User.username == request.username, User.email == request.username)
+        ).first()
         
         if not db_user:
-            print(f"[AUTH] Denied: User '{request.username}' not found.")
-            raise HTTPException(status_code=401, detail="Invalid username or password")
+            print(f"[AUTH] Denied: Identifier '{request.username}' not found.")
+            raise HTTPException(status_code=401, detail="Invalid credentials")
 
         # 2. VALIDATION (Security Checkpoint)
         if db_user.password_hash == request.password:
-            print(f"[AUTH] Granted: {db_user.username} authenticated as {db_user.role.role_name}.")
+            print(f"[AUTH] Granted: {db_user.username} ({db_user.email}) authenticated as {db_user.role.role_name}.")
             return {
                 "user_id": db_user.user_id,
                 "username": db_user.username,
