@@ -119,24 +119,10 @@ class Order(Base):
     priority = Column(Enum('Regular', 'Rush', 'Premium', name='order_priority_enum'), default='Regular')
     grand_total = Column(DECIMAL(10, 2), nullable=False)
     
-    # --- PAYMENT & SHIPPING ---
-    payment_method = Column(String(20), default='cash')
-    payment_status = Column(String(20), default='fully-paid')
-    shipping_preference = Column(String(20), default='pickup')
-    delivery_address = Column(Text, nullable=True)
-    delivery_courier = Column(String(50), nullable=True)
-    amount_received = Column(DECIMAL(10, 2), default=0.0)
-    balance = Column(DECIMAL(10, 2), default=0.0)
-    reference_no = Column(String(100), nullable=True)
-    # shelf_location removed
-    deposit_amount = Column(DECIMAL(10, 2), default=0.0)
-    release_time = Column(String(20), nullable=True)
-    
-    # Address Components
-    province = Column(String(100), nullable=True)
-    city = Column(String(100), nullable=True)
-    barangay = Column(String(100), nullable=True)
-    zip_code = Column(String(20), nullable=True)
+    # Removed legacy normalized fields (migrated to Payment / Delivery)
+    payment = relationship("Payment", back_populates="order", uselist=False, cascade="all, delete-orphan")
+    delivery = relationship("Delivery", back_populates="order", uselist=False, cascade="all, delete-orphan")
+
     
     # --- MACHINE LEARNING FEATURE BLOCK ---
     expected_at = Column(DateTime, nullable=False)  # Prediction Target / Deadline
@@ -156,7 +142,41 @@ class Order(Base):
     status_logs = relationship("StatusLog", back_populates="order")
 
 # ==========================================
-# 5. ITEMS & MAPPINGS (Granular ML Features)
+# 5. TRANSACTIONS & SHIPPING (Normalized)
+# ==========================================
+
+class Payment(Base):
+    """Normalized Payment Details (1:1 with Order)."""
+    __tablename__ = "payments"
+    payment_id = Column(Integer, primary_key=True, autoincrement=True)
+    order_id = Column(Integer, ForeignKey("orders.order_id", ondelete="CASCADE"), nullable=False, unique=True)
+    payment_method = Column(String(20), default='cash')
+    payment_status = Column(String(20), default='fully-paid')
+    amount_received = Column(DECIMAL(10, 2), default=0.0)
+    balance = Column(DECIMAL(10, 2), default=0.0)
+    reference_no = Column(String(100), nullable=True)
+    deposit_amount = Column(DECIMAL(10, 2), default=0.0)
+    
+    order = relationship("Order", back_populates="payment")
+
+class Delivery(Base):
+    """Normalized Delivery/Shipping Details (1:1 with Order)."""
+    __tablename__ = "deliveries"
+    delivery_id = Column(Integer, primary_key=True, autoincrement=True)
+    order_id = Column(Integer, ForeignKey("orders.order_id", ondelete="CASCADE"), nullable=False, unique=True)
+    shipping_preference = Column(String(20), default='pickup')
+    delivery_address = Column(Text, nullable=True)
+    delivery_courier = Column(String(50), nullable=True)
+    release_time = Column(String(20), nullable=True)
+    province = Column(String(100), nullable=True)
+    city = Column(String(100), nullable=True)
+    barangay = Column(String(100), nullable=True)
+    zip_code = Column(String(20), nullable=True)
+    
+    order = relationship("Order", back_populates="delivery")
+
+# ==========================================
+# 6. ITEMS & MAPPINGS (Granular ML Features)
 # ==========================================
 
 # Junction table for Item <-> Service (Snapshotting prices at order time)
@@ -193,7 +213,7 @@ class Item(Base):
     services = relationship("Service", secondary="item_service_mapping")
 
 # ==========================================
-# 6. AUDIT TRAIL & ML LOGGING
+# 7. AUDIT TRAIL & ML LOGGING
 # ==========================================
 
 class StatusLog(Base):

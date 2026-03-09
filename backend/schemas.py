@@ -108,6 +108,30 @@ class ItemSchema(BaseModel):
     class Config:
         from_attributes = True
 
+class PaymentSchema(BaseModel):
+    payment_id: Optional[int] = None
+    payment_method: str = 'cash'
+    payment_status: str = 'fully-paid'
+    amount_received: Decimal = 0.0
+    balance: Decimal = 0.0
+    reference_no: Optional[str] = None
+    deposit_amount: Decimal = 0.0
+    class Config:
+        from_attributes = True
+
+class DeliverySchema(BaseModel):
+    delivery_id: Optional[int] = None
+    shipping_preference: str = 'pickup'
+    delivery_address: Optional[str] = None
+    delivery_courier: Optional[str] = None
+    release_time: Optional[str] = None
+    province: Optional[str] = None
+    city: Optional[str] = None
+    barangay: Optional[str] = None
+    zip_code: Optional[str] = None
+    class Config:
+        from_attributes = True
+
 class OrderSchema(BaseModel):
     """Comprehensive Order Header with nested Items and Customer data."""
     order_id: Optional[int] = None
@@ -117,23 +141,6 @@ class OrderSchema(BaseModel):
     priority: str = 'Regular'
     grand_total: Decimal
     
-    # --- Payment & Shipping ---
-    payment_method: str = 'cash'
-    payment_status: str = 'fully-paid'
-    shipping_preference: str = 'pickup'
-    delivery_address: Optional[str] = None
-    delivery_courier: Optional[str] = None
-    amount_received: Decimal = 0.0
-    balance: Decimal = 0.0
-    reference_no: Optional[str] = None
-    # shelf_location removed
-    deposit_amount: Decimal = 0.0
-    release_time: Optional[str] = None
-    province: Optional[str] = None
-    city: Optional[str] = None
-    barangay: Optional[str] = None
-    zip_code: Optional[str] = None
-
     expected_at: datetime
     released_at: Optional[datetime] = None
     claimed_at: Optional[datetime] = None
@@ -145,8 +152,11 @@ class OrderSchema(BaseModel):
     customer: Optional[CustomerSchema] = None
     status: Optional[StatusSchema] = None
     processor: Optional[UserSchema] = None
+    payment: Optional[PaymentSchema] = None
+    delivery: Optional[DeliverySchema] = None
     items: List[ItemSchema] = []
     status_logs: List['StatusLogSchema'] = []
+
 
 
     class Config:

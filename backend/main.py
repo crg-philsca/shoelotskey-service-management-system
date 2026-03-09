@@ -21,12 +21,13 @@ from fastapi.responses import FileResponse
 # Internal Imports
 from models import (
     Base, Order, Item, Service, Expense, StatusLog, 
-    User, Customer, Role, Status, AuditLog, ItemServiceMapping
+    User, Customer, Role, Status, AuditLog, ItemServiceMapping,
+    Payment, Delivery
 )
 from schemas import (
     OrderSchema, ServiceSchema, ExpenseSchema, UserSchema, LoginRequest, 
     ForgotPasswordRequest, ResetPasswordRequest, RoleSchema, StatusSchema, 
-    ItemSchema
+    ItemSchema, PaymentSchema, DeliverySchema
 )
 from database import engine, get_db, SessionLocal
 
@@ -79,6 +80,25 @@ def on_startup():
             try: conn.execute(text("ALTER TABLE items ADD COLUMN cond_wornout BOOLEAN DEFAULT FALSE"))
             except: pass
             print(">>> DB Migration: Added condition columns to items table.")
+            
+            # Migration 2: Payments and Deliveries Extraction
+            try: conn.execute(text("""
+                INSERT INTO payments (order_id, payment_method, payment_status, amount_received, balance, reference_no, deposit_amount)
+                SELECT order_id, payment_method, payment_status, amount_received, balance, reference_no, deposit_amount
+                FROM orders
+                WHERE order_id NOT IN (SELECT order_id FROM payments)
+            """))
+            except: pass
+            
+            try: conn.execute(text("""
+                INSERT INTO deliveries (order_id, shipping_preference, delivery_address, delivery_courier, release_time, province, city, barangay, zip_code)
+                SELECT order_id, shipping_preference, delivery_address, delivery_courier, release_time, province, city, barangay, zip_code
+                FROM orders
+                WHERE order_id NOT IN (SELECT order_id FROM deliveries)
+            """))
+            except: pass
+            print(">>> DB Migration: Extracted payments and deliveries logic.")
+            
     except Exception as e:
         print(f">>> DB Migration Note: {e}")
     
@@ -234,6 +254,8 @@ def read_orders(db: Session = Depends(get_db)):
         joinedload(Order.processor),
         joinedload(Order.status_logs).joinedload(StatusLog.status),
         joinedload(Order.status_logs).joinedload(StatusLog.user),
+        joinedload(Order.payment),
+        joinedload(Order.delivery),
         joinedload(Order.items).joinedload(Item.conditions),
         joinedload(Order.items).joinedload(Item.services)
     ).order_by(Order.created_at.desc()).all()
@@ -300,24 +322,35 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db)):
             priority=priority_val,
             grand_total=order_data.get("grandTotal", 0.0),
             expected_at=expected_dt,
-            user_id=order_data.get("user_id", 1),
+            user_id=order_data.get("user_id", 1)
+        )
+        db.add(db_order)
+        db.flush()
+
+        db_payment = Payment(
+            order_id=db_order.order_id,
             payment_method=order_data.get("paymentMethod", "cash"),
             payment_status=order_data.get("paymentStatus", "fully-paid"),
-            shipping_preference=order_data.get("shippingPreference", "pickup"),
-            delivery_address=order_data.get("deliveryAddress"),
-            delivery_courier=order_data.get("deliveryCourier"),
             amount_received=order_data.get("amountReceived", 0.0),
             balance=order_data.get("balance", 0.0),
             reference_no=order_data.get("referenceNo"),
-            # shelf_location removed
-            deposit_amount=order_data.get("depositAmount", 0.0),
+            deposit_amount=order_data.get("depositAmount", 0.0)
+        )
+        db.add(db_payment)
+        
+        db_delivery = Delivery(
+            order_id=db_order.order_id,
+            shipping_preference=order_data.get("shippingPreference", "pickup"),
+            delivery_address=order_data.get("deliveryAddress"),
+            delivery_courier=order_data.get("deliveryCourier"),
             release_time=order_data.get("releaseTime"),
             province=order_data.get("province"),
             city=order_data.get("city"),
             barangay=order_data.get("barangay"),
             zip_code=order_data.get("zipCode")
         )
-        db.add(db_order)
+        db.add(db_delivery)
+        db.flush()
         db.flush()
 
         # Step 4: Handle Items (Multiple Shoes)
