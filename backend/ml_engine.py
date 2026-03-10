@@ -61,8 +61,9 @@ class ShoelotskeyPredictor:
 
     def get_current_workload(self, db: Session):
         """Returns count of active orders in the shop."""
+        # Status names now match frontend: 'new-order', 'on-going'
         active_statuses = db.query(Status).filter(
-            func.lower(Status.status_name).in_(['pending', 'in progress'])
+            Status.status_name.in_(['new-order', 'on-going'])
         ).all()
         status_ids = [s.status_id for s in active_statuses]
         return db.query(Order).filter(Order.status_id.in_(status_ids)).count()
@@ -140,7 +141,7 @@ class ShoelotskeyPredictor:
             
             # Extract features for this order
             item_count = len(o.items)
-            is_rush = 1 if o.priority and o.priority.priority_name == 'Rush' else 0
+            is_rush = 1 if o.priority and o.priority.priority_name == 'rush' else 0
             
             svc_count = 0
             cond_count = 0
