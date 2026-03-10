@@ -978,6 +978,76 @@ def get_statuses(db: Session = Depends(get_db)):
     return db.query(Status).all()
 
 
+@app.get("/api/expenses", response_model=List[ExpenseSchema])
+def get_expenses(db: Session = Depends(get_db)):
+    """Tracks business overhead costs."""
+    return db.query(Expense).all()
+
+@app.post("/api/expenses", response_model=ExpenseSchema)
+def create_expense(expense_data: dict, db: Session = Depends(get_db)):
+    """Logs a new business expense."""
+    # Logic: If date is missing, use now. Use first admin user as fallback for user_id.
+    user_id = expense_data.get('user_id', 1)
+    
+    # Map frontend 'date' if provided
+    exp_date = expense_data.get('date')
+    if exp_date:
+        if isinstance(exp_date, str):
+            try:
+                exp_date = datetime.fromisoformat(exp_date.replace('Z', ''))
+            except ValueError:
+                exp_date = datetime.now()
+    else:
+        exp_date = datetime.now()
+
+    db_expense = Expense(
+        amount=expense_data.get('amount', 0.0),
+        description=expense_data.get('notes') or expense_data.get('category') or "Misc Expense",
+        expense_date=exp_date,
+        user_id=user_id
+    )
+    db.add(db_expense)
+    db.commit()
+    db.refresh(db_expense)
+    return db_expense
+
+@app.get("/api/activities")
+def get_activities(db: Session = Depends(get_db)):
+    """Retrieves formatted system audit logs for UI."""
+    logs = db.query(AuditLog).order_by(AuditLog.created_at.desc()).limit(50).all()
+    results = []
+    for log in logs:
+        # Optimization: Fetch username
+        u = db.query(User).filter(User.user_id == log.user_id).first()
+        results.append({
+            "id": str(log.audit_log_id),
+            "timestamp": log.created_at.strftime('%m/%d/%Y, %H:%M') if log.created_at else "",
+            "user": u.username if u else "System",
+            "action": log.action_type,
+            "details": f"{log.action_type} on {log.table_name}",
+            "type": "system"
+        })
+    return results
+
+@app.post("/api/activities")
+def log_custom_activity(activity: dict, db: Session = Depends(get_db)):
+    """Generic endpoint for frontend to log UI-specific events."""
+    # Map to AuditLog model
+    u = db.query(User).filter(User.username == activity.get('user')).first()
+    new_log = AuditLog(
+        user_id=u.user_id if u else 1,
+        action_type='UPDATE' if activity.get('type') == 'service' else 'CREATE',
+        table_name=activity.get('type') or 'system',
+        record_id=0,
+        new_values={"details": activity.get('details')}
+    )
+    db.add(new_log)
+    db.commit()
+    db.refresh(new_log)
+    return activity
+
+
+
 
 
 # ==========================================
