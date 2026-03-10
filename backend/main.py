@@ -219,20 +219,22 @@ def seed_lookups(db: Session):
         db.commit()
 
     catalog_data = [
-        # BASE SERVICES
+        # BASE SERVICES (The Core 4)
         {"service_name": "Basic Cleaning", "base_price": 325, "category": "base", "duration_days": 10, "service_code": "BCN", "is_active": True},
-        {"service_name": "Color Renewal", "base_price": 800, "category": "base", "duration_days": 15, "service_code": "CRN", "is_active": True},
-        {"service_name": "Full Reglue", "base_price": 250, "category": "base", "duration_days": 25, "service_code": "FRG", "is_active": True},
         {"service_name": "Minor Reglue", "base_price": 150, "category": "base", "duration_days": 25, "service_code": "MRG", "is_active": True},
-        {"service_name": "Undersole", "base_price": 150, "category": "base", "duration_days": 20, "service_code": "USL", "is_active": True},
-        {"service_name": "Midsole", "base_price": 150, "category": "base", "duration_days": 20, "service_code": "MSL", "is_active": True},
-        {"service_name": "Minor Restoration", "base_price": 300, "category": "base", "duration_days": 25, "service_code": "MRS", "is_active": True},
-        {"service_name": "Minor Retouch", "base_price": 125, "category": "base", "duration_days": 5, "service_code": "MRT", "is_active": True},
-        {"service_name": "Add Glue Layer", "base_price": 100, "category": "base", "duration_days": 2, "service_code": "AGL", "is_active": True},
+        {"service_name": "Full Reglue", "base_price": 250, "category": "base", "duration_days": 25, "service_code": "FRG", "is_active": True},
+        {"service_name": "Color Renewal", "base_price": 800, "category": "base", "duration_days": 15, "service_code": "CRN", "is_active": True},
         
-        # ADD-ON SERVICES
+        # ADD-ON SERVICES (Restoration & Detailing)
+        {"service_name": "Undersole", "base_price": 150, "category": "addon", "duration_days": 20, "service_code": "USL", "is_active": True},
+        {"service_name": "Midsole", "base_price": 150, "category": "addon", "duration_days": 20, "service_code": "MSL", "is_active": True},
+        {"service_name": "Minor Restoration", "base_price": 300, "category": "addon", "duration_days": 25, "service_code": "MRS", "is_active": True},
+        {"service_name": "Minor Retouch", "base_price": 125, "category": "addon", "duration_days": 5, "service_code": "MRT", "is_active": True},
+        {"service_name": "Add Glue Layer", "base_price": 100, "category": "addon", "duration_days": 2, "service_code": "AGL", "is_active": True},
         {"service_name": "Unyellowing", "base_price": 125, "category": "addon", "duration_days": 5, "service_code": "UNY", "is_active": True},
         {"service_name": "White Paint", "base_price": 150, "category": "addon", "duration_days": 0, "service_code": "WPT", "is_active": True},
+        {"service_name": "2 Colors", "base_price": 200, "category": "addon", "duration_days": 0, "service_code": "2CL", "is_active": True},
+        {"service_name": "3 Colors", "base_price": 300, "category": "addon", "duration_days": 0, "service_code": "3CL", "is_active": True},
         
         # PRIORITY FEES
         {"service_name": "Rush Fee (Basic Cleaning)", "base_price": 150, "category": "priority", "duration_days": -5, "service_code": "RFC", "is_active": True},
@@ -911,9 +913,10 @@ def delete_service(service_id: int, db: Session = Depends(get_db)):
     if not db_service:
         raise HTTPException(status_code=404, detail="Service not found")
     
-    db.delete(db_service)
-    db.commit()
-    return {"status": "success"}
+    # S.O.L.I.D: Soft Delete implementation to maintain 3NF Integrity
+    db_service.is_active = False
+    db_commit_retry(db)
+    return {"status": "success", "message": "Service deactivated (Soft Delete)"}
 
 
 @app.get("/api/lookups/statuses", response_model=List[StatusSchema])
