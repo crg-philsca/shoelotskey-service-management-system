@@ -245,13 +245,20 @@ def seed_lookups(db: Session):
     # ------------------------------------------
     # We use a PostgreSQL advisory lock (ID: 12345) to ensure ONLY ONE worker
     # performs the sync during a multi-process Gunicorn boot.
+    # performs the sync during a multi-process Gunicorn boot.
     try:
-        db.execute(text("SELECT pg_advisory_xact_lock(12345)"))
+        # Use a transaction-level lock (pg_try_advisory_xact_lock) which IS released on commit/rollback.
+        # This will return True for the first worker and False for all others.
+        lock_acquired = db.execute(text("SELECT pg_try_advisory_xact_lock(12345)")).scalar()
+        if not lock_acquired:
+            print(">>> Catalog Sync: Resource busy (Another worker is syncing). Skipping.")
+            return
+
         print(">>> Catalog Lock acquired. Porting master list...")
         
         # Aggressive Cleanup: Deactivate everything first to ensure a clean UI
         db.execute(text("UPDATE services SET is_active = False"))
-        db.commit()
+
 
         # ------------------------------------------
         # 0. EXTREME AGGRESSIVE CLEANUP: Purge ALL Duplicates and Inactive Trash
@@ -259,7 +266,7 @@ def seed_lookups(db: Session):
         # We delete anything that contains "DUP" or is simply inactive and not needed.
         # This clears the database for a fresh sync.
         db.execute(text("DELETE FROM services WHERE service_name ILIKE '%[DUP]%' OR service_name ILIKE 'z_hidden%'"))
-        db.commit()
+
 
         for item in catalog_data:
             target_name = item["service_name"].strip()
@@ -300,6 +307,7 @@ def seed_lookups(db: Session):
         db.commit()
         print(">>> Permanent Duplication Cleanup complete.")
     except Exception as lock_err:
+        db.rollback()
         print(f">>> Catalog Sync Warning (Worker skipped lock): {lock_err}")
 
     # Seed Default Users (owner/staff)
@@ -597,7 +605,7 @@ def read_orders(db: Session = Depends(get_db)):
         joinedload(Order.status_logs).joinedload(StatusLog.user),
         joinedload(Order.payment),
         joinedload(Order.delivery),
-        joinedload(Order.items).joinedload(Item.conditions),
+        joinedload(Order.items),
         joinedload(Order.items).joinedload(Item.services)
     ).order_by(Order.created_at.desc()).all()
 
