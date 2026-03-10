@@ -244,6 +244,14 @@ def seed_lookups(db: Session):
         db.execute(text("UPDATE services SET is_active = False"))
         db.commit()
 
+        # ------------------------------------------
+        # 0. EXTREME AGGRESSIVE CLEANUP: Purge ALL Duplicates and Inactive Trash
+        # ------------------------------------------
+        # We delete anything that contains "DUP" or is simply inactive and not needed.
+        # This clears the database for a fresh sync.
+        db.execute(text("DELETE FROM services WHERE service_name ILIKE '%[DUP]%' OR service_name ILIKE 'z_hidden%'"))
+        db.commit()
+
         for item in catalog_data:
             target_name = item["service_name"].strip()
             
