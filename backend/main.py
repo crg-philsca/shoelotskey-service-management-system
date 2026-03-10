@@ -204,33 +204,54 @@ def seed_lookups(db: Session):
     # ------------------------------------------
     # 3. SERVICE CATALOG SYNC (Standardized Service List)
     # ------------------------------------------
-    # For Defense: We force a clean sync to ensure the dashboard matches the presentation script.
-    db.execute(text("DELETE FROM services"))
+    # For Defense: We perform a "Safe Sync" instead of DELETE to avoid Foreign Key violations with old orders.
+    print(">>> Syncing Complete Service Catalog (Safe Mode)...")
+    
+    # Optional: Soft-Reset by deactivating all services not in the master list
+    db.execute(text("UPDATE services SET is_active = False"))
     db.commit()
 
-    print(">>> Syncing Complete Service Catalog (Defense Mode)...")
-    catalog = [
+    # Special Handle: Rename Deep Cleaning to Color Renewal if it exists for continuity
+    dc = db.query(Service).filter(Service.service_name == "Deep Cleaning").first()
+    if dc:
+        dc.service_name = "Color Renewal"
+        dc.service_code = "CRN"
+        db.commit()
+
+    catalog_data = [
         # BASE SERVICES
-        Service(service_name="Basic Cleaning", base_price=325, category="base", duration_days=10, service_code="BCN"),
-        Service(service_name="Color Renewal", base_price=800, category="base", duration_days=15, service_code="CRN"),
-        Service(service_name="Full Reglue", base_price=250, category="base", duration_days=25, service_code="FRG"),
-        Service(service_name="Minor Reglue", base_price=150, category="base", duration_days=25, service_code="MRG"),
-        Service(service_name="Undersole", base_price=150, category="base", duration_days=20, service_code="USL"),
-        Service(service_name="Midsole", base_price=150, category="base", duration_days=20, service_code="MSL"),
-        Service(service_name="Minor Restoration", base_price=300, category="base", duration_days=25, service_code="MRS"),
-        Service(service_name="Minor Retouch", base_price=125, category="base", duration_days=5, service_code="MRT"),
-        Service(service_name="Add Glue Layer", base_price=100, category="base", duration_days=2, service_code="AGL"),
+        {"service_name": "Basic Cleaning", "base_price": 325, "category": "base", "duration_days": 10, "service_code": "BCN", "is_active": True},
+        {"service_name": "Color Renewal", "base_price": 800, "category": "base", "duration_days": 15, "service_code": "CRN", "is_active": True},
+        {"service_name": "Full Reglue", "base_price": 250, "category": "base", "duration_days": 25, "service_code": "FRG", "is_active": True},
+        {"service_name": "Minor Reglue", "base_price": 150, "category": "base", "duration_days": 25, "service_code": "MRG", "is_active": True},
+        {"service_name": "Undersole", "base_price": 150, "category": "base", "duration_days": 20, "service_code": "USL", "is_active": True},
+        {"service_name": "Midsole", "base_price": 150, "category": "base", "duration_days": 20, "service_code": "MSL", "is_active": True},
+        {"service_name": "Minor Restoration", "base_price": 300, "category": "base", "duration_days": 25, "service_code": "MRS", "is_active": True},
+        {"service_name": "Minor Retouch", "base_price": 125, "category": "base", "duration_days": 5, "service_code": "MRT", "is_active": True},
+        {"service_name": "Add Glue Layer", "base_price": 100, "category": "base", "duration_days": 2, "service_code": "AGL", "is_active": True},
         
         # ADD-ON SERVICES
-        Service(service_name="Unyellowing", base_price=125, category="addon", duration_days=5, service_code="UNY"),
-        Service(service_name="White Paint", base_price=150, category="addon", duration_days=0, service_code="WPT"),
+        {"service_name": "Unyellowing", "base_price": 125, "category": "addon", "duration_days": 5, "service_code": "UNY", "is_active": True},
+        {"service_name": "White Paint", "base_price": 150, "category": "addon", "duration_days": 0, "service_code": "WPT", "is_active": True},
         
         # PRIORITY FEES
-        Service(service_name="Rush Fee (Basic Cleaning)", base_price=150, category="priority", duration_days=-5, service_code="RFC", is_active=True),
-        Service(service_name="Rush Fee (Minor Reglue)", base_price=250, category="priority", duration_days=0, service_code="RFR", is_active=False),
-        Service(service_name="Rush Fee (Full Reglue)", base_price=250, category="priority", duration_days=0, service_code="RFF", is_active=False)
+        {"service_name": "Rush Fee (Basic Cleaning)", "base_price": 150, "category": "priority", "duration_days": -5, "service_code": "RFC", "is_active": True},
+        {"service_name": "Rush Fee (Minor Reglue)", "base_price": 250, "category": "priority", "duration_days": 0, "service_code": "RFR", "is_active": False},
+        {"service_name": "Rush Fee (Full Reglue)", "base_price": 250, "category": "priority", "duration_days": 0, "service_code": "RFF", "is_active": False}
     ]
-    db.add_all(catalog)
+
+    for item in catalog_data:
+        # Check if service exists by name to update, otherwise insert
+        existing = db.query(Service).filter(Service.service_name == item["service_name"]).first()
+        if existing:
+            existing.base_price = item["base_price"]
+            existing.category = item["category"]
+            existing.duration_days = item["duration_days"]
+            existing.service_code = item["service_code"]
+            existing.is_active = item["is_active"]
+        else:
+            db.add(Service(**item))
+    
     db.commit()
     print(">>> Catalog Sync complete.")
 
