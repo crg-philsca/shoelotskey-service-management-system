@@ -231,45 +231,53 @@ def seed_lookups(db: Session):
         {"service_name": "Rush Fee (Full Reglue)", "base_price": 250, "category": "priority", "duration_days": 0, "service_code": "RFF", "is_active": False}
     ]
 
-    # Aggressive Cleanup: Deactivate everything first to ensure a clean UI
-    db.execute(text("UPDATE services SET is_active = False"))
-    db.commit()
+    # ------------------------------------------
+    # 3. SERVICE CATALOG SYNC (Singleton Safe Sync)
+    # ------------------------------------------
+    # We use a PostgreSQL advisory lock (ID: 12345) to ensure ONLY ONE worker
+    # performs the sync during a multi-process Gunicorn boot.
+    try:
+        db.execute(text("SELECT pg_advisory_xact_lock(12345)"))
+        print(">>> Catalog Lock acquired. Porting master list...")
+        
+        # Aggressive Cleanup: Deactivate everything first to ensure a clean UI
+        db.execute(text("UPDATE services SET is_active = False"))
+        db.commit()
 
-    for item in catalog_data:
-        # Standardize matching: trim whitespace and lowercase
-        target_name = item["service_name"].strip()
-        
-        # Check for any existing services that match (including old Deep Cleaning names)
-        # We also check for 'Deep Cleaning' specifically if we are looking for 'Color Renewal'
-        if target_name == "Color Renewal":
-            matches = db.query(Service).filter(
-                (func.lower(Service.service_name) == "color renewal") | 
-                (func.lower(Service.service_name) == "deep cleaning")
-            ).all()
-        else:
-            matches = db.query(Service).filter(func.lower(Service.service_name) == target_name.lower()).all()
-        
-        if matches:
-            # Update the FIRST match as the primary ACTIVE one
-            primary = matches[0]
-            primary.service_name = target_name # Standardize casing
-            primary.base_price = item["base_price"]
-            primary.category = item["category"]
-            primary.duration_days = item["duration_days"]
-            primary.service_code = item["service_code"]
-            primary.is_active = item["is_active"]
+        for item in catalog_data:
+            target_name = item["service_name"].strip()
             
-            # Deactivate and RENAME all other matches to prevent UI duplication
-            for dup in matches[1:]:
-                dup.is_active = False
-                if not dup.service_name.startswith("[DUP]"):
-                    dup.service_name = f"[DUP] {dup.service_name}"
-        else:
-            # Not found at all, create it fresh
-            db.add(Service(**item))
-    
-    db.commit()
-    print(">>> Aggressive Catalog Sync complete (Duplicates Cleaned).")
+            # Legacy naming bridging (Deep Cleaning -> Color Renewal)
+            if target_name == "Color Renewal":
+                matches = db.query(Service).filter(
+                    (func.lower(Service.service_name) == "color renewal") | 
+                    (func.lower(Service.service_name) == "deep cleaning")
+                ).all()
+            else:
+                matches = db.query(Service).filter(func.lower(Service.service_name) == target_name.lower()).all()
+            
+            if matches:
+                # Update the PRIMARY match
+                primary = matches[0]
+                primary.service_name = target_name 
+                primary.base_price = item["base_price"]
+                primary.category = item["category"]
+                primary.duration_days = item["duration_days"]
+                primary.service_code = item["service_code"]
+                primary.is_active = item["is_active"]
+                
+                # Permanently hide and rename all other duplicates
+                for dup in matches[1:]:
+                    dup.is_active = False
+                    if not dup.service_name.startswith("[DUP]"):
+                        dup.service_name = f"[DUP] {dup.service_name}"
+            else:
+                db.add(Service(**item))
+        
+        db.commit()
+        print(">>> Aggressive Catalog Sync complete (Duplicates Cleaned).")
+    except Exception as lock_err:
+        print(f">>> Catalog Sync Warning (Worker skipped lock): {lock_err}")
 
     # Seed Default Users (owner/staff)
     if db.query(User).count() == 0:
