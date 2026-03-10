@@ -252,12 +252,12 @@ def seed_lookups(db: Session):
                 matches = db.query(Service).filter(
                     (func.lower(Service.service_name) == "color renewal") | 
                     (func.lower(Service.service_name) == "deep cleaning")
-                ).all()
+                ).order_by(Service.service_id).all()
             else:
-                matches = db.query(Service).filter(func.lower(Service.service_name) == target_name.lower()).all()
+                matches = db.query(Service).filter(func.lower(Service.service_name) == target_name.lower()).order_by(Service.service_id).all()
             
             if matches:
-                # Update the PRIMARY match
+                # Update the PRIMARY match (the oldest one to preserve ID links if any)
                 primary = matches[0]
                 primary.service_name = target_name 
                 primary.base_price = item["base_price"]
@@ -266,16 +266,21 @@ def seed_lookups(db: Session):
                 primary.service_code = item["service_code"]
                 primary.is_active = item["is_active"]
                 
-                # Permanently hide and rename all other duplicates
+                # PERMANENTLY DELETE all other duplicates to clean the database
                 for dup in matches[1:]:
-                    dup.is_active = False
-                    if not dup.service_name.startswith("[DUP]"):
-                        dup.service_name = f"[DUP] {dup.service_name}"
+                    try:
+                        db.delete(dup)
+                        db.flush() # Try to delete immediately
+                    except Exception:
+                        # If a duplicate is referenced by an order, we MUST hide it instead
+                        db.rollback()
+                        dup.is_active = False
+                        dup.service_name = f"z_hidden_{dup.service_id}" # Move to bottom
             else:
                 db.add(Service(**item))
         
         db.commit()
-        print(">>> Aggressive Catalog Sync complete (Duplicates Cleaned).")
+        print(">>> Permanent Duplication Cleanup complete.")
     except Exception as lock_err:
         print(f">>> Catalog Sync Warning (Worker skipped lock): {lock_err}")
 
