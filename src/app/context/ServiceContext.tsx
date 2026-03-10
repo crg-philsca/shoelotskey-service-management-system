@@ -7,6 +7,7 @@ interface ServiceContextType {
     addService: (service: Service) => void;
     updateService: (id: string, updates: Partial<Service>) => void;
     deleteService: (id: string) => void;
+    reorderServices: (newOrder: Service[]) => void;
 }
 
 const ServiceContext = createContext<ServiceContextType | undefined>(undefined);
@@ -133,8 +134,23 @@ export function ServiceProvider({ children }: { children: ReactNode }) {
             });
     };
 
+    const reorderServices = (newOrder: Service[]) => {
+        // Optimistically update local state immediately
+        setServices(newOrder);
+
+        // Map through all items and update their sort_order in parallel on the backend
+        newOrder.forEach((svc, index) => {
+            const payload = { sort_order: index + 1 };
+            fetch(`${API_BASE}/services/${svc.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).catch(err => console.error(`Failed to update sort order for ${svc.name}`, err));
+        });
+    };
+
     return (
-        <ServiceContext.Provider value={{ services, addService, updateService, deleteService }}>
+        <ServiceContext.Provider value={{ services, addService, updateService, deleteService, reorderServices }}>
             {children}
         </ServiceContext.Provider>
     );

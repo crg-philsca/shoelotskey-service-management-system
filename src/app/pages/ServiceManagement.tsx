@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
-import { PlusCircle, Edit, Trash, History } from 'lucide-react';
+import { PlusCircle, Edit, Trash, History, GripVertical } from 'lucide-react';
+import { Reorder } from 'motion/react';
 import ServiceModal from '@/app/components/ServiceModal';
 
 import { Service } from '@/app/types';
@@ -14,7 +15,7 @@ interface ServiceManagementProps {
 }
 
 export default function ServiceManagement({ onSetHeaderActionRight }: ServiceManagementProps) {
-  const { services, addService, updateService, deleteService } = useServices();
+  const { services, addService, updateService, deleteService, reorderServices } = useServices();
   const [serviceModalOpen, setServiceModalOpen] = useState(false); // Renamed from isModalOpen
   const [selectedService, setSelectedService] = useState<Service | null>(null); // Renamed from editingService
   const navigate = useNavigate();
@@ -67,6 +68,16 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
     }
   };
 
+  // Helper to handle category-specific reordering
+  const handleReorder = (category: string, reorderedInCategory: Service[]) => {
+    const otherCategories = services.filter(s => s.category !== category);
+    reorderServices([...otherCategories, ...reorderedInCategory]);
+  };
+
+  const baseServices = services.filter(s => s.category === 'base' && s.active === true && !s.name.startsWith('[') && !s.name.startsWith('z_')).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+  const priorityServices = services.filter(s => s.category === 'priority' && s.active === true && !s.name.includes('Premium') && !s.name.startsWith('[') && !s.name.startsWith('z_')).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+  const addonServices = services.filter(s => s.category === 'addon' && s.active === true && !s.name.startsWith('[') && !s.name.startsWith('z_')).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -76,19 +87,17 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
               <CardTitle className="text-base font-black text-gray-900 uppercase">Base Services</CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
-              <div className="space-y-3 -mt-2 pr-1 max-h-[240px] overflow-y-scroll custom-scrollbar">
-                {services.filter(s => 
-                  s.category === 'base' && 
-                  s.active === true && 
-                  !s.name.startsWith('[') && 
-                  !s.name.startsWith('z_')
-                ).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0)).map(service => (
-                  <div key={service.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border-none gap-3">
-                    <div className="min-w-0">
-                      <p className="font-bold text-gray-900 text-[13px] leading-tight">{service.name}</p>
-                      <p className="text-[11px] font-black text-red-600 mt-0">{'\u20B1'}{service.price.toLocaleString()}</p>
+              <Reorder.Group axis="y" values={baseServices} onReorder={(newOrder) => handleReorder('base', newOrder)} className="space-y-3 -mt-2 pr-1 max-h-[240px] overflow-y-scroll custom-scrollbar list-none p-0">
+                {baseServices.map(service => (
+                  <Reorder.Item key={service.id} value={service} className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border-none gap-3 cursor-grab active:cursor-grabbing">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <GripVertical size={14} className="text-gray-400 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="font-bold text-gray-900 text-[13px] leading-tight truncate">{service.name}</p>
+                        <p className="text-[11px] font-black text-red-600 mt-0">{'\u20B1'}{service.price.toLocaleString()}</p>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 shrink-0">
                       <Badge className={`${service.active ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'} text-[9px] font-bold uppercase tracking-wider shadow-none border-none`}>
                         {service.active ? 'Active' : 'Inactive'}
                       </Badge>
@@ -101,9 +110,9 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
                         </Button>
                       </div>
                     </div>
-                  </div>
+                  </Reorder.Item>
                 ))}
-              </div>
+              </Reorder.Group>
             </CardContent>
           </Card>
 
@@ -112,20 +121,17 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
               <CardTitle className="text-base font-black text-gray-900 uppercase">Priority Fees</CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
-              <div className="space-y-3 -mt-2 pr-1 max-h-[180px] overflow-y-scroll custom-scrollbar">
-                {services.filter(s => 
-                  s.category === 'priority' && 
-                  s.active === true && 
-                  !s.name.includes('Premium') &&
-                  !s.name.startsWith('[') && 
-                  !s.name.startsWith('z_')
-                ).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0)).map(service => (
-                  <div key={service.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border-none gap-3">
-                    <div className="min-w-0">
-                      <p className="font-bold text-gray-900 text-[13px] leading-tight">{service.name}</p>
-                      <p className="text-[11px] font-black text-red-600 mt-0.5">{'\u20B1'}{service.price.toLocaleString()}</p>
+              <Reorder.Group axis="y" values={priorityServices} onReorder={(newOrder) => handleReorder('priority', newOrder)} className="space-y-3 -mt-2 pr-1 max-h-[180px] overflow-y-scroll custom-scrollbar list-none p-0">
+                {priorityServices.map(service => (
+                  <Reorder.Item key={service.id} value={service} className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border-none gap-3 cursor-grab active:cursor-grabbing">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <GripVertical size={14} className="text-gray-400 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="font-bold text-gray-900 text-[13px] leading-tight truncate">{service.name}</p>
+                        <p className="text-[11px] font-black text-red-600 mt-0.5">{'\u20B1'}{service.price.toLocaleString()}</p>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 shrink-0">
                       <Badge className={`${service.active ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'} text-[9px] font-bold uppercase tracking-wider shadow-none border-none`}>
                         {service.active ? 'Active' : 'Inactive'}
                       </Badge>
@@ -138,9 +144,9 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
                         </Button>
                       </div>
                     </div>
-                  </div>
+                  </Reorder.Item>
                 ))}
-              </div>
+              </Reorder.Group>
             </CardContent>
           </Card>
         </div>
@@ -152,19 +158,17 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
             <CardTitle className="text-base font-black text-gray-900 uppercase">Add-On Services</CardTitle>
           </CardHeader>
           <CardContent className="pt-0 h-[calc(100%-48px)]">
-            <div className="space-y-3 -mt-2 pr-1 max-h-[440px] overflow-y-scroll custom-scrollbar">
-              {services.filter(s => 
-                s.category === 'addon' && 
-                s.active === true && 
-                !s.name.startsWith('[') && 
-                !s.name.startsWith('z_')
-              ).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0)).map(service => (
-                <div key={service.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border-none gap-3">
-                  <div className="min-w-0">
-                    <p className="font-bold text-gray-900 text-[13px] leading-tight">{service.name}</p>
-                    <p className="text-[11px] font-black text-red-600 mt-0.5">{'\u20B1'}{service.price.toLocaleString()}</p>
+            <Reorder.Group axis="y" values={addonServices} onReorder={(newOrder) => handleReorder('addon', newOrder)} className="space-y-3 -mt-2 pr-1 max-h-[440px] overflow-y-scroll custom-scrollbar list-none p-0">
+              {addonServices.map(service => (
+                <Reorder.Item key={service.id} value={service} className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border-none gap-3 cursor-grab active:cursor-grabbing">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <GripVertical size={14} className="text-gray-400 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="font-bold text-gray-900 text-[13px] leading-tight truncate">{service.name}</p>
+                      <p className="text-[11px] font-black text-red-600 mt-0.5">{'\u20B1'}{service.price.toLocaleString()}</p>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0">
                     <Badge className={`${service.active ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'} text-[9px] font-bold uppercase tracking-wider shadow-none border-none`}>
                       {service.active ? 'Active' : 'Inactive'}
                     </Badge>
@@ -177,9 +181,9 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
                       </Button>
                     </div>
                   </div>
-                </div>
+                </Reorder.Item>
               ))}
-            </div>
+            </Reorder.Group>
           </CardContent>
         </Card>
       </div>
