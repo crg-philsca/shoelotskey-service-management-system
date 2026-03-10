@@ -11,27 +11,38 @@ from sqlalchemy.orm import sessionmaker
 
 # 1. DATABASE CONNECTION URL
 # Automatically handles Heroku (DATABASE_URL) or fallback to local SQLite for deployment ease.
-# Note: For production MySQL, set DATABASE_URL=mysql+pymysql://root:@localhost/shoelotskey_db
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 if DATABASE_URL:
-    # Heroku URLs start with 'postgres://', 
+    # Heroku URLs start with 'postgres://',
     # but SQLAlchemy 1.4+ requires 'postgresql://'
     if DATABASE_URL.startswith("postgres://"):
         DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+    # Heroku PostgreSQL REQUIRES SSL - append sslmode=require if not already set
+    if "sslmode" not in DATABASE_URL:
+        separator = "&" if "?" in DATABASE_URL else "?"
+        DATABASE_URL = f"{DATABASE_URL}{separator}sslmode=require"
 else:
     # Fallback to local SQLite for development
     DATABASE_URL = "sqlite:///./shoelotskey.db"
 
-# SQLite specific config (check_same_thread) is required for multithreaded fastAPI access
+# 2. ENGINE CONFIGURATION
 is_sqlite = DATABASE_URL.startswith("sqlite")
-connect_args = {"check_same_thread": False} if is_sqlite else {}
+
+connect_args = {}
+if is_sqlite:
+    connect_args = {"check_same_thread": False}
+else:
+    # This forces the Python backend to use SSL just like DBeaver
+    connect_args = {"sslmode": "require"}
 
 engine = create_engine(
     DATABASE_URL,
     connect_args=connect_args,
     pool_pre_ping=True
 )
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_db():

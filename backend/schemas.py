@@ -1,41 +1,60 @@
-"""
-DATA SCHEMAS - PYDANTIC MODELS
-==============================
-This module handles data validation, serialization, and type-hinting.
-It defines the contracts between the React Frontend and Python Backend.
-"""
-
-from pydantic import BaseModel
-from typing import List, Optional, Any, Dict
-from datetime import datetime
-from decimal import Decimal
-
 # ==========================================
 # 1. LOOKUP SCHEMAS
 # ==========================================
 
 class RoleSchema(BaseModel):
-    """Schema for user roles."""
     role_id: Optional[int] = None
     role_name: str
     class Config:
         from_attributes = True
 
 class StatusSchema(BaseModel):
-    """Schema for order status (e.g., Pending)."""
     status_id: Optional[int] = None
     status_name: str
     class Config:
         from_attributes = True
 
+class ServiceCategorySchema(BaseModel):
+    category_id: Optional[int] = None
+    category_name: str
+    class Config:
+        from_attributes = True
 
+class ConditionSchema(BaseModel):
+    condition_id: Optional[int] = None
+    condition_name: str
+    class Config:
+        from_attributes = True
+
+class PaymentMethodSchema(BaseModel):
+    method_id: Optional[int] = None
+    method_name: str
+    class Config:
+        from_attributes = True
+
+class PaymentStatusSchema(BaseModel):
+    p_status_id: Optional[int] = None
+    status_name: str
+    class Config:
+        from_attributes = True
+
+class ShippingPreferenceSchema(BaseModel):
+    pref_id: Optional[int] = None
+    pref_name: str
+    class Config:
+        from_attributes = True
+
+class PriorityLevelSchema(BaseModel):
+    priority_id: Optional[int] = None
+    priority_name: str
+    class Config:
+        from_attributes = True
 
 # ==========================================
 # 2. USERS & CUSTOMERS
 # ==========================================
 
 class UserSchema(BaseModel):
-    """Detailed User information for session management."""
     user_id: Optional[int] = None
     username: str
     email: str
@@ -47,7 +66,6 @@ class UserSchema(BaseModel):
         from_attributes = True
 
 class UserCreateSchema(BaseModel):
-    """Schema for creating a new user."""
     username: str
     email: str
     password: str
@@ -55,7 +73,6 @@ class UserCreateSchema(BaseModel):
     is_active: bool = True
 
 class UserUpdateSchema(BaseModel):
-    """Schema for updating an existing user."""
     username: Optional[str] = None
     email: Optional[str] = None
     password: Optional[str] = None
@@ -63,7 +80,6 @@ class UserUpdateSchema(BaseModel):
     is_active: Optional[bool] = None
 
 class CustomerSchema(BaseModel):
-    """Customer profile information."""
     customer_id: Optional[int] = None
     customer_name: str
     contact_number: str
@@ -76,21 +92,21 @@ class CustomerSchema(BaseModel):
 # ==========================================
 
 class ServiceSchema(BaseModel):
-    """Available cleaning/repair services."""
     service_id: Optional[int] = None
     service_name: str
     base_price: Decimal
-    category: str = 'base'
+    category_id: int
     description: Optional[str] = None
     duration_days: int = 0
     service_code: Optional[str] = None
     is_active: bool = True
     sort_order: int = 0
+    
+    category: Optional[ServiceCategorySchema] = None
     class Config:
         from_attributes = True
 
 class ExpenseSchema(BaseModel):
-    """Business overhead logging."""
     expense_id: Optional[int] = None
     amount: Decimal
     description: Optional[str] = None
@@ -105,7 +121,6 @@ class ExpenseSchema(BaseModel):
 # ==========================================
 
 class ItemSchema(BaseModel):
-    """Individual shoe details within an order."""
     item_id: Optional[int] = None
     order_id: Optional[int] = None
     brand: Optional[str] = None
@@ -113,32 +128,30 @@ class ItemSchema(BaseModel):
     material: Optional[str] = None
     quantity: int = 1
     item_notes: Optional[str] = None
-    # Denormalized Conditions
-    cond_scratches: bool = False
-    cond_yellowing: bool = False
-    cond_ripsholes: bool = False
-    cond_deepstains: bool = False
-    cond_soleseparation: bool = False
-    cond_wornout: bool = False
     
     services: List[ServiceSchema] = []
+    conditions: List[ConditionSchema] = []
     class Config:
         from_attributes = True
 
 class PaymentSchema(BaseModel):
     payment_id: Optional[int] = None
-    payment_method: str = 'cash'
-    payment_status: str = 'fully-paid'
+    method_id: int
+    status_id: int
     amount_received: Decimal = 0.0
     balance: Decimal = 0.0
     reference_no: Optional[str] = None
     deposit_amount: Decimal = 0.0
+    created_at: Optional[datetime] = None
+    
+    method: Optional[PaymentMethodSchema] = None
+    p_status: Optional[PaymentStatusSchema] = None
     class Config:
         from_attributes = True
 
 class DeliverySchema(BaseModel):
     delivery_id: Optional[int] = None
-    shipping_preference: str = 'pickup'
+    pref_id: int
     delivery_address: Optional[str] = None
     delivery_courier: Optional[str] = None
     release_time: Optional[str] = None
@@ -146,16 +159,17 @@ class DeliverySchema(BaseModel):
     city: Optional[str] = None
     barangay: Optional[str] = None
     zip_code: Optional[str] = None
+    
+    preference: Optional[ShippingPreferenceSchema] = None
     class Config:
         from_attributes = True
 
 class OrderSchema(BaseModel):
-    """Comprehensive Order Header with nested Items and Customer data."""
     order_id: Optional[int] = None
     order_number: str
     customer_id: int
     status_id: int
-    priority: str = 'Regular'
+    priority_id: int
     grand_total: Decimal
     
     expected_at: datetime
@@ -165,16 +179,14 @@ class OrderSchema(BaseModel):
     updated_at: Optional[datetime] = None
     user_id: int
     
-    # 3NF Relationship hydration
     customer: Optional[CustomerSchema] = None
     status: Optional[StatusSchema] = None
+    priority: Optional[PriorityLevelSchema] = None
     processor: Optional[UserSchema] = None
-    payment: Optional[PaymentSchema] = None
+    payments: List[PaymentSchema] = []
     delivery: Optional[DeliverySchema] = None
     items: List[ItemSchema] = []
     status_logs: List['StatusLogSchema'] = []
-
-
 
     class Config:
         from_attributes = True
@@ -184,14 +196,12 @@ class OrderSchema(BaseModel):
 # ==========================================
 
 class StatusLogSchema(BaseModel):
-    """Historical trace of order status changes."""
     status_log_id: Optional[int] = None
     order_id: int
     status_id: int
     user_id: int
     changed_at: datetime
     
-    # Relationships
     status: Optional[StatusSchema] = None
     user: Optional[UserSchema] = None
 
@@ -199,7 +209,6 @@ class StatusLogSchema(BaseModel):
         from_attributes = True
 
 class AuditLogSchema(BaseModel):
-    """Generic audit trail entry."""
     audit_log_id: Optional[int] = None
     user_id: int
     action_type: str
@@ -216,15 +225,12 @@ class AuditLogSchema(BaseModel):
 # ==========================================
 
 class LoginRequest(BaseModel):
-    """Payload for user authentication."""
     username: str
     password: str
 
 class ForgotPasswordRequest(BaseModel):
-    """Payload for password recovery."""
     email: str
 
 class ResetPasswordRequest(BaseModel):
-    """Payload for password update."""
     token: str
     new_password: str

@@ -28,7 +28,8 @@ from fastapi.responses import FileResponse, JSONResponse
 from models import (
     Base, Order, Item, Service, Expense, StatusLog, 
     User, Customer, Role, Status, AuditLog, ItemServiceMapping,
-    Payment, Delivery
+    Payment, Delivery, ServiceCategory, PriorityLevel, Condition,
+    ItemConditionMapping, ShippingPreference, PaymentMethod, PaymentStatus
 )
 from schemas import (
     OrderSchema, ServiceSchema, ExpenseSchema, UserSchema, LoginRequest, 
@@ -36,6 +37,7 @@ from schemas import (
     ItemSchema, PaymentSchema, DeliverySchema, UserCreateSchema, UserUpdateSchema
 )
 from database import engine, get_db, SessionLocal
+from ml_engine import predictor
 
 # ==========================================
 # 0. INITIALIZATION
@@ -172,6 +174,45 @@ def on_startup():
             print(f">>> Inspector Context - Available Tables: {inspector.get_table_names()}")
         except: pass
     
+    # ----------------------------------------------------------------
+    # 5. LOOKUP VALUE MIGRATION (Fix old Title-Case -> lowercase)
+    # Renames existing DB values to match frontend types exactly.
+    # Safe to run multiple times - WHERE clause prevents double-updates.
+    # ----------------------------------------------------------------
+    try:
+        print(">>> Migration: Normalizing lookup values to match frontend types...")
+        with engine.begin() as conn:
+
+            # STATUS: 'Pending' -> 'new-order', 'In Progress' -> 'on-going', etc.
+            conn.execute(text("UPDATE status SET status_name = 'new-order'   WHERE status_name = 'Pending'"))
+            conn.execute(text("UPDATE status SET status_name = 'on-going'    WHERE status_name = 'In Progress'"))
+            conn.execute(text("UPDATE status SET status_name = 'for-release' WHERE status_name = 'Completed'"))
+            conn.execute(text("UPDATE status SET status_name = 'claimed'     WHERE status_name = 'Claimed'"))
+            conn.execute(text("UPDATE status SET status_name = 'cancelled'   WHERE status_name = 'Cancelled'"))
+
+            # PRIORITY: 'Regular' -> 'regular', 'Rush' -> 'rush', 'Premium' -> 'premium'
+            conn.execute(text("UPDATE priority_levels SET priority_name = 'regular' WHERE priority_name = 'Regular'"))
+            conn.execute(text("UPDATE priority_levels SET priority_name = 'rush'    WHERE priority_name = 'Rush'"))
+            conn.execute(text("UPDATE priority_levels SET priority_name = 'premium' WHERE priority_name = 'Premium'"))
+
+            # PAYMENT METHODS: 'Cash' -> 'cash', 'GCash' -> 'gcash', 'Bank Transfer' -> 'bank-transfer'
+            conn.execute(text("UPDATE payment_methods SET method_name = 'cash'          WHERE method_name = 'Cash'"))
+            conn.execute(text("UPDATE payment_methods SET method_name = 'gcash'         WHERE method_name = 'GCash'"))
+            conn.execute(text("UPDATE payment_methods SET method_name = 'bank-transfer' WHERE method_name = 'Bank Transfer'"))
+
+            # PAYMENT STATUSES: 'Fully Paid' -> 'fully-paid', 'Downpayment' -> 'downpayment'
+            conn.execute(text("UPDATE payment_statuses SET status_name = 'fully-paid'  WHERE status_name = 'Fully Paid'"))
+            conn.execute(text("UPDATE payment_statuses SET status_name = 'downpayment' WHERE status_name = 'Downpayment'"))
+            conn.execute(text("UPDATE payment_statuses SET status_name = 'pending'     WHERE status_name = 'Pending'"))
+
+            # SHIPPING: 'Pickup' -> 'pickup', 'Delivery' -> 'delivery'
+            conn.execute(text("UPDATE shipping_preferences SET pref_name = 'pickup'   WHERE pref_name = 'Pickup'"))
+            conn.execute(text("UPDATE shipping_preferences SET pref_name = 'delivery' WHERE pref_name = 'Delivery'"))
+
+        print(">>> Migration: Lookup values normalized successfully.")
+    except Exception as e:
+        print(f">>> Migration Warning: Lookup value update failed (table may not exist yet): {e}")
+
     # Seed lookup data
     db = SessionLocal()
     try:
@@ -179,6 +220,7 @@ def on_startup():
         print(">>> System Boot: Database ready.")
     finally:
         db.close()
+
 
 # ==========================================
 # 1. DATA SEEDING (S.O.L.I.D: Single Responsibility)
@@ -195,17 +237,53 @@ def seed_lookups(db: Session):
         db.add_all(roles)
         db.commit()
 
-    # Seed Statuses
+    # Seed Statuses — must match frontend JobStatus exactly
     if db.query(Status).count() == 0:
         print(">>> Seeding Statuses...")
         statuses = [
-            Status(status_name="Pending"),
-            Status(status_name="In Progress"),
-            Status(status_name="Completed"),
-            Status(status_name="Cancelled"),
-            Status(status_name="Claimed")
+            Status(status_name="new-order"),
+            Status(status_name="on-going"),
+            Status(status_name="for-release"),
+            Status(status_name="claimed"),
+            Status(status_name="cancelled")
         ]
         db.add_all(statuses)
+        db.commit()
+
+    # Seed Service Categories
+    if db.query(ServiceCategory).count() == 0:
+        print(">>> Seeding Service Categories...")
+        db.add_all([ServiceCategory(category_name=c) for c in ['base', 'addon', 'priority']])
+        db.commit()
+
+    # Seed Conditions
+    if db.query(Condition).count() == 0:
+        print(">>> Seeding Conditions...")
+        db.add_all([Condition(condition_name=c) for c in ['Scratches', 'Yellowing', 'Rips/Holes', 'Deep Stains', 'Sole Separation', 'Worn Out']])
+        db.commit()
+
+    # Seed Payment Methods — must match frontend: 'cash', 'gcash', 'bank-transfer'
+    if db.query(PaymentMethod).count() == 0:
+        print(">>> Seeding Payment Methods...")
+        db.add_all([PaymentMethod(method_name=m) for m in ['cash', 'gcash', 'bank-transfer']])
+        db.commit()
+
+    # Seed Payment Statuses — must match frontend: 'fully-paid', 'downpayment'
+    if db.query(PaymentStatus).count() == 0:
+        print(">>> Seeding Payment Statuses...")
+        db.add_all([PaymentStatus(status_name=s) for s in ['fully-paid', 'downpayment', 'pending']])
+        db.commit()
+
+    # Seed Shipping Preferences — must match frontend: 'pickup', 'delivery'
+    if db.query(ShippingPreference).count() == 0:
+        print(">>> Seeding Shipping Preferences...")
+        db.add_all([ShippingPreference(pref_name=p) for p in ['pickup', 'delivery']])
+        db.commit()
+
+    # Seed Priority Levels — must match frontend: 'regular', 'rush', 'premium'
+    if db.query(PriorityLevel).count() == 0:
+        print(">>> Seeding Priority Levels...")
+        db.add_all([PriorityLevel(priority_name=p) for p in ['regular', 'rush', 'premium']])
         db.commit()
 
 
@@ -243,69 +321,36 @@ def seed_lookups(db: Session):
     # ------------------------------------------
     # 3. SERVICE CATALOG SYNC (Singleton Safe Sync)
     # ------------------------------------------
-    # We use a PostgreSQL advisory lock (ID: 12345) to ensure ONLY ONE worker
-    # performs the sync during a multi-process Gunicorn boot.
-    # performs the sync during a multi-process Gunicorn boot.
+    cat_map = {c.category_name: c.category_id for c in db.query(ServiceCategory).all()}
+    
     try:
-        # Use a transaction-level lock (pg_try_advisory_xact_lock) which IS released on commit/rollback.
-        # This will return True for the first worker and False for all others.
-        lock_acquired = db.execute(text("SELECT pg_try_advisory_xact_lock(12345)")).scalar()
-        if not lock_acquired:
-            print(">>> Catalog Sync: Resource busy (Another worker is syncing). Skipping.")
-            return
+        if db.execute(text("SELECT pg_try_advisory_xact_lock(12345)")).scalar():
+            print(">>> Catalog Sync: Lock acquired. Updating service table...")
+            # Deactivate everything first to ensure a clean UI
+            db.execute(text("UPDATE services SET is_active = False"))
+            # Purge ALL Duplicates and Inactive Trash
+            db.execute(text("DELETE FROM services WHERE service_name ILIKE '%[DUP]%' OR service_name ILIKE 'z_hidden%'"))
 
-        print(">>> Catalog Lock acquired. Porting master list...")
-        
-        # Aggressive Cleanup: Deactivate everything first to ensure a clean UI
-        db.execute(text("UPDATE services SET is_active = False"))
-
-
-        # ------------------------------------------
-        # 0. EXTREME AGGRESSIVE CLEANUP: Purge ALL Duplicates and Inactive Trash
-        # ------------------------------------------
-        # We delete anything that contains "DUP" or is simply inactive and not needed.
-        # This clears the database for a fresh sync.
-        db.execute(text("DELETE FROM services WHERE service_name ILIKE '%[DUP]%' OR service_name ILIKE 'z_hidden%'"))
-
-
-        for item in catalog_data:
-            target_name = item["service_name"].strip()
-            
-            # Legacy naming bridging (Deep Cleaning -> Color Renewal)
-            if target_name == "Color Renewal":
-                matches = db.query(Service).filter(
-                    (func.lower(Service.service_name) == "color renewal") | 
-                    (func.lower(Service.service_name) == "deep cleaning")
-                ).order_by(Service.service_id).all()
-            else:
-                matches = db.query(Service).filter(func.lower(Service.service_name) == target_name.lower()).order_by(Service.service_id).all()
-            
-            if matches:
-                # Update the PRIMARY match (the oldest one to preserve ID links if any)
-                primary = matches[0]
-                primary.service_name = target_name 
-                primary.base_price = item["base_price"]
-                primary.category = item["category"]
-                primary.duration_days = item["duration_days"]
-                primary.service_code = item["service_code"]
-                primary.is_active = item["is_active"]
-                primary.sort_order = item["sort_order"]
+            for item in catalog_data:
+                target_name = item.get("service_name").strip()
+                cat_name = item.pop("category", "base")
+                item["category_id"] = cat_map.get(cat_name, cat_map.get("base"))
                 
-                # PERMANENTLY DELETE all other duplicates to clean the database
-                for dup in matches[1:]:
-                    try:
-                        db.delete(dup)
-                        db.flush() # Try to delete immediately
-                    except Exception:
-                        # If a duplicate is referenced by an order, we MUST hide it instead
-                        db.rollback()
-                        dup.is_active = False
-                        dup.service_name = f"z_hidden_{dup.service_id}" # Move to bottom
-            else:
-                db.add(Service(**item))
-        
-        db.commit()
-        print(">>> Permanent Duplication Cleanup complete.")
+                # Check for existing service
+                db_service = db.query(Service).filter(func.lower(Service.service_name) == target_name.lower()).first()
+                if db_service:
+                    db_service.service_name = target_name
+                    db_service.base_price = item["base_price"]
+                    db_service.category_id = item["category_id"]
+                    db_service.duration_days = item["duration_days"]
+                    db_service.service_code = item["service_code"]
+                    db_service.is_active = item["is_active"]
+                    db_service.sort_order = item["sort_order"]
+                else:
+                    db.add(Service(**item))
+            
+            db.commit()
+            print(">>> Catalog Sync: Complete.")
     except Exception as lock_err:
         db.rollback()
         print(f">>> Catalog Sync Warning (Worker skipped lock): {lock_err}")
@@ -505,6 +550,40 @@ async def reset_password(request: ResetPasswordRequest, db: Session = Depends(ge
     return {"message": "Password updated successfully"}
 
 # ==========================================
+# 2.2 MACHINE LEARNING & PREDICTION
+# ==========================================
+
+@app.post("/api/predict")
+async def get_prediction(order_data: Dict[str, Any], db: Session = Depends(get_db)):
+    """
+    ML Endpont: Predicts completion date based on order complexity.
+    Returns: Predicted date and metadata.
+    """
+    print(f"[ML] Predicting completion for new draft...")
+    try:
+        predicted_dt = predictor.predict_completion(db, order_data)
+        return {
+            "predicted_date": predicted_dt.isoformat(),
+            "predicted_days": (predicted_dt - datetime.now()).days,
+            "status": "success",
+            "engine": "Shoelotskey SPE v1.0"
+        }
+    except Exception as e:
+        print(f"[ML ERROR] {e}")
+        # Return a safe fallback (10 days)
+        fallback = datetime.now() + timedelta(days=10)
+        return {"predicted_date": fallback.isoformat(), "status": "fallback", "error": str(e)}
+
+@app.post("/api/ml/train")
+def train_model(db: Session = Depends(get_db)):
+    """Triggers retraining of the ML model based on history."""
+    success = predictor.train_from_history(db)
+    if success:
+        return {"message": "Model retrained successfully"}
+    else:
+        return {"message": "Retraining skipped - insufficient historical data"}
+
+# ==========================================
 # 2.5 USER MANAGEMENT
 # ==========================================
 
@@ -595,18 +674,20 @@ def delete_user(user_id: int, db: Session = Depends(get_db)):
 
 @app.get("/api/orders", response_model=List[OrderSchema])
 def read_orders(db: Session = Depends(get_db)):
-    """Retrieves all orders with full 3NF hydration (Customer, Items, Status)."""
+    """Retrieves all orders with full 3NF hydration (Customer, Items, Status, Payments, Delivery)."""
     print("[QUERY] Fetching Order history...")
     orders = db.query(Order).options(
-        joinedload(Order.customer), 
-        joinedload(Order.status), 
+        joinedload(Order.customer),
+        joinedload(Order.status),
+        joinedload(Order.priority),
         joinedload(Order.processor),
         joinedload(Order.status_logs).joinedload(StatusLog.status),
         joinedload(Order.status_logs).joinedload(StatusLog.user),
-        joinedload(Order.payment),
-        joinedload(Order.delivery),
-        joinedload(Order.items),
-        joinedload(Order.items).joinedload(Item.services)
+        joinedload(Order.payments).joinedload(Payment.method),
+        joinedload(Order.payments).joinedload(Payment.p_status),
+        joinedload(Order.delivery).joinedload(Delivery.preference),
+        joinedload(Order.items).joinedload(Item.services).joinedload(Service.category),
+        joinedload(Order.items).joinedload(Item.conditions),
     ).order_by(Order.created_at.desc()).all()
 
     return orders
@@ -638,37 +719,44 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db)):
             db.flush()
 
         # Step 2: Resolve Order Status
-        status_name = order_data.get("status", "Pending")
-        # Map frontend 'new-order' to backend 'Pending'
-        status_map = {"new-order": "Pending", "on-going": "In Progress", "for-release": "Completed", "claimed": "Claimed"}
-        mapped_status = status_map.get(status_name, "Pending")
-
+        # Frontend sends: 'new-order', 'on-going', 'for-release', 'claimed'
+        # DB now stores these exact values (they already match)
+        status_name = order_data.get("status", "new-order")
+        # Strip any legacy capitalized values just in case
+        status_map = {
+            "new-order": "new-order", "on-going": "on-going",
+            "for-release": "for-release", "claimed": "claimed",
+            # Legacy fallbacks
+            "Pending": "new-order", "In Progress": "on-going",
+            "Completed": "for-release", "Claimed": "claimed"
+        }
+        mapped_status = status_map.get(status_name, "new-order")
         db_status = db.query(Status).filter(Status.status_name == mapped_status).first()
         if not db_status:
             db_status = db.query(Status).first()
 
         # Step 3: Persistence - Order Header
-        priority_val = str(order_data.get("priorityLevel", "Regular")).capitalize()
-        if priority_val not in ["Regular", "Rush", "Premium"]: priority_val = "Regular"
+        # DB stores lowercase: 'regular', 'rush', 'premium'
+        p_val = str(order_data.get("priorityLevel", "regular")).lower()
+        if p_val not in ["regular", "rush", "premium"]: p_val = "regular"
+        db_prio = db.query(PriorityLevel).filter(PriorityLevel.priority_name == p_val).first() or db.query(PriorityLevel).first()
 
-        # Predicted Completion Handling (ML Output Integration)
-        # We parse the ISO date provided by the frontend's ML-based estimation logic.
+        # Predicted Completion Handling (Integrated ML)
         expected_iso = order_data.get("predictedCompletionDate")
         if expected_iso:
             try:
-                # Normalizing UTC format for DB persistence
                 expected_dt = datetime.fromisoformat(expected_iso.replace('Z', '+00:00'))
             except Exception:
-                # Safety fallback to default 7-day turnaround if parsing fails
-                expected_dt = datetime.now() + timedelta(days=7)
+                expected_dt = predictor.predict_completion(db, order_data)
         else:
-            expected_dt = datetime.now() + timedelta(days=7)
+            # AUTO-ML: Generate prediction based on services, material, and workload
+            expected_dt = predictor.predict_completion(db, order_data)
 
         db_order = Order(
             order_number=order_data.get("orderNumber") or str(uuid.uuid4())[:8].upper(),
             customer_id=db_customer.customer_id,
             status_id=db_status.status_id,
-            priority=priority_val,
+            priority_id=db_prio.priority_id,
             grand_total=order_data.get("grandTotal", 0.0),
             expected_at=expected_dt,
             user_id=order_data.get("user_id", 1)
@@ -676,10 +764,21 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db)):
         db.add(db_order)
         db.flush()
 
+        # Payment Normalization
+        # DB stores lowercase: 'cash', 'gcash', 'bank-transfer'
+        m_name = str(order_data.get("paymentMethod", "cash")).lower()
+        if m_name not in ["cash", "gcash", "bank-transfer"]: m_name = "cash"
+        db_method = db.query(PaymentMethod).filter(PaymentMethod.method_name == m_name).first() or db.query(PaymentMethod).first()
+        
+        # DB stores lowercase: 'fully-paid', 'downpayment', 'pending'
+        ps_raw = str(order_data.get("paymentStatus", "fully-paid")).lower()
+        ps_name = ps_raw if ps_raw in ["fully-paid", "downpayment", "pending"] else "fully-paid"
+        db_p_status = db.query(PaymentStatus).filter(PaymentStatus.status_name == ps_name).first() or db.query(PaymentStatus).first()
+
         db_payment = Payment(
             order_id=db_order.order_id,
-            payment_method=order_data.get("paymentMethod", "cash"),
-            payment_status=order_data.get("paymentStatus", "fully-paid"),
+            method_id=db_method.method_id,
+            status_id=db_p_status.p_status_id,
             amount_received=order_data.get("amountReceived", 0.0),
             balance=order_data.get("balance", 0.0),
             reference_no=order_data.get("referenceNo"),
@@ -687,9 +786,15 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db)):
         )
         db.add(db_payment)
         
+        # Delivery Normalization  
+        # DB stores lowercase: 'pickup', 'delivery'
+        sp_raw = str(order_data.get("shippingPreference", "pickup")).lower()
+        sp_name = sp_raw if sp_raw in ["pickup", "delivery"] else "pickup"
+        db_pref = db.query(ShippingPreference).filter(ShippingPreference.pref_name == sp_name).first() or db.query(ShippingPreference).first()
+
         db_delivery = Delivery(
             order_id=db_order.order_id,
-            shipping_preference=order_data.get("shippingPreference", "pickup"),
+            pref_id=db_pref.pref_id,
             delivery_address=order_data.get("deliveryAddress"),
             delivery_courier=order_data.get("deliveryCourier"),
             release_time=order_data.get("releaseTime"),
@@ -729,15 +834,14 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db)):
             db.add(db_item)
             db.flush()
 
-            # Associate Conditions (Denormalized)
+            # Associate Conditions (3NF Bridge)
             cond_data = item_data.get("condition", {})
             if isinstance(cond_data, dict):
-                db_item.cond_scratches = bool(cond_data.get("scratches", False))
-                db_item.cond_yellowing = bool(cond_data.get("yellowing", False))
-                db_item.cond_ripsholes = bool(cond_data.get("ripsHoles", False))
-                db_item.cond_deepstains = bool(cond_data.get("deepStains", False))
-                db_item.cond_soleseparation = bool(cond_data.get("soleSeparation", False))
-                db_item.cond_wornout = bool(cond_data.get("wornOut", False))
+                c_map = {"scratches": "Scratches", "yellowing": "Yellowing", "ripsHoles": "Rips/Holes", "deepStains": "Deep Stains", "soleSeparation": "Sole Separation", "wornOut": "Worn Out"}
+                for key, val in c_map.items():
+                    if cond_data.get(key):
+                        c_obj = db.query(Condition).filter(Condition.condition_name == val).first()
+                        if c_obj: db_item.conditions.append(c_obj)
             
             db.flush()
 
@@ -788,15 +892,18 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
     # 1. Status Lifecycle & Analytics Logging
     if "status" in updates:
         status_name = updates["status"]
-        # Internal Status Mapping
+        # DB now stores the exact frontend values directly
         status_map = {
-            "new-order": "Pending",
-            "on-going": "In Progress",
-            "for-release": "Completed",
-            "claimed": "Claimed",
-            "cancelled": "Cancelled"
+            "new-order": "new-order",
+            "on-going": "on-going",
+            "for-release": "for-release",
+            "claimed": "claimed",
+            "cancelled": "cancelled",
+            # Legacy fallbacks
+            "Pending": "new-order", "In Progress": "on-going",
+            "Completed": "for-release", "Claimed": "claimed"
         }
-        mapped_status = status_map.get(status_name, "Pending")
+        mapped_status = status_map.get(status_name, "new-order")
         db_status = db.query(Status).filter(Status.status_name == mapped_status).first()
         if db_status:
             db_order.status_id = db_status.status_id
@@ -805,15 +912,17 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
             db.add(log)
 
             
-            if mapped_status == "Claimed":
+            if mapped_status == "claimed":
                 db_order.claimed_at = datetime.now()
-            elif mapped_status == "Completed":
+            elif mapped_status == "for-release":
                 db_order.released_at = datetime.now()
 
     # 2. Handle Priority Level (ML Input)
     if "priorityLevel" in updates:
-        # Normalize: 'rush' -> 'Rush', 'regular' -> 'Regular'
-        db_order.priority = updates["priorityLevel"].replace('rush', 'Rush').replace('regular', 'Regular').replace('premium', 'Rush')
+        # DB stores lowercase: 'regular', 'rush', 'premium'
+        p_val = str(updates["priorityLevel"]).lower()
+        db_prio = db.query(PriorityLevel).filter(PriorityLevel.priority_name == p_val).first()
+        if db_prio: db_order.priority_id = db_prio.priority_id
 
     # 3. Handle Customer Information (Relational Update)
     if ("customerName" in updates or "contactNumber" in updates) and db_order.customer:
@@ -821,30 +930,45 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
         if "contactNumber" in updates: db_order.customer.contact_number = updates["contactNumber"]
 
     # 4. Handle Payment & Shipping
-    if "paymentMethod" in updates: db_order.payment_method = updates["paymentMethod"]
-    if "paymentStatus" in updates: db_order.payment_status = updates["paymentStatus"]
-    if "shippingPreference" in updates: db_order.shipping_preference = updates["shippingPreference"]
-    if "deliveryAddress" in updates: db_order.delivery_address = updates["deliveryAddress"]
-    if "deliveryCourier" in updates: db_order.delivery_courier = updates["deliveryCourier"]
-    if "amountReceived" in updates: db_order.amount_received = updates["amountReceived"]
-    if "balance" in updates: db_order.balance = updates["balance"]
-    if "grandTotal" in updates: db_order.grand_total = updates["grandTotal"]
-    if "referenceNo" in updates: db_order.reference_no = updates["referenceNo"]
-    # shelfLocation removed
-    if "depositAmount" in updates: db_order.deposit_amount = updates["depositAmount"]
-    if "releaseTime" in updates: db_order.release_time = updates["releaseTime"]
-    if "province" in updates: db_order.province = updates["province"]
-    if "city" in updates: db_order.city = updates["city"]
-    if "barangay" in updates: db_order.barangay = updates["barangay"]
-    if "zipCode" in updates: db_order.zip_code = updates["zipCode"]
+    if db_order.payments:
+        db_pay = db_order.payments[0]
+        if "paymentMethod" in updates:
+            # DB stores lowercase: 'cash', 'gcash', 'bank-transfer'
+            m_name = str(updates["paymentMethod"]).lower()
+            if m_name not in ["cash", "gcash", "bank-transfer"]: m_name = "cash"
+            db_m = db.query(PaymentMethod).filter(PaymentMethod.method_name == m_name).first()
+            if db_m: db_pay.method_id = db_m.method_id
+        if "paymentStatus" in updates:
+            # DB stores: 'fully-paid', 'downpayment', 'pending'
+            ps_raw = str(updates["paymentStatus"]).lower()
+            ps_name = ps_raw if ps_raw in ["fully-paid", "downpayment", "pending"] else "fully-paid"
+            db_ps = db.query(PaymentStatus).filter(PaymentStatus.status_name == ps_name).first()
+            if db_ps: db_pay.status_id = db_ps.p_status_id
+        if "amountReceived" in updates: db_pay.amount_received = updates["amountReceived"]
+        if "balance" in updates: db_pay.balance = updates["balance"]
+        if "referenceNo" in updates: db_pay.reference_no = updates["referenceNo"]
+        if "depositAmount" in updates: db_pay.deposit_amount = updates["depositAmount"]
 
-    # 5. Handle Prediction Updates
+    if db_order.delivery:
+        if "shippingPreference" in updates:
+            # DB stores lowercase: 'pickup', 'delivery'
+            sp_raw = str(updates["shippingPreference"]).lower()
+            sp_name = sp_raw if sp_raw in ["pickup", "delivery"] else "pickup"
+            db_pref = db.query(ShippingPreference).filter(ShippingPreference.pref_name == sp_name).first()
+            if db_pref: db_order.delivery.pref_id = db_pref.pref_id
+        for field in ["deliveryAddress", "deliveryCourier", "releaseTime", "province", "city", "barangay", "zipCode"]:
+            if field in updates: setattr(db_order.delivery, field.lower() if field != "zipCode" else "zip_code", updates[field])
+
+    # 5. Handle Prediction Updates (Re-ML if changed)
     if "predictedCompletionDate" in updates:
         expected_iso = updates["predictedCompletionDate"]
         if expected_iso:
             try:
                 db_order.expected_at = datetime.fromisoformat(expected_iso.replace('Z', '+00:00'))
-            except Exception: pass
+            except Exception:
+                db_order.expected_at = predictor.predict_completion(db, updates)
+        else:
+            db_order.expected_at = predictor.predict_completion(db, updates)
 
     # 6. Cascading Updates: Items, Conditions, and Services
     items_updates = updates.get("items", [])
@@ -872,15 +996,15 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
         if "condition" in item_data and isinstance(item_data["condition"], dict) and "others" in item_data["condition"]:
             db_item.item_notes = item_data["condition"]["others"]
 
-        # Sync Conditions
-        if "condition" in item_data and item_data["condition"]:
+        # Sync Conditions (3NF Bridge)
+        if "condition" in item_data and isinstance(item_data["condition"], dict):
             db_item.conditions = [] # Clear existing
-            cond_data = item_data["condition"]
-            for cond_key, is_present in cond_data.items():
-                if is_present and cond_key != 'others':
-                    lookup_name = cond_key.lower().replace(" ", "").replace("/", "")
-                    cond = db.query(Condition).filter(Condition.condition_name == lookup_name).first()
-                    if cond: db_item.conditions.append(cond)
+            c_data = item_data["condition"]
+            c_map = {"scratches": "Scratches", "yellowing": "Yellowing", "ripsHoles": "Rips/Holes", "deepStains": "Deep Stains", "soleSeparation": "Sole Separation", "wornOut": "Worn Out"}
+            for key, val in c_map.items():
+                if c_data.get(key):
+                    c_obj = db.query(Condition).filter(Condition.condition_name == val).first()
+                    if c_obj: db_item.conditions.append(c_obj)
 
         # Sync Services (Pricing Snapshots)
         if ("baseService" in item_data or "addOns" in item_data):

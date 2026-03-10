@@ -39,26 +39,30 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
             contactNumber: bo.customer?.contact_number || '-',
             grandTotal: parseFloat(bo.grand_total) || 0,
             baseServiceFee: bo.items?.reduce((total: number, currItem: any) =>
-                total + (currItem.services?.filter((s: any) => s.category === 'base').reduce((sum: number, s: any) => sum + (parseFloat(s.base_price) || 0) * (currItem.quantity || 1), 0) || 0)
+                total + (currItem.services?.filter((s: any) =>
+                    (s.category?.category_name || s.category) === 'base'
+                ).reduce((sum: number, s: any) => sum + (parseFloat(s.base_price) || 0) * (currItem.quantity || 1), 0) || 0)
                 , 0) || 0,
             addOnsTotal: bo.items?.reduce((total: number, currItem: any) =>
-                total + (currItem.services?.filter((s: any) => s.category === 'addon').reduce((sum: number, s: any) => sum + (parseFloat(s.base_price) || 0) * (currItem.quantity || 1), 0) || 0)
+                total + (currItem.services?.filter((s: any) =>
+                    (s.category?.category_name || s.category) === 'addon'
+                ).reduce((sum: number, s: any) => sum + (parseFloat(s.base_price) || 0) * (currItem.quantity || 1), 0) || 0)
                 , 0) || 0,
-            priorityLevel: (bo.priority || 'regular').toLowerCase() as any,
-            paymentStatus: (bo.payment?.payment_status || bo.payment_status || 'fully-paid').toLowerCase() as any,
-            paymentMethod: (bo.payment?.payment_method || bo.payment_method || 'cash').toLowerCase() as any,
-            shippingPreference: (bo.delivery?.shipping_preference || bo.shipping_preference || 'pickup').toLowerCase() as any,
-            deliveryAddress: bo.delivery?.delivery_address || bo.delivery_address || '',
-            deliveryCourier: bo.delivery?.delivery_courier || bo.delivery_courier || '',
-            amountReceived: parseFloat(bo.payment?.amount_received ?? bo.amount_received) || 0,
-            change: Math.max(0, (parseFloat(bo.payment?.amount_received ?? bo.amount_received) || 0) - (parseFloat(bo.grand_total) || 0)),
-            referenceNo: bo.payment?.reference_no || bo.reference_no || '',
-            depositAmount: parseFloat(bo.payment?.deposit_amount ?? bo.deposit_amount) || 0,
-            releaseTime: bo.delivery?.release_time || bo.release_time || '',
-            province: bo.delivery?.province || bo.province || '',
-            city: bo.delivery?.city || bo.city || '',
-            barangay: bo.delivery?.barangay || bo.barangay || '',
-            zipCode: bo.delivery?.zip_code || bo.zip_code || '',
+            priorityLevel: (bo.priority?.priority_name || bo.priority || 'regular').toLowerCase() as any,
+            paymentStatus: (bo.payments?.[0]?.p_status?.status_name || 'fully-paid').toLowerCase() as any,
+            paymentMethod: (bo.payments?.[0]?.method?.method_name || 'cash').toLowerCase() as any,
+            shippingPreference: (bo.delivery?.preference?.pref_name || 'pickup').toLowerCase() as any,
+            deliveryAddress: bo.delivery?.delivery_address || '',
+            deliveryCourier: bo.delivery?.delivery_courier || '',
+            amountReceived: parseFloat(bo.payments?.[0]?.amount_received) || 0,
+            change: Math.max(0, (parseFloat(bo.payments?.[0]?.amount_received) || 0) - (parseFloat(bo.grand_total) || 0)),
+            referenceNo: bo.payments?.[0]?.reference_no || '',
+            depositAmount: parseFloat(bo.payments?.[0]?.deposit_amount) || 0,
+            releaseTime: bo.delivery?.release_time || '',
+            province: bo.delivery?.province || '',
+            city: bo.delivery?.city || '',
+            barangay: bo.delivery?.barangay || '',
+            zipCode: bo.delivery?.zip_code || '',
 
             // Status Mapping
             status: mapBackendStatus(bo.status?.status_name),
@@ -69,28 +73,33 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
             predictedCompletionDate: bo.expected_at ? new Date(bo.expected_at) : undefined,
             actualCompletionDate: bo.released_at ? new Date(bo.released_at) : undefined,
 
-            // Items Mapping
-            items: bo.items?.map((bi: any) => ({
-                id: bi.item_id?.toString() || Math.random().toString(),
-                brand: bi.brand || 'Other',
-                shoeModel: bi.shoe_model || 'Other',
-                shoeMaterial: bi.material || 'Other',
-                quantity: bi.quantity || 1,
-                condition: {
-                    scratches: bi.cond_scratches || false,
-                    yellowing: bi.cond_yellowing || false,
-                    ripsHoles: bi.cond_ripsholes || false,
-                    deepStains: bi.cond_deepstains || false,
-                    soleSeparation: bi.cond_soleseparation || false,
-                    wornOut: bi.cond_wornout || false,
-                    others: bi.item_notes || ''
-                },
-                baseService: bi.services?.filter((s: any) => s.category === 'base').map((s: any) => s.service_name) || [],
-                addOns: bi.services?.filter((s: any) => s.category === 'addon').map((s: any) => ({
-                    name: s.service_name,
-                    quantity: 1
-                })) || []
-            })) || [],
+            // Items Mapping - conditions come from 3NF conditions[] array
+            items: bo.items?.map((bi: any) => {
+                const condNames: string[] = bi.conditions?.map((c: any) => c.condition_name?.toLowerCase()) || [];
+                return {
+                    id: bi.item_id?.toString() || Math.random().toString(),
+                    brand: bi.brand || 'Other',
+                    shoeModel: bi.shoe_model || 'Other',
+                    shoeMaterial: bi.material || 'Other',
+                    quantity: bi.quantity || 1,
+                    condition: {
+                        scratches:      condNames.includes('scratches')       || bi.cond_scratches       || false,
+                        yellowing:      condNames.includes('yellowing')       || bi.cond_yellowing       || false,
+                        ripsHoles:      condNames.includes('rips/holes')      || bi.cond_ripsholes       || false,
+                        deepStains:     condNames.includes('deep stains')     || bi.cond_deepstains      || false,
+                        soleSeparation: condNames.includes('sole separation') || bi.cond_soleseparation  || false,
+                        wornOut:        condNames.includes('worn out')        || bi.cond_wornout         || false,
+                        others: bi.item_notes || ''
+                    },
+                    // category is a nested 3NF object: { category_id, category_name }
+                    baseService: bi.services?.filter((s: any) =>
+                        (s.category?.category_name || s.category) === 'base'
+                    ).map((s: any) => s.service_name) || [],
+                    addOns: bi.services?.filter((s: any) =>
+                        (s.category?.category_name || s.category) === 'addon'
+                    ).map((s: any) => ({ name: s.service_name, quantity: 1 })) || []
+                };
+            }) || [],
 
             // Fallback fields
             brand: bo.items?.map((i: any) => i.brand).filter(Boolean).join(', ') || 'Unknown',
@@ -108,13 +117,14 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
             },
             baseService: Array.from(new Set(
                 bo.items?.flatMap((item: any) =>
-                    item.services?.filter((s: any) => s.category === 'base').map((s: any) => s.service_name) || []
+                    item.services?.filter((s: any) =>
+                        (s.category?.category_name || s.category) === 'base'
+                    ).map((s: any) => s.service_name) || []
                 ) || []
             )),
-            addOns: firstItem.services?.filter((s: any) => s.category === 'addon').map((s: any) => ({
-                name: s.service_name,
-                quantity: 1
-            })) || [],
+            addOns: firstItem.services?.filter((s: any) =>
+                (s.category?.category_name || s.category) === 'addon'
+            ).map((s: any) => ({ name: s.service_name, quantity: 1 })) || [],
             processedBy: bo.processor?.username || 'System',
 
             statusHistory: bo.status_logs?.map((sl: any) => ({
@@ -161,12 +171,20 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
         loadInitialData();
     }, []);
 
-    const mapBackendStatus = (statusName: string) => {
-        const map: any = {
+    // Maps DB status_name to frontend JobStatus type
+    // DB values now match frontend: 'new-order', 'on-going', 'for-release', 'claimed', 'cancelled'
+    const mapBackendStatus = (statusName: string): any => {
+        const map: Record<string, string> = {
+            'new-order': 'new-order',
+            'on-going': 'on-going',
+            'for-release': 'for-release',
+            'claimed': 'claimed',
+            'cancelled': 'claimed', // fallback - treat cancelled as claimed for display
+            // Legacy mappings in case old DB data exists
             'Pending': 'new-order',
             'In Progress': 'on-going',
             'Completed': 'for-release',
-            'Claimed': 'claimed'
+            'Claimed': 'claimed',
         };
         return map[statusName] || 'new-order';
     };
