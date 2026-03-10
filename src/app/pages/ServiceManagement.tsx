@@ -82,7 +82,7 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
                   s.active === true && 
                   !s.name.startsWith('[') && 
                   !s.name.startsWith('z_')
-                ).map(service => (
+                ).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0)).map(service => (
                   <div key={service.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border-none gap-3">
                     <div className="min-w-0">
                       <p className="font-bold text-gray-900 text-[13px] leading-tight">{service.name}</p>
@@ -119,7 +119,7 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
                   !s.name.includes('Premium') &&
                   !s.name.startsWith('[') && 
                   !s.name.startsWith('z_')
-                ).map(service => (
+                ).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0)).map(service => (
                   <div key={service.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border-none gap-3">
                     <div className="min-w-0">
                       <p className="font-bold text-gray-900 text-[13px] leading-tight">{service.name}</p>
@@ -158,7 +158,7 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
                 s.active === true && 
                 !s.name.startsWith('[') && 
                 !s.name.startsWith('z_')
-              ).map(service => (
+              ).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0)).map(service => (
                 <div key={service.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border-none gap-3">
                   <div className="min-w-0">
                     <p className="font-bold text-gray-900 text-[13px] leading-tight">{service.name}</p>

@@ -85,6 +85,7 @@ class ServiceSchema(BaseModel):
     duration_days: int = 0
     service_code: Optional[str] = None
     is_active: bool = True
+    sort_order: int = 0
     class Config:
         from_attributes = True
 

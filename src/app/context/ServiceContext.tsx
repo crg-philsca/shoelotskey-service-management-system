@@ -32,7 +32,8 @@ export function ServiceProvider({ children }: { children: ReactNode }) {
                         active: bs.is_active,
                         description: bs.description || '',
                         durationDays: bs.duration_days || 0,
-                        code: bs.service_code || ''
+                        code: bs.service_code || '',
+                        sortOrder: bs.sort_order || 0
                     }));
                     setServices(mappedServices);
                 }

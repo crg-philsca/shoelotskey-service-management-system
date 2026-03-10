@@ -91,6 +91,7 @@ class Service(Base):
     duration_days = Column(Integer, default=0)
     service_code = Column(String(20), nullable=True)
     is_active = Column(Boolean, default=True)
+    sort_order = Column(Integer, default=0)
 
 class Expense(Base):
     """Tracks business overhead costs."""

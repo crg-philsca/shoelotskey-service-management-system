@@ -104,6 +104,7 @@ export interface Service {
   description?: string;
   durationDays?: string | number;
   code?: string;
+  sortOrder?: number;
 }
 
 export interface User {
