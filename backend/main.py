@@ -13,7 +13,7 @@ print("="*50 + "\n")
 from fastapi import FastAPI, Depends, HTTPException, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import text, inspect
+from sqlalchemy import text, inspect, func
 from typing import List, Dict, Any, Union
 from datetime import datetime, timedelta
 import os
@@ -242,20 +242,35 @@ def seed_lookups(db: Session):
         {"service_name": "Rush Fee (Full Reglue)", "base_price": 250, "category": "priority", "duration_days": 0, "service_code": "RFF", "is_active": False}
     ]
 
+    # Aggressive Cleanup: Deactivate everything first
+    db.execute(text("UPDATE services SET is_active = False"))
+    db.commit()
+
     for item in catalog_data:
-        # Check if service exists by name to update, otherwise insert
-        existing = db.query(Service).filter(Service.service_name == item["service_name"]).first()
-        if existing:
-            existing.base_price = item["base_price"]
-            existing.category = item["category"]
-            existing.duration_days = item["duration_days"]
-            existing.service_code = item["service_code"]
-            existing.is_active = item["is_active"]
+        # Case-insensitive find all services with this name
+        matches = db.query(Service).filter(func.lower(Service.service_name) == item["service_name"].lower()).all()
+        
+        if matches:
+            # Update the FIRST match as the primary ACTIVE one
+            primary = matches[0]
+            primary.service_name = item["service_name"] # Standardize casing
+            primary.base_price = item["base_price"]
+            primary.category = item["category"]
+            primary.duration_days = item["duration_days"]
+            primary.service_code = item["service_code"]
+            primary.is_active = item["is_active"]
+            
+            # Deactivate and RENAME all other matches to prevent UI duplication
+            for dup in matches[1:]:
+                dup.is_active = False
+                if not dup.service_name.startswith("[DUP]"):
+                    dup.service_name = f"[DUP] {dup.service_name}"
         else:
+            # Not found at all, create it fresh
             db.add(Service(**item))
     
     db.commit()
-    print(">>> Catalog Sync complete.")
+    print(">>> Aggressive Catalog Sync complete (Duplicates Cleaned).")
 
     # Seed Default Users (owner/staff)
     if db.query(User).count() == 0:

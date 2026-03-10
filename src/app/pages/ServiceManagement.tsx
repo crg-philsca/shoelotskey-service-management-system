@@ -77,7 +77,7 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
             </CardHeader>
             <CardContent className="pt-0">
               <div className="space-y-3 -mt-2 pr-1 max-h-[240px] overflow-y-scroll custom-scrollbar">
-                {services.filter(s => s.category === 'base').map(service => (
+                {services.filter(s => s.category === 'base' && s.active).map(service => (
                   <div key={service.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border-none gap-3">
                     <div className="min-w-0">
                       <p className="font-bold text-gray-900 text-[13px] leading-tight">{service.name}</p>
@@ -108,7 +108,7 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
             </CardHeader>
             <CardContent className="pt-0">
               <div className="space-y-3 -mt-2 pr-1 max-h-[180px] overflow-y-scroll custom-scrollbar">
-                {services.filter(s => s.category === 'priority' && !s.name.includes('Premium')).map(service => (
+                {services.filter(s => s.category === 'priority' && s.active && !s.name.includes('Premium')).map(service => (
                   <div key={service.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border-none gap-3">
                     <div className="min-w-0">
                       <p className="font-bold text-gray-900 text-[13px] leading-tight">{service.name}</p>
@@ -142,7 +142,7 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
           </CardHeader>
           <CardContent className="pt-0 h-[calc(100%-48px)]">
             <div className="space-y-3 -mt-2 pr-1 max-h-[440px] overflow-y-scroll custom-scrollbar">
-              {services.filter(s => s.category === 'addon').map(service => (
+              {services.filter(s => s.category === 'addon' && s.active).map(service => (
                 <div key={service.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border-none gap-3">
                   <div className="min-w-0">
                     <p className="font-bold text-gray-900 text-[13px] leading-tight">{service.name}</p>
