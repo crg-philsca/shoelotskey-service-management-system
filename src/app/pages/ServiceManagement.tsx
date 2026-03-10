@@ -8,7 +8,6 @@ import ServiceModal from '@/app/components/ServiceModal';
 
 import { Service } from '@/app/types';
 import { useServices } from '@/app/context/ServiceContext';
-import { useActivities } from '@/app/context/ActivityContext';
 
 interface ServiceManagementProps {
   onSetHeaderActionRight?: (action: React.ReactNode | null) => void;
@@ -16,12 +15,9 @@ interface ServiceManagementProps {
 
 export default function ServiceManagement({ onSetHeaderActionRight }: ServiceManagementProps) {
   const { services, addService, updateService, deleteService } = useServices();
-  const { addActivity } = useActivities();
   const [serviceModalOpen, setServiceModalOpen] = useState(false); // Renamed from isModalOpen
   const [selectedService, setSelectedService] = useState<Service | null>(null); // Renamed from editingService
   const navigate = useNavigate();
-
-  const currentUser = JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}').username;
 
   useEffect(() => {
     if (onSetHeaderActionRight) {
@@ -32,7 +28,7 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
             className="border-red-600 text-red-600 hover:bg-red-50 hover:text-red-700 font-bold"
             onClick={() => navigate('/activity-history')}
           >
-            <History size={16} className="mr-2" />
+            <History size={16} className="mr-0" />
             View History
           </Button>
           <Button
@@ -42,7 +38,7 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
               setServiceModalOpen(true);
             }}
           >
-            <PlusCircle size={16} className="mr-2" />
+            <PlusCircle size={16} className="mr-0" />
             New Service
           </Button>
         </div>
@@ -55,20 +51,8 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
     const exists = services.find(s => s.id === service.id);
     if (exists) {
       updateService(service.id, service);
-      addActivity({
-        user: currentUser,
-        action: 'Update Service',
-        details: `Updated details for ${service.name}`,
-        type: 'service'
-      });
     } else {
       addService(service);
-      addActivity({
-        user: currentUser,
-        action: 'Create Service',
-        details: `Created new service ${service.name}`,
-        type: 'service'
-      });
     }
   };
 
@@ -79,14 +63,7 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
 
   const handleDeleteService = (id: string) => {
     if (confirm('Are you sure you want to delete this service?')) {
-      const serviceToDelete = services.find(s => s.id === id);
       deleteService(id);
-      addActivity({
-        user: currentUser,
-        action: 'Delete Service',
-        details: `Deleted service ${serviceToDelete?.name || id}`,
-        type: 'service'
-      });
     }
   };
 
@@ -157,6 +134,8 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
           </Card>
         </div>
 
+
+
         <Card className="border-none shadow-md h-full">
           <CardHeader className="pt-3 pb-0 px-4">
             <CardTitle className="text-base font-black text-gray-900 uppercase">Add-On Services</CardTitle>
@@ -198,6 +177,6 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
         service={selectedService}
         onSave={handleSaveService}
       />
-    </div>
+    </div >
   );
 }

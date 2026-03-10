@@ -140,7 +140,19 @@ def on_startup():
                     WHERE order_id NOT IN (SELECT order_id FROM deliveries)
                     ON CONFLICT DO NOTHING
                 """))
-                
+
+        # Cleanup any old 'Premium' services from the Priority section (Database hygiene)
+        db_exec = SessionLocal()
+        try:
+            from sqlalchemy import text
+            db_exec.execute(text("DELETE FROM services WHERE service_name LIKE '%Premium%'"))
+            db_exec.commit()
+            print(">>> DB Migration: Premium services cleaned from database.")
+        except Exception as cleanup_err:
+            print(f">>> DB Migration Warning: Cleanup failed: {cleanup_err}")
+        finally:
+            db_exec.close()
+
         print(">>> DB Migration: Schema check complete.")
             
     except Exception as e:
