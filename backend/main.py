@@ -13,6 +13,7 @@ print("="*50 + "\n")
 from fastapi import FastAPI, Depends, HTTPException, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import text, inspect
 from typing import List, Dict, Any, Union
 from datetime import datetime, timedelta
 import os
@@ -144,7 +145,6 @@ def on_startup():
         # Cleanup any old 'Premium' services from the Priority section (Database hygiene)
         db_exec = SessionLocal()
         try:
-            from sqlalchemy import text
             db_exec.execute(text("DELETE FROM services WHERE service_name LIKE '%Premium%'"))
             db_exec.commit()
             print(">>> DB Migration: Premium services cleaned from database.")
