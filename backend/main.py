@@ -201,30 +201,38 @@ def seed_lookups(db: Session):
 
 
 
-    # Seed Services (Fully Normalized with Metadata)
-    if db.query(Service).count() == 0:
-        print(">>> Seeding Complete Service Catalog...")
-        services = [
-            # Base Services
-            Service(service_name="Basic Cleaning", base_price=325, category="base", duration_days=10, service_code="BCN"),
-            Service(service_name="Deep Cleaning", base_price=450, category="base", duration_days=12, service_code="DCN"),
-            Service(service_name="Full Reglue", base_price=250, category="base", duration_days=25, service_code="FRG"),
-            Service(service_name="Minor Reglue", base_price=150, category="base", duration_days=25, service_code="MRG"),
-            Service(service_name="Color Renewal", base_price=800, category="base", duration_days=15, service_code="CRN"),
-            
-            # Add-ons
-            Service(service_name="Unyellowing", base_price=125, category="addon", duration_days=5, service_code="UNY"),
-            Service(service_name="Repainting", base_price=500, category="addon", duration_days=0, service_code="RPT"),
-            Service(service_name="Shoe Lace Replacement", base_price=50, category="addon", duration_days=0, service_code="SLR"),
-            Service(service_name="White Paint", base_price=150, category="addon", duration_days=0, service_code="WPT"),
-            Service(service_name="Minor Retouch", base_price=125, category="addon", duration_days=0, service_code="MRT"),
-            
-            # Priority
-            Service(service_name="Rush Fee (Basic Cleaning)", base_price=150, category="priority", duration_days=-5, service_code="RFC"),
-            Service(service_name="Rush Fee (Minor Reglue)", base_price=250, category="priority", duration_days=0, service_code="RFR")
-        ]
-        db.add_all(services)
-        db.commit()
+    # ------------------------------------------
+    # 3. SERVICE CATALOG SYNC (Standardized Service List)
+    # ------------------------------------------
+    # For Defense: We force a clean sync to ensure the dashboard matches the presentation script.
+    db.execute(text("DELETE FROM services"))
+    db.commit()
+
+    print(">>> Syncing Complete Service Catalog (Defense Mode)...")
+    catalog = [
+        # BASE SERVICES
+        Service(service_name="Basic Cleaning", base_price=325, category="base", duration_days=10, service_code="BCN"),
+        Service(service_name="Color Renewal", base_price=800, category="base", duration_days=15, service_code="CRN"),
+        Service(service_name="Full Reglue", base_price=250, category="base", duration_days=25, service_code="FRG"),
+        Service(service_name="Minor Reglue", base_price=150, category="base", duration_days=25, service_code="MRG"),
+        Service(service_name="Undersole", base_price=150, category="base", duration_days=20, service_code="USL"),
+        Service(service_name="Midsole", base_price=150, category="base", duration_days=20, service_code="MSL"),
+        Service(service_name="Minor Restoration", base_price=300, category="base", duration_days=25, service_code="MRT"),
+        Service(service_name="Add Glue Layer", base_price=100, category="base", duration_days=2, service_code="AGL"),
+        
+        # ADD-ON SERVICES
+        Service(service_name="Unyellowing", base_price=125, category="addon", duration_days=5, service_code="UNY"),
+        Service(service_name="White Paint", base_price=150, category="addon", duration_days=0, service_code="WPT"),
+        Service(service_name="Minor Retouch", base_price=125, category="addon", duration_days=0, service_code="MRT"),
+        
+        # PRIORITY FEES
+        Service(service_name="Rush Fee (Basic Cleaning)", base_price=150, category="priority", duration_days=-5, service_code="RFC", is_active=True),
+        Service(service_name="Rush Fee (Minor Reglue)", base_price=250, category="priority", duration_days=0, service_code="RFR", is_active=False),
+        Service(service_name="Rush Fee (Full Reglue)", base_price=250, category="priority", duration_days=0, service_code="RFF", is_active=False)
+    ]
+    db.add_all(catalog)
+    db.commit()
+    print(">>> Catalog Sync complete.")
 
     # Seed Default Users (owner/staff)
     if db.query(User).count() == 0:
