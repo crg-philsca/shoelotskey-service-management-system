@@ -207,17 +207,6 @@ def seed_lookups(db: Session):
     # For Defense: We perform a "Safe Sync" instead of DELETE to avoid Foreign Key violations with old orders.
     print(">>> Syncing Complete Service Catalog (Safe Mode)...")
     
-    # Optional: Soft-Reset by deactivating all services not in the master list
-    db.execute(text("UPDATE services SET is_active = False"))
-    db.commit()
-
-    # Special Handle: Rename Deep Cleaning to Color Renewal if it exists for continuity
-    dc = db.query(Service).filter(Service.service_name == "Deep Cleaning").first()
-    if dc:
-        dc.service_name = "Color Renewal"
-        dc.service_code = "CRN"
-        db.commit()
-
     catalog_data = [
         # BASE SERVICES (The Core 4)
         {"service_name": "Basic Cleaning", "base_price": 325, "category": "base", "duration_days": 10, "service_code": "BCN", "is_active": True},
@@ -242,18 +231,28 @@ def seed_lookups(db: Session):
         {"service_name": "Rush Fee (Full Reglue)", "base_price": 250, "category": "priority", "duration_days": 0, "service_code": "RFF", "is_active": False}
     ]
 
-    # Aggressive Cleanup: Deactivate everything first
+    # Aggressive Cleanup: Deactivate everything first to ensure a clean UI
     db.execute(text("UPDATE services SET is_active = False"))
     db.commit()
 
     for item in catalog_data:
-        # Case-insensitive find all services with this name
-        matches = db.query(Service).filter(func.lower(Service.service_name) == item["service_name"].lower()).all()
+        # Standardize matching: trim whitespace and lowercase
+        target_name = item["service_name"].strip()
+        
+        # Check for any existing services that match (including old Deep Cleaning names)
+        # We also check for 'Deep Cleaning' specifically if we are looking for 'Color Renewal'
+        if target_name == "Color Renewal":
+            matches = db.query(Service).filter(
+                (func.lower(Service.service_name) == "color renewal") | 
+                (func.lower(Service.service_name) == "deep cleaning")
+            ).all()
+        else:
+            matches = db.query(Service).filter(func.lower(Service.service_name) == target_name.lower()).all()
         
         if matches:
             # Update the FIRST match as the primary ACTIVE one
             primary = matches[0]
-            primary.service_name = item["service_name"] # Standardize casing
+            primary.service_name = target_name # Standardize casing
             primary.base_price = item["base_price"]
             primary.category = item["category"]
             primary.duration_days = item["duration_days"]
@@ -930,7 +929,7 @@ def delete_service(service_id: int, db: Session = Depends(get_db)):
     
     # S.O.L.I.D: Soft Delete implementation to maintain 3NF Integrity
     db_service.is_active = False
-    db_commit_retry(db)
+    db.commit()
     return {"status": "success", "message": "Service deactivated (Soft Delete)"}
 
 
