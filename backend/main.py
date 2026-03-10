@@ -142,6 +142,15 @@ def on_startup():
                     ON CONFLICT DO NOTHING
                 """))
 
+        # 4. Services Table update (Custom Sorting)
+        if "services" in inspector.get_table_names():
+            columns = [c['name'] for c in inspector.get_columns("services")]
+            if "sort_order" not in columns:
+                print(">>> Migration: Adding sort_order to services")
+                with engine.begin() as conn:
+                    try: conn.execute(text("ALTER TABLE services ADD COLUMN sort_order INTEGER DEFAULT 0"))
+                    except Exception as e: print(f">>> Migration Warning: {e}")
+
         # Cleanup any old 'Premium' services from the Priority section (Database hygiene)
         db_exec = SessionLocal()
         try:
