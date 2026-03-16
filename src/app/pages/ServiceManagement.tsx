@@ -91,15 +91,11 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
                 {baseServices.map(service => (
                   <Reorder.Item 
                     key={service.id} 
-                    value={service} 
-                    whileDrag={{ backgroundColor: "#fff", border: "1px solid #e5e7eb" }}
-                    dragTransition={{ bounceStiffness: 0, bounceDamping: 0 }}
-                    className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border border-transparent gap-3 cursor-grab active:cursor-grabbing hover:border-gray-200 transition-all"
+                    value={service}
+                    className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border border-transparent gap-3 cursor-grab active:cursor-grabbing hover:bg-white hover:border-gray-200 transition-all"
                   >
-                    <div className="flex items-center gap-2 min-w-0 pointer-events-none">
-                      <div className="p-1">
-                        <GripVertical size={16} className="text-gray-400 shrink-0" />
-                      </div>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <GripVertical size={16} className="text-gray-400 shrink-0" />
                       <div className="min-w-0">
                         <p className="font-bold text-gray-900 text-[13px] leading-tight truncate">{service.name}</p>
                         <p className="text-[11px] font-black text-red-600 mt-0">{'\u20B1'}{service.price.toLocaleString()}</p>
@@ -133,15 +129,11 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
                 {priorityServices.map(service => (
                   <Reorder.Item 
                     key={service.id} 
-                    value={service} 
-                    whileDrag={{ backgroundColor: "#fff", border: "1px solid #e5e7eb" }}
-                    dragTransition={{ bounceStiffness: 0, bounceDamping: 0 }}
-                    className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border border-transparent gap-3 cursor-grab active:cursor-grabbing hover:border-gray-200 transition-all"
+                    value={service}
+                    className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border border-transparent gap-3 cursor-grab active:cursor-grabbing hover:bg-white hover:border-gray-200 transition-all"
                   >
-                    <div className="flex items-center gap-2 min-w-0 pointer-events-none">
-                      <div className="p-1">
-                        <GripVertical size={16} className="text-gray-400 shrink-0" />
-                      </div>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <GripVertical size={16} className="text-gray-400 shrink-0" />
                       <div className="min-w-0">
                         <p className="font-bold text-gray-900 text-[13px] leading-tight truncate">{service.name}</p>
                         <p className="text-[11px] font-black text-red-600 mt-0.5">{'\u20B1'}{service.price.toLocaleString()}</p>
@@ -178,15 +170,11 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
               {addonServices.map(service => (
                 <Reorder.Item 
                   key={service.id} 
-                  value={service} 
-                  whileDrag={{ backgroundColor: "#fff", border: "1px solid #e5e7eb" }}
-                  dragTransition={{ bounceStiffness: 0, bounceDamping: 0 }}
-                  className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border border-transparent gap-3 cursor-grab active:cursor-grabbing hover:border-gray-200 transition-all"
+                  value={service}
+                  className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border border-transparent gap-3 cursor-grab active:cursor-grabbing hover:bg-white hover:border-gray-200 transition-all"
                 >
-                  <div className="flex items-center gap-2 min-w-0 pointer-events-none">
-                    <div className="p-1">
-                      <GripVertical size={16} className="text-gray-400 shrink-0" />
-                    </div>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <GripVertical size={16} className="text-gray-400 shrink-0" />
                     <div className="min-w-0">
                       <p className="font-bold text-gray-900 text-[13px] leading-tight truncate">{service.name}</p>
                       <p className="text-[11px] font-black text-red-600 mt-0.5">{'\u20B1'}{service.price.toLocaleString()}</p>
