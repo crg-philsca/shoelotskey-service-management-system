@@ -93,6 +93,7 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
                     key={service.id} 
                     value={service} 
                     whileDrag={{ backgroundColor: "#fff", border: "1px solid #e5e7eb" }}
+                    dragTransition={{ bounceStiffness: 0, bounceDamping: 0 }}
                     className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border border-transparent gap-3 cursor-grab active:cursor-grabbing hover:border-gray-200 transition-all"
                   >
                     <div className="flex items-center gap-2 min-w-0 pointer-events-none">
@@ -134,6 +135,7 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
                     key={service.id} 
                     value={service} 
                     whileDrag={{ backgroundColor: "#fff", border: "1px solid #e5e7eb" }}
+                    dragTransition={{ bounceStiffness: 0, bounceDamping: 0 }}
                     className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border border-transparent gap-3 cursor-grab active:cursor-grabbing hover:border-gray-200 transition-all"
                   >
                     <div className="flex items-center gap-2 min-w-0 pointer-events-none">
@@ -178,6 +180,7 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
                   key={service.id} 
                   value={service} 
                   whileDrag={{ backgroundColor: "#fff", border: "1px solid #e5e7eb" }}
+                  dragTransition={{ bounceStiffness: 0, bounceDamping: 0 }}
                   className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border border-transparent gap-3 cursor-grab active:cursor-grabbing hover:border-gray-200 transition-all"
                 >
                   <div className="flex items-center gap-2 min-w-0 pointer-events-none">
