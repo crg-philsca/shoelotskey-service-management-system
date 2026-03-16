@@ -92,9 +92,8 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
                   <Reorder.Item 
                     key={service.id} 
                     value={service} 
-                    initial={false}
-                    whileDrag={{ scale: 1.03, boxShadow: "0 10px 40px rgba(0,0,0,0.1)" }}
-                    className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border-none gap-3 cursor-grab active:cursor-grabbing border border-transparent hover:border-gray-200 transition-all z-0 hover:z-10 relative"
+                    whileDrag={{ backgroundColor: "#fff", border: "1px solid #e5e7eb" }}
+                    className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border border-transparent gap-3 cursor-grab active:cursor-grabbing hover:border-gray-200 transition-all"
                   >
                     <div className="flex items-center gap-2 min-w-0 pointer-events-none">
                       <div className="p-1">
@@ -134,9 +133,8 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
                   <Reorder.Item 
                     key={service.id} 
                     value={service} 
-                    initial={false}
-                    whileDrag={{ scale: 1.03, boxShadow: "0 10px 40px rgba(0,0,0,0.1)" }}
-                    className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border-none gap-3 cursor-grab active:cursor-grabbing border border-transparent hover:border-gray-200 transition-all z-0 hover:z-10 relative"
+                    whileDrag={{ backgroundColor: "#fff", border: "1px solid #e5e7eb" }}
+                    className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border border-transparent gap-3 cursor-grab active:cursor-grabbing hover:border-gray-200 transition-all"
                   >
                     <div className="flex items-center gap-2 min-w-0 pointer-events-none">
                       <div className="p-1">
@@ -179,9 +177,8 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
                 <Reorder.Item 
                   key={service.id} 
                   value={service} 
-                  initial={false}
-                  whileDrag={{ scale: 1.03, boxShadow: "0 10px 40px rgba(0,0,0,0.1)" }}
-                  className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border-none gap-3 cursor-grab active:cursor-grabbing border border-transparent hover:border-gray-200 transition-all z-0 hover:z-10 relative"
+                  whileDrag={{ backgroundColor: "#fff", border: "1px solid #e5e7eb" }}
+                  className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border border-transparent gap-3 cursor-grab active:cursor-grabbing hover:border-gray-200 transition-all"
                 >
                   <div className="flex items-center gap-2 min-w-0 pointer-events-none">
                     <div className="p-1">
