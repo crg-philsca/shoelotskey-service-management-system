@@ -93,6 +93,8 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)
     role_id = Column(Integer, ForeignKey("roles.role_id"), nullable=False)
     is_active = Column(Boolean, default=True)
+    failed_login_attempts = Column(Integer, default=0)
+    locked_until = Column(DateTime, nullable=True)
     reset_token = Column(String(255), nullable=True)
     reset_token_expiry = Column(DateTime, nullable=True)
     created_at = Column(TIMESTAMP, server_default=func.now())

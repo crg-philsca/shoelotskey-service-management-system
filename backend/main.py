@@ -389,27 +389,41 @@ def seed_lookups(db: Session):
 @app.post("/api/login")
 def login(request: LoginRequest, db: Session = Depends(get_db)):
     """
-    LOGIC: User Authentication
-    1. Query User + Related Role (3NF joinedload)
-    2. Verify Password (currently plaintext comparison, ready for hashing)
-    3. Return Sanitized Session Data
+    LOGIC: User Authentication with 3-Attempt Locking
+    1. Query User + Related Role
+    2. Check if account is currently locked
+    3. Verify password & manage failed attempts
     """
     print(f"[AUTH] Trace: Login attempt for '{request.username}'")
     
     try:
-        # 1. FETCH USER (Allow Login via Username OR Email for flexibility)
         from sqlalchemy import or_
+        from datetime import datetime, timedelta
+
         db_user = db.query(User).options(joinedload(User.role)).filter(
             or_(User.username == request.username, User.email == request.username)
         ).first()
         
         if not db_user:
-            print(f"[AUTH] Denied: Identifier '{request.username}' not found.")
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
-        # 2. VALIDATION (Security Checkpoint)
+        # 1. CHECK LOCK STATUS
+        if db_user.locked_until and db_user.locked_until > datetime.utcnow():
+            remaining = (db_user.locked_until - datetime.utcnow()).total_seconds() / 60
+            print(f"[AUTH] Denied: Account '{request.username}' is locked for {remaining:.1f} more mins.")
+            raise HTTPException(
+                status_code=403, 
+                detail=f"Account locked. Try again in {int(remaining)} minutes."
+            )
+
+        # 2. VALIDATE PASSWORD
         if db_user.password_hash == request.password:
-            print(f"[AUTH] Granted: {db_user.username} ({db_user.email}) authenticated as {db_user.role.role_name}.")
+            # SUCCESS: Reset attempts and unlock
+            db_user.failed_login_attempts = 0
+            db_user.locked_until = None
+            db.commit()
+            
+            print(f"[AUTH] Granted: {db_user.username} authenticated.")
             return {
                 "user_id": db_user.user_id,
                 "username": db_user.username,
@@ -417,7 +431,19 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
                 "email": db_user.email
             }
         else:
-            print(f"[AUTH] Denied: Password mismatch for user '{request.username}'.")
+            # FAILURE: Increment attempts
+            db_user.failed_login_attempts += 1
+            if db_user.failed_login_attempts >= 3:
+                db_user.locked_until = datetime.utcnow() + timedelta(minutes=15)
+                db.commit()
+                print(f"[AUTH] Security: Account '{request.username}' locked for 15 mins (3 failures).")
+                raise HTTPException(
+                    status_code=403, 
+                    detail="Too many failed attempts. Account locked for 15 minutes."
+                )
+            
+            db.commit()
+            print(f"[AUTH] Denied: Fail #{db_user.failed_login_attempts} for '{request.username}'.")
             raise HTTPException(status_code=401, detail="Invalid username or password")
             
     except HTTPException:
