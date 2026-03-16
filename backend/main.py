@@ -326,43 +326,39 @@ def seed_lookups(db: Session):
     cat_map = {c.category_name: c.category_id for c in db.query(ServiceCategory).all()}
     
     try:
-        # Check if we are on PostgreSQL before attempting advisory locks
-        is_postgres = "postgresql" in str(db.get_bind().url)
-        lock_acquired = True
+        service_count = db.query(Service).count()
         
-        if is_postgres:
-            try:
-                lock_acquired = db.execute(text("SELECT pg_try_advisory_xact_lock(12345)")).scalar()
-            except Exception:
-                lock_acquired = True # Fallback if lock fails
-
-        if lock_acquired:
-            print(">>> Catalog Sync: Updating service table...")
-            # Deactivate everything first to ensure a clean UI
-            db.execute(text("UPDATE services SET is_active = False"))
-            # Purge ALL Duplicates and Inactive Trash (Standardizing Case for SQLite/PG)
-            db.execute(text("DELETE FROM services WHERE service_name LIKE '%[DUP]%' OR service_name LIKE 'z_hidden%'"))
-
+        if service_count == 0:
+            # FIRST BOOT: Seed initial catalog from scratch
+            print(">>> Catalog Sync: First boot detected, seeding full service catalog...")
+            for item in catalog_data:
+                cat_name = item.pop("category", "base")
+                item["category_id"] = cat_map.get(cat_name, cat_map.get("base"))
+                db.add(Service(**item))
+            db.commit()
+            print(">>> Catalog Sync: Initial seeding complete.")
+        else:
+            # SUBSEQUENT BOOTS: Only add NEW services that do not exist yet.
+            # NEVER touch sort_order so user arrangements are preserved.
+            print(f">>> Catalog Sync: {service_count} services found. Adding any new catalog entries only...")
             for item in catalog_data:
                 target_name = item.get("service_name").strip()
                 cat_name = item.pop("category", "base")
                 item["category_id"] = cat_map.get(cat_name, cat_map.get("base"))
                 
-                # Check for existing service
-                db_service = db.query(Service).filter(func.lower(Service.service_name) == target_name.lower()).first()
-                if db_service:
-                    db_service.service_name = target_name
-                    db_service.base_price = item["base_price"]
-                    db_service.category_id = item["category_id"]
-                    db_service.duration_days = item["duration_days"]
-                    db_service.service_code = item["service_code"]
-                    db_service.is_active = item["is_active"]
-                    db_service.sort_order = db_service.sort_order # Keep existing user order
-                else:
+                exists = db.query(Service).filter(
+                    func.lower(Service.service_name) == target_name.lower()
+                ).first()
+                
+                if not exists:
+                    print(f">>> Catalog Sync: Adding new service '{target_name}'.")
                     db.add(Service(**item))
-            
+                else:
+                    # Only update price and activation status — NEVER sort_order
+                    exists.base_price = item["base_price"]
+                    exists.is_active = item["is_active"]
             db.commit()
-            print(">>> Catalog Sync: Complete.")
+            print(">>> Catalog Sync: Complete. User sort orders preserved.")
     except Exception as lock_err:
         db.rollback()
         print(f">>> Catalog Sync Warning: {lock_err}")

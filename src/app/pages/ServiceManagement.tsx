@@ -87,7 +87,7 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
               <CardTitle className="text-base font-black text-gray-900 uppercase">Base Services</CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
-              <Reorder.Group axis="y" values={baseServices} onReorder={(newOrder) => handleReorder('base', newOrder)} className="space-y-3 -mt-2 pr-1 max-h-[240px] overflow-y-scroll custom-scrollbar list-none p-0">
+              <Reorder.Group axis="y" values={baseServices} onReorder={(newOrder) => handleReorder('base', newOrder)} className="space-y-3 -mt-2 pr-1 max-h-[240px] overflow-y-scroll overflow-x-hidden custom-scrollbar list-none p-0">
                 {baseServices.map(service => (
                   <Reorder.Item 
                     key={service.id} 
@@ -129,7 +129,7 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
               <CardTitle className="text-base font-black text-gray-900 uppercase">Priority Fees</CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
-              <Reorder.Group axis="y" values={priorityServices} onReorder={(newOrder) => handleReorder('priority', newOrder)} className="space-y-3 -mt-2 pr-1 max-h-[180px] overflow-y-scroll custom-scrollbar list-none p-0">
+              <Reorder.Group axis="y" values={priorityServices} onReorder={(newOrder) => handleReorder('priority', newOrder)} className="space-y-3 -mt-2 pr-1 max-h-[180px] overflow-y-scroll overflow-x-hidden custom-scrollbar list-none p-0">
                 {priorityServices.map(service => (
                   <Reorder.Item 
                     key={service.id} 
@@ -174,7 +174,7 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
             <CardTitle className="text-base font-black text-gray-900 uppercase">Add-On Services</CardTitle>
           </CardHeader>
           <CardContent className="pt-0 h-[calc(100%-48px)]">
-            <Reorder.Group axis="y" values={addonServices} onReorder={(newOrder) => handleReorder('addon', newOrder)} className="space-y-3 -mt-2 pr-1 max-h-[440px] overflow-y-scroll custom-scrollbar list-none p-0">
+            <Reorder.Group axis="y" values={addonServices} onReorder={(newOrder) => handleReorder('addon', newOrder)} className="space-y-3 -mt-2 pr-1 max-h-[440px] overflow-y-scroll overflow-x-hidden custom-scrollbar list-none p-0">
               {addonServices.map(service => (
                 <Reorder.Item 
                   key={service.id} 
