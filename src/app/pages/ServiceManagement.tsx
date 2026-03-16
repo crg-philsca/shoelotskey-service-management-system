@@ -89,10 +89,16 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
             <CardContent className="pt-0">
               <Reorder.Group axis="y" values={baseServices} onReorder={(newOrder) => handleReorder('base', newOrder)} className="space-y-3 -mt-2 pr-1 max-h-[240px] overflow-y-scroll custom-scrollbar list-none p-0">
                 {baseServices.map(service => (
-                  <Reorder.Item key={service.id} value={service} className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border-none gap-3 cursor-grab active:cursor-grabbing border border-transparent hover:border-gray-200 transition-all">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="p-1 hover:bg-gray-200 rounded cursor-grab active:cursor-grabbing">
-                        <GripVertical size={16} className="text-gray-500 shrink-0" />
+                  <Reorder.Item 
+                    key={service.id} 
+                    value={service} 
+                    initial={false}
+                    whileDrag={{ scale: 1.03, boxShadow: "0 10px 40px rgba(0,0,0,0.1)" }}
+                    className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border-none gap-3 cursor-grab active:cursor-grabbing border border-transparent hover:border-gray-200 transition-all z-0 hover:z-10 relative"
+                  >
+                    <div className="flex items-center gap-2 min-w-0 pointer-events-none">
+                      <div className="p-1">
+                        <GripVertical size={16} className="text-gray-400 shrink-0" />
                       </div>
                       <div className="min-w-0">
                         <p className="font-bold text-gray-900 text-[13px] leading-tight truncate">{service.name}</p>
@@ -125,10 +131,16 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
             <CardContent className="pt-0">
               <Reorder.Group axis="y" values={priorityServices} onReorder={(newOrder) => handleReorder('priority', newOrder)} className="space-y-3 -mt-2 pr-1 max-h-[180px] overflow-y-scroll custom-scrollbar list-none p-0">
                 {priorityServices.map(service => (
-                  <Reorder.Item key={service.id} value={service} className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border-none gap-3 cursor-grab active:cursor-grabbing border border-transparent hover:border-gray-200 transition-all">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="p-1 hover:bg-gray-200 rounded cursor-grab active:cursor-grabbing">
-                        <GripVertical size={16} className="text-gray-500 shrink-0" />
+                  <Reorder.Item 
+                    key={service.id} 
+                    value={service} 
+                    initial={false}
+                    whileDrag={{ scale: 1.03, boxShadow: "0 10px 40px rgba(0,0,0,0.1)" }}
+                    className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border-none gap-3 cursor-grab active:cursor-grabbing border border-transparent hover:border-gray-200 transition-all z-0 hover:z-10 relative"
+                  >
+                    <div className="flex items-center gap-2 min-w-0 pointer-events-none">
+                      <div className="p-1">
+                        <GripVertical size={16} className="text-gray-400 shrink-0" />
                       </div>
                       <div className="min-w-0">
                         <p className="font-bold text-gray-900 text-[13px] leading-tight truncate">{service.name}</p>
@@ -164,10 +176,16 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
           <CardContent className="pt-0 h-[calc(100%-48px)]">
             <Reorder.Group axis="y" values={addonServices} onReorder={(newOrder) => handleReorder('addon', newOrder)} className="space-y-3 -mt-2 pr-1 max-h-[440px] overflow-y-scroll custom-scrollbar list-none p-0">
               {addonServices.map(service => (
-                <Reorder.Item key={service.id} value={service} className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border-none gap-3 cursor-grab active:cursor-grabbing border border-transparent hover:border-gray-200 transition-all">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="p-1 hover:bg-gray-200 rounded cursor-grab active:cursor-grabbing">
-                      <GripVertical size={16} className="text-gray-500 shrink-0" />
+                <Reorder.Item 
+                  key={service.id} 
+                  value={service} 
+                  initial={false}
+                  whileDrag={{ scale: 1.03, boxShadow: "0 10px 40px rgba(0,0,0,0.1)" }}
+                  className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border-none gap-3 cursor-grab active:cursor-grabbing border border-transparent hover:border-gray-200 transition-all z-0 hover:z-10 relative"
+                >
+                  <div className="flex items-center gap-2 min-w-0 pointer-events-none">
+                    <div className="p-1">
+                      <GripVertical size={16} className="text-gray-400 shrink-0" />
                     </div>
                     <div className="min-w-0">
                       <p className="font-bold text-gray-900 text-[13px] leading-tight truncate">{service.name}</p>

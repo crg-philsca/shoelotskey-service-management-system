@@ -357,7 +357,7 @@ def seed_lookups(db: Session):
                     db_service.duration_days = item["duration_days"]
                     db_service.service_code = item["service_code"]
                     db_service.is_active = item["is_active"]
-                    db_service.sort_order = item["sort_order"]
+                    db_service.sort_order = db_service.sort_order # Keep existing user order
                 else:
                     db.add(Service(**item))
             
@@ -1109,6 +1109,25 @@ def create_service(service_data: dict, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_service)
     return db_service
+
+@app.put("/api/services/reorder")
+def reorder_services_bulk(reorder_data: List[dict], db: Session = Depends(get_db)):
+    """
+    BULK REORDER: Updates sort_order for multiple services in one transaction.
+    Payload: [{"id": 1, "sort_order": 1}, {"id": 2, "sort_order": 2}]
+    """
+    print(f"[CATALOG] Bulk reordering {len(reorder_data)} services...")
+    try:
+        for item in reorder_data:
+            svc_id = item.get("id")
+            new_order = item.get("sort_order")
+            db.query(Service).filter(Service.service_id == svc_id).update({"sort_order": new_order})
+        db.commit()
+        return {"status": "success"}
+    except Exception as e:
+        db.rollback()
+        print(f"[ERROR] Bulk reorder failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save new order")
 
 @app.put("/api/services/{service_id}", response_model=ServiceSchema)
 def update_service(service_id: int, service_update: dict, db: Session = Depends(get_db)):

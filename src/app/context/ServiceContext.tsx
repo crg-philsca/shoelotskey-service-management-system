@@ -136,17 +136,23 @@ export function ServiceProvider({ children }: { children: ReactNode }) {
     };
 
     const reorderServices = (newOrder: Service[]) => {
-        // Optimistically update local state immediately
+        // 1. Optimistically update local state
         setServices(newOrder);
 
-        // Map through all items and update their sort_order in parallel on the backend
-        newOrder.forEach((svc, index) => {
-            const payload = { sort_order: index + 1 };
-            fetch(`${API_BASE}/services/${svc.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            }).catch(err => console.error(`Failed to update sort order for ${svc.name}`, err));
+        // 2. Prepare bulk payload (mappings frontend IDs to backend sort_orders)
+        const reorderPayload = newOrder.map((svc, index) => ({
+            id: parseInt(svc.id),
+            sort_order: index + 1
+        }));
+
+        // 3. Save entire sequence in one transaction (Pro-Level Sync)
+        fetch(`${API_BASE}/services/reorder`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(reorderPayload)
+        }).catch(err => {
+            console.error("Bulk reorder sync failed", err);
+            // Optional: revert state if critical
         });
     };
 
