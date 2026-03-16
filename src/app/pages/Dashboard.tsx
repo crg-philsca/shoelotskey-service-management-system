@@ -838,130 +838,152 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                              {paginatedOrders.map((order) => (
-                                <tr
-                                  key={order.id}
-                                  className="hover:bg-gray-50 cursor-pointer"
-                                  onClick={() => {
-                                    setSelectedOrder(order);
-                                    setIsEditing(false);
-                                  }}
-                                >
-                                  <td className="px-3 py-3 text-xs font-medium text-center whitespace-nowrap">{order.orderNumber}</td>
-                                  <td className="px-3 py-3 text-xs text-center">
-                                    <div className="inline-block text-left w-full max-w-[150px]">
-                                      {order.customerName}
+                              {paginatedOrders.length === 0 ? (
+                                <tr>
+                                  <td colSpan={selectedStatus === 'claimed' ? 10 : 9} className="px-6 py-20 text-center">
+                                    <div className="flex flex-col items-center justify-center space-y-3 opacity-40">
+                                      <ClipboardCheck size={48} className="text-gray-300" />
+                                      <p className="text-sm font-black text-gray-400 uppercase tracking-[0.2em]">
+                                        {(() => {
+                                          if (searchQuery) return 'No matching orders found';
+                                          switch (selectedStatus) {
+                                            case 'new-order': return 'No new orders found';
+                                            case 'on-going': return 'No ongoing orders found';
+                                            case 'for-release': return 'No orders for release';
+                                            case 'claimed': return 'No claimed orders found';
+                                            default: return 'No orders found';
+                                          }
+                                        })()}
+                                      </p>
                                     </div>
                                   </td>
-                                  <td className="px-3 py-3 text-xs text-center">
-                                    {Array.isArray(order.baseService)
-                                      ? order.baseService.map(s => s.replace(' (with basic cleaning)', '')).join(', ')
-                                      : String(order.baseService).replace(' (with basic cleaning)', '')}
-                                  </td>
-                                  <td className="px-3 py-3 text-xs text-center text-gray-700">{order.quantity || 1} {(order.quantity || 1) === 1 ? 'Pair' : 'Pairs'}</td>
-                                  <td className="px-3 py-3 text-xs text-center">{dateFnsFormat(new Date(order.createdAt), 'MM/dd/yy')}</td>
-                                  <td className="px-3 py-3 text-xs text-center">
-                                    {order.predictedCompletionDate ? dateFnsFormat(new Date(order.predictedCompletionDate), 'MM/dd/yy') : '-'}
-                                  </td>
-                                  <td className="px-3 py-3 text-xs text-center">
-                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase border whitespace-nowrap
-                                           ${order.priorityLevel === 'rush' ? 'bg-red-50 text-red-700 border-red-100' :
-                                        order.priorityLevel === 'premium' ? 'bg-amber-50 text-amber-700 border-amber-100' :
-                                          'bg-emerald-50 text-emerald-700 border-emerald-100'
-                                      }`}>
-                                      {order.priorityLevel}
-                                    </span>
-                                  </td>
-                                  {selectedStatus === 'claimed' && <td className="px-3 py-3 text-xs text-center hidden md:table-cell">{order.claimedBy || '-'}</td>}
-                                  <td className="px-3 py-3 text-center text-xs hidden md:table-cell">{order.processedBy || '-'}</td>
-                                  <td className="px-3 py-3 text-xs text-center" onClick={(e) => e.stopPropagation()}>
-                                    <DropdownMenu>
-                                      <DropdownMenuTrigger asChild>
-                                        <button className="inline-flex items-center gap-0.5 h-7 px-1 text-xs border border-red-600 text-red-600 rounded bg-red-50 hover:bg-red-100 transition-colors">
-                                          <MoreVertical className="h-3.5 w-3.5" />
-                                          <ChevronDown className="h-3.5 w-3.5" />
-                                        </button>
-                                      </DropdownMenuTrigger>
-                                      <DropdownMenuContent align="end" className="w-56 p-2 space-y-1">
-                                        {order.status === 'new-order' && (
-                                          <DropdownMenuItem onClick={(e) => {
-                                            e.stopPropagation();
-                                            setSelectedOrder(order);
-                                            setIsEditing(true);
-                                          }} className="border border-gray-200 rounded-md px-2.5 py-1.5 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:text-yellow-800 focus:bg-yellow-100 mb-1">
-                                            <Edit className="h-4 w-4 mr-2" />
-                                            Edit Order Detail
-                                          </DropdownMenuItem>
-                                        )}
-
-                                        {order.status !== 'new-order' && (
-                                          <DropdownMenuItem onClick={(e) => {
-                                            e.stopPropagation();
-                                            const prevStatus =
-                                              order.status === 'on-going' ? 'new-order' :
-                                                order.status === 'for-release' ? 'on-going' :
-                                                  order.status === 'claimed' ? 'for-release' : null;
-
-                                            if (prevStatus) {
-                                              updateOrder(order.id, {
-                                                status: prevStatus as any,
-                                                updatedAt: new Date(),
-                                                actualCompletionDate: undefined
-                                              }, user.username);
-                                              toast.success(`Order reverted to ${prevStatus.replace('-', ' ')}`);
-                                            }
-                                          }} className={cn(
-                                            "border rounded-md px-2.5 py-1.5 mb-1 focus:outline-none",
-                                            order.status === 'on-going' && "border-purple-200 text-purple-600 bg-purple-50 hover:bg-purple-100 focus:text-purple-700 focus:bg-purple-100",
-                                            order.status === 'for-release' && "border-blue-200 text-blue-600 bg-blue-50 hover:bg-blue-100 focus:text-blue-700 focus:bg-blue-100",
-                                            order.status === 'claimed' && "border-orange-200 text-orange-600 bg-orange-50 hover:bg-orange-100 focus:text-orange-700 focus:bg-orange-100"
-                                          )}>
-                                            <RotateCcw className={cn(
-                                              "h-4 w-4 mr-2",
-                                              order.status === 'on-going' && "text-purple-500",
-                                              order.status === 'for-release' && "text-blue-500",
-                                              order.status === 'claimed' && "text-orange-500"
-                                            )} />
-                                            {order.status === 'on-going' ? 'Undo to New Order' :
-                                              order.status === 'for-release' ? 'Undo to On-Going' :
-                                                'Undo to For Release'}
-                                          </DropdownMenuItem>
-                                        )}
-
-                                        {selectedStatus === 'new-order' && (
-                                          <DropdownMenuItem onClick={(e) => {
-                                            e.stopPropagation();
-                                            updateOrder(order.id, { status: 'on-going', updatedAt: new Date() }, user.username);
-                                            toast.success('Order moved to On-Going');
-                                          }} className="border border-gray-200 rounded-md px-2.5 py-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 focus:text-blue-700 focus:bg-blue-100">
-                                            <ArrowRight className="h-4 w-4 mr-2" />
-                                            Move to On-Going
-                                          </DropdownMenuItem>
-                                        )}
-                                        {selectedStatus === 'on-going' && (
-                                          <DropdownMenuItem onClick={(e) => {
-                                            e.stopPropagation();
-                                            updateOrder(order.id, { status: 'for-release', updatedAt: new Date() }, user.username);
-                                            toast.success('Order moved to For Release');
-                                          }} className="border border-gray-200 rounded-md px-2.5 py-1.5 text-orange-600 bg-orange-50 hover:bg-orange-100 focus:text-orange-700 focus:bg-orange-100">
-                                            <ArrowRight className="h-4 w-4 mr-2" />
-                                            Move to For Release
-                                          </DropdownMenuItem>
-                                        )}
-                                        {selectedStatus === 'for-release' && (
-                                          <DropdownMenuItem onClick={(e) => {
-                                            e.stopPropagation();
-                                            setProcessClaimOrder(order);
-                                          }} className="border border-gray-200 rounded-md px-2.5 py-1.5 text-gray-600 bg-gray-50 hover:bg-gray-100 focus:text-gray-700 focus:bg-gray-100">
-                                            <ArrowRight className="h-4 w-4 mr-2" />
-                                            Move to Claimed
-                                          </DropdownMenuItem>
-                                        )}
-                                      </DropdownMenuContent>
-                                    </DropdownMenu>
-                                  </td>
                                 </tr>
-                              ))}
+                              ) : (
+                                paginatedOrders.map((order) => (
+                                  <tr
+                                    key={order.id}
+                                    className="hover:bg-gray-50 cursor-pointer"
+                                    onClick={() => {
+                                      setSelectedOrder(order);
+                                      setIsEditing(false);
+                                    }}
+                                  >
+                                    <td className="px-3 py-3 text-xs font-medium text-center whitespace-nowrap">{order.orderNumber}</td>
+                                    <td className="px-3 py-3 text-xs text-center">
+                                      <div className="inline-block text-left w-full max-w-[150px]">
+                                        {order.customerName}
+                                      </div>
+                                    </td>
+                                    <td className="px-3 py-3 text-xs text-center">
+                                      {Array.isArray(order.baseService)
+                                        ? order.baseService.map(s => s.replace(' (with basic cleaning)', '')).join(', ')
+                                        : String(order.baseService).replace(' (with basic cleaning)', '')}
+                                    </td>
+                                    <td className="px-3 py-3 text-xs text-center text-gray-700">{order.quantity || 1} {(order.quantity || 1) === 1 ? 'Pair' : 'Pair'}</td>
+                                    <td className="px-3 py-3 text-xs text-center">{dateFnsFormat(new Date(order.createdAt), 'MM/dd/yy')}</td>
+                                    <td className="px-3 py-3 text-xs text-center">
+                                      {order.predictedCompletionDate ? dateFnsFormat(new Date(order.predictedCompletionDate), 'MM/dd/yy') : '-'}
+                                    </td>
+                                    <td className="px-3 py-3 text-xs text-center">
+                                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase border whitespace-nowrap
+                                             ${order.priorityLevel === 'rush' ? 'bg-red-50 text-red-700 border-red-100' :
+                                          order.priorityLevel === 'premium' ? 'bg-amber-50 text-amber-700 border-amber-100' :
+                                            'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                        }`}>
+                                        {order.priorityLevel}
+                                      </span>
+                                    </td>
+                                    {selectedStatus === 'claimed' && <td className="px-3 py-3 text-xs text-center hidden md:table-cell">{order.claimedBy || '-'}</td>}
+                                    <td className="px-3 py-3 text-center text-xs hidden md:table-cell">{order.processedBy || '-'}</td>
+                                    <td className="px-3 py-3 text-xs text-center" onClick={(e) => e.stopPropagation()}>
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                          <button className="inline-flex items-center gap-0.5 h-7 px-1 text-xs border border-red-600 text-red-600 rounded bg-red-50 hover:bg-red-100 transition-colors">
+                                            <MoreVertical className="h-3.5 w-3.5" />
+                                            <ChevronDown className="h-3.5 w-3.5" />
+                                          </button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" className="w-56 p-2 space-y-1">
+                                          {order.status === 'new-order' && (
+                                            <DropdownMenuItem onClick={(e) => {
+                                              e.stopPropagation();
+                                              setSelectedOrder(order);
+                                              setIsEditing(true);
+                                            }} className="border border-gray-200 rounded-md px-2.5 py-1.5 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:text-yellow-800 focus:bg-yellow-100 mb-1">
+                                              <Edit className="h-4 w-4 mr-2" />
+                                              Edit Order Detail
+                                            </DropdownMenuItem>
+                                          )}
+  
+                                          {order.status !== 'new-order' && (
+                                            <DropdownMenuItem onClick={(e) => {
+                                              e.stopPropagation();
+                                              const prevStatus =
+                                                order.status === 'on-going' ? 'new-order' :
+                                                  order.status === 'for-release' ? 'on-going' :
+                                                    order.status === 'claimed' ? 'for-release' : null;
+  
+                                              if (prevStatus) {
+                                                updateOrder(order.id, {
+                                                  status: prevStatus as any,
+                                                  updatedAt: new Date(),
+                                                  actualCompletionDate: undefined
+                                                }, user.username);
+                                                toast.success(`Order reverted to ${prevStatus.replace('-', ' ')}`);
+                                              }
+                                            }} className={cn(
+                                              "border rounded-md px-2.5 py-1.5 mb-1 focus:outline-none",
+                                              order.status === 'on-going' && "border-purple-200 text-purple-600 bg-purple-50 hover:bg-purple-100 focus:text-purple-700 focus:bg-purple-100",
+                                              order.status === 'for-release' && "border-blue-200 text-blue-600 bg-blue-50 hover:bg-blue-100 focus:text-blue-700 focus:bg-blue-100",
+                                              order.status === 'claimed' && "border-orange-200 text-orange-600 bg-orange-50 hover:bg-orange-100 focus:text-orange-700 focus:bg-orange-100"
+                                            )}>
+                                              <RotateCcw className={cn(
+                                                "h-4 w-4 mr-2",
+                                                order.status === 'on-going' && "text-purple-500",
+                                                order.status === 'for-release' && "text-blue-500",
+                                                order.status === 'claimed' && "text-orange-500"
+                                              )} />
+                                              {order.status === 'on-going' ? 'Undo to New Order' :
+                                                order.status === 'for-release' ? 'Undo to On-Going' :
+                                                  'Undo to For Release'}
+                                            </DropdownMenuItem>
+                                          )}
+  
+                                          {selectedStatus === 'new-order' && (
+                                            <DropdownMenuItem onClick={(e) => {
+                                              e.stopPropagation();
+                                              updateOrder(order.id, { status: 'on-going', updatedAt: new Date() }, user.username);
+                                              toast.success('Order moved to On-Going');
+                                            }} className="border border-gray-200 rounded-md px-2.5 py-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 focus:text-blue-700 focus:bg-blue-100">
+                                              <ArrowRight className="h-4 w-4 mr-2" />
+                                              Move to On-Going
+                                            </DropdownMenuItem>
+                                          )}
+                                          {selectedStatus === 'on-going' && (
+                                            <DropdownMenuItem onClick={(e) => {
+                                              e.stopPropagation();
+                                              updateOrder(order.id, { status: 'for-release', updatedAt: new Date() }, user.username);
+                                              toast.success('Order moved to For Release');
+                                            }} className="border border-gray-200 rounded-md px-2.5 py-1.5 text-orange-600 bg-orange-50 hover:bg-orange-100 focus:text-orange-700 focus:bg-orange-100">
+                                              <ArrowRight className="h-4 w-4 mr-2" />
+                                              Move to For Release
+                                            </DropdownMenuItem>
+                                          )}
+                                          {selectedStatus === 'for-release' && (
+                                            <DropdownMenuItem onClick={(e) => {
+                                              e.stopPropagation();
+                                              setProcessClaimOrder(order);
+                                            }} className="border border-gray-200 rounded-md px-2.5 py-1.5 text-gray-600 bg-gray-50 hover:bg-gray-100 focus:text-gray-700 focus:bg-gray-100">
+                                              <ArrowRight className="h-4 w-4 mr-2" />
+                                              Move to Claimed
+                                            </DropdownMenuItem>
+                                          )}
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
+                                    </td>
+                                  </tr>
+                                ))
+                              )}
                             </tbody>
                           </table>
                         </div>

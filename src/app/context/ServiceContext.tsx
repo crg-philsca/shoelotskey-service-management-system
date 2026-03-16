@@ -29,7 +29,8 @@ export function ServiceProvider({ children }: { children: ReactNode }) {
                         id: bs.service_id.toString(),
                         name: bs.service_name,
                         price: parseFloat(bs.base_price),
-                        category: bs.category,
+                        // Extract category name from nested 3NF object
+                        category: typeof bs.category === 'object' ? bs.category?.category_name : bs.category,
                         active: bs.is_active,
                         description: bs.description || '',
                         durationDays: bs.duration_days || 0,

@@ -242,16 +242,27 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
         }));
 
         try {
-            // Find numerical ID (if it was from backend)
-            // Note: In a real app, we'd store the actual DB ID in the 'id' field
             const dbId = parseInt(id);
             if (!isNaN(dbId)) {
-                await fetch(`${API_BASE}/orders/${dbId}`, {
+                const response = await fetch(`${API_BASE}/orders/${dbId}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ ...updates, updater_id: user.id })
                 });
 
+                // [SAFETY NET] Handle concurrent deletion by another staff member
+                if (response.status === 404) {
+                    console.warn(`[DEBUG] OrderProvider: Order ${id} not found. Likely deleted.`);
+                    const { toast } = await import('sonner');
+                    toast.error("Resource Unavailable", {
+                        description: "This order needs a 'Full Reglue' (it might have been deleted by another staff member).",
+                        duration: 5000
+                    });
+                    refreshOrders(); // Remove the "ghost" order from UI
+                    return;
+                }
+
+                if (!response.ok) throw new Error('API update failed');
             }
 
             // Log Activity
@@ -265,6 +276,7 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
             }
         } catch (err) {
             console.error('[DEBUG] OrderProvider: Backend update failed.', err);
+            // Optionally: revert optimistic update here if desired
         }
     };
 

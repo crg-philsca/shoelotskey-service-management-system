@@ -279,10 +279,12 @@ export default function TotalOrders({ onSetHeaderActionRight }: TotalOrdersProps
                             <TableBody>
                                 {paginatedOrders.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={7} className="text-center text-gray-400 py-12">
-                                            <div className="flex flex-col items-center gap-2">
-                                                <ShoppingBag className="h-10 w-10 text-gray-300" />
-                                                <p className="font-semibold">No orders found.</p>
+                                        <TableCell colSpan={7} className="px-6 py-20 text-center">
+                                            <div className="flex flex-col items-center justify-center space-y-3 opacity-40">
+                                                <ShoppingBag size={48} className="text-gray-300" />
+                                                <p className="text-sm font-black text-gray-400 uppercase tracking-[0.2em]">
+                                                    {searchQuery ? 'No matching orders found' : 'No orders found for this period'}
+                                                </p>
                                             </div>
                                         </TableCell>
                                     </TableRow>

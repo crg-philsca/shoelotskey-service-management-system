@@ -8,6 +8,10 @@ Pooling is optimized for multi-user access (10 base connections + 20 overflow).
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from dotenv import load_dotenv
+
+# Load variables from .env if present
+load_dotenv()
 
 # 1. DATABASE CONNECTION URL
 # Automatically handles Heroku (DATABASE_URL) or fallback to local SQLite for deployment ease.
@@ -33,8 +37,9 @@ is_sqlite = DATABASE_URL.startswith("sqlite")
 connect_args = {}
 if is_sqlite:
     connect_args = {"check_same_thread": False}
-else:
-    # This forces the Python backend to use SSL just like DBeaver
+elif "localhost" not in DATABASE_URL and "127.0.0.1" not in DATABASE_URL:
+    # Only force SSL for remote (Heroku/Cloud) connections
+    # This matches the user's "Gold Standard" for professional deployment
     connect_args = {"sslmode": "require"}
 
 engine = create_engine(

@@ -22,7 +22,8 @@ import json
 import sys
 import requests
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
+from fastapi.templating import Jinja2Templates
 
 # Internal Imports
 from models import (
@@ -36,19 +37,74 @@ from schemas import (
     ForgotPasswordRequest, ResetPasswordRequest, RoleSchema, StatusSchema, 
     ItemSchema, PaymentSchema, DeliverySchema, UserCreateSchema, UserUpdateSchema
 )
-from database import engine, get_db, SessionLocal
+from database import engine, get_db, SessionLocal, DATABASE_URL
 from ml_engine import predictor
 
 # ==========================================
-# 0. INITIALIZATION
+# 0. INITIALIZATION & DIAGNOSTICS
 # ==========================================
 
-# Initialize FastAPI app first to avoid NameErrors
+# Detector: Environment
+DB_TYPE = "PostgreSQL" if "postgresql" in DATABASE_URL else "SQLite"
+ENV = "Production/Heroku" if os.getenv("PORT") else "Localhost/Development"
+
+print("\n" + "!" * 60)
+print(f"  SYSTEM DIAGNOSTIC: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+print(f"  ENVIRONMENT:      {ENV}")
+print(f"  DATABASE TYPE:    {DB_TYPE}")
+print(f"  DATABASE URL:     {DATABASE_URL.split('@')[-1] if '@' in DATABASE_URL else DATABASE_URL}")
+print("!" * 60 + "\n")
+
+# Initialize FastAPI 
 app = FastAPI(
     title="Shoelotskey 3NF & ML SMS",
     description="Backend API for Normalized Service Management",
     version="2.0.0"
 )
+
+# Configure Templates for custom error pages
+# Look in the same directory as main.py for the 'templates' folder
+templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
+
+@app.exception_handler(404)
+async def not_found_exception_handler(request: Request, exc: Exception):
+    """
+    Catches all 404 Not Found errors and returns the custom Shoelotskey 404 page.
+    This prevents 'Information Leakage' by hiding raw server errors.
+    Also acts as a [VITAL DEBUGGING TOOL] by logging broken URLs for developer review.
+    """
+    path = request.url.path
+    print(f"[404 ERROR] Trace: Route '{path}' not found.")
+    
+    # [VITAL DEBUGGING TOOL] Secretly log broken links to audit_logs for staff review
+    try:
+        db = SessionLocal()
+        # Log the missing route as a system-event
+        # We use user_id=1 (usually the admin/seed user) for tracking
+        new_log = AuditLog(
+            user_id=1, 
+            action_type="404_NOT_FOUND",
+            table_name="router_v2",
+            record_id=0,
+            old_values={"broken_url": path},
+            new_values={
+                "method": request.method,
+                "client": request.client.host if request.client else "unknown",
+                "user_agent": request.headers.get("user-agent")
+            }
+        )
+        db.add(new_log)
+        db.commit()
+    except Exception as e:
+        print(f">>> [404 Logging Failed]: {e}")
+    finally:
+        if 'db' in locals():
+            db.close()
+
+    return templates.TemplateResponse("404.html", {"request": request}, status_code=404)
+
+# Mount Brand Assets
+app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="brand_assets")
 
 # Configure CORS for React compatibility
 app.add_middleware(
@@ -64,37 +120,30 @@ app.add_middleware(
 # ==========================================
 
 @app.on_event("startup")
-def on_startup():
-    """Logic executed when the server starts."""
-    print(">>> System Boot: Initializing Database Schema...")
+def startup_sequence():
+    """Robust unified startup logic for SQLite and PostgreSQL."""
+    print(">>> System Boot: Synchronizing Database Dialect...")
     
-    # 0. PRE-BREAD: Robust migrations before ANY ORM work
-    from sqlalchemy import text, inspect
-    try:
-        inspector = inspect(engine)
-        if "users" in inspector.get_table_names():
-            cols = [c['name'] for c in inspector.get_columns("users")]
-            with engine.connect() as conn:
-                with conn.begin():
-                    if "reset_token" not in cols:
-                        print(">>> Migration: Force adding reset_token column")
-                        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token VARCHAR(255)"))
-                    if "reset_token_expiry" not in cols:
-                        print(">>> Migration: Force adding reset_token_expiry column")
-                        conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expiry TIMESTAMP"))
-    except Exception as e:
-        print(f">>> Pre-migration Warning: {e}")
-
-    # Create tables if they don't exist
+    # 1. Create Tables (Idempotent)
     Base.metadata.create_all(bind=engine)
+    inspector = inspect(engine)
     
-    # Auto-Migration for 'Too Normalized' database fix
-    from sqlalchemy import text, inspect
+    # 2. Dialect-Safe Migrations
     try:
-        # Use inspector to check columns before blindly altering
-        inspector = inspect(engine)
-        
-        # 1. Items Table update
+        # User Table: Reset Tokens
+        if "users" in inspector.get_table_names():
+            columns = [c['name'] for c in inspector.get_columns("users")]
+            with engine.begin() as conn:
+                if "reset_token" not in columns:
+                    print(">>> Migration: Adding reset_token to users")
+                    try: conn.execute(text("ALTER TABLE users ADD COLUMN reset_token VARCHAR(255)"))
+                    except: pass
+                if "reset_token_expiry" not in columns:
+                    print(">>> Migration: Adding reset_token_expiry to users")
+                    try: conn.execute(text("ALTER TABLE users ADD COLUMN reset_token_expiry TIMESTAMP"))
+                    except: pass
+
+        # Items Table: Machine Learning Features (Condition Flags)
         if "items" in inspector.get_table_names():
             columns = [c['name'] for c in inspector.get_columns("items")]
             missing = [
@@ -109,115 +158,68 @@ def on_startup():
                 for col_name, col_type in missing:
                     if col_name not in columns:
                         print(f">>> Migration: Adding {col_name} to items")
-                        conn.execute(text(f"ALTER TABLE items ADD COLUMN {col_name} {col_type}"))
-        
-        # 2. Users Table update (Crucial for Forgot Password)
-        if "users" in inspector.get_table_names():
-            columns = [c['name'] for c in inspector.get_columns("users")]
-            with engine.begin() as conn:
-                if "reset_token" not in columns:
-                    print(">>> Migration: Adding reset_token to users")
-                    try: conn.execute(text("ALTER TABLE users ADD COLUMN reset_token VARCHAR(255)"))
-                    except Exception as e: print(f">>> Migration Warning: {e}")
-                
-                if "reset_token_expiry" not in columns:
-                    print(">>> Migration: Adding reset_token_expiry to users")
-                    try: conn.execute(text("ALTER TABLE users ADD COLUMN reset_token_expiry TIMESTAMP"))
-                    except Exception as e: print(f">>> Migration Warning: {e}")
-        
-        # 3. Data Extraction (Orders -> Payments/Deliveries)
-        if "payments" in inspector.get_table_names() and "deliveries" in inspector.get_table_names():
-            with engine.begin() as conn:
-                print(">>> Migration: Synchronizing payments/deliveries extraction...")
-                conn.execute(text("""
-                    INSERT INTO payments (order_id, payment_method, payment_status, amount_received, balance, reference_no, deposit_amount)
-                    SELECT order_id, payment_method, payment_status, amount_received, balance, reference_no, deposit_amount
-                    FROM orders
-                    WHERE order_id NOT IN (SELECT order_id FROM payments)
-                    ON CONFLICT DO NOTHING
-                """))
-                conn.execute(text("""
-                    INSERT INTO deliveries (order_id, shipping_preference, delivery_address, delivery_courier, release_time, province, city, barangay, zip_code)
-                    SELECT order_id, shipping_preference, delivery_address, delivery_courier, release_time, province, city, barangay, zip_code
-                    FROM orders
-                    WHERE order_id NOT IN (SELECT order_id FROM deliveries)
-                    ON CONFLICT DO NOTHING
-                """))
+                        try: conn.execute(text(f"ALTER TABLE items ADD COLUMN {col_name} {col_type}"))
+                        except: pass
 
-        # 4. Services Table update (Custom Sorting)
+        # Services Table: Sorting
         if "services" in inspector.get_table_names():
             columns = [c['name'] for c in inspector.get_columns("services")]
             if "sort_order" not in columns:
                 print(">>> Migration: Adding sort_order to services")
                 with engine.begin() as conn:
                     try: conn.execute(text("ALTER TABLE services ADD COLUMN sort_order INTEGER DEFAULT 0"))
-                    except Exception as e: print(f">>> Migration Warning: {e}")
+                    except: pass
 
-        # Cleanup any old 'Premium' services from the Priority section (Database hygiene)
+        # 3. Data Normalization (Legacy 2.0 -> 3NF)
+        # We wrap this in a sub-try since it relies on old columns that might already be deleted
+        try:
+            if "payments" in inspector.get_table_names() and "deliveries" in inspector.get_table_names():
+                with engine.begin() as conn:
+                    conn.execute(text("""
+                        INSERT INTO payments (order_id, method_id, status_id, amount_received, balance, reference_no, deposit_amount)
+                        SELECT order_id, 1, 1, amount_received, balance, reference_no, deposit_amount
+                        FROM orders WHERE order_id NOT IN (SELECT order_id FROM payments)
+                    """))
+        except:
+            print(">>> Migration: Data extraction skipped (already normalized)")
+
+        # 4. Cleanup/Hygiene
         db_exec = SessionLocal()
         try:
             db_exec.execute(text("DELETE FROM services WHERE service_name LIKE '%Premium%'"))
             db_exec.commit()
-            print(">>> DB Migration: Premium services cleaned from database.")
-        except Exception as cleanup_err:
-            print(f">>> DB Migration Warning: Cleanup failed: {cleanup_err}")
+        except:
+            db_exec.rollback()
         finally:
             db_exec.close()
 
-        print(">>> DB Migration: Schema check complete.")
-            
     except Exception as e:
-        print(f">>> DB Migration Critical failure: {e}")
-        # Log detail to help pinpoint UndefinedColumn errors
-        try:
-            inspector = inspect(engine)
-            print(f">>> Inspector Context - Available Tables: {inspector.get_table_names()}")
-        except: pass
-    
-    # ----------------------------------------------------------------
-    # 5. LOOKUP VALUE MIGRATION (Fix old Title-Case -> lowercase)
-    # Renames existing DB values to match frontend types exactly.
-    # Safe to run multiple times - WHERE clause prevents double-updates.
-    # ----------------------------------------------------------------
-    try:
-        print(">>> Migration: Normalizing lookup values to match frontend types...")
-        with engine.begin() as conn:
+        print(f">>> Boot Warning (Non-Critical): {e}")
 
-            # STATUS: 'Pending' -> 'new-order', 'In Progress' -> 'on-going', etc.
+    # 5. Lookup Normalization & Seeding
+    db = SessionLocal()
+    try:
+        # Normalize existing lookups to lowercase (Safe Sync)
+        with engine.begin() as conn:
+            # STATUS
             conn.execute(text("UPDATE status SET status_name = 'new-order'   WHERE status_name = 'Pending'"))
             conn.execute(text("UPDATE status SET status_name = 'on-going'    WHERE status_name = 'In Progress'"))
             conn.execute(text("UPDATE status SET status_name = 'for-release' WHERE status_name = 'Completed'"))
             conn.execute(text("UPDATE status SET status_name = 'claimed'     WHERE status_name = 'Claimed'"))
-            conn.execute(text("UPDATE status SET status_name = 'cancelled'   WHERE status_name = 'Cancelled'"))
-
-            # PRIORITY: 'Regular' -> 'regular', 'Rush' -> 'rush', 'Premium' -> 'premium'
+            
+            # PRIORITY
             conn.execute(text("UPDATE priority_levels SET priority_name = 'regular' WHERE priority_name = 'Regular'"))
             conn.execute(text("UPDATE priority_levels SET priority_name = 'rush'    WHERE priority_name = 'Rush'"))
-            conn.execute(text("UPDATE priority_levels SET priority_name = 'premium' WHERE priority_name = 'Premium'"))
+            
+            # PAYMENT & SHIPPING
+            conn.execute(text("UPDATE payment_methods SET method_name = 'cash' WHERE method_name = 'Cash'"))
+            conn.execute(text("UPDATE payment_statuses SET status_name = 'fully-paid' WHERE status_name = 'Fully Paid'"))
+            conn.execute(text("UPDATE shipping_preferences SET pref_name = 'pickup' WHERE pref_name = 'Pickup'"))
 
-            # PAYMENT METHODS: 'Cash' -> 'cash', 'GCash' -> 'gcash', 'Bank Transfer' -> 'bank-transfer'
-            conn.execute(text("UPDATE payment_methods SET method_name = 'cash'          WHERE method_name = 'Cash'"))
-            conn.execute(text("UPDATE payment_methods SET method_name = 'gcash'         WHERE method_name = 'GCash'"))
-            conn.execute(text("UPDATE payment_methods SET method_name = 'bank-transfer' WHERE method_name = 'Bank Transfer'"))
-
-            # PAYMENT STATUSES: 'Fully Paid' -> 'fully-paid', 'Downpayment' -> 'downpayment'
-            conn.execute(text("UPDATE payment_statuses SET status_name = 'fully-paid'  WHERE status_name = 'Fully Paid'"))
-            conn.execute(text("UPDATE payment_statuses SET status_name = 'downpayment' WHERE status_name = 'Downpayment'"))
-            conn.execute(text("UPDATE payment_statuses SET status_name = 'pending'     WHERE status_name = 'Pending'"))
-
-            # SHIPPING: 'Pickup' -> 'pickup', 'Delivery' -> 'delivery'
-            conn.execute(text("UPDATE shipping_preferences SET pref_name = 'pickup'   WHERE pref_name = 'Pickup'"))
-            conn.execute(text("UPDATE shipping_preferences SET pref_name = 'delivery' WHERE pref_name = 'Delivery'"))
-
-        print(">>> Migration: Lookup values normalized successfully.")
-    except Exception as e:
-        print(f">>> Migration Warning: Lookup value update failed (table may not exist yet): {e}")
-
-    # Seed lookup data
-    db = SessionLocal()
-    try:
         seed_lookups(db)
-        print(">>> System Boot: Database ready.")
+        print(">>> System Boot: Ready.")
+    except Exception as e:
+        print(f">>> Boot Error: Seeding failed: {e}")
     finally:
         db.close()
 
@@ -324,12 +326,22 @@ def seed_lookups(db: Session):
     cat_map = {c.category_name: c.category_id for c in db.query(ServiceCategory).all()}
     
     try:
-        if db.execute(text("SELECT pg_try_advisory_xact_lock(12345)")).scalar():
-            print(">>> Catalog Sync: Lock acquired. Updating service table...")
+        # Check if we are on PostgreSQL before attempting advisory locks
+        is_postgres = "postgresql" in str(db.get_bind().url)
+        lock_acquired = True
+        
+        if is_postgres:
+            try:
+                lock_acquired = db.execute(text("SELECT pg_try_advisory_xact_lock(12345)")).scalar()
+            except Exception:
+                lock_acquired = True # Fallback if lock fails
+
+        if lock_acquired:
+            print(">>> Catalog Sync: Updating service table...")
             # Deactivate everything first to ensure a clean UI
             db.execute(text("UPDATE services SET is_active = False"))
-            # Purge ALL Duplicates and Inactive Trash
-            db.execute(text("DELETE FROM services WHERE service_name ILIKE '%[DUP]%' OR service_name ILIKE 'z_hidden%'"))
+            # Purge ALL Duplicates and Inactive Trash (Standardizing Case for SQLite/PG)
+            db.execute(text("DELETE FROM services WHERE service_name LIKE '%[DUP]%' OR service_name LIKE 'z_hidden%'"))
 
             for item in catalog_data:
                 target_name = item.get("service_name").strip()
@@ -353,7 +365,7 @@ def seed_lookups(db: Session):
             print(">>> Catalog Sync: Complete.")
     except Exception as lock_err:
         db.rollback()
-        print(f">>> Catalog Sync Warning (Worker skipped lock): {lock_err}")
+        print(f">>> Catalog Sync Warning: {lock_err}")
 
     # Seed Default Users (owner/staff)
     if db.query(User).count() == 0:
@@ -368,26 +380,7 @@ def seed_lookups(db: Session):
             db.add(staff)
         db.commit()
 
-@app.on_event("startup")
-def startup_event():
-    """Triggered when the server starts - ensures DB integrity."""
-    print("\n-------------------------------------------")
-    print("BACKEND BOOT: Initializing Shoelotskey SMS")
-    print("-------------------------------------------")
-    try:
-        # Create all tables securely (IF NOT EXISTS)
-        Base.metadata.create_all(bind=engine)
-        print("DB Integrity: All tables verified.")
-        
-        db = SessionLocal()
-        try:
-            seed_lookups(db)
-            print("DB Initialization: Bootstrap check complete.")
-        finally:
-            db.close()
-    except Exception as e:
-        print(f"[FATAL STARTUP ERROR] {e}")
-        # Server will still start but API might fail - better for debugging than a silent crash
+# Startup events are now handled by startup_sequence()
 
 # ==========================================
 # 2. AUTHENTICATION & SECURITY
@@ -520,8 +513,15 @@ async def forgot_password(request: Request, body: ForgotPasswordRequest, db: Ses
 
 @app.get("/api/health")
 def health_check():
-    """Simple probe to verify the server is alive."""
-    return {"status": "ok", "timestamp": str(datetime.now()), "environment": os.environ.get('PORT', 'local')}
+    """Simple probe to verify the server is alive and report environment metadata."""
+    return {
+        "status": "ok", 
+        "timestamp": str(datetime.now()), 
+        "environment": ENV, 
+        "db_type": DB_TYPE,
+        "diagnostics": "healthy",
+        "version": "2.0.1"
+    }
 
 @app.post("/api/reset-password")
 async def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
@@ -1060,9 +1060,25 @@ def get_catalog(db: Session = Depends(get_db)):
     return db.query(Service).all()
 
 @app.post("/api/services", response_model=ServiceSchema)
-def create_service(service_data: ServiceSchema, db: Session = Depends(get_db)):
-    """Adds a new service to the catalog."""
-    db_service = Service(**service_data.dict(exclude={'service_id'}))
+def create_service(service_data: dict, db: Session = Depends(get_db)):
+    """Adds a new service to the catalog with category resolution."""
+    print(f"[CATALOG] Creating new service: {service_data.get('service_name')}")
+    
+    # Resolve category string to ID
+    cat_name = service_data.get('category', 'base')
+    db_cat = db.query(ServiceCategory).filter(ServiceCategory.category_name == cat_name).first()
+    category_id = db_cat.category_id if db_cat else 1
+
+    db_service = Service(
+        service_name=service_data.get('service_name'),
+        base_price=service_data.get('base_price'),
+        category_id=category_id,
+        description=service_data.get('description'),
+        duration_days=service_data.get('duration_days', 0),
+        service_code=service_data.get('service_code'),
+        is_active=service_data.get('is_active', True),
+        sort_order=service_data.get('sort_order', 0)
+    )
     db.add(db_service)
     db.commit()
     db.refresh(db_service)
@@ -1070,11 +1086,19 @@ def create_service(service_data: ServiceSchema, db: Session = Depends(get_db)):
 
 @app.put("/api/services/{service_id}", response_model=ServiceSchema)
 def update_service(service_id: int, service_update: dict, db: Session = Depends(get_db)):
-    """Updates an existing service."""
+    """Updates an existing service with category string-to-ID resolution."""
     db_service = db.query(Service).filter(Service.service_id == service_id).first()
     if not db_service:
         raise HTTPException(status_code=404, detail="Service not found")
     
+    # Handle category update via string resolution if provided
+    if "category" in service_update:
+        cat_name = service_update.pop("category")
+        db_cat = db.query(ServiceCategory).filter(ServiceCategory.category_name == cat_name).first()
+        if db_cat:
+            db_service.category_id = db_cat.category_id
+    
+    # Map other fields
     for key, value in service_update.items():
         if hasattr(db_service, key) and key != "service_id":
             setattr(db_service, key, value)
@@ -1141,15 +1165,25 @@ def get_activities(db: Session = Depends(get_db)):
     logs = db.query(AuditLog).order_by(AuditLog.created_at.desc()).limit(50).all()
     results = []
     for log in logs:
-        # Optimization: Fetch username
         u = db.query(User).filter(User.user_id == log.user_id).first()
+        
+        # [VITAL DEBUGGING TOOL] Extract descriptive details for the Activity History UI
+        details = f"{log.action_type} on {log.table_name}"
+        if log.action_type == "404_NOT_FOUND" and log.old_values:
+            broken_url = log.old_values.get("broken_url", "unknown")
+            client = log.new_values.get("client", "unknown") if log.new_values else "unknown"
+            details = f"Page Not Found: {broken_url} (Request from {client})"
+        elif log.action_type == "UPDATE" and log.new_values:
+            # If it's a standard update, show what changed
+            details = f"Updated {log.table_name}: {json.dumps(log.new_values)}"
+
         results.append({
             "id": str(log.audit_log_id),
             "timestamp": log.created_at.strftime('%m/%d/%Y, %H:%M') if log.created_at else "",
             "user": u.username if u else "System",
-            "action": log.action_type,
-            "details": f"{log.action_type} on {log.table_name}",
-            "type": "system"
+            "action": log.action_type.replace('_', ' '),
+            "details": details,
+            "type": "system" if log.action_type == "404_NOT_FOUND" else "order"
         })
     return results
 

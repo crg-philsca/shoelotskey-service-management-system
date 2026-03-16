@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shoelotskey 404 </title>
+    <link rel="icon" type="image/png" href="/logo.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .shoe-bounce {
+            animation: bounce 2s infinite;
+        }
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-25px); }
+        }
+    </style>
+</head>
+<body class="bg-white flex flex-col min-h-screen">
+    <!-- Main Content with balanced padding -->
+    <div class="flex-grow flex flex-col items-center justify-center text-center px-4 py-12">
+        <!-- Branded 3D Sneaker with "Shoelotskey" text -->
+        <div class="mb-8 shoe-bounce">
+            <img src="/static/branded_shoe_404.png" alt="Shoelotskey 404" 
+                 class="h-64 w-auto mx-auto select-none" />
+        </div>
+        
+        <h1 class="text-5xl font-extrabold text-gray-900 mb-4 tracking-tight">Oops! Page needs a shine.</h1>
+        
+        <p class="text-xl text-gray-600 mb-10 max-w-lg leading-relaxed font-medium">
+            Looks like this page needs a <strong>Full Reglue</strong>. It might have been moved or deleted by another staff member. 
+            Don't worry, the rest of the system is still walking strong!
+        </p>
+
+        <div class="flex flex-col items-center">
+            <!-- Shoelotskey Brand Red Button -->
+            <a href="http://localhost:5173/dashboard" class="inline-flex items-center justify-center bg-[#dc2626] hover:bg-[#b91c1c] text-white font-black py-4 px-10 rounded-2xl shadow-xl transform transition hover:-translate-y-1 active:scale-95 duration-200 uppercase tracking-widest text-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="14" width="7" height="7"></rect>
+                    <rect x="3" y="14" width="7" height="7"></rect>
+                </svg>
+                Back to Dashboard
+            </a>
+        </div>
+
+        <p class="mt-16 text-sm text-gray-400 italic font-medium">
+            "Good shoes take you to great places... but this link doesn't!"
+        </p>
+    </div>
+</body>
+</html>

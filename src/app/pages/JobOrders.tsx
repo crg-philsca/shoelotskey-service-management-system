@@ -204,8 +204,23 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                             <tbody>
                                 {paginatedOrders.length === 0 ? (
                                     <tr>
-                                        <td colSpan={7} className="h-24 text-center text-gray-500">
-                                            No orders found.
+                                        <td colSpan={9} className="px-6 py-20 text-center">
+                                            <div className="flex flex-col items-center justify-center space-y-3 opacity-40">
+                                                <ShoppingBag size={48} className="text-gray-300" />
+                                                <p className="text-sm font-black text-gray-400 uppercase tracking-[0.2em]">
+                                                    {(() => {
+                                                        if (searchQuery) return 'No matching orders found';
+                                                        switch (filterStatus) {
+                                                            case 'new-order': return 'No new orders found';
+                                                            case 'on-going': return 'No ongoing orders found';
+                                                            case 'for-release': return 'No orders for release';
+                                                            case 'claimed': return 'No claimed orders found';
+                                                            case 'cancelled': return 'No cancelled orders found';
+                                                            default: return 'No orders found';
+                                                        }
+                                                    })()}
+                                                </p>
+                                            </div>
                                         </td>
                                     </tr>
                                 ) : (
@@ -589,9 +604,9 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                 ))}
                             </div>
 
-                            {/* Order Status & Priority (Global) */}
-                            <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-3 mt-2">
-                                <div className="grid grid-cols-3 gap-4">
+                            {/* Order Status & Metadata Summary */}
+                            <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-4 mt-2">
+                                <div className="grid grid-cols-2 gap-4 pb-3 border-b border-gray-200/50">
                                     <div>
                                         <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Order Status</Label>
                                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize border
@@ -604,7 +619,7 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                             {selectedOrder.status.replace('-', ' ')}
                                         </span>
                                     </div>
-                                    <div>
+                                    <div className="text-right">
                                         <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Priority Level</Label>
                                         {selectedOrder.priorityLevel === 'rush' ? (
                                             <span className="text-xs font-black text-red-600 uppercase">RUSH</span>
@@ -612,9 +627,25 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                             <span className="text-xs font-medium text-gray-500 capitalize">{selectedOrder.priorityLevel}</span>
                                         )}
                                     </div>
+                                </div>
+
+                                {/* [REQUESTED ROW]: Order ID | Processed By | Payment Status (End Right) */}
+                                <div className="grid grid-cols-3 gap-4 items-center">
+                                    <div>
+                                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Order ID</Label>
+                                        <p className="text-sm font-bold text-gray-700">#{selectedOrder.orderNumber}</p>
+                                    </div>
                                     <div>
                                         <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Processed By</Label>
                                         <p className="text-sm font-bold text-gray-700">{selectedOrder.processedBy || 'Current User'}</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Payment Status</Label>
+                                        <span className={`text-sm font-black uppercase ${selectedOrder.paymentStatus === 'fully-paid' ? 'text-green-600' :
+                                            selectedOrder.paymentStatus === 'downpayment' ? 'text-yellow-600' : 'text-red-500'
+                                            }`}>
+                                            {selectedOrder.paymentStatus || 'downpayment'}
+                                        </span>
                                     </div>
                                 </div>
                             </div>
@@ -635,14 +666,7 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                             </p>
                                         </div>
                                     )}
-                                    <div>
-                                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Payment Status</Label>
-                                        <span className={`text-sm font-black uppercase ${selectedOrder.paymentStatus === 'fully-paid' ? 'text-green-600' :
-                                            selectedOrder.paymentStatus === 'downpayment' ? 'text-yellow-600' : 'text-red-500'
-                                            }`}>
-                                            {selectedOrder.paymentStatus || 'downpayment'}
-                                        </span>
-                                    </div>
+                                    {/* Removed redundant Payment Status - now in Summary row */}
                                     {['gcash', 'maya'].includes(selectedOrder.paymentMethod?.toLowerCase()) && (selectedOrder.paymentStatus === 'fully-paid' || selectedOrder.paymentStatus === 'downpayment') && (
                                         <div className="col-span-2">
                                             <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Reference Number</Label>

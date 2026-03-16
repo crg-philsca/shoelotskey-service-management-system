@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shoelotskey System Architecture & IPO</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #0ea5e9;
+            --secondary: #6366f1;
+            --bg: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --text-main: #f8fafc;
+            --text-dim: #94a3b8;
+            --border: rgba(255, 255, 255, 0.1);
+            --accent: #22d3ee;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg);
+            background-image: 
+                radial-gradient(circle at 20% 20%, rgba(14, 165, 233, 0.1) 0%, transparent 40%),
+                radial-gradient(circle at 80% 80%, rgba(99, 102, 241, 0.1) 0%, transparent 40%);
+            color: var(--text-main);
+            line-height: 1.6;
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 4rem;
+            animation: fadeInDown 0.8s ease-out;
+        }
+
+        h1 {
+            font-size: 3rem;
+            font-weight: 700;
+            background: linear-gradient(to right, #0ea5e9, #6366f1);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+
+        p.subtitle {
+            color: var(--text-dim);
+            font-size: 1.1rem;
+        }
+
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 1.5rem;
+            padding: 2.5rem;
+            margin-bottom: 3rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            transition: transform 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            border-color: var(--primary);
+        }
+
+        h2 {
+            font-size: 1.8rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--accent);
+        }
+
+        h2::before {
+            content: "";
+            display: inline-block;
+            width: 4px;
+            height: 24px;
+            background: var(--primary);
+            border-radius: 2px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        th {
+            text-align: left;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--primary);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            letter-spacing: 0.05em;
+        }
+
+        td {
+            padding: 1.25rem 1rem;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-main);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .mermaid {
+            background: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            margin-top: 2rem;
+        }
+
+        .tech-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            background: rgba(14, 165, 233, 0.15);
+            border: 1px solid rgba(14, 165, 233, 0.3);
+            border-radius: 2rem;
+            color: var(--primary);
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (max-width: 768px) {
+            body { padding: 1rem; }
+            h1 { font-size: 2rem; }
+            .card { padding: 1.5rem; }
+            td, th { padding: 0.75rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>System Architecture</h1>
+            <p class="subtitle">Shoelotskey Service Management System (SMS)</p>
+        </header>
+
+        <section class="card">
+            <h2>Technical Stack</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Layer</th>
+                        <th>Technology</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Frontend</strong></td>
+                        <td><span class="tech-badge">React 18</span> <span class="tech-badge">TypeScript</span> <span class="tech-badge">Vite</span> <span class="tech-badge">Tailwind CSS</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>UI/UX Components</strong></td>
+                        <td><span class="tech-badge">Material UI (MUI)</span> <span class="tech-badge">Radix UI</span> <span class="tech-badge">Framer Motion</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Backend</strong></td>
+                        <td><span class="tech-badge">Python 3</span> <span class="tech-badge">FastAPI</span> <span class="tech-badge">SQLAlchemy ORM</span> <span class="tech-badge">Pydantic</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Database</strong></td>
+                        <td><span class="tech-badge">PostgreSQL</span> <span class="tech-badge">SQLite</span> <span class="tech-badge">3NF Design</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>State & APIs</strong></td>
+                        <td><span class="tech-badge">React Context API</span> <span class="tech-badge">Axios</span> <span class="tech-badge">RESTful Architecture</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="card">
+            <h2>IPO (Input-Process-Output) Mapping</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Input</th>
+                        <th>Process</th>
+                        <th>Output</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Customer & Item Info</td>
+                        <td><strong>Order Intake</strong>: Validates and initializes service records.</td>
+                        <td>Order No. & Job Summary</td>
+                    </tr>
+                    <tr>
+                        <td>Service Selections</td>
+                        <td><strong>Pricing & Scheduling</strong>: Computes total and expected date.</td>
+                        <td>Full Bill & Timeline</td>
+                    </tr>
+                    <tr>
+                        <td>Payment Data</td>
+                        <td><strong>Transaction Recording</strong>: Logs payment and updates balance.</td>
+                        <td>Receipt & Confirmation</td>
+                    </tr>
+                    <tr>
+                        <td>Status Updates</td>
+                        <td><strong>Workflow Mgt</strong>: Tracks progression stages.</td>
+                        <td>Live Tracking Dashboard</td>
+                    </tr>
+                    <tr>
+                        <td>Release Request</td>
+                        <td><strong>Order Fulfillment</strong>: Finalizes delivery and item handover.</td>
+                        <td>Claimed Record & Item</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="card">
+            <h2>System Context Diagram</h2>
+            <div class="mermaid">
+                graph LR
+                    subgraph System ["Shoelotskey Service Management System"]
+                        P1["1. Order Intake Process"]
+                        P2["2. Pricing & Scheduling"]
+                        P3["3. Payment Processing"]
+                        P4["4. Workflow Tracking"]
+                        P5["5. Fulfillment & Release"]
+                    end
+
+                    Customer -- "Customer & Item Details" --> P1
+                    P1 -- "Order ID & Summary" --> Staff
+
+                    Staff -- "Service & Add-on Selection" --> P2
+                    P2 -- "Bill & Est. Date" --> Customer
+
+                    Customer -- "Payment Data" --> P3
+                    P3 -- "Receipt" --> Customer
+                    P3 -- "Revenue Record" --> Admin
+
+                    Staff -- "Status Updates" --> P4
+                    P4 -- "Progress Logs" --> Admin
+                    P4 -- "Tracking Status" --> Customer
+
+                    Customer -- "Verification" --> P5
+                    P5 -- "Release Confirmation" --> Staff
+                    P5 -- "Completed Item" --> Customer
+
+                    %% Styles
+                    style System fill:#f8fafc,stroke:#0ea5e9,stroke-width:2px
+                    style P1 fill:#eff6ff,stroke:#3b82f8
+                    style P2 fill:#eff6ff,stroke:#3b82f8
+                    style P3 fill:#eff6ff,stroke:#3b82f8
+                    style P4 fill:#eff6ff,stroke:#3b82f8
+                    style P5 fill:#eff6ff,stroke:#3b82f8
+            </div>
+        </section>
+    </div>
+
+    <script>
+        mermaid.initialize({ startOnLoad: true, theme: 'neutral' });
+    </script>
+</body>
+</html>

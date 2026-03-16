@@ -50,17 +50,41 @@ const BRAND_MODELS: Record<string, string[]> = {
     'On Cloud': ['Cloudmonster', 'Cloudnova', 'Cloudstratus', 'Cloud 5', 'Other']
 };
 
-const DEFAULT_MODELS = [
-    'Sneakers', 'Running Shoes', 'Basketball', 'Leather Shoes', 'Boots', 'Sandals', 'Formal', 'Slip-on', 'Other'
-];
+// DEPRECATED: Generic shoe types removed per user request to improve brand-model accuracy.
+const DEFAULT_MODELS: string[] = [];
+
+// Derived data for intelligent brand-model discovery
+const ALL_MODELS = Object.values(BRAND_MODELS).flat().filter(m => m !== 'Other');
+const MODEL_TO_BRAND: Record<string, string> = {};
+Object.entries(BRAND_MODELS).forEach(([brand, models]) => {
+    models.forEach(model => {
+        if (model !== 'Other' && !MODEL_TO_BRAND[model]) {
+            MODEL_TO_BRAND[model] = brand;
+        }
+    });
+});
 
 const MODEL_MATERIALS: Record<string, string> = {
+    // Nike
     'Air Force 1': 'Leather',
     'Dunk Low': 'Leather',
+    'Air Max 90': 'Mesh',
+    'Air Max 97': 'Mesh',
+    'Cortez': 'Leather',
+    'Blazer': 'Leather',
+    // Jordan
     'Air Jordan 1': 'Leather',
+    'Air Jordan 3': 'Leather',
+    'Air Jordan 4': 'Leather',
+    'Air Jordan 11': 'Patent Leather',
+    // Adidas
     'Superstar': 'Leather',
     'Stan Smith': 'Leather',
     'Samba': 'Leather',
+    'Ultraboost': 'Knit',
+    'Yeezy Boost 350': 'Knit',
+    'Gazelle': 'Suede',
+    // Others
     'Club C 85': 'Leather',
     'Classic Leather': 'Leather',
     '6-Inch Premium Boot': 'Nubuck',
@@ -70,7 +94,16 @@ const MODEL_MATERIALS: Record<string, string> = {
     'Chuck 70': 'Canvas',
     'Old Skool': 'Suede',
     'Slip-On': 'Canvas',
-    'Authentic': 'Canvas'
+    'Authentic': 'Canvas',
+    'Sk8-Hi': 'Canvas',
+    'Era': 'Canvas',
+    '550': 'Leather',
+    '990': 'Suede',
+    '2002R': 'Suede',
+    '574': 'Suede',
+    'Gel-Lyte III': 'Suede',
+    'Suede': 'Suede',
+    'XT-6': 'Synthetic'
 };
 
 const DELIVERY_COURIERS = [
@@ -447,14 +480,14 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
         const exactHalf = grandTotal / 2;
 
         if (paymentStatus === 'downpayment') {
-            setDepositAmount(exactHalf.toLocaleString());
+            setDepositAmount(exactHalf.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
             if (!isAmountReceivedTyped) {
-                setAmountReceived(exactHalf.toString());
+                setAmountReceived(exactHalf.toFixed(2));
             }
         } else if (paymentStatus === 'fully-paid') {
-            setDepositAmount(grandTotal.toLocaleString());
+            setDepositAmount(grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
             if (!isAmountReceivedTyped) {
-                setAmountReceived(grandTotal.toString());
+                setAmountReceived(grandTotal.toFixed(2));
             }
         }
     }, [paymentStatus, grandTotal, isAmountReceivedTyped]);
@@ -917,17 +950,32 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                     <div className="col-span-1">
                                                         <Label className={LABEL_STYLE}>Model</Label>
                                                         <CreatableCombobox
-                                                            options={BRAND_MODELS[shoe.brand] || DEFAULT_MODELS}
+                                                            options={shoe.brand ? (BRAND_MODELS[shoe.brand] || ['Other']) : ALL_MODELS}
                                                             value={shoe.shoeModel}
                                                             onChange={(val) => {
+                                                                // [SMART BRAND DISCOVERY] If no brand is selected, automatically fill it based on the model chosen
+                                                                if (!shoe.brand && MODEL_TO_BRAND[val]) {
+                                                                    const detectedBrand = MODEL_TO_BRAND[val];
+                                                                    const updates: Partial<ShoeEntry> = { 
+                                                                        brand: detectedBrand, 
+                                                                        shoeModel: val 
+                                                                    };
+                                                                    // Also auto-fill material if we know it
+                                                                    if (MODEL_MATERIALS[val]) {
+                                                                        updates.shoeMaterial = MODEL_MATERIALS[val];
+                                                                    }
+                                                                    updateShoe(shoe.id, updates);
+                                                                    return;
+                                                                }
+
                                                                 const updates: Partial<ShoeEntry> = { shoeModel: val };
                                                                 if (MODEL_MATERIALS[val]) {
                                                                     updates.shoeMaterial = MODEL_MATERIALS[val];
                                                                 }
                                                                 updateShoe(shoe.id, updates);
                                                             }}
-                                                            placeholder="Select Model"
-                                                            searchPlaceholder="Search model..."
+                                                            placeholder={shoe.brand ? `Select ${shoe.brand} Model` : "Search all Models..."}
+                                                            searchPlaceholder="Type model name (e.g. Air Force 1)"
                                                         />
                                                         {shoe.shoeModel === 'Other' && (
                                                             <Input
@@ -1396,15 +1444,37 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                     <span className="truncate">{user?.username || 'Current User'}</span>
                                                 </div>
                                             </div>
+                                            {/* [REQUESTED] Payment Status moved to this row */}
+                                            <div className="space-y-1 col-span-2 md:col-span-4">
+                                                <Label className={LABEL_STYLE}>Payment Status</Label>
+                                                <Select
+                                                    value={paymentStatus}
+                                                    onValueChange={(value: PaymentStatus) => {
+                                                        setPaymentStatus(value);
+                                                        if (value === 'downpayment') {
+                                                            setAmountReceived((grandTotal / 2).toFixed(2));
+                                                        } else if (value === 'fully-paid') {
+                                                            setAmountReceived(grandTotal.toFixed(2));
+                                                        }
+                                                    }}
+                                                >
+                                                    <SelectTrigger className="bg-white border-gray-100/50 h-9 rounded-xl text-xs text-gray-900 shadow-sm pr-8 transition-all hover:border-red-200">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="downpayment">Downpayment</SelectItem>
+                                                        <SelectItem value="fully-paid">Fully Paid</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
                                         </div>
-
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-gray-200/50 mt-2">
-                                            {/* Row 3: Payment Method & Payment Status */}
-                                            <div className="space-y-1">
+                                            {/* Row 3: Payment Method & Reference Number (Combined if electronic) */}
+                                            <div className={`space-y-1 ${!['gcash', 'maya'].includes(paymentMethod) ? 'sm:col-span-2' : ''}`}>
                                                 <Label className={LABEL_STYLE}>Payment Method</Label>
                                                 <div className="relative group/select">
                                                     <Select value={paymentMethod} onValueChange={(value: PaymentMethod) => setPaymentMethod(value)}>
-                                                        <SelectTrigger className="bg-white border-gray-100/50 h-9 rounded-xl text-xs shadow-sm pr-8">
+                                                        <SelectTrigger className="bg-white border-gray-100/50 h-9 rounded-xl text-xs shadow-sm pr-8 transition-all hover:border-red-200">
                                                             <SelectValue />
                                                         </SelectTrigger>
                                                         <SelectContent>
@@ -1416,42 +1486,23 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                 </div>
                                             </div>
 
-                                            <div className="space-y-1">
-                                                <Label className={LABEL_STYLE}>Payment Status</Label>
-                                                <Select
-                                                    value={paymentStatus}
-                                                    onValueChange={(value: PaymentStatus) => {
-                                                        setPaymentStatus(value);
-                                                        if (value === 'downpayment') {
-                                                            setAmountReceived((grandTotal / 2).toString());
-                                                        } else if (value === 'fully-paid') {
-                                                            setAmountReceived(grandTotal.toString());
-                                                        }
-                                                    }}
-                                                >
-                                                    <SelectTrigger className="bg-white border-gray-100/50 h-9 rounded-xl text-xs text-gray-900 shadow-sm pr-8">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="downpayment">Downpayment</SelectItem>
-                                                        <SelectItem value="fully-paid">Fully Paid</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-
-                                            {/* Row 4: Reference Number */}
-                                            {['gcash', 'maya'].includes(paymentMethod) && (paymentStatus === 'fully-paid' || paymentStatus === 'downpayment') && (
-                                                <div className="space-y-1 sm:col-span-2">
+                                            {['gcash', 'maya'].includes(paymentMethod) && (
+                                                <div className="space-y-1">
                                                     <Label htmlFor="refNo" className={LABEL_STYLE}>Reference Number</Label>
                                                     <ClearableInput
                                                         id="refNo"
                                                         value={referenceNo}
                                                         onChange={(e: any) => setReferenceNo(formatReferenceNo(e.target.value))}
                                                         placeholder="XXXX-XXXX-XXXX"
-                                                        className="bg-white border-gray-100/50 h-9 rounded-xl text-xs shadow-sm"
+                                                        className="bg-white border-gray-100/50 h-9 rounded-xl text-xs shadow-sm transition-all hover:border-red-200"
                                                     />
                                                 </div>
                                             )}
+                                        </div>
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                                            {/* Payment Status was moved up to the Metadata row */}
+
 
                                             {/* Row 5: Total / Required Downpayment & Amount Received */}
                                             {showAmountRec && (
