@@ -135,25 +135,35 @@ export function ServiceProvider({ children }: { children: ReactNode }) {
             });
     };
 
+    // debounce timeout reference
+    const [reorderTimeout, setReorderTimeout] = useState<NodeJS.Timeout | null>(null);
+
     const reorderServices = (newOrder: Service[]) => {
-        // 1. Optimistically update local state
+        // 1. Optimistically update local state for zero-latency UI
         setServices(newOrder);
 
-        // 2. Prepare bulk payload (mappings frontend IDs to backend sort_orders)
-        const reorderPayload = newOrder.map((svc, index) => ({
-            id: parseInt(svc.id),
-            sort_order: index + 1
-        }));
+        // 2. Clear existing timeout to debounce the backend sync
+        if (reorderTimeout) clearTimeout(reorderTimeout);
 
-        // 3. Save entire sequence in one transaction (Pro-Level Sync)
-        fetch(`${API_BASE}/services/reorder`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(reorderPayload)
-        }).catch(err => {
-            console.error("Bulk reorder sync failed", err);
-            // Optional: revert state if critical
-        });
+        // 3. Set a new timeout to sync with the database only after the user stops dragging (500ms)
+        const timeout = setTimeout(() => {
+            const reorderPayload = newOrder.map((svc, index) => ({
+                id: parseInt(svc.id),
+                sort_order: index + 1
+            }));
+
+            console.log(`[SYNC] Committing bulk reorder to database (${reorderPayload.length} services)...`);
+            
+            fetch(`${API_BASE}/services/reorder`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(reorderPayload)
+            }).catch(err => {
+                console.error("Bulk reorder sync failed", err);
+            });
+        }, 500);
+
+        setReorderTimeout(timeout);
     };
 
     return (

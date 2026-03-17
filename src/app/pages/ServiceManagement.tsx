@@ -16,9 +16,25 @@ interface ServiceManagementProps {
 
 export default function ServiceManagement({ onSetHeaderActionRight }: ServiceManagementProps) {
   const { services, addService, updateService, deleteService, reorderServices } = useServices();
-  const [serviceModalOpen, setServiceModalOpen] = useState(false); // Renamed from isModalOpen
-  const [selectedService, setSelectedService] = useState<Service | null>(null); // Renamed from editingService
+  const [serviceModalOpen, setServiceModalOpen] = useState(false);
+  const [selectedService, setSelectedService] = useState<Service | null>(null);
   const navigate = useNavigate();
+
+  // HIGH PERFORMANCE: Keep local copies for reordering to ensure zero-lag dragging
+  const [localBase, setLocalBase] = useState<Service[]>([]);
+  const [localPriority, setLocalPriority] = useState<Service[]>([]);
+  const [localAddon, setLocalAddon] = useState<Service[]>([]);
+
+  // Sync local states when global services change (but only if not currently dragging)
+  useEffect(() => {
+    const base = services.filter(s => s.category === 'base' && s.active === true && !s.name.startsWith('[') && !s.name.startsWith('z_')).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+    const priority = services.filter(s => s.category === 'priority' && s.active === true && !s.name.includes('Premium') && !s.name.startsWith('[') && !s.name.startsWith('z_')).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+    const addon = services.filter(s => s.category === 'addon' && s.active === true && !s.name.startsWith('[') && !s.name.startsWith('z_')).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+    
+    setLocalBase(base);
+    setLocalPriority(priority);
+    setLocalAddon(addon);
+  }, [services]);
 
   useEffect(() => {
     if (onSetHeaderActionRight) {
@@ -46,7 +62,7 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
       );
     }
     return () => onSetHeaderActionRight?.(null);
-  }, [onSetHeaderActionRight]);
+  }, [onSetHeaderActionRight, navigate]);
 
   const handleSaveService = (service: Service) => {
     const exists = services.find(s => s.id === service.id);
@@ -69,14 +85,16 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
   };
 
   // Helper to handle category-specific reordering
-  const handleReorder = (category: string, reorderedInCategory: Service[]) => {
-    const otherCategories = services.filter(s => s.category !== category);
-    reorderServices([...otherCategories, ...reorderedInCategory]);
-  };
+  const handleReorder = (category: string, newOrder: Service[]) => {
+    // 1. Update visual state instantly
+    if (category === 'base') setLocalBase(newOrder);
+    if (category === 'priority') setLocalPriority(newOrder);
+    if (category === 'addon') setLocalAddon(newOrder);
 
-  const baseServices = services.filter(s => s.category === 'base' && s.active === true && !s.name.startsWith('[') && !s.name.startsWith('z_')).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
-  const priorityServices = services.filter(s => s.category === 'priority' && s.active === true && !s.name.includes('Premium') && !s.name.startsWith('[') && !s.name.startsWith('z_')).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
-  const addonServices = services.filter(s => s.category === 'addon' && s.active === true && !s.name.startsWith('[') && !s.name.startsWith('z_')).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+    // 2. Commit to context/DB (debounced in context)
+    const otherCategories = services.filter(s => s.category !== category);
+    reorderServices([...otherCategories, ...newOrder]);
+  };
 
   return (
     <div className="space-y-4">
@@ -87,8 +105,8 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
               <CardTitle className="text-base font-black text-gray-900 uppercase">Base Services</CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
-              <Reorder.Group axis="y" values={baseServices} onReorder={(newOrder) => handleReorder('base', newOrder)} className="space-y-3 -mt-2 pr-1 max-h-[240px] overflow-y-scroll overflow-x-hidden custom-scrollbar list-none p-0">
-                {baseServices.map(service => (
+              <Reorder.Group axis="y" values={localBase} onReorder={(newOrder) => handleReorder('base', newOrder)} className="space-y-3 -mt-2 pr-1 max-h-[240px] overflow-y-scroll overflow-x-hidden custom-scrollbar list-none p-0">
+                {localBase.map(service => (
                   <Reorder.Item 
                     key={service.id} 
                     value={service}
@@ -125,8 +143,8 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
               <CardTitle className="text-base font-black text-gray-900 uppercase">Priority Fees</CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
-              <Reorder.Group axis="y" values={priorityServices} onReorder={(newOrder) => handleReorder('priority', newOrder)} className="space-y-3 -mt-2 pr-1 max-h-[180px] overflow-y-scroll overflow-x-hidden custom-scrollbar list-none p-0">
-                {priorityServices.map(service => (
+              <Reorder.Group axis="y" values={localPriority} onReorder={(newOrder) => handleReorder('priority', newOrder)} className="space-y-3 -mt-2 pr-1 max-h-[180px] overflow-y-scroll overflow-x-hidden custom-scrollbar list-none p-0">
+                {localPriority.map(service => (
                   <Reorder.Item 
                     key={service.id} 
                     value={service}
@@ -166,8 +184,8 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
             <CardTitle className="text-base font-black text-gray-900 uppercase">Add-On Services</CardTitle>
           </CardHeader>
           <CardContent className="pt-0 h-[calc(100%-48px)]">
-            <Reorder.Group axis="y" values={addonServices} onReorder={(newOrder) => handleReorder('addon', newOrder)} className="space-y-3 -mt-2 pr-1 max-h-[440px] overflow-y-scroll overflow-x-hidden custom-scrollbar list-none p-0">
-              {addonServices.map(service => (
+            <Reorder.Group axis="y" values={localAddon} onReorder={(newOrder) => handleReorder('addon', newOrder)} className="space-y-3 -mt-2 pr-1 max-h-[440px] overflow-y-scroll overflow-x-hidden custom-scrollbar list-none p-0">
+              {localAddon.map(service => (
                 <Reorder.Item 
                   key={service.id} 
                   value={service}

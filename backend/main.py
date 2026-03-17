@@ -1078,8 +1078,8 @@ def delete_order(order_id: int, db: Session = Depends(get_db)):
 
 @app.get("/api/services", response_model=List[ServiceSchema])
 def get_catalog(db: Session = Depends(get_db)):
-    """Returns the available service catalog with real-time pricing."""
-    return db.query(Service).all()
+    """Returns the available service catalog with real-time pricing, ordered by user preference."""
+    return db.query(Service).order_by(Service.sort_order.asc()).all()
 
 @app.post("/api/services", response_model=ServiceSchema)
 def create_service(service_data: dict, db: Session = Depends(get_db)):
@@ -1091,6 +1091,12 @@ def create_service(service_data: dict, db: Session = Depends(get_db)):
     db_cat = db.query(ServiceCategory).filter(ServiceCategory.category_name == cat_name).first()
     category_id = db_cat.category_id if db_cat else 1
 
+    # Auto-assign sort_order to the end if not provided
+    sort_order = service_data.get('sort_order')
+    if sort_order is None:
+        max_order = db.query(func.max(Service.sort_order)).scalar() or 0
+        sort_order = max_order + 1
+
     db_service = Service(
         service_name=service_data.get('service_name'),
         base_price=service_data.get('base_price'),
@@ -1099,7 +1105,7 @@ def create_service(service_data: dict, db: Session = Depends(get_db)):
         duration_days=service_data.get('duration_days', 0),
         service_code=service_data.get('service_code'),
         is_active=service_data.get('is_active', True),
-        sort_order=service_data.get('sort_order', 0)
+        sort_order=sort_order
     )
     db.add(db_service)
     db.commit()
