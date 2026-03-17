@@ -140,7 +140,6 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
     useEffect(() => {
         const loadInitialData = async () => {
             try {
-                console.log('[DEBUG] OrderProvider: Fetching orders from backend...');
                 const response = await fetch(`${API_BASE}/orders`);
                 if (response.ok) {
                     const data = await response.json();
@@ -148,12 +147,10 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
 
                     setOrders(mappedOrders);
                     localStorage.setItem('jobOrders_v19_cache', JSON.stringify(mappedOrders));
-                    console.log('[DEBUG] OrderProvider: Backend sync successful.');
                 } else {
                     throw new Error('API unreachable');
                 }
             } catch (err) {
-                console.warn('[DEBUG] OrderProvider: Backend offline. Using offline cache.');
                 const saved = localStorage.getItem('jobOrders_v19_cache');
                 if (saved) {
                     setOrders(JSON.parse(saved).map((o: any) => ({
@@ -212,7 +209,6 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
         setOrders((prev) => [{ ...order, updatedAt: new Date() }, ...prev]);
 
         try {
-            console.log('[DEBUG] OrderProvider: Persisting order to backend...');
             const response = await fetch(`${API_BASE}/orders`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -225,7 +221,6 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
 
             if (!response.ok) throw new Error('Failed to save to backend');
 
-            console.log('[DEBUG] OrderProvider: Order persisted successfully.');
             refreshOrders(); // Get the official DB IDs
         } catch (err) {
             console.error('[CRITICAL] OrderProvider: Backend sync failed. Order exists only in memory.', err);

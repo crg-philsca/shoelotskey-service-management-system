@@ -152,14 +152,12 @@ export function ServiceProvider({ children }: { children: ReactNode }) {
                 sort_order: index + 1
             }));
 
-            console.log(`[SYNC] Committing bulk reorder to database (${reorderPayload.length} services)...`);
-            
             fetch(`${API_BASE}/services/reorder`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(reorderPayload)
-            }).catch(err => {
-                console.error("Bulk reorder sync failed", err);
+            }).catch(() => {
+                // Silent failure on reorder sync in UI
             });
         }, 500);
 

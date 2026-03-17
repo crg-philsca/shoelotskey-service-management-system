@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { Mail, CheckCircle } from 'lucide-react';
 
 const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))
-  ? 'http://localhost:8000/api'
+  ? `http://${window.location.hostname}:8000/api`
   : '/api';
 
 export default function ForgotPassword() {
@@ -33,15 +33,20 @@ export default function ForgotPassword() {
         body: JSON.stringify({ email })
       });
 
+      const result = await response.json();
+      
       if (response.ok) {
-        toast.success('Password reset link sent!');
+        toast.success(result.message || 'Password reset link sent!');
         setSubmitted(true);
+        // Professional log for defense:
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+          console.info("%c[DEFENSE MODE] Password reset link sent to your system console.", "color: #e11d48; font-weight: bold;");
+        }
       } else {
-        const err = await response.json();
-        toast.error(err.detail || 'Email not found.');
+        toast.error(result.detail || 'Email not found.');
       }
     } catch (err) {
-      toast.error('Connection error. Is the backend running?');
+      toast.error('Service Unreachable: The system server is currently offline.');
     } finally {
       setLoading(false);
     }

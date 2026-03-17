@@ -1,14 +1,4 @@
-"""
-SHOE LOTSKEY SMS - MAIN API ENTRY
-=================================
-FastAPI backend for 3NF normalized service management.
-Implements security, order processing, and lookups.
-Includes diagnostic logging for easy debugging during the Defenses.
-"""
-
-print("\n" + "="*50)
-print("APP LOAD: main.py is being parsed by Gunicorn")
-print("="*50 + "\n")
+# Shoelotskey SMS - Main Entry
 
 from fastapi import FastAPI, Depends, HTTPException, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -40,20 +30,13 @@ from schemas import (
 from database import engine, get_db, SessionLocal, DATABASE_URL
 from ml_engine import predictor
 
-# ==========================================
-# 0. INITIALIZATION & DIAGNOSTICS
-# ==========================================
-
-# Detector: Environment
+# ------------------------------------------
+# SYSTEM INITIALIZATION
+# ------------------------------------------
 DB_TYPE = "PostgreSQL" if "postgresql" in DATABASE_URL else "SQLite"
-ENV = "Production/Heroku" if os.getenv("PORT") else "Localhost/Development"
+ENV = "Production" if os.getenv("PORT") else "Localhost"
 
-print("\n" + "!" * 60)
-print(f"  SYSTEM DIAGNOSTIC: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-print(f"  ENVIRONMENT:      {ENV}")
-print(f"  DATABASE TYPE:    {DB_TYPE}")
-print(f"  DATABASE URL:     {DATABASE_URL.split('@')[-1] if '@' in DATABASE_URL else DATABASE_URL}")
-print("!" * 60 + "\n")
+print(f"\n[BOOT] Shoelotskey SMS v2.0 - Environment: {ENV} ({DB_TYPE})")
 
 # Initialize FastAPI 
 app = FastAPI(
@@ -69,18 +52,21 @@ templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "t
 @app.exception_handler(404)
 async def not_found_exception_handler(request: Request, exc: Exception):
     """
-    Catches all 404 Not Found errors and returns the custom Shoelotskey 404 page.
-    This prevents 'Information Leakage' by hiding raw server errors.
-    Also acts as a [VITAL DEBUGGING TOOL] by logging broken URLs for developer review.
+    Catches all 404 Not Found errors. 
+    Returns JSON for API routes and the custom 404 HTML page for UI routes.
     """
     path = request.url.path
+    
+    # [VITAL FIX] If it's an API route, return JSON detail
+    if path.startswith("/api"):
+        detail = getattr(exc, "detail", "Not Found")
+        return JSONResponse(status_code=404, content={"detail": detail})
+
     print(f"[404 ERROR] Trace: Route '{path}' not found.")
     
-    # [VITAL DEBUGGING TOOL] Secretly log broken links to audit_logs for staff review
+    # Log to DB for defense review
     try:
         db = SessionLocal()
-        # Log the missing route as a system-event
-        # We use user_id=1 (usually the admin/seed user) for tracking
         new_log = AuditLog(
             user_id=1, 
             action_type="404_NOT_FOUND",
@@ -95,11 +81,9 @@ async def not_found_exception_handler(request: Request, exc: Exception):
         )
         db.add(new_log)
         db.commit()
-    except Exception as e:
-        print(f">>> [404 Logging Failed]: {e}")
+    except: pass
     finally:
-        if 'db' in locals():
-            db.close()
+        if 'db' in locals(): db.close()
 
     return templates.TemplateResponse("404.html", {"request": request}, status_code=404)
 
@@ -121,9 +105,21 @@ app.add_middleware(
 
 @app.on_event("startup")
 def startup_sequence():
-    """Robust unified startup logic for SQLite and PostgreSQL."""
-    print(">>> System Boot: Synchronizing Database Dialect...")
+    """Robust unified startup logic with connection verification."""
+    print("\n" + "="*50)
+    print(" SHOELOTSKEY SMS v2.0 - SYSTEM BOOT")
+    print("="*50)
     
+    # 0. Connection check for Defense
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        print(f"[DATABASE] SUCCESS: Linked to {DB_TYPE}")
+    except Exception as e:
+        print(f"[DATABASE] CRITICAL ERROR: Could not connect.")
+        print(f"           Tip: Check if your IP is whitelisted or if the DB is active.")
+        print(f"           Error Trace: {str(e)[:100]}...")
+
     # 1. Create Tables (Idempotent)
     Base.metadata.create_all(bind=engine)
     inspector = inspect(engine)
@@ -135,11 +131,9 @@ def startup_sequence():
             columns = [c['name'] for c in inspector.get_columns("users")]
             with engine.begin() as conn:
                 if "reset_token" not in columns:
-                    print(">>> Migration: Adding reset_token to users")
                     try: conn.execute(text("ALTER TABLE users ADD COLUMN reset_token VARCHAR(255)"))
                     except: pass
                 if "reset_token_expiry" not in columns:
-                    print(">>> Migration: Adding reset_token_expiry to users")
                     try: conn.execute(text("ALTER TABLE users ADD COLUMN reset_token_expiry TIMESTAMP"))
                     except: pass
 
@@ -531,7 +525,12 @@ async def forgot_password(request: Request, body: ForgotPasswordRequest, db: Ses
     if status == 200:
         return {"message": "Reset email sent successfully", "debug_token": token}
     else:
-        return {"message": "System: Mock recovery enabled (Mailgun error: fallback to token)", "debug_token": token}
+        # For Defense/Localhost: We print the link to the console if Mailgun fails (mock mode)
+        print("\n" + "*"*60)
+        print(" [DEVELOPER MODE] PASSWORD RESET LINK GENERATED")
+        print(f" LINK: {reset_link}")
+        print("*"*60 + "\n")
+        return {"message": "Password recovery link generated (Demonstration Mode).", "debug_token": token}
 
 @app.get("/api/health")
 def health_check():
@@ -1254,10 +1253,9 @@ def log_custom_activity(activity: dict, db: Session = Depends(get_db)):
 
 
 
-
-# ==========================================
-# 4. PROPER MONOLITH FIX & UI HOSTING
-# ==========================================
+# ------------------------------------------
+# UI HOSTING & SPA SUPPORT
+# ------------------------------------------
 # Resolves paths relative to main.py to find the 'dist' folder correctly.
 # NOTE: Use '../dist' because main.py is inside the 'backend' folder.
 

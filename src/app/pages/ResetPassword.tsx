@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { Lock, Eye, EyeOff, CheckCircle } from 'lucide-react';
 
 const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))
-  ? 'http://localhost:8000/api'
+  ? `http://${window.location.hostname}:8000/api`
   : '/api';
 
 export default function ResetPassword() {
@@ -64,7 +64,7 @@ export default function ResetPassword() {
         toast.error(err.detail || 'Failed to reset password');
       }
     } catch (err) {
-      toast.error('Connection error.');
+      toast.error('Service Unreachable: The system server is currently offline.');
     } finally {
       setLoading(false);
     }

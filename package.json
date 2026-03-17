@@ -6,7 +6,7 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite",
-    "server": "cmd /c \"cd backend && ..\\venv\\Scripts\\python.exe -m uvicorn main:app --reload --host 127.0.0.1 --port 8000\"",
+    "server": "cmd /c \"cd backend && ..\\venv\\Scripts\\python.exe -m uvicorn main:app --reload --host 0.0.0.0 --port 8000\"",
     "monolith": "npx concurrently -n \"Vite-UI,FastAPI-BE\" -c \"red,cyan\" \"npm run dev\" \"npm run server\""
   },
   "dependencies": {

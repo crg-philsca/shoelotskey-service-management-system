@@ -14,7 +14,7 @@ interface LoginProps {
 
 
 const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))
-  ? 'http://localhost:8000/api'
+  ? `http://${window.location.hostname}:8000/api`
   : '/api';
 
 export default function Login({ onLogin }: LoginProps) {
@@ -85,7 +85,7 @@ export default function Login({ onLogin }: LoginProps) {
        * Triggered if: Backend is offline, CORS issues, or DNS failure.
        */
       console.error('[AUTH_FATAL] Network/Server Exception:', err);
-      toast.error('System Offline: Please ensure the Monolith (Terminal) is running.');
+      toast.error('Service Unreachable: The system server is currently offline.');
     } finally {
       // Cleanup UI state regardless of outcome
       setIsLoading(false);

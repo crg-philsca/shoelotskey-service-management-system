@@ -1,5 +1,5 @@
 @echo off
-echo Starting Python Backend with MySQL...
+echo Starting Shoelotskey SMS Backend...
 
 :: Use the current folder for everything
 set "BASE_DIR=%~dp0"
@@ -16,4 +16,4 @@ exit /b 1
 :RUN_BACKEND
 echo Backend Starting...
 cd backend
-"..\venv\Scripts\python.exe" -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
+"..\venv\Scripts\python.exe" -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
