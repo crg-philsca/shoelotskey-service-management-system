@@ -106,9 +106,13 @@ app.add_middleware(
 @app.on_event("startup")
 def startup_sequence():
     """Robust unified startup logic with connection verification."""
+    # Masked URL for logging (Security best practice)
+    masked_url = DATABASE_URL.split('@')[-1] if '@' in DATABASE_URL else DATABASE_URL.split('///')[-1]
+    
     print("\n" + "="*50)
     print(" SHOELOTSKEY SMS v2.0 - SYSTEM BOOT")
     print("="*50)
+    print(f"[BOOT] Connecting to: ...@{masked_url}")
     
     # 0. Connection check for Defense
     try:

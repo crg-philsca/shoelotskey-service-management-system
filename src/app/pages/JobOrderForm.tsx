@@ -22,10 +22,10 @@ export default function JobOrderForm({ user, onSetHeaderActionRight }: JobOrderF
             onSetHeaderActionRight(
                 <Button
                     onClick={() => navigate('/dashboard', { state: { status: 'new-order' } })}
-                    className="bg-red-600 hover:bg-red-700 text-white font-bold h-9 px-4 shadow-sm transition-all"
+                    className="bg-red-600 hover:bg-red-700 text-white font-bold h-9 px-2 sm:px-4 shadow-sm transition-all"
                 >
-                    <ClipboardList className="h-4 w-4 mr-0" />
-                    Status Table
+                    <ClipboardList className="h-4 w-4 mr-0 sm:mr-1" />
+                    <span className="hidden sm:inline">Status Table</span>
                 </Button>
             );
         }

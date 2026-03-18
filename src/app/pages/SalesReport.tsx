@@ -1,13 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { useServices } from '@/app/context/ServiceContext';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 
 import { TrendingUp, ShoppingBag, Filter, Calendar, TrendingDown, ChevronDown, Wallet, CircleAlert } from 'lucide-react';
 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useExpenses } from '@/app/context/ExpenseContext';
 import { useOrders } from '@/app/context/OrderContext';
 import type { JobOrder } from '@/app/types';
@@ -20,11 +20,15 @@ interface SalesReportProps {
 
 export default function SalesReport({ onSetHeaderActionRight }: SalesReportProps) {
   const navigate = useNavigate();
-  const { orders: allOrders } = useOrders();
+  const location = useLocation();
+
+  const { orders: allOrders, loading } = useOrders();
   const { expenses } = useExpenses();
   const { services } = useServices();
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('all');
-  const [dateRange, setDateRange] = useState<string>('Daily');
+  const [dateRange, setDateRange] = useState<'Daily' | 'Weekly' | 'Quarterly' | 'Annually'>(() => {
+    return (location.state as any)?.dateRange || 'Daily';
+  });
 
   // 1. GLOBAL DATE FILTERING
   const filteredOrdersByDate = useMemo(() => {
@@ -43,7 +47,7 @@ export default function SalesReport({ onSetHeaderActionRight }: SalesReportProps
       if (dateRange === 'Annually') return diffDays < 365;
       return true;
     });
-  }, [dateRange]);
+  }, [dateRange, allOrders]);
 
   const filteredExpensesByDate = useMemo(() => {
     const now = new Date();
@@ -141,7 +145,7 @@ export default function SalesReport({ onSetHeaderActionRight }: SalesReportProps
         };
       })
       .sort((a, b) => b.amount - a.amount);
-  }, [totalSalesData]);
+  }, [totalSalesData, services]);
 
   // Daily Monitoring Table Data
   // Daily sales monitoring section removed per request
@@ -157,11 +161,11 @@ export default function SalesReport({ onSetHeaderActionRight }: SalesReportProps
             <button
               type="button"
               aria-label="Select range"
-              className="w-10 h-10 md:w-40 flex items-center justify-center md:justify-between rounded-md border border-red-600 bg-red-600 px-2 md:px-3 py-2 text-sm font-semibold uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:border-white focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-10 h-10 sm:w-40 flex items-center justify-center sm:justify-between rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-sm font-semibold uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:border-white focus:outline-none focus:ring-2 focus:ring-red-500"
             >
-              <Calendar className="h-4 w-4 md:mr-1 shrink-0" aria-hidden="true" />
-              <span className="hidden md:inline truncate mx-1 flex-1 text-center">{dateRange}</span>
-              <ChevronDown className="hidden md:block h-4 w-4 text-white shrink-0" aria-hidden="true" />
+              <Calendar className="h-4 w-4 sm:mr-1 shrink-0" aria-hidden="true" />
+              <span className="hidden sm:inline truncate mx-1 flex-1 text-center">{dateRange}</span>
+              <ChevronDown className="hidden sm:block h-4 w-4 text-white shrink-0" aria-hidden="true" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-40 p-0 rounded-xl border border-red-600 bg-white shadow-lg overflow-hidden">
@@ -181,8 +185,16 @@ export default function SalesReport({ onSetHeaderActionRight }: SalesReportProps
     return () => onSetHeaderActionRight?.(null);
   }, [onSetHeaderActionRight, dateRange]);
 
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-red-600"></div>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-8 pb-10">
+    <div className="space-y-8 pb-10 animate-in fade-in duration-700">
       {/* 1. TOP SUMMARY CARDS - Business Activity Section */}
       <Card className="border-none shadow-none mb-2">
         <CardHeader className="pt-5 pb-0 mb-0">
@@ -192,7 +204,7 @@ export default function SalesReport({ onSetHeaderActionRight }: SalesReportProps
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
             <Card
               className="border-none shadow-md bg-gradient-to-br from-green-50 to-green-100 overflow-hidden relative group cursor-pointer hover:shadow-lg transition-all"
-              onClick={() => navigate('/total-sales')}
+              onClick={() => navigate('/total-sales', { state: { dateRange } })}
             >
               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                 <TrendingUp size={48} className="text-green-600" />
@@ -207,7 +219,7 @@ export default function SalesReport({ onSetHeaderActionRight }: SalesReportProps
 
             <Card
               className="border-none shadow-md bg-gradient-to-br from-purple-50 to-purple-100 overflow-hidden relative group cursor-pointer hover:shadow-lg transition-all"
-              onClick={() => navigate('/total-orders')}
+              onClick={() => navigate('/total-orders', { state: { dateRange } })}
             >
               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                 <ShoppingBag size={48} className="text-purple-600" />
@@ -222,7 +234,7 @@ export default function SalesReport({ onSetHeaderActionRight }: SalesReportProps
 
             <Card
               className="border-none shadow-md bg-gradient-to-br from-orange-50 to-orange-100 overflow-hidden relative group cursor-pointer hover:shadow-lg transition-all"
-              onClick={() => navigate('/expenses')}
+              onClick={() => navigate('/expenses', { state: { dateRange } })}
             >
               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                 <TrendingDown size={48} className="text-orange-600" />

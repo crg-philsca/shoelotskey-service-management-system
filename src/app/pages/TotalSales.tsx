@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useOrders } from '@/app/context/OrderContext';
 import type { JobOrder } from '@/app/types';
 import {
@@ -31,9 +31,12 @@ type TotalSalesProps = {
 
 export default function TotalSales({ onSetHeaderActionRight }: TotalSalesProps) {
     const navigate = useNavigate();
+    const location = useLocation();
     const { orders } = useOrders();
 
-    const [profitRange, setProfitRange] = useState<'Daily' | 'Weekly' | 'Quarterly' | 'Annually'>('Daily');
+    const [profitRange, setProfitRange] = useState<'Daily' | 'Weekly' | 'Quarterly' | 'Annually'>(() => {
+        return (location.state as any)?.dateRange || 'Daily';
+    });
     const [searchQuery, setSearchQuery] = useState('');
     const [filterService, setFilterService] = useState<string>('all');
     const [filterPriority, setFilterPriority] = useState<string>('all');
@@ -65,11 +68,11 @@ export default function TotalSales({ onSetHeaderActionRight }: TotalSalesProps) 
                     <button
                         type="button"
                         aria-label="Select range"
-                        className="w-10 h-10 md:w-40 flex items-center justify-center md:justify-between rounded-md border border-red-600 bg-red-600 px-2 md:px-3 py-2 text-sm font-semibold uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:border-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                        className="w-10 h-10 sm:w-40 flex items-center justify-center sm:justify-between rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-sm font-semibold uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:border-white focus:outline-none focus:ring-2 focus:ring-red-500"
                     >
-                        <CalendarIcon className="h-4 w-4 md:mr-1 shrink-0" aria-hidden="true" />
-                        <span className="hidden md:inline truncate mx-1">{profitRange}</span>
-                        <ChevronDown className="hidden md:block h-4 w-4 text-white shrink-0" aria-hidden="true" />
+                        <CalendarIcon className="h-4 w-4 sm:mr-1 shrink-0" aria-hidden="true" />
+                        <span className="hidden sm:inline truncate mx-1">{profitRange}</span>
+                        <ChevronDown className="hidden sm:block h-4 w-4 text-white shrink-0" aria-hidden="true" />
                     </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-40 p-0 rounded-xl border border-red-600 bg-white shadow-lg overflow-hidden">
@@ -239,7 +242,7 @@ export default function TotalSales({ onSetHeaderActionRight }: TotalSalesProps) 
                         <CardTitle className="text-lg font-black uppercase tracking-tight text-gray-900">Sales Transactions</CardTitle>
                         <div className="flex flex-wrap md:flex-nowrap items-center gap-2 md:gap-3 w-full">
                             <Button
-                                onClick={() => navigate(-1)}
+                                onClick={() => navigate('/sales-report', { state: { dateRange: profitRange } })}
                                 className="bg-red-600 text-white hover:bg-red-700 h-10 px-3 flex-shrink-0 uppercase text-[11px] font-bold flex items-center gap-2 rounded-xl shadow-sm"
                                 size="sm"
                             >

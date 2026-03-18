@@ -85,11 +85,11 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                 ? { ...order.items[0].condition }
                 : (order.condition || {
                     scratches: false,
-                    ripsHoles: false,
-                    wornOut: false,
-                    soleSeparation: false,
                     yellowing: false,
+                    ripsHoles: false,
                     deepStains: false,
+                    soleSeparation: false,
+                    wornOut: false,
                     others: ''
                 });
 
@@ -450,11 +450,11 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                 <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
                                     {[
                                         { key: 'scratches', label: 'Scratches' },
-                                        { key: 'ripsHoles', label: 'Rips/ Holes' },
-                                        { key: 'wornOut', label: 'Worn Out' },
-                                        { key: 'soleSeparation', label: 'Sole Sep' },
                                         { key: 'yellowing', label: 'Yellowing' },
-                                        { key: 'deepStains', label: 'Stains' }
+                                        { key: 'ripsHoles', label: 'Rips/Holes' },
+                                        { key: 'deepStains', label: 'Deep Stains' },
+                                        { key: 'soleSeparation', label: 'Sole Separation' },
+                                        { key: 'wornOut', label: 'Faded/Worn' }
                                     ].map((condition) => (
                                         <div
                                             key={condition.key}

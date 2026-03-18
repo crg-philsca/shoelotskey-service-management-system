@@ -42,21 +42,21 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
-            className="border-red-600 text-red-600 hover:bg-red-50 hover:text-red-700 font-bold"
+            className="border-red-600 text-red-600 hover:bg-red-50 hover:text-red-700 font-bold px-2 sm:px-4"
             onClick={() => navigate('/activity-history')}
           >
-            <History size={16} className="mr-0" />
-            View History
+            <History size={16} className="mr-0 sm:mr-1" />
+            <span className="hidden sm:inline">View History</span>
           </Button>
           <Button
-            className="bg-red-600 hover:bg-red-700 font-bold"
+            className="bg-red-600 hover:bg-red-700 font-bold px-2 sm:px-4"
             onClick={() => {
               setSelectedService(null);
               setServiceModalOpen(true);
             }}
           >
-            <PlusCircle size={16} className="mr-0" />
-            New Service
+            <PlusCircle size={16} className="mr-0 sm:mr-1" />
+            <span className="hidden sm:inline">New Service</span>
           </Button>
         </div>
       );

@@ -10,8 +10,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
 
-# Load variables from .env if present
-load_dotenv()
+# Load variables from .env if present (Override system variables for project consistency)
+load_dotenv(override=True)
 
 # 1. DATABASE CONNECTION URL
 # Automatically handles Heroku (DATABASE_URL) or fallback to local SQLite for deployment ease.

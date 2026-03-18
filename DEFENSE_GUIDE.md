@@ -32,8 +32,12 @@ This document explains the core architectural changes made for security, verific
 - **Validation:** Controlled in `schemas.py` (e.g., ensuring `quantity` is an integer).
 - **Verification:** Logic-based checks in `main.py` (e.g., verifying if a user exists before allowing a login).
 
-## Contact for Fixes
-If the connection fails:
-1. Ensure `npm run dev` is running (Frontend).
-2. Ensure `.\run_backend.bat` is running (Backend).
-3. The API runs on `http://127.0.0.1:8000`.
+## System Architecture (For Professors)
+The system uses a **De-coupled Monolith** architecture:
+- **Frontend (Port 5173)**: React + Vite + Tailwind. Handles UI logic and UX.
+- **Backend (Port 8000)**: FastAPI + SQLAlchemy + PostgreSQL. Handles persistence and business rules.
+
+### Demonstration Mode (Password Recovery)
+On localhost, the SMTP (Email) service is disabled to prevent spam. 
+- **Success Case**: Requesting a reset will show a "Demonstration Mode" message.
+- **Verification**: The actual reset link will be printed in the **Backend Terminal console** for secure manual demonstration.

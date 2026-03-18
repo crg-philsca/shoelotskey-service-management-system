@@ -14,9 +14,9 @@ export default function JobOrderFormModal({ user }: JobOrderFormModalProps) {
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button className="bg-red-600 hover:bg-red-700 text-white gap-2 font-bold shadow-sm">
+                <Button className="bg-red-600 hover:bg-red-700 text-white gap-2 font-bold shadow-sm px-2 sm:px-4">
                     <CopyPlus size={18} />
-                    New Job Order Form
+                    <span className="hidden sm:inline">New Job Order Form</span>
                 </Button>
             </DialogTrigger>
             <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-[#F8F9FA] p-0 gap-0 rounded-2xl border-none shadow-2xl">

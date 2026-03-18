@@ -66,7 +66,8 @@ interface DashboardProps {
 
 export default function Dashboard({ user, onSetHeaderActionRight }: DashboardProps) {
   const role = user.role;
-  const { orders, updateOrder } = useOrders();
+  const { orders, loading, refreshing, updateOrder } = useOrders();
+  const { services } = useServices();
   const [isEditing, setIsEditing] = useState(false);
   const [profitRange, setProfitRange] = useState<'Daily' | 'Weekly' | 'Quarterly' | 'Annually'>('Daily');
   // STATE: Drill-down status filter
@@ -94,7 +95,6 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
   const [processClaimOrder, setProcessClaimOrder] = useState<JobOrder | null>(null);
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const { expenses, addExpense } = useExpenses();
-  const { services } = useServices();
   const itemsPerPage = 10;
 
   const baseServices = services.filter(s => s.category === 'base' && s.active);
@@ -397,13 +397,13 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
-              className="w-10 h-10 md:w-40 flex items-center justify-center md:justify-between rounded-md border border-red-600 bg-red-600 px-2 md:px-3 py-2 text-sm font-semibold uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:border-white focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-10 h-10 sm:w-40 flex items-center justify-center sm:justify-between rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-sm font-semibold uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:border-white focus:outline-none focus:ring-2 focus:ring-red-500"
               aria-label="Select range"
               type="button"
             >
-              <CalendarIcon className="h-4 w-4 md:mr-1 shrink-0" aria-hidden="true" />
-              <span className="hidden md:inline truncate mx-1 flex-1 text-center">{profitRange}</span>
-              <ChevronDown className="hidden md:block h-4 w-4 text-white shrink-0" aria-hidden="true" />
+              <CalendarIcon className="h-4 w-4 sm:mr-1 shrink-0" aria-hidden="true" />
+              <span className="hidden sm:inline truncate mx-1 flex-1 text-center">{profitRange}</span>
+              <ChevronDown className="hidden sm:block h-4 w-4 text-white shrink-0" aria-hidden="true" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-40 p-0 rounded-xl border border-red-600 bg-white shadow-lg overflow-hidden">
@@ -425,13 +425,13 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
-              className="w-10 h-10 md:w-40 flex items-center justify-center md:justify-between rounded-md border border-red-600 bg-red-600 px-2 md:px-3 py-2 text-sm font-semibold uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:border-white focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-10 h-10 sm:w-40 flex items-center justify-center sm:justify-between rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-sm font-semibold uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:border-white focus:outline-none focus:ring-2 focus:ring-red-500"
               aria-label="Select range"
               type="button"
             >
-              <CalendarIcon className="h-4 w-4 md:mr-1 shrink-0" aria-hidden="true" />
-              <span className="hidden md:inline truncate mx-1 flex-1 text-center">{profitRange}</span>
-              <ChevronDown className="hidden md:block h-4 w-4 text-white shrink-0" aria-hidden="true" />
+              <CalendarIcon className="h-4 w-4 sm:mr-1 shrink-0" aria-hidden="true" />
+              <span className="hidden sm:inline truncate mx-1 flex-1 text-center">{profitRange}</span>
+              <ChevronDown className="hidden sm:block h-4 w-4 text-white shrink-0" aria-hidden="true" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-40 p-0 rounded-xl border border-red-600 bg-white shadow-lg overflow-hidden">
@@ -451,10 +451,24 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
     return () => onSetHeaderActionRight(null);
   }, [onSetHeaderActionRight, profitRange, selectedStatus]);
 
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-red-600"></div>
+      </div>
+    );
+  }
+
   return (
     <>
-      <div className="space-y-6">
+      <div className="space-y-6 animate-in fade-in duration-700">
         <div className="space-y-4">
+          {refreshing && (
+            <div className="flex items-center gap-2 px-1 mb-2">
+              <div className="h-1.5 w-1.5 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.6)]"></div>
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Cloud Sync Active</span>
+            </div>
+          )}
 
           {/* Status Summary - Always Visible */}
           <Card>
@@ -1201,7 +1215,15 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                             {Object.entries(item.condition || {}).map(([key, value]) => {
                               if (key === 'others' && value) return <span key={key} className="px-2 py-1 bg-white border border-gray-200 rounded-md text-[10px] font-bold text-gray-600 shadow-sm">Note: {String(value)}</span>;
                               if (value === true) {
-                                const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                                const labels: Record<string, string> = {
+                                    scratches: 'Scratches',
+                                    yellowing: 'Yellowing',
+                                    ripsHoles: 'Rips/Holes',
+                                    deepStains: 'Deep Stains',
+                                    soleSeparation: 'Sole Separation',
+                                    wornOut: 'Faded/Worn'
+                                };
+                                const label = labels[key] || key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
                                 return <span key={key} className="px-2 py-1 bg-red-50 border border-red-100 rounded-md text-[10px] font-bold text-red-600">{label}</span>;
                               }
                               return null;

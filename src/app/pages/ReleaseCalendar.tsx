@@ -21,7 +21,7 @@ interface ReleaseCalendarProps {
 export default function ReleaseCalendar({ onSetHeaderActionRight }: ReleaseCalendarProps) {
   const navigate = useNavigate();
   const { services } = useServices();
-  const { orders } = useOrders();
+  const { orders, loading } = useOrders();
 
   // FILTER: Only show orders ready for release
   const forReleaseOrders = orders.filter((job: JobOrder) => job.status === 'for-release');
@@ -106,17 +106,17 @@ export default function ReleaseCalendar({ onSetHeaderActionRight }: ReleaseCalen
         <div className="flex items-center gap-2">
           <Button
             onClick={() => navigate('/claim-record')}
-            className="bg-white hover:bg-red-50 text-red-600 border border-red-200 font-bold h-9 px-4 shadow-sm transition-all"
+            className="bg-white hover:bg-red-50 text-red-600 border border-red-200 font-bold h-9 px-2 sm:px-4 shadow-sm transition-all"
           >
-            <FileText className="h-4 w-4 mr-1 text-red-600" />
-            Claim Record
+            <FileText className="h-4 w-4 mr-0 sm:mr-1 text-red-600" />
+            <span className="hidden sm:inline">Claim Record</span>
           </Button>
           <Button
             onClick={() => navigate('/dashboard', { state: { status: 'for-release' } })}
-            className="bg-red-600 hover:bg-red-700 text-white font-bold h-9 px-4 shadow-sm transition-all"
+            className="bg-red-600 hover:bg-red-700 text-white font-bold h-9 px-2 sm:px-4 shadow-sm transition-all"
           >
-            <ClipboardList className="h-4 w-4 mr-1" />
-            Release Table
+            <ClipboardList className="h-4 w-4 mr-0 sm:mr-1" />
+            <span className="hidden sm:inline">Release Table</span>
           </Button>
         </div>
       );
@@ -316,7 +316,11 @@ export default function ReleaseCalendar({ onSetHeaderActionRight }: ReleaseCalen
             </div>
 
             <div className="flex-1 p-4 pr-4 overflow-y-scroll min-h-[440px] max-h-[440px] flex flex-col scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
-              {sortedJobsOnDate.length === 0 ? (
+              {loading ? (
+                <div className="h-full flex items-center justify-center py-20">
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-red-600"></div>
+                </div>
+              ) : sortedJobsOnDate.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center py-20 text-center space-y-4">
                   <div className="h-20 w-20 rounded-full bg-gray-50 flex items-center justify-center text-gray-300">
                     <Package size={40} />

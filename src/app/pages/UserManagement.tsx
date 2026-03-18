@@ -33,7 +33,12 @@ const API_BASE = (typeof window !== 'undefined' && (window.location.hostname ===
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const itemsPerPage = 10;
 
-    const [users, setUsers] = useState<User[]>([]);
+    const [users, setUsers] = useState<User[]>(() => {
+      if (typeof window === 'undefined') return [];
+      const saved = localStorage.getItem('userManagement_cache');
+      return saved ? JSON.parse(saved) : [];
+    });
+    const [loading, setLoading] = useState(users.length === 0);
     const [userModalOpen, setUserModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<User | null>(null);
     const { addActivity } = useActivities();
@@ -41,6 +46,7 @@ const API_BASE = (typeof window !== 'undefined' && (window.location.hostname ===
 
     // Fetch users from API
     const fetchUsers = async () => {
+      setLoading(true);
       try {
         const response = await fetch(`${API_BASE}/users`);
         if (response.ok) {
@@ -54,12 +60,16 @@ const API_BASE = (typeof window !== 'undefined' && (window.location.hostname ===
             active: u.is_active
           }));
           setUsers(mappedUsers);
+          localStorage.setItem('userManagement_cache', JSON.stringify(mappedUsers));
         } else {
-          toast.error('Failed to load users');
+          // Fallback to cache is already handled by initial state
+          if (users.length === 0) toast.error('Failed to load users');
         }
       } catch (error) {
         console.error('Error fetching users:', error);
         toast.error('Network error. Failed to load users.');
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -89,15 +99,15 @@ const API_BASE = (typeof window !== 'undefined' && (window.location.hostname ===
       if (onSetHeaderAction) {
         onSetHeaderAction(
           <Button
-            className="bg-red-600 hover:bg-red-700 font-bold"
+            className="bg-red-600 hover:bg-red-700 font-bold px-2 sm:px-4"
             title="Create new user"
             onClick={() => {
               setEditingUser(null);
               setUserModalOpen(true);
             }}
           >
-            <PlusCircle className="h-4 w-4 mr-0" />
-            New User
+            <PlusCircle className="h-4 w-4 mr-0 sm:mr-1" />
+            <span className="hidden sm:inline">New User</span>
           </Button>
         );
       }
@@ -324,32 +334,48 @@ const API_BASE = (typeof window !== 'undefined' && (window.location.hostname ===
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {paginatedUsers.map((user) => (
-                  <tr key={user.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm font-medium">{user.username}</td>
-                    <td className="px-4 py-3 text-sm">{user.email}</td>
-                    <td className="px-4 py-3 text-sm">
-                      <Badge className={user.role === 'owner' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}>
-                        {user.role === 'owner' ? 'Owner' : 'Staff'}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      <Badge className={user.active ? 'bg-green-100 text-green-700' : 'bg-gray-400 text-white'}>
-                        {user.active ? 'Active' : 'Inactive'}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      <div className="flex gap-2">
-                        <Button size="sm" className="border border-yellow-500 text-yellow-700 bg-transparent hover:bg-yellow-50" onClick={() => handleEditClick(user)}>
-                          <Edit size={16} />
-                        </Button>
-                        <Button size="sm" className="border border-red-600 text-red-600 bg-transparent hover:bg-red-50" onClick={() => handleDeleteUser(user.id)}>
-                          <Trash size={16} />
-                        </Button>
+                {loading ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-8 text-center">
+                      <div className="flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
                       </div>
                     </td>
                   </tr>
-                ))}
+                ) : paginatedUsers.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-8 text-center text-gray-500 text-sm">
+                      No users found matching your criteria.
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedUsers.map((user) => (
+                    <tr key={user.id} className="hover:bg-gray-50 animate-in fade-in duration-500">
+                      <td className="px-4 py-3 text-sm font-medium">{user.username}</td>
+                      <td className="px-4 py-3 text-sm">{user.email}</td>
+                      <td className="px-4 py-3 text-sm">
+                        <Badge className={user.role === 'owner' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}>
+                          {user.role === 'owner' ? 'Owner' : 'Staff'}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        <Badge className={user.active ? 'bg-green-100 text-green-700' : 'bg-gray-400 text-white'}>
+                          {user.active ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        <div className="flex gap-2">
+                          <Button size="sm" className="border border-yellow-500 text-yellow-700 bg-transparent hover:bg-yellow-50" onClick={() => handleEditClick(user)}>
+                            <Edit size={16} />
+                          </Button>
+                          <Button size="sm" className="border border-red-600 text-red-600 bg-transparent hover:bg-red-50" onClick={() => handleDeleteUser(user.id)}>
+                            <Trash size={16} />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

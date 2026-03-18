@@ -7,7 +7,7 @@ import { Input } from '@/app/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu';
-import { Search, Filter, MoreVertical, Edit, ArrowRight, RotateCcw, User, Phone, Clock, CreditCard, Tag, MapPin, UserPlus, Calendar as CalendarIcon, Truck } from 'lucide-react';
+import { Search, Filter, MoreVertical, Edit, ArrowRight, RotateCcw, User, Phone, Clock, CreditCard, Tag, MapPin, UserPlus, Calendar as CalendarIcon, Truck, ShoppingBag } from 'lucide-react';
 import { format as dateFnsFormat } from 'date-fns';
 import { useServices } from '@/app/context/ServiceContext';
 import EditOrderModal from '@/app/components/EditOrderModal';
@@ -31,7 +31,7 @@ interface JobOrdersProps {
  * - Detailed Order View & Inline Editing
  */
 export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
-    const { orders, updateOrder } = useOrders();
+    const { orders, loading, updateOrder } = useOrders();
     const { services } = useServices();
     const [searchQuery, setSearchQuery] = useState('');
     const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -202,7 +202,15 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                 </tr>
                             </thead>
                             <tbody>
-                                {paginatedOrders.length === 0 ? (
+                                {loading ? (
+                                    <tr>
+                                        <td colSpan={9} className="px-6 py-20 text-center">
+                                            <div className="flex items-center justify-center">
+                                                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-red-600"></div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ) : paginatedOrders.length === 0 ? (
                                     <tr>
                                         <td colSpan={9} className="px-6 py-20 text-center">
                                             <div className="flex flex-col items-center justify-center space-y-3 opacity-40">
@@ -564,7 +572,15 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                                 {Object.entries(item.condition || {}).map(([key, value]) => {
                                                     if (key === 'others' && value) return <span key={key} className="px-2 py-1 bg-white border border-gray-200 rounded-xl text-[10px] font-bold text-gray-600 shadow-sm">Note: {String(value)}</span>;
                                                     if (value === true) {
-                                                        const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                                                        const labels: Record<string, string> = {
+                                                            scratches: 'Scratches',
+                                                            yellowing: 'Yellowing',
+                                                            ripsHoles: 'Rips/Holes',
+                                                            deepStains: 'Deep Stains',
+                                                            soleSeparation: 'Sole Separation',
+                                                            wornOut: 'Faded/Worn'
+                                                        };
+                                                        const label = labels[key] || key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
                                                         return <span key={key} className="px-2 py-1 bg-red-50 border border-red-100 rounded-xl text-[10px] font-bold text-red-600">{label}</span>;
                                                     }
                                                     return null;

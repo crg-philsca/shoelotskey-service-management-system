@@ -10,6 +10,8 @@ const API_BASE = (typeof window !== 'undefined' && (window.location.hostname ===
 
 interface OrderContextType {
     orders: JobOrder[];
+    loading: boolean;
+    refreshing: boolean;
     addOrder: (order: JobOrder) => Promise<void>;
     updateOrder: (id: string, updates: Partial<JobOrder>, statusUser?: string) => Promise<void>;
     refreshOrders: () => Promise<void>;
@@ -26,7 +28,26 @@ const OrderContext = createContext<OrderContextType | undefined>(undefined);
 export function OrderProvider({ children, user }: { children: ReactNode, user: { id?: number, username: string } }) {
 
     const { addActivity } = useActivities();
-    const [orders, setOrders] = useState<JobOrder[]>([]);
+    const [orders, setOrders] = useState<JobOrder[]>(() => {
+        if (typeof window === 'undefined') return [];
+        const saved = localStorage.getItem('jobOrders_v19_cache');
+        if (saved) {
+            try {
+                return JSON.parse(saved).map((o: any) => ({
+                    ...o,
+                    createdAt: new Date(o.createdAt),
+                    updatedAt: new Date(o.updatedAt),
+                    transactionDate: new Date(o.transactionDate || o.createdAt)
+                }));
+            } catch (e) {
+                console.error("Failed to parse cached orders", e);
+                return [];
+            }
+        }
+        return [];
+    });
+    const [loading, setLoading] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
 
     // Robust Mapping: Converts Backend 3NF Model to Frontend JobOrder Type
     const mapBackendToFrontend = (bo: any): JobOrder => {
@@ -139,6 +160,10 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
     // Initial Load - Hydrate from API with LocalStorage fallback
     useEffect(() => {
         const loadInitialData = async () => {
+            // If we have no orders, show blocking loading
+            if (orders.length === 0) setLoading(true);
+            setRefreshing(true);
+
             try {
                 const response = await fetch(`${API_BASE}/orders`);
                 if (response.ok) {
@@ -151,17 +176,13 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                     throw new Error('API unreachable');
                 }
             } catch (err) {
-                const saved = localStorage.getItem('jobOrders_v19_cache');
-                if (saved) {
-                    setOrders(JSON.parse(saved).map((o: any) => ({
-                        ...o,
-                        createdAt: new Date(o.createdAt),
-                        updatedAt: new Date(o.updatedAt),
-                        transactionDate: new Date(o.transactionDate || o.createdAt)
-                    })));
-                } else {
+                console.warn("Retaining cached data due to fetch failure", err);
+                if (orders.length === 0) {
                     setOrders(mockJobOrders);
                 }
+            } finally {
+                setLoading(false);
+                setRefreshing(false);
             }
         };
 
@@ -276,7 +297,14 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
     };
 
     return (
-        <OrderContext.Provider value={{ orders, addOrder, updateOrder, refreshOrders }}>
+        <OrderContext.Provider value={{
+            orders,
+            loading,
+            refreshing,
+            addOrder,
+            updateOrder,
+            refreshOrders
+        }}>
             {children}
         </OrderContext.Provider>
     );
