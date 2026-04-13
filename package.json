@@ -7,7 +7,8 @@
     "build": "vite build",
     "dev": "vite",
     "server": "cmd /c \"cd backend && ..\\venv\\Scripts\\python.exe -m uvicorn main:app --reload --host 0.0.0.0 --port 8000\"",
-    "monolith": "npx concurrently -n \"Vite-UI,FastAPI-BE\" -c \"red,cyan\" \"npm run dev\" \"npm run server\""
+    "monolith": "npx concurrently -n \"Vite-UI,FastAPI-BE\" -c \"red,cyan\" \"npm run dev\" \"npm run server\"",
+    "watch": "tsc --noEmit --watch"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
@@ -41,11 +42,13 @@
     "@radix-ui/react-toggle": "1.1.2",
     "@radix-ui/react-toggle-group": "1.1.2",
     "@radix-ui/react-tooltip": "1.1.8",
+    "axios": "^1.15.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "cmdk": "1.1.1",
     "date-fns": "3.6.0",
     "embla-carousel-react": "8.6.0",
+    "html2pdf.js": "^0.14.0",
     "input-otp": "1.4.2",
     "lucide-react": "0.487.0",
     "ml-random-forest": "^2.1.0",
@@ -70,6 +73,7 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.1.12",
+    "@types/html2pdf.js": "^0.10.0",
     "@types/jest": "^29.5.13",
     "@types/node": "^22.10.2",
     "@types/react": "^18.3.12",
@@ -78,7 +82,8 @@
     "concurrently": "^9.2.1",
     "tailwindcss": "4.1.12",
     "typescript": "^5.9.3",
-    "vite": "^6.4.1"
+    "vite": "^6.4.1",
+    "vite-plugin-checker": "^0.12.0"
   },
   "pnpm": {
     "overrides": {

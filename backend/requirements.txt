@@ -24,3 +24,4 @@ psycopg2-binary
 python-dotenv
 jinja2>=3.0.0
 requests
+PyJWT>=2.8.0

@@ -1,12 +1,25 @@
-import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import { createContext, useContext, useState, ReactNode, useEffect, useRef } from 'react';
 import { JobOrder } from '@/app/types';
 import { mockJobOrders } from '@/app/lib/mockData';
 import { useActivities } from './ActivityContext';
 
 // Backend API Base URL
-const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))
-    ? 'http://localhost:8000/api'
+const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '5173'))
+    ? `http://${window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname}:8000/api`
     : '/api';
+
+// Resilience Check: Verifies if the backend is actually reachable
+const checkBackend = async (token: string) => {
+    try {
+        const res = await fetch(`${API_BASE}/orders?limit=1`, { 
+            method: 'GET',
+            headers: { 'Authorization': `Bearer ${token}` } 
+        });
+        return res.ok || res.status === 401; // Reachable even if unauthorized
+    } catch {
+        return false;
+    }
+};
 
 interface OrderContextType {
     orders: JobOrder[];
@@ -14,6 +27,7 @@ interface OrderContextType {
     refreshing: boolean;
     addOrder: (order: JobOrder) => Promise<void>;
     updateOrder: (id: string, updates: Partial<JobOrder>, statusUser?: string) => Promise<void>;
+    deleteOrder: (id: string) => Promise<void>;
     refreshOrders: () => Promise<void>;
 }
 
@@ -25,27 +39,89 @@ const OrderContext = createContext<OrderContextType | undefined>(undefined);
  * Handles real-time synchronization with the FastAPI backend while providing
  * a robust localStorage fallback for offline/resilient operations.
  */
-export function OrderProvider({ children, user }: { children: ReactNode, user: { id?: number, username: string } }) {
-
+export function OrderProvider({ children, user }: { children: ReactNode, user: { id?: number, username: string, token: string } }) {
+    const syncNotificationShown = useRef(false);
     const { addActivity } = useActivities();
     const [orders, setOrders] = useState<JobOrder[]>(() => {
         if (typeof window === 'undefined') return [];
         const saved = localStorage.getItem('jobOrders_v19_cache');
+        let initialOrders: JobOrder[] = [];
         if (saved) {
             try {
-                return JSON.parse(saved).map((o: any) => ({
+                initialOrders = JSON.parse(saved).map((o: any) => ({
                     ...o,
                     createdAt: new Date(o.createdAt),
                     updatedAt: new Date(o.updatedAt),
-                    transactionDate: new Date(o.transactionDate || o.createdAt)
+                    transactionDate: new Date(o.transactionDate || o.createdAt),
+                    predictedCompletionDate: o.predictedCompletionDate ? new Date(o.predictedCompletionDate) : undefined,
+                    actualCompletionDate: o.actualCompletionDate ? new Date(o.actualCompletionDate) : undefined,
+                    statusHistory: o.statusHistory?.map((sl: any) => ({
+                        ...sl,
+                        timestamp: new Date(sl.timestamp)
+                    })) || []
                 }));
             } catch (e) {
                 console.error("Failed to parse cached orders", e);
-                return [];
             }
         }
-        return [];
+
+        // Merge from sync queue (important for persistent offline data)
+        const queueStr = localStorage.getItem('order_sync_queue');
+        if (queueStr) {
+            try {
+                const queue = JSON.parse(queueStr);
+                const pendingAdds = queue
+                    .filter((q: any) => q.type === 'ADD')
+                    .map((q: any) => ({
+                        ...q.payload,
+                        id: q.payload.id || `offline-${q.timestamp}`,
+                        createdAt: new Date(q.timestamp),
+                        updatedAt: new Date(q.timestamp),
+                        statusHistory: []
+                    }));
+                
+                // Add pending orders that aren't already in initialOrders
+                pendingAdds.forEach((pa: JobOrder) => {
+                    if (!initialOrders.find(o => o.orderNumber === pa.orderNumber)) {
+                        initialOrders.unshift(pa);
+                    }
+                });
+            } catch (e) {
+                console.error("Failed to merge sync queue", e);
+            }
+        }
+        return initialOrders;
     });
+
+    // Helper to merge pending ADD tasks into an orders array
+    const mergePendingOrders = (serverOrders: JobOrder[]) => {
+        const queueStr = localStorage.getItem('order_sync_queue');
+        if (!queueStr) return serverOrders;
+        
+        try {
+            const queue = JSON.parse(queueStr);
+            const pendingAdds = queue
+                .filter((q: any) => q.type === 'ADD')
+                .map((q: any) => ({
+                    ...q.payload,
+                    id: q.payload.id || `offline-${q.timestamp}`,
+                    createdAt: new Date(q.timestamp),
+                    updatedAt: new Date(q.timestamp),
+                    statusHistory: []
+                }));
+            
+            const merged = [...serverOrders];
+            pendingAdds.forEach((pa: JobOrder) => {
+                if (!merged.find(o => o.orderNumber === pa.orderNumber)) {
+                    merged.unshift(pa);
+                }
+            });
+            return merged;
+        } catch (e) {
+            return serverOrders;
+        }
+    };
+
     const [loading, setLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
 
@@ -104,12 +180,12 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                     shoeMaterial: bi.material || 'Other',
                     quantity: bi.quantity || 1,
                     condition: {
-                        scratches:      condNames.includes('scratches')       || bi.cond_scratches       || false,
-                        yellowing:      condNames.includes('yellowing')       || bi.cond_yellowing       || false,
-                        ripsHoles:      condNames.includes('rips/holes')      || bi.cond_ripsholes       || false,
-                        deepStains:     condNames.includes('deep stains')     || bi.cond_deepstains      || false,
-                        soleSeparation: condNames.includes('sole separation') || bi.cond_soleseparation  || false,
-                        wornOut:        condNames.includes('worn out')        || bi.cond_wornout         || false,
+                        scratches:      condNames.includes('scratches'),
+                        yellowing:      condNames.includes('yellowing'),
+                        ripsHoles:      condNames.includes('ripsholes'),
+                        deepStains:     condNames.includes('deepstains'),
+                        soleSeparation: condNames.includes('soleseparation'),
+                        wornOut:        condNames.includes('wornout'),
                         others: bi.item_notes || ''
                     },
                     // category is a nested 3NF object: { category_id, category_name }
@@ -127,14 +203,17 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
             shoeModel: firstItem.shoe_model || 'Unknown',
             shoeMaterial: bo.items?.map((i: any) => i.material).filter(Boolean).join(', ') || 'Unknown',
             quantity: bo.items?.reduce((acc: number, item: any) => acc + (item.quantity || 1), 0) || 1,
-            condition: {
-                scratches: firstItem.cond_scratches || false,
-                yellowing: firstItem.cond_yellowing || false,
-                ripsHoles: firstItem.cond_ripsholes || false,
-                deepStains: firstItem.cond_deepstains || false,
-                soleSeparation: firstItem.cond_soleseparation || false,
-                wornOut: firstItem.cond_wornout || false,
-                others: firstItem.item_notes || ''
+            condition: bo.items?.[0] ? {
+                scratches:      bo.items[0].conditions?.some((c: any) => c.condition_name?.toLowerCase() === 'scratches') || false,
+                yellowing:      bo.items[0].conditions?.some((c: any) => c.condition_name?.toLowerCase() === 'yellowing') || false,
+                ripsHoles:      bo.items[0].conditions?.some((c: any) => c.condition_name?.toLowerCase() === 'ripsholes') || false,
+                deepStains:     bo.items[0].conditions?.some((c: any) => c.condition_name?.toLowerCase() === 'deepstains') || false,
+                soleSeparation: bo.items[0].conditions?.some((c: any) => c.condition_name?.toLowerCase() === 'soleseparation') || false,
+                wornOut:        bo.items[0].conditions?.some((c: any) => c.condition_name?.toLowerCase() === 'wornout') || false,
+                others: bo.items[0].item_notes || ''
+            } : {
+                scratches: false, yellowing: false, ripsHoles: false,
+                deepStains: false, soleSeparation: false, wornOut: false, others: ''
             },
             baseService: Array.from(new Set(
                 bo.items?.flatMap((item: any) =>
@@ -165,13 +244,16 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
             setRefreshing(true);
 
             try {
-                const response = await fetch(`${API_BASE}/orders`);
+                const response = await fetch(`${API_BASE}/orders`, {
+                    headers: { 'Authorization': `Bearer ${user.token}` }
+                });
                 if (response.ok) {
                     const data = await response.json();
                     const mappedOrders = data.map(mapBackendToFrontend);
+                    const finalOrders = mergePendingOrders(mappedOrders);
 
-                    setOrders(mappedOrders);
-                    localStorage.setItem('jobOrders_v19_cache', JSON.stringify(mappedOrders));
+                    setOrders(finalOrders);
+                    localStorage.setItem('jobOrders_v19_cache', JSON.stringify(finalOrders));
                 } else {
                     throw new Error('API unreachable');
                 }
@@ -214,37 +296,173 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
      */
     const refreshOrders = async () => {
         try {
-            const response = await fetch(`${API_BASE}/orders`);
+            const response = await fetch(`${API_BASE}/orders`, {
+                headers: { 'Authorization': `Bearer ${user.token}` }
+            });
             if (response.ok) {
                 const data = await response.json();
-                setOrders(data.map(mapBackendToFrontend));
+                const mapped = data.map(mapBackendToFrontend);
+                setOrders(mergePendingOrders(mapped));
             }
         } catch (err) {
             console.error('[DEBUG] OrderProvider: Refresh failed.', err);
         }
     };
 
+    // --- OFFLINE AUTO-SYNC QUEUE ---
+    const queueSyncTask = (task: any) => {
+        if (typeof window === 'undefined') return;
+        const queueStr = localStorage.getItem('order_sync_queue');
+        const queue = queueStr ? JSON.parse(queueStr) : [];
+        queue.push({ ...task, timestamp: Date.now() });
+        localStorage.setItem('order_sync_queue', JSON.stringify(queue));
+        
+        // Notify the user
+        import('sonner').then(({ toast }) => {
+            toast.warning('You are offline. Change saved locally and will auto-sync when connection is restored.');
+        });
+    };
+
+    // Persist to cache whenever orders change
+    useEffect(() => {
+        if (orders.length > 0) {
+            localStorage.setItem('jobOrders_v19_cache', JSON.stringify(orders));
+        }
+    }, [orders]);
+
+    useEffect(() => {
+        const processSyncQueue = async () => {
+            if (typeof window === 'undefined' || !navigator.onLine) return;
+            const queueStr = localStorage.getItem('order_sync_queue');
+            if (!queueStr) return;
+            
+            try {
+                const queue: any[] = JSON.parse(queueStr);
+                if (queue.length === 0) return;
+                
+                // Verify server reachability before showing "Syncing" toast
+                const isReachable = await checkBackend(user.token);
+                if (!isReachable) {
+                    console.warn('[SYNC] Backend unreachable, skipping auto-sync attempt.');
+                    return;
+                }
+
+                if (syncNotificationShown.current) return;
+                syncNotificationShown.current = true;
+
+                const { toast } = await import('sonner');
+                const toastId = 'order-sync-toast';
+                toast.loading(`Syncing ${queue.length} offline changes...`, { id: toastId });
+                
+                let hasChanges = false;
+                let syncErrorCount = 0;
+                const remainingQueue = [];
+                
+                for (const task of queue) {
+                    try {
+                        const endpoint = task.type === 'ADD' ? `${API_BASE}/orders` : `${API_BASE}/orders/${parseInt(task.id)}`;
+                        const method = task.type === 'ADD' ? 'POST' : 'PUT';
+                        
+                        if (task.type === 'UPDATE' && isNaN(parseInt(task.id))) {
+                             // Defer UPDATEs for temp IDs if they weren't linked just now
+                             remainingQueue.push(task);
+                             continue;
+                        }
+
+                        const response = await fetch(endpoint, {
+                            method,
+                            headers: { 
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${user.token}`
+                            },
+                            body: JSON.stringify(task.payload)
+                        });
+                        
+                        if (response.ok) {
+                            hasChanges = true;
+                            if (task.type === 'ADD') {
+                                const newOrderData = await response.json();
+                                const newDbId = newOrderData.order_id?.toString();
+                                const tempId = task.payload.id;
+
+                                if (newDbId && tempId) {
+                                    queue.forEach(t => {
+                                        if (t.id === tempId) t.id = newDbId;
+                                    });
+                                }
+                            }
+                        } else {
+                            syncErrorCount++;
+                            task.status = response.status;
+                            remainingQueue.push(task);
+                        }
+                    } catch (err) {
+                        syncErrorCount++;
+                        task.status = 500;
+                        remainingQueue.push(task);
+                    }
+                }
+                
+                localStorage.setItem('order_sync_queue', JSON.stringify(remainingQueue));
+                
+                if (hasChanges) {
+                    toast.success("Offline changes synced successfully!", { id: toastId });
+                    syncNotificationShown.current = false;
+                    refreshOrders();
+                } else if (remainingQueue.length > 0) {
+                    // Only show error if we actually tried and failed multiple tasks
+                    if (syncErrorCount > 0) {
+                        const isAuthError = remainingQueue.some(t => t.status === 401);
+                        if (isAuthError) {
+                            toast.error(`Session Expired: Please Log Out and Log In again to sync ${remainingQueue.length} items.`, { id: toastId, duration: 5000 });
+                        } else {
+                            toast.error(`Sync failed for ${remainingQueue.length} items. Check server status.`, { id: toastId });
+                        }
+                    } else {
+                        toast.dismiss(toastId);
+                    }
+                    syncNotificationShown.current = false;
+                } else {
+                    toast.dismiss(toastId);
+                    syncNotificationShown.current = false;
+                }
+            } catch (err) {
+                console.error("Failed to process sync queue", err);
+            }
+        };
+
+        // Try syncing initially, and whenever network status goes "online"
+        processSyncQueue();
+        window.addEventListener('online', processSyncQueue);
+        return () => window.removeEventListener('online', processSyncQueue);
+    }, [user.token]);
+    // -------------------------------
 
     const addOrder = async (order: JobOrder) => {
         // OPTIMISTIC UPDATE: Update UI immediately to ensure zero-latency response for the user
         setOrders((prev) => [{ ...order, updatedAt: new Date() }, ...prev]);
 
+        const payload = {
+            ...order,
+            user_id: user.id
+        };
+
         try {
             const response = await fetch(`${API_BASE}/orders`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    ...order,
-                    user_id: user.id
-                })
-
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${user.token}`
+                },
+                body: JSON.stringify(payload)
             });
 
             if (!response.ok) throw new Error('Failed to save to backend');
 
             refreshOrders(); // Get the official DB IDs
         } catch (err) {
-            console.error('[CRITICAL] OrderProvider: Backend sync failed. Order exists only in memory.', err);
+            console.error('[CRITICAL] OrderProvider: Backend sync failed. Queueing for offline sync.', err);
+            queueSyncTask({ type: 'ADD', payload });
         }
     };
 
@@ -257,13 +475,18 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
             return order;
         }));
 
+        const payload = { ...updates, updater_id: user.id };
+
         try {
             const dbId = parseInt(id);
             if (!isNaN(dbId)) {
                 const response = await fetch(`${API_BASE}/orders/${dbId}`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ...updates, updater_id: user.id })
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${user.token}`
+                    },
+                    body: JSON.stringify(payload)
                 });
 
                 // [SAFETY NET] Handle concurrent deletion by another staff member
@@ -279,6 +502,9 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                 }
 
                 if (!response.ok) throw new Error('API update failed');
+            } else {
+                // If it doesn't have a valid ID yet, it was likely created offline recently
+                throw new Error('Unsynced temporary ID');
             }
 
             // Log Activity
@@ -291,8 +517,38 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                 });
             }
         } catch (err) {
-            console.error('[DEBUG] OrderProvider: Backend update failed.', err);
-            // Optionally: revert optimistic update here if desired
+            console.error('[DEBUG] OrderProvider: Backend sync pending. Queueing task.', err);
+            queueSyncTask({ type: 'UPDATE', id, payload });
+        }
+    };
+    
+    const deleteOrder = async (id: string) => {
+        // Optimistic Update
+        const oldOrders = [...orders];
+        setOrders((prev) => prev.filter(o => o.id !== id));
+        
+        try {
+            const dbId = parseInt(id);
+            if (!isNaN(dbId)) {
+                const response = await fetch(`${API_BASE}/orders/${dbId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${user.token}` }
+                });
+                if (!response.ok) throw new Error('Delete failed');
+                
+                addActivity({
+                    user: user.username,
+                    action: 'Delete Order',
+                    details: `Deleted order ID ${id}`,
+                    type: 'order'
+                });
+            }
+        } catch (err) {
+            console.error('[ERROR] OrderProvider: Delete failed.', err);
+            setOrders(oldOrders);
+            import('sonner').then(({ toast }) => {
+                toast.error('Failed to delete order. Restoring logic.');
+            });
         }
     };
 
@@ -303,6 +559,7 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
             refreshing,
             addOrder,
             updateOrder,
+            deleteOrder,
             refreshOrders
         }}>
             {children}

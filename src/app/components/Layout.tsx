@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FileText, Calendar, Activity, Wrench, Users, LogOut, ChevronLeft, ChevronRight, Menu } from 'lucide-react';
+import { LayoutDashboard, FileText, Calendar, Activity, Wrench, Users, LogOut, ChevronLeft, ChevronRight, Menu, Package } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/app/components/ui/tooltip';
 import { Sheet, SheetContent, SheetTrigger } from '@/app/components/ui/sheet';
@@ -29,6 +29,7 @@ export default function Layout({ children, user, onLogout, headerAction, headerA
     { path: '/job-order-form', icon: FileText, label: 'Job Order Form', shortLabel: 'Job Order' },
     { path: '/release-calendar', icon: Calendar, label: 'Release Calendar', shortLabel: 'Calendar' },
     { path: '/sales-report', icon: Activity, label: 'Sales Report', shortLabel: 'Sales' },
+    { path: '/inventory', icon: Package, label: 'Inventory Management', shortLabel: 'Inventory' },
     { path: '/service-management', icon: Wrench, label: 'Service Management', shortLabel: 'Service' },
     { path: '/user-management', icon: Users, label: 'User Management', shortLabel: 'Users' },
   ];
@@ -51,6 +52,7 @@ export default function Layout({ children, user, onLogout, headerAction, headerA
     '/expenses': 'Expenses',
     '/claim-record': 'CLAIM RECORD',
     '/activity-history': 'Activity History',
+    '/inventory': 'Inventory Management',
   };
 
   const menuItems = user.role === 'owner' ? ownerMenuItems : staffMenuItems;

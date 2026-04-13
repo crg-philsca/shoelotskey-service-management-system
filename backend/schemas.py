@@ -183,6 +183,8 @@ class OrderSchema(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     user_id: int
+    inventory_applied: bool = False
+    inventory_used: Optional[Any] = None
     
     customer: Optional[CustomerSchema] = None
     status: Optional[StatusSchema] = None
@@ -239,3 +241,41 @@ class ForgotPasswordRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str
+
+# ==========================================
+# 7. INVENTORY SCHEMAS
+# ==========================================
+
+class InventorySchema(BaseModel):
+    item_id: Optional[int] = None
+    item_name: str
+    category: Optional[str] = None
+    stock_quantity: float = 0.0
+    unit: Optional[str] = None
+    unit_price: Decimal = 0.0
+    status: Optional[str] = None
+    is_active: bool = True
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    class Config:
+        from_attributes = True
+
+class InventoryUpdateSchema(BaseModel):
+    item_name: Optional[str] = None
+    category: Optional[str] = None
+    stock_quantity: Optional[float] = None
+    unit: Optional[str] = None
+    unit_price: Optional[Decimal] = None
+    status: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class InventoryLogSchema(BaseModel):
+    log_id: Optional[int] = None
+    item_id: int
+    change_amount: float
+    action_type: str
+    order_id: Optional[int] = None
+    user_id: int
+    created_at: datetime
+    class Config:
+        from_attributes = True

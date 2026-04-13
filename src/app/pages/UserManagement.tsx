@@ -2,8 +2,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/ca
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { Input } from '@/app/components/ui/input';
-import { PlusCircle, Edit, Trash, Search, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
+import { PlusCircle, Edit, Trash, Search, Filter, ChevronLeft, ChevronRight, History as HistoryIcon, Activity } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import React from 'react';
 import {
   Select,
@@ -25,7 +26,10 @@ import { toast } from 'sonner';
 import { useActivities } from '@/app/context/ActivityContext';
 const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))
   ? 'http://localhost:8000/api'
-  : '/api'; export default function UserManagement({ onSetHeaderAction }: { onSetHeaderAction?: (action: React.ReactNode) => void }) {
+  : '/api';
+
+export default function UserManagement({ onSetHeaderActionRight, user }: { onSetHeaderActionRight?: (action: React.ReactNode) => void, user: { token: string } }) {
+  const navigate = useNavigate();
     const [currentPage, setCurrentPage] = useState(1);
     const [searchQuery, setSearchQuery] = useState('');
     const [roleFilter, setRoleFilter] = useState('all');
@@ -48,7 +52,9 @@ const API_BASE = (typeof window !== 'undefined' && (window.location.hostname ===
     const fetchUsers = async () => {
       setLoading(true);
       try {
-        const response = await fetch(`${API_BASE}/users`);
+        const response = await fetch(`${API_BASE}/users`, {
+          headers: { 'Authorization': `Bearer ${user.token}` }
+        });
         if (response.ok) {
           const data = await response.json();
           // Map backend UserSchema to frontend User type
@@ -96,27 +102,35 @@ const API_BASE = (typeof window !== 'undefined' && (window.location.hostname ===
 
     // Set header action on mount
     useEffect(() => {
-      if (onSetHeaderAction) {
-        onSetHeaderAction(
-          <Button
-            className="bg-red-600 hover:bg-red-700 font-bold px-2 sm:px-4"
-            title="Create new user"
-            onClick={() => {
-              setEditingUser(null);
-              setUserModalOpen(true);
-            }}
-          >
-            <PlusCircle className="h-4 w-4 mr-0 sm:mr-1" />
-            <span className="hidden sm:inline">New User</span>
-          </Button>
+      if (onSetHeaderActionRight) {
+        onSetHeaderActionRight(
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              className="w-10 h-10 sm:w-40 flex items-center justify-center rounded-md border border-red-200 bg-white px-2 sm:px-3 py-2 text-[11px] font-black uppercase text-red-600 shadow-none transition hover:bg-red-50 hover:border-red-300 focus:outline-none focus:ring-2 focus:ring-red-500 tracking-widest"
+              title="View system activity logs"
+              onClick={() => navigate('/activity-history')}
+            >
+              <HistoryIcon className="h-4 w-4 sm:mr-2 shrink-0 text-red-600" />
+              <span className="hidden sm:inline">View History</span>
+            </Button>
+            <Button
+              className="w-10 h-10 sm:w-40 flex items-center justify-center rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-[11px] font-black uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 tracking-widest"
+              onClick={() => {
+                setEditingUser(null);
+                setUserModalOpen(true);
+              }}
+            >
+              <PlusCircle className="sm:mr-2 h-4 w-4 shrink-0" />
+              <span className="hidden sm:inline">New User</span>
+            </Button>
+          </div>
         );
       }
       return () => {
-        if (onSetHeaderAction) {
-          onSetHeaderAction(null);
-        }
+        if (onSetHeaderActionRight) onSetHeaderActionRight(null);
       };
-    }, [onSetHeaderAction]);
+    }, [onSetHeaderActionRight, navigate]);
 
     const handleResetFilters = () => {
       setRoleFilter('all');
@@ -129,7 +143,10 @@ const API_BASE = (typeof window !== 'undefined' && (window.location.hostname ===
         if (editingUser) {
           const response = await fetch(`${API_BASE}/users/${editingUser.id}`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${user.token}`
+            },
             body: JSON.stringify({
               username: userData.username,
               email: userData.email,
@@ -163,7 +180,10 @@ const API_BASE = (typeof window !== 'undefined' && (window.location.hostname ===
         } else {
           const response = await fetch(`${API_BASE}/users`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${user.token}`
+            },
             body: JSON.stringify({
               username: userData.username,
               email: userData.email,
@@ -200,7 +220,8 @@ const API_BASE = (typeof window !== 'undefined' && (window.location.hostname ===
         try {
           const uToDelete = users.find(u => u.id === id);
           const response = await fetch(`${API_BASE}/users/${id}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${user.token}` }
           });
 
           if (response.ok) {
@@ -269,8 +290,15 @@ const API_BASE = (typeof window !== 'undefined' && (window.location.hostname ===
           {/* Filter Dialog */}
           <Dialog open={isFilterOpen} onOpenChange={setIsFilterOpen}>
             <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>Filters</DialogTitle>
+              <DialogHeader className="relative">
+                <button 
+                  onClick={() => (window as any).toggleActivityLog && (window as any).toggleActivityLog()}
+                  className="absolute left-0 top-1/2 -translate-y-1/2 p-2 text-gray-300 hover:text-red-600 transition-colors"
+                  title="Technical Audit Log"
+                >
+                  <Activity size={18} />
+                </button>
+                <DialogTitle className="text-center">Filters</DialogTitle>
               </DialogHeader>
 
               <div className="grid grid-cols-2 gap-4">
@@ -324,13 +352,13 @@ const API_BASE = (typeof window !== 'undefined' && (window.location.hostname ===
           {/* Table Section */}
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-red-50">
+              <thead className="bg-red-50 border-y border-red-100">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">Username</th>
-                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">Email</th>
-                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">Role</th>
-                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 uppercase">Actions</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-800 uppercase tracking-widest">Username</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-800 uppercase tracking-widest">Email</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-800 uppercase tracking-widest">Role</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-800 uppercase tracking-widest">Status</th>
+                  <th className="px-4 py-3 text-center text-[11px] font-bold text-slate-800 uppercase tracking-widest">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -353,23 +381,36 @@ const API_BASE = (typeof window !== 'undefined' && (window.location.hostname ===
                     <tr key={user.id} className="hover:bg-gray-50 animate-in fade-in duration-500">
                       <td className="px-4 py-3 text-sm font-medium">{user.username}</td>
                       <td className="px-4 py-3 text-sm">{user.email}</td>
-                      <td className="px-4 py-3 text-sm">
-                        <Badge className={user.role === 'owner' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}>
-                          {user.role === 'owner' ? 'Owner' : 'Staff'}
+                      <td className="px-4 py-3">
+                        <Badge className="bg-blue-50 text-blue-700 border-blue-100 text-[10px] font-black uppercase">
+                          {user.role}
                         </Badge>
                       </td>
-                      <td className="px-4 py-3 text-sm">
-                        <Badge className={user.active ? 'bg-green-100 text-green-700' : 'bg-gray-400 text-white'}>
+                      <td className="px-4 py-3">
+                        <Badge className={`
+                          ${user.active ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-gray-100 text-gray-500 border-gray-200'}
+                          text-[10px] font-black uppercase
+                        `}>
                           {user.active ? 'Active' : 'Inactive'}
                         </Badge>
                       </td>
-                      <td className="px-4 py-3 text-sm">
-                        <div className="flex gap-2">
-                          <Button size="sm" className="border border-yellow-500 text-yellow-700 bg-transparent hover:bg-yellow-50" onClick={() => handleEditClick(user)}>
-                            <Edit size={16} />
+                      <td className="px-4 py-3 text-sm text-center">
+                        <div className="flex justify-center gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-8 w-8 p-0 rounded-lg border border-amber-500 text-amber-600 hover:bg-amber-50 transition-colors bg-white shadow-none" 
+                            onClick={() => handleEditClick(user)}
+                          >
+                            <Edit size={14} strokeWidth={2.5} />
                           </Button>
-                          <Button size="sm" className="border border-red-600 text-red-600 bg-transparent hover:bg-red-50" onClick={() => handleDeleteUser(user.id)}>
-                            <Trash size={16} />
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-8 w-8 p-0 rounded-lg border border-red-500 text-red-600 hover:bg-red-50 transition-colors bg-white shadow-none" 
+                            onClick={() => handleDeleteUser(user.id)}
+                          >
+                            <Trash size={14} strokeWidth={2.5} />
                           </Button>
                         </div>
                       </td>

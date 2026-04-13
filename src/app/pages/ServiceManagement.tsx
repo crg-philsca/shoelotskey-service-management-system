@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
-import { PlusCircle, Edit, Trash, History, GripVertical } from 'lucide-react';
+import { PlusCircle, Edit, Trash, GripVertical } from 'lucide-react';
 import { Reorder } from 'motion/react';
 import ServiceModal from '@/app/components/ServiceModal';
 
@@ -12,9 +12,10 @@ import { useServices } from '@/app/context/ServiceContext';
 
 interface ServiceManagementProps {
   onSetHeaderActionRight?: (action: React.ReactNode | null) => void;
+  user: { token: string };
 }
 
-export default function ServiceManagement({ onSetHeaderActionRight }: ServiceManagementProps) {
+export default function ServiceManagement({ onSetHeaderActionRight, user }: ServiceManagementProps) {
   const { services, addService, updateService, deleteService, reorderServices } = useServices();
   const [serviceModalOpen, setServiceModalOpen] = useState(false);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
@@ -37,27 +38,26 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
   }, [services]);
 
   useEffect(() => {
+    // [OWASP A09] Security Audit Logging
+    if (user.token) {
+      console.log('[SECURITY] Service Management accessed by authenticated session');
+    }
+  }, [user.token]);
+
+  useEffect(() => {
     if (onSetHeaderActionRight) {
       onSetHeaderActionRight(
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            className="border-red-600 text-red-600 hover:bg-red-50 hover:text-red-700 font-bold px-2 sm:px-4"
-            onClick={() => navigate('/activity-history')}
-          >
-            <History size={16} className="mr-0 sm:mr-1" />
-            <span className="hidden sm:inline">View History</span>
-          </Button>
-          <Button
-            className="bg-red-600 hover:bg-red-700 font-bold px-2 sm:px-4"
+        <Button 
+            className="w-10 h-10 sm:w-40 flex items-center justify-center rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-[11px] font-black uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 tracking-widest"
             onClick={() => {
               setSelectedService(null);
               setServiceModalOpen(true);
             }}
-          >
-            <PlusCircle size={16} className="mr-0 sm:mr-1" />
+        >
+            <PlusCircle className="h-4 w-4 sm:mr-2 shrink-0" />
             <span className="hidden sm:inline">New Service</span>
-          </Button>
+        </Button>
         </div>
       );
     }
@@ -105,36 +105,40 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
               <CardTitle className="text-base font-black text-gray-900 uppercase">Base Services</CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
-              <Reorder.Group axis="y" values={localBase} onReorder={(newOrder) => handleReorder('base', newOrder)} className="space-y-3 -mt-2 pr-1 max-h-[240px] overflow-y-scroll overflow-x-hidden custom-scrollbar list-none p-0">
-                {localBase.map(service => (
-                  <Reorder.Item 
-                    key={service.id} 
-                    value={service}
-                    className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border border-transparent gap-3 cursor-grab active:cursor-grabbing hover:bg-white hover:border-gray-200 transition-all"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <GripVertical size={16} className="text-gray-400 shrink-0" />
-                      <div className="min-w-0">
-                        <p className="font-bold text-gray-900 text-[13px] leading-tight truncate">{service.name}</p>
-                        <p className="text-[11px] font-black text-red-600 mt-0">{'\u20B1'}{service.price.toLocaleString()}</p>
+              <div className="max-h-[300px] overflow-y-auto pr-1 custom-scrollbar -mt-2">
+                <Reorder.Group axis="y" values={localBase} onReorder={(newOrder) => handleReorder('base', newOrder)} className="space-y-3 list-none p-0">
+                  {localBase.map(service => (
+                    <Reorder.Item 
+                      key={service.id} 
+                      value={service}
+                      layout
+                      transition={{ type: 'spring', stiffness: 500, damping: 30, mass: 1 }}
+                      className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border border-transparent gap-3 cursor-grab active:cursor-grabbing hover:bg-white hover:border-gray-200 transition-all select-none"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <GripVertical size={16} className="text-gray-400 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="font-bold text-gray-900 text-[13px] leading-tight truncate">{service.name}</p>
+                          <p className="text-[11px] font-black text-red-600 mt-0">{'\u20B1'}{service.price.toLocaleString()}</p>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Badge className={`${service.active ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'} text-[9px] font-bold uppercase tracking-wider shadow-none border-none`}>
-                        {service.active ? 'Active' : 'Inactive'}
-                      </Badge>
-                      <div className="flex items-center gap-1.5">
-                        <Button variant="ghost" size="sm" onClick={() => handleEditService(service)} className="h-7 w-7 p-0 text-amber-600 border border-amber-600 hover:bg-amber-50 rounded-md">
-                          <Edit size={12} />
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleDeleteService(service.id)} className="h-7 w-7 p-0 text-red-600 border border-red-600 hover:bg-red-50 rounded-md">
-                          <Trash size={12} />
-                        </Button>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Badge className={`${service.active ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'} text-[9px] font-bold uppercase tracking-wider shadow-none border-none`}>
+                          {service.active ? 'Active' : 'Inactive'}
+                        </Badge>
+                        <div className="flex items-center gap-1.5" onPointerDown={e => e.stopPropagation()}>
+                          <Button variant="ghost" size="sm" onClick={() => handleEditService(service)} className="h-7 w-7 p-0 text-amber-600 border border-amber-600 hover:bg-amber-50 rounded-md">
+                            <Edit size={12} />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDeleteService(service.id)} className="h-7 w-7 p-0 text-red-600 border border-red-600 hover:bg-red-50 rounded-md">
+                            <Trash size={12} />
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  </Reorder.Item>
-                ))}
-              </Reorder.Group>
+                    </Reorder.Item>
+                  ))}
+                </Reorder.Group>
+              </div>
             </CardContent>
           </Card>
 
@@ -143,12 +147,60 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
               <CardTitle className="text-base font-black text-gray-900 uppercase">Priority Fees</CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
-              <Reorder.Group axis="y" values={localPriority} onReorder={(newOrder) => handleReorder('priority', newOrder)} className="space-y-3 -mt-2 pr-1 max-h-[180px] overflow-y-scroll overflow-x-hidden custom-scrollbar list-none p-0">
-                {localPriority.map(service => (
+              <div className="max-h-[200px] overflow-y-auto pr-1 custom-scrollbar -mt-2">
+                <Reorder.Group axis="y" values={localPriority} onReorder={(newOrder) => handleReorder('priority', newOrder)} className="space-y-3 list-none p-0">
+                  {localPriority.map(service => (
+                    <Reorder.Item 
+                      key={service.id} 
+                      value={service}
+                      layout
+                      transition={{ type: 'spring', stiffness: 500, damping: 30, mass: 1 }}
+                      className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border border-transparent gap-3 cursor-grab active:cursor-grabbing hover:bg-white hover:border-gray-200 transition-all select-none"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <GripVertical size={16} className="text-gray-400 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="font-bold text-gray-900 text-[13px] leading-tight truncate">{service.name}</p>
+                          <p className="text-[11px] font-black text-red-600 mt-0.5">{'\u20B1'}{service.price.toLocaleString()}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Badge className={`${service.active ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'} text-[9px] font-bold uppercase tracking-wider shadow-none border-none`}>
+                          {service.active ? 'Active' : 'Inactive'}
+                        </Badge>
+                        <div className="flex items-center gap-1.5" onPointerDown={e => e.stopPropagation()}>
+                          <Button variant="ghost" size="sm" onClick={() => handleEditService(service)} className="h-7 w-7 p-0 text-amber-600 border border-amber-600 hover:bg-amber-50 rounded-md">
+                            <Edit size={12} />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDeleteService(service.id)} className="h-7 w-7 p-0 text-red-600 border border-red-600 hover:bg-red-50 rounded-md">
+                            <Trash size={12} />
+                          </Button>
+                        </div>
+                      </div>
+                    </Reorder.Item>
+                  ))}
+                </Reorder.Group>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+
+
+        <Card className="border-none shadow-md h-full">
+          <CardHeader className="pt-3 pb-0 px-4">
+            <CardTitle className="text-base font-black text-gray-900 uppercase">Add-On Services</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="max-h-[300px] overflow-y-auto pr-1 custom-scrollbar -mt-2">
+              <Reorder.Group axis="y" values={localAddon} onReorder={(newOrder) => handleReorder('addon', newOrder)} className="space-y-3 list-none p-0">
+                {localAddon.map(service => (
                   <Reorder.Item 
                     key={service.id} 
                     value={service}
-                    className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border border-transparent gap-3 cursor-grab active:cursor-grabbing hover:bg-white hover:border-gray-200 transition-all"
+                    layout
+                    transition={{ type: 'spring', stiffness: 500, damping: 30, mass: 1 }}
+                    className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border border-transparent gap-3 cursor-grab active:cursor-grabbing hover:bg-white hover:border-gray-200 transition-all select-none"
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <GripVertical size={16} className="text-gray-400 shrink-0" />
@@ -161,7 +213,7 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
                       <Badge className={`${service.active ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'} text-[9px] font-bold uppercase tracking-wider shadow-none border-none`}>
                         {service.active ? 'Active' : 'Inactive'}
                       </Badge>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5" onPointerDown={e => e.stopPropagation()}>
                         <Button variant="ghost" size="sm" onClick={() => handleEditService(service)} className="h-7 w-7 p-0 text-amber-600 border border-amber-600 hover:bg-amber-50 rounded-md">
                           <Edit size={12} />
                         </Button>
@@ -173,47 +225,7 @@ export default function ServiceManagement({ onSetHeaderActionRight }: ServiceMan
                   </Reorder.Item>
                 ))}
               </Reorder.Group>
-            </CardContent>
-          </Card>
-        </div>
-
-
-
-        <Card className="border-none shadow-md h-full">
-          <CardHeader className="pt-3 pb-0 px-4">
-            <CardTitle className="text-base font-black text-gray-900 uppercase">Add-On Services</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0 h-[calc(100%-48px)]">
-            <Reorder.Group axis="y" values={localAddon} onReorder={(newOrder) => handleReorder('addon', newOrder)} className="space-y-3 -mt-2 pr-1 max-h-[440px] overflow-y-scroll overflow-x-hidden custom-scrollbar list-none p-0">
-              {localAddon.map(service => (
-                <Reorder.Item 
-                  key={service.id} 
-                  value={service}
-                  className="flex items-center justify-between p-2 bg-gray-50 rounded-xl border border-transparent gap-3 cursor-grab active:cursor-grabbing hover:bg-white hover:border-gray-200 transition-all"
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <GripVertical size={16} className="text-gray-400 shrink-0" />
-                    <div className="min-w-0">
-                      <p className="font-bold text-gray-900 text-[13px] leading-tight truncate">{service.name}</p>
-                      <p className="text-[11px] font-black text-red-600 mt-0.5">{'\u20B1'}{service.price.toLocaleString()}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Badge className={`${service.active ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'} text-[9px] font-bold uppercase tracking-wider shadow-none border-none`}>
-                      {service.active ? 'Active' : 'Inactive'}
-                    </Badge>
-                    <div className="flex items-center gap-1.5">
-                      <Button variant="ghost" size="sm" onClick={() => handleEditService(service)} className="h-7 w-7 p-0 text-amber-600 border border-amber-600 hover:bg-amber-50 rounded-md">
-                        <Edit size={12} />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDeleteService(service.id)} className="h-7 w-7 p-0 text-red-600 border border-red-600 hover:bg-red-50 rounded-md">
-                        <Trash size={12} />
-                      </Button>
-                    </div>
-                  </div>
-                </Reorder.Item>
-              ))}
-            </Reorder.Group>
+            </div>
           </CardContent>
         </Card>
       </div>

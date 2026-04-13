@@ -12,6 +12,8 @@ interface AddExpenseModalProps {
     isOpen: boolean;
     onClose: () => void;
     onAddExpense?: (expense: any) => void;
+    onEditExpense?: (id: string, expense: any) => void;
+    initialData?: any | null;
 }
 
 const EXPENSE_CATEGORIES = [
@@ -30,7 +32,7 @@ const EXPENSE_CATEGORIES = [
 const LABEL_STYLE = "text-[11px] font-bold text-gray-500 mb-1 block uppercase tracking-tight";
 const INPUT_STYLE = "bg-[#F8F9FA] border-gray-100 h-9 text-xs focus:ring-red-50 focus:border-red-100 transition-all";
 
-export default function AddExpenseModal({ isOpen, onClose, onAddExpense }: AddExpenseModalProps) {
+export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditExpense, initialData }: AddExpenseModalProps) {
     const [category, setCategory] = useState<string>('');
     const [customCategory, setCustomCategory] = useState('');
     const [categorySearch, setCategorySearch] = useState('');
@@ -39,16 +41,36 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense }: AddEx
     const [time, setTime] = useState('');
     const [notes, setNotes] = useState('');
 
-    // Pre-populate with current date and time
+    // Pre-populate with current date and time or initialData
     useEffect(() => {
         if (isOpen) {
-            const now = new Date();
-            const offset = now.getTimezoneOffset() * 60000;
-            const localISO = new Date(now.getTime() - offset).toISOString();
-            setDate(localISO.slice(0, 10)); // YYYY-MM-DD for date input
-            setTime(localISO.slice(11, 16)); // HH:mm for time input (military)
+            if (initialData) {
+                const isCustom = !EXPENSE_CATEGORIES.includes(initialData.category);
+                setCategory(isCustom ? 'Other (Manual Insert)' : initialData.category);
+                if (isCustom) setCustomCategory(initialData.category);
+                setAmount(formatAmount(initialData.amount.toString()));
+                setNotes(initialData.notes || '');
+                
+                const d = new Date(initialData.date);
+                if (!isNaN(d.getTime())) {
+                    const offset = d.getTimezoneOffset() * 60000;
+                    const localISO = new Date(d.getTime() - offset).toISOString();
+                    setDate(localISO.slice(0, 10));
+                    setTime(localISO.slice(11, 16));
+                }
+            } else {
+                const now = new Date();
+                const offset = now.getTimezoneOffset() * 60000;
+                const localISO = new Date(now.getTime() - offset).toISOString();
+                setDate(localISO.slice(0, 10)); // YYYY-MM-DD for date input
+                setTime(localISO.slice(11, 16)); // HH:mm for time input (military)
+                setCategory('');
+                setCustomCategory('');
+                setAmount('');
+                setNotes('');
+            }
         }
-    }, [isOpen]);
+    }, [isOpen, initialData]);
 
     const formatAmount = (value: string) => {
         const cleanValue = value.replace(/,/g, '');
@@ -88,17 +110,22 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense }: AddEx
             return;
         }
 
-        if (onAddExpense) {
-            onAddExpense({
-                id: Math.random().toString(36).substr(2, 9),
-                category: finalCategory,
-                amount: finalAmount,
-                date: `${date}T${time}`,
-                notes
-            });
+        const expensePayload = {
+            id: initialData?.id || Math.random().toString(36).substr(2, 9),
+            category: finalCategory,
+            amount: finalAmount,
+            date: `${date}T${time}`,
+            notes
+        };
+
+        if (initialData && onEditExpense) {
+            onEditExpense(initialData.id, expensePayload);
+            toast.success(`Expense updated: ${finalCategory}`);
+        } else if (onAddExpense) {
+            onAddExpense(expensePayload);
+            toast.success(`Expense logged: ${finalCategory}`);
         }
 
-        toast.success(`Expense logged: ${finalCategory}`);
         onClose();
         // Reset form
         setCategory('');
@@ -116,7 +143,9 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense }: AddEx
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="max-w-[500px]">
                 <DialogHeader>
-                    <DialogTitle className="text-xl font-bold text-red-600 uppercase text-center w-full">Log New Expense</DialogTitle>
+                    <DialogTitle className="text-xl font-bold text-red-600 uppercase text-center w-full">
+                        {initialData ? 'Edit Expense' : 'Log New Expense'}
+                    </DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4 mt-2">
                     <div className="grid grid-cols-2 gap-4">
@@ -224,7 +253,7 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense }: AddEx
                             CANCEL
                         </Button>
                         <Button type="submit" className="flex-1 h-9 bg-red-600 hover:bg-red-700 text-white font-bold text-xs uppercase tracking-widest">
-                            RECORD
+                            {initialData ? 'SAVE CHANGES' : 'RECORD'}
                         </Button>
                     </DialogFooter>
                 </form>

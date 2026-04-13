@@ -7,7 +7,7 @@ import { Input } from '@/app/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu';
-import { Search, Filter, MoreVertical, Edit, ArrowRight, RotateCcw, User, Phone, Clock, CreditCard, Tag, MapPin, UserPlus, Calendar as CalendarIcon, Truck, ShoppingBag } from 'lucide-react';
+import { Search, Filter, MoreVertical, Edit, ArrowRight, RotateCcw, User, Phone, Clock, Wallet, Tag, MapPin, UserPlus, Calendar as CalendarIcon, Truck, ShoppingBag } from 'lucide-react';
 import { format as dateFnsFormat } from 'date-fns';
 import { useServices } from '@/app/context/ServiceContext';
 import EditOrderModal from '@/app/components/EditOrderModal';
@@ -17,8 +17,8 @@ import { Label } from '@/app/components/ui/label';
 import { Checkbox } from '@/app/components/ui/checkbox';
 
 interface JobOrdersProps {
-    user: { username: string; role: 'owner' | 'staff' };
-    onSetHeaderAction: (action: React.ReactNode) => void;
+    user: { username: string; role: 'owner' | 'staff'; token: string };
+    onSetHeaderActionRight: (action: React.ReactNode) => void;
 }
 
 /**
@@ -30,7 +30,7 @@ interface JobOrdersProps {
  * - Bulk Actions (Assign Staff to multiple orders)
  * - Detailed Order View & Inline Editing
  */
-export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
+export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersProps) {
     const { orders, loading, updateOrder } = useOrders();
     const { services } = useServices();
     const [searchQuery, setSearchQuery] = useState('');
@@ -49,9 +49,9 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
 
     // Set header action
     useEffect(() => {
-        onSetHeaderAction(<JobOrderFormModal user={user} />);
-        return () => onSetHeaderAction(null);
-    }, [onSetHeaderAction, user]);
+        onSetHeaderActionRight(<JobOrderFormModal user={user} />);
+        return () => onSetHeaderActionRight(null);
+    }, [onSetHeaderActionRight, user]);
 
     // Filter logic
     const filteredOrders = orders.filter((order: JobOrder) => {
@@ -96,9 +96,9 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
         if (validA !== validB) return validB - validA;
 
         // Priority Level fallback (Rush first)
-        const priorityOrder = { rush: 0, premium: 1, regular: 2 };
-        const priorityA = priorityOrder[a.priorityLevel as keyof typeof priorityOrder] ?? 3;
-        const priorityB = priorityOrder[b.priorityLevel as keyof typeof priorityOrder] ?? 3;
+        const priorityOrder = { rush: 0, regular: 1 };
+        const priorityA = priorityOrder[a.priorityLevel as keyof typeof priorityOrder] ?? 2;
+        const priorityB = priorityOrder[b.priorityLevel as keyof typeof priorityOrder] ?? 2;
         if (priorityA !== priorityB) return priorityA - priorityB;
 
         return b.orderNumber.localeCompare(a.orderNumber);
@@ -166,7 +166,6 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                     <SelectItem value="on-going">On-Going</SelectItem>
                                     <SelectItem value="for-release">For Release</SelectItem>
                                     <SelectItem value="claimed">Claimed</SelectItem>
-                                    <SelectItem value="cancelled">Cancelled</SelectItem>
                                 </SelectContent>
                             </Select>
                             <Button
@@ -259,26 +258,24 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                                     ${order.status === 'new-order' ? 'bg-purple-50 text-purple-700 border-purple-100' :
                                                         order.status === 'on-going' ? 'bg-blue-50 text-blue-700 border-blue-100' :
                                                             order.status === 'for-release' ? 'bg-orange-50 text-orange-700 border-orange-100' :
-                                                                order.status === 'claimed' ? 'bg-gray-50 text-gray-700 border-gray-200' :
-                                                                    'bg-red-50 text-red-700 border-red-100'
+                                                                'bg-gray-50 text-gray-700 border-gray-200'
                                                     }`}>
-                                                    {order.status.replace('-', ' ')}
+                                                    {(order.status || 'new-order').replace('-', ' ')}
                                                 </span>
                                             </td>
                                             <td className="p-4">
                                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase border whitespace-nowrap
                                                     ${order.priorityLevel === 'rush' ? 'bg-red-50 text-red-700 border-red-100' :
-                                                        order.priorityLevel === 'premium' ? 'bg-amber-50 text-amber-700 border-amber-100' :
-                                                            'bg-slate-50 text-slate-700 border-slate-200'
+                                                        'bg-slate-50 text-slate-700 border-slate-200'
                                                     }`}>
-                                                    {order.priorityLevel}
+                                                    {order.priorityLevel || 'regular'}
                                                 </span>
                                             </td>
                                             <td className="p-4">
                                                 <span className={`text-xs font-bold ${order.paymentStatus === 'fully-paid' ? 'text-green-600' :
                                                     order.paymentStatus === 'downpayment' ? 'text-yellow-600' : 'text-red-600'
                                                     }`}>
-                                                    {order.paymentStatus.toUpperCase()}
+                                                    {order.paymentStatus === 'fully-paid' ? 'Fully Paid' : order.paymentStatus === 'downpayment' ? 'Downpayment' : order.paymentStatus.charAt(0).toUpperCase() + order.paymentStatus.slice(1)}
                                                 </span>
                                             </td>
                                             <td className="p-4 text-right" onClick={e => e.stopPropagation()}>
@@ -466,7 +463,7 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                         <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Contact Number</Label>
                                         <div className="flex items-center gap-2">
                                             <Phone size={12} className="text-gray-400" />
-                                            <p className="text-sm font-medium text-gray-600">{selectedOrder.contactNumber}</p>
+                                            <p className="text-sm font-bold text-gray-800">{selectedOrder.contactNumber}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -476,7 +473,7 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                         <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Order Date</Label>
                                         <div className="flex items-center gap-2">
                                             <CalendarIcon size={12} className="text-gray-400" />
-                                            <p className="text-sm font-medium text-gray-600">
+                                            <p className="text-sm font-bold text-gray-800">
                                                 {(() => {
                                                     const d = new Date(selectedOrder.transactionDate || selectedOrder.createdAt);
                                                     return isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy HH:mm');
@@ -557,7 +554,7 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                             </div>
                                             <div>
                                                 <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Material</Label>
-                                                <p className="text-sm font-medium text-gray-600">{item.shoeMaterial || '-'}</p>
+                                                <p className="text-sm font-bold text-gray-800">{item.shoeMaterial || '-'}</p>
                                             </div>
                                             <div>
                                                 <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Quantity</Label>
@@ -585,7 +582,7 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                                     }
                                                     return null;
                                                 })}
-                                                {Object.values(item.condition || {}).every(v => !v) && <p className="text-xs text-slate-400 italic">No issues reported</p>}
+                                                {Object.values(item.condition || {}).every(v => !v) && <p className="text-xs text-slate-400 italic">No conditions applied</p>}
                                             </div>
                                         </div>
 
@@ -640,7 +637,7 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                         {selectedOrder.priorityLevel === 'rush' ? (
                                             <span className="text-xs font-black text-red-600 uppercase">RUSH</span>
                                         ) : (
-                                            <span className="text-xs font-medium text-gray-500 capitalize">{selectedOrder.priorityLevel}</span>
+                                            <span className="text-xs font-bold text-gray-800 capitalize">{selectedOrder.priorityLevel}</span>
                                         )}
                                     </div>
                                 </div>
@@ -660,7 +657,7 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                                         <span className={`text-sm font-black uppercase ${selectedOrder.paymentStatus === 'fully-paid' ? 'text-green-600' :
                                             selectedOrder.paymentStatus === 'downpayment' ? 'text-yellow-600' : 'text-red-500'
                                             }`}>
-                                            {selectedOrder.paymentStatus || 'downpayment'}
+                                            {selectedOrder.paymentStatus === 'fully-paid' ? 'Fully Paid' : selectedOrder.paymentStatus === 'downpayment' ? 'Downpayment' : selectedOrder.paymentStatus?.charAt(0).toUpperCase() + (selectedOrder.paymentStatus?.slice(1) || '')}
                                         </span>
                                     </div>
                                 </div>
@@ -669,7 +666,7 @@ export default function JobOrders({ user, onSetHeaderAction }: JobOrdersProps) {
                             {/* Payment Section */}
                             <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-3">
                                 <div className="flex items-center gap-2 mb-2">
-                                    <CreditCard size={16} className="text-red-500" />
+                                    <Wallet size={16} className="text-red-500" />
                                     <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Payment Details</h4>
                                 </div>
 

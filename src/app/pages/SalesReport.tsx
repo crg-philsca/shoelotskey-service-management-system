@@ -3,7 +3,7 @@ import { useServices } from '@/app/context/ServiceContext';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { useState, useMemo, useEffect } from 'react';
 
-import { TrendingUp, ShoppingBag, Filter, Calendar, TrendingDown, ChevronDown, Wallet, CircleAlert } from 'lucide-react';
+import { TrendingUp, ShoppingBag, Filter, Calendar, TrendingDown, ChevronDown, Wallet, CircleAlert, Printer, FileText, FileSpreadsheet } from 'lucide-react';
 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
@@ -11,29 +11,42 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useExpenses } from '@/app/context/ExpenseContext';
 import { useOrders } from '@/app/context/OrderContext';
 import type { JobOrder } from '@/app/types';
+import { DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger } from '@/app/components/ui/dropdown-menu';
+import { toast } from 'sonner';
+import html2pdf from 'html2pdf.js';
 
 interface SalesReportProps {
   onSetHeaderActionRight?: (action: React.ReactNode | null) => void;
+  user: { token: string };
 }
 
 
 
-export default function SalesReport({ onSetHeaderActionRight }: SalesReportProps) {
+export default function SalesReport({ onSetHeaderActionRight, user }: SalesReportProps) {
   const navigate = useNavigate();
   const location = useLocation();
+
+  useEffect(() => {
+    // [OWASP A09] Security Audit: Logging view access with token context
+    if (user.token) {
+      console.log('[SECURITY] Sales Report accessed by authenticated session');
+    }
+  }, [user.token]);
 
   const { orders: allOrders, loading } = useOrders();
   const { expenses } = useExpenses();
   const { services } = useServices();
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('all');
-  const [dateRange, setDateRange] = useState<'Daily' | 'Weekly' | 'Quarterly' | 'Annually'>(() => {
+  const [printMode, setPrintMode] = useState<'all' | 'Sales' | 'Expenses' | 'ROI'>('all');
+  const [dateRange, setDateRange] = useState<'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Annually'>(() => {
     return (location.state as any)?.dateRange || 'Daily';
   });
 
-  // 1. GLOBAL DATE FILTERING
-  const filteredOrdersByDate = useMemo(() => {
-    const now = new Date();
-    return allOrders.filter(order => {
+  // 1. GLOBAL DATE FILTERING (Accrual Reference Point)
+  const now = new Date();
+
+  const filteredOrdersByDate = useMemo<JobOrder[]>(() => {
+    return allOrders.filter((order: JobOrder) => {
       const date = order.transactionDate ? new Date(order.transactionDate) : new Date(order.createdAt);
       const diffDays = (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24);
 
@@ -43,24 +56,37 @@ export default function SalesReport({ onSetHeaderActionRight }: SalesReportProps
         return date >= startOfToday;
       }
       if (dateRange === 'Weekly') return diffDays < 7;
+      if (dateRange === 'Monthly') return diffDays < 30;
       if (dateRange === 'Quarterly') return diffDays < 90;
       if (dateRange === 'Annually') return diffDays < 365;
       return true;
     });
   }, [dateRange, allOrders]);
 
-  const filteredExpensesByDate = useMemo(() => {
-    const now = new Date();
-    return expenses.filter(exp => {
+  const filteredExpensesByDate = useMemo<any[]>(() => {
+    return expenses.filter((exp: any) => {
+      const category = (exp.category || '').toLowerCase();
+      const isDaily = category.includes('(daily)');
+      const isWeekly = category.includes('(weekly)');
+      const isMonthly = category.includes('(monthly)') || 
+                        category.includes('water') || 
+                        category.includes('electricity');
+      
+      // Enforce STRICT timeframe buckets as per user request
+      if (isDaily && dateRange !== 'Daily') return false;
+      if (isWeekly && dateRange !== 'Weekly') return false;
+      if (isMonthly && (dateRange !== 'Monthly' && dateRange !== 'Quarterly' && dateRange !== 'Annually')) return false;
+
       const date = new Date(exp.date);
       const diffDays = (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24);
-
+      
       if (dateRange === 'Daily') {
         const startOfToday = new Date(now);
         startOfToday.setHours(0, 0, 0, 0);
         return date >= startOfToday;
       }
       if (dateRange === 'Weekly') return diffDays < 7;
+      if (dateRange === 'Monthly') return diffDays < 30;
       if (dateRange === 'Quarterly') return diffDays < 90;
       if (dateRange === 'Annually') return diffDays < 365;
       return true;
@@ -70,17 +96,17 @@ export default function SalesReport({ onSetHeaderActionRight }: SalesReportProps
   // 2. DATA SEGMENTATION
   // Total Revenue (Total billable amount)
   const totalRevenue = useMemo(() => {
-    return filteredOrdersByDate.reduce((sum, order) => sum + (order.grandTotal || 0), 0);
+    return filteredOrdersByDate.reduce((sum: number, order: JobOrder) => sum + (order.grandTotal || 0), 0);
   }, [filteredOrdersByDate]);
 
   // Total Pending Payments (Total unpaid balance)
   const totalPendingPayments = useMemo(() => {
-    return filteredOrdersByDate.reduce((sum, order) => sum + ((order.grandTotal || 0) - (order.amountReceived || 0)), 0);
+    return filteredOrdersByDate.reduce((sum: number, order: JobOrder) => sum + ((order.grandTotal || 0) - (order.amountReceived || 0)), 0);
   }, [filteredOrdersByDate]);
 
-  // Total Sales & Analytics Data (All Paid Orders)
+  // Total Sales & Analytics Data (Includes Fully Paid and Downpayment Orders)
   const totalSalesData = useMemo(() => {
-    return filteredOrdersByDate.filter((order: JobOrder) => order.paymentStatus === 'fully-paid');
+    return filteredOrdersByDate.filter((order: JobOrder) => order.paymentStatus === 'fully-paid' || order.paymentStatus === 'downpayment');
   }, [filteredOrdersByDate]);
 
   // 3. CHART & METRIC DATA
@@ -96,21 +122,21 @@ export default function SalesReport({ onSetHeaderActionRight }: SalesReportProps
       const method = order.paymentMethod?.toLowerCase() || 'cash';
       if (counts[method]) {
         counts[method].count += 1;
-        counts[method].amount += (order.grandTotal || 0);
+        counts[method].amount += (order.amountReceived || 0);
       }
     });
 
     return [
-      { name: 'Cash', value: counts.cash.count, amount: counts.cash.amount, color: '#9333ea' }, // Purple
-      { name: 'GCash', value: counts.gcash.count, amount: counts.gcash.amount, color: '#2563eb' }, // Blue
-      { name: 'Maya', value: counts.maya.count, amount: counts.maya.amount, color: '#16a34a' }, // Green
+      { name: 'Cash', value: counts.cash.count, amount: counts.cash.amount, color: '#9333ea' },
+      { name: 'GCash', value: counts.gcash.count, amount: counts.gcash.amount, color: '#2563eb' },
+      { name: 'Maya', value: counts.maya.count, amount: counts.maya.amount, color: '#16a34a' },
     ];
   }, [totalSalesData]);
 
   // Total Sales Amount (Controlled by Payment Filter)
   const totalSalesAmount = useMemo(() => {
     if (selectedPaymentMethod === 'all') {
-      return paymentMethodStats.reduce((sum, item) => sum + item.amount, 0);
+      return paymentMethodStats.reduce((sum: number, item) => sum + item.amount, 0);
     }
     return paymentMethodStats.find(p => p.name.toLowerCase() === selectedPaymentMethod.toLowerCase())?.amount || 0;
   }, [selectedPaymentMethod, paymentMethodStats]);
@@ -119,7 +145,7 @@ export default function SalesReport({ onSetHeaderActionRight }: SalesReportProps
   const totalOrdersCount = filteredOrdersByDate.length;
 
   // Total Expenses
-  const totalExpensesAmount = filteredExpensesByDate.reduce((sum, exp) => sum + exp.amount, 0);
+  const totalExpensesAmount = filteredExpensesByDate.reduce((sum: number, exp: any) => sum + Number(exp.amount || 0), 0);
 
   // Profit (Accrual Basis)
   const profit = totalRevenue - totalExpensesAmount;
@@ -140,15 +166,117 @@ export default function SalesReport({ onSetHeaderActionRight }: SalesReportProps
           name: cleanName,
           amount: totalSalesData
             .filter(j => (j.baseService as string[]).includes(service.name))
-            .reduce((sum, j) => sum + (j.grandTotal || 0), 0),
+            .reduce((sum, j) => sum + (j.amountReceived || 0), 0),
           fill: fillColor
         };
       })
       .sort((a, b) => b.amount - a.amount);
   }, [totalSalesData, services]);
 
-  // Daily Monitoring Table Data
-  // Daily sales monitoring section removed per request
+  // 4. PRINT & EXPORT LOGIC
+  const handleExport = (type: 'Sales' | 'Expenses' | 'ROI', format: 'print' | 'csv' | 'pdf') => {
+    if (format === 'print') {
+      setPrintMode(type);
+      // Give React a tick to update the DOM with print-only hidden classes
+      setTimeout(() => {
+        window.print();
+        setPrintMode('all');
+      }, 100);
+      return;
+    }
+
+    if (format === 'pdf') {
+      const toastId = toast.loading(`Preparing ${type} Report for Download...`);
+      setPrintMode(type);
+
+      // [VITAL FIX] Increase delay to 1000ms to ensure Recharts and layout are fully settled
+      setTimeout(async () => {
+        const element = document.getElementById('report-download-target');
+        
+        if (!element) {
+          toast.error("Critical Error: Report target not found", { id: toastId });
+          setPrintMode('all');
+          return;
+        }
+
+        try {
+          // Temporarily move off-screen but make visible for the capture engine
+          element.classList.remove('hidden');
+          element.style.position = 'fixed';
+          element.style.left = '-9999px';
+          element.style.top = '0';
+          element.style.display = 'block';
+
+          const opt = {
+            margin: 0.5,
+            filename: `${type}_Report_${dateRange}_${new Date().toISOString().split('T')[0]}.pdf`,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { 
+              scale: 2, 
+              useCORS: true, 
+              logging: false,
+              letterRendering: true,
+              windowWidth: 1200
+            },
+            jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+          };
+
+          // Execute download
+          await (html2pdf as any)().from(element).set(opt).save();
+          
+          toast.success(`${type} Report Downloaded!`, { id: toastId });
+        } catch (err) {
+          console.error("PDF Engine Error:", err);
+          toast.error("Download Failed. Try 'Print as PDF' instead.", { id: toastId });
+        } finally {
+          // CLEANUP: Always revert UI state so buttons don't stay "stuck"
+          element.classList.add('hidden');
+          element.style.display = '';
+          element.style.position = '';
+          element.style.left = '';
+          setPrintMode('all');
+        }
+      }, 1000);
+      return;
+    }
+
+    // CSV LOGIC
+    let csvContent = "";
+    let fileName = "";
+
+    if (type === 'Sales') {
+      fileName = `Sales_Report_${dateRange}_${now.toISOString().split('T')[0]}.csv`;
+      csvContent = "Date,Order ID,Customer,Amount,Method,Status\n";
+      filteredOrdersByDate.forEach(order => {
+        csvContent += `${order.transactionDate || order.createdAt},ORD-${order.id},${order.customerName},${order.grandTotal},${order.paymentMethod},${order.paymentStatus}\n`;
+      });
+    } else if (type === 'Expenses') {
+      fileName = `Expenses_Report_${dateRange}_${now.toISOString().split('T')[0]}.csv`;
+      csvContent = "Date,Description,Category,Amount\n";
+      filteredExpensesByDate.forEach(exp => {
+        csvContent += `${exp.date},"${exp.description}",${exp.category},${exp.amount}\n`;
+      });
+    } else {
+      fileName = `ROI_Report_${dateRange}_${now.toISOString().split('T')[0]}.csv`;
+      csvContent = "Metric,Value\n";
+      csvContent += `Period,${dateRange}\n`;
+      csvContent += `Total Revenue,${totalRevenue}\n`;
+      csvContent += `Total Expenses,${totalExpensesAmount}\n`;
+      csvContent += `Net Profit,${profit}\n`;
+      csvContent += `ROI %,${totalExpensesAmount > 0 ? ((profit / totalExpensesAmount) * 100).toFixed(2) : 'N/A'}\n`;
+    }
+
+    const blob = new Blob(["\uFEFF", csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success(`${type} Report downloaded successfully`);
+  };
 
 
 
@@ -156,34 +284,115 @@ export default function SalesReport({ onSetHeaderActionRight }: SalesReportProps
   useEffect(() => {
     if (onSetHeaderActionRight) {
       onSetHeaderActionRight(
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              aria-label="Select range"
-              className="w-10 h-10 sm:w-40 flex items-center justify-center sm:justify-between rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-sm font-semibold uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:border-white focus:outline-none focus:ring-2 focus:ring-red-500"
-            >
-              <Calendar className="h-4 w-4 sm:mr-1 shrink-0" aria-hidden="true" />
-              <span className="hidden sm:inline truncate mx-1 flex-1 text-center">{dateRange}</span>
-              <ChevronDown className="hidden sm:block h-4 w-4 text-white shrink-0" aria-hidden="true" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-40 p-0 rounded-xl border border-red-600 bg-white shadow-lg overflow-hidden">
-            {['Daily', 'Weekly', 'Quarterly', 'Annually'].map((range) => (
-              <DropdownMenuItem
-                key={range}
-                onClick={() => setDateRange(range as typeof dateRange)}
-                className={`uppercase px-4 py-2 text-sm font-semibold cursor-pointer ${dateRange === range ? 'bg-red-600 text-white focus:bg-red-600 focus:text-white' : 'bg-white text-red-700 hover:bg-red-100 hover:text-red-700 focus:bg-red-100 focus:text-red-700'}`}
+        <div className="flex items-center gap-2">
+          {/* Printables Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="w-10 h-10 flex items-center justify-center rounded-md border border-slate-700 bg-slate-700 text-white shadow-md transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500"
               >
-                {range}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+                <Printer className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56 p-0 rounded-xl border border-slate-200 bg-white shadow-lg overflow-hidden">
+              <div className="px-4 py-2 border-b border-gray-100 bg-gray-50/50">
+                <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Report Options</p>
+              </div>
+              
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className="uppercase px-4 py-3 text-[11px] font-bold text-slate-700 cursor-pointer hover:bg-slate-50 focus:bg-slate-50">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-green-600" />
+                    <span>Sales Report</span>
+                  </div>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="w-44 p-0 rounded-lg border border-slate-200 shadow-md">
+                  <DropdownMenuItem onClick={() => handleExport('Sales', 'print')} className="px-4 py-2 text-[10px] font-bold uppercase text-slate-600 cursor-pointer hover:bg-slate-50">
+                    <Printer className="h-3.5 w-3.5 mr-2 text-slate-500" /> Print as PDF
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExport('Sales', 'csv')} className="px-4 py-2 text-[10px] font-bold uppercase text-slate-600 cursor-pointer hover:bg-slate-50">
+                    <FileSpreadsheet className="h-3.5 w-3.5 mr-2 text-green-600" /> Export to CSV
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExport('Sales', 'pdf')} className="px-4 py-2 text-[10px] font-bold uppercase text-slate-600 cursor-pointer hover:bg-slate-50">
+                    <FileText className="h-3.5 w-3.5 mr-2 text-blue-600" /> Export to PDF
+                  </DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className="uppercase px-4 py-3 text-[11px] font-bold text-slate-700 cursor-pointer hover:bg-slate-50 focus:bg-slate-50 border-t border-gray-100">
+                  <div className="flex items-center gap-2">
+                    <TrendingDown className="h-4 w-4 text-red-600" />
+                    <span>Expenses Report</span>
+                  </div>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="w-44 p-0 rounded-lg border border-slate-200 shadow-md">
+                  <DropdownMenuItem onClick={() => handleExport('Expenses', 'print')} className="px-4 py-2 text-[10px] font-bold uppercase text-slate-600 cursor-pointer hover:bg-slate-50">
+                    <Printer className="h-3.5 w-3.5 mr-2 text-slate-500" /> Print as PDF
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExport('Expenses', 'csv')} className="px-4 py-2 text-[10px] font-bold uppercase text-slate-600 cursor-pointer hover:bg-slate-50">
+                    <FileSpreadsheet className="h-3.5 w-3.5 mr-2 text-green-600" /> Export to CSV
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExport('Expenses', 'pdf')} className="px-4 py-2 text-[10px] font-bold uppercase text-slate-600 cursor-pointer hover:bg-slate-50">
+                    <FileText className="h-3.5 w-3.5 mr-2 text-blue-600" /> Export to PDF
+                  </DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className="uppercase px-4 py-3 text-[11px] font-bold text-slate-700 cursor-pointer hover:bg-slate-50 focus:bg-slate-50 border-t border-gray-100">
+                  <div className="flex items-center gap-2">
+                    <Wallet className="h-4 w-4 text-blue-600" />
+                    <span>Sales & Expenses (ROI)</span>
+                  </div>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="w-44 p-0 rounded-lg border border-slate-200 shadow-md">
+                  <DropdownMenuItem onClick={() => handleExport('ROI', 'print')} className="px-4 py-2 text-[10px] font-bold uppercase text-slate-600 cursor-pointer hover:bg-slate-50">
+                    <Printer className="h-3.5 w-3.5 mr-2 text-slate-500" /> Print as PDF
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExport('ROI', 'csv')} className="px-4 py-2 text-[10px] font-bold uppercase text-slate-600 cursor-pointer hover:bg-slate-50">
+                    <FileSpreadsheet className="h-3.5 w-3.5 mr-2 text-green-600" /> Export to CSV
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExport('ROI', 'pdf')} className="px-4 py-2 text-[10px] font-bold uppercase text-slate-600 cursor-pointer hover:bg-slate-50">
+                    <FileText className="h-3.5 w-3.5 mr-2 text-blue-600" /> Export to PDF
+                  </DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Date Filter Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label="Select range"
+                className="w-10 h-10 sm:w-40 flex items-center justify-center sm:justify-between rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-[11px] font-black uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:border-white focus:outline-none focus:ring-2 focus:ring-red-500 tracking-widest"
+              >
+                <Calendar className="h-4 w-4 sm:mr-1 shrink-0" aria-hidden="true" />
+                <span className="hidden sm:inline truncate mx-1 flex-1 text-center">{dateRange}</span>
+                <ChevronDown className="hidden sm:block h-4 w-4 text-white shrink-0" aria-hidden="true" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40 p-0 rounded-xl border border-red-600 bg-white shadow-lg overflow-hidden">
+              {/* [OWASP A03] Security Mapping: Verified static list prevent injection */}
+              {['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Annually'].map((range) => (
+                <DropdownMenuItem
+                  key={range}
+                  onClick={() => setDateRange(range as typeof dateRange)}
+                  className={`uppercase px-4 py-2 text-[11px] font-black tracking-widest cursor-pointer ${dateRange === range ? 'bg-red-600 text-white focus:bg-red-600 focus:text-white' : 'bg-white text-red-700 hover:bg-red-100 hover:text-red-700 focus:bg-red-100 focus:text-red-700'}`}
+                >
+                  {range}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       );
     }
     return () => onSetHeaderActionRight?.(null);
-  }, [onSetHeaderActionRight, dateRange]);
+  }, [onSetHeaderActionRight, dateRange, filteredOrdersByDate, filteredExpensesByDate, totalRevenue, totalExpensesAmount, profit]);
 
   if (loading) {
     return (
@@ -194,7 +403,8 @@ export default function SalesReport({ onSetHeaderActionRight }: SalesReportProps
   }
 
   return (
-    <div className="space-y-8 pb-10 animate-in fade-in duration-700">
+    <>
+    <div className="space-y-8 pb-10 animate-in fade-in duration-700 print:hidden">
       {/* 1. TOP SUMMARY CARDS - Business Activity Section */}
       <Card className="border-none shadow-none mb-2">
         <CardHeader className="pt-5 pb-0 mb-0">
@@ -422,7 +632,128 @@ export default function SalesReport({ onSetHeaderActionRight }: SalesReportProps
           </CardContent>
         </Card>
       </div>
-
     </div>
+
+    {/* 3. PRINT-ONLY REPORTS (Visible only when printing) */}
+    <div id="report-download-target" className="hidden print:block mt-10">
+          <div className="flex items-center justify-between border-b-2 border-red-600 pb-4 mb-8">
+            <div className="flex items-center gap-4">
+              <img src="/logo.png" alt="Shoelotskey" className="h-16 w-16" />
+              <div>
+                <h1 className="text-2xl font-black text-red-600 uppercase tracking-tighter leading-none">Shoelotskey</h1>
+                <p className="text-sm font-bold text-gray-500 uppercase tracking-widest mt-1">Service Management System</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <h2 className="text-xl font-black text-gray-900 uppercase">
+                {printMode === 'Sales' ? 'SALES' : printMode === 'Expenses' ? 'EXPENSES' : 'FINANCIAL PERFORMANCE'} REPORT
+              </h2>
+              <p className="text-sm font-bold text-gray-400">{now.toLocaleDateString()} {now.toLocaleTimeString()}</p>
+              <p className="text-[10px] font-black text-red-600 uppercase tracking-[0.2em] mt-1">{dateRange} SUMMARY</p>
+            </div>
+          </div>
+
+          {/* Individual Sales Table */}
+          <section className={`mb-10 ${printMode !== 'Sales' && printMode !== 'ROI' ? 'print:hidden' : ''}`}>
+            <h3 className="text-lg font-black uppercase tracking-widest text-red-600 border-l-4 border-red-600 pl-3 mb-4">Sales Records</h3>
+            <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-gray-100">
+                <th className="px-3 py-2 text-left text-[10px] font-black uppercase text-gray-600 border border-gray-200">Date</th>
+                <th className="px-3 py-2 text-left text-[10px] font-black uppercase text-gray-600 border border-gray-200">Order ID</th>
+                <th className="px-3 py-2 text-left text-[10px] font-black uppercase text-gray-600 border border-gray-200">Customer</th>
+                <th className="px-3 py-2 text-right text-[10px] font-black uppercase text-gray-600 border border-gray-200">Total</th>
+                <th className="px-3 py-2 text-center text-[10px] font-black uppercase text-gray-600 border border-gray-200">Method</th>
+                <th className="px-3 py-2 text-center text-[10px] font-black uppercase text-gray-600 border border-gray-200">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredOrdersByDate.map((order: JobOrder) => (
+                <tr key={order.id}>
+                  <td className="px-3 py-2 text-[10px] border border-gray-200">{new Date(order.transactionDate || order.createdAt).toLocaleDateString()}</td>
+                  <td className="px-3 py-2 text-[10px] font-bold border border-gray-200">ORD-{order.id}</td>
+                  <td className="px-3 py-2 text-[10px] border border-gray-200">{order.customerName}</td>
+                  <td className="px-3 py-2 text-[10px] font-black text-right border border-gray-200">₱{(order.grandTotal || 0).toLocaleString()}</td>
+                  <td className="px-3 py-2 text-[10px] text-center border border-gray-200 font-bold uppercase">{order.paymentMethod}</td>
+                  <td className="px-3 py-2 text-[10px] text-center border border-gray-200 font-bold uppercase">{order.paymentStatus}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="bg-red-50">
+                <td colSpan={3} className="px-3 py-2 text-[11px] font-black uppercase text-red-600 text-right">Total Applied Sales</td>
+                <td className="px-3 py-2 text-[11px] font-black text-right text-red-600 border border-red-100">₱{totalRevenue.toLocaleString()}</td>
+                <td colSpan={2} className="bg-white"></td>
+              </tr>
+            </tfoot>
+          </table>
+        </section>
+
+        {/* Expenses Table */}
+        <section className={`mb-10 page-break-before ${printMode !== 'Expenses' && printMode !== 'ROI' ? 'print:hidden' : ''}`}>
+          <h3 className="text-lg font-black uppercase tracking-widest text-red-600 border-l-4 border-red-600 pl-3 mb-4">Expenses Records</h3>
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-gray-100">
+                <th className="px-3 py-2 text-left text-[10px] font-black uppercase text-gray-600 border border-gray-200">Date</th>
+                <th className="px-3 py-2 text-left text-[10px] font-black uppercase text-gray-600 border border-gray-200">Description</th>
+                <th className="px-3 py-2 text-left text-[10px] font-black uppercase text-gray-600 border border-gray-200">Category</th>
+                <th className="px-3 py-2 text-right text-[10px] font-black uppercase text-gray-600 border border-gray-200">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredExpensesByDate.map((exp: any, idx: number) => (
+                <tr key={idx}>
+                  <td className="px-3 py-2 text-[10px] border border-gray-200">{new Date(exp.date).toLocaleDateString()}</td>
+                  <td className="px-3 py-2 text-[10px] border border-gray-200">{exp.description}</td>
+                  <td className="px-3 py-2 text-[10px] border border-gray-200 font-bold uppercase">{exp.category}</td>
+                  <td className="px-3 py-2 text-[10px] font-black text-right border border-gray-200 text-red-600">₱{Number(exp.amount || 0).toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="bg-red-50">
+                <td colSpan={3} className="px-3 py-2 text-[11px] font-black uppercase text-red-600 text-right">Total Expenses</td>
+                <td className="px-3 py-2 text-[11px] font-black text-right text-red-600 border border-red-100">₱{totalExpensesAmount.toLocaleString()}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </section>
+
+        {/* ROI / Profit Summary */}
+        <section className={`mb-10 ${printMode !== 'ROI' ? 'print:hidden' : ''}`}>
+          <h3 className="text-lg font-black uppercase tracking-widest text-red-600 border-l-4 border-red-600 pl-3 mb-4">ROI & Profitability Summary</h3>
+          <div className="grid grid-cols-2 gap-4 border-2 border-gray-200 p-6 rounded-xl">
+            <div className="space-y-4">
+              <div className="flex justify-between border-b border-gray-100 pb-2">
+                <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Total Sales Revenue</span>
+                <span className="text-[12px] font-black text-gray-900">₱{totalRevenue.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between border-b border-gray-100 pb-2">
+                <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Total Operating Expenses</span>
+                <span className="text-[12px] font-black text-red-600">(₱{totalExpensesAmount.toLocaleString()})</span>
+              </div>
+              <div className="flex justify-between pt-2">
+                <span className="text-sm font-black text-red-600 uppercase tracking-tighter">Net Profit / Loss</span>
+                <span className={`text-lg font-black ${profit >= 0 ? 'text-green-600' : 'text-red-700'}`}>
+                  ₱{profit.toLocaleString()}
+                </span>
+              </div>
+            </div>
+            <div className="flex flex-col items-center justify-center bg-gray-50 rounded-lg p-4">
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Return on Investment (ROI)</span>
+              <span className={`text-4xl font-black ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {totalExpensesAmount > 0 ? ((profit / totalExpensesAmount) * 100).toFixed(1) : '---'}%
+              </span>
+            </div>
+          </div>
+        </section>
+
+        <div className="mt-20 pt-10 border-t border-gray-200 text-center">
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.3em]">End of Automated Report</p>
+          <p className="text-[9px] text-gray-300 mt-2">Generated by Shoelotskey SMS v2.0</p>
+        </div>
+      </div>
+    </>
   );
 }

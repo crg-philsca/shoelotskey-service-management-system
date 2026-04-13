@@ -5,7 +5,7 @@ import { Label } from '@/app/components/ui/label';
 import { useMemo, useState, useEffect } from 'react';
 import { useServices } from '@/app/context/ServiceContext';
 import { useOrders } from '@/app/context/OrderContext';
-import { Calendar as CalendarIcon, Package, User, CreditCard, ClipboardList, FileText, ChevronLeft, ChevronRight, Search, Filter, Phone, MapPin, Tag, Clock } from 'lucide-react';
+import { Calendar as CalendarIcon, Package, User, Wallet, ClipboardList, FileText, ChevronLeft, ChevronRight, Search, Filter, Phone, MapPin, Tag, Clock, Truck } from 'lucide-react';
 import { format } from 'date-fns';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { Button } from '@/app/components/ui/button';
@@ -16,9 +16,10 @@ import { JobOrder } from '@/app/types';
 
 interface ReleaseCalendarProps {
   onSetHeaderActionRight?: (node: React.ReactNode) => void;
+  user: { token: string };
 }
 
-export default function ReleaseCalendar({ onSetHeaderActionRight }: ReleaseCalendarProps) {
+export default function ReleaseCalendar({ onSetHeaderActionRight, user }: ReleaseCalendarProps) {
   const navigate = useNavigate();
   const { services } = useServices();
   const { orders, loading } = useOrders();
@@ -57,6 +58,13 @@ export default function ReleaseCalendar({ onSetHeaderActionRight }: ReleaseCalen
     setDate(newDate ?? date);
     setCurrentPage(1);
   };
+
+  useEffect(() => {
+    // [OWASP A09] Security Audit Logging
+    if (user.token) {
+      console.log('[SECURITY] Release Calendar viewed by authenticated session');
+    }
+  }, [user.token]);
 
   /**
    * FILTER LOGIC: jobsOnDate
@@ -106,16 +114,17 @@ export default function ReleaseCalendar({ onSetHeaderActionRight }: ReleaseCalen
         <div className="flex items-center gap-2">
           <Button
             onClick={() => navigate('/claim-record')}
-            className="bg-white hover:bg-red-50 text-red-600 border border-red-200 font-bold h-9 px-2 sm:px-4 shadow-sm transition-all"
+            variant="outline"
+            className="w-10 h-10 sm:w-40 flex items-center justify-center rounded-md border border-red-200 bg-white px-2 sm:px-3 py-2 text-[11px] font-black uppercase text-red-600 shadow-none transition hover:bg-red-50 hover:border-red-300 focus:outline-none focus:ring-2 focus:ring-red-500 tracking-widest"
           >
-            <FileText className="h-4 w-4 mr-0 sm:mr-1 text-red-600" />
+            <FileText className="h-4 w-4 sm:mr-2 shrink-0 text-red-600" />
             <span className="hidden sm:inline">Claim Record</span>
           </Button>
           <Button
             onClick={() => navigate('/dashboard', { state: { status: 'for-release' } })}
-            className="bg-red-600 hover:bg-red-700 text-white font-bold h-9 px-2 sm:px-4 shadow-sm transition-all"
+            className="w-10 h-10 sm:w-40 flex items-center justify-center rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-[11px] font-black uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 tracking-widest"
           >
-            <ClipboardList className="h-4 w-4 mr-0 sm:mr-1" />
+            <ClipboardList className="h-4 w-4 sm:mr-2 shrink-0" />
             <span className="hidden sm:inline">Release Table</span>
           </Button>
         </div>
@@ -377,12 +386,12 @@ export default function ReleaseCalendar({ onSetHeaderActionRight }: ReleaseCalen
 
                         <div className="flex items-center gap-2">
                           <div className="h-6 w-6 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 flex-shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                            <CreditCard size={12} />
+                            <Wallet size={12} />
                           </div>
                           <div className="min-w-0">
                             <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-none mb-0.5">Payment Status</p>
                             <p className={`text-[9px] font-black uppercase tracking-tight ${job.paymentStatus === 'fully-paid' ? 'text-green-600' : 'text-red-500'}`}>
-                              {job.paymentStatus}
+                              {job.paymentStatus === 'fully-paid' ? 'Fully Paid' : job.paymentStatus === 'downpayment' ? 'Downpayment' : job.paymentStatus.charAt(0).toUpperCase() + job.paymentStatus.slice(1)}
                             </p>
                           </div>
                         </div>
@@ -468,261 +477,311 @@ export default function ReleaseCalendar({ onSetHeaderActionRight }: ReleaseCalen
 
       {/* View Order Modal */}
       <Dialog open={!!selectedOrder} onOpenChange={(open) => !open && setSelectedOrder(null)}>
-        <DialogContent className="max-w-md bg-white">
-          <DialogHeader className="border-b border-gray-100 pb-4">
-            <DialogTitle className="text-xl font-bold flex items-center justify-center gap-2">
-              Order #
-              <span className="bg-gray-100/80 px-3 py-1 rounded-full text-sm text-gray-700">{selectedOrder?.orderNumber}</span>
-            </DialogTitle>
-          </DialogHeader>
+          <DialogContent className="max-w-md bg-white">
+              <DialogHeader className="border-b border-gray-100 pb-4">
+                  <DialogTitle className="text-xl font-bold flex items-center justify-center gap-2">
+                      Order #
+                      <span className="bg-gray-100/80 px-3 py-1 rounded-full text-sm text-gray-700">{selectedOrder?.orderNumber}</span>
+                  </DialogTitle>
+              </DialogHeader>
 
-          {selectedOrder && (
-            <div className="space-y-6 pt-2 max-h-[70vh] overflow-y-auto px-1 pr-2 no-scrollbar">
-              {/* Customer Section */}
-              <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <User size={16} className="text-red-500" />
-                  <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Customer Details</h4>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Customer Name</Label>
-                    <p className="text-sm font-bold text-gray-800">{selectedOrder.customerName}</p>
-                  </div>
-                  <div>
-                    <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Contact Number</Label>
-                    <div className="flex items-center gap-2">
-                      <Phone size={12} className="text-gray-400" />
-                      <p className="text-sm font-medium text-gray-600">{selectedOrder.contactNumber}</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 pt-2 border-t border-gray-200/50">
-                  <div>
-                    <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Order Date</Label>
-                    <div className="flex items-center gap-2">
-                      <CalendarIcon size={12} className="text-gray-400" />
-                      <p className="text-sm font-medium text-gray-600">
-                        {format(new Date(selectedOrder.transactionDate), 'MMM dd, yyyy h:mm a')}
-                      </p>
-                    </div>
-                  </div>
-                  <div>
-                    <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Release Date</Label>
-                    <div className="flex items-center gap-2">
-                      <Clock size={12} className="text-gray-400" />
-                      <p className="text-sm font-bold text-gray-800">
-                        {selectedOrder.predictedCompletionDate ? format(new Date(selectedOrder.predictedCompletionDate), 'MMM dd, yyyy') : '-'}
-                        {['for-release', 'claimed'].includes(selectedOrder.status) && selectedOrder.releaseTime && (
-                          <span className="text-xs text-gray-500 ml-1 font-normal">
-                            @ {selectedOrder.releaseTime}
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {selectedOrder.shippingPreference === 'delivery' && (
-                  <div>
-                    <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Delivery Address</Label>
-                    <div className="flex items-start gap-2">
-                      <MapPin size={12} className="text-gray-400 mt-0.5" />
-                      <p className="text-sm font-medium text-gray-600 leading-snug">{selectedOrder.deliveryAddress}</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Items Loop */}
-              <div className="space-y-4">
-                {(selectedOrder.items?.length ? selectedOrder.items : [selectedOrder]).map((item: any, index: number) => (
-                  <div key={index} className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Tag size={16} className="text-red-500" />
-                      <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">
-                        {(selectedOrder.items?.length || 0) > 1 ? `Item #${index + 1} Details` : 'Shoe & Service Details'}
-                      </h4>
-                    </div>
-
-                    {/* Shoe Details */}
-                    <div className="grid grid-cols-3 gap-4">
-                      <div>
-                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Brand</Label>
-                        <p className="text-sm font-bold text-gray-800">{item.brand || '-'}</p>
-                      </div>
-                      <div>
-                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Material</Label>
-                        <p className="text-sm font-medium text-gray-600">{item.shoeMaterial || '-'}</p>
-                      </div>
-                      <div>
-                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Quantity</Label>
-                        <p className="text-sm font-bold text-gray-800">{item.quantity || 1} Pair(s)</p>
-                      </div>
-                    </div>
-
-                    {/* Physical Condition */}
-                    <div className="pt-2 border-t border-gray-200/50">
-                      <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">Physical Condition</Label>
-                      <div className="flex flex-wrap gap-1.5">
-                        {Object.entries(item.condition || {}).map(([key, value]) => {
-                          if (key === 'others' && value) return <span key={key} className="px-2 py-1 bg-white border border-gray-200 rounded-md text-[10px] font-bold text-gray-600 shadow-sm">Note: {String(value)}</span>;
-                          if (value === true) {
-                            const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-                            return <span key={key} className="px-2 py-1 bg-red-50 border border-red-100 rounded-md text-[10px] font-bold text-red-600">{label}</span>;
-                          }
-                          return null;
-                        })}
-                        {Object.values(item.condition || {}).every(v => !v) && <p className="text-xs text-slate-400 italic">No issues reported</p>}
-                      </div>
-                    </div>
-
-                    {/* Service Details for this Item */}
-                    <div className="pt-2 border-t border-gray-200/50">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Base Service</Label>
-                          <p className="text-sm font-bold text-gray-800">
-                            {Array.isArray(item.baseService)
-                              ? item.baseService.map((s: string) => s.replace(' (with basic cleaning)', '')).join(', ')
-                              : String(item.baseService).replace(' (with basic cleaning)', '')}
-                          </p>
-                        </div>
-
-                        {item.addOns && item.addOns.length > 0 && (
-                          <div>
-                            <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Add-ons</Label>
-                            <div className="space-y-1">
-                              {item.addOns.map((addon: any, idx: number) => (
-                                <div key={idx} className="flex items-center justify-between text-sm">
-                                  <span className="font-medium text-gray-700">• {addon.name}</span>
-                                  <span className="text-gray-500 text-xs font-bold">x{addon.quantity}</span>
-                                </div>
-                              ))}
-                            </div>
+              {selectedOrder && (
+                  <div className="space-y-6 pt-2 max-h-[70vh] overflow-y-auto px-1 pr-2 no-scrollbar">
+                      {/* Customer Section */}
+                      <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-3">
+                          <div className="flex items-center gap-2 mb-2">
+                              <User size={16} className="text-red-500" />
+                              <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Customer Details</h4>
                           </div>
-                        )}
+
+                          <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                  <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Customer Name</Label>
+                                  <p className="text-sm font-bold text-gray-800">{selectedOrder.customerName}</p>
+                              </div>
+                              <div>
+                                  <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Contact Number</Label>
+                                  <div className="flex items-center gap-2">
+                                      <Phone size={12} className="text-gray-400" />
+                                      <p className="text-sm font-bold text-gray-800">{selectedOrder.contactNumber}</p>
+                                  </div>
+                              </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4 pt-2 border-t border-gray-200/50">
+                              <div>
+                                  <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Order Date</Label>
+                                  <div className="flex items-center gap-2">
+                                      <CalendarIcon size={12} className="text-gray-400" />
+                                      <p className="text-sm font-bold text-gray-800">
+                                          {(() => {
+                                              const d = new Date(selectedOrder.transactionDate || selectedOrder.createdAt);
+                                              return isNaN(d.getTime()) ? '-' : format(d, 'MM/dd/yy HH:mm');
+                                          })()}
+                                      </p>
+                                  </div>
+                              </div>
+                              <div>
+                                  <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Release Date</Label>
+                                  <div className="flex items-center gap-2">
+                                      <Clock size={12} className="text-gray-400" />
+                                      <p className="text-sm font-bold text-gray-800">
+                                          {(() => {
+                                              if (!selectedOrder.predictedCompletionDate) return '-';
+                                              const d = new Date(selectedOrder.predictedCompletionDate);
+                                              return isNaN(d.getTime()) ? '-' : format(d, 'MM/dd/yy');
+                                          })()}
+                                          {['for-release', 'claimed'].includes(selectedOrder.status) && selectedOrder.releaseTime && (
+                                              <span className="text-xs text-gray-500 ml-1 font-normal">
+                                                  @ {selectedOrder.releaseTime}
+                                              </span>
+                                          )}
+                                      </p>
+                                  </div>
+                              </div>
+                          </div>
+
+                          {/* Shipping Details */}
+                          <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-3 mt-2">
+                              <div className="flex items-center gap-2 mb-2">
+                                  <Truck size={16} className="text-red-500" />
+                                  <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Shipping Details</h4>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                      <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Preference</Label>
+                                      <p className="text-sm font-bold text-gray-800 uppercase">{selectedOrder.shippingPreference || 'Pickup'}</p>
+                                  </div>
+                                  {selectedOrder.shippingPreference === 'delivery' && selectedOrder.deliveryCourier && (
+                                      <div>
+                                          <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Courier</Label>
+                                          <div className="flex items-center gap-2">
+                                              <p className="text-sm font-bold text-gray-800">{selectedOrder.deliveryCourier}</p>
+                                          </div>
+                                      </div>
+                                  )}
+                              </div>
+
+                              {selectedOrder.shippingPreference === 'delivery' && (
+                                  <div className="pt-2 border-t border-gray-200/50">
+                                      <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Full Delivery Address</Label>
+                                      <div className="flex items-start gap-2">
+                                          <MapPin size={12} className="text-gray-400 mt-0.5" />
+                                          <p className="text-sm font-medium text-gray-600 leading-snug">{selectedOrder.deliveryAddress || 'No address provided'}</p>
+                                      </div>
+                                  </div>
+                              )}
+                          </div>
                       </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
 
-              {/* Order Status & Priority (Global) */}
-              <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-3 mt-2">
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Order Status</Label>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize border
-                        ${selectedOrder.status === 'new-order' ? 'bg-purple-50 text-purple-700 border-purple-100' :
-                        selectedOrder.status === 'on-going' ? 'bg-blue-50 text-blue-700 border-blue-100' :
-                          selectedOrder.status === 'for-release' ? 'bg-orange-50 text-orange-700 border-orange-100' :
-                            selectedOrder.status === 'claimed' ? 'bg-gray-50 text-gray-700 border-gray-200' :
-                              'bg-red-50 text-red-700 border-red-100'
-                      }`}>
-                      {selectedOrder.status.replace('-', ' ')}
-                    </span>
-                  </div>
-                  <div>
-                    <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Priority Level</Label>
-                    {selectedOrder.priorityLevel === 'rush' ? (
-                      <span className="text-xs font-black text-red-600 uppercase">RUSH</span>
-                    ) : (
-                      <span className="text-xs font-medium text-gray-500 capitalize">{selectedOrder.priorityLevel}</span>
-                    )}
-                  </div>
-                  <div>
-                    <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Assigned To</Label>
-                    <p className="text-sm font-medium text-gray-700">{selectedOrder.assignedTo || 'Unassigned'}</p>
-                  </div>
-                </div>
+                      {/* Items Loop */}
+                      <div className="space-y-4">
+                          {(selectedOrder.items?.length ? selectedOrder.items : [selectedOrder]).map((item: any, index: number) => (
+                              <div key={index} className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-3">
+                                  <div className="flex items-center gap-2 mb-2">
+                                      <Tag size={16} className="text-red-500" />
+                                      <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">
+                                          {(selectedOrder.items?.length || 0) > 1 ? `Item #${index + 1} Details` : 'Shoe & Service Details'}
+                                      </h4>
+                                  </div>
 
+                                  {/* Shoe Details */}
+                                  <div className="grid grid-cols-3 gap-4">
+                                      <div>
+                                          <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Brand</Label>
+                                          <p className="text-sm font-bold text-gray-800">{item.brand || '-'}</p>
+                                      </div>
+                                      <div>
+                                          <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Material</Label>
+                                          <p className="text-sm font-bold text-gray-800">{item.shoeMaterial || '-'}</p>
+                                      </div>
+                                      <div>
+                                          <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Quantity</Label>
+                                          <p className="text-sm font-bold text-gray-800">{item.quantity || 1} {(item.quantity || 1) === 1 ? 'Pair' : 'Pairs'}</p>
+                                      </div>
+                                  </div>
 
-              </div>
+                                  {/* Shoe Condition */}
+                                  <div className="pt-2 border-t border-gray-200/50">
+                                      <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">Shoe Condition</Label>
+                                      <div className="flex flex-wrap gap-1.5">
+                                          {Object.entries(item.condition || {}).map(([key, value]) => {
+                                              if (key === 'others' && value) return <span key={key} className="px-2 py-1 bg-white border border-gray-200 rounded-xl text-[10px] font-bold text-gray-600 shadow-sm">Note: {String(value)}</span>;
+                                              if (value === true) {
+                                                  const labels: Record<string, string> = {
+                                                      scratches: 'Scratches',
+                                                      yellowing: 'Yellowing',
+                                                      ripsHoles: 'Rips/Holes',
+                                                      deepStains: 'Deep Stains',
+                                                      soleSeparation: 'Sole Separation',
+                                                      wornOut: 'Faded/Worn'
+                                                  };
+                                                  const label = labels[key] || key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                                                  return <span key={key} className="px-2 py-1 bg-red-50 border border-red-100 rounded-xl text-[10px] font-bold text-red-600">{label}</span>;
+                                              }
+                                              return null;
+                                          })}
+                                          {Object.values(item.condition || {}).every(v => !v) && <p className="text-xs text-slate-400 italic">No conditions applied</p>}
+                                      </div>
+                                  </div>
 
+                                  {/* Service Details for this Item */}
+                                  <div className="pt-2 border-t border-gray-200/50">
+                                      <div className="grid grid-cols-2 gap-4">
+                                          <div>
+                                              <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Base Service</Label>
+                                              <p className="text-sm font-bold text-gray-800">
+                                                  {Array.isArray(item.baseService)
+                                                      ? item.baseService.map((s: string) => s.replace(' (with basic cleaning)', '')).join(', ')
+                                                      : String(item.baseService).replace(' (with basic cleaning)', '')}
+                                              </p>
+                                          </div>
 
-              {/* Payment Section */}
-              <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <CreditCard size={16} className="text-red-500" />
-                  <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Payment Details</h4>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  {selectedOrder.paymentStatus !== 'downpayment' && (
-                    <div>
-                      <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Method</Label>
-                      <p className="text-sm font-bold text-gray-800 uppercase">
-                        {selectedOrder.paymentMethod || '-'}
-                      </p>
-                    </div>
-                  )}
-                  <div>
-                    <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Payment Status</Label>
-                    <span className={`text-sm font-black uppercase ${selectedOrder.paymentStatus === 'fully-paid' ? 'text-green-600' :
-                      selectedOrder.paymentStatus === 'downpayment' ? 'text-yellow-600' : 'text-red-500'
-                      }`}>
-                      {selectedOrder.paymentStatus}
-                    </span>
-                  </div>
-                  {['gcash', 'maya'].includes(selectedOrder.paymentMethod?.toLowerCase()) && (selectedOrder.paymentStatus === 'fully-paid' || selectedOrder.paymentStatus === 'downpayment') && (
-                    <div className="col-span-2">
-                      <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Reference Number</Label>
-                      <p className="text-sm font-bold text-gray-800 font-mono tracking-tight">{selectedOrder.referenceNo || '-'}</p>
-                    </div>
-                  )}
-                  {selectedOrder.paymentStatus !== 'downpayment' && (
-                    <>
-                      <div>
-                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Amount Received</Label>
-                        <p className="text-sm font-bold text-gray-800">₱{(selectedOrder.amountReceived || 0).toFixed(2)}</p>
+                                          {item.addOns && item.addOns.length > 0 && (
+                                              <div>
+                                                  <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Add-ons</Label>
+                                                  <div className="space-y-1">
+                                                      {item.addOns.map((addon: any, idx: number) => (
+                                                          <div key={idx} className="flex items-center justify-between text-sm">
+                                                              <span className="font-medium text-gray-700">• {addon.name}</span>
+                                                              <span className="text-gray-500 text-xs font-bold">x{addon.quantity}</span>
+                                                          </div>
+                                                      ))}
+                                                  </div>
+                                              </div>
+                                          )}
+                                      </div>
+                                  </div>
+                              </div>
+                          ))}
                       </div>
-                      <div>
-                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Change</Label>
-                        <p className="text-sm font-bold text-gray-800">₱{(selectedOrder.change || 0).toFixed(2)}</p>
+
+                      {/* Order Status & Metadata Summary */}
+                      <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-4 mt-2">
+                          <div className="grid grid-cols-2 gap-4 pb-3 border-b border-gray-200/50">
+                              <div>
+                                  <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Order Status</Label>
+                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize border
+                                      ${selectedOrder.status === 'new-order' ? 'bg-purple-50 text-purple-700 border-purple-100' :
+                                          selectedOrder.status === 'on-going' ? 'bg-blue-50 text-blue-700 border-blue-100' :
+                                              selectedOrder.status === 'for-release' ? 'bg-orange-50 text-orange-700 border-orange-100' :
+                                                  selectedOrder.status === 'claimed' ? 'bg-gray-50 text-gray-700 border-gray-200' :
+                                                      'bg-red-50 text-red-700 border-red-100'
+                                      }`}>
+                                      {selectedOrder.status.replace('-', ' ')}
+                                  </span>
+                              </div>
+                              <div className="text-right">
+                                  <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Priority Level</Label>
+                                  {selectedOrder.priorityLevel === 'rush' ? (
+                                      <span className="text-xs font-black text-red-600 uppercase">RUSH</span>
+                                  ) : (
+                                      <span className="text-xs font-bold text-gray-800 capitalize">{selectedOrder.priorityLevel}</span>
+                                  )}
+                              </div>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-4 items-center">
+                              <div>
+                                  <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Order ID</Label>
+                                  <p className="text-sm font-bold text-gray-700">#{selectedOrder.orderNumber}</p>
+                              </div>
+                              <div>
+                                  <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Processed By</Label>
+                                  <p className="text-sm font-bold text-gray-700">{selectedOrder.processedBy || 'Current User'}</p>
+                              </div>
+                              <div className="text-right">
+                                  <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Payment Status</Label>
+                                  <span className={`text-sm font-black uppercase ${selectedOrder.paymentStatus === 'fully-paid' ? 'text-green-600' :
+                                      selectedOrder.paymentStatus === 'downpayment' ? 'text-yellow-600' : 'text-red-500'
+                                      }`}>
+                                      {selectedOrder.paymentStatus === 'fully-paid' ? 'Fully Paid' : selectedOrder.paymentStatus === 'downpayment' ? 'Downpayment' : selectedOrder.paymentStatus?.replace('-', ' ')?.replace(/\b\w/g, l => l.toUpperCase())}
+                                  </span>
+                              </div>
+                          </div>
                       </div>
-                    </>
-                  )}
-                  {(selectedOrder.paymentStatus === 'downpayment') && (
-                    <div>
-                      <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Remaining Balance</Label>
-                      <p className="text-sm font-black uppercase tracking-wider text-red-600">
-                        ₱{(selectedOrder.grandTotal - (selectedOrder.amountReceived || 0)).toFixed(2)}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
 
-              {/* Pricing Summary */}
-              <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 mt-2">
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center text-gray-600/80">
-                    <span className="text-xs font-medium uppercase tracking-wide">Base Service Fee</span>
-                    <span className="text-sm font-bold text-gray-800">₱{selectedOrder.baseServiceFee.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-gray-600/80">
-                    <span className="text-xs font-medium uppercase tracking-wide">Add-ons Total</span>
-                    <span className="text-sm font-bold text-gray-800">₱{selectedOrder.addOnsTotal.toFixed(2)}</span>
-                  </div>
-                  {selectedOrder.priorityLevel === 'rush' && (
-                    <div className="flex justify-between items-center text-gray-600/80">
-                      <span className="text-xs font-medium uppercase tracking-wide">Rush Fee</span>
-                      <span className="text-sm font-bold text-gray-800">₱{(selectedOrder.grandTotal - (selectedOrder.baseServiceFee + selectedOrder.addOnsTotal)).toFixed(2)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between items-center pt-3 border-t border-gray-200 mt-2">
-                    <span className="text-sm font-black text-gray-900 uppercase tracking-wide">Grand Total</span>
-                    <span className="text-lg font-black text-red-600">₱{selectedOrder.grandTotal.toFixed(2)}</span>
-                  </div>
-                </div>
-              </div>
+                      {/* Payment Section */}
+                      <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-3">
+                          <div className="flex items-center gap-2 mb-2">
+                              <Wallet size={16} className="text-red-500" />
+                              <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Payment Details</h4>
+                          </div>
 
-            </div>
-          )}
-        </DialogContent>
+                          <div className="grid grid-cols-2 gap-4">
+                              {selectedOrder.paymentMethod && selectedOrder.paymentStatus !== 'downpayment' && (
+                                  <div>
+                                      <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Method</Label>
+                                      <p className="text-sm font-bold text-gray-800 uppercase">
+                                          {selectedOrder.paymentMethod || '-'}
+                                      </p>
+                                  </div>
+                              )}
+                              {['gcash', 'maya'].includes(selectedOrder.paymentMethod?.toLowerCase()) && (selectedOrder.paymentStatus === 'fully-paid' || selectedOrder.paymentStatus === 'downpayment') && (
+                                  <div className="col-span-2">
+                                      <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Reference Number</Label>
+                                      <p className="text-sm font-bold text-gray-800 font-mono tracking-tight">{selectedOrder.referenceNo || '-'}</p>
+                                  </div>
+                              )}
+                              {selectedOrder.paymentStatus && (
+                                  <>
+                                      <div>
+                                          <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Amount Received</Label>
+                                          <p className="text-sm font-bold text-gray-800">₱{(selectedOrder.amountReceived || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                      </div>
+                                      {selectedOrder.change !== undefined && selectedOrder.change > 0 && (
+                                          <div className="col-span-2 pt-2 border-t border-gray-100 mt-1">
+                                              <div className="flex justify-between items-center">
+                                                  <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Customer Change</Label>
+                                                  <p className="text-sm font-bold text-green-600 underline decoration-dotted underline-offset-4">
+                                                      ₱{(selectedOrder.change || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                  </p>
+                                              </div>
+                                          </div>
+                                      )}
+                                  </>
+                              )}
+                              {selectedOrder.paymentStatus !== 'fully-paid' && (
+                                  <div className="pt-2 border-t border-gray-200/50 col-span-2 flex justify-between items-center">
+                                      <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Remaining Balance</Label>
+                                      <p className={`text-sm font-black ${((selectedOrder.grandTotal || 0) - (selectedOrder.amountReceived || 0)) > 0.01 ? 'text-red-500' : 'text-green-600'}`}>
+                                          ₱{Math.max(0, (selectedOrder.grandTotal || 0) - (selectedOrder.amountReceived || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                      </p>
+                                  </div>
+                              )}
+                          </div>
+                      </div>
+
+                      {/* Pricing Summary */}
+                      <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-2 mt-2" style={{ marginBottom: '16px' }}>
+                          <div className="flex justify-between items-center text-gray-600/80">
+                              <span className="text-xs font-medium uppercase tracking-wide">Total Quantity</span>
+                              <span className="text-sm font-bold text-gray-800">{selectedOrder.quantity || 1} {(selectedOrder.quantity || 1) === 1 ? 'Pair' : 'Pairs'}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-gray-600/80">
+                              <span className="text-xs font-medium uppercase tracking-wide">Base Service Fee</span>
+                              <span className="text-sm font-bold text-gray-800">₱{(selectedOrder.baseServiceFee || 0).toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between items-center text-gray-600/80">
+                              <span className="text-xs font-medium uppercase tracking-wide">Add-ons Total</span>
+                              <span className="text-sm font-bold text-gray-800">₱{(selectedOrder.addOnsTotal || 0).toFixed(2)}</span>
+                          </div>
+                          {selectedOrder.priorityLevel === 'rush' && (
+                              <div className="flex justify-between items-center text-gray-600/80">
+                                  <span className="text-xs font-medium uppercase tracking-wide">Rush Fee</span>
+                                  <span className="text-sm font-bold text-gray-800">₱{(selectedOrder.grandTotal - ((selectedOrder.baseServiceFee || 0) + (selectedOrder.addOnsTotal || 0))).toFixed(2)}</span>
+                              </div>
+                          )}
+                          <div className="flex justify-between items-center pt-3 border-t border-gray-200 mt-2">
+                              <span className="text-base font-black text-gray-900 uppercase tracking-tight">Grand Total</span>
+                              <span className="text-lg font-black text-red-600 tracking-tight">₱{(selectedOrder.grandTotal || 0).toFixed(2)}</span>
+                          </div>
+                      </div>
+
+                  </div>
+              )}
+          </DialogContent>
       </Dialog>
     </div>
   );

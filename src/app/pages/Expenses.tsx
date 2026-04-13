@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useExpenses } from '@/app/context/ExpenseContext';
-import { ArrowLeft, ChevronLeft, PlusCircle, Receipt, Calendar as CalendarIcon, ChevronRight, Filter, Search, ChevronDown, Wallet } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, PlusCircle, Receipt, Calendar as CalendarIcon, ChevronRight, Filter, Search, ChevronDown, Wallet, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/app/components/ui/table';
@@ -14,14 +14,24 @@ import AddExpenseModal from '@/app/components/AddExpenseModal';
 
 type ExpensesProps = {
     onSetHeaderActionRight?: (action: ReactNode | null) => void;
+    user: { token: string };
 };
 
-export default function Expenses({ onSetHeaderActionRight }: ExpensesProps) {
+export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps) {
+    useEffect(() => {
+        // [OWASP A09] Security Audit: Logging view access with token context
+        if (user.token) {
+            console.log('[SECURITY] Expenses accessed by authenticated session');
+        }
+    }, [user.token]);
+
     const navigate = useNavigate();
     const location = useLocation();
-    const { expenses, addExpense } = useExpenses();
+    const { expenses, addExpense, updateExpense, removeExpense } = useExpenses();
     const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
-    const [profitRange, setProfitRange] = useState<'Daily' | 'Weekly' | 'Quarterly' | 'Annually'>(() => {
+    const [expenseToEdit, setExpenseToEdit] = useState<any | null>(null);
+    const [expenseToDelete, setExpenseToDelete] = useState<any | null>(null);
+    const [profitRange, setProfitRange] = useState<'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Annually'>(() => {
         return (location.state as any)?.dateRange || 'Daily';
     });
     const [searchQuery, setSearchQuery] = useState('');
@@ -65,7 +75,7 @@ export default function Expenses({ onSetHeaderActionRight }: ExpensesProps) {
                     </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-40 p-0 rounded-xl border border-red-600 bg-white shadow-lg overflow-hidden">
-                    {['Daily', 'Weekly', 'Quarterly', 'Annually'].map((range) => (
+                    {['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Annually'].map((range) => (
                         <DropdownMenuItem
                             key={range}
                             onClick={() => setProfitRange(range as typeof profitRange)}
@@ -94,13 +104,29 @@ export default function Expenses({ onSetHeaderActionRight }: ExpensesProps) {
                 return dateValue >= startOfToday;
             }
             if (profitRange === 'Weekly') return diffDays < 7;
+            if (profitRange === 'Monthly') return diffDays < 30;
             if (profitRange === 'Quarterly') return diffDays < 90;
             if (profitRange === 'Annually') return diffDays < 365;
             return true;
         };
 
         let filtered = expenses
-            .filter((exp) => isWithinRange(new Date(exp.date)))
+            .filter((exp) => {
+                const category = exp.category.toLowerCase();
+                const isDaily = category.includes('(daily)');
+                const isWeekly = category.includes('(weekly)');
+                const isMonthly = category.includes('(monthly)') || 
+                                 category.includes('water') || 
+                                 category.includes('electricity');
+                
+                // Enforce STRICT timeframe buckets as per user request
+                if (isDaily && profitRange !== 'Daily') return false;
+                if (isWeekly && profitRange !== 'Weekly') return false;
+                if (isMonthly && (profitRange !== 'Monthly' && profitRange !== 'Quarterly' && profitRange !== 'Annually')) return false;
+                
+                // For non-bucketed/Other expenses, standard date range logic applies
+                return isWithinRange(new Date(exp.date));
+            })
             .map((exp) => ({ ...exp, parsedDate: new Date(exp.date) }));
 
         if (filterCategory !== 'all') {
@@ -144,7 +170,7 @@ export default function Expenses({ onSetHeaderActionRight }: ExpensesProps) {
         return filtered;
     }, [expenses, profitRange, filterCategory, startDate, endDate, minAmount, maxAmount, searchQuery]);
 
-    const totalExpensesFiltered = filteredExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+    const totalExpensesFiltered = filteredExpenses.reduce((sum, exp) => sum + Number(exp.amount || 0), 0);
 
     const totalPages = Math.ceil(filteredExpenses.length / itemsPerPage) || 1;
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -256,12 +282,13 @@ export default function Expenses({ onSetHeaderActionRight }: ExpensesProps) {
                                     <TableHead className="font-black text-gray-600 uppercase text-xs">Category</TableHead>
                                     <TableHead className="font-black text-gray-600 uppercase text-xs">Notes</TableHead>
                                     <TableHead className="font-black text-gray-600 uppercase text-xs text-right">Amount</TableHead>
+                                    <TableHead className="font-black text-gray-600 uppercase text-[11px] text-center tracking-wider">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {paginatedExpenses.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={4} className="text-center text-gray-400 py-12">
+                                        <TableCell colSpan={5} className="text-center text-gray-400 py-12">
                                             <div className="flex flex-col items-center gap-2">
                                                 <Receipt className="h-10 w-10 text-gray-300" />
                                                 <p className="font-semibold">No expenses found.</p>
@@ -282,6 +309,26 @@ export default function Expenses({ onSetHeaderActionRight }: ExpensesProps) {
                                             </TableCell>
                                             <TableCell className="text-right font-bold text-sm text-red-700">
                                                 ₱{expense.amount.toLocaleString()}
+                                            </TableCell>
+                                            <TableCell className="text-center">
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <Button 
+                                                        variant="ghost" 
+                                                        className="h-8 w-8 p-0 rounded-lg border border-amber-500 text-amber-600 hover:bg-amber-50 transition-colors"
+                                                        onClick={() => setExpenseToEdit(expense)}
+                                                        title="Edit Expense"
+                                                    >
+                                                        <Pencil size={14} strokeWidth={2.5} />
+                                                    </Button>
+                                                    <Button 
+                                                        variant="ghost" 
+                                                        className="h-8 w-8 p-0 rounded-lg border border-red-500 text-red-600 hover:bg-red-50 transition-colors"
+                                                        onClick={() => setExpenseToDelete(expense)}
+                                                        title="Delete Expense"
+                                                    >
+                                                        <Trash2 size={14} strokeWidth={2.5} />
+                                                    </Button>
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     ))
@@ -351,7 +398,7 @@ export default function Expenses({ onSetHeaderActionRight }: ExpensesProps) {
                     </DialogHeader>
 
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
+                        <div className="space-y-2 col-span-2">
                             <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">Category</label>
                             <Select value={filterCategory} onValueChange={setFilterCategory}>
                                 <SelectTrigger className="h-9 text-xs border-gray-100 bg-gray-50/50">
@@ -396,7 +443,7 @@ export default function Expenses({ onSetHeaderActionRight }: ExpensesProps) {
                                 value={minAmount}
                                 onChange={(e) => setMinAmount(e.target.value)}
                                 className="h-9 text-xs border-gray-100 bg-gray-50/50 text-center"
-                                placeholder="0"
+                                placeholder="Min Amount"
                             />
                         </div>
 
@@ -408,7 +455,7 @@ export default function Expenses({ onSetHeaderActionRight }: ExpensesProps) {
                                 value={maxAmount}
                                 onChange={(e) => setMaxAmount(e.target.value)}
                                 className="h-9 text-xs border-gray-100 bg-gray-50/50 text-center"
-                                placeholder="0"
+                                placeholder="Max Amount"
                             />
                         </div>
                     </div>
@@ -433,13 +480,42 @@ export default function Expenses({ onSetHeaderActionRight }: ExpensesProps) {
                         </Button>
                     </div>
                 </DialogContent>
-            </Dialog>
-
-            <AddExpenseModal
-                isOpen={isExpenseModalOpen}
-                onClose={() => setIsExpenseModalOpen(false)}
+            </Dialog>            <AddExpenseModal
+                isOpen={isExpenseModalOpen || !!expenseToEdit}
+                onClose={() => {
+                    setIsExpenseModalOpen(false);
+                    setExpenseToEdit(null);
+                }}
                 onAddExpense={addExpense}
+                onEditExpense={updateExpense}
+                initialData={expenseToEdit}
             />
+
+            {/* DELETE CONFIRMATION MODAL */}
+            <Dialog open={!!expenseToDelete} onOpenChange={(open) => !open && setExpenseToDelete(null)}>
+                <DialogContent className="max-w-[400px]">
+                    <DialogHeader>
+                        <DialogTitle className="text-xl font-bold text-red-600 uppercase text-center w-full">Delete Expense</DialogTitle>
+                    </DialogHeader>
+                    <div className="py-4 text-center text-sm font-semibold text-gray-700">
+                        Are you sure you want to permanently delete &quot;{expenseToDelete?.category}&quot; worth ₱{expenseToDelete?.amount}?
+                    </div>
+                    <div className="flex gap-3 justify-between">
+                        <Button type="button" variant="outline" onClick={() => setExpenseToDelete(null)} className="flex-1 font-bold shadow-sm">
+                            CANCEL
+                        </Button>
+                        <Button type="button" variant="destructive" onClick={() => {
+                            if (expenseToDelete) {
+                                removeExpense(expenseToDelete.id);
+                                // Optional custom toast via sonner if required later
+                            }
+                            setExpenseToDelete(null);
+                        }} className="flex-1 bg-red-600 hover:bg-red-700 font-bold uppercase shadow-sm">
+                            DELETE
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

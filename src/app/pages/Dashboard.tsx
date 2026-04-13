@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import axios from 'axios';
 import { format as dateFnsFormat } from 'date-fns';
 import { useLocation } from 'react-router-dom';
 import { cn } from '@/app/components/ui/utils';
@@ -8,6 +9,7 @@ import { Button } from '@/app/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { Input } from '@/app/components/ui/input';
 import EditOrderModal from '@/app/components/EditOrderModal';
+import StockUpdateModal from '@/app/components/StockUpdateModal';
 import { Label } from '@/app/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import {
@@ -26,6 +28,7 @@ import {
   Search,
   MoreVertical,
   Calendar as CalendarIcon,
+  Package,
   TrendingUp,
   TrendingDown,
   ChevronDown,
@@ -45,7 +48,7 @@ import {
   User,
   Phone,
   Clock,
-  CreditCard,
+  Wallet,
   Tag,
   MapPin,
   Truck,
@@ -60,16 +63,21 @@ import type { JobOrder } from '@/app/types';
  * @param onSetHeaderActionRight - Function to inject components into the global header's right action area.
  */
 interface DashboardProps {
-  user: { username: string; role: 'owner' | 'staff' };
+  user: { username: string; role: 'owner' | 'staff'; token: string };
   onSetHeaderActionRight?: (action: ReactNode | null) => void;
 }
 
 export default function Dashboard({ user, onSetHeaderActionRight }: DashboardProps) {
   const role = user.role;
+  const API_BASE_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '5173'))
+    ? `http://${window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname}:8000/api`
+    : '/api';
+
   const { orders, loading, refreshing, updateOrder } = useOrders();
   const { services } = useServices();
   const [isEditing, setIsEditing] = useState(false);
-  const [profitRange, setProfitRange] = useState<'Daily' | 'Weekly' | 'Quarterly' | 'Annually'>('Daily');
+  const [isUpdatingStock, setIsUpdatingStock] = useState(false);
+  const [profitRange, setProfitRange] = useState<'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Annually'>('Daily');
   // STATE: Drill-down status filter
   // When a user clicks a status card (e.g., 'New Order'), this state is set
   // and the dashboard switches to show a detailed table for that status.
@@ -109,6 +117,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
         return createdAt >= startOfToday;
       }
       if (profitRange === 'Weekly') return diffDays < 7;
+      if (profitRange === 'Monthly') return diffDays < 30;
       if (profitRange === 'Quarterly') return diffDays < 90;
       return diffDays < 365; // Annually
     };
@@ -124,10 +133,6 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
     if (!selectedStatus) return filteredOrders;
     return filteredOrders.filter(order => order.status === selectedStatus);
   }, [filteredOrders, selectedStatus]);
-
-  const assignedOrdersCount = useMemo(() => {
-    return orders.filter(o => o.assignedTo === user.username && o.status !== 'claimed').length;
-  }, [orders, user.username]);
 
   const totalSales = useMemo(() => {
     return filteredOrders.reduce((sum, order) => sum + (order.amountReceived || 0), 0);
@@ -150,48 +155,30 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
         return dateValue >= startOfToday;
       }
       if (profitRange === 'Weekly') return diffDays < 7;
+      if (profitRange === 'Monthly') return diffDays < 30;
       if (profitRange === 'Quarterly') return diffDays < 90;
       return diffDays < 365; // Annually
     };
 
-    return expenses.filter(expense => isWithinRange(new Date(expense.date)));
+    return expenses.filter(exp => {
+      const category = (exp.category || '').toLowerCase();
+      const isDaily = category.includes('(daily)');
+      const isWeekly = category.includes('(weekly)');
+      const isMonthly = category.includes('(monthly)') || 
+                        category.includes('water') || 
+                        category.includes('electricity');
+
+      if (isDaily && profitRange !== 'Daily') return false;
+      if (isWeekly && profitRange !== 'Weekly') return false;
+      if (isMonthly && (profitRange !== 'Monthly' && profitRange !== 'Quarterly' && profitRange !== 'Annually')) return false;
+
+      return isWithinRange(new Date(exp.date));
+    });
   }, [expenses, profitRange]);
 
   const totalExpenses = useMemo(() => {
-    return filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+    return filteredExpenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
   }, [filteredExpenses]);
-
-  const staffPerformance = useMemo(() => {
-    const assigned = filteredOrders.filter(order => order.assignedTo === user.username);
-    const counts = {
-      'new-order': 0,
-      'on-going': 0,
-      'for-release': 0,
-      claimed: 0,
-    };
-
-    assigned.forEach(order => {
-      if (counts[order.status as keyof typeof counts] !== undefined) {
-        counts[order.status as keyof typeof counts] += 1;
-      }
-    });
-
-    const completionRate = assigned.length ? Math.round((counts['claimed'] / assigned.length) * 100) : 0;
-    const inProgress = counts['new-order'] + counts['on-going'] + counts['for-release'];
-
-    return {
-      data: [
-        { label: 'New', value: counts['new-order'], color: '#a855f7' },
-        { label: 'On-Going', value: counts['on-going'], color: '#3b82f6' },
-        { label: 'For Release', value: counts['for-release'], color: '#f97316' },
-        { label: 'Claimed', value: counts['claimed'], color: '#16a34a' },
-      ],
-      totalAssigned: assigned.length,
-      completed: counts['claimed'],
-      inProgress,
-      completionRate,
-    };
-  }, [filteredOrders, user.username]);
 
   /**
    * MEMO: serviceVolumeData
@@ -337,6 +324,30 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
       });
     }
 
+    if (profitRange === 'Monthly') {
+      return Array.from({ length: 30 }, (_, i) => {
+        const date = new Date(now);
+        date.setDate(date.getDate() - (29 - i));
+        const dayStart = new Date(date);
+        dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(date);
+        dayEnd.setHours(23, 59, 59, 999);
+
+        return {
+          period: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          newOrders: filteredOrders.filter(order => {
+            const orderTime = new Date(order.createdAt);
+            return orderTime >= dayStart && orderTime <= dayEnd;
+          }).length,
+          releasedOrders: filteredOrders.filter(order => {
+            if (!order.actualCompletionDate) return false;
+            const releaseTime = new Date(order.actualCompletionDate);
+            return releaseTime >= dayStart && releaseTime <= dayEnd;
+          }).length,
+        };
+      });
+    }
+
     if (profitRange === 'Quarterly') {
       return Array.from({ length: 12 }, (_, i) => {
         const weekStart = new Date(now);
@@ -388,36 +399,36 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
 
   const chartTitle = 'ORDER ACTIVITY TRENDS';
 
-  // Header right action: Daily/Weekly/Monthly/Yearly filter
+  // Header right action: Navigation and contextual buttons
   useEffect(() => {
     if (!onSetHeaderActionRight) return;
 
     if (!selectedStatus) {
       onSetHeaderActionRight(
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              className="w-10 h-10 sm:w-40 flex items-center justify-center sm:justify-between rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-sm font-semibold uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:border-white focus:outline-none focus:ring-2 focus:ring-red-500"
-              aria-label="Select range"
-              type="button"
-            >
-              <CalendarIcon className="h-4 w-4 sm:mr-1 shrink-0" aria-hidden="true" />
-              <span className="hidden sm:inline truncate mx-1 flex-1 text-center">{profitRange}</span>
-              <ChevronDown className="hidden sm:block h-4 w-4 text-white shrink-0" aria-hidden="true" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-40 p-0 rounded-xl border border-red-600 bg-white shadow-lg overflow-hidden">
-            {['Daily', 'Weekly', 'Quarterly', 'Annually'].map((range) => (
-              <DropdownMenuItem
-                key={range}
-                onClick={() => setProfitRange(range as typeof profitRange)}
-                className={`uppercase px-4 py-2 text-sm font-semibold cursor-pointer ${profitRange === range ? 'bg-red-600 text-white focus:bg-red-600 focus:text-white' : 'bg-white text-red-700 hover:bg-red-100 hover:text-red-700 focus:bg-red-100 focus:text-red-700'}`}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="w-10 h-10 sm:w-40 flex items-center justify-center sm:justify-between rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-sm font-semibold uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:border-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                aria-label="Select range"
+                type="button"
               >
-                {range}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+                <CalendarIcon className="h-4 w-4 sm:mr-1 shrink-0" aria-hidden="true" />
+                <span className="hidden sm:inline truncate mx-1 flex-1 text-center">{profitRange}</span>
+                <ChevronDown className="hidden sm:block h-4 w-4 text-white shrink-0" aria-hidden="true" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40 p-0 rounded-xl border border-red-600 bg-white shadow-lg overflow-hidden animate-in slide-in-from-top-2 duration-200">
+              {['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Annually'].map((range) => (
+                <DropdownMenuItem
+                  key={range}
+                  onClick={() => setProfitRange(range as typeof profitRange)}
+                  className={`uppercase px-4 py-2 text-sm font-semibold cursor-pointer transition-colors ${profitRange === range ? 'bg-red-600 text-white focus:bg-red-600 focus:text-white' : 'bg-white text-red-700 hover:bg-red-100 hover:text-red-700 focus:bg-red-100 focus:text-red-700'}`}
+                >
+                  {range}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
       );
     } else {
       // Status drill-down view: show only filter
@@ -435,7 +446,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-40 p-0 rounded-xl border border-red-600 bg-white shadow-lg overflow-hidden">
-            {['Daily', 'Weekly', 'Quarterly', 'Annually'].map((range) => (
+            {['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Annually'].map((range) => (
               <DropdownMenuItem
                 key={range}
                 onClick={() => setProfitRange(range as typeof profitRange)}
@@ -536,13 +547,21 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
           {/* Overview Summary Section - Always Shown */}
           {!selectedStatus && (
             <Card>
-              <CardHeader className="pt-5 pb-0 mb-0">
+              <CardHeader className="pt-5 pb-0 mb-0 relative group">
                 <CardTitle className="text-center text-base font-bold text-gray-900 uppercase mb-0 pb-0 tracking-tight">Overview Summary</CardTitle>
+                <button 
+                  onClick={async () => {
+                    try { await axios.get(`${API_BASE_URL}/test-crash`); } catch(e) { /* Let global handler handle it */ }
+                  }}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity absolute top-2 right-2 text-[10px] text-red-400 font-mono border border-red-200 px-1 rounded"
+                >
+                  SIMULATE_CRASH
+                </button>
               </CardHeader>
               <CardContent className="pt-0 pb-0 mb-0 -mt-5">
                 <div className={`grid gap-2 ${role === 'owner' ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4' : 'grid-cols-1 md:grid-cols-2'}`}>
                   {/* Card 1: Total Active Orders */}
-                  <Card className="border-none shadow-md bg-white overflow-hidden relative col-span-1">
+                  <Card className={`border-none shadow-md bg-white overflow-hidden relative ${role === 'staff' ? 'col-span-1 md:col-span-2' : 'col-span-1'}`}>
                     <div className="absolute top-0 right-0 p-4 opacity-10">
                       <FileText size={48} className="text-yellow-600" />
                     </div>
@@ -551,19 +570,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                       <p className="text-2xl font-black text-yellow-600 tracking-tight">{overviewOrders.filter(o => ['new-order', 'on-going', 'for-release'].includes(o.status)).length}</p>
                     </CardContent>
                   </Card>
-
-                  {role === 'staff' && (
-                    <Card className="border-none shadow-md bg-white overflow-hidden relative col-span-1">
-                      <div className="absolute top-0 right-0 p-4 opacity-10">
-                        <ClipboardCheck size={48} className="text-green-600" />
-                      </div>
-                      <CardContent className="pt-6">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">Assigned Orders</p>
-                        <p className="text-2xl font-black text-green-600 tracking-tight">{assignedOrdersCount}</p>
-                      </CardContent>
-                    </Card>
-                  )}
-
+                  {/* Assigned Orders Removed per user request */}
                   {role === 'owner' && (
                     <>
                       {/* Card 2: Pending Payments (Red) */}
@@ -928,6 +935,17 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                                               Edit Order Detail
                                             </DropdownMenuItem>
                                           )}
+
+                                          {order.status === 'on-going' && (
+                                            <DropdownMenuItem onClick={(e) => {
+                                              e.stopPropagation();
+                                              setSelectedOrder(order);
+                                              setIsUpdatingStock(true);
+                                            }} className="border border-gray-200 rounded-md px-2.5 py-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 focus:text-emerald-800 focus:bg-emerald-100 mb-1">
+                                              <Package className="h-4 w-4 mr-2 text-emerald-600" />
+                                              Update Stock Inventory
+                                            </DropdownMenuItem>
+                                          )}
   
                                           {order.status !== 'new-order' && (
                                             <DropdownMenuItem onClick={(e) => {
@@ -1064,7 +1082,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
           )}
 
           {/* Order Details Modal */}
-          <Dialog open={!!selectedOrder && !isEditing} onOpenChange={(open) => {
+          <Dialog open={!!selectedOrder && !isEditing && !isUpdatingStock} onOpenChange={(open) => {
             if (!open) setSelectedOrder(null);
           }}
           >
@@ -1094,7 +1112,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                         <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Contact Number</Label>
                         <div className="flex items-center gap-2">
                           <Phone size={12} className="text-gray-400" />
-                          <p className="text-sm font-medium text-gray-600">{selectedOrder.contactNumber}</p>
+                          <p className="text-sm font-bold text-gray-800">{selectedOrder.contactNumber}</p>
                         </div>
                       </div>
                     </div>
@@ -1104,7 +1122,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                         <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Order Date</Label>
                         <div className="flex items-center gap-2">
                           <CalendarIcon size={12} className="text-gray-400" />
-                          <p className="text-sm font-medium text-gray-600">
+                          <p className="text-sm font-bold text-gray-800">
                             {(() => {
                               const d = new Date(selectedOrder.transactionDate || selectedOrder.createdAt);
                               return isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy HH:mm');
@@ -1200,7 +1218,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                           </div>
                           <div>
                             <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Material</Label>
-                            <p className="text-sm font-medium text-gray-600">{item.shoeMaterial || '-'}</p>
+                            <p className="text-sm font-bold text-gray-800">{item.shoeMaterial || '-'}</p>
                           </div>
                           <div>
                             <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Quantity</Label>
@@ -1228,7 +1246,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                               }
                               return null;
                             })}
-                            {Object.values(item.condition || {}).every(v => !v) && <p className="text-xs text-slate-400 italic">No issues reported</p>}
+                            {Object.values(item.condition || {}).every(v => !v) && <p className="text-xs text-slate-400 italic">No conditions applied</p>}
                           </div>
                         </div>
 
@@ -1283,7 +1301,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                         {selectedOrder.priorityLevel === 'rush' ? (
                           <span className="text-xs font-black text-red-600 uppercase">RUSH</span>
                         ) : (
-                          <span className="text-xs font-medium text-gray-500 capitalize">{selectedOrder.priorityLevel}</span>
+                          <span className="text-xs font-bold text-gray-800 capitalize">{selectedOrder.priorityLevel}</span>
                         )}
                       </div>
                       <div>
@@ -1296,7 +1314,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                   {/* Payment Section */}
                   <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-3">
                     <div className="flex items-center gap-2 mb-2">
-                      <CreditCard size={16} className="text-red-500" />
+                      <Wallet size={16} className="text-red-500" />
                       <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Payment Details</h4>
                     </div>
 
@@ -1314,7 +1332,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                         <span className={`text-sm font-black uppercase ${selectedOrder.paymentStatus === 'fully-paid' ? 'text-green-600' :
                           selectedOrder.paymentStatus === 'downpayment' ? 'text-yellow-600' : 'text-red-500'
                           }`}>
-                          {selectedOrder.paymentStatus || 'downpayment'}
+                          {selectedOrder.paymentStatus === 'fully-paid' ? 'Fully Paid' : selectedOrder.paymentStatus === 'downpayment' ? 'Downpayment' : selectedOrder.paymentStatus?.replace('-', ' ')?.replace(/\b\w/g, l => l.toUpperCase())}
                         </span>
                       </div>
                       {['gcash', 'maya'].includes(selectedOrder.paymentMethod?.toLowerCase()) && (selectedOrder.paymentStatus === 'fully-paid' || selectedOrder.paymentStatus === 'downpayment') && (
@@ -1398,6 +1416,20 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
             }}
           />
 
+          <StockUpdateModal
+            order={selectedOrder}
+            open={!!selectedOrder && isUpdatingStock}
+            onOpenChange={(open) => {
+              if (!open) {
+                setIsUpdatingStock(false);
+              }
+            }}
+            onSave={(id, updates) => {
+              updateOrder(id, updates);
+              setIsUpdatingStock(false);
+            }}
+          />
+
           < ProcessClaimModal
             order={processClaimOrder}
             open={!!processClaimOrder}
@@ -1413,9 +1445,8 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
           {
             !selectedStatus && (
               <>
-                {/* Charts - Owner Only */}
-                {role === 'owner' && (
-                  <div className="grid grid-cols-1 gap-6">
+                {/* Charts - Visible to all but revenue protected */}
+                <div className="grid grid-cols-1 gap-6">
                     <Card>
                       <CardHeader className="flex flex-col md:flex-row items-center md:items-start justify-between mt-3 py-6 gap-4">
                         <CardTitle className="text-center md:text-left text-base font-black uppercase whitespace-nowrap tracking-tight">Service Volume by Type</CardTitle>
@@ -1470,7 +1501,9 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                                     <div className="bg-white p-3 border rounded shadow-lg max-w-xs">
                                       <p className="font-semibold text-gray-900 mb-2">{data.name}</p>
                                       <p className="text-sm text-gray-600">Total Orders: {data.value}</p>
-                                      <p className="text-sm text-gray-600 mb-2">Revenue: {'\u20B1'}{data.sales.toLocaleString()}</p>
+                                      {role === 'owner' && (
+                                        <p className="text-sm text-gray-600 mb-2">Revenue: {'\u20B1'}{data.sales.toLocaleString()}</p>
+                                      )}
 
                                       {/* Show breakdown for Basic Cleaning */}
                                       {data.name === 'Basic Cleaning' && data.breakdown && (
@@ -1562,73 +1595,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                       </CardContent>
                     </Card>
                   </div>
-                )}
-
-                {role === 'staff' && (
-                  <div className="grid grid-cols-1 gap-6">
-                    <Card>
-                      <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                        <div>
-                          <CardTitle className="text-base font-black uppercase tracking-tight">Staff Performance</CardTitle>
-                          <p className="text-xs text-gray-500">Based on assigned orders within the selected range</p>
-                        </div>
-                        <div className="flex flex-col md:flex-row md:items-stretch gap-3 w-full md:w-auto">
-                          <div className="bg-white border border-gray-100 rounded-xl px-3 py-2 shadow-sm md:min-w-[150px]">
-                            <p className="text-[10px] font-black uppercase text-gray-400 tracking-wide">Assigned</p>
-                            <p className="text-lg font-black text-gray-800 leading-tight">{staffPerformance.totalAssigned}</p>
-                          </div>
-                          <div className="bg-white border border-gray-100 rounded-xl px-3 py-2 shadow-sm md:min-w-[150px]">
-                            <p className="text-[10px] font-black uppercase text-gray-400 tracking-wide">Completed</p>
-                            <p className="text-lg font-black text-green-600 leading-tight">{staffPerformance.completed}</p>
-                          </div>
-                          <div className="bg-white border border-gray-100 rounded-xl px-3 py-2 shadow-sm md:min-w-[150px]">
-                            <p className="text-[10px] font-black uppercase text-gray-400 tracking-wide">In Progress</p>
-                            <p className="text-lg font-black text-blue-600 leading-tight">{staffPerformance.inProgress}</p>
-                          </div>
-                          <div className="bg-white border border-gray-100 rounded-xl px-3 py-2 shadow-sm md:min-w-[150px]">
-                            <p className="text-[10px] font-black uppercase text-gray-400 tracking-wide">Completion Rate</p>
-                            <p className="text-lg font-black text-emerald-600 leading-tight">{staffPerformance.completionRate}%</p>
-                          </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent>
-                        {staffPerformance.totalAssigned === 0 ? (
-                          <p className="text-sm text-gray-500">No assigned orders in this range.</p>
-                        ) : (
-                          <ResponsiveContainer width="100%" height={260}>
-                            <BarChart data={staffPerformance.data} margin={{ left: 8, right: 8, bottom: 12 }}>
-                              <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                              <XAxis
-                                dataKey="label"
-                                tick={{ fontSize: 11, fontWeight: 600, fill: '#4b5563' }}
-                                axisLine={false}
-                                tickLine={false}
-                              />
-                              <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#6b7280' }} />
-                              <Tooltip
-                                cursor={{ fill: 'rgba(248, 113, 113, 0.05)' }}
-                                content={({ active, payload }) => {
-                                  if (!active || !payload || !payload.length) return null;
-                                  const item = payload[0].payload as { label: string; value: number };
-                                  return (
-                                    <div className="bg-white px-3 py-2 border border-gray-100 rounded-lg shadow-sm text-sm font-semibold text-gray-700">
-                                      {item.label}: {item.value}
-                                    </div>
-                                  );
-                                }}
-                              />
-                              <Bar dataKey="value" radius={[8, 8, 0, 0]}>
-                                {staffPerformance.data.map((item) => (
-                                  <Cell key={item.label} fill={item.color} />
-                                ))}
-                              </Bar>
-                            </BarChart>
-                          </ResponsiveContainer>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </div>
-                )}
+                {/* Staff performance Removed per user request */}
 
               </>
             )

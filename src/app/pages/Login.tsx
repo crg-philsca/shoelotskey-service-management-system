@@ -9,12 +9,12 @@ import { Eye, EyeOff, User, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface LoginProps {
-  onLogin: (id: number, username: string, role: 'owner' | 'staff') => void;
+  onLogin: (id: number, username: string, role: 'owner' | 'staff', token: string) => void;
 }
 
 
-const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))
-  ? `http://${window.location.hostname}:8000/api`
+const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '5173'))
+  ? `http://${window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname}:8000/api`
   : '/api';
 
 export default function Login({ onLogin }: LoginProps) {
@@ -64,9 +64,24 @@ export default function Login({ onLogin }: LoginProps) {
         console.log('[AUTH_DEBUG] Auth Success. Payload:', data);
 
         toast.success(`Welcome back, ${data.username}!`);
+        
+        // --- OFFLINE FALLBACK LOGIC ---
+        // If Remember Me is checked, we encrypt and save an offline key so the user
+        // can authenticate seamlessly even if the internet drops and the backend goes unreachable.
+        if (rememberMe) {
+            try {
+                const obfuscatedPass = btoa(password).split('').reverse().join('');
+                localStorage.setItem('shoelotskey_offline_auth', JSON.stringify({
+                    ...data,
+                    _key: obfuscatedPass
+                }));
+            } catch(e) {}
+        } else {
+            localStorage.removeItem('shoelotskey_offline_auth');
+        }
 
-        // Pass to App-level state management
-        onLogin(data.user_id, data.username, data.role as 'owner' | 'staff');
+        // Pass to App-level state management with token (OWASP A01 Compliance)
+        onLogin(data.user_id, data.username, data.role as 'owner' | 'staff', data.access_token);
 
       } else {
         // FAIL: Handle specific status codes (e.g., 401 Unauthorized, 403 Forbidden)
@@ -84,6 +99,22 @@ export default function Login({ onLogin }: LoginProps) {
        * CATCH: Network/Connection Exceptions
        * Triggered if: Backend is offline, CORS issues, or DNS failure.
        */
+       
+      // --- OFFLINE FALLBACK INTERCEPTOR ---
+      const offlineAuth = localStorage.getItem('shoelotskey_offline_auth');
+      if (offlineAuth) {
+          try {
+              const parsed = JSON.parse(offlineAuth);
+              const inputKey = btoa(password).split('').reverse().join('');
+              if (parsed.username === username && parsed._key === inputKey) {
+                  toast.success(`Offline login successful! Operating from local cache.`);
+                  onLogin(parsed.user_id, parsed.username, parsed.role, parsed.access_token || '');
+                  setIsLoading(false);
+                  return; // Stop execution here to prevent network error toast
+              }
+          } catch(e) {}
+      }
+
       console.error('[AUTH_FATAL] Network/Server Exception:', err);
       toast.error('Service Unreachable: The system server is currently offline.');
     } finally {

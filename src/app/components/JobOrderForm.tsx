@@ -50,9 +50,6 @@ const BRAND_MODELS: Record<string, string[]> = {
     'On Cloud': ['Cloudmonster', 'Cloudnova', 'Cloudstratus', 'Cloud 5', 'Other']
 };
 
-// DEPRECATED: Generic shoe types removed per user request to improve brand-model accuracy.
-const DEFAULT_MODELS: string[] = [];
-
 // Derived data for intelligent brand-model discovery
 const ALL_MODELS = Object.values(BRAND_MODELS).flat().filter(m => m !== 'Other');
 const MODEL_TO_BRAND: Record<string, string> = {};
@@ -1343,7 +1340,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                     <div className="flex items-center justify-between w-full translate-y-[1px]">
                         <div className="flex items-center gap-3">
                             <ClipboardList className="text-red-600" size={18} />
-                            <CardTitle className={`${CARD_TITLE_STYLE} text-slate-900`}>ORDER SUMMARY</CardTitle>
+                            <CardTitle className={`${CARD_TITLE_STYLE} text-slate-900`}>JOB ORDER SUMMARY</CardTitle>
                         </div>
                         <Button
                             type="button"

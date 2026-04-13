@@ -7,7 +7,10 @@ import { Label } from '@/app/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { Checkbox } from '@/app/components/ui/checkbox';
 import { useServices } from '@/app/context/ServiceContext';
-import type { JobOrder, JobStatus, PaymentStatus, PaymentMethod } from '@/app/types';
+import { useInventory } from '@/app/context/InventoryContext';
+import type { JobOrder, JobStatus, PaymentStatus, PaymentMethod, InventoryUsed } from '@/app/types';
+import { Package, Plus, Minus, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface EditOrderModalProps {
     order: JobOrder | null;
@@ -103,9 +106,24 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
         }
     }, [order]);
 
-    if (!formData) return null;
+    const formatReferenceNo = (value: string) => {
+        const digits = value.replace(/\D/g, '').slice(0, 12);
+        let formatted = '';
+        for (let i = 0; i < digits.length; i++) {
+            formatted += digits[i];
+            if ((i === 2 || i === 5 || i === 8) && i !== digits.length - 1) {
+                formatted += '-';
+            }
+        }
+        return formatted;
+    };
 
     const { services } = useServices();
+    const { inventoryData, updateStock } = useInventory();
+    const [selectedInventoryItem, setSelectedInventoryItem] = useState<string>('');
+    
+    if (!formData) return null;
+
     const baseServices = services.filter(s => s.category === 'base' && s.active);
     const addOnServices = services.filter(s => s.category === 'addon' && s.active);
 
@@ -194,8 +212,54 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
     };
 
 
+
+    const handleDeductStock = () => {
+        if (!formData || !formData.inventoryUsed || formData.inventoryApplied) return;
+
+        const dbId = parseInt(formData.id);
+        formData.inventoryUsed.forEach(item => {
+            updateStock(item.itemId, item.quantity, isNaN(dbId) ? undefined : dbId);
+        });
+
+        setFormData({ ...formData, inventoryApplied: true });
+        toast.success(`Updated stock levels for ${formData.inventoryUsed.length} items.`);
+    };
+
+    const handleAddInventory = (itemId: string) => {
+        const item = inventoryData.find(i => i.id.toString() === itemId);
+        if (!item) return;
+
+        const currentUsed = formData.inventoryUsed || [];
+        if (currentUsed.some(i => i.itemId === item.id)) {
+            toast.error('Item already added');
+            return;
+        }
+
+        const updatedUsed: InventoryUsed[] = [
+            ...currentUsed,
+            { itemId: item.id, name: item.name, quantity: 1, unit: item.unit }
+        ];
+        setFormData({ ...formData, inventoryUsed: updatedUsed });
+        setSelectedInventoryItem('');
+    };
+
+    const handleUpdateInventoryQty = (itemId: number, delta: number) => {
+        const updatedUsed = (formData.inventoryUsed || []).map(i => 
+            i.itemId === itemId ? { ...i, quantity: Math.max(0, parseFloat((i.quantity + delta).toFixed(2))) } : i
+        );
+        setFormData({ ...formData, inventoryUsed: updatedUsed });
+    };
+
+    const handleRemoveInventory = (itemId: number) => {
+        const updatedUsed = (formData.inventoryUsed || []).filter(i => i.itemId !== itemId);
+        setFormData({ ...formData, inventoryUsed: updatedUsed });
+    };
+
+
     const INPUT_STYLE = "w-full bg-white border-gray-200 h-10 text-sm focus:ring-red-50 focus:border-red-100 transition-all shadow-sm rounded-xl px-3";
     const LABEL_STYLE = "text-xs font-bold text-gray-600 mb-1.5 block uppercase tracking-wide";
+
+    if (!formData) return null;
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -214,7 +278,7 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                 <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 bg-gray-50/30 pb-10">
                     {/* Order Info Section */}
                     <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-                        <div className="grid grid-cols-3 gap-4">
+                        <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <Label className={LABEL_STYLE}>Order Status</Label>
                                 <Select
@@ -240,29 +304,35 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                 </Select>
                             </div>
                             <div>
-                                <Label className={LABEL_STYLE}>Priority Level</Label>
-                                <Select
-                                    value={formData.priorityLevel}
-                                    onValueChange={(val: any) => updateFormData({ priorityLevel: val })}
-                                >
-                                    <SelectTrigger className={INPUT_STYLE}><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="regular">Regular</SelectItem>
-                                        {(Array.isArray(formData.baseService) ? formData.baseService : []).includes('Basic Cleaning') && (
-                                            <SelectItem value="rush">Rush</SelectItem>
-                                        )}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
                                 <Label className={LABEL_STYLE}>Processed By</Label>
                                 <p className="h-10 flex items-center px-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold text-gray-700">
                                     {formData.processedBy || 'Current User'}
                                 </p>
                             </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <Label className={LABEL_STYLE}>Order Date</Label>
+                                <Input
+                                    type="date"
+                                    value={formData.transactionDate ? new Date(formData.transactionDate).toISOString().split('T')[0] : ''}
+                                    onChange={(e) => updateFormData({ transactionDate: new Date(e.target.value).toISOString() })}
+                                    className={INPUT_STYLE}
+                                />
+                            </div>
+                            <div>
+                                <Label className={LABEL_STYLE}>Target Release Date</Label>
+                                <Input
+                                    type="date"
+                                    value={formData.predictedCompletionDate ? new Date(formData.predictedCompletionDate).toISOString().split('T')[0] : ''}
+                                    onChange={(e) => updateFormData({ predictedCompletionDate: new Date(e.target.value).toISOString() })}
+                                    className={INPUT_STYLE}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
                             {['for-release', 'claimed'].includes(formData.status) && (
                                 <div>
                                     <Label className={LABEL_STYLE}>Release Time</Label>
@@ -431,7 +501,7 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
+                             <div className="grid grid-cols-2 gap-4">
                                 <div className="col-span-1">
                                     <Label className={LABEL_STYLE}>Quantity</Label>
                                     <Input
@@ -442,6 +512,19 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                         className={INPUT_STYLE}
                                     />
                                     <p className="text-[10px] text-gray-400 mt-1 font-medium">Selected: {formData.quantity || 1} {formData.quantity === 1 ? 'Pair' : 'Pairs'}</p>
+                                </div>
+                                <div className="col-span-1">
+                                    <Label className={LABEL_STYLE}>Priority Level</Label>
+                                    <Select
+                                        value={formData.priorityLevel}
+                                        onValueChange={(val: any) => updateFormData({ priorityLevel: val })}
+                                    >
+                                        <SelectTrigger className={INPUT_STYLE}><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="regular">Regular</SelectItem>
+                                            <SelectItem value="rush">Rush</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                             </div>
 
@@ -544,6 +627,113 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                         </div>
                     </div>
 
+                    {/* Inventory Used Section - Only visible for On-Going or beyond */}
+                    {formData.status !== 'new-order' && (
+                        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                                Inventory Used
+                            </h3>
+                            <Button 
+                                type="button"
+                                size="sm"
+                                disabled={!formData.inventoryUsed?.length || formData.inventoryApplied}
+                                onClick={handleDeductStock}
+                                className={`text-[10px] h-7 rounded-lg font-black uppercase tracking-widest px-3 border border-red-100 transition-all
+                                    ${formData.inventoryApplied 
+                                        ? 'bg-green-50 text-green-600 border-green-100 hover:bg-green-50' 
+                                        : 'bg-red-50 text-red-600 hover:bg-red-100'}`}
+                            >
+                                {formData.inventoryApplied ? 'Stock Updated' : 'Update Stock'}
+                            </Button>
+                        </div>
+                        <div className="space-y-4">
+                            <div className="flex gap-2">
+                                <div className="flex-1">
+                                    <Select 
+                                        value={selectedInventoryItem} 
+                                        onValueChange={setSelectedInventoryItem}
+                                    >
+                                        <SelectTrigger className="h-10 rounded-xl border-gray-200">
+                                            <SelectValue placeholder="Select Supply/Chemical" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {inventoryData.filter(i => i.isActive).map(item => (
+                                                <SelectItem key={item.id} value={item.id.toString()}>
+                                                    {item.name} ({item.stock} {item.unit})
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <Button 
+                                    type="button" 
+                                    onClick={() => handleAddInventory(selectedInventoryItem)}
+                                    disabled={!selectedInventoryItem}
+                                    className="bg-red-600 hover:bg-red-700 h-10 w-10 p-0 rounded-xl"
+                                >
+                                    <Plus className="h-4 w-4" />
+                                </Button>
+                            </div>
+
+                            <div className="space-y-2">
+                                {(formData.inventoryUsed || []).map((item) => (
+                                    <div key={item.itemId} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                        <div className="flex items-center gap-3">
+                                            <div className="h-8 w-8 rounded-lg bg-white flex items-center justify-center text-red-600 shadow-sm border border-gray-100">
+                                                <Package size={16} />
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-bold text-gray-900">{item.name}</p>
+                                                <p className="text-[10px] text-gray-400 font-medium uppercase">{item.unit}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex items-center gap-1 bg-white rounded-lg border border-gray-100 p-0.5">
+                                                <button 
+                                                    onClick={() => handleUpdateInventoryQty(item.itemId, -1)}
+                                                    className="h-6 w-6 flex items-center justify-center text-gray-400 hover:text-red-600 transition-colors"
+                                                >
+                                                    <Minus size={12} />
+                                                </button>
+                                                <input 
+                                                    type="number"
+                                                    step="any"
+                                                    value={item.quantity}
+                                                    onChange={(e) => {
+                                                        const val = parseFloat(e.target.value) || 0;
+                                                        const updatedUsed = (formData.inventoryUsed || []).map(i => 
+                                                            i.itemId === item.itemId ? { ...i, quantity: val } : i
+                                                        );
+                                                        setFormData({ ...formData, inventoryUsed: updatedUsed });
+                                                    }}
+                                                    className="text-[10px] font-black w-[30px] text-center bg-transparent border-none focus:ring-0 p-0"
+                                                />
+                                                <button 
+                                                    onClick={() => handleUpdateInventoryQty(item.itemId, 1)}
+                                                    className="h-6 w-6 flex items-center justify-center text-gray-400 hover:text-green-600 transition-colors"
+                                                >
+                                                    <Plus size={12} />
+                                                </button>
+                                            </div>
+                                            <button 
+                                                onClick={() => handleRemoveInventory(item.itemId)}
+                                                className="text-gray-300 hover:text-red-500 transition-colors"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                                {(!formData.inventoryUsed || formData.inventoryUsed.length === 0) && (
+                                    <p className="text-[10px] text-gray-400 text-center py-2 italic">No items recorded for this order</p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                    )}
+                    
                     {/* Financials & Payment */}
                     <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100 space-y-4">
                         <div className="space-y-2">
@@ -571,8 +761,8 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                 <Select value={formData.paymentStatus} onValueChange={(val: PaymentStatus) => setFormData({ ...formData, paymentStatus: val })}>
                                     <SelectTrigger className="h-10 bg-white border-gray-200 rounded-xl text-xs"><SelectValue /></SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="downpayment">Partial</SelectItem>
-                                        <SelectItem value="fully-paid">Paid</SelectItem>
+                                        <SelectItem value="downpayment">Downpayment</SelectItem>
+                                        <SelectItem value="fully-paid">Fully Paid</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -624,9 +814,9 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                 <Label className={LABEL_STYLE}>Reference Number</Label>
                                 <Input
                                     value={formData.referenceNo || ''}
-                                    onChange={(e) => setFormData({ ...formData, referenceNo: e.target.value })}
+                                    onChange={(e) => setFormData({ ...formData, referenceNo: formatReferenceNo(e.target.value) })}
                                     className={INPUT_STYLE}
-                                    placeholder="Enter reference number"
+                                    placeholder="XXXX-XXXX-XXXX"
                                 />
                             </div>
                         )}

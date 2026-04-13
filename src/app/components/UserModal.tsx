@@ -55,7 +55,7 @@ export default function UserModal({ isOpen, onClose, user, onSave }: UserModalPr
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="max-w-md">
                 <DialogHeader>
-                    <DialogTitle className="text-xl font-bold uppercase text-red-600 text-center">
+                    <DialogTitle className="text-[12px] font-black uppercase tracking-widest text-center">
                         {user ? 'Edit User' : 'New User'}
                     </DialogTitle>
                 </DialogHeader>
@@ -118,7 +118,7 @@ export default function UserModal({ isOpen, onClose, user, onSave }: UserModalPr
                             <SelectTrigger className="font-medium border-red-200 focus:ring-0 focus:border-red-600">
                                 <SelectValue placeholder="Select role" />
                             </SelectTrigger>
-                            <SelectContent className="bg-red-50">
+                            <SelectContent>
                                 <SelectItem value="staff">Staff</SelectItem>
                                 <SelectItem value="owner">Owner</SelectItem>
                             </SelectContent>

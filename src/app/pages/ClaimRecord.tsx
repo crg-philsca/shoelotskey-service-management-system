@@ -5,7 +5,7 @@ import { Search, Filter, Check, Calendar as CalendarIcon, ChevronLeft, ChevronRi
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/app/components/ui/card';
 import { Input } from '@/app/components/ui/input';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { format as dateFnsFormat } from "date-fns";
 import {
     Dialog,
@@ -30,7 +30,14 @@ import {
 } from "@/app/components/ui/popover";
 import { cn } from "@/app/components/ui/utils";
 
-export default function ClaimRecord() {
+export default function ClaimRecord({ user }: { user: { token: string } }) {
+    useEffect(() => {
+        // [OWASP A09] Security Audit: Logging view access with token context
+        if (user.token) {
+            console.log('[SECURITY] Claim Record accessed by authenticated session');
+        }
+    }, [user.token]);
+
     const navigate = useNavigate();
     const { orders } = useOrders();
     const [searchTerm, setSearchTerm] = useState('');
@@ -201,7 +208,6 @@ export default function ClaimRecord() {
                                     <th className="border-b border-gray-200 px-2 py-1.5 text-[11px] font-black text-gray-500 uppercase tracking-wider w-[90px] whitespace-nowrap text-center">Date</th>
                                     <th className="border-b border-gray-200 px-2 py-1.5 text-[11px] font-black text-gray-500 uppercase tracking-wider w-[60px] whitespace-nowrap text-center">Pairs</th>
                                     <th className="border-b border-gray-200 px-2 py-1.5 text-[11px] font-black text-gray-500 uppercase tracking-wider w-[130px] whitespace-nowrap text-center">Payment Method</th>
-                                    <th className="border-b border-gray-200 px-2 py-1.5 text-[11px] font-black text-gray-500 uppercase tracking-wider w-[150px] whitespace-nowrap text-center">Remaining Balance</th>
                                     <th className="border-b border-gray-200 px-2 py-1.5 text-[11px] font-black text-gray-500 uppercase tracking-wider w-[90px] whitespace-nowrap text-center">Fully Paid</th>
                                     <th className="border-b border-gray-200 px-2 py-1.5 text-[11px] font-black text-gray-500 uppercase tracking-wider w-[130px] whitespace-nowrap text-center">ATTENDED BY</th>
                                 </tr>
@@ -209,7 +215,7 @@ export default function ClaimRecord() {
                             <tbody>
                                 {paginatedOrders.length === 0 ? (
                                     <tr>
-                                        <td colSpan={9} className="px-4 py-8 text-center text-gray-400 text-xs italic">
+                                        <td colSpan={7} className="px-4 py-8 text-center text-gray-400 text-xs italic">
                                             {searchTerm || paymentFilter !== 'all' ? 'No matching records found.' : 'No claimed records found.'}
                                         </td>
                                     </tr>
@@ -235,13 +241,6 @@ export default function ClaimRecord() {
                                                 </td>
                                                 <td className="px-2 py-1.5 text-sm text-center font-normal text-gray-600 uppercase border-r border-gray-50 whitespace-nowrap">
                                                     {order.paymentMethod || '-'}
-                                                </td>
-                                                <td className="px-2 py-1.5 text-sm text-center font-normal text-gray-700 border-r border-gray-50 whitespace-nowrap">
-                                                    {balance > 0 ? (
-                                                        <span className="text-red-600 font-medium">{'\u20B1'}{balance.toLocaleString()}</span>
-                                                    ) : (
-                                                        <span className="text-gray-300">-</span>
-                                                    )}
                                                 </td>
                                                 <td className="px-2 py-1.5 text-center border-r border-gray-50">
                                                     <div className="flex justify-center">

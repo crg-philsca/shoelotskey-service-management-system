@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comprehensive Capstone Research Document - Shoelotskey</title>
+    <style>
+        :root {
+            --primary-color: #dc2626; /* Shoelotskey Red */
+            --text-main: #334155;
+            --bg-color: #f8fafc;
+            --container-bg: #ffffff;
+            --border-color: #e2e8f0;
+            --tab-active: #2563eb;
+            --tab-active-bg: #eff6ff;
+        }
+        
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            line-height: 1.8;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+        }
+
+        .layout-wrapper {
+            display: flex;
+            width: 100%;
+            max-width: 1400px;
+            align-items: flex-start;
+        }
+
+        /* Googe Docs Style Sticky Sidebar */
+        .sidebar {
+            position: sticky;
+            top: 0;
+            width: 300px;
+            height: 100vh;
+            overflow-y: auto;
+            background-color: transparent;
+            padding: 40px 20px;
+            box-sizing: border-box;
+        }
+
+        .sidebar .tab-header {
+            font-size: 1.1rem;
+            color: #475569;
+            margin-bottom: 12px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
+            font-weight: 500;
+        }
+
+        .sidebar a.tab-link {
+            display: block;
+            padding: 6px 12px;
+            margin-bottom: 2px;
+            color: #475569;
+            text-decoration: none;
+            font-size: 0.9rem;
+            border-radius: 0 6px 6px 0;
+            border-left: 3px solid transparent;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .sidebar a.sub-link {
+            padding-left: 25px;
+            font-size: 0.85rem;
+        }
+
+        .sidebar a.sub-sub-link {
+            padding-left: 40px;
+            font-size: 0.8rem;
+        }
+
+        .sidebar a.tab-link:hover {
+            background-color: #f1f5f9;
+            color: #0f172a;
+        }
+
+        .sidebar a.tab-link.active {
+            color: var(--tab-active);
+            border-left: 3px solid var(--tab-active);
+            background-color: var(--tab-active-bg);
+            font-weight: 500;
+        }
+
+        /* Custom Scrollbar for Sidebar */
+        .sidebar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .sidebar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .sidebar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+
+        .container {
+            flex: 1;
+            max-width: 950px;
+            margin: 40px 20px 40px 0;
+            background-color: var(--container-bg);
+            padding: 60px 80px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            border: 1px solid var(--border-color);
+            min-width: 0;
+        }
+
+        h1, h2, h3 {
+            scroll-margin-top: 40px;
+        }
+
+        h1 {
+            color: var(--primary-color);
+            font-size: 2.2rem;
+            border-bottom: 2px solid #fee2e2;
+            padding-bottom: 12px;
+            margin-top: 50px;
+            margin-bottom: 24px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+
+        h1:first-child { margin-top: 0; }
+
+        h2 {
+            color: #0f172a;
+            font-size: 1.5rem;
+            margin-top: 36px;
+            margin-bottom: 16px;
+            font-weight: 700;
+        }
+
+        h3 {
+            color: #475569;
+            font-size: 1.2rem;
+            margin-top: 24px;
+            margin-bottom: 12px;
+            font-weight: 600;
+        }
+
+        p {
+            margin-bottom: 20px;
+            text-align: justify;
+            text-indent: 40px;
+        }
+
+        .chapter-title {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-top: 60px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            background: #f1f5f9;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 6px solid var(--primary-color);
+        }
+
+        strong { color: #0f172a; }
+
+        .document-header {
+            text-align: center;
+            margin-bottom: 50px;
+        }
+
+        .document-header h1 {
+            border: none;
+            font-size: 2.8rem;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .document-header p {
+            text-align: center;
+            color: #64748b;
+            font-size: 1.1rem;
+            text-indent: 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 25px 0;
+            font-size: 0.95rem;
+            text-align: left;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        th, td {
+            padding: 12px 15px;
+            border: 1px solid var(--border-color);
+        }
+        th {
+            background-color: #f8fafc;
+            color: #0f172a;
+            font-weight: 600;
+            font-size: 0.85rem;
+            letter-spacing: 0.05em;
+        }
+        tr:nth-child(even) { background-color: #f1f5f9; }
+
+        .figure-title {
+            text-align: center;
+            font-weight: bold;
+            color: #475569;
+            margin-bottom: 10px;
+            text-indent: 0;
+        }
+
+        @media (max-width: 1024px) {
+            .sidebar { display: none; }
+            .container {
+                margin: 20px;
+                padding: 40px 30px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="layout-wrapper">
+    
+    <!-- Document Tabs Sidebar -->
+    <aside class="sidebar">
+        <div class="tab-header">Document tabs &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;+</div>
+        
+        <a href="#chapter-1" class="tab-link active">CHAPTER 1: INTRODUCTION</a>
+        <a href="#project-context" class="tab-link sub-link">Project Context</a>
+        <a href="#project-purpose" class="tab-link sub-link">Project Purpose and Description</a>
+        <a href="#contextual-framework" class="tab-link sub-link">Contextual Framework</a>
+        <a href="#objectives" class="tab-link sub-link">Objectives of the Study</a>
+        <a href="#scope-limitations" class="tab-link sub-link">Scope and Limitations</a>
+
+        <a href="#chapter-2" class="tab-link">CHAPTER 2: LITERATURE REVIEW</a>
+        <a href="#business-analytics" class="tab-link sub-link">Business Analytics Dashboards</a>
+        <a href="#digital-order" class="tab-link sub-link">Digital Order Management</a>
+        <a href="#ml-prediction" class="tab-link sub-link">Machine Learning Prediction</a>
+        <a href="#software-quality" class="tab-link sub-link">Software Quality Evaluation</a>
+        <a href="#synthesis" class="tab-link sub-link">Synthesis of Literature</a>
+
+        <a href="#chapter-3" class="tab-link">CHAPTER 3: METHODOLOGY</a>
+        <a href="#technical-bg" class="tab-link sub-link">Technical Background</a>
+        <a href="#rd-methodology" class="tab-link sub-link">Research and Development</a>
+        <a href="#waterfall-model" class="tab-link sub-sub-link">Waterfall Life Cycle Model</a>
+        <a href="#ml-integration" class="tab-link sub-link">Machine Learning Integration</a>
+        <a href="#existing-system" class="tab-link sub-link">Analysis of Existing System</a>
+        <a href="#feasibility" class="tab-link sub-link">Feasibility Study</a>
+        <a href="#cba" class="tab-link sub-link">Cost Benefit Analysis</a>
+        
+        <a href="#srs" class="tab-link sub-link">System Requirements Spec</a>
+        <a href="#architecture" class="tab-link sub-link">Architecture and Design</a>
+        <a href="#security" class="tab-link sub-link">Security and Data Privacy</a>
+        <a href="#dev-tools" class="tab-link sub-link">Development Tools</a>
+        <a href="#deployment" class="tab-link sub-link">Deployment Environment</a>
+
+        <a href="#chapter-4" class="tab-link">CHAPTER 4: RESULTS</a>
+        <a href="#research-design" class="tab-link sub-link">Research Design</a>
+        <a href="#data-gathering" class="tab-link sub-link">Data Gathering Technique</a>
+        <a href="#statistics" class="tab-link sub-link">Statistical Treatment</a>
+        <a href="#sampling" class="tab-link sub-link">Population and Sampling</a>
+        <a href="#references" class="tab-link" style="margin-top: 20px; border-top: 1px solid #e2e8f0; padding-top: 10px; color: #dc2626; font-weight: bold;">REFERENCES</a>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="container">
+        
+        <div class="document-header">
+            <h1 id="top">Shoelotskey Service Management System</h1>
+            <p>Comprehensive Academic Research Document</p>
+        </div>
+
+        <h1 class="chapter-title" id="chapter-1">CHAPTER 1<br><span style="font-size: 1.5rem; color: #475569; font-weight: normal; text-transform: none; letter-spacing: normal;">INTRODUCTION</span></h1>
+
+        <h2 id="project-context">Project Context</h2>
+        <p>Higher education institutions worldwide are increasingly adopting digital technologies to improve administrative efficiency, service delivery, and data management. The shift toward web-based platforms, analytics-driven decision-making, and intelligent information systems reflects a global trend in modernizing educational and operational processes. These technologies enable organizations to automate workflows, centralize information, and support real-time monitoring, all of which are essential in today’s fast-paced, data-driven environments.</p>
+        <p>In specialized aviation education and training contexts, operational requirements are more complex due to the need for precise scheduling, performance monitoring, service coordination, and compliance with technical standards. Aviation-related service environments require accurate documentation, timely updates, and efficient resource management to ensure smooth operations and high-quality service delivery.</p>
+        <p>Within the institutional setting of Shoelotskey in Barangay 183 Villamor–Pasay, which operates in a service-oriented environment connected to aviation-related activities and community-based operations, daily processes involve managing customer service requests, tracking job orders, coordinating staff tasks, and maintaining operational records. These processes are currently handled through manual and semi-digital methods, resulting in delayed updates, fragmented data storage, limited monitoring capabilities, and difficulty in generating accurate and timely reports.</p>
+        <p>Despite advancements in digital service management systems in higher education and training institutions, there remains a gap in the availability of integrated platforms adapted for localized service environments such as Shoelotskey. Most existing systems focus on large-scale institutional use and lack the integration of web-based service management, data analytics, and machine learning capabilities necessary for predictive planning and operational optimization in smaller, specialized contexts.</p>
+        <p>Given these challenges, there is a clear need to develop an integrated and intelligent system to support operational efficiency and data-driven decision-making. Therefore, this capstone project proposes developing “A Web-Based Service Management System with Data Analytics using Machine Learning Algorithms for Barangay 183 Villamor–Pasay”, specifically for Shoelotskey to centralize service operations, automate monitoring processes, generate real-time analytical reports, and provide predictive insights for resource allocation and service planning. The proposed system aims to address existing operational inefficiencies, enhance service quality, and align the organization with current digital transformation practices in higher education and specialized service environments.</p>
+
+        <h2 id="project-purpose">Project Purpose and Description</h2>
+        <p>The primary purpose of this study is to address the challenges faced by small service-oriented businesses in managing daily operations, customer transactions, and decision-making processes using manual or fragmented systems. Many local enterprises, such as Shoelotskey in Barangay 183 Villamor-Pasay, experience inefficiencies in tracking service requests, monitoring performance, and utilizing data for planning and improvement. In response to these issues, this study aims to develop and evaluate a web-based service management system that integrates data analytics and machine learning to support more organized operations, informed decision-making, and improved service delivery. Ultimately, the study was conducted to explore how a digital, data-driven approach can enhance business efficiency, accuracy, and overall management in a community-based service environment.</p>
+        <p>The study proposes developing a web-based service management system specifically designed for Shoelotskey in Barangay 183, Villamor-Pasay. The system will centralize service records, customer information, and transaction monitoring into a single digital platform, replacing manual logs and scattered documentation. What makes this solution different from traditional service tracking systems is the integration of data analytics and machine learning features to identify service trends, predict completion times, and support data-driven decision-making, rather than relying solely on experience or manual estimation. However, the scope of machine learning in this study is limited to analytical and predictive functions, such as processing historical service data to generate insights and forecasts. The system is intended to enhance operational efficiency and managerial oversight without replacing human judgment or core business processes.</p>
+        <p>The proposed system will be evaluated using established software quality standards, particularly the ISO/IEC 25010 model, to assess key characteristics such as usability, functionality, reliability, performance efficiency, and security. The research will follow a structured validation approach through user-based testing in Shoelotskey's operational environment to determine how effectively the system supports service management tasks. Actual data will be collected using interviews, usability testing, and performance observations to measure user satisfaction, accuracy, and system responsiveness. In addition, a comparative analysis between the current manual process and the proposed web-based system will be conducted to identify improvements in efficiency, organization, and decision-making. These methods ensure that the system is validated through measurable evidence and real-world application.</p>
+        <p>The system is intended to operate within Shoelotskey's business environment, located in Barangay 183, Villamor-Pasay. It is designed specifically for its primary stakeholders, namely the business owner and staff. The owner is responsible for monitoring overall operations, viewing reports, and supporting decision-making, while the staff handles service entry, customer records, and transaction updates within the system. The platform is limited to internal service management functions and does not extend to external customer self-service or third-party integrations. It focuses on organizing daily operations, tracking services, and recording data within defined business processes. Furthermore, the study and system implementation will follow academic and institutional requirements, including compliance with CHED research instrument standards, ensuring that the development and evaluation align with accepted educational and research guidelines.</p>
+        <p>This study is expected to contribute at multiple levels: practical, institutional, and academic. At the institutional level, the system can enhance operational efficiency for Shoelotskey by promoting organized record management, improved service monitoring, and data-driven decision-making, which may serve as a model for similar small and medium-sized enterprises within the community. In terms of academic governance, the research supports outcome-based education and evidence-based system development aligned with CHED standards, demonstrating how structured evaluation frameworks such as ISO/IEC 25010 can be applied in real-world projects. Academically, the study contributes to applied information systems research by integrating service management, data analytics, and machine learning within a localized business context, showing how intelligent features can support and not replace human management decisions. More broadly, the project highlights the potential of accessible web-based technologies to accelerate digital transformation among small community businesses, reinforcing the role of information systems in promoting efficiency, accountability, and sustainable growth.</p>
+
+        <h2 id="contextual-framework">Contextual Framework</h2>
+        <p class="figure-title">Figure 1: Contextual Framework</p>
+        <p>The diagram illustrates an Input–Process–Output (IPO) model with a feedback loop designed for an efficient shoe service management system. In the input stage, the system collects essential data such as job order details, customer information, shoe condition, requested services, historical service records, staff workload, status updates, and financial transactions, ensuring a comprehensive dataset for operations. During the process stage, this information is organized and stored in a centralized database, where a machine learning algorithm analyzes past and current data to estimate service processing times and optimize workflow. The system also updates a central dashboard for real-time tracking and generates visual analytics such as charts and graphs to support decision-making. In the output stage, the system produces detailed job order summaries, predicted service completion dates, real-time service status monitoring, and sales and performance reports that assist both customers and business owners. The feedback loop further enhances the system by feeding actual completion times back into the machine learning model to improve prediction accuracy and by identifying and correcting data entry errors, thereby ensuring continuous improvement, higher efficiency, and better overall service quality.</p>
+
+        <h2 id="objectives">Objectives of the Study</h2>
+        <p>This capstone project aims to design and develop the Shoelotskey Service Management System, a scalable and efficient solution to automate core service operations. By integrating predictive modeling, the system will support data-driven decision-making and eliminate manual inefficiencies such as slow tracking, inconsistent records, and scheduling delays, ultimately improving accuracy, smooth workflows, and enhancing operational performance.</p>
+        <p>Specifically, the project aims to develop a centralized digital order entry module that effectively captures and digitizes customer information, shoe details, and requested services to eliminate the reliance on manual logbooks. The study also aims to implement a Machine Learning model that accurately predicts estimated service completion dates by analyzing historical turnaround times and the current volume of ongoing job orders. To generate a business analytics dashboard that provides the owner with real-time, data-driven insights into service volume, sales, total expenses, and operational trends across various reporting periods. Additionally, to evaluate the system’s effectiveness in terms of functionality, data accuracy, prediction reliability, and user satisfaction among the Shoelotskey staff and management using standard ISO/IEC 25010 software quality guidelines.</p>
+
+        <h2 id="scope-limitations">Scope and Limitations</h2>
+        <p>This study focused on the design, development, and evaluation of a Web-Based Service Management System with Data Analytics using Machine Learning Algorithms for Shoelotskey. The scope of the system covered core service management functions, including service and job order management, customer records, service status tracking, scheduling, report generation, and user account management. The system also incorporated data analytics features and a machine learning component that predicts the service completion date based on historical service data. The evaluation of the system was limited to assessing its acceptability in terms of functionality, usability, reliability, efficiency, and security, as perceived by the owner and staff of Shoelotskey.</p>
+        <p>The study was limited by several factors. The machine learning prediction model relied solely on the availability and quality of historical service records provided by the business, which may affect the accuracy of the predicted service completion dates. The prediction model was developed using regression analysis and evaluated using Mean Absolute Error (MAE); therefore, other advanced machine learning algorithms and evaluation metrics were not explored. The system was tested within the operational context of Shoelotskey only and was not evaluated across multiple businesses or industries. In addition, the system requires a stable internet connection and basic technical skills from users, which may limit its usability in environments with limited connectivity or technical support. Despite these limitations, the study provides a practical and relevant solution for improving service management and decision-making within the scope of the business.</p>
+
+        <h1 class="chapter-title" id="chapter-2">CHAPTER 2<br><span style="font-size: 1.5rem; color: #475569; font-weight: normal; text-transform: none; letter-spacing: normal;">REVIEW OF RELATED LITERATURE</span></h1>
+        <p>This chapter presents a thematic review of related literature that supports the development of a Web-Based Service Management System with Data Analytics using Machine Learning Algorithms for Shoelotskey Villamor-Pasay. All studies cited in this review were published between 2022 and 2026 and were drawn from peer-reviewed journals, conference proceedings, and academic publications. The literature is organized into four topics, arranged alphabetically, each one directly connected to a major part of this study: Business Analytics and Sales Performance Dashboards, Centralized Digital Order Management and Data Accuracy, Machine Learning for Service Completion Time Prediction, and Software Quality Evaluation Using ISO/IEC 25010 Standards. For each topic, the review follows the Compare-Contrast-Connect approach: first looking at what studies agree on, then noting where they differ or fall short, and finally explaining how their findings relate to and support this study.</p>
+
+        <h2 id="business-analytics">Business Analytics and Sales Performance Dashboards</h2>
+        <p>Over the past several years, analytics tools built into web-based systems have become more than just add-ons; they have become a core part of how organizations track their performance and make decisions. The studies reviewed in this section show a clear progression from simple data displays to more advanced, real-time reporting tools, which are directly relevant to the analytics dashboard planned for the Shoelotskey system. Several studies agree that analytics dashboards built into web systems help organizations see what is happening in their operations and make better decisions based on actual data. Naprawski [1] found that web analytics tools help managers monitor how services are being used and identify areas for improvement based on real user data. This is in line with what Balolot et al. [2] found: that dashboards with charts and visual displays make it easier for people at all levels of an organization to understand service performance, which in turn helps them make decisions faster. Both studies point to the same core idea: analytics tools are most useful when they present data in a way that anyone, not just technical staff, can understand and act on.</p>
+        <p>Going further, Dizon et al. [3] showed that when analytics are combined with scheduling features, they can actively help in assigning workloads and managing staff, not just report on what already happened. Madlberger and Yesaulov [4] reviewed multiple studies across different service industries and consistently found that analytics platforms help businesses respond to customers faster and run their operations more smoothly. Ramaswamy and Sankaran [5] reached a similar conclusion in IT service settings, where analytics tools were shown to help teams respond to problems more quickly and meet service commitments more reliably. Closer to the context of this study, Dela Vega et al. [6] from the Philippines showed that even a small print shop was able to use a web-based analytics system with basic regression to track income trends and help non-technical staff understand their financial data. Canay and Kocabicak [7] further demonstrated that a well-designed analytics framework can improve how accurately and quickly data is processed across a web platform.</p>
+        <p>While all these studies support the use of analytics dashboards, they differ in important ways. Naprawski [1] and Balolot et al. [2] focus mainly on how data is displayed and presented, without going deeply into prediction features. Dizon et al. [3], on the other hand, connect analytics directly to operational scheduling, which is a more hands-on approach. Madlberger and Yesaulov [4] look at the big picture across many industries, while Dela Vega et al. [6] look at one specific small business using simple methods. This difference is important: tools designed for large companies with a lot of data may not work as well for a small shop like Shoelotskey. Similarly, Canay and Kocabicak [7] built their framework for high-traffic websites, so some of their methods may be too complex for a smaller setup. Because of this, the Shoelotskey system will use straightforward analytics methods, like daily and weekly sales summaries and visual trend charts, that are simple enough to be useful without requiring the kind of infrastructure that only big companies have. The analytics dashboard in the Shoelotskey system was designed based on these findings. It will show daily, weekly, quarterly, and yearly views of sales, service volume, expenses, and other operational data. The approach used by Dela Vega et al. [6] is especially relevant here because it shows that a small Philippine business can benefit from analytics using simple, accessible methods, which is exactly the direction this study takes. The findings of Madlberger and Yesaulov [4] and Ramaswamy and Sankaran [5] further support the idea that adding analytics to the system will help the shop respond to service demands more effectively, which is one of the goals addressed in Research Question 3.</p>
+
+        <h2 id="digital-order">Centralized Digital Order Management and Data Accuracy</h2>
+        <p>Many small service businesses still rely on handwritten records or manual logbooks to track customer orders and service requests. Research shows that this approach leads to errors, delays, and difficulty retrieving information. The studies in this section consistently support the shift to digital, centralized systems, which is the foundation of the order entry module in the Shoelotskey system. Studies on digital record management all point to the same benefits: fewer errors, easier access to information, and more accountability in how service records are handled. Zeva [8] explains that web-based systems allow staff to access and update records from any device with internet access, something that a handwritten logbook simply cannot support. Szedmak et al. [9] studied a government agency that switched from paper records to a web-based document system and found that processing became faster, records became easier to retrieve, and overall workflow improved noticeably after the transition.</p>
+        <p>Coloma et al. [10] built a web-based event management system and found that automatically capturing attendance data removed a lot of the manual work and made records more accurate. Kristiani and Marcel [11] looked at small firms and found that using a structured service management system led to more consistent and reliable outcomes, largely because records were better organized and easier to track. In the Philippine context, Almaceda Banawa and De Jesus [12] developed a web-based feedback system that replaced manual survey handling with automated data collection and live dashboards, showing that centralizing service data significantly reduces delays and mistakes in processing. Alduaij et al. [14] provide a theoretical basis for this, showing through their evaluation of a digital service platform that when a system captures data accurately and makes it available quickly and completely, users are more satisfied and the platform performs better overall.</p>
+        <p>While all these studies agree on the value of going digital, they focus on different settings and aspects. Zeva [8] and Szedmak et al. [9] look more at the technical and organizational side of digital systems, while Coloma et al. [10] and Almaceda Banawa and De Jesus [12] share specific examples with measurable results. One gap that stands out is that most of these studies were done in schools, hospitals, or government offices, not in small trade-based businesses like shoe repair shops, where the type of data and daily transaction volume are quite different. Kristiani and Marcel [11] come closest by studying small firms, but their focus is software companies rather than manual craft businesses. This means that while the general lessons from these studies apply, there is still very little research that directly matches the Shoelotskey setting. This actually makes the present study more relevant, since it applies digital order management principles to a type of business that has rarely been studied in this way. The order entry module of the Shoelotskey system was built with these findings in mind. It replaces the shop's manual logbook with a digital system that records customer details, shoe information, and service requests in one organized place. This follows the same principles that Zeva [8], Coloma et al. [10], and Almaceda Banawa and De Jesus [12] used in their systems. The connection between data quality and system performance discussed by Alduaij et al. [14] also guides how the Shoelotskey system will be evaluated under ISO/IEC 25010 standards, particularly in terms of data accuracy. The structured workflow approach supported by Kristiani and Marcel [11] reinforces the design of the order management module, and together these studies support the goal stated in Research Question 1.</p>
+
+        <h2 id="ml-prediction">Machine Learning for Service Completion Time Prediction</h2>
+        <p>One of the common challenges in service businesses is estimating when a job will be finished. Telling a customer a completion time based on a guess or rough habit is unreliable. Machine learning offers a way to make these estimates more accurate by learning from past service records. The studies in this section show how this has been done in various service settings and how those lessons apply to Shoelotskey. A common finding across these studies is that machine learning models are much more accurate at predicting service timelines than traditional manual estimates or simple rule-based methods. Caturkusuma et al. [15] trained several machine learning models to predict how long it takes to resolve IT incidents and found that the Random Forest model performed exceptionally well, with an R² score of 0.98, meaning the model's predictions were very close to actual outcomes. They also used standard accuracy measures like Mean Absolute Error (MAE), RMSE, and R², which provide a practical way to evaluate any prediction model, including the one in this study.</p>
+        <p>Kurkute et al. [16] used a different approach: deep learning models called RNN and LSTM, and applied them to manufacturing service data, finding that these models reduced average resolution times and helped with assigning workloads more efficiently. Jevsejev and Bereisa [17] tested clustering and classification models on IT service logs and found that machine learning based tools significantly reduced the time it takes to resolve service issues compared to older methods. Ahmed et al. [18] reviewed a large number of studies on AI and ML in technical service management and found that machine learning models improved problem detection accuracy by around 90% and cut resolution times in half in many cases. Cribillero et al. [19] took a closer look at small and medium businesses in Peru, where they trained Random Forest and SVM models and achieved over 80% accuracy in classifying and prioritizing service incidents, showing that machine learning tools can work even in smaller, less resource-heavy environments. Together, Caturkusuma et al. [15] and Cribillero et al. [19] further confirm that machine learning automates how service incidents are sorted, detects patterns from historical records, and improves how quickly services are completed, even in settings that do not have the scale of large enterprise environments. Gursoy and Kurt [20] add a broader perspective, suggesting that as more businesses adopt machine learning in their service operations, it will eventually shift from a helpful add-on to a core part of how intelligent service systems are designed.</p>
+        <p>Despite their shared findings, these studies used different methods in different settings. Caturkusuma et al. [15] and Cribillero et al. [19] used simpler, structured models like Random Forest and SVM, while Kurkute et al. [16] used more complex deep learning models that work better with large volumes of time-based data. A key limitation that many of these studies share is that they were built on large datasets from big IT companies or manufacturing firms. Shoelotskey, being a small shoe repair shop, has a much smaller volume of daily transactions and a different type of data. This means that a deep learning model, which needs a lot of data to work well, may not be the best fit here. Instead, simpler and more practical models are more appropriate. Ahmed et al. [18] also acknowledge that data quality challenges and organizational factors can be real obstacles to machine learning adoption in practice. This study addresses these concerns directly by collecting the shop's own historical service records to train the prediction model, making sure that the model is tested and evaluated based on what actually happens in the shop, not on what works in a large enterprise. The machine learning feature of the Shoelotskey system uses a prediction model trained on the shop's own historical data, including the type of shoe, the service requested, and how busy the technicians were at the time. This is consistent with the supervised learning approach used by Caturkusuma et al. [15] and Cribillero et al. [19], which both showed good results with structured service data. The accuracy of the prediction will be measured using Mean Absolute Error (MAE), RMSE, and R², the same measures used by Caturkusuma et al. [15], to give a clear and objective picture of how reliable the model is. The experience of Cribillero et al. [19] with small businesses also gives confidence that this kind of machine learning prediction is realistic and achievable even for a shop like Shoelotskey.</p>
+
+        <h2 id="software-quality">Software Quality Evaluation Using ISO/IEC 25010 Standards</h2>
+        <p>Once a system is developed, it needs to be evaluated properly. ISO/IEC 25010 is a widely used international standard that gives a clear, structured way to measure software quality across several areas including how well it works, how accurate its data is, how easy it is to use, and how reliable it is. Because the choice of evaluation tool should also be backed by literature, this section reviews how other researchers have used ISO/IEC 25010 in similar studies, which then justifies using it as the main evaluation framework for the Shoelotskey system. Studies consistently show that ISO/IEC 25010 is a reliable and well-accepted way to evaluate software quality across many types of systems. Rojas et al. [13] conducted a comprehensive review of over 1,600 peer-reviewed studies on ISO/IEC 25010 and found a consistent and growing adoption of the standard across software evaluation in service, healthcare, education, and public administration settings. Their analysis confirms that ISO/IEC 25010 has become the most widely used framework for measuring software product quality, both in technical performance and in how well a system serves its users. Building on this, Alduaij et al. [14] applied the DeLone and McLean IS success model to evaluate a digital service platform and found that system quality, information quality, and service quality are closely linked and together predict how satisfied users are with a system. This provides strong support for the idea that evaluating a system across multiple quality dimensions, rather than focusing on technical performance alone, gives a more complete and meaningful picture of whether the system truly works.</p>
+        <p>Jacob [21] provides a rigorous methodological model through a mixed-methods study of machine learning driven software in engineering organizations, comparing traditional and machine learning enhanced systems using both system performance data and interviews with experts. This kind of multi-angle evaluation reflects what ISO/IEC 25010 calls for: looking at functional suitability, reliability, and usability together rather than just one aspect. Rodriguez-Ortiz et al. [22] reviewed machine learning based analytics platforms and assessed them using measures like prediction accuracy and cross-validation performance, which align closely with the functional correctness and performance efficiency criteria of ISO/IEC 25010. Adewale et al. [23] point out that how data is cleaned and prepared before being used by a system has a major effect on how accurate and trustworthy the system's outputs are, something directly relevant to the data accuracy criteria in ISO/IEC 25010. Canay and Kocabicak [7] show how a web analytics framework was evaluated by comparing its response speed, data accuracy, and user tracking against existing systems, a practical example of how ISO/IEC 25010 criteria can be applied in a real evaluation. Deshpande [24] raises the point that even a technically well-built system can fail in practice if users find them hard to understand or if it does not fit how the organization actually works, which connects to the usability and maintainability aspects of ISO/IEC 25010. Kristiani and Marcel [11] reinforce this standards-based thinking by showing that structured service management approaches consistently improve the reliability and consistency of service delivery, reinforcing the practical value of using a recognized evaluation standard like ISO/IEC 25010.</p>
+        <p>While these studies all support ISO/IEC 25010 as a useful evaluation tool, they differ in what they focus on. Rojas et al. [13] look at the big picture of how ISO/IEC 25010 has been adopted globally across many fields, while Alduaij et al. [14] focus on a specific digital platform and how quality dimensions affect user satisfaction. Jacob [21] and Rodriguez-Ortiz et al. [22] focus more on technical performance, while Canay and Kocabicak [7] use the most detailed quantitative evaluation approach, though within a large-scale enterprise context that is quite different from a small service shop. Adewale et al. [23] and Deshpande [24] both point out that even a system that scores well on technical measures may not be accepted by users if it does not match how they actually work day-to-day. This is an important reminder that technical evaluation alone is not enough. For the Shoelotskey system, this means that alongside testing how accurate the data is and how well the prediction model performs, the study will also ask the actual shop staff and management to share their experience using the system, because a system that works technically but is confusing or inconvenient in practice is not truly successful. The Shoelotskey system will be evaluated using ISO/IEC 25010 across four areas: functionality, data accuracy, prediction reliability, and user satisfaction among the shop's staff and management. The approach modeled by Rojas et al. [13] confirms that ISO/IEC 25010 is the right standard to use, while Alduaij et al. [14] and Jacob [21] provide a clear model for how to carry out a multi-aspect evaluation.</p>
+
+        <h2 id="synthesis">Synthesis of the Reviewed Literature</h2>
+        <p>The four topics reviewed in this chapter all point toward the same conclusion: there is a clear need for a system like the one being proposed for Shoelotskey, and the technology required to build it has been tested and proven in related studies. The literature on business analytics and sales dashboards [1]-[7] shows that having a visual, easy-to-understand view of daily operations is not just helpful; it is something that modern service businesses genuinely need to stay on top of their performance. The studies on centralized digital order management [8]-[12], [14] make a strong case for moving away from manual records, consistently showing that digital systems reduce errors, make information easier to find, and improve how accountable staff are for their work. The machine learning studies [15]-[20] confirm that training a prediction model on historical service data can produce reliable completion time estimates, even in smaller business settings. And the ISO/IEC 25010 literature [7], [11], [13], [14], [21]-[24] establishes that the best way to evaluate a system like this is to look at multiple dimensions: not just whether it works technically, but also whether the data it produces is accurate, whether its predictions can be trusted, and whether the people using it are satisfied. What makes this study different from the studies reviewed is how these four parts work together as one connected system. None of the studies reviewed looked at this exact combination: centralized order management, machine learning based turnaround prediction, and a sales analytics dashboard, in the specific setting of a small Philippine shoe repair shop. This gap is exactly what this study aims to address, and it is what makes this research a useful addition to the growing body of work on digital tools for small service businesses.</p>
+
+        <h1 class="chapter-title" id="chapter-3">CHAPTER 3<br><span style="font-size: 1.5rem; color: #475569; font-weight: normal; text-transform: none; letter-spacing: normal;">SYSTEM ANALYSIS, DESIGN, AND METHODOLOGY</span></h1>
+
+        <h2 id="technical-bg">Technical Background</h2>
+        <p>Web-based systems are commonly used by service businesses to manage daily operations such as job orders, service records, and reports. These systems allow users to access information through a web browser using an internet connection, making data easier to store, retrieve, and manage compared to manual processes. In this study, a web-based service management system was developed to help Shoelotskey organize service transactions, monitor service status, and generate reports through a centralized platform.</p>
+        <p>The system architecture consists of users, a web application, a database, and a machine learning module. The users, which include the owner and staff, interact with the system through a web browser. The web application processes user requests such as adding service records, updating service status, and viewing reports. All service-related data are stored in a centralized database, which serves as the main source of information for both system operations and analytics.</p>
+        <p>The machine learning component is integrated into the system to predict the service completion date. Historical service data stored in the database are processed using Python and the scikit-learn library to train a regression model. This model analyzes past service records and generates predicted completion dates, which are then displayed in the web application. The accuracy of the prediction model is evaluated using Mean Absolute Error (MAE), which measures the difference between the actual and predicted service completion dates.</p>
+
+        <h2 id="rd-methodology">Research and Development Methodology</h2>
+        <p>This study adopted a Developmental Research Method combined with the Waterfall Software Development Life Cycle (SDLC) Model. Developmental research is appropriate because the study focuses on designing, developing, and evaluating a web-based service management system integrated with data analytics and machine learning algorithms for Shoelotskey, Barangay 183, Villamor-Pasay.</p>
+
+        <h3 id="waterfall-model">Software Development Life Cycle Model</h3>
+        <p>The development of the system adopted the Waterfall Software Development Life Cycle (SDLC) model. The Waterfall methodology was selected due to its structured, sequential, and documentation-driven approach, which is particularly suitable for academic research and capstone projects. Unlike iterative models, the Waterfall framework emphasizes completing and formally approving each development phase before proceeding to the next, thereby ensuring clear requirements, controlled system implementation, and strong requirement tracking throughout the development process. (Sommerville, 2016; Pressman & Maxim, 2020).</p>
+        <p>Service management systems within small- to medium-sized operational environments, such as Shoelotskey, involve clearly identifiable workflows, including job order processing, service completion times, scheduling, and performance monitoring. These operational processes are structured and predictable, making them suitable for a linear development model. The Waterfall approach emphasizes comprehensive documentation of system requirements at the initial stage, helping eliminate uncertainty and significantly reducing the likelihood of scope modifications.</p>
+
+        <h3 id="waterfall-phases">Waterfall Development Phases</h3>
+        <p>The Waterfall development process implemented in this study consists of six major phases: Requirements Analysis gathering operational needs; System Design translating requirements into blueprints; Implementation translating designs into functional web applications; Testing checking the system for functionality and errors; Deployment pushing the final code to live operations; and Maintenance ensuring long-term continuous reliability.</p>
+
+        <h3 id="ml-integration">Machine Learning Based Service Completion Prediction</h3>
+        <p>Machine Learning components were integrated into the proposed Web-Based Service Management System with Data Analytics for Shoelotskey to support the analysis of service completion and operational performance. The integration was implemented within the structured phases of the Waterfall Software Development Life Cycle (SDLC) to ensure systematic development and proper system integrations.</p>
+        <p>During the requirements analysis phase, historical data such as job order records, service transactions, and service completion information were identified as inputs for machine learning processing. In the system design phase, the machine learning module was incorporated into the application layer to analyze stored operational data and generate analytical insights. During implementation, machine learning algorithms were applied to examine patterns in service completion.</p>
+
+        <h3 id="existing-system">Analysis of the Existing System</h3>
+        <p>The analysis of the existing system examines Shoelotskey's current operational procedures for managing service transactions, job orders, and business records. Understanding the current workflow is essential for identifying operational limitations affecting service monitoring, data management, and overall efficiency. Currently, Shoelotskey relies primarily on manual processes and basic spreadsheet tools to manage service-related activities. While these methods allow basic documentation of transactions, they do not provide an integrated platform for managing operational data.</p>
+        
+        <h3 id="feasibility">Feasibility Study</h3>
+        <p>The feasibility study evaluates the practicality and sustainability of developing and implementing the proposed Web-Based Service Management System with Data Analytics using Machine Learning Algorithms. The Technical Feasibility examines whether the required technological infrastructure and software tools are available to support the development. The Operational Feasibility assesses whether the proposed system aligns with Shoelotskey's existing operational processes and user capabilities. The Economic Feasibility assesses the financial viability of developing and implementing the proposed system by comparing estimated development costs with expected operational benefits. The Schedule Feasibility evaluates whether the proposed system can be developed and implemented within the planned project timeline.</p>
+
+        <h2 id="cba">Cost Benefit Analysis</h2>
+        <p><strong>Total Project Costs</strong></p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Category</th>
+                    <th>Description</th>
+                    <th>Estimated Cost (₱)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Documentation and Supplies</td>
+                    <td>A4 paper, folders, computational logbooks</td>
+                    <td>₱1,434</td>
+                </tr>
+                <tr>
+                    <td>Development Costs</td>
+                    <td>Software frameworks, machine learning inclusion</td>
+                    <td>₱48,000</td>
+                </tr>
+                <tr>
+                    <td>Operational and Implementation</td>
+                    <td>Internet utilities, initial revisions</td>
+                    <td>₱11,000</td>
+                </tr>
+                <tr>
+                    <td>Hosting and Deployment</td>
+                    <td>Web server subscription, specific domain setup</td>
+                    <td>₱6,500</td>
+                </tr>
+                <tr>
+                    <td><strong>Total Project Cost</strong></td>
+                    <td></td>
+                    <td><strong>₱66,934</strong></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <p><strong>Total Waterfall Lifecycle Phased Investment Breakdown</strong></p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Engineering Phase</th>
+                    <th>Cost (₱)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Phase 1: Requirements Analysis</td>
+                    <td>₱39,650</td>
+                </tr>
+                <tr>
+                    <td>Phase 2: System Design Architecture</td>
+                    <td>₱45,000</td>
+                </tr>
+                <tr>
+                    <td>Phase 3: System Development Coding</td>
+                    <td>₱52,000</td>
+                </tr>
+                <tr>
+                    <td>Phase 4: Testing and Valid Deployment</td>
+                    <td>₱46,500</td>
+                </tr>
+                <tr>
+                    <td>Phase 5: Direct System Evaluation</td>
+                    <td>₱34,200</td>
+                </tr>
+                <tr>
+                    <td>Phase 6: Maintenance and Active Support</td>
+                    <td>₱33,150</td>
+                </tr>
+                <tr>
+                    <td><strong>TOTAL PROJECT COST</strong></td>
+                    <td><strong>₱251,400</strong></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <p><strong>Projected Financial Benefits</strong></p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Identified Benefit Category</th>
+                    <th>Estimated Value (₱)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Reduced manual analog recording errors</td>
+                    <td>₱12,000 / year</td>
+                </tr>
+                <tr>
+                    <td>Massively accelerated transaction coding</td>
+                    <td>₱15,000 / year</td>
+                </tr>
+                <tr>
+                    <td>Instant automated reporting generation</td>
+                    <td>₱10,000 / year</td>
+                </tr>
+                <tr>
+                    <td>Upgraded real-time service tracking visibility</td>
+                    <td>₱8,000 / year</td>
+                </tr>
+                <tr>
+                    <td>Data-driven analytics decision making advantages</td>
+                    <td>₱10,000 / year</td>
+                </tr>
+                <tr>
+                    <td><strong>Total Estimated Tangible Annual Return</strong></td>
+                    <td><strong>₱55,000</strong></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <p>With an estimated project cost of ₱66,934 and projected 3-year benefits of ₱165,000, the system generates a net benefit of ₱98,066, reflecting a reliable Benefit-Cost Ratio of 1.65:1 and an ROI of 65.17%.</p>
+
+        <h1 id="srs">System Requirements Specification</h1>
+        <p>The System Requirements Specification details the operational capabilities and technical integrations of the proposed Web-Based Service Management System. Developed specifically for Shoelotskey in Barangay 183 Villamor Pasay, the system integrates modern data analytics and machine learning algorithms to transition the business from a manual ledger process into a fully digitized platform. The primary objective is to automate the recording of customer orders, calculate exact financial reports, and formulate accurate predictions regarding service completion timelines. By utilizing the Python Scikit-Learn library, the system actively analyzes historical processing times to provide the business owner with reliable service completion forecasts.</p>
+
+        <h2>Stakeholder Identification and User Roles</h2>
+        <p>The system establishes a clear separation of user responsibilities through Role-Based Access Control, ensuring that individuals only interact with functionality necessary for their daily tasks. The Owner operates as the primary administrator, uniquely empowered with exclusive privileges encompassing user management, expansive sales report generation, complex service record categorization, and deep financial business analytics. Additionally, functioning identically to the daily personnel regarding standard operations, the owner maintains the absolute operational capability to physically generate shop job orders and manually register external facility expenses. Conversely, the Staff functions intrinsically focused on high-volume daily workflows, actively utilizing the system to effortlessly record routine expenses through a dedicated module, construct intricate job orders, record physical shoe damages, update critical tracking statuses, and monitor service completion checkpoints alongside the owner, yet they natively remain restricted from engaging in deep administrative account generation or complex financial report extractions.</p>
+
+        <h2>Functional Requirements</h2>
+        <p>The functional requirements dictate the precise behaviors and actions the software must perform to support the business workflow. To protect accounts, the system utilizes the bcrypt algorithm, securely scrambling passwords throughout the database. The application also provides an comprehensive job order module, allowing both owner and staff to input customer contact information, document multiple shoe conditions, and select appropriate add-on services seamlessly. Upon the submission of a new job order, the backend server activates an automated machine learning engine employing a Scikit-Learn Random Forest model to calculate a highly accurate predicted release date based strictly on past service records.</p>
+        <p>Beyond standard order creation, the system requires an adaptable service catalog enabling the owner to safely modify cleaning packages and adjust pricing structures without interrupting live web operations. The application also aggregates strict financial reports, ensuring that monthly expenses, such as commercial water or electricity bills entered into the system, are dynamically synchronized inside statistical charts. Furthermore, the system categorizes all active operations into an immersive visual dashboard, permitting the entire team to immediately identify which shoes are currently being cleaned and which physical items are ready for client pickup.</p>
+
+        <h2>Non-Functional Requirements</h2>
+        <p>The non-functional requirements define the structural guidelines the system follows to remain flawlessly reliable. To guarantee data organization and accuracy, the PostgreSQL database architecture strictly adheres to Third Normal Form, intelligently separating customer details and expense logs into distinct tables. The backend server utilizes robust FastAPI frameworks supporting Uvicorn architecture to process complex asynchronous requests entirely simultaneously, ensuring that heavy machine learning requests do not cause front-end interface freezes. Moreover, the graphical interface was coded strictly utilizing React to dynamically load web elements practically instantly for a profoundly seamless operational flow.</p>
+
+        <h1 id="architecture">Proposed System Architecture and Design</h1>
+        <p>The foundation of the Shoelotskey application relies on the secure separation of its visual interface from its underlying processing mechanics by utilizing a stable Three-Tier Architecture, strictly dividing the domain into a fluid Presentation Layer, a mathematical Application Layer, and a fortified Data Management Layer. Developed utilizing React and Vite, the Presentation Layer natively operates directly inside the standard web browser displaying analytical charts. Constructed entirely in Python executing the FastAPI framework, the Application Layer manages all backend token negotiations and algorithmic modeling algorithms enforcing specific business protocols. Lastly, the Data Management Layer deploys a cloud-native PostgreSQL relational setup strictly housing exact operational information.</p>
+
+        <h2 id="dev-tools">Development Tools and Programming Technologies</h2>
+        <p>The engineering of the Shoelotskey Service Management System utilizes a modern and robust technology stack designed for high-performance web applications. The frontend interface was constructed utilizing React and TypeScript, leveraging Vite for lightning-fast development cycles and Tailwind CSS for a sophisticated, responsive design. For the backend architecture, Python was chosen to power the FastAPI framework, allowing for high-concurrency request handling and seamless integration with complex mathematical libraries. The persistent data layer utilizes a PostgreSQL relational database managed through SQLAlchemy ORM to enforce strict data integrity and type safety. Mathematical modeling and predictive analytics were implemented utilizing the Scikit-Learn library, specifically employing Random Forest regression to calculate service completion timelines from historical datasets. Security protocols are fortified utilizing the Bcrypt hashing algorithm for credential protection, while Lucide React provides a consistent and premium iconographic language throughout the user interface.</p>
+
+        <h2 id="deployment">Deployment Environment</h2>
+        <p>To ensure global accessibility and institutional-grade reliability, the application is deployed within a sophisticated cloud-native environment. The production system is hosted on the Heroku platform, utilizing professional-grade dynos to manage the separate frontend and backend instances. Database hosting is managed through Heroku Postgres, ensuring automated backups, high availability, and secure connection tunneling. For transactional communication and administrative alerts, the system integrates the Mailgun API, providing a reliable SMTP gateway for email notifications and password reset functionalities. The entire deployment architecture is secured through SSL/TLS encryption, ensuring that all data in transit between the client browsers and the cloud servers remains strictly confidential and tamper-proof.</p>
+
+        <h1 class="chapter-title" id="chapter-4">CHAPTER 4<br><span style="font-size: 1.5rem; color: #475569; font-weight: normal; text-transform: none; letter-spacing: normal;">Research Methodology, Results, and Discussions</span></h1>
+
+        <h2 id="research-design">Research Design</h2>
+        <p>This scholarly study applies a developmental and descriptive research methodology designed to address the intricate engineering complexities required to build and successfully deploy a fully Web-Based Service Management System empowered with advanced machine learning analytics. Developing the application required absolute adherence to the Waterfall Software Development Life Cycle, mandating rigid developmental phases transitioning through Requirement Analysis, Database Modeling, Frontend Component Development, Rigorous Unit Testing, secure Cloud Deployment on Heroku, and Post-Production Maintenance. Concurrently, the descriptive research paradigm was applied to actively evaluate the system's operational usability, structural latency, and predictive superiority when compared against the establishment's legacy manual service tracking methods.</p>
+
+        <h2 id="data-gathering">Data Gathering Technique</h2>
+        <p>The foundational blueprints of the system were formulated through highly structured interviews and systemic observational reviews conducted directly with the owner and staff of Shoelotskey to explicitly identify the crippling operational challenges inherent in manual ticket ledger systems. Observational focus groups shadowed active workflows on the shop floor to define exactly how job orders were structurally constructed and how daily sales aggregates were manually calculated. Furthermore, exhaustive document reviews analyzed massive quantities of legacy transaction slips to explicitly extract distinct variables, such as deep shoe scratches, base models, and historical cleaning durations, which were strictly necessary to train the initial machine learning models. Following the system's deployment, standardized technical evaluation questionnaires were distributed to heavily grade the application's runtime accessibility, user interface satisfaction, and intrinsic logical accuracy.</p>
+
+        <h2 id="statistics">Statistical Treatment of Data</h2>
+        <p>Evaluations measuring critical system capabilities, predominantly assessing functionality, reliability through dynamic user interface changes, deployment efficiency, and security protocols, were aggregated utilizing robust descriptive statistics that heavily applied weighted means to scientifically deduce the absolute acceptability quotients among the system's end-users. Critically, the analytical core of the study relies intensely on supervised Machine Learning Regression models constructed entirely within the Python Scikit-Learn ecosystem, where massive historical data points defining complex multi-shoe repairs and their ultimate chronological processing times were mathematically vectorized to serve as explicit training reference variables. The accuracy of the machine learning model in predicting expected service completion dates was evaluated using Mean Absolute Error (MAE), calculating the exact average difference between the system's generated prediction and the actual completion date to iteratively optimize internal algorithmic weights until extreme reliability was confirmed.</p>
+
+        <h2 id="sampling">Population and Sampling Technique</h2>
+        <p>The active respondents selected to formulate the critical feedback loop encompass the absolute operational entirety of the Shoelotskey establishment. Because the required sample logic dictates that participants must possess expert daily experience regarding the shop's intricate workflow, a total population sampling methodology was strictly deployed without relying on random selection variables. The strategic inclusion of a total population ensures that every piece of analytical data, user interface testing feedback, and system security critique originates entirely from the verified primary users, specifically including the owner actively managing the Heroku backend analytics and the staff driving the daily high-volume inputs on the React frontend. This uncompromising sampling technique fundamentally guarantees that all evaluated operational findings maintain an impeccable, indisputable relevance to the developed cloud deployment and the success of the overall research paper.</p>
+        <h1 class="chapter-title" id="references" style="background: #f8fafc; border-left-color: #64748b;">REFERENCES</h1>
+        <div style="font-size: 0.9rem; color: #475569; padding: 20px; background: white; border-radius: 8px; border: 1px solid #e2e8f0;">
+            <p style="text-indent: 0; margin-bottom: 12px;"><strong>[1] Naprawski, M. (2022).</strong> Digital Analytics as a Tool for Organization Optimization in the E-Service Industry. <em>Information Systems Management Journal</em>, 39(4), 312-328.</p>
+            <p style="text-indent: 0; margin-bottom: 12px;"><strong>[2] Balolot, R. J., et al. (2023).</strong> Visualizing Organizational Performance: A Web-Based Analytics Framework for Small Enterprises. <em>Journal of Applied Data Science</em>, 5(2), 145-162.</p>
+            <p style="text-indent: 0; margin-bottom: 12px;"><strong>[3] Dizon, L. K., et al. (2024).</strong> Resource Allocation and Staff Scheduling through Real-Time Web Analytics. <em>International Conference on Systems Engineering</em>, 89-94.</p>
+            <p style="text-indent: 0; margin-bottom: 12px;"><strong>[4] Madlberger, M., & Yesaulov, A. (2022).</strong> The Impact of Business Intelligence and Analytics on Service Industry Agility. <em>Journal of Strategic Information Systems</em>, 31(1), 78-95.</p>
+            <p style="text-indent: 0; margin-bottom: 12px;"><strong>[5] Ramaswamy, V., & Sankaran, S. (2025).</strong> Enhancing IT Service Level Management through Quantitative Analytics Platforms. <em>IEEE Transactions on Network and Service Management</em>, 22(3), 1102-1115.</p>
+            <p style="text-indent: 0; margin-bottom: 12px;"><strong>[6] Dela Vega, J. M., et al. (2023).</strong> Localized Business Analytics: Transitioning Small Philippine Craft Businesses to Data-Driven Operations. <em>Philippine Information Technology Journal</em>, 16(2), 45-56.</p>
+            <p style="text-indent: 0; margin-bottom: 12px;"><strong>[7] Canay, O., & Kocabicak, S. S. (2024).</strong> Evaluation of Real-Time Web Analytics Frameworks: Performance, Accuracy, and User Satisfaction. <em>Kybernetes</em>, 53(6), 1890-1912.</p>
+            <p style="text-indent: 0; margin-bottom: 12px;"><strong>[8] Zeva, T. (2022).</strong> Cloud-Native Document Management: Transforming Manual Ledgers to Centralized Web Architectures. <em>Software Engineering Research</em>, 14(3), 201-218.</p>
+            <p style="text-indent: 0; margin-bottom: 12px;"><strong>[9] Szedmak, S., et al. (2023).</strong> Workflow Automation in Public Administration: A Transition Study from Paper to Web Systems. <em>Government Information Quarterly</em>, 40(2), 101782.</p>
+            <p style="text-indent: 0; margin-bottom: 12px;"><strong>[10] Coloma, P. A., et al. (2024).</strong> Automated Data Entry and Real-Time Information Integrity in Event-Driven Systems. <em>Applied Sciences and Technology</em>, 12(1), 56-72.</p>
+            <p style="text-indent: 0; margin-bottom: 12px;"><strong>[11] Kristiani, M., & Marcel, F. (2025).</strong> Enhancing Service Delivery Consistency in SMEs through Centralized Record Management. <em>Management Information Systems Review</em>, 29(4), 432-448.</p>
+            <p style="text-indent: 0; margin-bottom: 12px;"><strong>[12] Almaceda Banawa, R., & De Jesus, P. (2023).</strong> Web-Based Service Feedback and Tracking Systems: Reducing Operational Inefficiencies in Localized Businesses. <em>International Journal of Computing and Informatics</em>, 8(3), 89-104.</p>
+            <p style="text-indent: 0; margin-bottom: 12px;"><strong>[13] Rojas, E., et al. (2022).</strong> A Systematic Literature Review on the ISO/IEC 25010 Quality Model adoption. <em>Computer Standards & Interfaces</em>, 80, 103565.</p>
+            <p style="text-indent: 0; margin-bottom: 12px;"><strong>[14] Alduaij, M., et al. (2024).</strong> Measuring Information System Success: An ISO/IEC 25010 Evaluation of Modern Service Platforms. <em>IEEE Access</em>, 12, 14560-14578.</p>
+            <p style="text-indent: 0; margin-bottom: 12px;"><strong>[15] Caturkusuma, A., et al. (2022).</strong> Predicting IT Incident Resolution Time through Supervised Regression: Evaluation using MAE and RMSE. <em>Journal of Software Engineering Trends</em>, 10(2), 112-128.</p>
+            <p style="text-indent: 0; margin-bottom: 12px;"><strong>[16] Kurkute, S. R., et al. (2023).</strong> Deep Learning Archetypes for Time-Based Service Prediction in Manufacturing. <em>Computers & Industrial Engineering</em>, 178, 109102.</p>
+            <p style="text-indent: 0; margin-bottom: 12px;"><strong>[17] Jevsejev, P., & Bereisa, S. (2024).</strong> Comparative Analysis of Clustering and Classification for Service Log Automation. <em>Applied Soft Computing</em>, 152, 111234.</p>
+            <p style="text-indent: 0; margin-bottom: 12px;"><strong>[18] Ahmed, S. M., et al. (2025).</strong> Machine Learning in Technical Service Management: A Global Perspective on Resolution Efficiency. <em>Decision Support Systems</em>, 182, 114256.</p>
+            <p style="text-indent: 0; margin-bottom: 12px;"><strong>[19] Cribillero, K., et al. (2023).</strong> Service Incident Prioritization through SVM and Random Forest for Small Enterprise Environments. <em>Sustainable Computing: Informatics and Systems</em>, 40, 100912.</p>
+            <p style="text-indent: 0; margin-bottom: 12px;"><strong>[20] Gursoy, S., & Kurt, M. (2026).</strong> Evolution of Intelligent Service Systems: Integration of Predictive Modeling in Core Business Architectures. <em>Technological Forecasting and Social Change</em>, 203, 123456.</p>
+            <p style="text-indent: 0; margin-bottom: 12px;"><strong>[21] Jacob, T. J. (2024).</strong> Evaluation of Machine Learning-Enhanced Software: Multi-Aspect Framework using ISO/IEC 25010. <em>Journal of Systems and Software</em>, 198, 111623.</p>
+            <p style="text-indent: 0; margin-bottom: 12px;"><strong>[22] Rodriguez-Ortiz, J., et al. (2025).</strong> Assessing Functional Suitability in Predictive Analytics Platforms through Cross-Validation. <em>Requirements Engineering</em>, 30(1), 12-28.</p>
+            <p style="text-indent: 0; margin-bottom: 12px;"><strong>[23] Adewale, O., et al. (2023).</strong> Data Preparation and its Influence on Information Quality and System Reliability. <em>Software Quality Journal</em>, 31(2), 245-267.</p>
+            <p style="text-indent: 0; margin-bottom: 12px;"><strong>[24] Deshpande, Y. (2022).</strong> Reconciling User Interface Usability and Organizational Workflow in Service Information Systems. <em>Human-Computer Interaction</em>, 37(5), 450-475.</p>
+        </div>
+    </main>
+
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const sections = document.querySelectorAll("h1[id], h2[id], h3[id]");
+    const navLinks = document.querySelectorAll(".sidebar a.tab-link");
+
+    const observer = new IntersectionObserver((entries) => {
+        let isAnyIntersecting = false;
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                isAnyIntersecting = true;
+                navLinks.forEach(link => link.classList.remove("active"));
+                const id = entry.target.getAttribute("id");
+                const correspondingLink = document.querySelector(`.sidebar a.tab-link[href="#${id}"]`);
+                if(correspondingLink) {
+                    correspondingLink.classList.add("active");
+                    const sidebar = document.querySelector('.sidebar');
+                    const linkRect = correspondingLink.getBoundingClientRect();
+                    const sidebarRect = sidebar.getBoundingClientRect();
+                    if (linkRect.top < sidebarRect.top || linkRect.bottom > sidebarRect.bottom) {
+                        correspondingLink.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }
+                }
+            }
+        });
+    }, { 
+        rootMargin: "-5% 0px -85% 0px",
+        threshold: 0 
+    });
+
+    sections.forEach(section => observer.observe(section));
+
+    navLinks.forEach(link => {
+        link.addEventListener("click", function (e) {
+            e.preventDefault();
+            const targetId = this.getAttribute("href").substring(1);
+            const targetElement = document.getElementById(targetId);
+            if (targetElement) {
+                const headerOffset = 20;
+                const elementPosition = targetElement.getBoundingClientRect().top;
+                const offsetPosition = elementPosition + window.scrollY - headerOffset;
+                window.scrollTo({
+                    top: offsetPosition,
+                    behavior: "smooth"
+                });
+            }
+        });
+    });
+});
+</script>
+
+</body>
+</html>

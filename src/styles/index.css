@@ -40,14 +40,6 @@ body {
 	text-align: center !important;
 }
 
-.sidebar-collapsed [class*="CardTitle"] {
-	text-align: center !important;
-	margin: 0 auto !important;
-}
-
-.toaster>* {
-	pointer-events: auto;
-}
 
 /* Custom toast styling */
 .custom-toast {
@@ -129,4 +121,53 @@ input[type="date"]::-webkit-datetime-edit-month-field {
 
 input[type="date"]::-webkit-datetime-edit-year-field {
 	color: black;
+}
+
+@media print {
+  /* Hide sidebar and top header */
+  .lg\:flex.flex-col.bg-red-700, 
+  header.bg-white.border-b,
+  button,
+  .no-print {
+    display: none !important;
+  }
+  
+  /* Ensure the main content container fills the page */
+  .flex-1.flex.flex-col.overflow-hidden {
+    display: block !important;
+    overflow: visible !important;
+    position: static !important;
+  }
+
+  /* Reset main content styles */
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    position: static !important;
+    height: auto !important;
+  }
+
+  body {
+    overflow: visible !important;
+    height: auto !important;
+    background: white !important;
+    color: black !important;
+  }
+
+  #root {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .shadow-md, .shadow-lg, .shadow-sm {
+    box-shadow: none !important;
+    border: 1px solid #eee !important;
+  }
+
+  /* Force charts to be visible if they use background colors */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
 }

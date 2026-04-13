@@ -7,14 +7,14 @@ import {
     ChevronLeft,
     ChevronRight,
     Filter,
-    CreditCard,
+    Wallet,
     Search,
     Calendar as CalendarIcon,
     ChevronDown,
-
     LineChart,
-
     TrendingUp,
+    Pencil,
+    Trash2
 } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
@@ -24,17 +24,31 @@ import { Input } from '@/app/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu';
 import { useServices } from '@/app/context/ServiceContext';
+import EditOrderModal from '@/app/components/EditOrderModal';
+import { toast } from 'sonner';
 
 type TotalSalesProps = {
     onSetHeaderActionRight?: (action: ReactNode | null) => void;
+    user: { token: string };
 };
 
-export default function TotalSales({ onSetHeaderActionRight }: TotalSalesProps) {
+export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesProps) {
+    useEffect(() => {
+        // [OWASP A09] Security Audit: Logging view access with token context
+        if (user.token) {
+            console.log('[SECURITY] Total Sales accessed by authenticated session');
+        }
+    }, [user.token]);
+
     const navigate = useNavigate();
     const location = useLocation();
-    const { orders } = useOrders();
+    const { orders, updateOrder, deleteOrder } = useOrders();
 
-    const [profitRange, setProfitRange] = useState<'Daily' | 'Weekly' | 'Quarterly' | 'Annually'>(() => {
+    const [selectedOrder, setSelectedOrder] = useState<JobOrder | null>(null);
+    const [isEditing, setIsEditing] = useState(false);
+    const [orderToDelete, setOrderToDelete] = useState<JobOrder | null>(null);
+
+    const [profitRange, setProfitRange] = useState<'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Annually'>(() => {
         return (location.state as any)?.dateRange || 'Daily';
     });
     const [searchQuery, setSearchQuery] = useState('');
@@ -76,7 +90,7 @@ export default function TotalSales({ onSetHeaderActionRight }: TotalSalesProps) 
                     </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-40 p-0 rounded-xl border border-red-600 bg-white shadow-lg overflow-hidden">
-                    {['Daily', 'Weekly', 'Quarterly', 'Annually'].map((range) => (
+                    {['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Annually'].map((range) => (
                         <DropdownMenuItem
                             key={range}
                             onClick={() => setProfitRange(range as typeof profitRange)}
@@ -105,13 +119,14 @@ export default function TotalSales({ onSetHeaderActionRight }: TotalSalesProps) 
                 return createdAt >= startOfToday;
             }
             if (profitRange === 'Weekly') return diffDays < 7;
+            if (profitRange === 'Monthly') return diffDays < 30;
             if (profitRange === 'Quarterly') return diffDays < 90;
             if (profitRange === 'Annually') return diffDays < 365;
             return true;
         };
 
         return orders
-            .filter((order: JobOrder) => order.paymentStatus === 'fully-paid')
+            .filter((order: JobOrder) => order.paymentStatus === 'fully-paid' || order.paymentStatus === 'downpayment')
             .filter((order: JobOrder) => isWithinRange(new Date(order.transactionDate || order.createdAt)));
     }, [orders, profitRange]);
 
@@ -203,7 +218,7 @@ export default function TotalSales({ onSetHeaderActionRight }: TotalSalesProps) 
                     <CardContent className="pt-6 pb-4">
                         <div className="flex items-center gap-2 mb-2">
                             <div className="p-2 rounded-lg bg-amber-100 text-amber-700">
-                                <CreditCard className="h-4 w-4" />
+                                <Wallet className="h-4 w-4" />
                             </div>
                             <p className="text-xs font-black uppercase tracking-wider text-gray-500">Cash Sales</p>
                         </div>
@@ -215,7 +230,7 @@ export default function TotalSales({ onSetHeaderActionRight }: TotalSalesProps) 
                     <CardContent className="pt-6 pb-4">
                         <div className="flex items-center gap-2 mb-2">
                             <div className="p-2 rounded-lg bg-cyan-100 text-cyan-700">
-                                <CreditCard className="h-4 w-4" />
+                                <Wallet className="h-4 w-4" />
                             </div>
                             <p className="text-xs font-black uppercase tracking-wider text-gray-500">GCash Sales</p>
                         </div>
@@ -227,7 +242,7 @@ export default function TotalSales({ onSetHeaderActionRight }: TotalSalesProps) 
                     <CardContent className="pt-6 pb-4">
                         <div className="flex items-center gap-2 mb-2">
                             <div className="p-2 rounded-lg bg-pink-100 text-pink-700">
-                                <CreditCard className="h-4 w-4" />
+                                <Wallet className="h-4 w-4" />
                             </div>
                             <p className="text-xs font-black uppercase tracking-wider text-gray-500">Maya Sales</p>
                         </div>
@@ -296,10 +311,11 @@ export default function TotalSales({ onSetHeaderActionRight }: TotalSalesProps) 
                                     <TableHead className="font-black text-gray-600 uppercase text-xs">Customer Name</TableHead>
                                     <TableHead className="font-black text-gray-600 uppercase text-xs">Service Type</TableHead>
                                     <TableHead className="font-black text-gray-600 uppercase text-xs">Order Date</TableHead>
-                                    <TableHead className="font-black text-gray-600 uppercase text-xs">Payment</TableHead>
-                                    <TableHead className="font-black text-gray-600 uppercase text-xs">Status</TableHead>
+                                    <TableHead className="font-black text-gray-600 uppercase text-xs">Payment Method</TableHead>
+                                    <TableHead className="font-black text-gray-600 uppercase text-xs">Payment Status</TableHead>
                                     <TableHead className="font-black text-gray-600 uppercase text-xs text-right">Amount Paid</TableHead>
-                                    <TableHead className="font-black text-gray-600 uppercase text-xs text-right">Remaining Balance</TableHead>
+                                    <TableHead className="font-black text-gray-600 uppercase text-xs text-right">Balance</TableHead>
+                                    <TableHead className="font-black text-gray-600 uppercase text-[11px] text-center tracking-wider">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -316,17 +332,12 @@ export default function TotalSales({ onSetHeaderActionRight }: TotalSalesProps) 
                                     paginatedOrders.map((order: JobOrder) => {
                                         const orderDate = new Date(order.transactionDate || order.createdAt);
                                         const remainingBalance = (order.grandTotal || 0) - (order.amountReceived || 0);
-                                        const status = order.status || '';
+                                        const pStatus = order.paymentStatus || '';
 
                                         let badgeClass = 'bg-gray-100 text-gray-700';
-                                        if (status === 'new-order') badgeClass = 'bg-purple-100 text-purple-700';
-                                        else if (status === 'on-going') badgeClass = 'bg-blue-100 text-blue-700';
-                                        else if (status === 'for-release') badgeClass = 'bg-orange-100 text-orange-700';
-                                        else if (status === 'claimed') badgeClass = 'bg-gray-200 text-gray-800';
-                                        else if (status === 'fully-paid') badgeClass = 'bg-green-100 text-green-700';
-                                        else if (status === 'downpayment') badgeClass = 'bg-red-100 text-red-700';
-
-                                        const statusLabel = status.replace('-', ' ');
+                                        if (pStatus === 'fully-paid') badgeClass = 'bg-green-100 text-green-700';
+                                        else if (pStatus === 'downpayment') badgeClass = 'bg-red-100 text-red-700';
+                                        else if (pStatus === 'unpaid') badgeClass = 'bg-gray-200 text-gray-800';
 
                                         return (
                                             <TableRow key={order.id} className="hover:bg-gray-50">
@@ -345,7 +356,7 @@ export default function TotalSales({ onSetHeaderActionRight }: TotalSalesProps) 
                                                 </TableCell>
                                                 <TableCell className="text-sm">
                                                     <span className={`px-2 py-0.5 rounded-md text-xs font-semibold uppercase ${badgeClass}`}>
-                                                        {statusLabel}
+                                                        {pStatus === 'fully-paid' ? 'Fully Paid' : pStatus === 'downpayment' ? 'Downpayment' : pStatus.charAt(0).toUpperCase() + pStatus.slice(1)}
                                                     </span>
                                                 </TableCell>
                                                 <TableCell className="text-right font-bold text-sm text-gray-900">
@@ -353,6 +364,29 @@ export default function TotalSales({ onSetHeaderActionRight }: TotalSalesProps) 
                                                 </TableCell>
                                                 <TableCell className="text-right font-semibold text-sm text-gray-700">
                                                     ₱{Math.max(remainingBalance, 0).toLocaleString()}
+                                                </TableCell>
+                                                <TableCell className="text-center">
+                                                    <div className="flex items-center justify-center gap-2">
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            className="h-8 w-8 p-0 rounded-lg border border-amber-500 text-amber-600 hover:bg-amber-50 transition-colors"
+                                                            onClick={() => {
+                                                                setSelectedOrder(order);
+                                                                setIsEditing(true);
+                                                            }}
+                                                            title="Edit Order"
+                                                        >
+                                                            <Pencil size={14} strokeWidth={2.5} />
+                                                        </Button>
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            className="h-8 w-8 p-0 rounded-lg border border-red-500 text-red-600 hover:bg-red-50 transition-colors"
+                                                            onClick={() => setOrderToDelete(order)}
+                                                            title="Delete Order"
+                                                        >
+                                                            <Trash2 size={14} strokeWidth={2.5} />
+                                                        </Button>
+                                                    </div>
                                                 </TableCell>
                                             </TableRow>
                                         );
@@ -491,6 +525,63 @@ export default function TotalSales({ onSetHeaderActionRight }: TotalSalesProps) 
                         </Button>
                         <Button className="flex-1 w-full bg-red-600 hover:bg-red-700 text-white font-bold h-10 rounded-xl shadow-md uppercase tracking-wider transition-all" onClick={() => setIsFilterOpen(false)}>
                             Apply
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Edit Order Modal */}
+            {selectedOrder && (
+                <EditOrderModal
+                    open={isEditing}
+                    onOpenChange={(open) => {
+                        setIsEditing(open);
+                        if (!open) setSelectedOrder(null);
+                    }}
+                    order={selectedOrder}
+                    onSave={(id, updates) => {
+                        updateOrder(id, updates, "Owner");
+                        setIsEditing(false);
+                        toast.success('Order updated successfully');
+                    }}
+                />
+            )}
+
+            {/* Delete Confirmation Modal */}
+            <Dialog open={!!orderToDelete} onOpenChange={(open) => !open && setOrderToDelete(null)}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="text-center text-base font-black uppercase tracking-tight">Confirm Soft Delete</DialogTitle>
+                    </DialogHeader>
+                    <div className="py-6 flex flex-col items-center gap-4">
+                        <div className="h-16 w-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center">
+                            <Trash2 size={32} />
+                        </div>
+                        <div className="text-center">
+                            <p className="text-sm font-bold text-gray-900">Are you sure you want to delete this order?</p>
+                            <p className="text-xs text-gray-500 mt-1">This action will remove <span className="font-black text-red-600">{orderToDelete?.orderNumber}</span> from the sales record. This cannot be undone.</p>
+                        </div>
+                    </div>
+                    <div className="flex gap-3">
+                        <Button 
+                            variant="ghost" 
+                            className="flex-1 bg-gray-100 font-bold uppercase text-[10px] tracking-widest h-10 rounded-xl"
+                            onClick={() => setOrderToDelete(null)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button 
+                            variant="destructive" 
+                            className="flex-1 bg-red-600 hover:bg-red-700 font-bold uppercase text-[10px] tracking-widest h-10 rounded-xl shadow-lg shadow-red-100"
+                            onClick={async () => {
+                                if (orderToDelete) {
+                                    await deleteOrder(orderToDelete.id);
+                                    toast.success(`Order ${orderToDelete.orderNumber} deleted successfully`);
+                                    setOrderToDelete(null);
+                                }
+                            }}
+                        >
+                            Yes, Delete
                         </Button>
                     </div>
                 </DialogContent>

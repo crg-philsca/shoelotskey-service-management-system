@@ -2,7 +2,25 @@ export type JobStatus = 'new-order' | 'on-going' | 'for-release' | 'claimed';
 export type Priority = 'regular' | 'rush' | 'premium';
 export type ShippingPreference = 'pickup' | 'delivery';
 export type PaymentMethod = 'cash' | 'gcash' | 'maya';
-export type PaymentStatus = 'fully-paid' | 'downpayment';
+export type PaymentStatus = 'fully-paid' | 'downpayment' | 'unpaid' | 'pending';
+
+export interface InventoryUsed {
+  itemId: number;
+  name: string;
+  quantity: number;
+  unit: string;
+}
+
+export interface InventoryItem {
+  id: number;
+  name: string;
+  category: string;
+  stock: number;
+  unit: string;
+  price: number;
+  status: string;
+  isActive: boolean;
+}
 
 export interface BaseJobOrderData {
   // Customer Information
@@ -93,6 +111,8 @@ export interface JobOrder extends BaseJobOrderData {
     timestamp: Date;
     user: string;
   }>;
+  inventoryUsed?: InventoryUsed[];
+  inventoryApplied?: boolean;
 }
 
 export interface Service {

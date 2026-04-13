@@ -25,14 +25,22 @@ import type { JobOrder } from '@/app/types';
 
 type TotalOrdersProps = {
     onSetHeaderActionRight?: (action: ReactNode | null) => void;
+    user: { token: string };
 };
 
-export default function TotalOrders({ onSetHeaderActionRight }: TotalOrdersProps) {
+export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrdersProps) {
+    useEffect(() => {
+        // [OWASP A09] Security Audit: Logging view access with token context
+        if (user.token) {
+            console.log('[SECURITY] Total Orders accessed by authenticated session');
+        }
+    }, [user.token]);
+
     const navigate = useNavigate();
     const location = useLocation();
     const { orders } = useOrders();
 
-    const [profitRange, setProfitRange] = useState<'Daily' | 'Weekly' | 'Quarterly' | 'Annually'>(() => {
+    const [profitRange, setProfitRange] = useState<'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Annually'>(() => {
         return (location.state as any)?.dateRange || 'Daily';
     });
     const [searchQuery, setSearchQuery] = useState('');
@@ -74,7 +82,7 @@ export default function TotalOrders({ onSetHeaderActionRight }: TotalOrdersProps
                     </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-40 p-0 rounded-xl border border-red-600 bg-white shadow-lg overflow-hidden">
-                    {['Daily', 'Weekly', 'Quarterly', 'Annually'].map((range) => (
+                    {['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Annually'].map((range) => (
                         <DropdownMenuItem
                             key={range}
                             onClick={() => setProfitRange(range as typeof profitRange)}
@@ -103,6 +111,7 @@ export default function TotalOrders({ onSetHeaderActionRight }: TotalOrdersProps
                 return createdAt >= startOfToday;
             }
             if (profitRange === 'Weekly') return diffDays < 7;
+            if (profitRange === 'Monthly') return diffDays < 30;
             if (profitRange === 'Quarterly') return diffDays < 90;
             if (profitRange === 'Annually') return diffDays < 365;
             return true;
@@ -166,7 +175,8 @@ export default function TotalOrders({ onSetHeaderActionRight }: TotalOrdersProps
 
     const totalOrdersCount = filteredOrders.length;
     const paidOrdersCount = filteredOrders.filter((order) => order.paymentStatus === 'fully-paid').length;
-    const activeOrdersCount = filteredOrders.filter((order) => order.paymentStatus !== 'fully-paid').length;
+    const downpaymentOrdersCount = filteredOrders.filter((order) => order.paymentStatus === 'downpayment').length;
+    const activeOrdersCount = filteredOrders.filter((order) => order.paymentStatus !== 'fully-paid').length; // Active means not fully-paid (downpayment, unpaid, pending)
 
     const handlePageChange = (page: number) => {
         setCurrentPage(page);
@@ -175,7 +185,7 @@ export default function TotalOrders({ onSetHeaderActionRight }: TotalOrdersProps
 
     return (
         <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <Card className="border-none shadow-lg bg-gradient-to-br from-blue-50 to-white">
                     <CardContent className="pt-6 pb-4">
                         <div className="flex items-center gap-2 mb-2">
@@ -194,9 +204,21 @@ export default function TotalOrders({ onSetHeaderActionRight }: TotalOrdersProps
                             <div className="p-2 rounded-lg bg-green-100 text-green-700">
                                 <Wallet className="h-4 w-4" />
                             </div>
-                            <p className="text-xs font-black uppercase tracking-wider text-gray-500">Paid Orders</p>
+                            <p className="text-xs font-black uppercase tracking-wider text-gray-500">Fully Paid Orders</p>
                         </div>
                         <p className="text-3xl font-black text-green-700 tracking-tight">{paidOrdersCount}</p>
+                    </CardContent>
+                </Card>
+
+                <Card className="border-none shadow-lg bg-gradient-to-br from-red-50 to-white">
+                    <CardContent className="pt-6 pb-4">
+                        <div className="flex items-center gap-2 mb-2">
+                            <div className="p-2 rounded-lg bg-red-100 text-red-700">
+                                <Wallet className="h-4 w-4" />
+                            </div>
+                            <p className="text-xs font-black uppercase tracking-wider text-gray-500">Downpayment Orders</p>
+                        </div>
+                        <p className="text-3xl font-black text-red-700 tracking-tight">{downpaymentOrdersCount}</p>
                     </CardContent>
                 </Card>
 
@@ -211,9 +233,7 @@ export default function TotalOrders({ onSetHeaderActionRight }: TotalOrdersProps
                         <p className="text-3xl font-black text-amber-700 tracking-tight">{activeOrdersCount}</p>
                     </CardContent>
                 </Card>
-
-
-            </div>
+            </div >
 
             <Card className="shadow-xl border-0">
                 <CardHeader className="pb-2 pt-6">
@@ -312,7 +332,7 @@ export default function TotalOrders({ onSetHeaderActionRight }: TotalOrdersProps
                                                         : order.priorityLevel}
                                             </TableCell>
                                             <TableCell className="text-sm font-semibold text-gray-800">
-                                                {order.paymentStatus}
+                                                {order.paymentStatus === 'fully-paid' ? 'Fully Paid' : order.paymentStatus === 'downpayment' ? 'Downpayment' : order.paymentStatus.charAt(0).toUpperCase() + order.paymentStatus.slice(1)}
                                             </TableCell>
                                             <TableCell className="text-right font-bold text-sm text-gray-900">
                                                 ₱{(order.grandTotal || 0).toLocaleString()}

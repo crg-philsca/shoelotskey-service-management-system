@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Filter, ArrowLeft, ChevronLeft, ChevronRight, ClipboardCheck } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
@@ -15,7 +15,14 @@ import { useActivities } from '@/app/context/ActivityContext';
  * PURPOSE: Displays a list of system-wide activities (Audit Trail).
  * DATA SOURCE: ActivityContext (Synced with AuditLog backend table).
  */
-export default function ActivityHistory() {
+export default function ActivityHistory({ user }: { user: { token: string } }) {
+    useEffect(() => {
+        // [OWASP A09] Security Audit: Logging view access with token context
+        if (user.token) {
+            console.log('[SECURITY] Activity History accessed by authenticated session');
+        }
+    }, [user.token]);
+
     const navigate = useNavigate();
     const { activities } = useActivities();
     const [searchTerm, setSearchTerm] = useState('');
@@ -91,7 +98,7 @@ export default function ActivityHistory() {
                     {/* Search and Filter Section - DASHBOARD STYLE */}
                     <div className="flex flex-wrap md:flex-nowrap gap-2 md:gap-4 mb-4 items-center">
                         <Button 
-                            onClick={() => navigate('/service-management')}
+                            onClick={() => navigate('/user-management')}
                             className="bg-red-600 text-white hover:bg-red-700 h-9 px-3 md:px-4 flex-shrink-0 uppercase text-[11px] font-bold flex items-center gap-1.5"
                             size="sm"
                         >

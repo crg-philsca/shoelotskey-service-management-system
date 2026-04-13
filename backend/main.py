@@ -3,8 +3,8 @@
 from fastapi import FastAPI, Depends, HTTPException, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import text, inspect, func
-from typing import List, Dict, Any, Union
+from sqlalchemy import text, inspect, func, or_
+from typing import List, Dict, Any, Union, Optional
 from datetime import datetime, timedelta
 import os
 import uuid
@@ -15,20 +15,39 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-# Internal Imports
+import bcrypt as _bcrypt
+
+class _BcryptWrapper:
+    @staticmethod
+    def hash(password: str) -> str:
+        return _bcrypt.hashpw(password.encode('utf-8'), _bcrypt.gensalt()).decode('utf-8')
+        
+    @staticmethod
+    def verify(password: str, hashed: str) -> bool:
+        # If the hash doesn't start with a valid bcrypt identifier (e.g. $2b$, $2a$), 
+        # raise ValueError to trigger the plaintext fallback in the login route.
+        if not hashed.startswith('$2'):
+            raise ValueError("not a valid bcrypt hash")
+        
+        return _bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+
+bcrypt = _BcryptWrapper()
 from models import (
     Base, Order, Item, Service, Expense, StatusLog, 
     User, Customer, Role, Status, AuditLog, ItemServiceMapping,
     Payment, Delivery, ServiceCategory, PriorityLevel, Condition,
-    ItemConditionMapping, ShippingPreference, PaymentMethod, PaymentStatus
+    ItemConditionMapping, ShippingPreference, PaymentMethod, PaymentStatus,
+    Inventory, InventoryLog
 )
 from schemas import (
     OrderSchema, ServiceSchema, ExpenseSchema, UserSchema, LoginRequest, 
     ForgotPasswordRequest, ResetPasswordRequest, RoleSchema, StatusSchema, 
-    ItemSchema, PaymentSchema, DeliverySchema, UserCreateSchema, UserUpdateSchema
+    ItemSchema, PaymentSchema, DeliverySchema, UserCreateSchema, UserUpdateSchema,
+    InventorySchema, InventoryUpdateSchema, InventoryLogSchema
 )
 from database import engine, get_db, SessionLocal, DATABASE_URL
 from ml_engine import predictor
+from auth_utils import get_current_user, require_role, create_access_token, sanitize_error
 
 # ------------------------------------------
 # SYSTEM INITIALIZATION
@@ -48,6 +67,14 @@ app = FastAPI(
 # Configure Templates for custom error pages
 # Look in the same directory as main.py for the 'templates' folder
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
+
+# --- AUTOMATIC TABLE GEN (OWASP A03: Integrity Verification) ---
+try:
+    print("[INIT] Syncing Database Schema...")
+    Base.metadata.create_all(bind=engine)
+    print("[INIT] Database Schema OK.")
+except Exception as e:
+    print(f"[INIT] DB ERROR: {e}")
 
 @app.exception_handler(404)
 async def not_found_exception_handler(request: Request, exc: Exception):
@@ -86,6 +113,63 @@ async def not_found_exception_handler(request: Request, exc: Exception):
         if 'db' in locals(): db.close()
 
     return templates.TemplateResponse("404.html", {"request": request}, status_code=404)
+    
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """
+    OWASP A10: MISHANDLING OF EXCEPTIONAL CONDITIONS PREVENTION
+    Catches all unhandled exceptions and returns a generic security-hardened message.
+    """
+    import traceback
+    import sys
+
+    # Extract traceback info
+    exc_type, exc_value, exc_traceback = sys.exc_info()
+    tb_list = traceback.extract_tb(exc_traceback)
+    
+    # Get the last meaningful frame
+    file_name = "unknown"
+    line_no = 0
+    if tb_list:
+        last_frame = tb_list[-1]
+        file_name = os.path.basename(last_frame.filename)
+        line_no = last_frame.lineno
+
+    raw_msg = str(exc)
+    safe_msg = sanitize_error(raw_msg)
+    
+    # [VITAL DEFENSE TOOL] Log to DB for Audit UI
+    try:
+        db = SessionLocal()
+        new_log = AuditLog(
+            user_id=1, 
+            action_type="SERVER_ERROR",
+            table_name="backend_v2",
+            record_id=0,
+            old_values={"error": raw_msg},
+            new_values={
+                "file": file_name,
+                "line": line_no,
+                "url": request.url.path,
+                "method": request.method
+            }
+        )
+        db.add(new_log)
+        db.commit()
+    except: pass
+    finally:
+        if 'db' in locals(): db.close()
+
+    print(f"[SECURITY ALERT] Unhandled Exception at {file_name}:{line_no} -> {raw_msg}")
+    
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": safe_msg, 
+            "error_id": str(uuid.uuid4())[:8],
+            "debug_info": {"file": file_name, "line": line_no}
+        }
+    )
 
 # Mount Brand Assets
 app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="brand_assets")
@@ -268,10 +352,10 @@ def seed_lookups(db: Session):
         db.add_all([PaymentMethod(method_name=m) for m in ['cash', 'gcash', 'bank-transfer']])
         db.commit()
 
-    # Seed Payment Statuses — must match frontend: 'fully-paid', 'downpayment'
+    # Seed Payment Statuses — must match frontend: 'fully-paid', 'downpayment', 'unpaid'
     if db.query(PaymentStatus).count() == 0:
         print(">>> Seeding Payment Statuses...")
-        db.add_all([PaymentStatus(status_name=s) for s in ['fully-paid', 'downpayment', 'pending']])
+        db.add_all([PaymentStatus(status_name=s) for s in ['fully-paid', 'downpayment', 'unpaid', 'pending']])
         db.commit()
 
     # Seed Shipping Preferences — must match frontend: 'pickup', 'delivery'
@@ -367,10 +451,10 @@ def seed_lookups(db: Session):
         role_owner = db.query(Role).filter(Role.role_name == "owner").first()
         role_staff = db.query(Role).filter(Role.role_name == "staff").first()
         if role_owner:
-            owner = User(username="owner", email="owner@shoelotskey.com", password_hash="owner123", role_id=role_owner.role_id)
+            owner = User(username="owner", email="owner@shoelotskey.com", password_hash=bcrypt.hash("owner123"), role_id=role_owner.role_id)
             db.add(owner)
         if role_staff:
-            staff = User(username="staff", email="staff@shoelotskey.com", password_hash="staff123", role_id=role_staff.role_id)
+            staff = User(username="staff", email="staff@shoelotskey.com", password_hash=bcrypt.hash("staff123"), role_id=role_staff.role_id)
             db.add(staff)
         db.commit()
 
@@ -391,8 +475,6 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     print(f"[AUTH] Trace: Login attempt for '{request.username}'")
     
     try:
-        from sqlalchemy import or_
-        from datetime import datetime, timedelta
 
         db_user = db.query(User).options(joinedload(User.role)).filter(
             or_(User.username == request.username, User.email == request.username)
@@ -410,19 +492,47 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
                 detail=f"Account locked. Try again in {int(remaining)} minutes."
             )
 
-        # 2. VALIDATE PASSWORD
-        if db_user.password_hash == request.password:
+        # 2. VALIDATE PASSWORD (Bcrypt with Plaintext Migration)
+        pw_match = False
+        try:
+            pw_match = bcrypt.verify(request.password, db_user.password_hash)
+        except:
+            # Legacy Plaintext Fallback & Migration
+            if db_user.password_hash == request.password:
+                pw_match = True
+                # Migrate to hash automatically
+                db_user.password_hash = bcrypt.hash(request.password)
+                db.commit()
+
+        if pw_match:
             # SUCCESS: Reset attempts and unlock
             db_user.failed_login_attempts = 0
             db_user.locked_until = None
             db.commit()
             
             print(f"[AUTH] Granted: {db_user.username} authenticated.")
+            access_token = create_access_token(data={"sub": db_user.username})
+            
+            # Security Log: Success (OWASP A09)
+            try:
+                sec_log = AuditLog(
+                    user_id=db_user.user_id,
+                    action_type="LOGIN_SUCCESS",
+                    table_name="auth",
+                    record_id=db_user.user_id,
+                    new_values={"user_agent": request.headers.get("user-agent")}
+                )
+                db.add(sec_log)
+                db.commit()
+            except: pass
+
             return {
                 "user_id": db_user.user_id,
                 "username": db_user.username,
                 "role": db_user.role.role_name,
-                "email": db_user.email
+                "email": db_user.email,
+                "access_token": access_token,
+                "token_type": "bearer"
             }
         else:
             # FAILURE: Increment attempts
@@ -534,7 +644,7 @@ async def forgot_password(request: Request, body: ForgotPasswordRequest, db: Ses
         print(" [DEVELOPER MODE] PASSWORD RESET LINK GENERATED")
         print(f" LINK: {reset_link}")
         print("*"*60 + "\n")
-        return {"message": "Password recovery link generated (Demonstration Mode).", "debug_token": token}
+        return {"message": "Password recovery link generated.", "debug_token": token}
 
 @app.get("/api/health")
 def health_check():
@@ -565,8 +675,8 @@ async def reset_password(request: ResetPasswordRequest, db: Session = Depends(ge
         db.commit()
         raise HTTPException(status_code=400, detail="Reset link has expired. Please request a new one.")
 
-    # 1. Update password
-    user.password_hash = request.new_password # Plaintext as per current architecture
+    # 1. Update password (Secure Hashing)
+    user.password_hash = bcrypt.hash(request.new_password)
     user.reset_token = None # Clear token after use
     user.reset_token_expiry = None
     db.commit()
@@ -600,8 +710,8 @@ async def get_prediction(order_data: Dict[str, Any], db: Session = Depends(get_d
         return {"predicted_date": fallback.isoformat(), "status": "fallback", "error": str(e)}
 
 @app.post("/api/ml/train")
-def train_model(db: Session = Depends(get_db)):
-    """Triggers retraining of the ML model based on history."""
+def train_model(db: Session = Depends(get_db), current_user: User = Depends(require_role("owner"))):
+    """Triggers retraining of the ML model based on history (Owner only)."""
     success = predictor.train_from_history(db)
     if success:
         return {"message": "Model retrained successfully"}
@@ -613,14 +723,14 @@ def train_model(db: Session = Depends(get_db)):
 # ==========================================
 
 @app.get("/api/users", response_model=List[UserSchema])
-def get_users(db: Session = Depends(get_db)):
-    """Fetch all users along with their roles."""
+def get_users(db: Session = Depends(get_db), current_user: User = Depends(require_role("owner"))):
+    """Fetch all users (Owner only - OWASP A01)."""
     users = db.query(User).options(joinedload(User.role)).all()
     return users
 
 @app.post("/api/users", response_model=UserSchema)
-def create_user(user_data: UserCreateSchema, db: Session = Depends(get_db)):
-    """Create a new staff or owner account."""
+def create_user(user_data: UserCreateSchema, db: Session = Depends(get_db), current_user: User = Depends(require_role("owner"))):
+    """Create a new account (Owner only - OWASP A01)."""
     if db.query(User).filter(User.username == user_data.username).first():
         raise HTTPException(status_code=400, detail="Username already exists")
     if db.query(User).filter(User.email == user_data.email).first():
@@ -633,7 +743,7 @@ def create_user(user_data: UserCreateSchema, db: Session = Depends(get_db)):
     new_user = User(
         username=user_data.username,
         email=user_data.email,
-        password_hash=user_data.password, # Note: using plaintext based on current architecture
+        password_hash=bcrypt.hash(user_data.password),
         role_id=db_role.role_id,
         is_active=user_data.is_active
     )
@@ -643,8 +753,8 @@ def create_user(user_data: UserCreateSchema, db: Session = Depends(get_db)):
     return new_user
 
 @app.put("/api/users/{user_id}", response_model=UserSchema)
-def update_user(user_id: int, user_update: UserUpdateSchema, db: Session = Depends(get_db)):
-    """Update user details."""
+def update_user(user_id: int, user_update: UserUpdateSchema, db: Session = Depends(get_db), current_user: User = Depends(require_role("owner"))):
+    """Update user details (Owner only)."""
     db_user = db.query(User).filter(User.user_id == user_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -661,7 +771,7 @@ def update_user(user_id: int, user_update: UserUpdateSchema, db: Session = Depen
         db_user.email = user_update.email
         
     if user_update.password:
-        db_user.password_hash = user_update.password
+        db_user.password_hash = bcrypt.hash(user_update.password)
         
     if user_update.role_name:
         db_role = db.query(Role).filter(Role.role_name == user_update.role_name).first()
@@ -677,8 +787,8 @@ def update_user(user_id: int, user_update: UserUpdateSchema, db: Session = Depen
     return db_user
 
 @app.delete("/api/users/{user_id}")
-def delete_user(user_id: int, db: Session = Depends(get_db)):
-    """Remove user access."""
+def delete_user(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_role("owner"))):
+    """Remove user access (Owner only)."""
     db_user = db.query(User).filter(User.user_id == user_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -698,8 +808,8 @@ def delete_user(user_id: int, db: Session = Depends(get_db)):
 # ==========================================
 
 @app.get("/api/orders", response_model=List[OrderSchema])
-def read_orders(db: Session = Depends(get_db)):
-    """Retrieves all orders with full 3NF hydration (Customer, Items, Status, Payments, Delivery)."""
+def read_orders(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Retrieves all orders with full 3NF hydration (Auth Required)."""
     print("[QUERY] Fetching Order history...")
     orders = db.query(Order).options(
         joinedload(Order.customer),
@@ -718,7 +828,7 @@ def read_orders(db: Session = Depends(get_db)):
     return orders
 
 @app.post("/api/orders", response_model=OrderSchema)
-def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db)):
+def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     ENDPOINT: Create Job Order
     LOGIC:
@@ -790,9 +900,9 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db)):
         db.flush()
 
         # Payment Normalization
-        # DB stores lowercase: 'cash', 'gcash', 'bank-transfer'
+        # DB stores lowercase: 'cash', 'gcash', 'maya', 'bank-transfer'
         m_name = str(order_data.get("paymentMethod", "cash")).lower()
-        if m_name not in ["cash", "gcash", "bank-transfer"]: m_name = "cash"
+        if m_name not in ["cash", "gcash", "maya", "bank-transfer"]: m_name = "cash"
         db_method = db.query(PaymentMethod).filter(PaymentMethod.method_name == m_name).first() or db.query(PaymentMethod).first()
         
         # DB stores lowercase: 'fully-paid', 'downpayment', 'pending'
@@ -861,12 +971,27 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db)):
 
             # Associate Conditions (3NF Bridge)
             cond_data = item_data.get("condition", {})
+            print(f"[DEBUG] Item {db_item.item_id} Condition Data: {cond_data}")
             if isinstance(cond_data, dict):
-                c_map = {"scratches": "Scratches", "yellowing": "Yellowing", "ripsHoles": "Rips/Holes", "deepStains": "Deep Stains", "soleSeparation": "Sole Separation", "wornOut": "Worn Out"}
+                c_map = {
+                    "scratches": "scratches", 
+                    "yellowing": "yellowing", 
+                    "ripsHoles": "ripsholes", 
+                    "deepStains": "deepstains", 
+                    "soleSeparation": "soleseparation", 
+                    "wornOut": "wornout"
+                }
                 for key, val in c_map.items():
                     if cond_data.get(key):
-                        c_obj = db.query(Condition).filter(Condition.condition_name == val).first()
-                        if c_obj: db_item.conditions.append(c_obj)
+                        # Force case-insensitive match since DB stores title-cased terms e.g. "Yellowing", "Rips/Holes"
+                        val_lower = val.replace(' ', '').replace('/', '').lower()
+                        # We simply remove special chars from DB row and compare
+                        c_obj = db.query(Condition).filter(func.replace(func.replace(func.lower(Condition.condition_name), ' ', ''), '/', '') == val_lower).first()
+                        if c_obj: 
+                            print(f"[DEBUG] Found condition '{val}' (ID: {c_obj.condition_id}) - Appending to Item {db_item.item_id}")
+                            db_item.conditions.append(c_obj)
+                        else:
+                            print(f"[DEBUG] WARNING: NO MATCH for condition names '{val}' in the conditions table!")
             
             db.flush()
 
@@ -916,38 +1041,41 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
     
     # 1. Status Lifecycle & Analytics Logging
     if "status" in updates:
-        status_name = updates["status"]
-        # DB now stores the exact frontend values directly
+        # Case-insensitive lookup and Slug normalization
+        status_name = str(updates["status"]).lower().strip()
         status_map = {
             "new-order": "new-order",
             "on-going": "on-going",
             "for-release": "for-release",
             "claimed": "claimed",
-            "cancelled": "cancelled",
-            # Legacy fallbacks
-            "Pending": "new-order", "In Progress": "on-going",
-            "Completed": "for-release", "Claimed": "claimed"
+            "pending": "new-order",
+            "in progress": "on-going",
+            "completed": "for-release"
         }
         mapped_status = status_map.get(status_name, "new-order")
-        db_status = db.query(Status).filter(Status.status_name == mapped_status).first()
+        # Direct DB lookup for the status object
+        db_status = db.query(Status).filter(func.lower(Status.status_name) == mapped_status.lower()).first()
         if db_status:
             db_order.status_id = db_status.status_id
+            
             # Log the change for ML time-tracking
             log = StatusLog(order_id=order_id, status_id=db_status.status_id, user_id=updates.get("updater_id", 1)) 
             db.add(log)
+            print(f"[EDIT] Status changed for Order {db_order.order_number}: {mapped_status}")
+        else:
+            print(f"[EDIT] Error: Mapped status '{mapped_status}' not found in Status table.")
 
-            
-            if mapped_status == "claimed":
-                db_order.claimed_at = datetime.now()
-            elif mapped_status == "for-release":
-                db_order.released_at = datetime.now()
+        if mapped_status == "claimed":
+            db_order.claimed_at = datetime.now()
+        elif mapped_status == "for-release":
+            db_order.released_at = datetime.now()
 
     # 2. Handle Priority Level (ML Input)
     if "priorityLevel" in updates:
-        # DB stores lowercase: 'regular', 'rush', 'premium'
-        p_val = str(updates["priorityLevel"]).lower()
+        p_val = str(updates["priorityLevel"]).lower().strip()
         db_prio = db.query(PriorityLevel).filter(PriorityLevel.priority_name == p_val).first()
-        if db_prio: db_order.priority_id = db_prio.priority_id
+        if db_prio: 
+            db_order.priority_id = db_prio.priority_id
 
     # 3. Handle Customer Information (Relational Update)
     if ("customerName" in updates or "contactNumber" in updates) and db_order.customer:
@@ -958,42 +1086,78 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
     if db_order.payments:
         db_pay = db_order.payments[0]
         if "paymentMethod" in updates:
-            # DB stores lowercase: 'cash', 'gcash', 'bank-transfer'
-            m_name = str(updates["paymentMethod"]).lower()
-            if m_name not in ["cash", "gcash", "bank-transfer"]: m_name = "cash"
+            # DB stores lowercase: 'cash', 'gcash', 'maya', 'bank-transfer'
+            m_name = str(updates["paymentMethod"]).lower().strip()
+            if m_name not in ["cash", "gcash", "maya", "bank-transfer"]: m_name = "cash"
             db_m = db.query(PaymentMethod).filter(PaymentMethod.method_name == m_name).first()
-            if db_m: db_pay.method_id = db_m.method_id
+            if db_m: 
+                db_pay.method_id = db_m.method_id
         if "paymentStatus" in updates:
             # DB stores: 'fully-paid', 'downpayment', 'pending'
-            ps_raw = str(updates["paymentStatus"]).lower()
+            ps_raw = str(updates["paymentStatus"]).lower().strip()
             ps_name = ps_raw if ps_raw in ["fully-paid", "downpayment", "pending"] else "fully-paid"
             db_ps = db.query(PaymentStatus).filter(PaymentStatus.status_name == ps_name).first()
-            if db_ps: db_pay.status_id = db_ps.p_status_id
-        if "amountReceived" in updates: db_pay.amount_received = updates["amountReceived"]
-        if "balance" in updates: db_pay.balance = updates["balance"]
-        if "referenceNo" in updates: db_pay.reference_no = updates["referenceNo"]
-        if "depositAmount" in updates: db_pay.deposit_amount = updates["depositAmount"]
+            if db_ps: 
+                db_pay.status_id = db_ps.p_status_id
+        if "amountReceived" in updates: 
+            db_pay.amount_received = updates["amountReceived"]
+        if "balance" in updates: 
+            db_pay.balance = updates["balance"]
+        if "referenceNo" in updates: 
+            db_pay.reference_no = updates["referenceNo"]
+        if "depositAmount" in updates: 
+            db_pay.deposit_amount = updates["depositAmount"]
 
     if db_order.delivery:
         if "shippingPreference" in updates:
-            # DB stores lowercase: 'pickup', 'delivery'
-            sp_raw = str(updates["shippingPreference"]).lower()
+            sp_raw = str(updates["shippingPreference"]).lower().strip()
             sp_name = sp_raw if sp_raw in ["pickup", "delivery"] else "pickup"
             db_pref = db.query(ShippingPreference).filter(ShippingPreference.pref_name == sp_name).first()
-            if db_pref: db_order.delivery.pref_id = db_pref.pref_id
-        for field in ["deliveryAddress", "deliveryCourier", "releaseTime", "province", "city", "barangay", "zipCode"]:
-            if field in updates: setattr(db_order.delivery, field.lower() if field != "zipCode" else "zip_code", updates[field])
+            if db_pref: 
+                db_order.delivery.pref_id = db_pref.pref_id
+        
+        # Explicit mapping for Delivery fields to handle camelCase -> snake_case
+        delivery_fields = {
+            "deliveryAddress": "delivery_address",
+            "deliveryCourier": "delivery_courier",
+            "releaseTime": "release_time",
+            "province": "province",
+            "city": "city",
+            "barangay": "barangay",
+            "zipCode": "zip_code"
+        }
+        for frontend_field, db_col in delivery_fields.items():
+            if frontend_field in updates:
+                setattr(db_order.delivery, db_col, updates[frontend_field])
 
-    # 5. Handle Prediction Updates (Re-ML if changed)
+    # 5. Handle Inventory Persistence (New Dynamic Feature)
+    if "inventoryApplied" in updates: 
+        db_order.inventory_applied = updates["inventoryApplied"]
+    if "inventoryUsed" in updates: 
+        db_order.inventory_used = updates["inventoryUsed"]
+
+    # 5. Handle Date Updates (Order Date & Predicted Completion)
+    if "transactionDate" in updates:
+        td_iso = updates["transactionDate"]
+        if td_iso:
+            try:
+                db_order.created_at = datetime.fromisoformat(td_iso.replace('Z', '+00:00'))
+            except Exception as e:
+                print(f"[EDIT] Error parsing transactionDate: {e}")
+
     if "predictedCompletionDate" in updates:
         expected_iso = updates["predictedCompletionDate"]
         if expected_iso:
             try:
                 db_order.expected_at = datetime.fromisoformat(expected_iso.replace('Z', '+00:00'))
-            except Exception:
+            except Exception as e:
+                print(f"[EDIT] Error parsing predictedCompletionDate: {e}")
                 db_order.expected_at = predictor.predict_completion(db, updates)
         else:
-            db_order.expected_at = predictor.predict_completion(db, updates)
+             db_order.expected_at = predictor.predict_completion(db, updates)
+    elif "status" in updates or "priorityLevel" in updates:
+        # Re-run prediction if status/priority changed but date wasn't manually set
+        db_order.expected_at = predictor.predict_completion(db, updates)
 
     # 6. Cascading Updates: Items, Conditions, and Services
     items_updates = updates.get("items", [])
@@ -1020,16 +1184,38 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
         if "quantity" in item_data: db_item.quantity = item_data["quantity"]
         if "condition" in item_data and isinstance(item_data["condition"], dict) and "others" in item_data["condition"]:
             db_item.item_notes = item_data["condition"]["others"]
-
         # Sync Conditions (3NF Bridge)
         if "condition" in item_data and isinstance(item_data["condition"], dict):
+            print(f"[DEBUG] UPDATING Conditions for Item {db_item.item_id}. Payload: {item_data['condition']}")
             db_item.conditions = [] # Clear existing
             c_data = item_data["condition"]
-            c_map = {"scratches": "Scratches", "yellowing": "Yellowing", "ripsHoles": "Rips/Holes", "deepStains": "Deep Stains", "soleSeparation": "Sole Separation", "wornOut": "Worn Out"}
+            
+            # 3NF Lookup Table Mapping (Frontend CamelCase -> Backend DB SnakeCase/Lowercase)
+            c_map = {
+                "scratches": "scratches", 
+                "yellowing": "yellowing", 
+                "ripsHoles": "ripsholes", 
+                "deepStains": "deepstains", 
+                "soleSeparation": "soleseparation", 
+                "wornOut": "wornout"
+            }
+            
             for key, val in c_map.items():
                 if c_data.get(key):
+                    # Robust lookup: Try exact match first, then case-insensitive, then normalized
                     c_obj = db.query(Condition).filter(Condition.condition_name == val).first()
-                    if c_obj: db_item.conditions.append(c_obj)
+                    if not c_obj:
+                        c_obj = db.query(Condition).filter(func.lower(Condition.condition_name) == val.lower()).first()
+                    if not c_obj:
+                        # Normalize by removing spaces/slashes for a more robust match
+                        normalized_val = val.lower().replace(" ", "").replace("/", "")
+                        c_obj = db.query(Condition).filter(func.replace(func.replace(func.lower(Condition.condition_name), ' ', ''), '/', '') == normalized_val).first()
+                    
+                    if c_obj: 
+                        print(f"[DEBUG] MATCH: Applied '{val}' to Item {db_item.item_id}")
+                        db_item.conditions.append(c_obj)
+                    else:
+                        print(f"[DEBUG] ERROR: Condition '{val}' not found in DB lookup table.")
 
         # Sync Services (Pricing Snapshots)
         if ("baseService" in item_data or "addOns" in item_data):
@@ -1198,9 +1384,14 @@ def create_expense(expense_data: dict, db: Session = Depends(get_db)):
     else:
         exp_date = datetime.now()
 
+    # Combine category and notes to fit into the single 'description' column in 3NF DB
+    cat = expense_data.get('category', 'Misc Expense')
+    notes = expense_data.get('notes', '')
+    desc_str = f"{cat} || {notes}" if notes else cat
+
     db_expense = Expense(
         amount=expense_data.get('amount', 0.0),
-        description=expense_data.get('notes') or expense_data.get('category') or "Misc Expense",
+        description=desc_str,
         expense_date=exp_date,
         user_id=user_id
     )
@@ -1208,6 +1399,49 @@ def create_expense(expense_data: dict, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_expense)
     return db_expense
+
+@app.put("/api/expenses/{expense_id}", response_model=ExpenseSchema)
+def update_expense(expense_id: int, expense_data: dict, db: Session = Depends(get_db)):
+    """Updates an existing expense."""
+    db_exp = db.query(Expense).filter(Expense.expense_id == expense_id).first()
+    if not db_exp:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    
+    if 'amount' in expense_data:
+        db_exp.amount = expense_data['amount']
+        
+    cat = expense_data.get('category')
+    notes = expense_data.get('notes')
+    if cat is None or notes is None:
+        parts = (db_exp.description or '').split(' || ')
+        curr_cat = parts[0] if len(parts) > 0 else 'Misc Expense'
+        curr_notes = parts[1] if len(parts) > 1 else ''
+        cat = cat if cat is not None else curr_cat
+        notes = notes if notes is not None else curr_notes
+
+    db_exp.description = f"{cat} || {notes}" if notes else cat
+    
+    if 'date' in expense_data:
+        exp_date = expense_data['date']
+        if isinstance(exp_date, str):
+            try:
+                db_exp.expense_date = datetime.fromisoformat(exp_date.replace('Z', ''))
+            except ValueError:
+                pass
+                
+    db.commit()
+    db.refresh(db_exp)
+    return db_exp
+
+@app.delete("/api/expenses/{expense_id}")
+def delete_expense(expense_id: int, db: Session = Depends(get_db)):
+    """Permanently deletes an expense record."""
+    db_exp = db.query(Expense).filter(Expense.expense_id == expense_id).first()
+    if not db_exp:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    db.delete(db_exp)
+    db.commit()
+    return {"status": "success", "message": "Expense deleted."}
 
 @app.get("/api/activities")
 def get_activities(db: Session = Depends(get_db)):
@@ -1226,6 +1460,11 @@ def get_activities(db: Session = Depends(get_db)):
         elif log.action_type == "UPDATE" and log.new_values:
             # If it's a standard update, show what changed
             details = f"Updated {log.table_name}: {json.dumps(log.new_values)}"
+        elif log.action_type == "SERVER_ERROR" and log.new_values:
+            f = log.new_values.get("file", "unknown")
+            l = log.new_values.get("line", 0)
+            e = log.old_values.get("error", "Unknown error")
+            details = f"CRITICAL: {e} | File: {f} | Line: {l}"
 
         results.append({
             "id": str(log.audit_log_id),
@@ -1233,7 +1472,7 @@ def get_activities(db: Session = Depends(get_db)):
             "user": u.username if u else "System",
             "action": log.action_type.replace('_', ' '),
             "details": details,
-            "type": "system" if log.action_type == "404_NOT_FOUND" else "order"
+            "type": "critical" if log.action_type == "SERVER_ERROR" else ("system" if log.action_type == "404_NOT_FOUND" else "order")
         })
     return results
 
@@ -1257,13 +1496,101 @@ def log_custom_activity(activity: dict, db: Session = Depends(get_db)):
 
 
 
+# (Relocated UI Hosting section at EOF)
+# ==========================================
+# 12. INVENTORY ENDPOINTS
+# ==========================================
+
+@app.get("/api/inventory", response_model=List[InventorySchema])
+def get_inventory(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Fetch all supply items."""
+    return db.query(Inventory).all()
+
+@app.post("/api/inventory", response_model=InventorySchema)
+def create_inventory_item(item: InventorySchema, db: Session = Depends(get_db), current_user: User = Depends(require_role(["owner"]))):
+    """Admin-only: Add new material to catalog."""
+    new_item = Inventory(
+        item_name=item.item_name,
+        category=item.category,
+        stock_quantity=item.stock_quantity,
+        unit=item.unit,
+        unit_price=item.unit_price,
+        status=item.status or "In Stock",
+        is_active=item.is_active
+    )
+    db.add(new_item)
+    db.commit()
+    db.refresh(new_item)
+    return new_item
+
+@app.put("/api/inventory/{item_id}", response_model=InventorySchema)
+def update_inventory_item(item_id: int, updates: InventoryUpdateSchema, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Modify stock or metadata."""
+    item = db.query(Inventory).filter(Inventory.item_id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    
+    update_data = updates.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(item, key, value)
+    
+    db.commit()
+    db.refresh(item)
+    return item
+
+@app.post("/api/inventory/adjust")
+def adjust_stock(
+    item_id: int = Body(...), 
+    amount: float = Body(...), 
+    action: str = Body(...), # 'deduction', 'restock'
+    order_id: Optional[int] = Body(None),
+    db: Session = Depends(get_db), 
+    current_user: User = Depends(get_current_user)
+):
+    """Record stock movement and update balance."""
+    item = db.query(Inventory).filter(Inventory.item_id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    
+    # 1. Update the inventory balance
+    if action == 'deduction':
+        item.stock_quantity -= amount
+    else:
+        item.stock_quantity += amount
+    
+    # 2. Update status based on levels
+    if item.stock_quantity <= 5: item.status = "Critical"
+    elif item.stock_quantity <= 10: item.status = "Low Stock"
+    else: item.status = "In Stock"
+
+    # 3. Log the transaction
+    log = InventoryLog(
+        item_id=item_id,
+        change_amount=amount if action == 'restock' else -amount,
+        action_type=action,
+        order_id=order_id,
+        user_id=current_user.user_id
+    )
+    
+    db.add(log)
+    db.commit()
+    return {"status": "success", "new_stock": item.stock_quantity}
+
+# ------------------------------------------
+# DEFENSE DEBUGGING TOOLS
+# ------------------------------------------
+@app.get("/api/test-crash")
+def test_crash():
+    """Endpoint to simulate a server-side exception for debugging demos."""
+    raise ValueError("DEFENSE_SIMULATION: Critical Database Connection Interrupted!")
+
+
 # ------------------------------------------
 # UI HOSTING & SPA SUPPORT
 # ------------------------------------------
 # Resolves paths relative to main.py to find the 'dist' folder correctly.
 # NOTE: Use '../dist' because main.py is inside the 'backend' folder.
 
-# 1. Mount the 'assets' (CSS/JS) so the browser can load them
 # 1. Mount the 'assets' (CSS/JS) so the browser can load them
 base_dir = os.path.dirname(os.path.abspath(__file__))
 dist_path = os.path.abspath(os.path.join(base_dir, "..", "dist"))

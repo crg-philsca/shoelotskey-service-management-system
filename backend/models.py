@@ -165,10 +165,13 @@ class Order(Base):
     released_at = Column(DateTime, nullable=True)
     claimed_at = Column(DateTime, nullable=True)
     
+    user_id = Column(Integer, ForeignKey("users.user_id"), nullable=False)
+    inventory_applied = Column(Boolean, default=False)
+    inventory_used = Column(JSON, nullable=True)
     created_at = Column(TIMESTAMP, server_default=func.now())
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
-    user_id = Column(Integer, ForeignKey("users.user_id"), nullable=False)
     
+    # Relationships
     customer = relationship("Customer", back_populates="orders")
     status = relationship("Status", back_populates="orders")
     priority = relationship("PriorityLevel")
@@ -278,3 +281,36 @@ class AuditLog(Base):
     old_values = Column(JSON)
     new_values = Column(JSON)
     created_at = Column(TIMESTAMP, server_default=func.now())
+
+# ==========================================
+# 8. INVENTORY & STOCK MANAGEMENT
+# ==========================================
+
+class Inventory(Base):
+    """Tracks material and chemical supplies used in repairs."""
+    __tablename__ = "inventory"
+    item_id = Column(Integer, primary_key=True, autoincrement=True)
+    item_name = Column(String(100), nullable=False, unique=True)
+    category = Column(String(50), index=True)
+    stock_quantity = Column(Float, default=0.0)
+    unit = Column(String(20))
+    unit_price = Column(DECIMAL(10, 2), default=0.0)
+    status = Column(String(30)) # e.g., 'In Stock', 'Low Stock', 'Critical'
+    is_active = Column(Boolean, default=True)
+    created_at = Column(TIMESTAMP, server_default=func.now())
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
+
+class InventoryLog(Base):
+    """Audit trail for stock adjustments (deductions/restocks)."""
+    __tablename__ = "inventory_logs"
+    log_id = Column(Integer, primary_key=True, autoincrement=True)
+    item_id = Column(Integer, ForeignKey("inventory.item_id"), nullable=False)
+    change_amount = Column(Float, nullable=False)
+    action_type = Column(String(20), nullable=False) # 'deduction', 'restock', 'manual_edit'
+    order_id = Column(Integer, ForeignKey("orders.order_id"), nullable=True) # Linked to job order if needed
+    user_id = Column(Integer, ForeignKey("users.user_id"), nullable=False)
+    created_at = Column(TIMESTAMP, server_default=func.now())
+    
+    inventory_item = relationship("Inventory")
+    order = relationship("Order")
+    user = relationship("User")
