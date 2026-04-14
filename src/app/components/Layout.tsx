@@ -38,6 +38,7 @@ export default function Layout({ children, user, onLogout, headerAction, headerA
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', shortLabel: 'Dashboard' },
     { path: '/job-order-form', icon: FileText, label: 'Job Order Form', shortLabel: 'Job Order' },
     { path: '/release-calendar', icon: Calendar, label: 'Release Calendar', shortLabel: 'Calendar' },
+    { path: '/inventory', icon: Package, label: 'Inventory Management', shortLabel: 'Inventory' },
   ];
 
   const pageTitles: Record<string, string> = {

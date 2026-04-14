@@ -11,7 +11,9 @@ from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
 
 # Load variables from .env if present (Override system variables for project consistency)
-load_dotenv(override=True)
+from pathlib import Path
+env_path = Path(__file__).parent / ".env"
+load_dotenv(dotenv_path=env_path, override=True)
 
 # 1. DATABASE CONNECTION URL
 PG_URL = os.getenv("DATABASE_URL")
@@ -23,24 +25,35 @@ if PG_URL:
         separator = "&" if "?" in PG_URL else "?"
         PG_URL = f"{PG_URL}{separator}sslmode=require"
 
-LOCAL_SQLITE = "sqlite:///./shoelotskey_offline.db"
+# 2. DATABASE PATHS
+import os
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(BASE_DIR)
 
-# 2. ENGINE CONFIGURATION & OFFLINE-FALLBACK Auto-Switch
+# [USER REQUEST] Using 'shoelotskey.db' as the dedicated local fallback
+LOCAL_SQLITE_PATH = os.path.join(ROOT_DIR, "shoelotskey.db")
+LOCAL_SQLITE = f"sqlite:///{LOCAL_SQLITE_PATH}"
+
+# 3. ENGINE CONFIGURATION & OFFLINE-FALLBACK Auto-Switch
 engine = None
 is_sqlite = False
+conn_error = None
 
-if PG_URL:
-    try:
-        # Try primary AWS RDS PostgreSQL Connection
-        print("[DATABASE] Attempting connection to Primary PostgreSQL Database...")
-        primary_engine = create_engine(PG_URL, connect_args={"sslmode": "require"}, pool_pre_ping=True)
-        # Test connection validity
+try:
+    if PG_URL:
+        # Use a short timeout for the initial connection check (OWASP A09: Connection Resilience)
+        # connect_timeout=5 ensures we don't hang the server if the network drops/times out
+        primary_engine = create_engine(
+            PG_URL, 
+            connect_args={"sslmode": "require", "connect_timeout": 5}, 
+            pool_pre_ping=True,
+            pool_recycle=3600
+        )
         with primary_engine.connect() as conn:
             conn.execute(text("SELECT 1"))
-        
         engine = primary_engine
         DATABASE_URL = PG_URL
-        print("[DATABASE] SUCCESS: Linked to AWS PostgreSQL (Online)")
+        print(f"[DATABASE] SUCCESS: Linked to AWS PostgreSQL (Online)")
         
         # [DEFENSE VERIFICATION] Auto-Check required columns
         from sqlalchemy import inspect
@@ -52,11 +65,12 @@ if PG_URL:
                 print("[SCHEMA]  SUCCESS: inventory_used column VERIFIED.")
             else:
                 print("[SCHEMA]  WARNING: Missing inventory columns in 'orders' table!")
-    except Exception as e:
-        print("[DATABASE] CRITICAL ERROR: Could not connect to Primary PostgreSQL.")
-        print(f"           Trace: {str(e)[:100]}...")
-        print("[DATABASE] ACTION: Auto-Switching to Local SQLite Backup (Offline Mode)")
-        engine = None
+except Exception as e:
+    conn_error = str(e)
+    print("[DATABASE] CRITICAL ERROR: Could not connect to Primary PostgreSQL.")
+    print(f"           Trace: {str(e)[:100]}...")
+    print("[DATABASE] ACTION: Auto-Switching to Local SQLite Backup (Offline Mode)")
+    engine = None
 
 # If PG failed or no URL provided, lock in SQLite Offline Engine
 if engine is None:

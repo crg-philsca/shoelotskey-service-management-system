@@ -125,6 +125,10 @@ export default function App() {
                     <Route path="/total-sales" element={<TotalSales user={user} onSetHeaderActionRight={setHeaderActionRight} />} />
                     <Route path="/total-orders" element={<TotalOrders user={user} onSetHeaderActionRight={setHeaderActionRight} />} />
                     <Route path="/expenses" element={<Expenses user={user} onSetHeaderActionRight={setHeaderActionRight} />} />
+                    <Route 
+                      path="/inventory" 
+                      element={<Inventory user={user} onSetHeaderActionRight={setHeaderActionRight} />} 
+                    />
                     {user.role === 'owner' && (
                       <>
                         <Route 
@@ -132,14 +136,6 @@ export default function App() {
                           element={
                             <ProtectedRoute allowedRoles={['owner']} user={user}>
                               <SalesReport user={user} onSetHeaderActionRight={setHeaderActionRight} />
-                            </ProtectedRoute>
-                          } 
-                        />
-                        <Route 
-                          path="/inventory" 
-                          element={
-                            <ProtectedRoute allowedRoles={['owner']} user={user}>
-                              <Inventory user={user} onSetHeaderActionRight={setHeaderActionRight} />
                             </ProtectedRoute>
                           } 
                         />

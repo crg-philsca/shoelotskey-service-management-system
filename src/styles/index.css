@@ -40,6 +40,14 @@ body {
 	text-align: center !important;
 }
 
+.sidebar-collapsed [class*="CardTitle"] {
+	text-align: center !important;
+	margin: 0 auto !important;
+}
+
+.toaster>* {
+	pointer-events: auto;
+}
 
 /* Custom toast styling */
 .custom-toast {

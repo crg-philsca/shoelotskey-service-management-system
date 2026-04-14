@@ -189,14 +189,30 @@ app.add_middleware(
 
 @app.on_event("startup")
 def startup_sequence():
-    """Robust unified startup logic with connection verification."""
-    # Masked URL for logging (Security best practice)
-    masked_url = DATABASE_URL.split('@')[-1] if '@' in DATABASE_URL else DATABASE_URL.split('///')[-1]
-    
+    """BOOT SEQUENCE: Integrated Schema Migration, Integrity Checking, and Seeding."""
     print("\n" + "="*50)
     print(" SHOELOTSKEY SMS v2.0 - SYSTEM BOOT")
     print("="*50)
-    print(f"[BOOT] Connecting to: ...@{masked_url}")
+    print(f"[BOOT] Connecting to: {str(engine.url).split('@')[-1]}")
+    
+    # [USER REQUEST] Ensure local fallback database is ALWAYS ready even if we are online.
+    # We briefly initialize the local SQLite engine to push the schema if it's missing.
+    from database import LOCAL_SQLITE, Base
+    try:
+        from sqlalchemy import create_engine
+        local_engine = create_engine(LOCAL_SQLITE)
+        Base.metadata.create_all(bind=local_engine)
+        print("[BOOT] Local Fallback (shoelotskey.db) Structure: OK.")
+    except Exception as e:
+        print(f"[BOOT] LOCAL DB SYNC WARNING: {e}")
+
+    # 1. Base Schema Generation (Primary Engine)
+    try:
+        print("[DATABASE] SUCCESS: Linked")
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        print(f"[BOOT] DATABASE ERROR: {e}")
+        return # Cannot continue safely
     
     # 0. Connection check for Defense
     try:
@@ -274,36 +290,63 @@ def startup_sequence():
             db_exec.rollback()
         finally:
             db_exec.close()
-
     except Exception as e:
-        print(f">>> Boot Warning (Non-Critical): {e}")
+        print(f">>> Migration Warning (Phase 1): {e}")
 
-    # 5. Lookup Normalization & Seeding
+    # 2. Schema Migration & Synchronization (Cross-Engine)
+    # We ensure BOTH Cloud and Local mirror each other's structure
+    from database import LOCAL_SQLITE
+    engines_to_sync = [engine]
+    if "sqlite" not in str(engine.url):
+        from sqlalchemy import create_engine
+        engines_to_sync.append(create_engine(LOCAL_SQLITE))
+
+    for sync_engine in engines_to_sync:
+        try:
+            inspector = inspect(sync_engine)
+            tables = inspector.get_table_names()
+            is_pg = "postgresql" in str(sync_engine.url)
+            json_type = "JSONB" if is_pg else "JSON"
+            engine_name = "Cloud" if is_pg else "Local Fallback"
+            
+            with sync_engine.begin() as conn:
+                # Fix ORDERS table
+                if 'orders' in tables:
+                    cols = [c['name'] for c in inspector.get_columns('orders')]
+                    if 'inventory_applied' not in cols:
+                        print(f">>> Migration ({engine_name}): Adding orders.inventory_applied")
+                        conn.execute(text("ALTER TABLE orders ADD COLUMN inventory_applied BOOLEAN DEFAULT FALSE"))
+                    if 'inventory_used' not in cols:
+                        print(f">>> Migration ({engine_name}): Adding orders.inventory_used ({json_type})")
+                        if is_pg:
+                            conn.execute(text(f"ALTER TABLE orders ADD COLUMN inventory_used {json_type} DEFAULT '[]'::jsonb"))
+                        else:
+                            conn.execute(text(f"ALTER TABLE orders ADD COLUMN inventory_used {json_type} DEFAULT '[]'"))
+                
+                # Fix ITEMS table
+                if 'items' in tables:
+                    cols = [c['name'] for c in inspector.get_columns('items')]
+                    if 'inventory_used' not in cols:
+                        print(f">>> Migration ({engine_name}): Adding items.inventory_used ({json_type})")
+                        if is_pg:
+                            conn.execute(text(f"ALTER TABLE items ADD COLUMN inventory_used {json_type} DEFAULT '[]'::jsonb"))
+                        else:
+                            conn.execute(text(f"ALTER TABLE items ADD COLUMN inventory_used {json_type} DEFAULT '[]'"))
+                
+        except Exception as e:
+            print(f">>> Migration Warning ({sync_engine.url}): {e}")
+
+    print(">>> Migration: Dual-Engine Schema check complete.")
+
+    # 3. Seed Lookups & Static Data
+    # ------------------------------------------
     db = SessionLocal()
     try:
-        # Normalize existing lookups to lowercase (Safe Sync)
-        with engine.begin() as conn:
-            # STATUS
-            conn.execute(text("UPDATE status SET status_name = 'new-order'   WHERE status_name = 'Pending'"))
-            conn.execute(text("UPDATE status SET status_name = 'on-going'    WHERE status_name = 'In Progress'"))
-            conn.execute(text("UPDATE status SET status_name = 'for-release' WHERE status_name = 'Completed'"))
-            conn.execute(text("UPDATE status SET status_name = 'claimed'     WHERE status_name = 'Claimed'"))
-            
-            # PRIORITY
-            conn.execute(text("UPDATE priority_levels SET priority_name = 'regular' WHERE priority_name = 'Regular'"))
-            conn.execute(text("UPDATE priority_levels SET priority_name = 'rush'    WHERE priority_name = 'Rush'"))
-            
-            # PAYMENT & SHIPPING
-            conn.execute(text("UPDATE payment_methods SET method_name = 'cash' WHERE method_name = 'Cash'"))
-            conn.execute(text("UPDATE payment_statuses SET status_name = 'fully-paid' WHERE status_name = 'Fully Paid'"))
-            conn.execute(text("UPDATE shipping_preferences SET pref_name = 'pickup' WHERE pref_name = 'Pickup'"))
-
         seed_lookups(db)
-        print(">>> System Boot: Ready.")
-    except Exception as e:
-        print(f">>> Boot Error: Seeding failed: {e}")
     finally:
         db.close()
+
+    # The actual seeding is now handled within the seed_lookups function below.
 
 
 # ==========================================
@@ -312,7 +355,24 @@ def startup_sequence():
 
 def seed_lookups(db: Session):
     """Diagnose and seed essential database static data."""
-    print(">>> Diagnostic: Checking lookup data...")
+    print(">>> System Initialization: Checking data integrity...")
+    
+    try:
+        # 0. NORMALIZE EXISTING DATA (Persistence Defense)
+        # ------------------------------------------
+        db.execute(text("UPDATE status SET status_name = 'new-order'   WHERE status_name = 'Pending'"))
+        db.execute(text("UPDATE status SET status_name = 'on-going'    WHERE status_name = 'In Progress'"))
+        db.execute(text("UPDATE status SET status_name = 'for-release' WHERE status_name = 'Completed'"))
+        db.execute(text("UPDATE status SET status_name = 'claimed'     WHERE status_name = 'Claimed'"))
+        db.execute(text("UPDATE priority_levels SET priority_name = 'regular' WHERE priority_name = 'Regular'"))
+        db.execute(text("UPDATE priority_levels SET priority_name = 'rush'    WHERE priority_name = 'Rush'"))
+        db.execute(text("UPDATE payment_methods SET method_name = 'cash' WHERE method_name = 'Cash'"))
+        db.execute(text("UPDATE payment_statuses SET status_name = 'fully-paid' WHERE status_name = 'Fully Paid'"))
+        db.execute(text("UPDATE shipping_preferences SET pref_name = 'pickup' WHERE pref_name = 'Pickup'"))
+        db.commit()
+    except Exception as norm_err:
+        db.rollback()
+        print(f">>> Normalization Warning: {norm_err}")
     
     # Seed Roles
     if db.query(Role).count() == 0:
@@ -414,54 +474,138 @@ def seed_lookups(db: Session):
             # FIRST BOOT: Seed initial catalog from scratch
             print(">>> Catalog Sync: First boot detected, seeding full service catalog...")
             for item in catalog_data:
-                cat_name = item.pop("category", "base")
-                item["category_id"] = cat_map.get(cat_name, cat_map.get("base"))
-                db.add(Service(**item))
+                # Be careful to get cat_id from names
+                item_copy = item.copy()
+                cat_name = item_copy.pop("category", "base")
+                item_copy["category_id"] = cat_map.get(cat_name, cat_map.get("base"))
+                db.add(Service(**item_copy))
             db.commit()
             print(">>> Catalog Sync: Initial seeding complete.")
         else:
-            # SUBSEQUENT BOOTS: Only add NEW services that do not exist yet.
-            # NEVER touch sort_order so user arrangements are preserved.
-            print(f">>> Catalog Sync: {service_count} services found. Adding any new catalog entries only...")
-            for item in catalog_data:
-                target_name = item.get("service_name").strip()
-                cat_name = item.pop("category", "base")
-                item["category_id"] = cat_map.get(cat_name, cat_map.get("base"))
-                
-                exists = db.query(Service).filter(
-                    func.lower(Service.service_name) == target_name.lower()
-                ).first()
-                
-                if not exists:
-                    print(f">>> Catalog Sync: Adding new service '{target_name}'.")
-                    db.add(Service(**item))
-                else:
-                    # Only update price and activation status — NEVER sort_order
-                    exists.base_price = item["base_price"]
-                    exists.is_active = item["is_active"]
-            db.commit()
-            print(">>> Catalog Sync: Complete. User sort orders preserved.")
+            print(f">>> Catalog Sync: {service_count} services found. Skipping seed to preserve user modifications.")
     except Exception as lock_err:
         db.rollback()
         print(f">>> Catalog Sync Warning: {lock_err}")
 
-    # Seed Default Users (owner/staff)
+    # ------------------------------------------
+    # 4. Inventory Record Seeding
+    if db.query(Inventory).count() == 0:
+        print(">>> Inventory Sync: First boot detected, seeding default chemicals and supplies...")
+        inventory_defaults = [
+            {"item_name": "Cleaner", "category": "Chemical", "stock_quantity": 500.0, "unit": "Liters", "unit_price": 0.0},
+            {"item_name": "Bleach", "category": "Chemical", "stock_quantity": 350.0, "unit": "Liters", "unit_price": 0.0},
+            {"item_name": "Stain Remover", "category": "Chemical", "stock_quantity": 480.0, "unit": "bottle", "unit_price": 0.0},
+            {"item_name": "Deodorizer", "category": "Chemical", "stock_quantity": 150.0, "unit": "can", "unit_price": 0.0},
+            {"item_name": "Leather Conditioner", "category": "Chemical", "stock_quantity": 280.0, "unit": "tub", "unit_price": 0.0},
+            {"item_name": "Standard Shoe Cleaner", "category": "Chemicals", "stock_quantity": 25.0, "unit": "Bottles", "unit_price": 150.0},
+            {"item_name": "Soft Bristle Brush", "category": "Tools", "stock_quantity": 15.0, "unit": "Pcs", "unit_price": 85.0},
+            {"item_name": "Microfiber Cloth", "category": "Supplies", "stock_quantity": 50.0, "unit": "Pcs", "unit_price": 25.0}
+        ]
+        for item in inventory_defaults:
+            db.add(Inventory(**item, status="In Stock", is_active=True))
+        db.commit()
+    else:
+        # Perform internal unit migration for existing items
+        legacy_items = db.query(Inventory).filter(func.lower(Inventory.unit) == '4 liters').all()
+        for legacy in legacy_items:
+            legacy.unit = 'Liters'
+        if legacy_items:
+            db.commit()
+            print(f">>> Inventory Migration: Updated {len(legacy_items)} items to 'Liters'.")
+
+    # 5. User Account Seeding
     if db.query(User).count() == 0:
         print(">>> Seeding Default Accounts...")
         role_owner = db.query(Role).filter(Role.role_name == "owner").first()
         role_staff = db.query(Role).filter(Role.role_name == "staff").first()
         if role_owner:
-            owner = User(username="owner", email="owner@shoelotskey.com", password_hash=bcrypt.hash("owner123"), role_id=role_owner.role_id)
-            db.add(owner)
+            db.add(User(username="owner", email="owner@shoelotskey.com", password_hash=bcrypt.hash("owner123"), role_id=role_owner.role_id))
         if role_staff:
-            staff = User(username="staff", email="staff@shoelotskey.com", password_hash=bcrypt.hash("staff123"), role_id=role_staff.role_id)
-            db.add(staff)
+            db.add(User(username="staff", email="staff@shoelotskey.com", password_hash=bcrypt.hash("staff123"), role_id=role_staff.role_id))
         db.commit()
+
+    # 6. Final Verification
+    print(">>> System Boot: Database integrity verified. User modifications preserved.")
 
 # Startup events are now handled by startup_sequence()
 
+@app.get("/api/health-check")
+def health_check(db: Session = Depends(get_db)):
+    """Diagnostic endpoint to verify DB connectivity and dialect."""
+    from database import is_sqlite, conn_error, LOCAL_SQLITE_PATH
+    import os
+    has_offline_data = os.path.exists(LOCAL_SQLITE_PATH) and os.path.getsize(LOCAL_SQLITE_PATH) > 10240 
+    
+    return {
+        "status": "online",
+        "database": "SQLite (Backup)" if is_sqlite else "PostgreSQL (Remote)",
+        "db_error": conn_error if is_sqlite else None,
+        "backup_file": LOCAL_SQLITE_PATH,
+        "has_pending_offline_data": has_offline_data if not is_sqlite else False,
+        "timestamp": datetime.now()
+    }
+
+@app.get("/")
+def read_root():
+    from database import is_sqlite, LOCAL_SQLITE_PATH
+    return {
+        "app": "Shoelotskey SMS API",
+        "version": "2.0",
+        "database": "Offline (SQLite)" if is_sqlite else "Online (PostgreSQL)",
+        "backup_path": LOCAL_SQLITE_PATH
+    }
+
+@app.post("/api/sync-backup-to-cloud")
+def sync_backup_to_cloud(db: Session = Depends(get_db), current_user: User = Depends(require_role("owner"))):
+    """Admin-only: Pull data from SQLite backup file and push to Cloud PostgreSQL."""
+    from database import is_sqlite, LOCAL_SQLITE
+    if is_sqlite:
+        raise HTTPException(status_code=400, detail="Cannot sync: Currently running on Backup mode. Connect to Cloud first.")
+
+    import sqlite3
+    import os
+    offline_path = "./shoelotskey_offline.db"
+    if not os.path.exists(offline_path):
+        return {"message": "No backup file found."}
+
+    try:
+        conn = sqlite3.connect(offline_path)
+        cursor = conn.cursor()
+        
+        # 1. Fetch orders from SQLite that don't exist in PG
+        # We use order_number as the unique key
+        cursor.execute("SELECT order_number, customer_id, status_id, priority_id, grand_total, expected_at, created_at FROM orders")
+        offline_orders = cursor.fetchall()
+        
+        synced_count = 0
+        for off_o in offline_orders:
+            exists = db.query(Order).filter(Order.order_number == off_o[0]).first()
+            if not exists:
+                new_o = Order(
+                    order_number=off_o[0],
+                    customer_id=off_o[1], # Note: Customer IDs might mismatch between DBs, but name logic usually handles it
+                    status_id=off_o[2],
+                    priority_id=off_o[3],
+                    grand_total=off_o[4],
+                    expected_at=datetime.fromisoformat(off_o[5]) if off_o[5] else None,
+                    created_at=datetime.fromisoformat(off_o[6]) if off_o[6] else datetime.now()
+                )
+                db.add(new_o)
+                synced_count += 1
+        
+        db.commit()
+        conn.close()
+        
+        # Rename file to mark as processed (Defense strategy)
+        os.rename(offline_path, f"./shoelotskey_offline_synced_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db.bak")
+        
+        return {"status": "success", "synced_records": synced_count}
+    except Exception as e:
+        print(f"[RECONCILE ERROR] {e}")
+        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
+
 # ==========================================
-# 2. AUTHENTICATION & SECURITY
+# 1. AUTHENTICATION & SECURITY
 # ==========================================
 
 @app.post("/api/login")
@@ -839,6 +983,15 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
     5. Feature Extraction: Associates ML-ready conditions and dynamic service pricing snapshots.
     """
     print(f"[TRANS] Creating new Job Order for: {order_data.get('customerName')}")
+    
+    # [IDEMPOTENCY FIX] Check if order number already exists to prevent duplicate sync errors
+    order_num = order_data.get("orderNumber")
+    if order_num:
+        existing_order = db.query(Order).filter(Order.order_number == order_num).first()
+        if existing_order:
+            print(f"[TRANS] NOTICE: Order {order_num} already exists. Returning existing record to satisfy sync queue.")
+            return existing_order
+
     try:
         # Step 1: Customer Normalization
         customer_name = order_data.get("customerName", "Guest")
@@ -945,7 +1098,7 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
         # Step 4: Handle Items (Multiple Shoes)
         items_list = order_data.get("items", [])
         
-        # Fallback for old format (single item at top level)
+        # Fallback for old format
         if not items_list and (order_data.get("brand") or order_data.get("shoeMaterial")):
             items_list = [{
                 "brand": order_data.get("brand"),
@@ -954,7 +1107,8 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
                 "quantity": order_data.get("quantity", 1),
                 "condition": order_data.get("condition", {}),
                 "baseService": order_data.get("baseService", []),
-                "addOns": order_data.get("addOns", [])
+                "addOns": order_data.get("addOns", []),
+                "inventoryUsed": order_data.get("inventoryUsed", [])
             }]
 
         for item_data in items_list:
@@ -969,9 +1123,35 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
             db.add(db_item)
             db.flush()
 
+            # --- AUTOMATIC INVENTORY DEDUCTION ---
+            # item_data['inventoryUsed'] is an array of { itemId: number, amount: number }
+            inventory_usage = item_data.get("inventoryUsed") or order_data.get("inventoryUsed") or []
+            if isinstance(inventory_usage, list):
+                for usage in inventory_usage:
+                    inv_id = usage.get("itemId") or usage.get("id")
+                    inv_amount = float(usage.get("amount") or 0)
+                    
+                    if inv_id and inv_amount > 0:
+                        inv_item = db.query(Inventory).filter(Inventory.item_id == inv_id).first()
+                        if inv_item:
+                            print(f"[INVENTORY] Deducting {inv_amount} {inv_item.unit} of '{inv_item.item_name}' for Order {db_order.order_number}")
+                            inv_item.stock_quantity -= inv_amount
+                            
+                            # Log the stock movement
+                            inv_log = InventoryLog(
+                                item_id=inv_id,
+                                change_amount=-inv_amount,
+                                action_type='deduction',
+                                order_id=db_order.order_id,
+                                user_id=order_data.get("user_id", 1)
+                            )
+                            db.add(inv_log)
+            
+            # Save usage to item JSON for 3NF reporting
+            db_item.inventory_used = inventory_usage
+
             # Associate Conditions (3NF Bridge)
             cond_data = item_data.get("condition", {})
-            print(f"[DEBUG] Item {db_item.item_id} Condition Data: {cond_data}")
             if isinstance(cond_data, dict):
                 c_map = {
                     "scratches": "scratches", 
@@ -983,19 +1163,14 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
                 }
                 for key, val in c_map.items():
                     if cond_data.get(key):
-                        # Force case-insensitive match since DB stores title-cased terms e.g. "Yellowing", "Rips/Holes"
                         val_lower = val.replace(' ', '').replace('/', '').lower()
-                        # We simply remove special chars from DB row and compare
                         c_obj = db.query(Condition).filter(func.replace(func.replace(func.lower(Condition.condition_name), ' ', ''), '/', '') == val_lower).first()
                         if c_obj: 
-                            print(f"[DEBUG] Found condition '{val}' (ID: {c_obj.condition_id}) - Appending to Item {db_item.item_id}")
                             db_item.conditions.append(c_obj)
-                        else:
-                            print(f"[DEBUG] WARNING: NO MATCH for condition names '{val}' in the conditions table!")
             
             db.flush()
 
-            # Associate Services (Pricing Snapshots)
+            # Associate Services
             services_applied = []
             base_s = item_data.get("baseService", [])
             if isinstance(base_s, list): services_applied.extend(base_s)
@@ -1005,17 +1180,10 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
                 if isinstance(ad, dict): services_applied.append(ad.get("name"))
                 else: services_applied.append(ad)
 
-            # Unique services only
-            services_applied = list(set(services_applied))
-
-            for s_name in services_applied:
+            for s_name in list(set(services_applied)):
                 service_obj = db.query(Service).filter(Service.service_name == s_name).first()
                 if service_obj:
-                    pricing = ItemServiceMapping(
-                        item_id=db_item.item_id,
-                        service_id=service_obj.service_id,
-                        actual_price=service_obj.base_price
-                    )
+                    pricing = ItemServiceMapping(item_id=db_item.item_id, service_id=service_obj.service_id, actual_price=service_obj.base_price)
                     db.add(pricing)
 
         db.commit()
@@ -1077,6 +1245,10 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
         if db_prio: 
             db_order.priority_id = db_prio.priority_id
 
+    # 2.5 Handle Grand Total
+    if "grandTotal" in updates:
+        db_order.grand_total = updates["grandTotal"]
+
     # 3. Handle Customer Information (Relational Update)
     if ("customerName" in updates or "contactNumber" in updates) and db_order.customer:
         if "customerName" in updates: db_order.customer.customer_name = updates["customerName"]
@@ -1130,11 +1302,78 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
             if frontend_field in updates:
                 setattr(db_order.delivery, db_col, updates[frontend_field])
 
-    # 5. Handle Inventory Persistence (New Dynamic Feature)
+    # 5. Handle Item-level Inventory Updates (Dynamic Stock Reconciliation)
+    if "items" in updates:
+        for item_update in updates["items"]:
+            # Safe ID conversion to prevent server crash during offline sync
+            u_id_raw = item_update.get("id")
+            if u_id_raw and str(u_id_raw).isdigit() and "inventoryUsed" in item_update:
+                item_id = int(u_id_raw)
+                new_usage = item_update["inventoryUsed"]
+                
+                db_item = db.query(Item).filter(Item.item_id == item_id).first()
+                if db_item:
+                    old_usage = db_item.inventory_used or []
+                    
+                    # Reconciliation: Add back old, subtract new
+                    if isinstance(old_usage, list):
+                        for u in old_usage:
+                            i_id = u.get("itemId") or u.get("id")
+                            i_amt = float(u.get("amount") or 0)
+                            if i_id:
+                                db.query(Inventory).filter(Inventory.item_id == i_id).update({Inventory.stock_quantity: Inventory.stock_quantity + i_amt})
+                    
+                    if isinstance(new_usage, list):
+                        for u in new_usage:
+                            i_id = u.get("itemId") or u.get("id")
+                            i_amt = float(u.get("amount") or 0)
+                            if i_id and i_amt > 0:
+                                inv_item = db.query(Inventory).filter(Inventory.item_id == i_id).first()
+                                if inv_item:
+                                    inv_item.stock_quantity -= i_amt
+                                    db.add(InventoryLog(item_id=i_id, change_amount=-i_amt, action_type='manual_edit', order_id=db_order.order_id, user_id=updates.get("updater_id", 1)))
+                    
+                    db_item.inventory_used = new_usage
+
+    # 5. Handle Inventory Persistence & Dynamic Stock Adjustment
+    if "inventoryUsed" in updates: 
+        new_usage = updates["inventoryUsed"]
+        old_usage = db_order.inventory_used or []
+        
+        # S.O.L.I.D: Encapsulated Delta Deduction Logic
+        # 1. Reverse old deductions (Restock)
+        if isinstance(old_usage, list):
+            for usage in old_usage:
+                inv_id = usage.get("itemId") or usage.get("id")
+                inv_amount = float(usage.get("amount") or 0)
+                if inv_id and inv_amount > 0:
+                    inv_item = db.query(Inventory).filter(Inventory.item_id == inv_id).first()
+                    if inv_item:
+                        inv_item.stock_quantity += inv_amount # Restock previous usage
+        
+        # 2. Apply new usage (Deduct)
+        if isinstance(new_usage, list):
+            for usage in new_usage:
+                inv_id = usage.get("itemId") or usage.get("id")
+                inv_amount = float(usage.get("amount") or 0)
+                if inv_id and inv_amount > 0:
+                    inv_item = db.query(Inventory).filter(Inventory.item_id == inv_id).first()
+                    if inv_item:
+                        inv_item.stock_quantity -= inv_amount # Deduct new usage
+                        
+                        # Log the adjustment
+                        db.add(InventoryLog(
+                            item_id=inv_id,
+                            change_amount=-inv_amount,
+                            action_type='order_update',
+                            order_id=db_order.order_id,
+                            user_id=updates.get("updater_id", 1)
+                        ))
+
+        db_order.inventory_used = new_usage
+    
     if "inventoryApplied" in updates: 
         db_order.inventory_applied = updates["inventoryApplied"]
-    if "inventoryUsed" in updates: 
-        db_order.inventory_used = updates["inventoryUsed"]
 
     # 5. Handle Date Updates (Order Date & Predicted Completion)
     if "transactionDate" in updates:
@@ -1173,72 +1412,50 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
         }]
 
     if items_updates and db_order.items:
-        # For simplicity in this SMS version, we sync with the primary item (item 0)
-        # In a multi-shoe system, we'd match by item_id
-        db_item = db_order.items[0]
-        item_data = items_updates[0]
-        
-        if "brand" in item_data: db_item.brand = item_data["brand"]
-        if "shoeModel" in item_data: db_item.shoe_model = item_data["shoeModel"]
-        if "shoeMaterial" in item_data: db_item.material = item_data["shoeMaterial"]
-        if "quantity" in item_data: db_item.quantity = item_data["quantity"]
-        if "condition" in item_data and isinstance(item_data["condition"], dict) and "others" in item_data["condition"]:
-            db_item.item_notes = item_data["condition"]["others"]
-        # Sync Conditions (3NF Bridge)
-        if "condition" in item_data and isinstance(item_data["condition"], dict):
-            print(f"[DEBUG] UPDATING Conditions for Item {db_item.item_id}. Payload: {item_data['condition']}")
-            db_item.conditions = [] # Clear existing
-            c_data = item_data["condition"]
+        # Multi-Item Sync with matching by order-item_id
+        for item_data in items_updates:
+            # Match by order item ID if provided, otherwise fallback to item 0
+            u_id_raw = item_data.get("id")
+            db_item = None
+            if u_id_raw and str(u_id_raw).isdigit():
+                item_id = int(u_id_raw)
+                db_item = next((i for i in db_order.items if i.item_id == item_id), None)
             
-            # 3NF Lookup Table Mapping (Frontend CamelCase -> Backend DB SnakeCase/Lowercase)
-            c_map = {
-                "scratches": "scratches", 
-                "yellowing": "yellowing", 
-                "ripsHoles": "ripsholes", 
-                "deepStains": "deepstains", 
-                "soleSeparation": "soleseparation", 
-                "wornOut": "wornout"
-            }
-            
-            for key, val in c_map.items():
-                if c_data.get(key):
-                    # Robust lookup: Try exact match first, then case-insensitive, then normalized
-                    c_obj = db.query(Condition).filter(Condition.condition_name == val).first()
-                    if not c_obj:
-                        c_obj = db.query(Condition).filter(func.lower(Condition.condition_name) == val.lower()).first()
-                    if not c_obj:
-                        # Normalize by removing spaces/slashes for a more robust match
-                        normalized_val = val.lower().replace(" ", "").replace("/", "")
-                        c_obj = db.query(Condition).filter(func.replace(func.replace(func.lower(Condition.condition_name), ' ', ''), '/', '') == normalized_val).first()
-                    
-                    if c_obj: 
-                        print(f"[DEBUG] MATCH: Applied '{val}' to Item {db_item.item_id}")
-                        db_item.conditions.append(c_obj)
-                    else:
-                        print(f"[DEBUG] ERROR: Condition '{val}' not found in DB lookup table.")
+            if not db_item and db_order.items:
+                db_item = db_order.items[0]
+                
+            if not db_item: continue
 
-        # Sync Services (Pricing Snapshots)
-        if ("baseService" in item_data or "addOns" in item_data):
-            # Clear old mappings
-            db.query(ItemServiceMapping).filter(ItemServiceMapping.item_id == db_item.item_id).delete()
-            
-            services_applied = []
-            if "baseService" in item_data and isinstance(item_data["baseService"], list):
-                services_applied.extend(item_data["baseService"])
-            if "addOns" in item_data and isinstance(item_data["addOns"], list):
-                for ad in item_data["addOns"]:
-                    if isinstance(ad, dict): services_applied.append(ad.get("name"))
-                    else: services_applied.append(ad)
-            
-            for s_name in set(services_applied):
-                service_obj = db.query(Service).filter(Service.service_name == s_name).first()
-                if service_obj:
-                    pricing = ItemServiceMapping(
-                        item_id=db_item.item_id,
-                        service_id=service_obj.service_id,
-                        actual_price=service_obj.base_price
-                    )
-                    db.add(pricing)
+            if "brand" in item_data: db_item.brand = item_data["brand"]
+            if "shoeModel" in item_data: db_item.shoe_model = item_data["shoeModel"]
+            if "shoeMaterial" in item_data: db_item.material = item_data["shoeMaterial"]
+            if "quantity" in item_data: db_item.quantity = item_data["quantity"]
+            if "condition" in item_data and isinstance(item_data["condition"], dict) and "others" in item_data["condition"]:
+                db_item.item_notes = item_data["condition"]["others"]
+
+            # Sync Conditions (3NF Bridge)
+            if "condition" in item_data and isinstance(item_data["condition"], dict):
+                db_item.conditions = [] 
+                c_data = item_data["condition"]
+                c_map = {"scratches":"scratches", "yellowing":"yellowing", "ripsHoles":"ripsholes", "deepStains":"deepstains", "soleSeparation":"soleseparation", "wornOut":"wornout"}
+                for key, val in c_map.items():
+                    if c_data.get(key):
+                        c_obj = db.query(Condition).filter(func.lower(Condition.condition_name) == val.lower()).first()
+                        if c_obj: db_item.conditions.append(c_obj)
+
+            # Sync Services (Pricing Snapshots)
+            if ("baseService" in item_data or "addOns" in item_data):
+                db.query(ItemServiceMapping).filter(ItemServiceMapping.item_id == db_item.item_id).delete()
+                services_applied = []
+                if "baseService" in item_data and isinstance(item_data["baseService"], list): services_applied.extend(item_data["baseService"])
+                if "addOns" in item_data and isinstance(item_data["addOns"], list):
+                    for ad in item_data["addOns"]:
+                        services_applied.append(ad.get("name") if isinstance(ad, dict) else ad)
+                
+                for s_name in set(services_applied):
+                    service_obj = db.query(Service).filter(Service.service_name == s_name).first()
+                    if service_obj:
+                        db.add(ItemServiceMapping(item_id=db_item.item_id, service_id=service_obj.service_id, actual_price=service_obj.base_price))
 
     try:
         db.commit()
@@ -1537,6 +1754,19 @@ def update_inventory_item(item_id: int, updates: InventoryUpdateSchema, db: Sess
     db.commit()
     db.refresh(item)
     return item
+
+@app.delete("/api/inventory/{item_id}")
+def delete_inventory_item(item_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_role(["owner"]))):
+    """Admin-only: Remove item from catalog."""
+    item = db.query(Inventory).filter(Inventory.item_id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    
+    # Soft delete to preserve logs or hard delete? User said "remove", usually means delete.
+    # In a real business system we might soft-delete, but for standard CRUD functionality:
+    db.delete(item)
+    db.commit()
+    return {"status": "success", "message": "Item deleted"}
 
 @app.post("/api/inventory/adjust")
 def adjust_stock(

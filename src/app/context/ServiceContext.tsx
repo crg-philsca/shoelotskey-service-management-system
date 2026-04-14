@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import { createContext, useContext, useState, ReactNode, useEffect, useMemo } from 'react';
 import { Service } from '@/app/types';
 
 interface ServiceContextType {
@@ -11,8 +11,8 @@ interface ServiceContextType {
 
 const ServiceContext = createContext<ServiceContextType | undefined>(undefined);
 
-const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '5173'))
-    ? `http://${window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname}:8000/api`
+const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '5173' || window.location.hostname.startsWith('192.')))
+    ? `${window.location.protocol}//${window.location.hostname}:8000/api`
     : '/api';
 
 export function ServiceProvider({ children, user }: { children: ReactNode, user: { token: string } }) {
@@ -150,7 +150,7 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
         processSyncQueue();
         window.addEventListener('online', processSyncQueue);
         return () => window.removeEventListener('online', processSyncQueue);
-    }, []);
+    }, [user.token]);
 
     const addService = (service: Service) => {
         const payload = {
@@ -290,8 +290,16 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
         setReorderTimeout(timeout);
     };
 
+    const contextValue = useMemo(() => ({ 
+        services, 
+        addService, 
+        updateService, 
+        deleteService, 
+        reorderServices 
+    }), [services, addService, updateService, deleteService, reorderServices]);
+
     return (
-        <ServiceContext.Provider value={{ services, addService, updateService, deleteService, reorderServices }}>
+        <ServiceContext.Provider value={contextValue}>
             {children}
         </ServiceContext.Provider>
     );

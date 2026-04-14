@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
@@ -14,6 +14,7 @@ import type { ShippingPreference, PaymentMethod, PaymentStatus, Priority } from 
 import { format as dateFnsFormat } from 'date-fns';
 import { CreatableCombobox } from './ui/creatable-combobox';
 import { useActivities } from '@/app/context/ActivityContext';
+import { useInventory } from '../context/InventoryContext';
 import { trainPredictionModel, predictCompletionDays } from '@/app/lib/mlPredictor';
 
 // Dropdown options
@@ -61,7 +62,7 @@ Object.entries(BRAND_MODELS).forEach(([brand, models]) => {
     });
 });
 
-const MODEL_MATERIALS: Record<string, string> = {
+const MODEL_MATERIALS: Record<string, string>  = {
     // Nike
     'Air Force 1': 'Leather',
     'Dunk Low': 'Leather',
@@ -127,6 +128,7 @@ interface ShoeEntry {
     };
     baseService: string[];
     addOns: { name: string; quantity?: number }[];
+    inventoryUsed: { itemId: number; amount: number }[];
 }
 
 interface JobOrderFormProps {
@@ -137,6 +139,8 @@ interface JobOrderFormProps {
 
 const LABEL_STYLE = "text-[11px] font-bold text-gray-500 mb-1 block uppercase tracking-tight";
 const INPUT_STYLE = "bg-white border-gray-100 h-9 text-xs focus:ring-red-50 focus:border-red-100 transition-all shadow-sm";
+
+
 const CARD_HEADER_STYLE = "bg-red-50/50 py-2 px-6 border-b border-red-100/50";
 const CARD_TITLE_STYLE = "text-gray-600 font-black text-[14px] uppercase tracking-widest flex items-center gap-2";
 
@@ -169,6 +173,7 @@ function ClearableInput({ id, value, onChange, placeholder, className, required,
 export default function JobOrderFormComponent({ user, onSuccess, onCancel }: JobOrderFormProps) {
     const { addOrder, orders } = useOrders();
     const { services } = useServices();
+    const { inventoryData } = useInventory();
     const { addActivity } = useActivities();
     const [customerName, setCustomerName] = useState('');
     const [contactNumber, setContactNumber] = useState('');
@@ -196,6 +201,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
         },
         baseService: [],
         addOns: [],
+        inventoryUsed: [],
     }]);
 
     // Train ML predictor with historical data
@@ -261,6 +267,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
             },
             baseService: [],
             addOns: [],
+            inventoryUsed: [],
         }]);
 
         // Reset Order Details
@@ -344,7 +351,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
         return isNaN(parsed) ? 0 : parsed;
     };
 
-    const calculatePredictedDaysBreakdown = () => {
+    const mlBreakdown = useMemo(() => {
         let baseDays = 0;
         let addOnDays = 0;
         let priorityDays = 0;
@@ -390,9 +397,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
         const totalDays = hasServices ? Math.max(1, baseDays + addOnDays + priorityDays) : 0;
 
         return { baseDays, addOnDays, priorityDays, totalDays };
-    };
-
-    const mlBreakdown = calculatePredictedDaysBreakdown();
+    }, [shoes, baseServices, addOnServices, priorityLevel, basicCleaningRushReduction]);
     const calculatePredictedDays = () => {
         const hasServices = shoes.some(shoe => (Array.isArray(shoe.baseService) ? shoe.baseService : []).length > 0 || shoe.addOns.length > 0);
         if (!hasServices) return 0;
@@ -428,7 +433,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
         return total * shoe.quantity;
     };
 
-    const calculateTotals = () => {
+    const totals = useMemo(() => {
         let baseTotal = 0;
         let addOnsTotal = 0;
         let rushFee = 0;
@@ -467,9 +472,9 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
         const remainingBalance = Math.max(0, grandTotal - depositAmt);
 
         return { baseTotal, addOnsTotal, rushFee, grandTotal, amountReceivedNum, remainingBalance, change };
-    };
+    }, [shoes, baseServices, addOnServices, priorityLevel, amountReceived, paymentStatus]);
 
-    const { baseTotal, addOnsTotal, rushFee, grandTotal } = calculateTotals();
+    const { baseTotal, addOnsTotal, rushFee, grandTotal } = totals;
 
     const [isAmountReceivedTyped, setIsAmountReceivedTyped] = useState(false);
 
@@ -508,6 +513,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
             },
             baseService: [],
             addOns: [],
+            inventoryUsed: [],
         }]);
     };
 
@@ -573,8 +579,6 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
             return `${deliveryAddress.houseNo} ${deliveryAddress.street}, ${deliveryAddress.barangay}, ${deliveryAddress.city}, ${deliveryAddress.province}, ${deliveryAddress.zipCode}`;
         };
 
-        const totals = calculateTotals();
-
         // New Logic: ONE JobOrder with many items
         const newOrder: any = {
             id: `JO-${Date.now()}`,
@@ -596,7 +600,8 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                 quantity: shoe.quantity,
                 condition: shoe.condition,
                 baseService: shoe.baseService,
-                addOns: shoe.addOns
+                addOns: shoe.addOns,
+                inventoryUsed: shoe.inventoryUsed
             })),
 
             priorityLevel,
@@ -678,6 +683,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
             },
             baseService: [],
             addOns: [],
+            inventoryUsed: [],
         }]);
         setPriorityLevel('regular');
         setDeliveryAddress({
@@ -889,10 +895,10 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
 
 
                 </CardContent>
-            </Card >
+            </Card>
 
             {/* Shoes */}
-            < div className="space-y-2" >
+            <div className="space-y-2">
                 {
                     shoes.map((shoe, index) => (
                         <Card key={shoe.id} className="border-red-100/50 shadow-sm bg-white group relative rounded-2xl">
@@ -1311,6 +1317,88 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                         )}
                                                     </div>
                                                 </div>
+                                            
+                                            {/* Supplies & Materials Used */}
+                                            <div className="space-y-3 pt-3 border-t border-gray-200 mt-4 h-full">
+                                                <div className="flex items-center justify-between">
+                                                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Supplies & Materials Used</Label>
+                                                    <span className="text-[10px] font-bold text-gray-300 uppercase italic">Stock will be subtracted</span>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    {shoe.inventoryUsed.map((usage, uIdx) => {
+                                                        const item = inventoryData.find((i: any) => i.id === usage.itemId);
+                                                        return (
+                                                            <div key={uIdx} className="flex items-center gap-2 bg-white p-2 rounded-lg border border-gray-100 shadow-sm animate-in fade-in slide-in-from-left-2 duration-300">
+                                                                 <Select 
+                                                                    value={usage.itemId?.toString() || ""} 
+                                                                    onValueChange={(val) => {
+                                                                        const newUsage = [...shoe.inventoryUsed];
+                                                                        newUsage[uIdx].itemId = parseInt(val);
+                                                                        updateShoe(shoe.id, { inventoryUsed: newUsage });
+                                                                    }}
+                                                                >
+                                                                    <SelectTrigger className="h-8 text-[11px] font-bold border-none shadow-none flex-1">
+                                                                        <SelectValue />
+                                                                    </SelectTrigger>
+                                                                    <SelectContent>
+                                                                        {inventoryData.map((inv: any) => (
+                                                                            <SelectItem key={inv.id} value={inv.id?.toString() || ""} className="text-[11px] font-medium">
+                                                                                {inv.name} ({inv.stock} {inv.unit} left)
+                                                                            </SelectItem>
+                                                                        ))}
+                                                                    </SelectContent>
+                                                                </Select>
+                                                                <div className="flex items-center gap-1 shrink-0 bg-gray-50 px-2 py-1 rounded-md border border-gray-100">
+                                                                    <input
+                                                                        type="number"
+                                                                        step="0.1"
+                                                                        min="0.1"
+                                                                        value={usage.amount}
+                                                                        onChange={(e) => {
+                                                                            const newUsage = [...shoe.inventoryUsed];
+                                                                            newUsage[uIdx].amount = parseFloat(e.target.value) || 0;
+                                                                            updateShoe(shoe.id, { inventoryUsed: newUsage });
+                                                                        }}
+                                                                        className="w-12 h-6 bg-transparent text-[11px] font-black text-center focus:outline-none"
+                                                                    />
+                                                                    <span className="text-[9px] font-black text-gray-400 uppercase">{item?.unit || 'qty'}</span>
+                                                                </div>
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    onClick={() => {
+                                                                        const newUsage = shoe.inventoryUsed.filter((_, idx) => idx !== uIdx);
+                                                                        updateShoe(shoe.id, { inventoryUsed: newUsage });
+                                                                    }}
+                                                                    className="h-6 w-6 text-red-400 hover:text-red-700 hover:bg-red-50"
+                                                                >
+                                                                    <X size={12} />
+                                                                </Button>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            const firstAvailable = inventoryData[0]?.id;
+                                                            if (firstAvailable) {
+                                                                updateShoe(shoe.id, {
+                                                                    inventoryUsed: [...shoe.inventoryUsed, { itemId: firstAvailable, amount: 0.1 }]
+                                                                });
+                                                            } else {
+                                                                toast.error("Inventory list is empty.");
+                                                            }
+                                                        }}
+                                                        className="w-full h-8 border border-dashed border-gray-200 text-gray-400 hover:text-red-600 hover:bg-red-50/50 hover:border-red-100 text-[10px] font-black uppercase tracking-widest gap-2"
+                                                    >
+                                                        <Plus size={12} className="stroke-[3]" />
+                                                        Add Supply Used
+                                                    </Button>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -1319,10 +1407,10 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                         </Card>
                     ))
                 }
-            </div >
+            </div>
 
             {/* Add Shoe Button */}
-            < div className="my-4" >
+            <div className="my-4">
                 <Button
                     type="button"
                     variant="outline"
@@ -1332,10 +1420,10 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                     <Plus size={16} className="stroke-[3]" />
                     Add Another Shoe Item
                 </Button>
-            </div >
+            </div>
 
             {/* Order Summary Section */}
-            < Card className="border-red-100/50 shadow-sm bg-white overflow-hidden" >
+            <Card className="border-red-100/50 shadow-sm bg-white overflow-hidden">
                 <CardHeader className={`${CARD_HEADER_STYLE} !py-2`}>
                     <div className="flex items-center justify-between w-full translate-y-[1px]">
                         <div className="flex items-center gap-3">
@@ -1441,7 +1529,6 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                     <span className="truncate">{user?.username || 'Current User'}</span>
                                                 </div>
                                             </div>
-                                            {/* [REQUESTED] Payment Status moved to this row */}
                                             <div className="space-y-1 col-span-2 md:col-span-4">
                                                 <Label className={LABEL_STYLE}>Payment Status</Label>
                                                 <Select
@@ -1466,7 +1553,6 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                             </div>
                                         </div>
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-gray-200/50 mt-2">
-                                            {/* Row 3: Payment Method & Reference Number (Combined if electronic) */}
                                             <div className={`space-y-1 ${!['gcash', 'maya'].includes(paymentMethod) ? 'sm:col-span-2' : ''}`}>
                                                 <Label className={LABEL_STYLE}>Payment Method</Label>
                                                 <div className="relative group/select">
@@ -1498,10 +1584,6 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                         </div>
 
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
-                                            {/* Payment Status was moved up to the Metadata row */}
-
-
-                                            {/* Row 5: Total / Required Downpayment & Amount Received */}
                                             {showAmountRec && (
                                                 <>
                                                     <div className="space-y-1">
@@ -1545,13 +1627,11 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                                 placeholder="0.00"
                                                                 className="bg-white border-gray-100/50 h-10 rounded-xl text-xs pl-7 font-black text-gray-700 shadow-sm"
                                                             />
-
                                                         </div>
                                                     </div>
                                                 </>
                                             )}
 
-                                            {/* Row 6: Amount Change & Remaining Balance */}
                                             {showAmountRec && (
                                                 <>
                                                     <div className={`space-y-1 ${!isPartial ? 'col-span-2' : ''}`}>

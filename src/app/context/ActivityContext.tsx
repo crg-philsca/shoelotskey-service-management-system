@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import { createContext, useContext, useState, ReactNode, useEffect, useMemo } from 'react';
 import { format as dateFnsFormat } from 'date-fns';
 
 export interface ActivityLog {
@@ -157,8 +157,10 @@ export function ActivityProvider({ children, user }: { children: ReactNode, user
         }
     };
 
+    const contextValue = useMemo(() => ({ activities, addActivity }), [activities, addActivity]);
+
     return (
-        <ActivityContext.Provider value={{ activities, addActivity }}>
+        <ActivityContext.Provider value={contextValue}>
             {children}
         </ActivityContext.Provider>
     );

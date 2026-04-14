@@ -4,6 +4,20 @@ export type ShippingPreference = 'pickup' | 'delivery';
 export type PaymentMethod = 'cash' | 'gcash' | 'maya';
 export type PaymentStatus = 'fully-paid' | 'downpayment' | 'unpaid' | 'pending';
 
+export interface ShoeEntry {
+    id: number;
+    shoeName: string;
+    brand?: string;
+    shoeModel?: string;
+    shoeMaterial?: string;
+    description: string;
+    quantity: number;
+    condition?: any;
+    baseService: string[];
+    addOns: any[];
+    inventoryUsed: any[];
+}
+
 export interface InventoryUsed {
   itemId: number;
   name: string;

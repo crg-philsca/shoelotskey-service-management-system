@@ -23,8 +23,8 @@ interface InventoryContextType {
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
 
-const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '5173'))
-    ? `http://${window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname}:8000/api`
+const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '5173' || window.location.hostname.startsWith('192.')))
+    ? `${window.location.protocol}//${window.location.hostname}:8000/api`
     : '/api';
 
 export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: string } }> = ({ children, user }) => {
@@ -32,12 +32,13 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
 
     const calculateStatus = (stock: number, unit: string) => {
         const u = unit.toLowerCase();
+        // Dynamic Thresholds for Shoelotskey Chemicals
         if (u.includes('liter')) {
-            if (stock <= 1) return 'Critical';
-            if (stock < 4) return 'Low Stock';
-        } else if (u.includes('bottle')) {
-            if (stock <= 1) return 'Critical';
-            if (stock <= 2) return 'Low Stock';
+            if (stock <= 5) return 'Critical';
+            if (stock <= 20) return 'Low Stock';
+        } else if (u.includes('bottle') || u.includes('tub') || u.includes('can')) {
+            if (stock <= 10) return 'Critical';
+            if (stock <= 50) return 'Low Stock';
         } else {
             if (stock <= 5) return 'Critical';
             if (stock <= 10) return 'Low Stock';
@@ -52,18 +53,22 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
             });
             if (!res.ok) throw new Error('Failed to fetch inventory');
             const data = await res.json();
-            const mapped = data.map((item: any) => ({
-                id: item.item_id,
-                name: item.item_name,
-                category: item.category,
-                stock: item.stock_quantity,
-                unit: item.unit,
-                price: parseFloat(item.unit_price),
-                status: item.status,
-                isActive: item.is_active
-            }));
-            setInventoryData(mapped);
-            localStorage.setItem('inventory_cache', JSON.stringify(mapped));
+            if (Array.isArray(data)) {
+                const mapped = data.map((item: any) => ({
+                    id: item.item_id,
+                    name: item.item_name,
+                    category: item.category,
+                    stock: item.stock_quantity,
+                    unit: item.unit,
+                    price: parseFloat(item.unit_price),
+                    status: item.status,
+                    isActive: item.is_active
+                }));
+                setInventoryData(mapped);
+                localStorage.setItem('inventory_cache', JSON.stringify(mapped));
+            } else {
+                console.warn("Inventory API returned non-array data:", data);
+            }
         } catch (err) {
             console.error("Inventory fetch failed, using cache:", err);
             const saved = localStorage.getItem('inventory_cache');
@@ -107,6 +112,14 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
     };
 
     const addItem = async (item: Omit<InventoryItem, 'id' | 'status'>) => {
+        const tempId = Date.now();
+        const optimisticItem: InventoryItem = {
+            ...item,
+            id: tempId,
+            status: calculateStatus(item.stock, item.unit)
+        };
+        setInventoryData(prev => [optimisticItem, ...prev]);
+        
         try {
             const res = await fetch(`${API_BASE}/inventory`, {
                 method: 'POST',
@@ -123,13 +136,23 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
                     is_active: item.isActive
                 })
             });
-            if (res.ok) fetchInventory();
+            if (res.ok) {
+                fetchInventory();
+            } else {
+                throw new Error(await res.text());
+            }
         } catch (err) {
-            console.error("Add item failed", err);
+            console.error("[CRITICAL] Inventory Add failed, persisting locally.", err);
+            // In a real robust system we'd use a queue like OrderContext. Here we just rely on localStorage cache.
+            const saved = localStorage.getItem('inventory_cache');
+            const cache = saved ? JSON.parse(saved) : [];
+            cache.unshift(optimisticItem);
+            localStorage.setItem('inventory_cache', JSON.stringify(cache));
         }
     };
 
     const updateItem = async (updatedItem: InventoryItem) => {
+        setInventoryData(prev => prev.map(item => item.id === updatedItem.id ? updatedItem : item));
         try {
             const res = await fetch(`${API_BASE}/inventory/${updatedItem.id}`, {
                 method: 'PUT',
@@ -147,19 +170,51 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
                     status: updatedItem.status
                 })
             });
-            if (res.ok) fetchInventory();
+            if (res.ok) {
+                fetchInventory();
+            } else {
+                throw new Error("Update failed");
+            }
         } catch (err) {
-            console.error("Update item failed", err);
+            console.error("[CRITICAL] Inventory Update failed, persisting locally.", err);
+            const saved = localStorage.getItem('inventory_cache');
+            if (saved) {
+                const cache = JSON.parse(saved).map((i: any) => i.id === updatedItem.id ? updatedItem : i);
+                localStorage.setItem('inventory_cache', JSON.stringify(cache));
+            }
         }
     };
 
     const deleteItem = async (id: number) => {
-        // Soft delete logic usually on backend, here we just filter out
         setInventoryData(prev => prev.filter(item => item.id !== id));
+        // Also update local storage
+        const saved = localStorage.getItem('inventory_cache');
+        if (saved) {
+            const cache = JSON.parse(saved).filter((i: any) => i.id !== id);
+            localStorage.setItem('inventory_cache', JSON.stringify(cache));
+        }
+        
+        try {
+            await fetch(`${API_BASE}/inventory/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${user.token}` }
+            });
+        } catch(e) {
+            console.error("Failed to delete from server", e);
+        }
     };
 
+    const contextValue = React.useMemo(() => ({ 
+        inventoryData, 
+        setInventoryData, 
+        updateStock, 
+        addItem, 
+        updateItem, 
+        deleteItem 
+    }), [inventoryData, updateStock, addItem, updateItem, deleteItem]);
+
     return (
-        <InventoryContext.Provider value={{ inventoryData, setInventoryData, updateStock, addItem, updateItem, deleteItem }}>
+        <InventoryContext.Provider value={contextValue}>
             {children}
         </InventoryContext.Provider>
     );

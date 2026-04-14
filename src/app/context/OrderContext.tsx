@@ -1,11 +1,11 @@
-import { createContext, useContext, useState, ReactNode, useEffect, useRef } from 'react';
+import { createContext, useContext, useState, ReactNode, useEffect, useRef, useMemo } from 'react';
 import { JobOrder } from '@/app/types';
 import { mockJobOrders } from '@/app/lib/mockData';
 import { useActivities } from './ActivityContext';
 
 // Backend API Base URL
-const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '5173'))
-    ? `http://${window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname}:8000/api`
+const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '5173' || window.location.hostname.startsWith('192.')))
+    ? `${window.location.protocol}//${window.location.hostname}:8000/api`
     : '/api';
 
 // Resilience Check: Verifies if the backend is actually reachable
@@ -25,6 +25,7 @@ interface OrderContextType {
     orders: JobOrder[];
     loading: boolean;
     refreshing: boolean;
+    dbStatus: 'remote' | 'local' | 'unknown';
     addOrder: (order: JobOrder) => Promise<void>;
     updateOrder: (id: string, updates: Partial<JobOrder>, statusUser?: string) => Promise<void>;
     deleteOrder: (id: string) => Promise<void>;
@@ -124,6 +125,39 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
 
     const [loading, setLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
+    const [dbStatus, setDbStatus] = useState<'remote' | 'local' | 'unknown'>('unknown');
+
+    // Diagnostic Check: Verify if we are on Remote or Local DB
+    useEffect(() => {
+        const checkHealth = async () => {
+            try {
+                const res = await fetch(`${API_BASE}/health-check`);
+                const data = await res.json();
+                setDbStatus(data.database.includes('PostgreSQL') ? 'remote' : 'local');
+                
+                // Auto-trigger cloud sync if we have pending local data and we're back on Remote
+                if (data.has_pending_offline_data && !data.database.includes('SQLite') && user.token) {
+                    console.log("[SYNC] Local orders detected. Attempting migration to Cloud...");
+                    fetch(`${API_BASE}/sync-backup-to-cloud`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${user.token}` }
+                    }).then(r => r.json()).then(syncData => {
+                        if (syncData.status === 'success') {
+                            const { toast } = require('sonner');
+                            toast.success("Database Restored", {
+                                description: `Successfully synced ${syncData.synced_records} orders from local backup to Cloud Database.`,
+                                duration: 10000
+                            });
+                            refreshOrders();
+                        }
+                    }).catch(console.error);
+                }
+            } catch (e) {
+                setDbStatus('unknown');
+            }
+        };
+        checkHealth();
+    }, [user.token]);
 
     // Robust Mapping: Converts Backend 3NF Model to Frontend JobOrder Type
     const mapBackendToFrontend = (bo: any): JobOrder => {
@@ -188,6 +222,7 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                         wornOut:        condNames.includes('wornout'),
                         others: bi.item_notes || ''
                     },
+                    inventoryUsed: bi.inventory_used || [],
                     // category is a nested 3NF object: { category_id, category_name }
                     baseService: bi.services?.filter((s: any) =>
                         (s.category?.category_name || s.category) === 'base'
@@ -226,6 +261,7 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                 (s.category?.category_name || s.category) === 'addon'
             ).map((s: any) => ({ name: s.service_name, quantity: 1 })) || [],
             processedBy: bo.processor?.username || 'System',
+            inventoryUsed: bo.inventory_used || [],
 
             statusHistory: bo.status_logs?.map((sl: any) => ({
                 status: mapBackendStatus(sl.status?.status_name),
@@ -317,10 +353,12 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
         queue.push({ ...task, timestamp: Date.now() });
         localStorage.setItem('order_sync_queue', JSON.stringify(queue));
         
-        // Notify the user
-        import('sonner').then(({ toast }) => {
-            toast.warning('You are offline. Change saved locally and will auto-sync when connection is restored.');
-        });
+        // Notify the user ONLY if it is a connectivity issue
+        if (!navigator.onLine) {
+            import('sonner').then(({ toast }) => {
+                toast.warning('You are offline. Change saved locally and will auto-sync when connection is restored.');
+            });
+        }
     };
 
     // Persist to cache whenever orders change
@@ -426,6 +464,19 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                     toast.dismiss(toastId);
                     syncNotificationShown.current = false;
                 }
+                
+                // Alert user if strictly using local backup database
+                const healthRes = await fetch(`${API_BASE}/health-check`).catch(() => null);
+                if (healthRes && healthRes.ok) {
+                    const healthData = await healthRes.json();
+                    if (healthData.database.includes('SQLite')) {
+                        const { toast } = await import('sonner');
+                        toast.info("Connectivity Note", {
+                            description: "The system is currently writing to the local backup database. Remote sync will occur once the cloud connection is stabilized.",
+                            duration: 8000
+                        });
+                    }
+                }
             } catch (err) {
                 console.error("Failed to process sync queue", err);
             }
@@ -457,12 +508,25 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                 body: JSON.stringify(payload)
             });
 
-            if (!response.ok) throw new Error('Failed to save to backend');
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.detail || 'Server Error: Failed to save to database.');
+            }
 
-            refreshOrders(); // Get the official DB IDs
-        } catch (err) {
-            console.error('[CRITICAL] OrderProvider: Backend sync failed. Queueing for offline sync.', err);
-            queueSyncTask({ type: 'ADD', payload });
+            refreshOrders(); 
+        } catch (err: any) {
+            console.error('[CRITICAL] OrderProvider: Sync failed.', err);
+            
+            // Only queue and show 'offline' if it's a network error
+            if (!navigator.onLine || err.message.includes('failed to fetch') || err.name === 'TypeError') {
+                queueSyncTask({ type: 'ADD', payload });
+            } else {
+                const { toast } = await import('sonner');
+                toast.error("Execution Error", {
+                    description: err.message || "The server rejected this order. Check connection or data integrity.",
+                    duration: 5000
+                });
+            }
         }
     };
 
@@ -552,16 +616,19 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
         }
     };
 
+    const contextValue = useMemo(() => ({
+        orders,
+        loading,
+        refreshing,
+        dbStatus,
+        addOrder,
+        updateOrder,
+        deleteOrder,
+        refreshOrders
+    }), [orders, loading, refreshing, dbStatus, addOrder, updateOrder, deleteOrder, refreshOrders]);
+
     return (
-        <OrderContext.Provider value={{
-            orders,
-            loading,
-            refreshing,
-            addOrder,
-            updateOrder,
-            deleteOrder,
-            refreshOrders
-        }}>
+        <OrderContext.Provider value={contextValue}>
             {children}
         </OrderContext.Provider>
     );

@@ -28,9 +28,9 @@ export default function ServiceManagement({ onSetHeaderActionRight, user }: Serv
 
   // Sync local states when global services change (but only if not currently dragging)
   useEffect(() => {
-    const base = services.filter(s => s.category === 'base' && s.active === true && !s.name.startsWith('[') && !s.name.startsWith('z_')).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
-    const priority = services.filter(s => s.category === 'priority' && s.active === true && !s.name.includes('Premium') && !s.name.startsWith('[') && !s.name.startsWith('z_')).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
-    const addon = services.filter(s => s.category === 'addon' && s.active === true && !s.name.startsWith('[') && !s.name.startsWith('z_')).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+    const base = services.filter(s => s.category === 'base').sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+    const priority = services.filter(s => s.category === 'priority').sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+    const addon = services.filter(s => s.category === 'addon').sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
     
     setLocalBase(base);
     setLocalPriority(priority);
@@ -192,7 +192,7 @@ export default function ServiceManagement({ onSetHeaderActionRight, user }: Serv
             <CardTitle className="text-base font-black text-gray-900 uppercase">Add-On Services</CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
-            <div className="max-h-[300px] overflow-y-auto pr-1 custom-scrollbar -mt-2">
+            <div className="max-h-[555px] overflow-y-auto pr-1 custom-scrollbar -mt-2">
               <Reorder.Group axis="y" values={localAddon} onReorder={(newOrder) => handleReorder('addon', newOrder)} className="space-y-3 list-none p-0">
                 {localAddon.map(service => (
                   <Reorder.Item 

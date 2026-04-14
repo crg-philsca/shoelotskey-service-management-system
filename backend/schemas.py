@@ -133,6 +133,7 @@ class ItemSchema(BaseModel):
     material: Optional[str] = None
     quantity: int = 1
     item_notes: Optional[str] = None
+    inventory_used: Optional[Any] = None
     
     services: List[ServiceSchema] = []
     conditions: List[ConditionSchema] = []

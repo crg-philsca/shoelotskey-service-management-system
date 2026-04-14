@@ -3,7 +3,7 @@ import { useServices } from '@/app/context/ServiceContext';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { useState, useMemo, useEffect } from 'react';
 
-import { TrendingUp, ShoppingBag, Filter, Calendar, TrendingDown, ChevronDown, Wallet, CircleAlert, Printer, FileText, FileSpreadsheet } from 'lucide-react';
+import { TrendingUp, ShoppingBag, Filter, Calendar, TrendingDown, ChevronDown, Wallet, CircleAlert, Printer } from 'lucide-react';
 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
@@ -11,9 +11,6 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useExpenses } from '@/app/context/ExpenseContext';
 import { useOrders } from '@/app/context/OrderContext';
 import type { JobOrder } from '@/app/types';
-import { DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger } from '@/app/components/ui/dropdown-menu';
-import { toast } from 'sonner';
-import html2pdf from 'html2pdf.js';
 
 interface SalesReportProps {
   onSetHeaderActionRight?: (action: React.ReactNode | null) => void;
@@ -174,108 +171,13 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
   }, [totalSalesData, services]);
 
   // 4. PRINT & EXPORT LOGIC
-  const handleExport = (type: 'Sales' | 'Expenses' | 'ROI', format: 'print' | 'csv' | 'pdf') => {
-    if (format === 'print') {
-      setPrintMode(type);
-      // Give React a tick to update the DOM with print-only hidden classes
-      setTimeout(() => {
-        window.print();
-        setPrintMode('all');
-      }, 100);
-      return;
-    }
-
-    if (format === 'pdf') {
-      const toastId = toast.loading(`Preparing ${type} Report for Download...`);
-      setPrintMode(type);
-
-      // [VITAL FIX] Increase delay to 1000ms to ensure Recharts and layout are fully settled
-      setTimeout(async () => {
-        const element = document.getElementById('report-download-target');
-        
-        if (!element) {
-          toast.error("Critical Error: Report target not found", { id: toastId });
-          setPrintMode('all');
-          return;
-        }
-
-        try {
-          // Temporarily move off-screen but make visible for the capture engine
-          element.classList.remove('hidden');
-          element.style.position = 'fixed';
-          element.style.left = '-9999px';
-          element.style.top = '0';
-          element.style.display = 'block';
-
-          const opt = {
-            margin: 0.5,
-            filename: `${type}_Report_${dateRange}_${new Date().toISOString().split('T')[0]}.pdf`,
-            image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { 
-              scale: 2, 
-              useCORS: true, 
-              logging: false,
-              letterRendering: true,
-              windowWidth: 1200
-            },
-            jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
-          };
-
-          // Execute download
-          await (html2pdf as any)().from(element).set(opt).save();
-          
-          toast.success(`${type} Report Downloaded!`, { id: toastId });
-        } catch (err) {
-          console.error("PDF Engine Error:", err);
-          toast.error("Download Failed. Try 'Print as PDF' instead.", { id: toastId });
-        } finally {
-          // CLEANUP: Always revert UI state so buttons don't stay "stuck"
-          element.classList.add('hidden');
-          element.style.display = '';
-          element.style.position = '';
-          element.style.left = '';
-          setPrintMode('all');
-        }
-      }, 1000);
-      return;
-    }
-
-    // CSV LOGIC
-    let csvContent = "";
-    let fileName = "";
-
-    if (type === 'Sales') {
-      fileName = `Sales_Report_${dateRange}_${now.toISOString().split('T')[0]}.csv`;
-      csvContent = "Date,Order ID,Customer,Amount,Method,Status\n";
-      filteredOrdersByDate.forEach(order => {
-        csvContent += `${order.transactionDate || order.createdAt},ORD-${order.id},${order.customerName},${order.grandTotal},${order.paymentMethod},${order.paymentStatus}\n`;
-      });
-    } else if (type === 'Expenses') {
-      fileName = `Expenses_Report_${dateRange}_${now.toISOString().split('T')[0]}.csv`;
-      csvContent = "Date,Description,Category,Amount\n";
-      filteredExpensesByDate.forEach(exp => {
-        csvContent += `${exp.date},"${exp.description}",${exp.category},${exp.amount}\n`;
-      });
-    } else {
-      fileName = `ROI_Report_${dateRange}_${now.toISOString().split('T')[0]}.csv`;
-      csvContent = "Metric,Value\n";
-      csvContent += `Period,${dateRange}\n`;
-      csvContent += `Total Revenue,${totalRevenue}\n`;
-      csvContent += `Total Expenses,${totalExpensesAmount}\n`;
-      csvContent += `Net Profit,${profit}\n`;
-      csvContent += `ROI %,${totalExpensesAmount > 0 ? ((profit / totalExpensesAmount) * 100).toFixed(2) : 'N/A'}\n`;
-    }
-
-    const blob = new Blob(["\uFEFF", csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.href = url;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    toast.success(`${type} Report downloaded successfully`);
+  const handleExport = (type: 'Sales' | 'Expenses' | 'ROI') => {
+    setPrintMode(type);
+    // Give React a tick to update the DOM with print-only hidden classes
+    setTimeout(() => {
+      window.print();
+      setPrintMode('all');
+    }, 100);
   };
 
 
@@ -297,68 +199,29 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56 p-0 rounded-xl border border-slate-200 bg-white shadow-lg overflow-hidden">
               <div className="px-4 py-2 border-b border-gray-100 bg-gray-50/50">
-                <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Report Options</p>
+                <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Print Options</p>
               </div>
               
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger className="uppercase px-4 py-3 text-[11px] font-bold text-slate-700 cursor-pointer hover:bg-slate-50 focus:bg-slate-50">
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="h-4 w-4 text-green-600" />
-                    <span>Sales Report</span>
-                  </div>
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="w-44 p-0 rounded-lg border border-slate-200 shadow-md">
-                  <DropdownMenuItem onClick={() => handleExport('Sales', 'print')} className="px-4 py-2 text-[10px] font-bold uppercase text-slate-600 cursor-pointer hover:bg-slate-50">
-                    <Printer className="h-3.5 w-3.5 mr-2 text-slate-500" /> Print as PDF
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleExport('Sales', 'csv')} className="px-4 py-2 text-[10px] font-bold uppercase text-slate-600 cursor-pointer hover:bg-slate-50">
-                    <FileSpreadsheet className="h-3.5 w-3.5 mr-2 text-green-600" /> Export to CSV
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleExport('Sales', 'pdf')} className="px-4 py-2 text-[10px] font-bold uppercase text-slate-600 cursor-pointer hover:bg-slate-50">
-                    <FileText className="h-3.5 w-3.5 mr-2 text-blue-600" /> Export to PDF
-                  </DropdownMenuItem>
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
+              <DropdownMenuItem onClick={() => handleExport('Sales')} className="uppercase px-4 py-3 text-[11px] font-bold text-slate-700 cursor-pointer hover:bg-slate-50 focus:bg-slate-50">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-green-600 border-b-0" />
+                  <span>Print Sales Report</span>
+                </div>
+              </DropdownMenuItem>
 
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger className="uppercase px-4 py-3 text-[11px] font-bold text-slate-700 cursor-pointer hover:bg-slate-50 focus:bg-slate-50 border-t border-gray-100">
-                  <div className="flex items-center gap-2">
-                    <TrendingDown className="h-4 w-4 text-red-600" />
-                    <span>Expenses Report</span>
-                  </div>
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="w-44 p-0 rounded-lg border border-slate-200 shadow-md">
-                  <DropdownMenuItem onClick={() => handleExport('Expenses', 'print')} className="px-4 py-2 text-[10px] font-bold uppercase text-slate-600 cursor-pointer hover:bg-slate-50">
-                    <Printer className="h-3.5 w-3.5 mr-2 text-slate-500" /> Print as PDF
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleExport('Expenses', 'csv')} className="px-4 py-2 text-[10px] font-bold uppercase text-slate-600 cursor-pointer hover:bg-slate-50">
-                    <FileSpreadsheet className="h-3.5 w-3.5 mr-2 text-green-600" /> Export to CSV
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleExport('Expenses', 'pdf')} className="px-4 py-2 text-[10px] font-bold uppercase text-slate-600 cursor-pointer hover:bg-slate-50">
-                    <FileText className="h-3.5 w-3.5 mr-2 text-blue-600" /> Export to PDF
-                  </DropdownMenuItem>
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
+              <DropdownMenuItem onClick={() => handleExport('Expenses')} className="uppercase px-4 py-3 text-[11px] font-bold text-slate-700 cursor-pointer hover:bg-slate-50 focus:bg-slate-50 border-t border-gray-100">
+                <div className="flex items-center gap-2">
+                  <TrendingDown className="h-4 w-4 text-red-600" />
+                  <span>Print Expenses Report</span>
+                </div>
+              </DropdownMenuItem>
 
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger className="uppercase px-4 py-3 text-[11px] font-bold text-slate-700 cursor-pointer hover:bg-slate-50 focus:bg-slate-50 border-t border-gray-100">
-                  <div className="flex items-center gap-2">
-                    <Wallet className="h-4 w-4 text-blue-600" />
-                    <span>Sales & Expenses (ROI)</span>
-                  </div>
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="w-44 p-0 rounded-lg border border-slate-200 shadow-md">
-                  <DropdownMenuItem onClick={() => handleExport('ROI', 'print')} className="px-4 py-2 text-[10px] font-bold uppercase text-slate-600 cursor-pointer hover:bg-slate-50">
-                    <Printer className="h-3.5 w-3.5 mr-2 text-slate-500" /> Print as PDF
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleExport('ROI', 'csv')} className="px-4 py-2 text-[10px] font-bold uppercase text-slate-600 cursor-pointer hover:bg-slate-50">
-                    <FileSpreadsheet className="h-3.5 w-3.5 mr-2 text-green-600" /> Export to CSV
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleExport('ROI', 'pdf')} className="px-4 py-2 text-[10px] font-bold uppercase text-slate-600 cursor-pointer hover:bg-slate-50">
-                    <FileText className="h-3.5 w-3.5 mr-2 text-blue-600" /> Export to PDF
-                  </DropdownMenuItem>
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
+              <DropdownMenuItem onClick={() => handleExport('ROI')} className="uppercase px-4 py-3 text-[11px] font-bold text-slate-700 cursor-pointer hover:bg-slate-50 focus:bg-slate-50 border-t border-gray-100">
+                <div className="flex items-center gap-2">
+                  <Wallet className="h-4 w-4 text-blue-600" />
+                  <span>Print ROI Report</span>
+                </div>
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -392,7 +255,7 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
       );
     }
     return () => onSetHeaderActionRight?.(null);
-  }, [onSetHeaderActionRight, dateRange, filteredOrdersByDate, filteredExpensesByDate, totalRevenue, totalExpensesAmount, profit]);
+  }, [onSetHeaderActionRight, dateRange]);
 
   if (loading) {
     return (
@@ -681,7 +544,7 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
             </tbody>
             <tfoot>
               <tr className="bg-red-50">
-                <td colSpan={3} className="px-3 py-2 text-[11px] font-black uppercase text-red-600 text-right">Total Applied Sales</td>
+                <td colSpan={3} className="px-3 py-2 text-[11px] font-black uppercase text-red-600 text-right">Total Sales</td>
                 <td className="px-3 py-2 text-[11px] font-black text-right text-red-600 border border-red-100">₱{totalRevenue.toLocaleString()}</td>
                 <td colSpan={2} className="bg-white"></td>
               </tr>

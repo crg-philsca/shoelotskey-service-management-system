@@ -137,12 +137,16 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
     };
 
     const filteredInventory = inventoryData.filter((item: InventoryItem) => {
+        const name = item.name || '';
+        const category = item.category || '';
+        const status = item.status || '';
+
         const matchesSearch = 
-            item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            item.category.toLowerCase().includes(searchQuery.toLowerCase());
+            name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            category.toLowerCase().includes(searchQuery.toLowerCase());
         
-        const matchesCategory = categoryFilter === 'all' || item.category === categoryFilter;
-        const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
+        const matchesCategory = categoryFilter === 'all' || category === categoryFilter;
+        const matchesStatus = statusFilter === 'all' || status === statusFilter;
         const matchesActive = activeFilter === 'all' || 
             (activeFilter === 'active' && item.isActive) || 
             (activeFilter === 'inactive' && !item.isActive);
@@ -476,11 +480,12 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                         value={formData.category}
                                         onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
                                     >
-                                        <option value="Chemicals">CHEMICALS</option>
+                                        <option value="">(NONE / CLEAR)</option>
+                                        <option value="Chemical">CHEMICAL</option>
                                         <option value="Supplies">SUPPLIES</option>
                                         <option value="Tools">TOOLS</option>
                                         <option value="Equipment">EQUIPMENT</option>
-                                        {inventoryData.map(item => item.category).filter((v, i, a) => !['Chemicals', 'Supplies', 'Tools', 'Equipment'].includes(v) && a.indexOf(v) === i).map(cat => (
+                                        {inventoryData.map(item => item.category).filter((v, i, a) => !['Chemical', 'Supplies', 'Tools', 'Equipment'].includes(v) && a.indexOf(v) === i).map(cat => (
                                             <option key={cat} value={cat}>{cat.toUpperCase()}</option>
                                         ))}
                                     </select>
@@ -511,14 +516,15 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                         value={formData.unit}
                                         onChange={(e) => setFormData(prev => ({ ...prev, unit: e.target.value }))}
                                     >
-                                        <option value="Bottles">BOTTLES</option>
-                                        <option value="Cans">CANS</option>
+                                        <option value="">(NONE / CLEAR)</option>
                                         <option value="Liters">LITERS</option>
-                                        <option value="Pcs">PCS</option>
-                                        <option value="Pairs">PAIRS</option>
-                                        <option value="Rolls">ROLLS</option>
-                                        <option value="Sets">SETS</option>
-                                        {inventoryData.map(item => item.unit).filter((v, i, a) => !['Bottles', 'Cans', 'Liters', 'Pcs', 'Pairs', 'Rolls', 'Sets'].includes(v) && a.indexOf(v) === i).map(unit => (
+                                        <option value="bottle">BOTTLE</option>
+                                        <option value="can">CAN</option>
+                                        <option value="tub">TUB</option>
+                                        <option value="ml">ML</option>
+                                        <option value="pcs">PCS</option>
+                                        <option value="pairs">PAIRS</option>
+                                        {inventoryData.map(item => item.unit).filter((v, i, a) => !['liters', 'bottle', 'can', 'tub', 'ml', 'pcs', 'pairs'].includes(v.toLowerCase()) && a.indexOf(v) === i).map(unit => (
                                             <option key={unit} value={unit}>{unit.toUpperCase()}</option>
                                         ))}
                                     </select>
@@ -533,8 +539,11 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                     type="number" 
                                     step="any"
                                     placeholder="0" 
-                                    value={formData.stock}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, stock: parseFloat(e.target.value) || 0 }))}
+                                    value={formData.stock || ''}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        setFormData(prev => ({ ...prev, stock: val === '' ? 0 : parseFloat(val) }));
+                                    }}
                                 />
                             </div>
                             <div className="space-y-2">
@@ -544,8 +553,11 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                     type="number" 
                                     step="any"
                                     placeholder="0.00" 
-                                    value={formData.price}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
+                                    value={formData.price || ''}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        setFormData(prev => ({ ...prev, price: val === '' ? 0 : parseFloat(val) }));
+                                    }}
                                 />
                             </div>
                         </div>
