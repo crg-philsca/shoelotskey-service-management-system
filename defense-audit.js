@@ -55,15 +55,17 @@ function printDiff(oldStr, newStr, filename) {
 
     // Simplified diff: Show changed lines only
     let hasDiff = false;
+    let deletedLines = [];
     const maxLines = Math.max(oldLines.length, newLines.length);
 
     for (let i = 0; i < maxLines; i++) {
         if (oldLines[i] !== newLines[i]) {
             hasDiff = true;
-            if (oldLines[i] !== undefined) {
+            if (oldLines[i] !== undefined && oldLines[i].trim() !== "") {
                 console.log(`${RED}- [ORIGINAL] Line ${i + 1}: ${oldLines[i].trim()}${RESET}`);
+                deletedLines.push(`Line ${i + 1}: ${oldLines[i]}`);
             }
-            if (newLines[i] !== undefined) {
+            if (newLines[i] !== undefined && newLines[i].trim() !== "") {
                 console.log(`${GREEN}+ [REVISED ] Line ${i + 1}: ${newLines[i].trim()}${RESET}`);
             }
         }
@@ -71,6 +73,13 @@ function printDiff(oldStr, newStr, filename) {
     
     if (!hasDiff) {
         console.log(`${YELLOW}[NOTE] Trivial change detected (whitespace or encoding).${RESET}`);
+    } else {
+        if (deletedLines.length > 0) {
+            console.log(`\n${BOLD}${RED}[DELETED CODE BLOCK] Copy to restore specific lines:${RESET}`);
+            console.log(`// --- START OF REMOVED CONTENT ---`);
+            console.log(deletedLines.join('\n'));
+            console.log(`// --- END OF REMOVED CONTENT ---`);
+        }
     }
 }
 

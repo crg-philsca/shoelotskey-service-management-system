@@ -152,12 +152,15 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
     return services
       .filter(s => s.category === 'base' && s.active)
       .map((service) => {
-        const cleanName = service.name.replace(' (with basic cleaning)', '');
-        let fillColor = '#dc2626'; // default
-        if (cleanName === 'Basic Cleaning') fillColor = '#0d948880'; // teal-700 50%
-        else if (cleanName === 'Minor Reglue') fillColor = '#6366f180'; // indigo-500 50%
-        else if (cleanName === 'Full Reglue') fillColor = '#c026d380'; // violet-600 50%
-        else if (cleanName === 'Color Renewal') fillColor = '#f59e0b80'; // amber-500 50%
+        const cleanName = service.name.replace(' (with basic cleaning)', '').trim();
+        let fillColor = '#dc2626'; // Default red
+        const lowerName = cleanName.toLowerCase();
+
+        if (lowerName.includes('basic cleaning')) fillColor = '#0d948880'; 
+        else if (lowerName.includes('minor reglue')) fillColor = '#6366f180'; 
+        else if (lowerName.includes('full reglue')) fillColor = '#c026d380'; 
+        else if (lowerName.includes('color renewal')) fillColor = '#f59e0b80'; 
+        else if (lowerName.includes('deep cleaning')) fillColor = '#0891b280';
 
         return {
           name: cleanName,

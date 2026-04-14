@@ -70,7 +70,7 @@ function printDiff(oldStr, newStr, filename) {
             hasDiff = true;
             if (oldLines[i] !== undefined && oldLines[i].trim() !== "") {
                 console.log(`${RED}- [OLD] Line ${i + 1}: ${oldLines[i].trim()}${RESET}`);
-                deletedLines.push(oldLines[i]);
+                deletedLines.push(`Line ${i + 1}: ${oldLines[i]}`);
             }
             if (newLines[i] !== undefined && newLines[i].trim() !== "") {
                 console.log(`${GREEN}+ [NEW] Line ${i + 1}: ${newLines[i].trim()}${RESET}`);
@@ -87,11 +87,6 @@ function printDiff(oldStr, newStr, filename) {
             console.log(deletedLines.join('\n'));
             console.log(`// --- END OF REMOVED CONTENT ---`);
         }
-
-        console.log(`\n${BOLD}${YELLOW}[RECOVERY SNAPSHOT] Copy below for full file restoration:${RESET}`);
-        console.log(`// --- PREVIOUS VERSION OF ${path.basename(filename)} ---`);
-        console.log(oldStr);
-        console.log(`// --- END OF SNAPSHOT ---`);
     }
     console.log(`${BOLD}${YELLOW}----------------------------------------------------${RESET}`);
 }

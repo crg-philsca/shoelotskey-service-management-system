@@ -186,30 +186,18 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
    * Maps specific sub-services (like 'Minor Reglue (with cleaning)') into parent groups.
    */
   const serviceVolumeData = useMemo(() => {
-    const groupings = {
-      'Basic Cleaning': ['Basic Cleaning', 'Unyellowing', 'Minor Retouch', 'Minor Restoration', 'Counter'],
-      'Minor Reglue': ['Minor Reglue', 'Minor Reglue (with basic cleaning)'],
-      'Full Reglue': ['Full Reglue', 'Full Reglue (with basic cleaning)'],
-      'Color Renewal': ['Color Renewal', 'Color Renewal (with basic cleaning)', '2 Colors', '3 Colors'],
-    };
-
     const basicCleaningBreakdown = {
       'Basic Cleaning': 0,
       'Unyellowing': 0,
       'Minor Retouch': 0,
       'Minor Restoration': 0,
     };
-
-    const colorRenewalBreakdown = {
-      '2 Colors': 0,
-      '3 Colors': 0,
-    };
-
+  
     const result = [
       { name: 'Basic Cleaning', value: 0, sales: 0, breakdown: basicCleaningBreakdown },
       { name: 'Minor Reglue', value: 0, sales: 0 },
       { name: 'Full Reglue', value: 0, sales: 0 },
-      { name: 'Color Renewal', value: 0, sales: 0, breakdown: colorRenewalBreakdown },
+      { name: 'Color Renewal', value: 0, sales: 0 },
     ];
 
     filteredOrders.forEach(order => {
@@ -217,53 +205,35 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
         baseService: Array.isArray(order.baseService) ? order.baseService : [order.baseService],
         addOns: order.addOns || []
       }];
-
+  
       items.forEach(item => {
         const itemBaseServices = Array.isArray(item.baseService) ? item.baseService : [item.baseService];
-        const primaryBase = itemBaseServices[0] || 'Other';
-        const addOnNames = (item.addOns || []).map((addon: any) => (typeof addon === 'string' ? addon : addon.name));
-
-        // Attribution logic: If an item has multiple services, we attribute the 'value' to the primary base
-        // and sales proportionately if needed, but for volume chart we count primary base.
-
-        if (groupings['Basic Cleaning'].includes(primaryBase)) {
-          result[0].value += 1;
-          result[0].sales += (order.grandTotal / (items.length || 1)); // Distribute sales across items
-          if (basicCleaningBreakdown.hasOwnProperty(primaryBase)) {
-            basicCleaningBreakdown[primaryBase as keyof typeof basicCleaningBreakdown] += 1;
-          }
-          addOnNames.forEach(addon => {
-            if (basicCleaningBreakdown.hasOwnProperty(addon)) {
-              basicCleaningBreakdown[addon as keyof typeof basicCleaningBreakdown] += 1;
-            }
-          });
-        }
-
-        if (groupings['Minor Reglue'].includes(primaryBase)) {
-          result[1].value += 1;
-          result[1].sales += (order.grandTotal / (items.length || 1));
-        }
-
-        if (groupings['Full Reglue'].includes(primaryBase)) {
+        const primaryBase = (itemBaseServices[0] || 'Other').toLowerCase();
+        const salesShare = (order.grandTotal / (items.length || 1));
+        
+        // Dynamic Grouping Logic
+        if (primaryBase.includes('full reglue')) {
           result[2].value += 1;
-          result[2].sales += (order.grandTotal / (items.length || 1));
-        }
-
-        if (groupings['Color Renewal'].includes(primaryBase)) {
+          result[2].sales += salesShare;
+        } else if (primaryBase.includes('minor reglue')) {
+          result[1].value += 1;
+          result[1].sales += salesShare;
+        } else if (primaryBase.includes('color renewal') || primaryBase.includes('color') || primaryBase.includes('renewal')) {
           result[3].value += 1;
-          result[3].sales += (order.grandTotal / (items.length || 1));
-          if (colorRenewalBreakdown.hasOwnProperty(primaryBase)) {
-            colorRenewalBreakdown[primaryBase as keyof typeof colorRenewalBreakdown] += 1;
-          }
-          addOnNames.forEach(addon => {
-            if (colorRenewalBreakdown.hasOwnProperty(addon)) {
-              colorRenewalBreakdown[addon as keyof typeof colorRenewalBreakdown] += 1;
-            }
-          });
+          result[3].sales += salesShare;
+        } else if (primaryBase.includes('cleaning') || primaryBase.includes('unyellowing') || primaryBase.includes('retouch') || primaryBase.includes('restoration') || primaryBase.includes('basic')) {
+          result[0].value += 1;
+          result[0].sales += salesShare;
+          
+          // Breakdown logic maintenance
+          if (primaryBase.includes('unyellowing')) basicCleaningBreakdown['Unyellowing'] += 1;
+          else if (primaryBase.includes('retouch')) basicCleaningBreakdown['Minor Retouch'] += 1;
+          else if (primaryBase.includes('restoration')) basicCleaningBreakdown['Minor Restoration'] += 1;
+          else basicCleaningBreakdown['Basic Cleaning'] += 1;
         }
       });
     });
-
+  
     return result;
   }, [filteredOrders]);
 
