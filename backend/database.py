@@ -43,11 +43,14 @@ try:
     if PG_URL:
         # Use a short timeout for the initial connection check (OWASP A09: Connection Resilience)
         # connect_timeout=5 ensures we don't hang the server if the network drops/times out
+        # Strict pooling for RDS Free-Tier (FATAL: too many connections fix)
         primary_engine = create_engine(
             PG_URL, 
-            connect_args={"sslmode": "require", "connect_timeout": 5}, 
-            pool_pre_ping=True,
-            pool_recycle=3600
+            connect_args={"sslmode": "require", "connect_timeout": 10}, 
+            pool_size=2,          # Keep base connections very low
+            max_overflow=0,       # Disable overflow to prevent RDS lockout
+            pool_pre_ping=True,   # Check if connection is alive before using
+            pool_recycle=300      # Close and reopen connections every 5 mins
         )
         with primary_engine.connect() as conn:
             conn.execute(text("SELECT 1"))

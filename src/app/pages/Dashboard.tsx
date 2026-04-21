@@ -1266,13 +1266,13 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                       <div>
                         <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Order Status</Label>
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize border
-                            ${selectedStatus === 'new-order' || selectedOrder.status === 'new-order' ? 'bg-purple-50 text-purple-700 border-purple-100' :
-                            selectedOrder.status === 'on-going' ? 'bg-blue-50 text-blue-700 border-blue-100' :
-                              selectedOrder.status === 'for-release' ? 'bg-orange-50 text-orange-700 border-orange-100' :
-                                selectedOrder.status === 'claimed' ? 'bg-gray-50 text-gray-700 border-gray-200' :
+                            ${(selectedStatus === 'new-order' || selectedOrder?.status === 'new-order') ? 'bg-purple-50 text-purple-700 border-purple-100' :
+                            selectedOrder?.status === 'on-going' ? 'bg-blue-50 text-blue-700 border-blue-100' :
+                              selectedOrder?.status === 'for-release' ? 'bg-orange-50 text-orange-700 border-orange-100' :
+                                selectedOrder?.status === 'claimed' ? 'bg-gray-50 text-gray-700 border-gray-200' :
                                   'bg-red-50 text-red-700 border-red-100'
                           }`}>
-                          {selectedOrder.status.replace('-', ' ')}
+                          {(selectedOrder?.status || 'unknown').replace('-', ' ')}
                         </span>
                       </div>
                       <div>
