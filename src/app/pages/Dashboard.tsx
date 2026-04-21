@@ -113,9 +113,8 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
     const isWithinRange = (createdAt: Date) => {
       const diffDays = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
       if (profitRange === 'Daily') {
-        const startOfToday = new Date(now);
-        startOfToday.setHours(0, 0, 0, 0);
-        return createdAt >= startOfToday;
+        // Use a 24-hour window instead of strict midnight to fix Timezone/UTC issues
+        return diffDays <= 1.1; 
       }
       if (profitRange === 'Weekly') return diffDays < 7;
       if (profitRange === 'Monthly') return diffDays < 30;
@@ -162,9 +161,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
     const isWithinRange = (dateValue: Date) => {
       const diffDays = (now.getTime() - dateValue.getTime()) / (1000 * 60 * 60 * 24);
       if (profitRange === 'Daily') {
-        const startOfToday = new Date(now);
-        startOfToday.setHours(0, 0, 0, 0);
-        return dateValue >= startOfToday;
+        return diffDays <= 1.1;
       }
       if (profitRange === 'Weekly') return diffDays < 7;
       if (profitRange === 'Monthly') return diffDays < 30;
