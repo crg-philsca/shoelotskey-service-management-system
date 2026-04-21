@@ -61,7 +61,8 @@ print(f"\n[BOOT] Shoelotskey SMS v2.0 - Environment: {ENV} ({DB_TYPE})")
 app = FastAPI(
     title="Shoelotskey 3NF & ML SMS",
     description="Backend API for Normalized Service Management",
-    version="2.0.0"
+    version="2.0.0",
+    swagger_ui_parameters={"filter": True}
 )
 
 # Configure Templates for custom error pages
@@ -197,7 +198,7 @@ def startup_sequence():
     
     # [USER REQUEST] Ensure local fallback database is ALWAYS ready even if we are online.
     # We briefly initialize the local SQLite engine to push the schema if it's missing.
-    from database import LOCAL_SQLITE, Base
+    from database import LOCAL_SQLITE
     try:
         from sqlalchemy import create_engine
         local_engine = create_engine(LOCAL_SQLITE)
@@ -603,6 +604,49 @@ def sync_backup_to_cloud(db: Session = Depends(get_db), current_user: User = Dep
     except Exception as e:
         print(f"[RECONCILE ERROR] {e}")
         raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
+
+# ==========================================
+# 0.6 CAPSTONE STORED PROCEDURE DEMO
+# ==========================================
+@app.post("/api/trigger-analytics-procedure")
+def trigger_daily_sales_procedure(db: Session = Depends(get_db)):
+    """
+    Capstone Defense Route: Manually executes the PostgreSQL Stored Procedure 
+    instead of waiting for the midnight pg_cron job.
+    """
+    from database import is_sqlite
+    
+    if is_sqlite:
+        raise HTTPException(
+            status_code=400, 
+            detail="Cannot execute Stored Procedure on local SQLite fallback. Please connect to Cloud PostgreSQL."
+        )
+        
+    try:
+        # Native SQL command to explicitly execute a Procedure in Postgres
+        db.execute(text("CALL generate_daily_sales_summary()"))
+        db.commit()
+        
+        # Verify the result from the caching table
+        result = db.execute(text(
+            "SELECT summary_date, total_revenue, total_job_orders "
+            "FROM daily_analytics_summary "
+            "ORDER BY summary_date DESC LIMIT 1"
+        )).first()
+        
+        return {
+            "status": "success",
+            "message": "Daily Sales Aggregation Stored Procedure executed successfully.",
+            "cache_record_created": {
+                "date": str(result[0]) if result else None,
+                "total_revenue": float(result[1]) if result else 0.0,
+                "total_orders": int(result[2]) if result else 0
+            }
+        }
+    except Exception as e:
+        db.rollback()
+        print(f"[PROCEDURE ERROR] {e}")
+        raise HTTPException(status_code=500, detail=f"Procedure execution failed: Ensure setup_stored_procedure.py was run first. Error: {str(e)}")
 
 # ==========================================
 # 1. AUTHENTICATION & SECURITY

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Capstone Paper - Machine Learning Section</title>
+    <style>
+        body {
+            font-family: "Times New Roman", Times, serif;
+            line-height: 2; /* Common for academic papers */
+            margin: 40px auto;
+            max-width: 800px;
+            padding: 20px;
+            color: #000;
+            background-color: #fff;
+        }
+        h3 {
+            text-align: center;
+            font-size: 1.25em;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        p {
+            text-indent: 50px; /* Academic paragraph indent */
+            text-align: justify;
+            margin-bottom: 15px;
+            margin-top: 0;
+        }
+    </style>
+</head>
+<body>
+
+    <h3>Machine Learning Based Service Completion Prediction</h3>
+
+    <p>Machine learning was integrated into the proposed Web-Based Service Management System with Data Analytics for Shoelotskey to improve the accuracy of service completion time estimates and release dates. Although each shoe cleaning or repair service has a standard processing duration, actual completion time may vary depending on current shop workload, pending job orders, order priority (regular or rush), and service complexity. Through machine learning, the system provides more accurate and data-driven completion estimates.</p>
+
+    <p>The machine learning module was developed following the Waterfall Software Development Life Cycle (SDLC) to ensure systematic integration into the web-based platform. During the requirements analysis phase, approximately 500 historical completed job order records, service transactions, and turnaround time data were collected from Shoelotskey operations. Relevant variables included date received, date completed, service type, requested conditions, priority level, and workload volume. For feature engineering, rather than using sparse one-hot encoding arrays, the system was designed to mathematically aggregate service complexities. Specific features extracted included the total count of requested services, total count of shoe conditions, real-time workload volume, and a priority level converted into an active binary indicator (rush equals 1, regular equals 0). Furthermore, heuristic baselines were engineered to account for specific material delays (e.g., suede) and condition severities (e.g., sole separation). Date fields were directly parsed to calculate the continuous actual turnaround time in days used as the target variable for the model.</p>
+
+    <p>During the design phase, the processed dataset was divided using an 80:20 train-test split, where 80% of the records were used for training and 20% for testing. This method allowed the model to learn historical service patterns and evaluate predictive performance using unseen data. The trained model was then integrated into the application layer and connected to the job order form and service management page.</p>
+
+    <p>During the implementation phase, a regression-based approach was used because the objective of the study was to predict service completion time in days, which is a continuous numerical target variable. Among the regression algorithms considered, the Random Forest Regressor was selected over Linear Regression, Decision Tree, and XGBoost because it can effectively model nonlinear relationships among workload, priority level, and service complexity. It also reduces overfitting through ensemble learning, performs well on structured datasets from small and medium-sized businesses, and requires less parameter tuning than XGBoost. The predicted completion time was then used to calculate the estimated release date by adding the predicted completion days to the date received.</p>
+
+    <p>During the testing phase, model performance was evaluated using the Mean Absolute Error (MAE) metric, which measures the average difference between predicted and actual completion time. Lower MAE values indicate better prediction accuracy and more reliable release date estimates. Through this integration, the proposed system supports data-driven monitoring of service completion, improves scheduling efficiency, enhances customer satisfaction through accurate release dates, and strengthens operational decision-making for Shoelotskey.</p>
+
+</body>
+</html>

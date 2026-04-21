@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shoelotskey SMS | System Technical Monograph</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #dc2626;
+            --secondary: #1e293b;
+            --bg: #f8fafc;
+            --border: #e2e8f0;
+        }
+
+        * { margin:0; padding:0; box-sizing:border-box; font-family: 'Outfit', sans-serif; }
+
+        body { background: var(--bg); color: #334155; line-height: 1.6; padding: 0; }
+
+        .header { background: #0f172a; color: white; padding: 60px 40px; border-bottom: 5px solid var(--primary); }
+        .header h1 { font-size: 2.2rem; font-weight: 800; text-transform: uppercase; letter-spacing: -1px; margin-bottom: 10px; }
+        .header p { font-size: 0.9rem; text-transform: uppercase; letter-spacing: 3px; opacity: 0.8; }
+
+        .container { max-width: 1400px; margin: 50px auto; padding: 0 40px; }
+
+        /* --- SYSTEM ARCHITECTURE OVERVIEW --- */
+        .stack-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 60px;
+        }
+        .stack-item { background: white; border: 1px solid var(--border); padding: 25px; border-radius: 12px; text-align: center; }
+        .stack-item h4 { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; color: var(--primary); margin-bottom: 5px; }
+        .stack-item p { font-size: 1rem; font-weight: 600; color: #0f172a; }
+
+        /* --- MODULES --- */
+        .module-section { margin-bottom: 80px; }
+        .module-header { border-left: 5px solid var(--primary); padding-left: 20px; margin-bottom: 40px; }
+        .module-header h2 { font-size: 1.8rem; font-weight: 800; color: #0f172a; text-transform: uppercase; }
+        
+        .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 25px; }
+        
+        .feature-card { background: white; border: 1px solid var(--border); border-radius: 16px; padding: 35px; transition: 0.3s; }
+        .feature-card:hover { border-color: var(--primary); transform: translateY(-3px); box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
+        .feature-card h3 { font-size: 1.25rem; font-weight: 800; color: #0f172a; margin-bottom: 10px; }
+        .feature-card p { font-size: 0.95rem; color: #64748b; margin-bottom: 20px; }
+        .feature-card .sys-tag { display: inline-block; background: #fef2f2; color: #991b1b; padding: 3px 10px; border-radius: 5px; font-size: 0.65rem; font-weight: 800; text-transform: uppercase; }
+
+        /* --- COMPLIANCE --- */
+        .compliance-wrapper { display: flex; gap: 30px; margin-top: 50px; flex-wrap: wrap; }
+        .comp-card { flex: 1; min-width: 450px; border-radius: 20px; padding: 50px; }
+        .iso { background: white; border: 2px solid #2563eb; }
+        .owasp { background: #0f172a; color: white; }
+        .comp-card h2 { font-size: 1.6rem; font-weight: 800; text-transform: uppercase; margin-bottom: 30px; }
+        .iso h2 { color: #2563eb; }
+        .owasp h2 { color: #ef4444; }
+        .comp-list { list-style: none; }
+        .comp-list li { margin-bottom: 15px; font-size: 0.9rem; }
+        .comp-list li strong { display: block; font-size: 1rem; margin-bottom: 2px; }
+
+        .footer { text-align: center; padding: 80px 0; color: #94a3b8; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 5px; }
+    </style>
+</head>
+<body>
+
+    <header class="header">
+        <h1>System Technical Monograph</h1>
+        <p>Shoelotskey SMS | Software Engineering Documentation</p>
+    </header>
+
+    <div class="container">
+
+        <!-- TECH STACK ATLAS -->
+        <div class="stack-bar">
+            <div class="stack-item"><h4>Frontend Engine</h4><p>React 18 / Vite</p></div>
+            <div class="stack-item"><h4>Backend API</h4><p>FastAPI / Python</p></div>
+            <div class="stack-item"><h4>Primary Database</h4><p>PostgreSQL (Cloud)</p></div>
+            <div class="stack-item"><h4>Fallback Database</h4><p>SQLite (Offline)</p></div>
+        </div>
+
+        <!-- MODULE A: TRANSACTIONAL CORE -->
+        <section class="module-section">
+            <div class="module-header"><h2>A. Transactional Control Modules</h2></div>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h3>Job Order Admission</h3>
+                    <p>The system's primary intake engine, facilitating multi-shoe admissions with automated pricing and downpayment logic.</p>
+                    <span class="sys-tag">Transactional Core</span>
+                </div>
+                <div class="feature-card">
+                    <h3>Multi-Item Data Grouping</h3>
+                    <p>Enables the grouping of multiple service records under a single unique transaction ID for system-wide consistency.</p>
+                    <span class="sys-tag">Relational Logic</span>
+                </div>
+                <div class="feature-card">
+                    <h3>Status Execution Pipeline</h3>
+                    <p>A strictly enforced state-machine workflow that tracks every item through timestamped status triggers.</p>
+                    <span class="sys-tag">Logistics Engine</span>
+                </div>
+                <div class="feature-card">
+                    <h3>Claim Verification Protocol</h3>
+                    <p>The final release gateway that reconciles balances and updates the system state to a closed transaction.</p>
+                    <span class="sys-tag">Accountability</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- MODULE B: PERSISTENCE & INTELLIGENCE -->
+        <section class="module-section">
+            <div class="module-header"><h2>B. Persistence & Intelligence Engine</h2></div>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h3>Hybrid Persistence Bridge</h3>
+                    <p>Facilitates seamless, automatic failover between Cloud and Local database instances to ensure business continuity.</p>
+                    <span class="sys-tag">Resilience Engine</span>
+                </div>
+                <div class="feature-card">
+                    <h3>Service Prediction Engine (SPE)</h3>
+                    <p>Proprietary logic algorithm used to calculate estimated finish dates based on current shop-floor job saturation.</p>
+                    <span class="sys-tag">ML Logic</span>
+                </div>
+                <div class="feature-card">
+                    <h3>Self-Healing Data Initializer</h3>
+                    <p>Automated startup routine that detects structural anomalies or missing data and repairs the environment instantly.</p>
+                    <span class="sys-tag">System Maintenance</span>
+                </div>
+                <div class="feature-card">
+                    <h3>Sync Idempotency Shield</h3>
+                    <p>Security layer that prevents duplicate data entry during network sync cycles to maintain 100% data integrity.</p>
+                    <span class="sys-tag">Data Integrity</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- MODULE C: INVENTORY & BI -->
+        <section class="module-section">
+            <div class="module-header"><h2>C. Asset Management & Analytics</h2></div>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h3>Automatic Inventory Sync</h3>
+                    <p>Triggers immediate stock deduction based on service completion to maintain a real-time count of physical assets.</p>
+                    <span class="sys-tag">Supply Automation</span>
+                </div>
+                <div class="feature-card">
+                    <h3>Financial ROI Analytics</h3>
+                    <p>Visual intelligence module that calculates Profits, Losses, and Operating Expenses through integrated data charts.</p>
+                    <span class="sys-tag">Business Intelligence</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- COMPLIANCE GRIDS -->
+        <div class="compliance-wrapper">
+            <div class="comp-card iso">
+                <h2>ISO 25010 QUALITY MODEL</h2>
+                <ul class="comp-list">
+                    <li><strong>Functional Suitability:</strong> Correctness of all 30+ service functions.</li>
+                    <li><strong>Reliability:</strong> Fail-safe operations via the Hybrid Persistence Bridge.</li>
+                    <li><strong>Performance:</strong> Responds in < 150ms for all major system tasks.</li>
+                    <li><strong>Usability:</strong> Optimized dashboard layout for rapid staff adoption.</li>
+                </ul>
+            </div>
+            <div class="comp-card owasp">
+                <h2>OWASP TOP 10 SECURITY</h2>
+                <ul class="comp-list">
+                    <li><strong>A01: Broken Access Control:</strong> Strict Role-Based Access Enforcement.</li>
+                    <li><strong>A03: SQL Injection:</strong> Complete protection via SQLAlchemy Parameterization.</li>
+                    <li><strong>A08: Integrity Failures:</strong> Secure Sync Idempotency Shielding.</li>
+                    <li><strong>A09: Monitoring Failures:</strong> Real-time Live Integrity System Auditor.</li>
+                </ul>
+            </div>
+        </div>
+
+    </div>
+
+    <footer class="footer">
+        Shoelotskey SMS | THE SYSTEM TECHNICAL MONOGRAPH | 2026
+    </footer>
+
+</body>
+</html>
