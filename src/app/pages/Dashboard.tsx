@@ -129,12 +129,12 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
   // Use the raw 'orders' for Status Summary cards so nothing is hidden by the date filter
   const statusCounts = useMemo(() => {
     return {
-      new: orders.filter(o => o.status === 'new-order').length,
-      ongoing: orders.filter(o => o.status === 'on-going').length,
-      forRelease: orders.filter(o => o.status === 'for-release').length,
-      claimed: orders.filter(o => o.status === 'claimed').length,
+      new: analyticsOrders.filter(o => o.status === 'new-order').length,
+      ongoing: analyticsOrders.filter(o => o.status === 'on-going').length,
+      forRelease: analyticsOrders.filter(o => o.status === 'for-release').length,
+      claimed: analyticsOrders.filter(o => o.status === 'claimed').length,
     };
-  }, [orders]);
+  }, [analyticsOrders]);
 
   /**
    * MEMO: overviewOrders
