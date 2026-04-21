@@ -1134,7 +1134,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                           <p className="text-sm font-bold text-green-700">
                             {(() => {
                               if (!selectedOrder?.actualCompletionDate) return '-';
-                              const d = new Date(selectedOrder.actualCompletionDate);
+                              const d = new Date(selectedOrder.actualCompletionDate || "");
                               return isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy HH:mm');
                             })()}
                           </p>
@@ -1378,7 +1378,6 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                   </div>
                 </div>
               )}
-             )}
             </DialogContent>
           </Dialog >
 
