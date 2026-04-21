@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Review Compliance Matrix</title>
+    <style>
+        body {
+            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8fafc;
+            color: #334155;
+            margin: 0;
+            padding: 40px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: #ffffff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 20px;
+        }
+        h1 {
+            color: #0f172a;
+            font-size: 28px;
+            margin: 0 0 10px 0;
+            font-weight: 700;
+        }
+        p.subtitle {
+            color: #64748b;
+            font-size: 15px;
+            margin: 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+            vertical-align: top;
+        }
+        th {
+            background-color: #f1f5f9;
+            color: #0f172a;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 12px;
+            letter-spacing: 0.05em;
+            position: sticky;
+            top: 0;
+        }
+        tbody tr:hover {
+            background-color: #f8fafc;
+        }
+        .reviewer {
+            font-weight: 600;
+            color: #3b82f6;
+            white-space: nowrap;
+        }
+        .chapter {
+            font-style: italic;
+            color: #475569;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            background-color: #dcfce7;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+            text-align: center;
+        }
+        .page-no {
+            font-family: monospace;
+            background: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        .action {
+            color: #1e293b;
+        }
+        .proof-badge {
+            display: block;
+            margin-top: 8px;
+            padding: 6px;
+            background-color: #e0f2fe;
+            border-left: 3px solid #0284c7;
+            font-size: 12px;
+            color: #0369a1;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>Panel Review Compliance Matrix</h1>
+        <p class="subtitle">Shoelotskey Service Management System - Defense Alignment Report</p>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th width="12%">Panel Reviewer</th>
+                <th width="28%">Panel Comment/s</th>
+                <th width="15%">Chapter / Section</th>
+                <th width="30%">Action Taken & Technical Proof</th>
+                <th width="7%">Page No.</th>
+                <th width="8%">Remarks</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td class="reviewer">Ma’am Vista</td>
+                <td>Remove “For Shoelotskey Villamor-Pasay” from the title.</td>
+                <td class="chapter">Chapter 1 – Title of the study</td>
+                <td class="action">Revised the title to improve clarity and relevance to the study.<span class="proof-badge">Document Sync: Verified applied in Chapter 1 title header.</span></td>
+                <td><span class="page-no">1</span></td>
+                <td><span class="badge">Addressed</span></td>
+            </tr>
+            <tr>
+                <td class="reviewer">Sir Alojado</td>
+                <td>Add “For Shoelotskey Villamor-Pasay” from the title.</td>
+                <td class="chapter">Chapter 1 – Title of the study</td>
+                <td class="action">Revised to enhance its clarity and strengthen its relevance to the objectives and scope of the study.<span class="proof-badge">Document Sync: Re-added as explicitly instructed by the reviewer in the paper header.</span></td>
+                <td><span class="page-no">1</span></td>
+                <td><span class="badge">Addressed</span></td>
+            </tr>
+            <tr>
+                <td class="reviewer">Ma’am Vista & Sir Alojado</td>
+                <td>Include the discussion of general, specific problem, research gap, and solution for establishment</td>
+                <td class="chapter">Chapter 1 – Introduction</td>
+                <td class="action">Added content to present the problems, research gap, and proposed solution for the establishment.<span class="proof-badge">Document Sync: Defined fragmentized paper records vs. proposed digital solution in Introduction.</span></td>
+                <td><span class="page-no">2-3</span></td>
+                <td><span class="badge">Addressed</span></td>
+            </tr>
+            <tr>
+                <td class="reviewer">Sir Alojado</td>
+                <td>Should provide evidences for every claims</td>
+                <td class="chapter">Chapter 1 – Problem Statement</td>
+                <td class="action">Added evidences to support every claim and to justify each action taken in the study.<span class="proof-badge">Document Sync: Measured KPIs (15-30m retrieval delays, 4-6hr report prep delays) explicitly added.</span></td>
+                <td><span class="page-no">3-4</span></td>
+                <td><span class="badge">Addressed</span></td>
+            </tr>
+            <tr>
+                <td class="reviewer">Ma’am Vista & Sir Alojado</td>
+                <td>Remove unrelated content and revise the project context to ensure relevance to the study.</td>
+                <td class="chapter">Chapter 1 – Project Context</td>
+                <td class="action">Revised the project context by removing unrelated content and ensuring its alignment with the study.</td>
+                <td><span class="page-no">5-7</span></td>
+                <td><span class="badge">Addressed</span></td>
+            </tr>
+            <tr>
+                <td class="reviewer">Ma’am Vista</td>
+                <td>Clarify the evaluation criteria using ISO/IEC 25010 and TAM, and specify measurable indicators. Add objectives for system enhancement and future research.</td>
+                <td class="chapter">Chapter 1 – Objectives of the study</td>
+                <td class="action">Improved the evaluation criteria by specifying measurable indicators based on ISO/IEC 25010 and TAM, and added objectives for system enhancement.<span class="proof-badge">System Sync: ISO 25010 Security evaluated natively via implemented api_tests.py suite.</span></td>
+                <td><span class="page-no">9-10</span></td>
+                <td><span class="badge">Addressed</span></td>
+            </tr>
+            <tr>
+                <td class="reviewer">Sir Alojado</td>
+                <td>Include reduction in service processing time, reduction in reporting time, prediction accuracy target, and improvement in user satisfaction</td>
+                <td class="chapter">Chapter 1 – Objectives of the study</td>
+                <td class="action">Added reduction in service processing time, reporting time, prediction accuracy target (>85%), and improvement in user satisfaction.<span class="proof-badge">Document Sync: Metrics explicitly placed inside the Objectives list.</span></td>
+                <td><span class="page-no">9-10</span></td>
+                <td><span class="badge">Addressed</span></td>
+            </tr>
+            <tr>
+                <td class="reviewer">Ma’am Vista & Sir Alojado</td>
+                <td>Remove unrelated content and revise the Project Purpose and Description to ensure relevance to the study.</td>
+                <td class="chapter">Chapter 1 – Project Purpose and Description</td>
+                <td class="action">Revised the Project Purpose and Description by removing unrelated content and ensuring its alignment with the study.</td>
+                <td><span class="page-no">5-7</span></td>
+                <td><span class="badge">Addressed</span></td>
+            </tr>
+            <tr>
+                <td class="reviewer">Ma’am Vista & Sir Alojado</td>
+                <td>Focus on the system features only and privacy limitation mentioned, small sample size respondents</td>
+                <td class="chapter">Chapter 1 – Scope and Limitations</td>
+                <td class="action">Revised the content by focusing on the system features, limitations and removing unnecessary or unrelated details.<span class="proof-badge">System Sync: Explicitly lists omitted tools (e.g. online payments, SMS) to manage panel expectations.</span></td>
+                <td><span class="page-no">10-12</span></td>
+                <td><span class="badge">Addressed</span></td>
+            </tr>
+            <tr>
+                <td class="reviewer">Ma’am Vista</td>
+                <td>Rephrase and improve the organization and clarity of the Review of Related Literature, and include relevant references on the Technology Acceptance Model (TAM).</td>
+                <td class="chapter">Chapter 2 – Review and Related Literature</td>
+                <td class="action">Rephrased and reorganized the Review of Related Literature to improve clarity and logical flow, and added 7 relevant references on TAM.</td>
+                <td><span class="page-no">11-29</span></td>
+                <td><span class="badge">Addressed</span></td>
+            </tr>
+            <tr>
+                <td class="reviewer">Ma’am Vista</td>
+                <td>Discuss the actual activity in Waterfall Development Phases</td>
+                <td class="chapter">Chapter 3 – Waterfall Development Phases</td>
+                <td class="action">Expanded the discussion of the Waterfall Development Phases by detailing the actual activities performed in each phase.<span class="proof-badge">Document Sync: Included specific timelines mapping Design to Implementation components.</span></td>
+                <td><span class="page-no">35-38</span></td>
+                <td><span class="badge">Addressed</span></td>
+            </tr>
+            <tr>
+                <td class="reviewer">Ma’am Vista & Ma’am Villarica</td>
+                <td>Change Start and End points into Begin and End in the procedural workflow.</td>
+                <td class="chapter">Chapter 3 – Procedural Workflow</td>
+                <td class="action">Updated the procedural workflow by changing it into Begin and End points.</td>
+                <td><span class="page-no">80-81</span></td>
+                <td><span class="badge">Addressed</span></td>
+            </tr>
+            <tr>
+                <td class="reviewer">Ma’am Vista</td>
+                <td>Add an introduction before each figure in all diagrams.</td>
+                <td class="chapter">Chapter 3- Process Modeling and System Workflow</td>
+                <td class="action">Added introductory descriptions before each figure to provide context and improve understanding of the diagrams.</td>
+                <td><span class="page-no">74-91</span></td>
+                <td><span class="badge">Addressed</span></td>
+            </tr>
+            <tr>
+                <td class="reviewer">Ma’am Vista</td>
+                <td>Fix grammar and formatting issues</td>
+                <td class="chapter">All Chapters</td>
+                <td class="action">Proofread and applied consistent formatting (IEEE Style)</td>
+                <td><span class="page-no">All</span></td>
+                <td><span class="badge">Addressed</span></td>
+            </tr>
+            <tr>
+                <td class="reviewer">Ma’am Villarica</td>
+                <td>Update all diagrams to reflect the added system features.</td>
+                <td class="chapter">Chapter 3- Process Modeling and System Workflow</td>
+                <td class="action">Updated all diagrams to incorporate and accurately reflect the added system features.</td>
+                <td><span class="page-no">74-91</span></td>
+                <td><span class="badge">Addressed</span></td>
+            </tr>
+            <tr>
+                <td class="reviewer">Ma’am Villarica</td>
+                <td>Implement the Top 10 OWASP for Security Measures</td>
+                <td class="chapter">System Security</td>
+                <td class="action">Implemented security measures based on the OWASP Top 10 to enhance protection.<span class="proof-badge">System Proof: Implemented JWT validation via auth_utils.py (A01: Broken Access Control), bcrypt hashing (A02: Cryptographic Failures), and SQLAlchemy ORM bindings (A03: Injection).</span></td>
+                <td><span class="page-no">N/A</span></td>
+                <td><span class="badge">Addressed</span></td>
+            </tr>
+            <tr>
+                <td class="reviewer">Ma’am Vista & Ma’am Villarica</td>
+                <td>Add a monthly time frame range filter in the dashboard header and sales report page.</td>
+                <td class="chapter">System Feature</td>
+                <td class="action">Added a monthly time frame range filter in the dashboard header and sales report page.<span class="proof-badge">System Proof: Implemented React DatePicker component in SalesReport.tsx to actively hit the /api/trigger-analytics-procedure.</span></td>
+                <td><span class="page-no">N/A</span></td>
+                <td><span class="badge">Addressed</span></td>
+            </tr>
+            <tr>
+                <td class="reviewer">Ma’am Vista</td>
+                <td>Change “Order Summary” to “Job Order Summary” in the job order form.</td>
+                <td class="chapter">System Feature</td>
+                <td class="action">Updated “Order Summary” to “Job Order Summary” for clarity and consistency.<span class="proof-badge">System Proof: Updated structural headers directly inside JobOrderForm.tsx.</span></td>
+                <td><span class="page-no">N/A</span></td>
+                <td><span class="badge">Addressed</span></td>
+            </tr>
+            <tr>
+                <td class="reviewer">Ma’am Vista</td>
+                <td>Add printable options in the sales report page, including sales, expenses, and ROI reports.</td>
+                <td class="chapter">System Feature</td>
+                <td class="action">Added printable functionality in the sales report page to support documentation.<span class="proof-badge">System Proof: Implemented window.print() CSS styles masking UI elements for clean reporting in React.</span></td>
+                <td><span class="page-no">N/A</span></td>
+                <td><span class="badge">Addressed</span></td>
+            </tr>
+            <tr>
+                <td class="reviewer">Ma’am Vista</td>
+                <td>Add an inventory page to track consumable materials.</td>
+                <td class="chapter">System Feature</td>
+                <td class="action">Added an inventory page to track and manage consumable materials within the system.<span class="proof-badge">System Proof: Created Inventory models inside PostgreSQL and active real-time tracking logic when Job Orders are finalized.</span></td>
+                <td><span class="page-no">N/A</span></td>
+                <td><span class="badge">Addressed</span></td>
+            </tr>
+            <tr>
+                <td class="reviewer">Sir Alojado</td>
+                <td>Basic explanation is clear but too general, and lacks technical justification for architecture choices.</td>
+                <td class="chapter">Chapter 3- Technical Background</td>
+                <td class="action">Expanded the section with detailed descriptions of system components, database structure, and ML module functions.<span class="proof-badge">Document Sync: Defined why FastAPI is superior for async connections over legacy PHP; mapped specific Python layers.</span></td>
+                <td><span class="page-no">24-26</span></td>
+                <td><span class="badge">Addressed</span></td>
+            </tr>
+            <tr>
+                <td class="reviewer">Sir Alojado</td>
+                <td>Mentions regression model and MAE as a good start, but lacks justification for choosing regression, feature engineering details, and dataset size explanation.</td>
+                <td class="chapter">Chapter 3- Machine Learning Based<br>Service Completion Prediction</td>
+                <td class="action">Added comparative analysis for selecting Random Forest regression, included feature selection (priority, conditions, item count), and provided dataset size summary.<span class="proof-badge">System Sync: Logic explicitly visible in ml_engine.py using numerical matrix conversion.</span></td>
+                <td><span class="page-no">32-33</span></td>
+                <td><span class="badge">Addressed</span></td>
+            </tr>
+            <tr>
+                <td class="reviewer">Sir Alojado</td>
+                <td>Explained repeatedly with excessive repetition, repeated justifications, and concerns that Waterfall may not be ideal for UI feedback changes.</td>
+                <td class="chapter">Chapter 3- Software Development Life Cycle Model</td>
+                <td class="action">Removed duplicate content, consolidated the discussion, and added justification for choosing Waterfall while acknowledging limitations.</td>
+                <td><span class="page-no">27-29</span></td>
+                <td><span class="badge">Addressed</span></td>
+            </tr>
+            <tr>
+                <td class="reviewer">Sir Alojado</td>
+                <td>Clearly identifies current issues but lacks measured evidence.</td>
+                <td class="chapter">Chapter 3- Analysis of the Existing System</td>
+                <td class="action">Added structured evidence such as explicit retrieval delays and error correction rates.<span class="proof-badge">Document Sync: Recorded 2-3 error corrections per day due to strict manual processes.</span></td>
+                <td><span class="page-no">35-36</span></td>
+                <td><span class="badge">Addressed</span></td>
+            </tr>
+            <tr>
+                <td class="reviewer">Sir Alojado</td>
+                <td>Useful section but needs stronger comparison.</td>
+                <td class="chapter">Chapter 3- Requirements Gap Analysis</td>
+                <td class="action">Added a structured Current State vs Required State comparison table mapping directly to proposed backend features.</td>
+                <td><span class="page-no">38-39</span></td>
+                <td><span class="badge">Addressed</span></td>
+            </tr>
+            <tr>
+                <td class="reviewer">Sir Alojado</td>
+                <td>Good alternatives included, but evaluation was descriptive and lacked scoring criteria.</td>
+                <td class="chapter">Chapter 3- Alternative Solutions and Feasibility Analysis</td>
+                <td class="action">Improved alternative descriptions and included a weighted decision mathematical matrix with final justification for a Custom Web-based setup.</td>
+                <td><span class="page-no">39-41</span></td>
+                <td><span class="badge">Addressed</span></td>
+            </tr>
+            <tr>
+                <td class="reviewer">Sir Alojado</td>
+                <td>Covers technical, operational, economic, and schedule feasibility, but some claims lacked supporting data.</td>
+                <td class="chapter">Chapter 3- Feasibility Study</td>
+                <td class="action">Reorganized the section for clarity and added quantifiable evidence, metrics, and factual technical justifications (e.g., 50 Mbps minimum required).</td>
+                <td><span class="page-no">42-45</span></td>
+                <td><span class="badge">Addressed</span></td>
+            </tr>
+            <tr>
+                <td class="reviewer">Sir Alojado</td>
+                <td>Comprehensive but questionable due to unsupported estimates, optimistic values, and unclear formulas.</td>
+                <td class="chapter">Chapter 3- Cost-Benefit Analysis</td>
+                <td class="action">Reviewed and revised calculations, updated labor costs to accurate scale, and added transparent step-by-step Benefit-Cost Ratio formulas.<span class="proof-badge">Document Sync: Recalculated total software build ROI transparently to a 1.65:1 ratio.</span></td>
+                <td><span class="page-no">45-54</span></td>
+                <td><span class="badge">Addressed</span></td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+</body>
+</html>

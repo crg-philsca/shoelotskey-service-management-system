@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chapter XI: Overall System Integration Testing (End-to-End)</title>
+    <style>
+        body {
+            font-family: 'Times New Roman', Times, serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            background-color: #f4f6f8;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 50px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            border: 1px solid #dcdcdc;
+            border-top: 5px solid #2980b9;
+        }
+        h1, h2, h3, h4 {
+            color: #1a1a1a;
+            margin-top: 1.5em;
+            margin-bottom: 0.5em;
+        }
+        h1 {
+            text-align: center;
+            font-size: 28px;
+            border-bottom: 2px solid #2980b9;
+            padding-bottom: 10px;
+            color: #2980b9;
+            margin-bottom: 30px;
+        }
+        h2 {
+            font-size: 22px;
+            border-bottom: 1px solid #e1e1e1;
+            padding-bottom: 8px;
+            color: #2c3e50;
+        }
+        h3 {
+            font-size: 18px;
+            color: #444;
+            font-style: italic;
+        }
+        p {
+            margin-bottom: 15px;
+            text-align: justify;
+        }
+        ul, ol {
+            margin-bottom: 20px;
+            padding-left: 40px;
+        }
+        li {
+            margin-bottom: 8px;
+        }
+        .code-block {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #2980b9;
+            font-size: 14px;
+            overflow-x: auto;
+            margin: 20px 0;
+            white-space: pre-wrap;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 25px 0;
+            font-size: 15px;
+        }
+        th, td {
+            border: 1px solid #c0c0c0;
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #2980b9;
+            color: #ffffff;
+            font-weight: bold;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Overall System Integration Testing (End-to-End)</h1>
+
+    <h2>1. Introduction to System Testing</h2>
+    <p>
+        While Unit Testing verified isolated equations, the <strong>System Testing (End-to-End Testing)</strong> validation phase guarantees that the entire architecture of the <strong>Shoelotskey Service Management System</strong> operates harmoniously. This phase confirms that the React Frontend boundaries safely transit data through the FastAPI backend constraints, executing complex Python procedures seamlessly into persistent AWS PostgreSQL cloud storage.
+    </p>
+    <p>
+        The objective is to prove that "Real-World Workflows"—such as navigating the checkout funnel from login to generating a final receipt—function without crashing, losing data, or stalling.
+    </p>
+
+    <h2>2. End-to-End Workflow Validation Scenarios</h2>
+    <p>System testing subjects the application to chained events that strictly mimic real administrative behavior.</p>
+
+    <h3>A. The Administrator Login Cycle</h3>
+    <p>
+        Tests verify the system-wide security pipeline. When an admin enters valid credentials, the system must generate a JSON Web Token (JWT), pass it over the network, save it in the client browser's local state, and actively authorize subsequent API calls dynamically. Only if the complete loop resolves is the system deemed secure.
+    </p>
+
+    <h3>B. Complete Job Order Lifecycle</h3>
+    <p>
+        The most crucial system integration test traces a Job Order across every data layer. We run automated HTTP pipeline requests to:
+    </p>
+    <ol>
+        <li>Inject a complex, multi-service payload matching real frontend structures perfectly.</li>
+        <li>Assert the Machine Learning estimator generates the proper completion variables.</li>
+        <li>Insert relational structures across five different tables (Orders, Customers, Sales, Activity Logs, and Receipts) via SQLAlchemy.</li>
+        <li>Retrieve the exact payload from the Cloud database to ensure data consistency.</li>
+    </ol>
+    <div class="code-block">
+# System Integration Logic Path Example
+1. POST /api/login -> Receives Auth Token
+2. POST /api/orders (Auth: Bearer X) -> Inserts Order, Triggers DB Cascade
+3. GET  /api/orders/{generated_id} -> Assures Zero Data Loss
+    </div>
+
+    <h3>C. Offline Systems Integrity</h3>
+    <p>
+        A unique End-to-End system test for Shoelotskey involves artificially disconnecting the network wrapper. The backend pipeline is tested to ensure that the router seamlessly transitions transactions over to the local SQLite offline file and buffers the queues without halting workflow execution.
+    </p>
+
+    <h2>3. System Diagnostics Traceability Matrix</h2>
+    <p>This macro-testing matrix proves integration continuity between microservices.</p>
+    
+    <table>
+        <tr>
+            <th>Sub-System Integrated</th>
+            <th>Workflow Assessed</th>
+            <th>Expected Verification Behavior</th>
+        </tr>
+        <tr>
+            <td>React → FastAPI</td>
+            <td>RESTful Payload Handshakes</td>
+            <td>Complex JSON structures successfully deserialize and load completely.</td>
+        </tr>
+        <tr>
+            <td>FastAPI → Security</td>
+            <td>JWT Network Authorization</td>
+            <td>Token states cascade smoothly and validate endpoints during heavy usage.</td>
+        </tr>
+        <tr>
+            <td>Machine Learning → PostgreSQL</td>
+            <td>Date Algorithmic Insertion</td>
+            <td>ML durations perfectly populate the AWS Postgres 'expected_release' columns.</td>
+        </tr>
+        <tr>
+            <td>FastAPI → Database View</td>
+            <td>Retrieval Integrity</td>
+            <td>Fetching the identical record returns verbatim mathematical values as inserted.</td>
+        </tr>
+    </table>
+
+    <p style="margin-top: 50px; font-size: 13px; text-align: center; color: #7f8c8d; border-top: 1px solid #e1e1e1; padding-top: 15px;">
+        Shoelotskey Service Management System - Capstone Technical Defense Documentation
+    </p>
+</div>
+
+</body>
+</html>

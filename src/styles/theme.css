@@ -16,7 +16,7 @@
   --muted-foreground: #717182;
   --accent: #e9ebef;
   --accent-foreground: #030213;
-  --destructive: #d4183d;
+  --destructive: #de3c3c;
   --destructive-foreground: #ffffff;
   --border: rgba(0, 0, 0, 0.1);
   --input: transparent;
@@ -79,6 +79,18 @@
 }
 
 @theme inline {
+  /* Override Tailwind's default harsh reds with vibrant but eye-friendly shades */
+  --color-red-50: #fff5f5;
+  --color-red-100: #ffe5e5;
+  --color-red-200: #ffc9c9;
+  --color-red-300: #fea4a4;
+  --color-red-400: #fc7575;
+  --color-red-500: #f54e4e;
+  --color-red-600: #de3c3c;
+  --color-red-700: #bf2f2f;
+  --color-red-800: #9e2a2a;
+  --color-red-900: #822727;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);

@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/app/components/ui/checkbox';
 import { Textarea } from '@/app/components/ui/textarea';
 import { toast } from 'sonner';
-import { Plus, X, Calendar, User, Hash, ClipboardList, RotateCcw } from 'lucide-react';
+import { Plus, X, User, Hash, ClipboardList, RotateCcw } from 'lucide-react';
 import { useOrders } from '../context/OrderContext';
 import { useServices } from '../context/ServiceContext';
 import type { ShippingPreference, PaymentMethod, PaymentStatus, Priority } from '@/app/types';
@@ -229,7 +229,9 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
     const [depositAmount, setDepositAmount] = useState('');
     const [referenceNo, setReferenceNo] = useState('');
     // shelfLocation removed
+    const [orderDate, setOrderDate] = useState(dateFnsFormat(new Date(), 'yyyy-MM-dd'));
     const [orderTime, setOrderTime] = useState(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
+    const [manualReleaseDate, setManualReleaseDate] = useState('');
     const [releaseTime, setReleaseTime] = useState('');
 
     const handleResetForm = () => {
@@ -278,7 +280,9 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
         setAmountReceived('');
         setDepositAmount('');
         setReferenceNo('');
+        setOrderDate(dateFnsFormat(new Date(), 'yyyy-MM-dd'));
         setOrderTime(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
+        setManualReleaseDate('');
         setReleaseTime('');
     };
     const [generatedOrderNumber, setGeneratedOrderNumber] = useState('');
@@ -570,7 +574,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
         }
 
         const [oHours, oMinutes] = orderTime.split(':').map(Number);
-        const createdDate = new Date();
+        const createdDate = new Date(orderDate);
         createdDate.setHours(oHours || 0, oMinutes || 0, 0, 0);
 
         // Helper to format delivery address
@@ -627,10 +631,17 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
             processedBy: user?.username || 'Current User',
             status: 'new-order',
             predictedCompletionDate: (() => {
-                // LOGIC: Calculate expected delivery date based on priority
-                // Regular: 7 days, Rush: 3 days, Premium: 1 day
+                // LOGIC: Calculate expected delivery date based on priority, OR use manual override
+                if (manualReleaseDate) {
+                    const date = new Date(manualReleaseDate);
+                    if (releaseTime) {
+                        const [rHours, rMinutes] = releaseTime.split(':').map(Number);
+                        date.setHours(rHours, rMinutes, 0, 0);
+                    }
+                    return date;
+                }
                 const daysToAdd = calculatePredictedDays();
-                const date = new Date(Date.now() + daysToAdd * 24 * 60 * 60 * 1000);
+                const date = new Date(createdDate.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
                 if (releaseTime) {
                     const [rHours, rMinutes] = releaseTime.split(':').map(Number);
                     date.setHours(rHours, rMinutes, 0, 0);
@@ -700,7 +711,9 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
         setPaymentStatus('downpayment');
         setAmountReceived('');
         setReferenceNo('');
+        setOrderDate(dateFnsFormat(new Date(), 'yyyy-MM-dd'));
         setOrderTime(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
+        setManualReleaseDate('');
         setReleaseTime('');
     };
 
@@ -1464,10 +1477,12 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                             {/* Row 1: Order Date, Order Time, Release Date & Release Time */}
                                             <div className="space-y-1 col-span-1 md:col-span-3">
                                                 <Label className={LABEL_STYLE}>Order Date</Label>
-                                                <div className="flex items-center bg-white h-9 rounded-xl px-3 text-xs text-gray-900 border border-gray-100/50 shadow-sm">
-                                                    <Calendar size={14} className="mr-2 text-gray-400 shrink-0" />
-                                                    <span className="truncate">{dateFnsFormat(new Date(), 'MM/dd/yy')}</span>
-                                                </div>
+                                                <Input
+                                                    type="date"
+                                                    value={orderDate}
+                                                    onChange={(e) => setOrderDate(e.target.value)}
+                                                    className="bg-white border-gray-100/50 h-9 rounded-xl text-xs text-gray-900 shadow-sm px-3 cursor-pointer w-full relative pr-8 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-4"
+                                                />
                                             </div>
                                             <div className="space-y-1 col-span-1 md:col-span-3">
                                                 <Label className={LABEL_STYLE}>Order Time</Label>
@@ -1475,20 +1490,22 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                     type="time"
                                                     value={orderTime}
                                                     onChange={(e) => setOrderTime(e.target.value)}
-                                                    className="bg-white border-gray-100/50 h-9 rounded-xl text-xs text-gray-900 shadow-sm px-2"
+                                                    className="bg-white border-gray-100/50 h-9 rounded-xl text-xs text-gray-900 shadow-sm px-3 w-full relative pr-8 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-4"
                                                 />
                                             </div>
                                             <div className="space-y-1 col-span-1 md:col-span-3">
                                                 <Label className={LABEL_STYLE}>Release Date</Label>
-                                                <div className="flex items-center bg-white h-9 rounded-xl px-3 text-xs text-gray-900 border border-gray-100/50 shadow-sm">
-                                                    <Calendar size={14} className="mr-2 text-gray-400 shrink-0" />
-                                                    <span className="truncate">{(() => {
+                                                <Input
+                                                    type="date"
+                                                    value={manualReleaseDate || (() => {
                                                         const daysToAdd = calculatePredictedDays();
                                                         const val = isNaN(daysToAdd) ? 7 : daysToAdd;
-                                                        const d = new Date(Date.now() + val * 24 * 60 * 60 * 1000);
-                                                        return dateFnsFormat(isNaN(d.getTime()) ? new Date() : d, 'MM/dd/yy');
-                                                    })()}</span>
-                                                </div>
+                                                        const d = new Date(new Date(orderDate).getTime() + val * 24 * 60 * 60 * 1000);
+                                                        return dateFnsFormat(isNaN(d.getTime()) ? new Date() : d, 'yyyy-MM-dd');
+                                                    })()}
+                                                    onChange={(e) => setManualReleaseDate(e.target.value)}
+                                                    className="bg-white border-gray-100/50 h-9 rounded-xl text-xs text-gray-900 shadow-sm px-3 cursor-pointer w-full relative pr-8 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-4"
+                                                />
                                             </div>
                                             <div className="space-y-1 col-span-1 md:col-span-3">
                                                 <Label className={LABEL_STYLE}>Release Time</Label>
@@ -1497,7 +1514,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                     value={releaseTime}
                                                     onChange={(e) => setReleaseTime(e.target.value)}
                                                     placeholder="--:--"
-                                                    className="bg-white border-gray-100/50 h-9 rounded-xl text-xs text-gray-900 shadow-sm px-2"
+                                                    className="bg-white border-gray-100/50 h-9 rounded-xl text-xs text-gray-900 shadow-sm px-3 w-full relative pr-8 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-4"
                                                 />
                                             </div>
                                             {/* ML Predicted Duration Breakdown */}
@@ -1542,7 +1559,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                         }
                                                     }}
                                                 >
-                                                    <SelectTrigger className="bg-white border-gray-100/50 h-9 rounded-xl text-xs text-gray-900 shadow-sm pr-8 transition-all hover:border-red-200">
+                                                    <SelectTrigger className="bg-white border-gray-100/50 h-9 rounded-xl text-xs text-gray-900 shadow-sm px-3 w-full pr-4 transition-all hover:border-red-200">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -1557,7 +1574,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                 <Label className={LABEL_STYLE}>Payment Method</Label>
                                                 <div className="relative group/select">
                                                     <Select value={paymentMethod} onValueChange={(value: PaymentMethod) => setPaymentMethod(value)}>
-                                                        <SelectTrigger className="bg-white border-gray-100/50 h-9 rounded-xl text-xs shadow-sm pr-8 transition-all hover:border-red-200">
+                                                        <SelectTrigger className="bg-white border-gray-100/50 h-9 rounded-xl text-xs shadow-sm px-3 w-full pr-4 transition-all hover:border-red-200">
                                                             <SelectValue />
                                                         </SelectTrigger>
                                                         <SelectContent>

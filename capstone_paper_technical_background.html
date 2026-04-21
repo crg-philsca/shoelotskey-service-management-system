@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Capstone Paper - Technical Background Section</title>
+    <style>
+        body {
+            font-family: "Times New Roman", Times, serif;
+            line-height: 2; /* Common for academic papers */
+            margin: 40px auto;
+            max-width: 800px;
+            padding: 20px;
+            color: #000;
+            background-color: #fff;
+        }
+        h3 {
+            text-align: center;
+            font-size: 1.25em;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        p {
+            text-indent: 50px; /* Academic paragraph indent */
+            text-align: justify;
+            margin-bottom: 15px;
+            margin-top: 0;
+        }
+    </style>
+</head>
+<body>
+
+    <h3>Technical Background</h3>
+
+    <p>Web-based systems are widely used in service-oriented businesses because they centralize records, automate transactions, and allow authorized users to access data through web browsers. Compared with manual processes, they improve data accuracy, retrieval speed, and operational efficiency. For Shoelotskey, a Web-Based Service Management System was developed to digitize job orders, monitor service progress, generate reports, and provide predictive release date estimates through a unified platform.</p>
+
+    <p>The proposed system uses a modern client-server architecture composed of users, a frontend web application, backend API services, database infrastructure, a machine learning module, and cloud deployment services. This layered design separates the user interface, business logic, data storage, analytics, and deployment environment, making the system easier to maintain, scale, and upgrade.</p>
+
+    <p>The user layer consists of two authenticated roles: staff and owner. Both roles can create job orders, update service status, view service records, and process transactions. However, the owner has additional privileges such as report generation, analytics dashboards, account management, and system configuration. This hierarchy is enforced through Role-Based Access Control (RBAC) to secure sensitive administrative functions.</p>
+
+    <p>The frontend application is developed using React, TypeScript, and Vite. React was selected because its component-based structure allows reusable forms, tables, and dashboards while supporting Single-Page Application (SPA) functionality for faster navigation without page reloads. This frictionless interface aligns heavily with the Perceived Ease of Use construct within the Technology Acceptance Model (TAM), significantly increasing the likelihood of successful system adoption among Shoelotskey staff. For user interface styling, Tailwind CSS and Radix UI components were uniquely utilized to rapidly enforce a consistent, highly accessible, and mobile-responsive layout across all device screens. High-level dashboard operations integrate the Recharts library to visualize interactive data analytics, while html2pdf.js provides critical functionality allowing the owner to natively export operational reports and receipts into shareable document formats. Network requests are structurally handled via Axios for seamless HTTP communication. TypeScript further improves architectural reliability through strict static type checking, while Vite provides faster development and optimized production builds.</p>
+
+    <p>The backend is developed using FastAPI, a high-performance Python framework, powered structurally by the Uvicorn ASGI server. FastAPI was chosen because it explicitly supports asynchronous request handling, automatic data validation, and highly efficient execution performance when multiple users access the system simultaneously. It was also selected because Python is fundamentally compatible with machine learning libraries, natively allowing direct integration of predictive models intelligently into the backend without crossing framework boundaries.</p>
+
+    <p>The system source code is organically managed using GitHub for version control. GitHub was used to track code changes, maintain backup repositories, support collaborative development practices, and streamline deployment updates. The application is natively deployed through Heroku, which integrates directly with GitHub repositories for continuous deployment whenever approved updates are pushed. This approach dramatically simplifies maintenance and ensures efficient cloud hosting.</p>
+
+    <p>The database layer actively uses SQLAlchemy ORM connected to a relational database. SQLAlchemy simplifies development by mathematically converting raw SQL into structured Python models while strictly reducing SQL injection risks through parameterized queries. All job orders, transactions, service histories, and user credentials are stored in a centralized database. The primary database natively uses Heroku Postgres, a managed cloud-hosted PostgreSQL service that provides remote accessibility, scalability, automated maintenance, and highly reliable data storage. Furthermore, a localized SQLite fallback database securely ensures continued operation during unexpected internet interruptions.</p>
+
+    <p>A comprehensive security layer diligently protects business information and system access, rigidly adhering to Open Web Application Security Project (OWASP) guidelines. Authentication actively uses JSON Web Tokens (JWT), while user passwords are irreversibly hashed using the bcrypt algorithm to defend against cryptographic vulnerabilities. RBAC programming ensures strictly only the owner can access privileged administrative modules, and TLS/SSL encryption safely secures data transmission between the application and database. For account recovery operations, the system fully integrates the Mailgun email service API to dispatch secure, time-sensitive password reset links to authorized users.</p>
+
+    <p>The system is accessible remotely through a custom domain registered via Name.com, providing a professional web address for Shoelotskey and improving overall accessibility for users. Domain integration also significantly enhances local branding and simplifies user access compared with default platform-generated URLs.</p>
+
+    <p>The machine learning component is integrated securely using scikit-learn, pandas, and NumPy. Historical service records are structurally utilized to train a Random Forest Regressor model that predicts expected release dates. In this study, "release date" specifically refers to the date when the requested service has been successfully completed and the shoes are ready for customer pickup. This predictive capability directly satisfies the Perceived Usefulness dimension of the Technology Acceptance Model (TAM) by providing immediate, tangible value to operations. This algorithm was technically chosen because it intelligently handles nonlinear factors such as shoe condition severity, dynamic service types, fluctuating workload volumes, material complexity, and rush order priority levels. Compared with basic linear models, Random Forest provides significantly more accurate predictions while actively reducing data overfitting. Model performance is continuously evaluated using Mean Absolute Error (MAE).</p>
+
+    <p>By heavily integrating React, FastAPI, GitHub version control, Heroku deployment, Heroku Postgres, secure authentication, Mailgun email recovery, Name.com domain services, and a Random Forest predictive engine, the proposed architecture provides Shoelotskey with a highly secure, scalable, and intelligent management platform. This technological ecosystem achieves strict compliance with the ISO/IEC 25010 software quality standards—specifically fulfilling parameters for functional suitability, security, reliability, maintainability, and usability. By satisfying these stringent quality metrics, it effectively enables both the staff and owner to conduct daily operations efficiently while drastically improving scheduling accuracy, reducing processing delays, and providing customers with vastly more reliable release date estimates.</p>
+
+</body>
+</html>
