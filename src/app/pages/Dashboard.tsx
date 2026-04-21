@@ -107,7 +107,8 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
 
   const baseServices = services.filter(s => s.category === 'base' && s.active);
 
-  const filteredOrders = useMemo(() => {
+  // Separate Range-Filtered Orders (for Analytics) from Global Orders (for Status Cards)
+  const analyticsOrders = useMemo(() => {
     const now = new Date();
     const isWithinRange = (createdAt: Date) => {
       const diffDays = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
@@ -125,25 +126,36 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
     return orders.filter(order => isWithinRange(new Date(order.createdAt)));
   }, [orders, profitRange]);
 
+  // Use the raw 'orders' for Status Summary cards so nothing is hidden by the date filter
+  const statusCounts = useMemo(() => {
+    return {
+      new: orders.filter(o => o.status === 'new-order').length,
+      ongoing: orders.filter(o => o.status === 'on-going').length,
+      forRelease: orders.filter(o => o.status === 'for-release').length,
+      claimed: orders.filter(o => o.status === 'claimed').length,
+    };
+  }, [orders]);
+
   /**
    * MEMO: overviewOrders
    * Filtered list of orders based on the current drill-down status (e.g., just 'New Orders').
    */
   const overviewOrders = useMemo(() => {
-    if (!selectedStatus) return filteredOrders;
-    return filteredOrders.filter(order => order.status === selectedStatus);
-  }, [filteredOrders, selectedStatus]);
+    // Detailed list view and Summary metrics now follow the Profit Range filter
+    if (!selectedStatus) return analyticsOrders;
+    return analyticsOrders.filter(order => order.status === selectedStatus);
+  }, [analyticsOrders, selectedStatus]);
 
   const totalSales = useMemo(() => {
-    return filteredOrders.reduce((sum, order) => sum + (order.amountReceived || 0), 0);
-  }, [filteredOrders]);
+    return analyticsOrders.reduce((sum, order) => sum + (order.amountReceived || 0), 0);
+  }, [analyticsOrders]);
 
   const totalPendingPayments = useMemo(() => {
-    return filteredOrders.reduce((sum, order) => {
+    return analyticsOrders.reduce((sum, order) => {
       if (order.paymentStatus === 'fully-paid') return sum;
       return sum + (order.grandTotal - (order.amountReceived || 0));
     }, 0);
-  }, [filteredOrders]);
+  }, [analyticsOrders]);
 
   const filteredExpenses = useMemo(() => {
     const now = new Date();
@@ -200,7 +212,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
       { name: 'Color Renewal', value: 0, sales: 0 },
     ];
 
-    filteredOrders.forEach(order => {
+    analyticsOrders.forEach(order => {
       const items = order.items?.length ? order.items : [{
         baseService: Array.isArray(order.baseService) ? order.baseService : [order.baseService],
         addOns: order.addOns || []
@@ -235,7 +247,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
     });
   
     return result;
-  }, [filteredOrders]);
+  }, [analyticsOrders]);
 
   /**
    * MEMO: timeSeriesData
@@ -256,11 +268,11 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
 
           return {
             period: `${hour}:00`,
-            newOrders: filteredOrders.filter(order => {
+            newOrders: analyticsOrders.filter(order => {
               const orderTime = new Date(order.createdAt);
               return orderTime >= periodStart && orderTime < periodEnd;
             }).length,
-            releasedOrders: filteredOrders.filter(order => {
+            releasedOrders: analyticsOrders.filter(order => {
               if (!order.actualCompletionDate) return false;
               const releaseTime = new Date(order.actualCompletionDate);
               return releaseTime >= periodStart && releaseTime < periodEnd;
@@ -281,11 +293,11 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
 
         return {
           period: date.toLocaleDateString('en-US', { weekday: 'short' }),
-          newOrders: filteredOrders.filter(order => {
+          newOrders: analyticsOrders.filter(order => {
             const orderTime = new Date(order.createdAt);
             return orderTime >= dayStart && orderTime <= dayEnd;
           }).length,
-          releasedOrders: filteredOrders.filter(order => {
+          releasedOrders: analyticsOrders.filter(order => {
             if (!order.actualCompletionDate) return false;
             const releaseTime = new Date(order.actualCompletionDate);
             return releaseTime >= dayStart && releaseTime <= dayEnd;
@@ -305,11 +317,11 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
 
         return {
           period: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-          newOrders: filteredOrders.filter(order => {
+          newOrders: analyticsOrders.filter(order => {
             const orderTime = new Date(order.createdAt);
             return orderTime >= dayStart && orderTime <= dayEnd;
           }).length,
-          releasedOrders: filteredOrders.filter(order => {
+          releasedOrders: analyticsOrders.filter(order => {
             if (!order.actualCompletionDate) return false;
             const releaseTime = new Date(order.actualCompletionDate);
             return releaseTime >= dayStart && releaseTime <= dayEnd;
@@ -329,11 +341,11 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
 
         return {
           period: `Week ${i + 1}`,
-          newOrders: filteredOrders.filter(order => {
+          newOrders: analyticsOrders.filter(order => {
             const orderTime = new Date(order.createdAt);
             return orderTime >= weekStart && orderTime <= weekEnd;
           }).length,
-          releasedOrders: filteredOrders.filter(order => {
+          releasedOrders: analyticsOrders.filter(order => {
             if (!order.actualCompletionDate) return false;
             const releaseTime = new Date(order.actualCompletionDate);
             return releaseTime >= weekStart && releaseTime <= weekEnd;
@@ -354,18 +366,18 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
 
       return {
         period: monthStart.toLocaleDateString('en-US', { month: 'short' }),
-        newOrders: filteredOrders.filter(order => {
+        newOrders: analyticsOrders.filter(order => {
           const orderTime = new Date(order.createdAt);
           return orderTime >= monthStart && orderTime <= monthEnd;
         }).length,
-        releasedOrders: filteredOrders.filter(order => {
+        releasedOrders: analyticsOrders.filter(order => {
           if (!order.actualCompletionDate) return false;
           const releaseTime = new Date(order.actualCompletionDate);
           return releaseTime >= monthStart && releaseTime <= monthEnd;
         }).length,
       };
     });
-  }, [filteredOrders, profitRange]);
+  }, [analyticsOrders, profitRange]);
 
   const chartTitle = 'ORDER ACTIVITY TRENDS';
 
@@ -468,7 +480,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                   </div>
                   <CardContent className="pt-5 pb-1 px-3">
                     <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 leading-none mb-1">New Order</p>
-                    <p className="text-3xl font-black text-purple-600 tracking-tight leading-none">{filteredOrders.filter(o => o.status === 'new-order').length}</p>
+                    <p className="text-3xl font-black text-purple-600 tracking-tight leading-none">{statusCounts.new}</p>
                   </CardContent>
                 </Card>
                 {/* On-Going */}
@@ -481,7 +493,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                   </div>
                   <CardContent className="pt-5 pb-1 px-3">
                     <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 leading-none mb-1">On-Going</p>
-                    <p className="text-3xl font-black text-blue-600 tracking-tight leading-none">{filteredOrders.filter(o => o.status === 'on-going').length}</p>
+                    <p className="text-3xl font-black text-blue-600 tracking-tight leading-none">{statusCounts.ongoing}</p>
                   </CardContent>
                 </Card>
                 {/* For Release */}
@@ -494,7 +506,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                   </div>
                   <CardContent className="pt-5 pb-1 px-3">
                     <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 leading-none mb-1">For Release</p>
-                    <p className="text-3xl font-black text-orange-600 tracking-tight leading-none">{filteredOrders.filter(o => o.status === 'for-release').length}</p>
+                    <p className="text-3xl font-black text-orange-600 tracking-tight leading-none">{statusCounts.forRelease}</p>
                   </CardContent>
                 </Card>
                 {/* Claimed */}
@@ -507,7 +519,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                   </div>
                   <CardContent className="pt-5 pb-1 px-3">
                     <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 leading-none mb-1">Claimed</p>
-                    <p className="text-3xl font-black text-gray-600 tracking-tight leading-none">{filteredOrders.filter(o => o.status === 'claimed').length}</p>
+                    <p className="text-3xl font-black text-gray-600 tracking-tight leading-none">{statusCounts.claimed}</p>
                   </CardContent>
                 </Card>
               </div>
@@ -748,7 +760,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                 {/* Orders Table */}
                 <div>
                   {(() => {
-                    let filtered = filteredOrders.filter(order => order.status === selectedStatus);
+                    let filtered = analyticsOrders.filter(order => order.status === selectedStatus);
 
                     if (filterService !== 'all') {
                       filtered = filtered.filter(order => order.baseService.includes(filterService));
