@@ -827,15 +827,69 @@ async def forgot_password(request: Request, body: ForgotPasswordRequest, db: Ses
         return {"message": "Password recovery link generated.", "debug_token": token}
 
 @app.get("/api/health")
-def health_check():
-    """Simple probe to verify the server is alive and report environment metadata."""
+def health_check(db: Session = Depends(get_db)):
+    import os
+    from datetime import datetime
+    import traceback
+    
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    index_path = os.path.abspath(os.path.join(base_dir, "..", "dist", "index.html"))
+    build_time = "Unknown"
+    if os.path.exists(index_path):
+        mtime = os.path.getmtime(index_path)
+        build_time = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M:%S')
+
+    counts = {}
+    user_ids = []
+    try:
+        counts["users"] = db.query(User).count()
+        counts["roles"] = db.query(Role).count()
+        counts["statuses"] = db.query(Status).count()
+        counts["priorities"] = db.query(PriorityLevel).count()
+        counts["orders"] = db.query(Order).count()
+        user_ids = [u.user_id for u in db.query(User).limit(5).all()]
+    except Exception as e:
+        counts["error"] = str(e)
+
+    error_str = "None"
+    try:
+        # Test Order Creation (Dry Run)
+        test_user = db.query(User).first()
+        if not test_user:
+             raise ValueError("CRITICAL: No users found in database.")
+        
+        dummy_order = {
+            "orderNumber": f"HEALTH-{int(datetime.now().timestamp())}",
+            "customerName": "Health Check Test",
+            "contactNumber": "09000000000",
+            "status": "new-order",
+            "priorityLevel": "regular",
+            "grandTotal": 0.0,
+            "items": []
+        }
+        
+        # Manually invoke creation logic
+        new_order = create_order(dummy_order, db, test_user)
+        # Verify it has an ID
+        if not new_order.order_id:
+            raise ValueError("Order created but No ID assigned!")
+        
+        db.rollback()
+    except Exception as e:
+        error_str = f"{type(e).__name__}: {str(e)}\n{traceback.format_exc()}"
+        db.rollback()
+
     return {
         "status": "ok", 
-        "timestamp": str(datetime.now()), 
+        "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         "environment": ENV, 
-        "db_type": DB_TYPE,
-        "diagnostics": "healthy",
-        "version": "2.0.1"
+        "version": "2.0.3-diagnostic",
+        "running_from": base_dir,
+        "build_time": build_time,
+        "counts": counts,
+        "sample_user_ids": user_ids,
+        "create_order_diagnostic": error_str,
+        "db_type": DB_TYPE
     }
 
 @app.post("/api/reset-password")
@@ -1083,7 +1137,7 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
             priority_id=db_prio.priority_id,
             grand_total=order_data.get("grandTotal", 0.0),
             expected_at=expected_dt,
-            user_id=order_data.get("user_id", 1)
+            user_id=current_user.user_id  # Use authenticated user's ID
         )
         db.add(db_order)
         db.flush()
@@ -1179,7 +1233,7 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
                                 change_amount=-inv_amount,
                                 action_type='deduction',
                                 order_id=db_order.order_id,
-                                user_id=order_data.get("user_id", 1)
+                                user_id=current_user.user_id
                             )
                             db.add(inv_log)
             
@@ -1233,7 +1287,7 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.put("/api/orders/{order_id}", response_model=OrderSchema)
-def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(get_db)):
+def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Updates order status, priority, or customer details.
     S.O.L.I.D: Open/Closed Principle - handles various fields without changing core logic.
@@ -1263,7 +1317,7 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
             db_order.status_id = db_status.status_id
             
             # Log the change for ML time-tracking
-            log = StatusLog(order_id=order_id, status_id=db_status.status_id, user_id=updates.get("updater_id", 1)) 
+            log = StatusLog(order_id=order_id, status_id=db_status.status_id, user_id=current_user.user_id) 
             db.add(log)
             print(f"[EDIT] Status changed for Order {db_order.order_number}: {mapped_status}")
         else:
@@ -1367,7 +1421,7 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
                                 inv_item = db.query(Inventory).filter(Inventory.item_id == i_id).first()
                                 if inv_item:
                                     inv_item.stock_quantity -= i_amt
-                                    db.add(InventoryLog(item_id=i_id, change_amount=-i_amt, action_type='manual_edit', order_id=db_order.order_id, user_id=updates.get("updater_id", 1)))
+                                    db.add(InventoryLog(item_id=i_id, change_amount=-i_amt, action_type='manual_edit', order_id=db_order.order_id, user_id=current_user.user_id))
                     
                     db_item.inventory_used = new_usage
 
@@ -1403,7 +1457,7 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
                             change_amount=-inv_amount,
                             action_type='order_update',
                             order_id=db_order.order_id,
-                            user_id=updates.get("updater_id", 1)
+                            user_id=current_user.user_id
                         ))
 
         db_order.inventory_used = new_usage
