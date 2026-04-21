@@ -1085,13 +1085,13 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Customer Name</Label>
-                        <p className="text-sm font-bold text-gray-800">{selectedOrder.customerName}</p>
+                        <p className="text-sm font-bold text-gray-800">{selectedOrder?.customerName || '-'}</p>
                       </div>
                       <div>
                         <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Contact Number</Label>
                         <div className="flex items-center gap-2">
                           <Phone size={12} className="text-gray-400" />
-                          <p className="text-sm font-bold text-gray-800">{selectedOrder.contactNumber}</p>
+                          <p className="text-sm font-bold text-gray-800">{selectedOrder?.contactNumber || '-'}</p>
                         </div>
                       </div>
                     </div>
@@ -1103,7 +1103,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                           <CalendarIcon size={12} className="text-gray-400" />
                           <p className="text-sm font-bold text-gray-800">
                             {(() => {
-                              const d = new Date(selectedOrder.transactionDate || selectedOrder.createdAt);
+                              const d = new Date(selectedOrder?.transactionDate || selectedOrder?.createdAt || new Date());
                               return isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy HH:mm');
                             })()}
                           </p>
@@ -1115,11 +1115,11 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                           <Clock size={12} className="text-gray-400" />
                           <p className="text-sm font-bold text-gray-800">
                             {(() => {
-                              if (!selectedOrder.predictedCompletionDate) return '-';
+                              if (!selectedOrder?.predictedCompletionDate) return '-';
                               const d = new Date(selectedOrder.predictedCompletionDate);
                               return isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy');
                             })()}
-                            {['for-release', 'claimed'].includes(selectedOrder.status) && selectedOrder.releaseTime && (
+                            {selectedOrder?.status && ['for-release', 'claimed'].includes(selectedOrder.status) && selectedOrder?.releaseTime && (
                               <span className="text-xs text-gray-500 ml-1 font-normal">
                                 @ {selectedOrder.releaseTime}
                               </span>
@@ -1127,17 +1127,19 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                           </p>
                         </div>
                       </div>
-                      {selectedOrder.status === 'claimed' && selectedOrder.actualCompletionDate && (
-                        <div>
-                          <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Actual Claim Date</Label>
-                          <div className="flex items-center gap-2">
-                            <ClipboardCheck size={12} className="text-green-500" />
-                            <p className="text-sm font-bold text-green-700">
-                              {dateFnsFormat(new Date(selectedOrder.actualCompletionDate), 'MM/dd/yy HH:mm')}
-                            </p>
-                          </div>
+                      <div>
+                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Actual Claim Date</Label>
+                        <div className="flex items-center gap-2">
+                          <ClipboardCheck size={12} className="text-green-500" />
+                          <p className="text-sm font-bold text-green-700">
+                            {(() => {
+                              if (!selectedOrder?.actualCompletionDate) return '-';
+                              const d = new Date(selectedOrder.actualCompletionDate);
+                              return isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy HH:mm');
+                            })()}
+                          </p>
                         </div>
-                      )}
+                      </div>
                     </div>
                   </div>
 
@@ -1151,9 +1153,9 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Preference</Label>
-                        <p className="text-sm font-bold text-gray-800 uppercase">{selectedOrder.shippingPreference || 'Pickup'}</p>
+                        <p className="text-sm font-bold text-gray-800 uppercase">{selectedOrder?.shippingPreference || 'Pickup'}</p>
                       </div>
-                      {selectedOrder.shippingPreference === 'delivery' && selectedOrder.deliveryCourier && (
+                      {selectedOrder?.shippingPreference === 'delivery' && selectedOrder?.deliveryCourier && (
                         <div>
                           <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Courier</Label>
                           <div className="flex items-center gap-2">
@@ -1163,25 +1165,25 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                       )}
                     </div>
 
-                    {selectedOrder.shippingPreference === 'delivery' && (
+                    {selectedOrder?.shippingPreference === 'delivery' && (
                       <div className="pt-2 border-t border-gray-200/50">
                         <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Full Delivery Address</Label>
                         <div className="flex items-start gap-2">
                           <MapPin size={12} className="text-gray-400 mt-0.5" />
-                          <p className="text-sm font-medium text-gray-600 leading-snug">{selectedOrder.deliveryAddress || 'No address provided'}</p>
+                          <p className="text-sm font-medium text-gray-600 leading-snug">{selectedOrder?.deliveryAddress || 'No address provided'}</p>
                         </div>
                       </div>
                     )}
                   </div>
 
-                  {/* Items Loop - Supporting both Dashboard list style and multi-item style if present */}
+                  {/* Items Loop */}
                   <div className="space-y-4">
-                    {(selectedOrder.items?.length ? selectedOrder.items : [selectedOrder]).map((item: any, index: number) => (
+                    {((selectedOrder?.items?.length ? selectedOrder.items : [selectedOrder]) || []).map((item: any, index: number) => (
                       <div key={index} className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-3">
                         <div className="flex items-center gap-2 mb-2">
                           <Tag size={16} className="text-red-500" />
                           <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">
-                            {(selectedOrder.items?.length || 0) > 1 ? `Item #${index + 1} Details` : 'Shoe & Service Details'}
+                            {(selectedOrder?.items?.length || 0) > 1 ? `Item #${index + 1} Details` : 'Shoe & Service Details'}
                           </h4>
                         </div>
 
@@ -1189,19 +1191,19 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                           <div>
                             <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Brand</Label>
-                            <p className="text-sm font-bold text-gray-800">{item.brand || '-'}</p>
+                            <p className="text-sm font-bold text-gray-800">{item?.brand || '-'}</p>
                           </div>
                           <div>
                             <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Model</Label>
-                            <p className="text-sm font-bold text-gray-800">{item.shoeModel || '-'}</p>
+                            <p className="text-sm font-bold text-gray-800">{item?.shoeModel || '-'}</p>
                           </div>
                           <div>
                             <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Material</Label>
-                            <p className="text-sm font-bold text-gray-800">{item.shoeMaterial || '-'}</p>
+                            <p className="text-sm font-bold text-gray-800">{item?.shoeMaterial || '-'}</p>
                           </div>
                           <div>
                             <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Quantity</Label>
-                            <p className="text-sm font-bold text-gray-800">{item.quantity || 1} {(item.quantity || 1) === 1 ? 'Pair' : 'Pairs'}</p>
+                            <p className="text-sm font-bold text-gray-800">{item?.quantity || 1} {(item?.quantity || 1) === 1 ? 'Pair' : 'Pairs'}</p>
                           </div>
                         </div>
 
@@ -1209,46 +1211,46 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                         <div className="pt-2 border-t border-gray-200/50">
                           <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">Shoe Condition</Label>
                           <div className="flex flex-wrap gap-1.5">
-                            {Object.entries(item.condition || {}).map(([key, value]) => {
+                            {Object.entries(item?.condition || {}).map(([key, value]) => {
                               if (key === 'others' && value) return <span key={key} className="px-2 py-1 bg-white border border-gray-200 rounded-md text-[10px] font-bold text-gray-600 shadow-sm">Note: {String(value)}</span>;
                               if (value === true) {
                                 const labels: Record<string, string> = {
-                                    scratches: 'Scratches',
-                                    yellowing: 'Yellowing',
-                                    ripsHoles: 'Rips/Holes',
-                                    deepStains: 'Deep Stains',
-                                    soleSeparation: 'Sole Separation',
-                                    wornOut: 'Faded/Worn'
+                                  scratches: 'Scratches',
+                                  yellowing: 'Yellowing',
+                                  ripsHoles: 'Rips/Holes',
+                                  deepStains: 'Deep Stains',
+                                  soleSeparation: 'Sole Separation',
+                                  wornOut: 'Faded/Worn'
                                 };
                                 const label = labels[key] || key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
                                 return <span key={key} className="px-2 py-1 bg-red-50 border border-red-100 rounded-md text-[10px] font-bold text-red-600">{label}</span>;
                               }
                               return null;
                             })}
-                            {Object.values(item.condition || {}).every(v => !v) && <p className="text-xs text-slate-400 italic">No conditions applied</p>}
+                            {(!item?.condition || Object.values(item.condition).every(v => !v)) && <p className="text-xs text-slate-400 italic">No conditions applied</p>}
                           </div>
                         </div>
 
-                        {/* Service Details for this Item */}
+                        {/* Service Details */}
                         <div className="pt-2 border-t border-gray-200/50">
                           <div className="grid grid-cols-2 gap-4">
                             <div>
                               <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Base Service</Label>
                               <p className="text-sm font-bold text-gray-800">
-                                {Array.isArray(item.baseService)
-                                  ? item.baseService.map((s: string) => s.replace(' (with basic cleaning)', '')).join(', ')
-                                  : String(item.baseService).replace(' (with basic cleaning)', '')}
+                                {Array.isArray(item?.baseService)
+                                  ? item.baseService.map((s: string) => String(s || '').replace(' (with basic cleaning)', '')).join(', ')
+                                  : String(item?.baseService || '-').replace(' (with basic cleaning)', '')}
                               </p>
                             </div>
 
-                            {item.addOns && item.addOns.length > 0 && (
+                            {item?.addOns && item.addOns.length > 0 && (
                               <div>
                                 <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Add-ons</Label>
                                 <div className="space-y-1">
                                   {item.addOns.map((addon: any, idx: number) => (
                                     <div key={idx} className="flex items-center justify-between text-sm">
-                                      <span className="font-medium text-gray-700">• {addon.name}</span>
-                                      <span className="text-gray-500 text-xs font-bold">x{addon.quantity}</span>
+                                      <span className="font-medium text-gray-700">• {addon?.name || 'Unknown Addon'}</span>
+                                      <span className="text-gray-500 text-xs font-bold">x{addon?.quantity || 1}</span>
                                     </div>
                                   ))}
                                 </div>
@@ -1260,7 +1262,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                     ))}
                   </div>
 
-                  {/* Order Status & Priority (Global) */}
+                  {/* Order Status & Priority */}
                   <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-3 mt-2">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <div>
@@ -1277,15 +1279,15 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                       </div>
                       <div>
                         <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Priority Level</Label>
-                        {selectedOrder.priorityLevel === 'rush' ? (
+                        {selectedOrder?.priorityLevel === 'rush' ? (
                           <span className="text-xs font-black text-red-600 uppercase">RUSH</span>
                         ) : (
-                          <span className="text-xs font-bold text-gray-800 capitalize">{selectedOrder.priorityLevel}</span>
+                          <span className="text-xs font-bold text-gray-800 capitalize">{selectedOrder?.priorityLevel || 'normal'}</span>
                         )}
                       </div>
                       <div>
                         <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Processed By</Label>
-                        <p className="text-sm font-bold text-gray-700">{selectedOrder.processedBy || 'Current User'}</p>
+                        <p className="text-sm font-bold text-gray-700">{selectedOrder?.processedBy || '-'}</p>
                       </div>
                     </div>
                   </div>
@@ -1293,40 +1295,40 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                   {/* Payment Section */}
                   <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-3">
                     <div className="flex items-center gap-2 mb-2">
-                      <Wallet size={16} className="text-red-500" />
+                       <Wallet size={16} className="text-red-500" />
                       <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Payment Details</h4>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
-                      {selectedOrder.paymentMethod && (
+                      {selectedOrder?.paymentMethod && (
                         <div>
                           <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Method</Label>
                           <p className="text-sm font-bold text-gray-800 uppercase">
-                            {selectedOrder.paymentMethod || '-'}
+                            {selectedOrder.paymentMethod}
                           </p>
                         </div>
                       )}
                       <div>
                         <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Payment Status</Label>
-                        <span className={`text-sm font-black uppercase ${selectedOrder.paymentStatus === 'fully-paid' ? 'text-green-600' :
-                          selectedOrder.paymentStatus === 'downpayment' ? 'text-yellow-600' : 'text-red-500'
+                        <span className={`text-sm font-black uppercase ${selectedOrder?.paymentStatus === 'fully-paid' ? 'text-green-600' :
+                          selectedOrder?.paymentStatus === 'downpayment' ? 'text-yellow-600' : 'text-red-500'
                           }`}>
-                          {selectedOrder.paymentStatus === 'fully-paid' ? 'Fully Paid' : selectedOrder.paymentStatus === 'downpayment' ? 'Downpayment' : selectedOrder.paymentStatus?.replace('-', ' ')?.replace(/\b\w/g, l => l.toUpperCase())}
+                          {selectedOrder?.paymentStatus === 'fully-paid' ? 'Fully Paid' : selectedOrder?.paymentStatus === 'downpayment' ? 'Downpayment' : (selectedOrder?.paymentStatus || 'awaiting')?.replace('-', ' ')?.replace(/\b\w/g, l => l.toUpperCase())}
                         </span>
                       </div>
-                      {['gcash', 'maya'].includes(selectedOrder.paymentMethod?.toLowerCase()) && (selectedOrder.paymentStatus === 'fully-paid' || selectedOrder.paymentStatus === 'downpayment') && (
+                      {['gcash', 'maya'].includes(selectedOrder?.paymentMethod?.toLowerCase() || '') && (selectedOrder?.paymentStatus === 'fully-paid' || selectedOrder?.paymentStatus === 'downpayment') && (
                         <div className="col-span-2">
                           <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Reference Number</Label>
-                          <p className="text-sm font-bold text-gray-800 font-mono tracking-tight">{selectedOrder.referenceNo || '-'}</p>
+                          <p className="text-sm font-bold text-gray-800 font-mono tracking-tight">{selectedOrder?.referenceNo || '-'}</p>
                         </div>
                       )}
-                      {selectedOrder.paymentStatus && (
+                      {selectedOrder?.paymentStatus && (
                         <>
                           <div>
                             <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Amount Received</Label>
-                            <p className="text-sm font-bold text-gray-800">₱{(selectedOrder.amountReceived || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                            <p className="text-sm font-bold text-gray-800">₱{(selectedOrder?.amountReceived || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                           </div>
-                          {selectedOrder.change !== undefined && selectedOrder.change > 0 && (
+                          {selectedOrder?.change !== undefined && selectedOrder.change > 0 && (
                             <div className="col-span-2 pt-2 border-t border-gray-100 mt-1">
                               <div className="flex justify-between items-center">
                                 <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Customer Change</Label>
@@ -1338,11 +1340,11 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                           )}
                         </>
                       )}
-                      {selectedOrder.paymentStatus !== 'fully-paid' && (
+                      {selectedOrder?.paymentStatus !== 'fully-paid' && (
                         <div className="pt-2 border-t border-gray-200/50 col-span-2 flex justify-between items-center">
                           <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Remaining Balance</Label>
-                          <p className={`text-sm font-black ${((selectedOrder.grandTotal || 0) - (selectedOrder.amountReceived || 0)) > 0.01 ? 'text-red-500' : 'text-green-600'}`}>
-                            ₱{Math.max(0, (selectedOrder.grandTotal || 0) - (selectedOrder.amountReceived || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          <p className={`text-sm font-black ${((selectedOrder?.grandTotal || 0) - (selectedOrder?.amountReceived || 0)) > 0.01 ? 'text-red-500' : 'text-green-600'}`}>
+                            ₱{Math.max(0, (selectedOrder?.grandTotal || 0) - (selectedOrder?.amountReceived || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </p>
                         </div>
                       )}
@@ -1353,29 +1355,30 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                   <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-2 mt-2">
                     <div className="flex justify-between items-center text-gray-600/80">
                       <span className="text-xs font-medium uppercase tracking-wide">Total Quantity</span>
-                      <span className="text-sm font-bold text-gray-800">{selectedOrder.quantity || 1} {(selectedOrder.quantity || 1) === 1 ? 'Pair' : 'Pairs'}</span>
+                      <span className="text-sm font-bold text-gray-800">{selectedOrder?.quantity || 1} {(selectedOrder?.quantity || 1) === 1 ? 'Pair' : 'Pairs'}</span>
                     </div>
                     <div className="flex justify-between items-center text-gray-600/80">
                       <span className="text-xs font-medium uppercase tracking-wide">Base Service Fee</span>
-                      <span className="text-sm font-bold text-gray-800">₱{(selectedOrder.baseServiceFee || 0).toFixed(2)}</span>
+                      <span className="text-sm font-bold text-gray-800">₱{(selectedOrder?.baseServiceFee || 0).toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between items-center text-gray-600/80">
                       <span className="text-xs font-medium uppercase tracking-wide">Add-ons Total</span>
-                      <span className="text-sm font-bold text-gray-800">₱{(selectedOrder.addOnsTotal || 0).toFixed(2)}</span>
+                      <span className="text-sm font-bold text-gray-800">₱{(selectedOrder?.addOnsTotal || 0).toFixed(2)}</span>
                     </div>
-                    {selectedOrder.priorityLevel === 'rush' && (
+                    {selectedOrder?.priorityLevel === 'rush' && (
                       <div className="flex justify-between items-center text-gray-600/80">
                         <span className="text-xs font-medium uppercase tracking-wide">Rush Fee</span>
-                        <span className="text-sm font-bold text-gray-800">₱{(selectedOrder.grandTotal - ((selectedOrder.baseServiceFee || 0) + (selectedOrder.addOnsTotal || 0))).toFixed(2)}</span>
+                        <span className="text-sm font-bold text-gray-800">₱{( (selectedOrder?.grandTotal || 0) - ((selectedOrder?.baseServiceFee || 0) + (selectedOrder?.addOnsTotal || 0)) ).toFixed(2)}</span>
                       </div>
                     )}
                     <div className="flex justify-between items-center pt-3 border-t border-gray-200 mt-2">
                       <span className="text-base font-black text-gray-900 uppercase tracking-tight">Grand Total</span>
-                      <span className="text-lg font-black text-red-600 tracking-tight">₱{(selectedOrder.grandTotal || 0).toFixed(2)}</span>
+                      <span className="text-lg font-black text-red-600 tracking-tight">₱{(selectedOrder?.grandTotal || 0).toFixed(2)}</span>
                     </div>
                   </div>
                 </div>
               )}
+             )}
             </DialogContent>
           </Dialog >
 
