@@ -862,27 +862,37 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                                 paginatedOrders.map((order) => (
                                   <tr
                                     key={order.id}
-                                    className="hover:bg-gray-50 cursor-pointer"
-                                    onClick={() => {
-                                      setSelectedOrder(order);
+                                    className="hover:bg-gray-50 cursor-pointer transition-colors"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (order) setSelectedOrder({...order});
                                       setIsEditing(false);
                                     }}
                                   >
                                     <td className="px-3 py-3 text-xs font-medium text-center whitespace-nowrap">{order.orderNumber}</td>
                                     <td className="px-3 py-3 text-xs text-center">
                                       <div className="inline-block text-left w-full max-w-[150px]">
-                                        {order.customerName}
+                                        {order.customerName || '-'}
                                       </div>
                                     </td>
                                     <td className="px-3 py-3 text-xs text-center">
                                       {Array.isArray(order.baseService)
-                                        ? order.baseService.map(s => s.replace(' (with basic cleaning)', '')).join(', ')
-                                        : String(order.baseService).replace(' (with basic cleaning)', '')}
+                                        ? order.baseService.map(s => String(s || '').replace(' (with basic cleaning)', '')).join(', ')
+                                        : String(order.baseService || '-').replace(' (with basic cleaning)', '')}
                                     </td>
-                                    <td className="px-3 py-3 text-xs text-center text-gray-700">{order.quantity || 1} {(order.quantity || 1) === 1 ? 'Pair' : 'Pair'}</td>
-                                    <td className="px-3 py-3 text-xs text-center">{dateFnsFormat(new Date(order.createdAt), 'MM/dd/yy')}</td>
+                                    <td className="px-3 py-3 text-xs text-center text-gray-700">{order.quantity || 1} {(order.quantity || 1) === 1 ? 'Pair' : 'Pairs'}</td>
                                     <td className="px-3 py-3 text-xs text-center">
-                                      {order.predictedCompletionDate ? dateFnsFormat(new Date(order.predictedCompletionDate), 'MM/dd/yy') : '-'}
+                                      {(() => {
+                                        const d = new Date(order.createdAt);
+                                        return isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy');
+                                      })()}
+                                    </td>
+                                    <td className="px-3 py-3 text-xs text-center">
+                                       {(() => {
+                                         if (!order.predictedCompletionDate) return '-';
+                                         const d = new Date(order.predictedCompletionDate);
+                                         return isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy');
+                                       })()}
                                     </td>
                                     <td className="px-3 py-3 text-xs text-center">
                                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase border whitespace-nowrap
@@ -907,7 +917,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                                           {order.status === 'new-order' && (
                                             <DropdownMenuItem onClick={(e) => {
                                               e.stopPropagation();
-                                              setSelectedOrder(order);
+                                              if (order) setSelectedOrder({...order});
                                               setIsEditing(true);
                                             }} className="border border-gray-200 rounded-md px-2.5 py-1.5 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:text-yellow-800 focus:bg-yellow-100 mb-1">
                                               <Edit className="h-4 w-4 mr-2" />
@@ -918,7 +928,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                                           {order.status === 'on-going' && (
                                             <DropdownMenuItem onClick={(e) => {
                                               e.stopPropagation();
-                                              setSelectedOrder(order);
+                                              if (order) setSelectedOrder({...order});
                                               setIsUpdatingStock(true);
                                             }} className="border border-gray-200 rounded-md px-2.5 py-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 focus:text-emerald-800 focus:bg-emerald-100 mb-1">
                                               <Package className="h-4 w-4 mr-2 text-emerald-600" />
