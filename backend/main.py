@@ -546,15 +546,7 @@ def health_check(db: Session = Depends(get_db)):
         "timestamp": datetime.now()
     }
 
-@app.get("/")
-def read_root():
-    from database import is_sqlite, LOCAL_SQLITE_PATH
-    return {
-        "app": "Shoelotskey SMS API",
-        "version": "2.0",
-        "database": "Offline (SQLite)" if is_sqlite else "Online (PostgreSQL)",
-        "backup_path": LOCAL_SQLITE_PATH
-    }
+
 
 @app.post("/api/sync-backup-to-cloud")
 def sync_backup_to_cloud(db: Session = Depends(get_db), current_user: User = Depends(require_role("owner"))):
