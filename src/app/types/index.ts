@@ -34,6 +34,13 @@ export interface InventoryItem {
   price: number;
   status: string;
   isActive: boolean;
+  auto_deduct?: boolean;
+  auto_deduct_trigger?: string;
+  trigger_service?: string;
+  consumption_qty?: number;
+  consumption_unit?: string;
+  package_size?: number;
+  package_unit?: string;
 }
 
 export interface BaseJobOrderData {

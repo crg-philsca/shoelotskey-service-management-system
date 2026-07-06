@@ -18,12 +18,26 @@ interface StockUpdateModalProps {
 export default function StockUpdateModal({ order, open, onOpenChange, onSave }: StockUpdateModalProps) {
     const { inventoryData, updateStock } = useInventory();
     const [inventoryUsed, setInventoryUsed] = useState<InventoryUsed[]>([]);
+    const [originalUsed, setOriginalUsed] = useState<InventoryUsed[]>([]);
     const [selectedItem, setSelectedItem] = useState<string>('');
     const [isApplied, setIsApplied] = useState(false);
 
     useEffect(() => {
         if (order) {
-            setInventoryUsed(order.inventoryUsed || []);
+            // [STABILITY] Ensure we have a valid array even if the DB returns a string or object
+            let rawUsed = order.inventoryUsed || [];
+            if (typeof rawUsed === 'string') {
+                try { rawUsed = JSON.parse(rawUsed); } catch (e) { rawUsed = []; }
+            }
+            
+            // If it's an object (non-null, non-array), convert values to array
+            if (rawUsed && typeof rawUsed === 'object' && !Array.isArray(rawUsed)) {
+                rawUsed = Object.values(rawUsed);
+            }
+            
+            const parsedArray = Array.isArray(rawUsed) ? rawUsed : [];
+            setInventoryUsed([...parsedArray]);
+            setOriginalUsed(JSON.parse(JSON.stringify(parsedArray)));
             setIsApplied(order.inventoryApplied || false);
         }
     }, [order, open]);
@@ -37,16 +51,27 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave }: 
             return;
         }
 
+        const isPackaged = item.package_size && item.package_size > 0;
+        const defaultQty = isPackaged ? (item.consumption_qty || 10) : 1;
+        const displayUnit = isPackaged ? (item.package_unit || item.unit) : item.unit;
+
         setInventoryUsed(prev => [...prev, {
             itemId: item.id,
             name: item.name,
-            quantity: 1,
-            unit: item.unit
+            quantity: defaultQty,
+            unit: displayUnit
         }]);
         setSelectedItem('');
     };
 
-    const handleUpdateQty = (itemId: number, delta: number) => {
+    const handleUpdateQty = (itemId: number, direction: number) => {
+        const item = inventoryData.find(i => i.id === itemId);
+        if (!item) return;
+
+        const isPackaged = item.package_size && item.package_size > 0;
+        const step = isPackaged ? (item.consumption_qty || 10) : 1;
+        const delta = direction * step;
+
         setInventoryUsed(prev => prev.map(i => 
             i.itemId === itemId ? { ...i, quantity: Math.max(0, parseFloat((i.quantity + delta).toFixed(2))) } : i
         ));
@@ -57,11 +82,29 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave }: 
     };
 
     const handleUpdateStock = async () => {
-        if (!order || isApplied) return;
+        if (!order) return;
 
         const dbId = parseInt(order.id);
-        inventoryUsed.forEach(item => {
-            updateStock(item.itemId, item.quantity, isNaN(dbId) ? undefined : dbId);
+        const orderIdVal = isNaN(dbId) ? undefined : dbId;
+
+        // Compute delta adjustments
+        const allItemIds = Array.from(new Set([
+            ...inventoryUsed.map(i => i.itemId),
+            ...originalUsed.map(i => i.itemId)
+        ]));
+
+        allItemIds.forEach(itemId => {
+            const newItem = inventoryUsed.find(i => i.itemId === itemId);
+            const oldItem = originalUsed.find(i => i.itemId === itemId);
+            
+            const newQty = newItem ? newItem.quantity : 0;
+            const oldQty = oldItem ? oldItem.quantity : 0;
+            
+            const delta = newQty - oldQty;
+            
+            if (delta !== 0) {
+                updateStock(itemId, delta, orderIdVal);
+            }
         });
 
         setIsApplied(true);
@@ -91,18 +134,18 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave }: 
                 </DialogHeader>
 
                 <div className="p-6 space-y-6">
-                    {isApplied ? (
-                        <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-8 text-center space-y-3">
-                            <div className="mx-auto w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center">
-                                <CheckCircle2 size={20} className="text-white" />
+                    {isApplied && (
+                        <div className="bg-amber-50/70 border border-amber-100 rounded-2xl p-4 flex gap-3 items-start">
+                            <CheckCircle2 size={18} className="text-amber-600 mt-0.5 flex-shrink-0" />
+                            <div>
+                                <h4 className="text-amber-800 font-black uppercase text-[10px] tracking-widest leading-none">Adjustment Mode</h4>
+                                <p className="text-amber-600 text-[10px] font-medium mt-1 leading-relaxed">
+                                    Stock was previously deducted. Modifying these items will automatically adjust (deduct or restock) quantities in the inventory.
+                                </p>
                             </div>
-                            <h4 className="text-emerald-800 font-black uppercase text-xs tracking-widest">Stock Already Updated</h4>
-                            <p className="text-emerald-600 text-[10px] font-medium leading-relaxed">
-                                Materials for this order have already been deducted from the database inventory. 
-                            </p>
                         </div>
-                    ) : (
-                        <>
+                    )}
+
                             <div className="space-y-3">
                                 <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest block mb-1">
                                     Add Material / Supply
@@ -114,14 +157,21 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave }: 
                                                 <SelectValue placeholder="Select Supply or Chemical" />
                                             </SelectTrigger>
                                             <SelectContent className="rounded-xl border-gray-100 shadow-xl">
-                                                {inventoryData.filter(i => i.isActive && i.stock > 0).map(item => (
-                                                    <SelectItem key={item.id} value={item.id.toString()} className="text-xs font-medium py-2.5">
-                                                        <div className="flex justify-between w-full gap-8">
-                                                            <span>{item.name}</span>
-                                                            <span className="text-gray-400">({item.stock} {item.unit} left)</span>
-                                                        </div>
-                                                    </SelectItem>
-                                                ))}
+                                                {inventoryData.filter(i => i.isActive && i.stock > 0).map(item => {
+                                                    const packageSize = item.package_size ?? 0;
+                                                    const hasPkg = packageSize > 0;
+                                                    const displayStockLabel = hasPkg 
+                                                        ? `${item.stock} ${item.package_unit || item.unit} (~${(item.stock / packageSize).toFixed(2)} ${item.unit})`
+                                                        : `${item.stock} ${item.unit}`;
+                                                    return (
+                                                        <SelectItem key={item.id} value={item.id.toString()} className="text-xs font-medium py-2.5">
+                                                            <div className="flex justify-between w-full gap-8">
+                                                                <span>{item.name}</span>
+                                                                <span className="text-gray-400">({displayStockLabel} left)</span>
+                                                            </div>
+                                                        </SelectItem>
+                                                    );
+                                                })}
                                             </SelectContent>
                                         </Select>
                                     </div>
@@ -141,7 +191,7 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave }: 
                                     Materials to Deduct ({inventoryUsed.length})
                                 </label>
                                 <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1 custom-scrollbar">
-                                    {inventoryUsed.map((item) => (
+                                    {(inventoryUsed || []).map((item) => (
                                         <div key={item.itemId} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100 group hover:border-emerald-200 transition-all">
                                             <div className="flex items-center gap-4">
                                                 <div className="h-10 w-10 rounded-xl bg-white flex items-center justify-center text-emerald-600 shadow-sm border border-gray-100 group-hover:scale-110 transition-transform">
@@ -196,8 +246,6 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave }: 
                                     )}
                                 </div>
                             </div>
-                        </>
-                    )}
                 </div>
 
                 <DialogFooter className="bg-gray-50/50 p-6 border-t border-gray-100 flex gap-3 sm:justify-center">
@@ -208,15 +256,13 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave }: 
                     >
                         Close
                     </Button>
-                    {!isApplied && (
-                        <Button 
-                            onClick={handleUpdateStock}
-                            disabled={inventoryUsed.length === 0}
-                            className="flex-1 h-12 rounded-2xl text-[11px] font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700 text-white shadow-xl shadow-emerald-100 active:scale-95 transition-all"
-                        >
-                            Subtract Stock
-                        </Button>
-                    )}
+                    <Button 
+                        onClick={handleUpdateStock}
+                        disabled={inventoryUsed.length === 0}
+                        className="flex-1 h-12 rounded-2xl text-[11px] font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700 text-white shadow-xl shadow-emerald-100 active:scale-95 transition-all"
+                    >
+                        {isApplied ? 'Save & Adjust Stock' : 'Subtract Stock'}
+                    </Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

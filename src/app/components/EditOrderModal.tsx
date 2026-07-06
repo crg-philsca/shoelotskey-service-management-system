@@ -81,6 +81,18 @@ const DELIVERY_COURIERS = [
 
 export default function EditOrderModal({ order, open, onOpenChange, onSave }: EditOrderModalProps) {
     const [formData, setFormData] = useState<JobOrder | null>(null);
+    
+    // [STABILITY] Helper to ensure list types for database-returned JSON which might be objects or strings
+    const ensureList = (data: any): any[] => {
+        if (!data) return [];
+        if (Array.isArray(data)) return data;
+        if (typeof data === 'string') {
+            try { const parsed = JSON.parse(data); return Array.isArray(parsed) ? parsed : Object.values(parsed); } 
+            catch { return []; }
+        }
+        if (typeof data === 'object') return Object.values(data);
+        return [];
+    };
 
     useEffect(() => {
         if (order) {
@@ -99,9 +111,10 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
             setFormData({
                 ...order,
                 condition: initialCondition,
-                items: order.items || [],
-                baseService: order.baseService || [],
-                addOns: order.addOns || []
+                items: ensureList(order.items),
+                baseService: ensureList(order.baseService),
+                addOns: ensureList(order.addOns),
+                inventoryUsed: ensureList((order as any).inventoryUsed)
             });
         }
     }, [order]);
@@ -129,33 +142,28 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
 
     const recalculateTotals = (data: JobOrder) => {
         let basePrice = 0;
-        const baseServicesArr = Array.isArray(data.baseService) ? data.baseService : [];
+        const qty = Number(data?.quantity || 1);
+        const baseServicesArr = Array.isArray(data?.baseService) ? data.baseService : [];
 
         baseServicesArr.forEach(serviceName => {
-            const baseServiceObj = baseServices.find(s => s.name === serviceName);
-            if (baseServiceObj) basePrice += baseServiceObj.price * data.quantity;
+            const baseServiceObj = (baseServices || []).find(s => s?.name === serviceName);
+            if (baseServiceObj) basePrice += (Number(baseServiceObj.price || 0) * qty);
         });
 
         let addonsPrice = 0;
-        data.addOns.forEach(addon => {
-            const addonObj = addOnServices.find(s => s.name === addon.name);
-            if (addonObj) addonsPrice += addonObj.price * (addon.quantity || 1) * data.quantity;
+        (data?.addOns || []).forEach(addon => {
+            const addonObj = (addOnServices || []).find(s => s?.name === addon?.name);
+            if (addonObj) addonsPrice += (Number(addonObj.price || 0) * (Number(addon?.quantity || 1)) * qty);
         });
 
         let priorityFee = 0;
-        if (data.priorityLevel === 'rush') {
-            let maxFee = 0;
-            if (baseServicesArr.includes('Basic Cleaning')) {
-                maxFee = 150;
-            }
-            priorityFee = maxFee;
-        } else if (data.priorityLevel === 'premium') {
-            if (baseServicesArr.some(s => s.includes('Color Renewal'))) {
-                priorityFee = 1000;
-            }
+        if (data?.priorityLevel === 'rush') {
+            priorityFee = baseServicesArr.includes('Basic Cleaning') ? 150 : 0;
+        } else if (data?.priorityLevel === 'premium') {
+            priorityFee = baseServicesArr.some(s => String(s || '').includes('Color Renewal')) ? 1000 : 0;
         }
 
-        const rushFeeTotal = priorityFee * data.quantity;
+        const rushFeeTotal = priorityFee * qty;
         const total = basePrice + addonsPrice + rushFeeTotal;
 
         return {
@@ -214,15 +222,16 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
 
 
     const handleDeductStock = () => {
-        if (!formData || !formData.inventoryUsed || formData.inventoryApplied) return;
+        const used = ensureList(formData?.inventoryUsed);
+        if (!formData || !used.length || formData.inventoryApplied) return;
 
         const dbId = parseInt(formData.id);
-        formData.inventoryUsed.forEach(item => {
+        used.forEach(item => {
             updateStock(item.itemId, item.quantity, isNaN(dbId) ? undefined : dbId);
         });
 
         setFormData({ ...formData, inventoryApplied: true });
-        toast.success(`Updated stock levels for ${formData.inventoryUsed.length} items.`);
+        toast.success(`Updated stock levels for ${used.length} items.`);
     };
 
     const handleAddInventory = (itemId: string) => {
@@ -244,14 +253,14 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
     };
 
     const handleUpdateInventoryQty = (itemId: number, delta: number) => {
-        const updatedUsed = (formData.inventoryUsed || []).map(i => 
+        const updatedUsed = ensureList(formData.inventoryUsed).map(i => 
             i.itemId === itemId ? { ...i, quantity: Math.max(0, parseFloat((i.quantity + delta).toFixed(2))) } : i
         );
         setFormData({ ...formData, inventoryUsed: updatedUsed });
     };
 
     const handleRemoveInventory = (itemId: number) => {
-        const updatedUsed = (formData.inventoryUsed || []).filter(i => i.itemId !== itemId);
+        const updatedUsed = ensureList(formData.inventoryUsed).filter(i => i.itemId !== itemId);
         setFormData({ ...formData, inventoryUsed: updatedUsed });
     };
 
@@ -316,7 +325,11 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                 <Label className={LABEL_STYLE}>Order Date</Label>
                                 <Input
                                     type="date"
-                                    value={formData.transactionDate ? new Date(formData.transactionDate).toISOString().split('T')[0] : ''}
+                                    value={(() => {
+                                        if (!formData?.transactionDate) return '';
+                                        const d = new Date(formData.transactionDate);
+                                        return isNaN(d.getTime()) ? '' : d.toISOString().split('T')[0];
+                                    })()}
                                     onChange={(e) => updateFormData({ transactionDate: new Date(e.target.value).toISOString() })}
                                     className={INPUT_STYLE}
                                 />
@@ -325,7 +338,11 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                 <Label className={LABEL_STYLE}>Target Release Date</Label>
                                 <Input
                                     type="date"
-                                    value={formData.predictedCompletionDate ? new Date(formData.predictedCompletionDate).toISOString().split('T')[0] : ''}
+                                    value={(() => {
+                                        if (!formData?.predictedCompletionDate) return '';
+                                        const d = new Date(formData.predictedCompletionDate);
+                                        return isNaN(d.getTime()) ? '' : d.toISOString().split('T')[0];
+                                    })()}
                                     onChange={(e) => updateFormData({ predictedCompletionDate: new Date(e.target.value).toISOString() })}
                                     className={INPUT_STYLE}
                                 />
@@ -678,7 +695,7 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                             </div>
 
                             <div className="space-y-2">
-                                {(formData.inventoryUsed || []).map((item) => (
+                                {ensureList(formData.inventoryUsed).map((item) => (
                                     <div key={item.itemId} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
                                         <div className="flex items-center gap-3">
                                             <div className="h-8 w-8 rounded-lg bg-white flex items-center justify-center text-red-600 shadow-sm border border-gray-100">
@@ -726,7 +743,7 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                         </div>
                                     </div>
                                 ))}
-                                {(!formData.inventoryUsed || formData.inventoryUsed.length === 0) && (
+                                {ensureList(formData.inventoryUsed).length === 0 && (
                                     <p className="text-[10px] text-gray-400 text-center py-2 italic">No items recorded for this order</p>
                                 )}
                             </div>

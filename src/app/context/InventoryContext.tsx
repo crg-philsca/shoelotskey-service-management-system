@@ -10,6 +10,13 @@ export interface InventoryItem {
     price: number;
     status: string;
     isActive: boolean;
+    auto_deduct?: boolean;
+    auto_deduct_trigger?: string;
+    trigger_service?: string;
+    consumption_qty?: number;
+    consumption_unit?: string;
+    package_size?: number;
+    package_unit?: string;
 }
 
 interface InventoryContextType {
@@ -30,25 +37,16 @@ const API_BASE = (typeof window !== 'undefined' && (window.location.hostname ===
 export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: string } }> = ({ children, user }) => {
     const [inventoryData, setInventoryData] = useState<InventoryItem[]>([]);
 
-    const calculateStatus = (stock: number, unit: string) => {
-        const u = unit.toLowerCase();
-        // Dynamic Thresholds for Shoelotskey Chemicals
-        if (u.includes('liter')) {
-            if (stock <= 5) return 'Critical';
-            if (stock <= 20) return 'Low Stock';
-        } else if (u.includes('bottle') || u.includes('tub') || u.includes('can')) {
-            if (stock <= 10) return 'Critical';
-            if (stock <= 50) return 'Low Stock';
-        } else {
-            if (stock <= 5) return 'Critical';
-            if (stock <= 10) return 'Low Stock';
-        }
+    const calculateStatus = (stock: number, packageSize?: number) => {
+        if (stock <= 0) return 'Critical';
+        const limit = (packageSize && packageSize > 0) ? packageSize : 1;
+        if (stock <= limit) return 'Low Stock';
         return 'In Stock';
     };
 
     const fetchInventory = async () => {
         try {
-            const res = await fetch(`${API_BASE}/inventory`, {
+            const res = await fetch(`${API_BASE}/inventory?_t=${Date.now()}`, {
                 headers: { 'Authorization': `Bearer ${user.token}` }
             });
             if (!res.ok) throw new Error('Failed to fetch inventory');
@@ -62,7 +60,14 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
                     unit: item.unit,
                     price: parseFloat(item.unit_price),
                     status: item.status,
-                    isActive: item.is_active
+                    isActive: item.is_active,
+                    auto_deduct: item.auto_deduct,
+                    auto_deduct_trigger: item.auto_deduct_trigger,
+                    trigger_service: item.trigger_service,
+                    consumption_qty: item.consumption_qty,
+                    consumption_unit: item.consumption_unit,
+                    package_size: item.package_size,
+                    package_unit: item.package_unit
                 }));
                 setInventoryData(mapped);
                 localStorage.setItem('inventory_cache', JSON.stringify(mapped));
@@ -81,11 +86,14 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
     }, [user.token]);
 
     const updateStock = async (itemId: number, usedQuantity: number, orderId?: number) => {
+        const isRestock = usedQuantity < 0;
+        const absoluteAmount = Math.abs(usedQuantity);
+
         // Optimistic UI Update
         setInventoryData(prev => prev.map(item => {
             if (item.id === itemId) {
-                const newStock = Math.max(0, item.stock - usedQuantity);
-                return { ...item, stock: newStock, status: calculateStatus(newStock, item.unit) };
+                const newStock = isRestock ? item.stock + absoluteAmount : Math.max(0, item.stock - absoluteAmount);
+                return { ...item, stock: newStock, status: calculateStatus(newStock, item.package_size) };
             }
             return item;
         }));
@@ -99,8 +107,8 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
                 },
                 body: JSON.stringify({
                     item_id: itemId,
-                    amount: usedQuantity,
-                    action: 'deduction',
+                    amount: absoluteAmount,
+                    action: isRestock ? 'restock' : 'deduction',
                     order_id: orderId
                 })
             });
@@ -116,7 +124,7 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
         const optimisticItem: InventoryItem = {
             ...item,
             id: tempId,
-            status: calculateStatus(item.stock, item.unit)
+            status: calculateStatus(item.stock, item.package_size)
         };
         setInventoryData(prev => [optimisticItem, ...prev]);
         
@@ -133,7 +141,14 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
                     stock_quantity: item.stock,
                     unit: item.unit,
                     unit_price: item.price,
-                    is_active: item.isActive
+                    is_active: item.isActive,
+                    auto_deduct: item.auto_deduct || false,
+                    auto_deduct_trigger: item.auto_deduct_trigger || 'Job Started',
+                    trigger_service: item.trigger_service || 'All',
+                    consumption_qty: item.consumption_qty || 0.0,
+                    consumption_unit: item.consumption_unit || '',
+                    package_size: item.package_size || 0.0,
+                    package_unit: item.package_unit || ''
                 })
             });
             if (res.ok) {
@@ -167,7 +182,14 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
                     unit: updatedItem.unit,
                     unit_price: updatedItem.price,
                     is_active: updatedItem.isActive,
-                    status: updatedItem.status
+                    status: updatedItem.status,
+                    auto_deduct: updatedItem.auto_deduct || false,
+                    auto_deduct_trigger: updatedItem.auto_deduct_trigger || 'Job Started',
+                    trigger_service: updatedItem.trigger_service || 'All',
+                    consumption_qty: updatedItem.consumption_qty || 0.0,
+                    consumption_unit: updatedItem.consumption_unit || '',
+                    package_size: updatedItem.package_size || 0.0,
+                    package_unit: updatedItem.package_unit || ''
                 })
             });
             if (res.ok) {

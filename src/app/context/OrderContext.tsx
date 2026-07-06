@@ -163,6 +163,14 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
     const mapBackendToFrontend = (bo: any): JobOrder => {
         const firstItem = bo.items?.[0] || {};
 
+        const parseUTC = (dateStr: any): Date => {
+            if (!dateStr) return new Date();
+            if (typeof dateStr === 'string' && !dateStr.endsWith('Z') && !dateStr.includes('+') && !/-\d{2}:\d{2}$/.test(dateStr)) {
+                return new Date(dateStr + 'Z');
+            }
+            return new Date(dateStr);
+        };
+
         return {
             id: bo.order_id.toString(),
             orderNumber: bo.order_number,
@@ -198,11 +206,11 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
             // Status Mapping
             status: mapBackendStatus(bo.status?.status_name),
 
-            createdAt: new Date(bo.created_at || Date.now()),
-            updatedAt: new Date(bo.updated_at || bo.created_at || Date.now()),
-            transactionDate: new Date(bo.created_at || Date.now()),
-            predictedCompletionDate: bo.expected_at ? new Date(bo.expected_at) : undefined,
-            actualCompletionDate: bo.released_at ? new Date(bo.released_at) : undefined,
+            createdAt: parseUTC(bo.created_at),
+            updatedAt: parseUTC(bo.updated_at || bo.created_at),
+            transactionDate: parseUTC(bo.created_at),
+            predictedCompletionDate: bo.expected_at ? parseUTC(bo.expected_at) : undefined,
+            actualCompletionDate: bo.released_at ? parseUTC(bo.released_at) : undefined,
 
             // Items Mapping - conditions come from 3NF conditions[] array
             items: bo.items?.map((bi: any) => {

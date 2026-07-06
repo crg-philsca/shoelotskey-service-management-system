@@ -7,7 +7,7 @@ import { Input } from '@/app/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu';
-import { Search, Filter, MoreVertical, Edit, ArrowRight, RotateCcw, User, Phone, Clock, Wallet, Tag, MapPin, UserPlus, Calendar as CalendarIcon, Truck, ShoppingBag } from 'lucide-react';
+import { Search, Filter, MoreVertical, Edit, ArrowRight, RotateCcw, User, Phone, Clock, Wallet, Tag, MapPin, UserPlus, Calendar as CalendarIcon, Truck, ShoppingBag, Package } from 'lucide-react';
 import { format as dateFnsFormat } from 'date-fns';
 import { useServices } from '@/app/context/ServiceContext';
 import EditOrderModal from '@/app/components/EditOrderModal';
@@ -714,6 +714,26 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                                     )}
                                 </div>
                             </div>
+
+                            {/* Materials Used section */}
+                            {selectedOrder.inventoryUsed && selectedOrder.inventoryUsed.length > 0 && (
+                                <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-100 space-y-3 mt-2">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <Package size={16} className="text-emerald-600" />
+                                        <h4 className="text-xs font-black text-emerald-800 uppercase tracking-widest">Materials / Supply Used</h4>
+                                    </div>
+                                    <div className="space-y-2">
+                                        {selectedOrder.inventoryUsed.map((used: any, idx: number) => (
+                                            <div key={idx} className="flex justify-between items-center text-xs font-medium text-slate-700">
+                                                <span>{used.name}</span>
+                                                <span className="font-bold text-slate-900 bg-emerald-100/60 px-2 py-0.5 rounded-md">
+                                                    {used.quantity} {used.unit}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Pricing Summary */}
                             <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-2 mt-2">

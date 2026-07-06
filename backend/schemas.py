@@ -1,7 +1,8 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from decimal import Decimal
+import re
 
 # ==========================================
 # 1. LOOKUP SCHEMAS
@@ -77,12 +78,40 @@ class UserCreateSchema(BaseModel):
     role_name: str = 'staff'
     is_active: bool = True
 
+    @field_validator('password')
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError('Password must be at least 8 characters long.')
+        if not re.search(r"[a-z]", v):
+            raise ValueError('Password must contain at least one lowercase letter.')
+        if not re.search(r"[A-Z]", v):
+            raise ValueError('Password must contain at least one uppercase letter.')
+        if not re.search(r"\d", v):
+            raise ValueError('Password must contain at least one digit.')
+        return v
+
 class UserUpdateSchema(BaseModel):
     username: Optional[str] = None
     email: Optional[str] = None
     password: Optional[str] = None
     role_name: Optional[str] = None
     is_active: Optional[bool] = None
+
+    @field_validator('password')
+    @classmethod
+    def validate_password(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        if len(v) < 8:
+            raise ValueError('Password must be at least 8 characters long.')
+        if not re.search(r"[a-z]", v):
+            raise ValueError('Password must contain at least one lowercase letter.')
+        if not re.search(r"[A-Z]", v):
+            raise ValueError('Password must contain at least one uppercase letter.')
+        if not re.search(r"\d", v):
+            raise ValueError('Password must contain at least one digit.')
+        return v
 
 class CustomerSchema(BaseModel):
     customer_id: Optional[int] = None
@@ -243,6 +272,19 @@ class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str
 
+    @field_validator('new_password')
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError('Password must be at least 8 characters long.')
+        if not re.search(r"[a-z]", v):
+            raise ValueError('Password must contain at least one lowercase letter.')
+        if not re.search(r"[A-Z]", v):
+            raise ValueError('Password must contain at least one uppercase letter.')
+        if not re.search(r"\d", v):
+            raise ValueError('Password must contain at least one digit.')
+        return v
+
 # ==========================================
 # 7. INVENTORY SCHEMAS
 # ==========================================
@@ -256,6 +298,16 @@ class InventorySchema(BaseModel):
     unit_price: Decimal = 0.0
     status: Optional[str] = None
     is_active: bool = True
+    
+    # Automated consumption fields
+    auto_deduct: bool = False
+    auto_deduct_trigger: str = "Job Started"
+    trigger_service: str = "All"
+    consumption_qty: float = 0.0
+    consumption_unit: str = ""
+    package_size: float = 0.0
+    package_unit: str = ""
+
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     class Config:
@@ -269,6 +321,15 @@ class InventoryUpdateSchema(BaseModel):
     unit_price: Optional[Decimal] = None
     status: Optional[str] = None
     is_active: Optional[bool] = None
+    
+    # Automated consumption fields
+    auto_deduct: Optional[bool] = None
+    auto_deduct_trigger: Optional[str] = None
+    trigger_service: Optional[str] = None
+    consumption_qty: Optional[float] = None
+    consumption_unit: Optional[str] = None
+    package_size: Optional[float] = None
+    package_unit: Optional[str] = None
 
 class InventoryLogSchema(BaseModel):
     log_id: Optional[int] = None

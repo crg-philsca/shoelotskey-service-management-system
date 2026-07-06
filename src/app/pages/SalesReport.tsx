@@ -1,9 +1,11 @@
+import { format as dateFnsFormat } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { useServices } from '@/app/context/ServiceContext';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { useState, useMemo, useEffect } from 'react';
 
 import { TrendingUp, ShoppingBag, Filter, Calendar, TrendingDown, ChevronDown, Wallet, CircleAlert, Printer } from 'lucide-react';
+
 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
@@ -43,24 +45,29 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
   const now = new Date();
 
   const filteredOrdersByDate = useMemo<JobOrder[]>(() => {
-    return allOrders.filter((order: JobOrder) => {
-      const date = order.transactionDate ? new Date(order.transactionDate) : new Date(order.createdAt);
-      const diffDays = (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24);
+    const todayStr = dateFnsFormat(now, 'yyyy-MM-dd');
+    return (allOrders || []).filter((order: JobOrder) => {
+      const date = order?.transactionDate ? new Date(order.transactionDate as any) : new Date(order?.createdAt as any);
+      if (isNaN(date.getTime())) return false;
+      
+      const orderDateStr = dateFnsFormat(date, 'yyyy-MM-dd');
+      const diffHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
 
       if (dateRange === 'Daily') {
-        const startOfToday = new Date(now);
-        startOfToday.setHours(0, 0, 0, 0);
-        return date >= startOfToday;
+        return orderDateStr === todayStr || diffHours < 48;
       }
-      if (dateRange === 'Weekly') return diffDays < 7;
-      if (dateRange === 'Monthly') return diffDays < 30;
-      if (dateRange === 'Quarterly') return diffDays < 90;
-      if (dateRange === 'Annually') return diffDays < 365;
+      
+      const diffDays = diffHours / 24;
+      if (dateRange === 'Weekly') return diffDays <= 7.5;
+      if (dateRange === 'Monthly') return diffDays <= 31.5;
+      if (dateRange === 'Quarterly') return diffDays <= 93;
+      if (dateRange === 'Annually') return diffDays <= 367;
       return true;
     });
-  }, [dateRange, allOrders]);
+  }, [dateRange, allOrders, now]);
 
   const filteredExpensesByDate = useMemo<any[]>(() => {
+    const todayStr = dateFnsFormat(now, 'yyyy-MM-dd');
     return expenses.filter((exp: any) => {
       const category = (exp.category || '').toLowerCase();
       const isDaily = category.includes('(daily)');
@@ -75,20 +82,21 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
       if (isMonthly && (dateRange !== 'Monthly' && dateRange !== 'Quarterly' && dateRange !== 'Annually')) return false;
 
       const date = new Date(exp.date);
-      const diffDays = (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24);
-      
+      if (isNaN(date.getTime())) return false;
+      const expDateStr = dateFnsFormat(date, 'yyyy-MM-dd');
+
       if (dateRange === 'Daily') {
-        const startOfToday = new Date(now);
-        startOfToday.setHours(0, 0, 0, 0);
-        return date >= startOfToday;
+        return expDateStr === todayStr;
       }
-      if (dateRange === 'Weekly') return diffDays < 7;
-      if (dateRange === 'Monthly') return diffDays < 30;
-      if (dateRange === 'Quarterly') return diffDays < 90;
-      if (dateRange === 'Annually') return diffDays < 365;
+      
+      const diffDays = (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24);
+      if (dateRange === 'Weekly') return diffDays <= 7.1;
+      if (dateRange === 'Monthly') return diffDays <= 31.1;
+      if (dateRange === 'Quarterly') return diffDays <= 91.1;
+      if (dateRange === 'Annually') return diffDays <= 366.1;
       return true;
     });
-  }, [dateRange, expenses]);
+  }, [dateRange, expenses, now]);
 
   // 2. DATA SEGMENTATION
   // Total Revenue (Total billable amount)
@@ -119,7 +127,7 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
       const method = order.paymentMethod?.toLowerCase() || 'cash';
       if (counts[method]) {
         counts[method].count += 1;
-        counts[method].amount += (order.amountReceived || 0);
+        counts[method].amount += Math.min(order.grandTotal || 0, order.amountReceived || 0);
       }
     });
 
@@ -166,7 +174,7 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
           name: cleanName,
           amount: totalSalesData
             .filter(j => (j.baseService as string[]).includes(service.name))
-            .reduce((sum, j) => sum + (j.amountReceived || 0), 0),
+            .reduce((sum, j) => sum + Math.min(j.grandTotal || 0, j.amountReceived || 0), 0),
           fill: fillColor
         };
       })
@@ -190,12 +198,15 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
     if (onSetHeaderActionRight) {
       onSetHeaderActionRight(
         <div className="flex items-center gap-2">
+
+
           {/* Printables Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
                 className="w-10 h-10 flex items-center justify-center rounded-md border border-slate-700 bg-slate-700 text-white shadow-md transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500"
+                title="Print Report"
               >
                 <Printer className="h-4 w-4" />
               </button>

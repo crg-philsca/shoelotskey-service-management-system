@@ -9,8 +9,17 @@ from models import User, Role
 from database import get_db
 
 # --- OWASP A02: UNUSED SECRETS HARDENING ---
-# Ensure JWT_SECRET is loaded from environment; fallback to a strong random if local
-SECRET_KEY = os.getenv("JWT_SECRET", "super-secret-shoelotskey-2026-key-ags-aviatech")
+# Ensure JWT_SECRET is loaded from environment. Require it in production.
+SECRET_KEY = os.getenv("JWT_SECRET")
+ENV = "Production" if os.getenv("PORT") or os.getenv("ENV") == "Production" else "Localhost"
+
+if not SECRET_KEY:
+    if ENV == "Production":
+        raise RuntimeError("CRITICAL: JWT_SECRET environment variable is required in production!")
+    else:
+        # Development fallback
+        SECRET_KEY = "super-secret-shoelotskey-2026-key-ags-aviatech"
+
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 480 # 8-hour shift default
 
@@ -55,13 +64,15 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Security(securi
         
     return user
 
-def require_role(role_name: str):
+def require_role(role_name):
     """
     OWASP A01: ENFORCE LEAST PRIVILEGE
     Decorator-style dependency for RBAC.
+    Supports a single role string or a list/tuple of strings.
     """
     def role_checker(current_user: User = Depends(get_current_user)):
-        if current_user.role.role_name != role_name and current_user.role.role_name != 'owner':
+        roles = [role_name] if isinstance(role_name, str) else list(role_name)
+        if current_user.role.role_name not in roles and current_user.role.role_name != 'owner':
             print(f"[SECURITY] Unauthorized access attempt by {current_user.username} (Role: {current_user.role.role_name}) to {role_name}-only resource.")
             raise HTTPException(status_code=403, detail="Unauthorized - Elevated permissions required")
         return current_user

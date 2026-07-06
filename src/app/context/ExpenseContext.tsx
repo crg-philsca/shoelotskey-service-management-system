@@ -62,7 +62,7 @@ export function ExpenseProvider({ children, user }: { children: ReactNode, user:
                 
                 if (hasChanges) {
                     // Refetch to get real db ids
-                    const refetch = await fetch(`${API_BASE}/expenses`, {
+                    const refetch = await fetch(`${API_BASE}/expenses?_t=${Date.now()}`, {
                         headers: { 'Authorization': `Bearer ${user.token}` }
                     });
                     const data = await refetch.json();
@@ -95,7 +95,7 @@ export function ExpenseProvider({ children, user }: { children: ReactNode, user:
                 } catch(e) {}
             }
 
-            fetch(`${API_BASE}/expenses`, {
+            fetch(`${API_BASE}/expenses?_t=${Date.now()}`, {
                 headers: { 'Authorization': `Bearer ${user.token}` }
             })
                 .then(res => res.json())

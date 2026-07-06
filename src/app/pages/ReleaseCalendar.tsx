@@ -41,7 +41,8 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
     return Array.from(new Map(dates.map((d: Date) => [d.toDateString(), d])).values());
   }, [forReleaseOrders]);
 
-  const [date, setDate] = useState<Date | undefined>(releaseDates[0] ?? new Date());
+  const [date, setDate] = useState<Date | undefined>(new Date());
+  const [month, setMonth] = useState<Date>(new Date());
   const [currentPage, setCurrentPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterPaymentStatus, setFilterPaymentStatus] = useState<string>('all');
@@ -56,6 +57,9 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
 
   const handleDateChange = (newDate: Date | undefined) => {
     setDate(newDate ?? date);
+    if (newDate) {
+      setMonth(newDate);
+    }
     setCurrentPage(1);
   };
 
@@ -273,6 +277,8 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
                   mode="single"
                   selected={date}
                   onSelect={handleDateChange}
+                  month={month}
+                  onMonthChange={setMonth}
                   showOutsideDays={true}
                   fixedWeeks
                   modifiers={{ releaseDay: releaseDates as Date[] }}

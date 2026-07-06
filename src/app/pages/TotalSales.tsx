@@ -183,7 +183,7 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
         return filtered;
     }, [salesOrders, filterService, filterPriority, startDate, endDate, searchQuery]);
 
-    const totalSales = filteredOrders.reduce((sum: number, order: JobOrder) => sum + (order.amountReceived || 0), 0);
+    const totalSales = filteredOrders.reduce((sum: number, order: JobOrder) => sum + Math.min(order.grandTotal || 0, order.amountReceived || 0), 0);
     const totalPages = Math.ceil(filteredOrders.length / itemsPerPage) || 1;
     const startIndex = (currentPage - 1) * itemsPerPage;
     const paginatedOrders = filteredOrders.slice(startIndex, startIndex + itemsPerPage);
@@ -195,7 +195,7 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
 
     const paymentBreakdown = filteredOrders.reduce((acc: Record<string, number>, order: JobOrder) => {
         const method = (order.paymentMethod || 'cash').toLowerCase();
-        acc[method] = (acc[method] || 0) + (order.amountReceived || 0);
+        acc[method] = (acc[method] || 0) + Math.min(order.grandTotal || 0, order.amountReceived || 0);
         return acc;
     }, {} as Record<string, number>);
 

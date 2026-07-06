@@ -298,6 +298,16 @@ class Inventory(Base):
     unit_price = Column(DECIMAL(10, 2), default=0.0)
     status = Column(String(30)) # e.g., 'In Stock', 'Low Stock', 'Critical'
     is_active = Column(Boolean, default=True)
+    
+    # Automated consumption fields
+    auto_deduct = Column(Boolean, default=False)
+    auto_deduct_trigger = Column(String(50), default="Job Started")
+    trigger_service = Column(String(100), default="All")
+    consumption_qty = Column(Float, default=0.0)
+    consumption_unit = Column(String(20), default="")
+    package_size = Column(Float, default=0.0)
+    package_unit = Column(String(20), default="")
+
     created_at = Column(TIMESTAMP, server_default=func.now())
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
 

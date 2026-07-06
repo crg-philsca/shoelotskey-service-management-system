@@ -1248,7 +1248,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                                     {addOnServices.filter(addon => {
                                                                         const baseServicesArr = shoe.baseService || [];
                                                                         const basicCleaningAddOns = ['Unyellowing', 'White Paint', 'Minor Restoration', 'Minor Retouch'];
-                                                                        const reglueAddOns = ['Add Glue Layer', 'Premium Glue', 'Midsole', 'Undersole'];
+                                                                        const reglueAddOns = ['Add Glue Layer', 'Premium Glue', 'Midsole', 'Undersole', 'Midsole Full Reglue', 'Undersole Full Reglue', 'Middlesole Glue', 'Undersole Glue', 'Midsole Glue'];
                                                                         if (baseServicesArr.includes('Basic Cleaning') && basicCleaningAddOns.includes(addon.name)) return true;
                                                                         if (baseServicesArr.some(s => s.toLowerCase().includes('reglue')) && reglueAddOns.includes(addon.name)) return true;
                                                                         const colorAddOns = ['2 Colors', '3 Colors'];
@@ -1354,11 +1354,17 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                                         <SelectValue />
                                                                     </SelectTrigger>
                                                                     <SelectContent>
-                                                                        {inventoryData.map((inv: any) => (
-                                                                            <SelectItem key={inv.id} value={inv.id?.toString() || ""} className="text-[11px] font-medium">
-                                                                                {inv.name} ({inv.stock} {inv.unit} left)
-                                                                            </SelectItem>
-                                                                        ))}
+                                                                        {inventoryData.map((inv: any) => {
+                                                                            const hasPkg = inv.package_size && inv.package_size > 0;
+                                                                            const displayStockLabel = hasPkg 
+                                                                                ? `${inv.stock} ${inv.package_unit || inv.unit} (~${(inv.stock / inv.package_size).toFixed(2)} ${inv.unit})`
+                                                                                : `${inv.stock} ${inv.unit}`;
+                                                                            return (
+                                                                                <SelectItem key={inv.id} value={inv.id?.toString() || ""} className="text-[11px] font-medium">
+                                                                                    {inv.name} ({displayStockLabel} left)
+                                                                                </SelectItem>
+                                                                            );
+                                                                        })}
                                                                     </SelectContent>
                                                                 </Select>
                                                                 <div className="flex items-center gap-1 shrink-0 bg-gray-50 px-2 py-1 rounded-md border border-gray-100">

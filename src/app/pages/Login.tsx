@@ -17,6 +17,13 @@ const API_BASE = (typeof window !== 'undefined' && (window.location.hostname ===
   ? `http://${window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname}:8000/api`
   : '/api';
 
+const hashPassword = async (password: string): Promise<string> => {
+  const msgBuffer = new TextEncoder().encode(password);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+};
+
 export default function Login({ onLogin }: LoginProps) {
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
@@ -70,10 +77,10 @@ export default function Login({ onLogin }: LoginProps) {
         // can authenticate seamlessly even if the internet drops and the backend goes unreachable.
         if (rememberMe) {
             try {
-                const obfuscatedPass = btoa(password).split('').reverse().join('');
+                const passwordHash = await hashPassword(password);
                 localStorage.setItem('shoelotskey_offline_auth', JSON.stringify({
                     ...data,
-                    _key: obfuscatedPass
+                    _key: passwordHash
                 }));
             } catch(e) {}
         } else {
@@ -105,8 +112,8 @@ export default function Login({ onLogin }: LoginProps) {
       if (offlineAuth) {
           try {
               const parsed = JSON.parse(offlineAuth);
-              const inputKey = btoa(password).split('').reverse().join('');
-              if (parsed.username === username && parsed._key === inputKey) {
+              const passwordHash = await hashPassword(password);
+              if (parsed.username === username && parsed._key === passwordHash) {
                   toast.success(`Offline login successful! Operating from local cache.`);
                   onLogin(parsed.user_id, parsed.username, parsed.role, parsed.access_token || '');
                   setIsLoading(false);

@@ -88,7 +88,7 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
                 
                 if (hasChanges) {
                     // Refetch to align exact database IDs
-                    const response = await fetch(`${API_BASE}/services`, {
+                    const response = await fetch(`${API_BASE}/services?_t=${Date.now()}`, {
                         headers: { 'Authorization': `Bearer ${user.token}` }
                     });
                     const data = await response.json();
@@ -120,7 +120,7 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
                 } catch(e) {}
             }
 
-            fetch(`${API_BASE}/services`, {
+            fetch(`${API_BASE}/services?_t=${Date.now()}`, {
                 headers: { 'Authorization': `Bearer ${user.token}` }
             })
                 .then(res => res.json())

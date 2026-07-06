@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/ca
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { Input } from '@/app/components/ui/input';
-import { Package, PlusCircle, Search, Filter, AlertTriangle, ArrowUpRight, ChevronLeft, ChevronRight, Edit, Trash2 } from 'lucide-react';
+import { Package, PlusCircle, Search, Filter, AlertTriangle, ArrowUpRight, ChevronLeft, ChevronRight, Edit, Trash2, Printer } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Switch } from '@/app/components/ui/switch';
 import { 
@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useActivities } from '@/app/context/ActivityContext';
 import { toast } from 'sonner';
 import { useInventory } from '@/app/context/InventoryContext';
+import { useServices } from '@/app/context/ServiceContext';
 import { InventoryItem } from '@/app/types';
 
 interface InventoryProps {
@@ -26,6 +27,7 @@ interface InventoryProps {
 export default function Inventory({ onSetHeaderActionRight, user }: InventoryProps) {
     const { addActivity } = useActivities();
     const { inventoryData, addItem, updateItem, deleteItem } = useInventory();
+    const { services } = useServices();
     const [searchQuery, setSearchQuery] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -49,7 +51,14 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
         stock: 0,
         unit: 'Bottles',
         price: 0,
-        isActive: true
+        isActive: true,
+        autoDeduct: false,
+        autoDeductTrigger: 'Job Started',
+        triggerService: 'All',
+        consumptionQty: 0,
+        consumptionUnit: '',
+        packageSize: 0,
+        packageUnit: ''
     });
 
     useEffect(() => {
@@ -65,7 +74,21 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                     className="w-10 h-10 sm:w-40 flex items-center justify-center rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-[11px] font-black uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 tracking-widest"
                     onClick={() => {
                         setEditingItem(null);
-                        setFormData({ name: '', category: 'Chemicals', stock: 0, unit: 'Bottles', price: 0, isActive: true });
+                        setFormData({ 
+                            name: '', 
+                            category: 'Chemicals', 
+                            stock: 0, 
+                            unit: 'Bottles', 
+                            price: 0, 
+                            isActive: true,
+                            autoDeduct: false,
+                            autoDeductTrigger: 'on-going',
+                            triggerService: 'All',
+                            consumptionQty: 0,
+                            consumptionUnit: '',
+                            packageSize: 0,
+                            packageUnit: ''
+                        });
                         setIsCustomCategory(false);
                         setIsCustomUnit(false);
                         setIsModalOpen(true);
@@ -80,12 +103,31 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
             if (onSetHeaderActionRight) onSetHeaderActionRight(null);
         };
     }, [onSetHeaderActionRight]);
-
+ 
     const handleSaveItem = () => {
         if (!formData.name) return;
 
+        const packageSize = formData.packageSize || 0;
+        const dbStock = packageSize > 0 ? (formData.stock * packageSize) : formData.stock;
+
+        const saveItemPayload = {
+            name: formData.name,
+            category: formData.category,
+            stock: dbStock,
+            unit: formData.unit,
+            price: formData.price,
+            isActive: formData.isActive,
+            auto_deduct: formData.autoDeduct,
+            auto_deduct_trigger: formData.autoDeductTrigger,
+            trigger_service: formData.triggerService,
+            consumption_qty: formData.consumptionQty,
+            consumption_unit: formData.consumptionUnit,
+            package_size: formData.packageSize,
+            package_unit: formData.packageUnit
+        };
+ 
         if (editingItem) {
-            updateItem({ ...editingItem, ...formData });
+            updateItem({ ...editingItem, ...saveItemPayload });
             addActivity({
                 type: 'system',
                 user: 'Owner',
@@ -94,7 +136,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
             });
             toast.success(`Successfully updated ${formData.name}`);
         } else {
-            addItem(formData);
+            addItem(saveItemPayload);
             addActivity({
                 type: 'system',
                 user: 'Owner',
@@ -106,7 +148,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
         setEditingItem(null);
         setIsModalOpen(false);
     };
-
+ 
     const handleDeleteItem = (id: number) => {
         const item = inventoryData.find((d) => d.id === id);
         if (confirm(`Are you sure you want to delete ${item?.name}?`)) {
@@ -120,16 +162,27 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
             toast.success(`Successfully removed ${item?.name}`);
         }
     };
-
+ 
     const handleEditItem = (item: InventoryItem) => {
         setEditingItem(item);
+        const packageSize = item.package_size ?? 0;
+        const hasPkg = packageSize > 0;
         setFormData({
             name: item.name,
             category: item.category,
-            stock: item.stock,
+            stock: hasPkg ? parseFloat((item.stock / packageSize).toFixed(2)) : item.stock,
             unit: item.unit,
             price: item.price,
-            isActive: item.isActive
+            isActive: item.isActive,
+            autoDeduct: item.auto_deduct || false,
+            autoDeductTrigger: item.auto_deduct_trigger === 'Job Started' ? 'on-going' : 
+                               (item.auto_deduct_trigger === 'Shoe Released' ? 'for-release' : 
+                               (item.auto_deduct_trigger || 'on-going')),
+            triggerService: item.trigger_service || 'All',
+            consumptionQty: item.consumption_qty || 0,
+            consumptionUnit: item.consumption_unit || '',
+            packageSize: item.package_size || 0,
+            packageUnit: item.package_unit || ''
         });
         setIsCustomCategory(false);
         setIsCustomUnit(false);
@@ -139,7 +192,8 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
     const filteredInventory = inventoryData.filter((item: InventoryItem) => {
         const name = item.name || '';
         const category = item.category || '';
-        const status = item.status || '';
+        const qty = Number(item.stock || 0);
+        const status = qty <= 0 ? 'Critical' : (qty <= 1 ? 'Low Stock' : 'In Stock');
 
         const matchesSearch = 
             name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -165,12 +219,12 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
     };
 
     const categories = Array.from(new Set(inventoryData.map(item => item.category))) as string[];
-    const statuses = Array.from(new Set(inventoryData.map(item => item.status))) as string[];
+    const statuses = ['In Stock', 'Low Stock', 'Critical'];
 
     return (
         <div className="space-y-6 animate-in fade-in duration-700">
             {/* Summary Row */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 no-print">
                 <Card className="border-none shadow-sm bg-white group">
                     <CardContent className="p-5 flex items-center gap-4">
                         <div className="h-12 w-12 rounded-2xl bg-red-50 flex items-center justify-center text-red-600 group-hover:bg-red-600 group-hover:text-white transition-all duration-300">
@@ -191,7 +245,11 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                         <div>
                             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Low Stock Alert</p>
                             <h3 className="text-2xl font-black text-gray-900 leading-tight">
-                                {inventoryData.filter(i => i.status !== 'In Stock').length}
+                                {inventoryData.filter(i => {
+                                    const qty = Number(i.stock || 0);
+                                    const limit = (i.package_size && i.package_size > 0) ? i.package_size : 1;
+                                    return qty <= limit;
+                                }).length}
                             </h3>
                         </div>
                     </CardContent>
@@ -219,7 +277,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                     </div>
                 </CardHeader>
                 <CardContent className="p-6 pt-0">
-                    <div className="flex items-center gap-2 mb-3">
+                    <div className="flex items-center gap-2 mb-3 no-print">
                         <div className="relative flex-1 group">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 group-focus-within:text-red-600 transition-colors" />
                             <Input 
@@ -312,6 +370,14 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                 </div>
                             </DialogContent>
                         </Dialog>
+                        <Button 
+                            variant="outline" 
+                            className="h-10 w-10 p-0 rounded-xl border-gray-100 text-gray-500 hover:border-red-600 hover:text-red-600 hover:bg-red-50 no-print"
+                            onClick={() => window.print()}
+                            title="Print Stock Inventory"
+                        >
+                            <Printer size={18} />
+                        </Button>
                     </div>
 
                     <div className="overflow-x-auto -mx-6">
@@ -324,7 +390,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                     <th className="px-6 py-4 text-right text-[11px] font-bold text-slate-800 uppercase tracking-widest">Stock Level</th>
                                     <th className="px-6 py-4 text-center text-[11px] font-bold text-slate-800 uppercase tracking-widest">Stock Status</th>
                                     <th className="px-6 py-4 text-center text-[11px] font-bold text-slate-800 uppercase tracking-widest whitespace-nowrap">Status</th>
-                                    <th className="px-6 py-4 text-center text-[11px] font-bold text-slate-800 uppercase tracking-widest">Action</th>
+                                    <th className="px-6 py-4 text-center text-[11px] font-bold text-slate-800 uppercase tracking-widest no-print">Action</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -337,18 +403,37 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                         <td className="px-6 py-4 text-xs font-bold text-gray-600 uppercase">{item.category}</td>
                                         <td className="px-6 py-4 text-right font-black text-xs text-gray-900">₱{(item.price || 0).toLocaleString()}</td>
                                         <td className="px-6 py-4 text-right">
-                                            <span className="text-sm font-black text-gray-900">{item.stock}</span>
-                                            <span className="text-[10px] text-gray-400 ml-1 font-bold">{item.unit}</span>
+                                            {item.package_size && item.package_size > 0 ? (
+                                                <div>
+                                                    <span className="text-sm font-black text-gray-900">{item.stock}</span>
+                                                    <span className="text-[10px] text-gray-400 ml-1 font-bold">{item.package_unit || item.unit}</span>
+                                                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wide leading-none mt-0.5">
+                                                        ~{(item.stock / item.package_size).toFixed(2)} {item.unit}
+                                                    </p>
+                                                </div>
+                                            ) : (
+                                                <div>
+                                                    <span className="text-sm font-black text-gray-900">{item.stock}</span>
+                                                    <span className="text-[10px] text-gray-400 ml-1 font-bold">{item.unit}</span>
+                                                </div>
+                                            )}
                                         </td>
                                         <td className="px-6 py-4 text-center">
-                                            <Badge className={`
-                                                ${item.status === 'In Stock' ? 'bg-blue-50 text-blue-700 border-blue-100' : ''}
-                                                ${item.status === 'Low Stock' ? 'bg-amber-50 text-amber-700 border-amber-100' : ''}
-                                                ${item.status === 'Critical' ? 'bg-red-50 text-red-700 border-red-100' : ''}
-                                                text-[10px] font-black uppercase
-                                            `}>
-                                                {item.status}
-                                            </Badge>
+                                            {(() => {
+                                                const qty = Number(item.stock || 0);
+                                                const limit = (item.package_size && item.package_size > 0) ? item.package_size : 1;
+                                                const status = qty <= 0 ? 'Critical' : (qty <= limit ? 'Low Stock' : 'In Stock');
+                                                return (
+                                                    <Badge className={`
+                                                        ${status === 'In Stock' ? 'bg-blue-50 text-blue-700 border-blue-100' : ''}
+                                                        ${status === 'Low Stock' ? 'bg-amber-50 text-amber-700 border-amber-100' : ''}
+                                                        ${status === 'Critical' ? 'bg-red-50 text-red-700 border-red-100' : ''}
+                                                        text-[10px] font-black uppercase
+                                                    `}>
+                                                        {status}
+                                                    </Badge>
+                                                );
+                                            })()}
                                         </td>
                                         <td className="px-6 py-4 text-center">
                                             <div className="flex justify-center">
@@ -360,7 +445,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                                 </Badge>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4 text-center">
+                                        <td className="px-6 py-4 text-center no-print">
                                             <div className="flex items-center justify-center gap-2">
                                                 <Button 
                                                     variant="ghost" 
@@ -383,7 +468,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                             </tbody>
                         </table>
                     </div>
-                    <div className="mt-2 flex items-center justify-between pt-4 pb-1">
+                    <div className="mt-2 flex items-center justify-between pt-4 pb-1 no-print">
                         <div className="text-[11px] text-gray-500 font-bold uppercase tracking-wider">
                             PAGE {currentPage} OF {totalPages}
                         </div>
@@ -533,7 +618,9 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase text-gray-400">Stock Qty</label>
+                                <label className="text-[10px] font-black uppercase text-gray-400">
+                                    Stock Qty {formData.unit ? `(${formData.unit})` : ''}
+                                </label>
                                 <Input 
                                     className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs" 
                                     type="number" 
@@ -560,6 +647,144 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                     }}
                                 />
                             </div>
+                        </div>
+
+                        {/* Package Details */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase text-gray-400">Package Size</label>
+                                <Input 
+                                    className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs" 
+                                    type="number" 
+                                    step="any"
+                                    placeholder="e.g. 250" 
+                                    value={formData.packageSize || ''}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        setFormData(prev => ({ ...prev, packageSize: val === '' ? 0 : parseFloat(val) }));
+                                    }}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase text-gray-400">Package Size Unit</label>
+                                <Input 
+                                    className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs" 
+                                    placeholder="e.g. mL" 
+                                    value={formData.packageUnit || ''}
+                                    onChange={(e) => setFormData(prev => ({ ...prev, packageUnit: e.target.value }))}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Collapsible/Expandable Consumption Settings */}
+                        <div className="border border-red-100/60 rounded-xl p-3 bg-red-50/20 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <input 
+                                        type="checkbox" 
+                                        id="autoDeductCheckbox" 
+                                        className="h-4 w-4 rounded border-red-300 text-red-600 focus:ring-red-500 cursor-pointer"
+                                        checked={formData.autoDeduct}
+                                        onChange={(e) => setFormData(prev => ({ ...prev, autoDeduct: e.target.checked }))}
+                                    />
+                                    <label htmlFor="autoDeductCheckbox" className="text-[10px] font-black uppercase text-red-900 cursor-pointer select-none font-bold">
+                                        Automatically deduct during job order
+                                    </label>
+                                </div>
+                            </div>
+
+                            {formData.autoDeduct && (
+                                <div className="space-y-3 pt-1.5 border-t border-red-100/50">
+                                    <div className="space-y-3">
+                                        <div className="space-y-1.5">
+                                            <label className="text-[9px] font-black uppercase text-gray-400">Trigger Event</label>
+                                            <select 
+                                                className="w-full h-8 rounded-lg border border-red-100 bg-white px-2 text-xs focus:ring-2 focus:ring-red-500"
+                                                value={formData.autoDeductTrigger}
+                                                onChange={(e) => setFormData(prev => ({ ...prev, autoDeductTrigger: e.target.value }))}
+                                            >
+                                                <option value="on-going">On-Going</option>
+                                                <option value="for-release">For Release</option>
+                                            </select>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-[9px] font-black uppercase text-gray-400">Trigger Services (Select multiple)</label>
+                                            <div className="border border-red-100 rounded-lg bg-white p-2.5 max-h-[110px] overflow-y-auto space-y-1.5 focus-within:ring-2 focus-within:ring-red-500">
+                                                <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer select-none text-gray-700 hover:text-red-600 transition-colors">
+                                                    <input 
+                                                        type="checkbox"
+                                                        className="rounded text-red-500 focus:ring-red-500 h-3.5 w-3.5 border-red-200 cursor-pointer"
+                                                        checked={formData.triggerService === 'All'}
+                                                        onChange={(e) => {
+                                                            if (e.target.checked) {
+                                                                setFormData(prev => ({ ...prev, triggerService: 'All' }));
+                                                            } else {
+                                                                setFormData(prev => ({ ...prev, triggerService: '' }));
+                                                            }
+                                                        }}
+                                                    />
+                                                    <span>All Services</span>
+                                                </label>
+                                                {services.map(svc => {
+                                                    const currentList = formData.triggerService === 'All'
+                                                        ? services.map(s => s.name)
+                                                        : formData.triggerService.split(',').map(s => s.trim()).filter(Boolean);
+                                                    const isChecked = formData.triggerService === 'All' || currentList.includes(svc.name);
+                                                    return (
+                                                        <label key={svc.id} className="flex items-center gap-2 text-xs font-medium cursor-pointer select-none text-gray-600 hover:text-red-600 transition-colors pl-2 border-l border-red-50/50">
+                                                            <input 
+                                                                type="checkbox"
+                                                                className="rounded text-red-500 focus:ring-red-500 h-3.5 w-3.5 border-red-200 cursor-pointer"
+                                                                checked={isChecked}
+                                                                disabled={formData.triggerService === 'All'}
+                                                                onChange={(e) => {
+                                                                    const current = formData.triggerService.split(',').map(s => s.trim()).filter(Boolean);
+                                                                    let next: string[];
+                                                                    if (e.target.checked) {
+                                                                        next = [...current, svc.name];
+                                                                    } else {
+                                                                        next = current.filter(s => s !== svc.name);
+                                                                    }
+                                                                    const sortedNext = services
+                                                                        .filter(s => next.includes(s.name))
+                                                                        .map(s => s.name);
+                                                                    setFormData(prev => ({ ...prev, triggerService: sortedNext.join(', ') }));
+                                                                }}
+                                                            />
+                                                            <span>{svc.name}</span>
+                                                        </label>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-1.5">
+                                            <label className="text-[9px] font-black uppercase text-gray-400">Consumption Per Use</label>
+                                            <Input 
+                                                className="h-8 border-red-100 focus:border-red-500 rounded-lg text-xs" 
+                                                type="number" 
+                                                step="any"
+                                                placeholder="e.g. 1" 
+                                                value={formData.consumptionQty || ''}
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    setFormData(prev => ({ ...prev, consumptionQty: val === '' ? 0 : parseFloat(val) }));
+                                                }}
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-[9px] font-black uppercase text-gray-400">Consumption Unit</label>
+                                            <Input 
+                                                className="h-8 border-red-100 focus:border-red-500 rounded-lg text-xs" 
+                                                placeholder="e.g. mL" 
+                                                value={formData.consumptionUnit || ''}
+                                                onChange={(e) => setFormData(prev => ({ ...prev, consumptionUnit: e.target.value }))}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                         <div className="grid grid-cols-2 items-center gap-4 pt-2">
                             <label className="text-[10px] font-black uppercase text-gray-400">Status</label>

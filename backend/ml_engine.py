@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from models import Order, Item, Service, Condition, Status, PriorityLevel
 from sklearn.ensemble import RandomForestRegressor
 import pickle
@@ -143,34 +143,43 @@ class ShoelotskeyPredictor:
             item_count = len(o.items)
             is_rush = 1 if o.priority and o.priority.priority_name == 'rush' else 0
             
-            svc_count = 0
-            cond_count = 0
-            for item in o.items:
-                svc_count += len(item.services)
-                cond_count += len(item.conditions)
+            all_service_ids = []
+            all_condition_ids = []
+            primary_material = "Unknown"
             
-            # Note: We don't have historical workload at time of creation saved in Order (3NF improvement opportunity!)
-            # For now, we use a constant or average.
+            for i, item in enumerate(o.items):
+                if i == 0:
+                    primary_material = item.material or "Unknown"
+                all_service_ids.extend([s.service_id for s in item.services])
+                all_condition_ids.extend([c.condition_id for c in item.conditions])
+            
+            # Compute heuristic days dynamically for historical sample
+            heuristic_days = self.calculate_heuristic_days(db, list(set(all_service_ids)), list(set(all_condition_ids)), primary_material)
+            
+            # Calculate historical workload: how many active orders existed when this order was created
+            workload = db.query(Order).filter(
+                Order.created_at <= start,
+                or_(Order.released_at == None, Order.released_at > start)
+            ).count()
             
             data.append({
                 'item_count': item_count,
                 'is_rush': is_rush,
-                'svc_count': svc_count,
-                'cond_count': cond_count,
+                'svc_count': len(all_service_ids),
+                'cond_count': len(all_condition_ids),
+                'workload': workload,
+                'heuristic_days': heuristic_days,
                 'actual_days': actual_days
             })
             
         df = pd.DataFrame(data)
-        X = df[['item_count', 'is_rush', 'svc_count', 'cond_count']]
-        # We add 'workload' and 'heuristic' here if we had them saved.
-        # This is enough to demonstrate the principle.
+        X = df[['item_count', 'is_rush', 'svc_count', 'cond_count', 'workload', 'heuristic_days']]
         
         # Train!
         self.model = RandomForestRegressor(n_estimators=100, random_state=42)
-        # We need more features for a real model, but this validates the 3NF data entry.
         # Target: actual_days
         y = df['actual_days']
-        self.model.fit(X, y)
+        self.model.fit(X.values, y)
         
         # Save model
         with open(self.model_path, 'wb') as f:

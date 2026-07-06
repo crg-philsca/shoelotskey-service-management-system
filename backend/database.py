@@ -46,9 +46,9 @@ try:
         # Strict pooling for RDS Free-Tier (FATAL: too many connections fix)
         primary_engine = create_engine(
             PG_URL, 
-            connect_args={"sslmode": "require", "connect_timeout": 10}, 
-            pool_size=2,          # Keep base connections very low
-            max_overflow=0,       # Disable overflow to prevent RDS lockout
+            connect_args={"sslmode": "require", "connect_timeout": 2}, 
+            pool_size=5,          # Scaled for concurrent dashboard requests
+            max_overflow=3,       # Allow burst connections up to 8 total
             pool_pre_ping=True,   # Check if connection is alive before using
             pool_recycle=300      # Close and reopen connections every 5 mins
         )

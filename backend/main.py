@@ -45,7 +45,7 @@ from schemas import (
     ItemSchema, PaymentSchema, DeliverySchema, UserCreateSchema, UserUpdateSchema,
     InventorySchema, InventoryUpdateSchema, InventoryLogSchema
 )
-from database import engine, get_db, SessionLocal, DATABASE_URL
+from database import engine, get_db, SessionLocal, DATABASE_URL, is_sqlite, conn_error, LOCAL_SQLITE_PATH, LOCAL_SQLITE
 from ml_engine import predictor
 from auth_utils import get_current_user, require_role, create_access_token, sanitize_error
 
@@ -175,10 +175,24 @@ async def global_exception_handler(request: Request, exc: Exception):
 # Mount Brand Assets
 app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="brand_assets")
 
-# Configure CORS for React compatibility
+# Configure CORS for React compatibility (OWASP A05: Security Misconfiguration Hardening)
+origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+]
+env_origin = os.getenv("FRONTEND_URL")
+if env_origin:
+    origins.append(env_origin)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Allow all for local defense, restrict for production
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -198,7 +212,6 @@ def startup_sequence():
     
     # [USER REQUEST] Ensure local fallback database is ALWAYS ready even if we are online.
     # We briefly initialize the local SQLite engine to push the schema if it's missing.
-    from database import LOCAL_SQLITE
     try:
         from sqlalchemy import create_engine
         local_engine = create_engine(LOCAL_SQLITE)
@@ -269,6 +282,51 @@ def startup_sequence():
                     try: conn.execute(text("ALTER TABLE services ADD COLUMN sort_order INTEGER DEFAULT 0"))
                     except: pass
 
+        # Inventory Table: Automated Consumption Settings
+        if "inventory" in inspector.get_table_names():
+            columns = [c['name'] for c in inspector.get_columns("inventory")]
+            active_is_sqlite = is_sqlite
+            engines_to_migrate = [(engine, active_is_sqlite)]
+            
+            # If online, also migrate SQLite backup database so schemas align for background sync
+            if not is_sqlite:
+                try:
+                    from sqlalchemy import create_engine
+                    local_mig_engine = create_engine(LOCAL_SQLITE)
+                    engines_to_migrate.append((local_mig_engine, True))
+                except Exception as local_eng_err:
+                    print(f"[SCHEMA MIGRATION WARNING] Could not load SQLite engine: {local_eng_err}")
+                    
+            for mig_engine, is_sqlite_target in engines_to_migrate:
+                db_name = "SQLite" if is_sqlite_target else "PostgreSQL"
+                # Check target columns inside target database
+                try:
+                    with mig_engine.connect() as check_conn:
+                        target_inspector = inspect(mig_engine)
+                        target_columns = [c['name'] for c in target_inspector.get_columns("inventory")]
+                except Exception:
+                    target_columns = columns # fallback
+                    
+                try:
+                    with mig_engine.begin() as conn:
+                        for col_name, col_type in [
+                            ("auto_deduct", "BOOLEAN DEFAULT FALSE"),
+                            ("auto_deduct_trigger", "VARCHAR(50) DEFAULT 'Job Started'"),
+                            ("trigger_service", "VARCHAR(100) DEFAULT 'All'"),
+                            ("consumption_qty", "DOUBLE PRECISION DEFAULT 0.0" if not is_sqlite_target else "REAL DEFAULT 0.0"),
+                            ("consumption_unit", "VARCHAR(20) DEFAULT ''"),
+                            ("package_size", "DOUBLE PRECISION DEFAULT 0.0" if not is_sqlite_target else "REAL DEFAULT 0.0"),
+                            ("package_unit", "VARCHAR(20) DEFAULT ''")
+                        ]:
+                            if col_name not in target_columns:
+                                try:
+                                    conn.execute(text(f"ALTER TABLE inventory ADD COLUMN {col_name} {col_type}"))
+                                    print(f">>> Migration: Added {col_name} to inventory in {db_name}")
+                                except Exception:
+                                    pass
+                except Exception as mig_err:
+                    print(f"[SCHEMA MIGRATION WARNING] Failed to migrate {db_name}: {mig_err}")
+
         # 3. Data Normalization (Legacy 2.0 -> 3NF)
         # We wrap this in a sub-try since it relies on old columns that might already be deleted
         try:
@@ -296,7 +354,6 @@ def startup_sequence():
 
     # 2. Schema Migration & Synchronization (Cross-Engine)
     # We ensure BOTH Cloud and Local mirror each other's structure
-    from database import LOCAL_SQLITE
     engines_to_sync = [engine]
     if "sqlite" not in str(engine.url):
         from sqlalchemy import create_engine
@@ -483,7 +540,21 @@ def seed_lookups(db: Session):
             db.commit()
             print(">>> Catalog Sync: Initial seeding complete.")
         else:
-            print(f">>> Catalog Sync: {service_count} services found. Skipping seed to preserve user modifications.")
+            print(f">>> Catalog Sync: {service_count} services found. Ensuring required reglue additions exist...")
+            # Auto-insert Midsole Full Reglue & Undersole Full Reglue if missing
+            additional_services = [
+                {"service_name": "Midsole Full Reglue", "base_price": 150, "category": "addon", "duration_days": 20, "service_code": "MFR", "is_active": True, "sort_order": 20},
+                {"service_name": "Undersole Full Reglue", "base_price": 150, "category": "addon", "duration_days": 20, "service_code": "UFR", "is_active": True, "sort_order": 21},
+            ]
+            for item in additional_services:
+                exists = db.query(Service).filter(Service.service_name == item["service_name"]).first()
+                if not exists:
+                    item_copy = item.copy()
+                    cat_name = item_copy.pop("category", "base")
+                    item_copy["category_id"] = cat_map.get(cat_name, cat_map.get("base"))
+                    db.add(Service(**item_copy))
+                    print(f"  -> Added missing service: {item['service_name']}")
+            db.commit()
     except Exception as lock_err:
         db.rollback()
         print(f">>> Catalog Sync Warning: {lock_err}")
@@ -525,15 +596,242 @@ def seed_lookups(db: Session):
             db.add(User(username="staff", email="staff@shoelotskey.com", password_hash=bcrypt.hash("staff123"), role_id=role_staff.role_id))
         db.commit()
 
+    # 5.5 Reconcile SQLite orders to PostgreSQL (Cloud) and purge stale diagnostic orders
+    try:
+        # Delete associated payments, items, delivery, etc for HEALTH- orders from PostgreSQL
+        health_orders = db.query(Order).filter(Order.order_number.like('HEALTH-%')).all()
+        if health_orders:
+            for ho in health_orders:
+                db.execute(text("DELETE FROM payments WHERE order_id = :oid"), {"oid": ho.order_id})
+                db.execute(text("DELETE FROM deliveries WHERE order_id = :oid"), {"oid": ho.order_id})
+                items = db.query(Item).filter(Item.order_id == ho.order_id).all()
+                for item in items:
+                    db.execute(text("DELETE FROM item_service_mapping WHERE item_id = :itid"), {"itid": item.item_id})
+                    db.execute(text("DELETE FROM item_condition_mapping WHERE item_id = :itid"), {"itid": item.item_id})
+                    db.delete(item)
+                db.delete(ho)
+            db.commit()
+            print(f">>> Boot Cleanup: Purged {len(health_orders)} HEALTH- check orders.")
+            
+        # Reconcile any missing orders from SQLite backup to Cloud
+        if not is_sqlite:
+            from sqlalchemy import create_engine
+            from sqlalchemy.orm import sessionmaker
+            local_eng = create_engine(LOCAL_SQLITE)
+            LocalSession = sessionmaker(bind=local_eng)
+            with LocalSession() as ldb:
+                # Also purge HEALTH- orders from local SQLite while we are at it
+                ldb_health = ldb.query(Order).filter(Order.order_number.like('HEALTH-%')).all()
+                if ldb_health:
+                    for lho in ldb_health:
+                        ldb.execute(text("DELETE FROM payments WHERE order_id = :oid"), {"oid": lho.order_id})
+                        ldb.execute(text("DELETE FROM deliveries WHERE order_id = :oid"), {"oid": lho.order_id})
+                        litems = ldb.query(Item).filter(Item.order_id == lho.order_id).all()
+                        for li in litems:
+                            ldb.execute(text("DELETE FROM item_service_mapping WHERE item_id = :itid"), {"itid": li.item_id})
+                            ldb.execute(text("DELETE FROM item_condition_mapping WHERE item_id = :itid"), {"itid": li.item_id})
+                            ldb.delete(li)
+                        ldb.delete(lho)
+                    ldb.commit()
+                    print(f">>> Boot Cleanup (Local SQLite): Purged {len(ldb_health)} HEALTH- check orders.")
+
+                # Scan for orders to sync to cloud
+                sqlite_orders = ldb.query(Order).all()
+                for sq_order in sqlite_orders:
+                    if sq_order.order_number.startswith("HEALTH-"):
+                        continue
+                    exists = db.query(Order).filter(Order.order_number == sq_order.order_number).first()
+                    if not exists:
+                        print(f"[RECONCILE] Syncing offline order {sq_order.order_number} to Cloud PostgreSQL...")
+                        # A. Resolve Customer
+                        sq_cust = ldb.query(Customer).filter(Customer.customer_id == sq_order.customer_id).first()
+                        cust_name = sq_cust.customer_name if sq_cust else "Guest"
+                        cust_phone = sq_cust.contact_number if sq_cust else "-"
+                        pg_cust = db.query(Customer).filter(Customer.customer_name == cust_name, Customer.contact_number == cust_phone).first()
+                        if not pg_cust:
+                            pg_cust = Customer(
+                                customer_name=cust_name,
+                                contact_number=cust_phone,
+                                created_at=sq_cust.created_at if sq_cust else datetime.now()
+                            )
+                            db.add(pg_cust)
+                            db.flush()
+                        
+                        # Resolve user name
+                        sq_user_name = ldb.execute(
+                            text("SELECT username FROM users WHERE user_id = :user_id"),
+                            {"user_id": sq_order.user_id}
+                        ).scalar()
+                        pg_user = db.query(User).filter(User.username == sq_user_name).first() if sq_user_name else None
+                        if not pg_user:
+                            pg_user = db.query(User).first()
+                        
+                        # Resolve status name
+                        sq_status_name = ldb.execute(
+                            text("SELECT status_name FROM status WHERE status_id = :status_id"),
+                            {"status_id": sq_order.status_id}
+                        ).scalar()
+                        pg_status = db.query(Status).filter(Status.status_name == sq_status_name).first()
+                        
+                        # Resolve priority name
+                        sq_prio_name = ldb.execute(
+                            text("SELECT priority_name FROM priority_levels WHERE priority_id = :priority_id"),
+                            {"priority_id": sq_order.priority_id}
+                        ).scalar()
+                        pg_prio = db.query(PriorityLevel).filter(PriorityLevel.priority_name == sq_prio_name).first()
+                        
+                        if not pg_status or not pg_prio:
+                            print(f"[RECONCILE] Skipping order {sq_order.order_number} due to lookup mismatch.")
+                            continue
+
+                        # B. Create Order
+                        pg_order = Order(
+                            order_number=sq_order.order_number,
+                            customer_id=pg_cust.customer_id,
+                            status_id=pg_status.status_id,
+                            priority_id=pg_prio.priority_id,
+                            grand_total=sq_order.grand_total,
+                            expected_at=sq_order.expected_at,
+                            released_at=sq_order.released_at,
+                            claimed_at=sq_order.claimed_at,
+                            user_id=pg_user.user_id if pg_user else sq_order.user_id,
+                            inventory_applied=sq_order.inventory_applied,
+                            inventory_used=sq_order.inventory_used,
+                            created_at=sq_order.created_at,
+                            updated_at=sq_order.updated_at
+                        )
+                        db.add(pg_order)
+                        db.flush()
+                        
+                        # C. Items
+                        for sq_item in sq_order.items:
+                            pg_item = Item(
+                                order_id=pg_order.order_id,
+                                brand=sq_item.brand,
+                                shoe_model=sq_item.shoe_model,
+                                material=sq_item.material,
+                                quantity=sq_item.quantity,
+                                item_notes=sq_item.item_notes,
+                                inventory_used=sq_item.inventory_used
+                            )
+                            db.add(pg_item)
+                            db.flush()
+                            
+                            # Services
+                            sq_mappings = ldb.execute(
+                                text("SELECT service_id, actual_price FROM item_service_mapping WHERE item_id = :item_id"),
+                                {"item_id": sq_item.item_id}
+                            ).fetchall()
+                            for sq_svc_id, actual_price in sq_mappings:
+                                sq_svc_name = ldb.execute(
+                                    text("SELECT service_name FROM services WHERE service_id = :svc_id"),
+                                    {"svc_id": sq_svc_id}
+                                ).scalar()
+                                pg_svc = db.query(Service).filter(Service.service_name == sq_svc_name).first()
+                                if pg_svc:
+                                    db.execute(
+                                        text("INSERT INTO item_service_mapping (item_id, service_id, actual_price) VALUES (:item_id, :service_id, :actual_price)"),
+                                        {"item_id": pg_item.item_id, "service_id": pg_svc.service_id, "actual_price": actual_price}
+                                    )
+                            
+                            # Conditions
+                            sq_cond_mappings = ldb.execute(
+                                text("SELECT condition_id FROM item_condition_mapping WHERE item_id = :item_id"),
+                                {"item_id": sq_item.item_id}
+                            ).fetchall()
+                            for (sq_cond_id,) in sq_cond_mappings:
+                                sq_cond_name = ldb.execute(
+                                    text("SELECT condition_name FROM conditions WHERE condition_id = :cond_id"),
+                                    {"cond_id": sq_cond_id}
+                                ).scalar()
+                                pg_cond = db.query(Condition).filter(Condition.condition_name == sq_cond_name).first()
+                                if pg_cond:
+                                    db.execute(
+                                        text("INSERT INTO item_condition_mapping (item_id, condition_id) VALUES (:item_id, :condition_id)"),
+                                        {"item_id": pg_item.item_id, "condition_id": pg_cond.condition_id}
+                                    )
+                        
+                        # D. Payments
+                        for sq_pay in sq_order.payments:
+                            sq_method_name = ldb.execute(
+                                text("SELECT method_name FROM payment_methods WHERE method_id = :method_id"),
+                                {"method_id": sq_pay.method_id}
+                            ).scalar()
+                            pg_method = db.query(PaymentMethod).filter(PaymentMethod.method_name == sq_method_name).first()
+                            
+                            sq_p_status_name = ldb.execute(
+                                text("SELECT status_name FROM payment_statuses WHERE p_status_id = :status_id"),
+                                {"status_id": sq_pay.status_id}
+                            ).scalar()
+                            pg_p_status = db.query(PaymentStatus).filter(PaymentStatus.status_name == sq_p_status_name).first()
+                            
+                            if pg_method and pg_p_status:
+                                pg_pay = Payment(
+                                    order_id=pg_order.order_id,
+                                    method_id=pg_method.method_id,
+                                    status_id=pg_p_status.p_status_id,
+                                    amount_received=sq_pay.amount_received,
+                                    balance=sq_pay.balance,
+                                    reference_no=sq_pay.reference_no,
+                                    deposit_amount=sq_pay.deposit_amount,
+                                    created_at=sq_pay.created_at
+                                )
+                                db.add(pg_pay)
+                        
+                        # E. Delivery
+                        if sq_order.delivery:
+                            sq_del = sq_order.delivery
+                            pg_del = Delivery(
+                                order_id=pg_order.order_id,
+                                pref_id=sq_del.pref_id,
+                                delivery_address=sq_del.delivery_address,
+                                delivery_courier=sq_del.delivery_courier,
+                                release_time=sq_del.release_time,
+                                province=sq_del.province,
+                                city=sq_del.city,
+                                barangay=sq_del.barangay,
+                                zip_code=sq_del.zip_code
+                            )
+                            db.add(pg_del)
+                            
+                        db.commit()
+                        print(f"[RECONCILE] Synced order {sq_order.order_number} successfully.")
+    except Exception as recon_err:
+        db.rollback()
+        print(f"[RECONCILE ERROR] Reconcile sequence failed: {recon_err}")
+
     # 6. Final Verification
     print(">>> System Boot: Database integrity verified. User modifications preserved.")
+
+    # 7. Spawn Background Auto-Sync (Cloud -> Local SQLite)
+    try:
+        import threading
+        import time
+        from sync_to_local import sync_data
+        
+        def auto_sync_loop():
+            # Wait 5 seconds after boot to let the server bind and settle
+            time.sleep(5)
+            while True:
+                try:
+                    if not is_sqlite:
+                        print("[AUTO-SYNC] Running background cloud-to-local synchronization...")
+                        sync_data()
+                except Exception as sync_err:
+                    print(f"[AUTO-SYNC ERROR] {sync_err}")
+                # Synchronize every 10 minutes (600 seconds)
+                time.sleep(600)
+                
+        threading.Thread(target=auto_sync_loop, daemon=True).start()
+        print("[AUTO-SYNC] Background synchronization engine initialized.")
+    except Exception as t_err:
+        print(f"[AUTO-SYNC] Failed to initialize background thread: {t_err}")
 
 # Startup events are now handled by startup_sequence()
 
 @app.get("/api/health-check")
-def health_check(db: Session = Depends(get_db)):
+def health_check_extended(db: Session = Depends(get_db)):
     """Diagnostic endpoint to verify DB connectivity and dialect."""
-    from database import is_sqlite, conn_error, LOCAL_SQLITE_PATH
     import os
     has_offline_data = os.path.exists(LOCAL_SQLITE_PATH) and os.path.getsize(LOCAL_SQLITE_PATH) > 10240 
     
@@ -551,13 +849,12 @@ def health_check(db: Session = Depends(get_db)):
 @app.post("/api/sync-backup-to-cloud")
 def sync_backup_to_cloud(db: Session = Depends(get_db), current_user: User = Depends(require_role("owner"))):
     """Admin-only: Pull data from SQLite backup file and push to Cloud PostgreSQL."""
-    from database import is_sqlite, LOCAL_SQLITE
     if is_sqlite:
         raise HTTPException(status_code=400, detail="Cannot sync: Currently running on Backup mode. Connect to Cloud first.")
 
     import sqlite3
     import os
-    offline_path = "./shoelotskey_offline.db"
+    offline_path = LOCAL_SQLITE_PATH
     if not os.path.exists(offline_path):
         return {"message": "No backup file found."}
 
@@ -585,12 +882,63 @@ def sync_backup_to_cloud(db: Session = Depends(get_db), current_user: User = Dep
                 )
                 db.add(new_o)
                 synced_count += 1
+
+        # 1.5. Sync inventory from SQLite to PG
+        try:
+            cursor.execute("SELECT item_name, category, stock_quantity, unit, unit_price, status, is_active, auto_deduct, auto_deduct_trigger, trigger_service, consumption_qty, consumption_unit, package_size, package_unit FROM inventory")
+            offline_inventory = cursor.fetchall()
+            for off_i in offline_inventory:
+                exists_i = db.query(Inventory).filter(Inventory.item_name == off_i[0]).first()
+                i_name, i_cat, i_stock, i_unit, i_price, i_status, i_active, i_auto, i_trigger, i_service, i_cq, i_cu, i_ps, i_pu = off_i
+                
+                i_active_bool = bool(i_active)
+                i_auto_bool = bool(i_auto)
+                
+                if not exists_i:
+                    new_i = Inventory(
+                        item_name=i_name,
+                        category=i_cat,
+                        stock_quantity=i_stock,
+                        unit=i_unit,
+                        unit_price=i_price,
+                        status=i_status,
+                        is_active=i_active_bool,
+                        auto_deduct=i_auto_bool,
+                        auto_deduct_trigger=i_trigger,
+                        trigger_service=i_service,
+                        consumption_qty=i_cq,
+                        consumption_unit=i_cu,
+                        package_size=i_ps,
+                        package_unit=i_pu
+                    )
+                    db.add(new_i)
+                else:
+                    exists_i.category = i_cat
+                    exists_i.stock_quantity = i_stock
+                    exists_i.unit = i_unit
+                    exists_i.unit_price = i_price
+                    exists_i.status = i_status
+                    exists_i.is_active = i_active_bool
+                    exists_i.auto_deduct = i_auto_bool
+                    exists_i.auto_deduct_trigger = i_trigger
+                    exists_i.trigger_service = i_service
+                    exists_i.consumption_qty = i_cq
+                    exists_i.consumption_unit = i_cu
+                    exists_i.package_size = i_ps
+                    exists_i.package_unit = i_pu
+            print("[SYNC] Inventory table sync processed successfully.")
+        except Exception as inv_sync_err:
+            print(f"[SYNC WARNING] Skipping inventory table sync: {inv_sync_err}")
         
         db.commit()
         conn.close()
         
         # Rename file to mark as processed (Defense strategy)
-        os.rename(offline_path, f"./shoelotskey_offline_synced_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db.bak")
+        bak_path = os.path.join(
+            os.path.dirname(offline_path), 
+            f"shoelotskey_offline_synced_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db.bak"
+        )
+        os.rename(offline_path, bak_path)
         
         return {"status": "success", "synced_records": synced_count}
     except Exception as e:
@@ -604,15 +952,66 @@ def sync_backup_to_cloud(db: Session = Depends(get_db), current_user: User = Dep
 def trigger_daily_sales_procedure(db: Session = Depends(get_db)):
     """
     Capstone Defense Route: Manually executes the PostgreSQL Stored Procedure 
-    instead of waiting for the midnight pg_cron job.
+    instead of waiting for the midnight pg_cron job. Falls back to SQLite emulation 
+    if running offline (Hybrid Persistence Bridge).
     """
-    from database import is_sqlite
-    
     if is_sqlite:
-        raise HTTPException(
-            status_code=400, 
-            detail="Cannot execute Stored Procedure on local SQLite fallback. Please connect to Cloud PostgreSQL."
-        )
+        try:
+            # 1. Ensure the caching table exists in SQLite
+            db.execute(text("""
+            CREATE TABLE IF NOT EXISTS daily_analytics_summary (
+                summary_date DATE PRIMARY KEY,
+                total_revenue DECIMAL(10, 2) DEFAULT 0.0,
+                total_job_orders INT DEFAULT 0
+            );
+            """))
+            db.commit()
+            
+            # 2. Calculate target date (yesterday)
+            target_date = (datetime.utcnow() - timedelta(days=1)).date()
+            target_date_str = target_date.strftime("%Y-%m-%d")
+            
+            # 3. Aggregate totals from normalized orders table
+            result = db.execute(text("""
+            SELECT COALESCE(SUM(grand_total), 0.0), COUNT(order_id)
+            FROM orders
+            WHERE DATE(created_at) = :target_date
+            """), {"target_date": target_date_str}).first()
+            
+            calc_revenue = float(result[0]) if result else 0.0
+            calc_orders = int(result[1]) if result else 0
+            
+            # 4. Upsert (Insert or Update) into daily_analytics_summary
+            db.execute(text("""
+            INSERT INTO daily_analytics_summary (summary_date, total_revenue, total_job_orders)
+            VALUES (:target_date, :revenue, :orders)
+            ON CONFLICT (summary_date) 
+            DO UPDATE SET 
+                total_revenue = EXCLUDED.total_revenue,
+                total_job_orders = EXCLUDED.total_job_orders;
+            """), {"target_date": target_date_str, "revenue": calc_revenue, "orders": calc_orders})
+            db.commit()
+            
+            # 5. Verify the result
+            verify_res = db.execute(text(
+                "SELECT summary_date, total_revenue, total_job_orders "
+                "FROM daily_analytics_summary "
+                "ORDER BY summary_date DESC LIMIT 1"
+            )).first()
+            
+            return {
+                "status": "success",
+                "message": "Daily Sales Aggregation (SQLite Emulated Procedure) executed successfully.",
+                "cache_record_created": {
+                    "date": str(verify_res[0]) if verify_res else None,
+                    "total_revenue": float(verify_res[1]) if verify_res else 0.0,
+                    "total_orders": int(verify_res[2]) if verify_res else 0
+                }
+            }
+        except Exception as e:
+            db.rollback()
+            print(f"[SQLITE PROCEDURE ERROR] {e}")
+            raise HTTPException(status_code=500, detail=f"SQLite procedure emulation failed: {str(e)}")
         
     try:
         # Native SQL command to explicitly execute a Procedure in Postgres
@@ -776,7 +1175,7 @@ def send_reset_email(user_email, reset_link):
                 </div>
                 <p style="color: #777; font-size: 11px; text-align: center;">If you didn't request this, you can safely ignore this email.</p>
                 <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
-                <p style="font-size: 11px; color: #999; text-align: center;">Shoelotskey Villamor - Pasay City, Metro Manila</p>
+                <p style="font-size: 11px; color: #999; text-align: center;">Shoelotskey Villamor-Pasay, Metro Manila</p>
             </div>
         """
     }
@@ -801,7 +1200,7 @@ async def forgot_password(request: Request, body: ForgotPasswordRequest, db: Ses
 
     token = str(uuid.uuid4())
     user.reset_token = token
-    user.reset_token_expiry = datetime.now() + timedelta(hours=1)
+    user.reset_token_expiry = datetime.utcnow() + timedelta(hours=1)
     db.commit()
 
     # Dynamic Host Detection
@@ -816,15 +1215,23 @@ async def forgot_password(request: Request, body: ForgotPasswordRequest, db: Ses
 
     status = send_reset_email(user.email, reset_link)
     
+    # Build response data, hiding debug_token in production
+    if ENV == "Production":
+        res_success = {"message": "Reset email sent successfully"}
+        res_fail = {"message": "Password recovery link generated."}
+    else:
+        res_success = {"message": "Reset email sent successfully", "debug_token": token}
+        res_fail = {"message": "Password recovery link generated.", "debug_token": token}
+
     if status == 200:
-        return {"message": "Reset email sent successfully", "debug_token": token}
+        return res_success
     else:
         # For Defense/Localhost: We print the link to the console if Mailgun fails (mock mode)
         print("\n" + "*"*60)
         print(" [DEVELOPER MODE] PASSWORD RESET LINK GENERATED")
         print(f" LINK: {reset_link}")
         print("*"*60 + "\n")
-        return {"message": "Password recovery link generated.", "debug_token": token}
+        return res_fail
 
 @app.get("/api/health")
 def health_check(db: Session = Depends(get_db)):
@@ -851,33 +1258,7 @@ def health_check(db: Session = Depends(get_db)):
     except Exception as e:
         counts["error"] = str(e)
 
-    error_str = "None"
-    try:
-        # Test Order Creation (Dry Run)
-        test_user = db.query(User).first()
-        if not test_user:
-             raise ValueError("CRITICAL: No users found in database.")
-        
-        dummy_order = {
-            "orderNumber": f"HEALTH-{int(datetime.now().timestamp())}",
-            "customerName": "Health Check Test",
-            "contactNumber": "09000000000",
-            "status": "new-order",
-            "priorityLevel": "regular",
-            "grandTotal": 0.0,
-            "items": []
-        }
-        
-        # Manually invoke creation logic
-        new_order = create_order(dummy_order, db, test_user)
-        # Verify it has an ID
-        if not new_order.order_id:
-            raise ValueError("Order created but No ID assigned!")
-        
-        db.rollback()
-    except Exception as e:
-        error_str = f"{type(e).__name__}: {str(e)}\n{traceback.format_exc()}"
-        db.rollback()
+    error_str = "Skipped (Disabled to prevent DB pollution)"
 
     return {
         "status": "ok", 
@@ -902,7 +1283,7 @@ async def reset_password(request: ResetPasswordRequest, db: Session = Depends(ge
         raise HTTPException(status_code=400, detail="Invalid or expired reset token.")
 
     # 2. Check Expiry
-    if user.reset_token_expiry and user.reset_token_expiry < datetime.now():
+    if user.reset_token_expiry and user.reset_token_expiry < datetime.utcnow():
         print(f"[AUTH] Expired token used for {user.username}")
         user.reset_token = None
         user.reset_token_expiry = None
@@ -933,7 +1314,7 @@ async def get_prediction(order_data: Dict[str, Any], db: Session = Depends(get_d
         predicted_dt = predictor.predict_completion(db, order_data)
         return {
             "predicted_date": predicted_dt.isoformat(),
-            "predicted_days": (predicted_dt - datetime.now()).days,
+            "predicted_days": int(round((predicted_dt - datetime.now()).total_seconds() / 86400.0)),
             "status": "success",
             "engine": "Shoelotskey SPE v1.0"
         }
@@ -1320,13 +1701,127 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
             log = StatusLog(order_id=order_id, status_id=db_status.status_id, user_id=current_user.user_id) 
             db.add(log)
             print(f"[EDIT] Status changed for Order {db_order.order_number}: {mapped_status}")
+            
+            # Automated stock consumption trigger
+            try:
+                # Map target trigger keywords
+                target_trigger = None
+                if mapped_status == "on-going":
+                    target_trigger = "on-going"
+                elif mapped_status in ["for-release", "claimed"]:
+                    target_trigger = "for-release"
+                
+                if target_trigger:
+                    # Query active auto-deduct items matching this trigger (supporting new and legacy names)
+                    trigger_names = [target_trigger]
+                    if target_trigger == "on-going":
+                        trigger_names.append("Job Started")
+                    elif target_trigger == "for-release":
+                        trigger_names.append("Shoe Released")
+                        
+                    auto_items = db.query(Inventory).filter(
+                        Inventory.is_active == True,
+                        Inventory.auto_deduct == True,
+                        Inventory.auto_deduct_trigger.in_(trigger_names)
+                    ).all()
+                    
+                    for item in auto_items:
+                        # Check if already deducted for this order to prevent duplicate deductions
+                        existing_log = db.query(InventoryLog).filter(
+                            InventoryLog.item_id == item.item_id,
+                            InventoryLog.order_id == order_id,
+                            InventoryLog.action_type == "deduction"
+                        ).first()
+                        
+                        if existing_log:
+                            print(f"[AUTO-CONSUME] Skipping item '{item.item_name}' for Order {db_order.order_number}: already deducted.")
+                            continue
+                        
+                        # Match trigger service (robust substring matching to handle multiple services)
+                        is_match = False
+                        if not item.trigger_service or item.trigger_service.lower() in ["all", "all services", ""]:
+                            is_match = True
+                        else:
+                            # Retrieve selected services names for this order
+                            svc_names = []
+                            for ord_item in db_order.items:
+                                for svc in ord_item.services:
+                                    svc_names.append(svc.service_name.lower())
+                            
+                            # Split multiple trigger services by comma
+                            trigger_services = [s.strip().lower() for s in item.trigger_service.split(",") if s.strip()]
+                            for t_svc in trigger_services:
+                                for s_name in svc_names:
+                                    if t_svc in s_name or s_name in t_svc:
+                                        is_match = True
+                                        break
+                                if is_match:
+                                    break
+                                    
+                        if is_match:
+                            # Calculate consumption in stock units
+                            qty_consumed = float(item.consumption_qty) if item.consumption_qty else 0.0
+                            deduct_amount = qty_consumed
+                            
+                            if deduct_amount > 0.0:
+                                # Decrement stock quantity
+                                item.stock_quantity -= deduct_amount
+                                
+                                # Update status based on levels (limit based on package size)
+                                limit = item.package_size if (item.package_size and item.package_size > 0.0) else 1.0
+                                if item.stock_quantity <= 0: item.status = "Critical"
+                                elif item.stock_quantity <= limit: item.status = "Low Stock"
+                                else: item.status = "In Stock"
+                                
+                                # Add to order's inventory_used list for frontend tracking
+                                current_used = db_order.inventory_used or []
+                                updated_used = list(current_used)
+                                
+                                # Check if already in the list to avoid duplicate records
+                                found = False
+                                for i_used in updated_used:
+                                    if i_used.get("itemId") == item.item_id:
+                                        i_used["quantity"] = float(i_used.get("quantity", 0.0)) + deduct_amount
+                                        found = True
+                                        break
+                                
+                                if not found:
+                                    # Use package unit if package_size is set, otherwise default unit
+                                    unit_name = item.package_unit if (item.package_size and item.package_size > 0.0) else item.unit
+                                    updated_used.append({
+                                        "itemId": item.item_id,
+                                        "name": item.item_name,
+                                        "quantity": deduct_amount,
+                                        "unit": unit_name or "units"
+                                    })
+                                    
+                                db_order.inventory_used = updated_used
+                                db_order.inventory_applied = True
+                                
+                                # Log movement
+                                consume_log = InventoryLog(
+                                    item_id=item.item_id,
+                                    change_amount=-deduct_amount,
+                                    action_type="deduction",
+                                    order_id=order_id,
+                                    user_id=current_user.user_id
+                                )
+                                db.add(consume_log)
+                                print(f"[AUTO-CONSUME] Deducted {deduct_amount} units of '{item.item_name}' for Order {db_order.order_number}")
+            except Exception as auto_err:
+                print(f"[AUTO-CONSUME ERROR] Failed to run consumption: {auto_err}")
         else:
             print(f"[EDIT] Error: Mapped status '{mapped_status}' not found in Status table.")
 
         if mapped_status == "claimed":
             db_order.claimed_at = datetime.now()
-        elif mapped_status == "for-release":
+        else:
+            db_order.claimed_at = None
+
+        if mapped_status == "for-release":
             db_order.released_at = datetime.now()
+        else:
+            db_order.released_at = None
 
     # 2. Handle Priority Level (ML Input)
     if "priorityLevel" in updates:
@@ -1558,8 +2053,8 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
         raise HTTPException(status_code=500, detail="Database Sync Error")
 
 @app.delete("/api/orders/{order_id}")
-def delete_order(order_id: int, db: Session = Depends(get_db)):
-    """Permanent removal of order (Use with caution)."""
+def delete_order(order_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_role("owner"))):
+    """Permanent removal of order (Use with caution - Owner only)."""
     db_order = db.query(Order).filter(Order.order_id == order_id).first()
     if not db_order:
         raise HTTPException(status_code=404, detail="Order not found")
@@ -1575,11 +2070,11 @@ def delete_order(order_id: int, db: Session = Depends(get_db)):
 @app.get("/api/services", response_model=List[ServiceSchema])
 def get_catalog(db: Session = Depends(get_db)):
     """Returns the available service catalog with real-time pricing, ordered by user preference."""
-    return db.query(Service).order_by(Service.sort_order.asc()).all()
+    return db.query(Service).filter(Service.is_active == True).order_by(Service.sort_order.asc()).all()
 
 @app.post("/api/services", response_model=ServiceSchema)
-def create_service(service_data: dict, db: Session = Depends(get_db)):
-    """Adds a new service to the catalog with category resolution."""
+def create_service(service_data: dict, db: Session = Depends(get_db), current_user: User = Depends(require_role("owner"))):
+    """Adds a new service to the catalog with category resolution (Owner only)."""
     print(f"[CATALOG] Creating new service: {service_data.get('service_name')}")
     
     # Resolve category string to ID
@@ -1609,9 +2104,9 @@ def create_service(service_data: dict, db: Session = Depends(get_db)):
     return db_service
 
 @app.put("/api/services/reorder")
-def reorder_services_bulk(reorder_data: List[dict], db: Session = Depends(get_db)):
+def reorder_services_bulk(reorder_data: List[dict], db: Session = Depends(get_db), current_user: User = Depends(require_role("owner"))):
     """
-    BULK REORDER: Updates sort_order for multiple services in one transaction.
+    BULK REORDER: Updates sort_order for multiple services in one transaction (Owner only).
     Payload: [{"id": 1, "sort_order": 1}, {"id": 2, "sort_order": 2}]
     """
     print(f"[CATALOG] Bulk reordering {len(reorder_data)} services...")
@@ -1628,8 +2123,8 @@ def reorder_services_bulk(reorder_data: List[dict], db: Session = Depends(get_db
         raise HTTPException(status_code=500, detail="Failed to save new order")
 
 @app.put("/api/services/{service_id}", response_model=ServiceSchema)
-def update_service(service_id: int, service_update: dict, db: Session = Depends(get_db)):
-    """Updates an existing service with category string-to-ID resolution."""
+def update_service(service_id: int, service_update: dict, db: Session = Depends(get_db), current_user: User = Depends(require_role("owner"))):
+    """Updates an existing service with category string-to-ID resolution (Owner only)."""
     db_service = db.query(Service).filter(Service.service_id == service_id).first()
     if not db_service:
         raise HTTPException(status_code=404, detail="Service not found")
@@ -1651,8 +2146,8 @@ def update_service(service_id: int, service_update: dict, db: Session = Depends(
     return db_service
 
 @app.delete("/api/services/{service_id}")
-def delete_service(service_id: int, db: Session = Depends(get_db)):
-    """Removes a service from the catalog."""
+def delete_service(service_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_role("owner"))):
+    """Removes a service from the catalog (Owner only)."""
     db_service = db.query(Service).filter(Service.service_id == service_id).first()
     if not db_service:
         raise HTTPException(status_code=404, detail="Service not found")
@@ -1671,14 +2166,43 @@ def get_statuses(db: Session = Depends(get_db)):
 
 @app.get("/api/expenses", response_model=List[ExpenseSchema])
 def get_expenses(db: Session = Depends(get_db)):
-    """Tracks business overhead costs."""
-    return db.query(Expense).all()
+    """Tracks business overhead costs + dynamically includes inventory restock costs as expenses."""
+    from decimal import Decimal
+    # 1. Fetch standard overhead expenses
+    standard_expenses = db.query(Expense).all()
+    
+    # 2. Fetch inventory restock logs
+    restock_logs = db.query(InventoryLog).filter(InventoryLog.action_type == 'restock').all()
+    
+    # 3. Format restock logs as virtual ExpenseSchema objects
+    virtual_expenses = []
+    for log in restock_logs:
+        item = log.inventory_item
+        if not item:
+            continue
+            
+        unit_price = item.unit_price if item.unit_price is not None else Decimal('0.0')
+        cost = Decimal(str(log.change_amount)) * unit_price
+        
+        # Follow the database's "Category || Notes" standard to map correctly in React context
+        description = f"INVENTORY || Restock: {item.item_name} (+{int(log.change_amount)} {item.unit or ''})"
+        
+        virtual_expenses.append({
+            "expense_id": 1000000 + log.log_id,
+            "amount": cost,
+            "description": description,
+            "expense_date": log.created_at,
+            "user_id": log.user_id,
+            "created_at": log.created_at
+        })
+        
+    return list(standard_expenses) + virtual_expenses
 
 @app.post("/api/expenses", response_model=ExpenseSchema)
-def create_expense(expense_data: dict, db: Session = Depends(get_db)):
-    """Logs a new business expense."""
+def create_expense(expense_data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Logs a new business expense (Auth Required)."""
     # Logic: If date is missing, use now. Use first admin user as fallback for user_id.
-    user_id = expense_data.get('user_id', 1)
+    user_id = expense_data.get('user_id', current_user.user_id)
     
     # Map frontend 'date' if provided
     exp_date = expense_data.get('date')
@@ -1708,8 +2232,8 @@ def create_expense(expense_data: dict, db: Session = Depends(get_db)):
     return db_expense
 
 @app.put("/api/expenses/{expense_id}", response_model=ExpenseSchema)
-def update_expense(expense_id: int, expense_data: dict, db: Session = Depends(get_db)):
-    """Updates an existing expense."""
+def update_expense(expense_id: int, expense_data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Updates an existing expense (Auth Required)."""
     db_exp = db.query(Expense).filter(Expense.expense_id == expense_id).first()
     if not db_exp:
         raise HTTPException(status_code=404, detail="Expense not found")
@@ -1741,8 +2265,8 @@ def update_expense(expense_id: int, expense_data: dict, db: Session = Depends(ge
     return db_exp
 
 @app.delete("/api/expenses/{expense_id}")
-def delete_expense(expense_id: int, db: Session = Depends(get_db)):
-    """Permanently deletes an expense record."""
+def delete_expense(expense_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_role("owner"))):
+    """Permanently deletes an expense record (Owner only)."""
     db_exp = db.query(Expense).filter(Expense.expense_id == expense_id).first()
     if not db_exp:
         raise HTTPException(status_code=404, detail="Expense not found")
@@ -1816,14 +2340,24 @@ def get_inventory(db: Session = Depends(get_db), current_user: User = Depends(ge
 @app.post("/api/inventory", response_model=InventorySchema)
 def create_inventory_item(item: InventorySchema, db: Session = Depends(get_db), current_user: User = Depends(require_role(["owner"]))):
     """Admin-only: Add new material to catalog."""
+    limit = item.package_size if (item.package_size and item.package_size > 0.0) else 1.0
+    calculated_status = "Critical" if item.stock_quantity <= 0.0 else ("Low Stock" if item.stock_quantity <= limit else "In Stock")
+    
     new_item = Inventory(
         item_name=item.item_name,
         category=item.category,
         stock_quantity=item.stock_quantity,
         unit=item.unit,
         unit_price=item.unit_price,
-        status=item.status or "In Stock",
-        is_active=item.is_active
+        status=calculated_status,
+        is_active=item.is_active,
+        auto_deduct=item.auto_deduct,
+        auto_deduct_trigger=item.auto_deduct_trigger,
+        trigger_service=item.trigger_service,
+        consumption_qty=item.consumption_qty,
+        consumption_unit=item.consumption_unit,
+        package_size=item.package_size,
+        package_unit=item.package_unit
     )
     db.add(new_item)
     db.commit()
@@ -1840,6 +2374,9 @@ def update_inventory_item(item_id: int, updates: InventoryUpdateSchema, db: Sess
     update_data = updates.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(item, key, value)
+        
+    limit = item.package_size if (item.package_size and item.package_size > 0.0) else 1.0
+    item.status = "Critical" if item.stock_quantity <= 0.0 else ("Low Stock" if item.stock_quantity <= limit else "In Stock")
     
     db.commit()
     db.refresh(item)
@@ -1847,16 +2384,15 @@ def update_inventory_item(item_id: int, updates: InventoryUpdateSchema, db: Sess
 
 @app.delete("/api/inventory/{item_id}")
 def delete_inventory_item(item_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_role(["owner"]))):
-    """Admin-only: Remove item from catalog."""
+    """Admin-only: Soft-delete item from catalog."""
     item = db.query(Inventory).filter(Inventory.item_id == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
     
-    # Soft delete to preserve logs or hard delete? User said "remove", usually means delete.
-    # In a real business system we might soft-delete, but for standard CRUD functionality:
-    db.delete(item)
+    # Soft delete to preserve transaction logs and relational integrity (3NF)
+    item.is_active = False
     db.commit()
-    return {"status": "success", "message": "Item deleted"}
+    return {"status": "success", "message": "Item deactivated"}
 
 @app.post("/api/inventory/adjust")
 def adjust_stock(
@@ -1878,9 +2414,10 @@ def adjust_stock(
     else:
         item.stock_quantity += amount
     
-    # 2. Update status based on levels
-    if item.stock_quantity <= 5: item.status = "Critical"
-    elif item.stock_quantity <= 10: item.status = "Low Stock"
+    # 2. Update status based on levels (limit based on package size)
+    limit = item.package_size if (item.package_size and item.package_size > 0.0) else 1.0
+    if item.stock_quantity <= 0.0: item.status = "Critical"
+    elif item.stock_quantity <= limit: item.status = "Low Stock"
     else: item.status = "In Stock"
 
     # 3. Log the transaction
@@ -1900,8 +2437,10 @@ def adjust_stock(
 # DEFENSE DEBUGGING TOOLS
 # ------------------------------------------
 @app.get("/api/test-crash")
-def test_crash():
-    """Endpoint to simulate a server-side exception for debugging demos."""
+def test_crash(current_user: User = Depends(require_role("owner"))):
+    """Endpoint to simulate a server-side exception for debugging demos (Owner only)."""
+    if ENV == "Production":
+        raise HTTPException(status_code=403, detail="Debug endpoints disabled in production")
     raise ValueError("DEFENSE_SIMULATION: Critical Database Connection Interrupted!")
 
 

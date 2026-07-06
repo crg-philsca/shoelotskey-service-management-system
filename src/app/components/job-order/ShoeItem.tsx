@@ -207,7 +207,7 @@ export const ShoeItem: React.FC<ShoeItemProps> = ({ shoe, index, updateShoe, rem
                                             {addOnServices.filter(addon => {
                                                 const baseServicesArr = shoe.baseService || [];
                                                 const basicCleaningAddOns = ['Unyellowing', 'White Paint', 'Minor Restoration', 'Minor Retouch'];
-                                                const reglueAddOns = ['Add Glue Layer', 'Premium Glue', 'Midsole', 'Undersole'];
+                                                const reglueAddOns = ['Add Glue Layer', 'Premium Glue', 'Midsole', 'Undersole', 'Midsole Full Reglue', 'Undersole Full Reglue', 'Middlesole Glue', 'Undersole Glue', 'Midsole Glue'];
                                                 if (baseServicesArr.includes('Basic Cleaning') && basicCleaningAddOns.includes(addon.name)) return true;
                                                 if (baseServicesArr.some((s: string) => s.toLowerCase().includes('reglue')) && reglueAddOns.includes(addon.name)) return true;
                                                 const colorAddOns = ['2 Colors', '3 Colors'];
@@ -280,11 +280,17 @@ export const ShoeItem: React.FC<ShoeItemProps> = ({ shoe, index, updateShoe, rem
                                                         <SelectValue placeholder="Select Supply" />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        {inventoryData.map((inv: any) => (
-                                                            <SelectItem key={inv.id} value={inv.id?.toString()} className="text-[11px]">
-                                                                {inv.name} ({inv.stock} {inv.unit} left)
-                                                            </SelectItem>
-                                                        ))}
+                                                        {inventoryData.map((inv: any) => {
+                                                            const hasPkg = inv.package_size && inv.package_size > 0;
+                                                            const displayStockLabel = hasPkg 
+                                                                ? `${inv.stock} ${inv.package_unit || inv.unit} (~${(inv.stock / inv.package_size).toFixed(2)} ${inv.unit})`
+                                                                : `${inv.stock} ${inv.unit}`;
+                                                            return (
+                                                                <SelectItem key={inv.id} value={inv.id?.toString()} className="text-[11px]">
+                                                                    {inv.name} ({displayStockLabel} left)
+                                                                </SelectItem>
+                                                            );
+                                                        })}
                                                     </SelectContent>
                                                 </Select>
                                                 <div className="flex items-center gap-1.5 px-2 py-1 bg-gray-50 rounded-lg border border-gray-100">

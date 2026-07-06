@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
 import { format as dateFnsFormat } from 'date-fns';
 import { useLocation } from 'react-router-dom';
 import { cn } from '@/app/components/ui/utils';
@@ -11,6 +10,7 @@ import { Input } from '@/app/components/ui/input';
 import EditOrderModal from '@/app/components/EditOrderModal';
 import StockUpdateModal from '@/app/components/StockUpdateModal';
 import { Label } from '@/app/components/ui/label';
+import { Badge } from '@/app/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import {
   DropdownMenu,
@@ -22,6 +22,7 @@ import { toast } from 'sonner';
 import { useServices } from '@/app/context/ServiceContext';
 import { useOrders } from '@/app/context/OrderContext';
 import { useExpenses } from '@/app/context/ExpenseContext';
+import { useInventory } from '@/app/context/InventoryContext';
 import AddExpenseModal from '@/app/components/AddExpenseModal';
 import ProcessClaimModal from '@/app/components/ProcessClaimModal';
 import {
@@ -48,13 +49,38 @@ import {
   User,
   Phone,
   Clock,
-  Wallet,
   Tag,
   MapPin,
   Truck,
+  AlertTriangle,
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Cell } from 'recharts';
 import type { JobOrder } from '@/app/types';
+import React from 'react';
+
+// [STABILITY] Error Boundary to prevent White Screen on crash
+class DashboardErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error: any}> {
+  constructor(props: {children: React.ReactNode}) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: any) { return { hasError: true, error }; }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-8 bg-red-50 border-2 border-red-200 rounded-2xl text-center space-y-4">
+          <CircleAlert className="h-12 w-12 text-red-600 mx-auto" />
+          <h2 className="text-xl font-black text-red-900 uppercase">Dashboard Engine Halted</h2>
+          <pre className="text-[10px] bg-white p-4 rounded text-left overflow-auto border border-red-100 max-h-40">
+            {this.state.error?.toString()}
+          </pre>
+          <Button onClick={() => window.location.reload()} className="bg-red-600 text-white font-bold uppercase py-2 px-6 rounded-xl">Re-Ignite Engine</Button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 /**
  * INTERFACE: DashboardProps
@@ -67,11 +93,70 @@ interface DashboardProps {
   onSetHeaderActionRight?: (action: ReactNode | null) => void;
 }
 
-export default function Dashboard({ user, onSetHeaderActionRight }: DashboardProps) {
+export default function Dashboard(props: DashboardProps) {
+  return (
+    <DashboardErrorBoundary>
+      <DashboardMain {...props} />
+    </DashboardErrorBoundary>
+  );
+}
+
+// [AESTHETIC] Custom Tooltip for Service Volume Chart
+const ServiceTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+      <div className="bg-white p-4 rounded-xl shadow-2xl border border-gray-100 min-w-[180px] animate-in zoom-in-95 duration-200">
+        <p className="text-sm font-black text-gray-900 mb-2">{data.name}</p>
+        <div className="space-y-1 pb-2 border-b border-gray-50 mb-2">
+           <div className="flex justify-between text-[11px] font-bold">
+             <span className="text-gray-400">Total Orders:</span>
+             <span className="text-gray-900">{data.value}</span>
+           </div>
+           <div className="flex justify-between text-[11px] font-bold">
+             <span className="text-gray-400">Revenue:</span>
+             <span className="text-emerald-600 font-black">{'\u20B1'}{Number(data.sales || 0).toLocaleString()}</span>
+           </div>
+        </div>
+        {data.breakdown && (
+          <div className="space-y-1.5">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 mt-1">Service Breakdown:</p>
+            {Object.entries(data.breakdown).map(([key, val]: any) => (
+              <div key={key} className="flex justify-between text-[10px] font-bold">
+                <span className="text-gray-500">{key}:</span>
+                <span className="text-gray-800">{val}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+  return null;
+};
+
+// [AESTHETIC] Custom Tooltip for Activity Trends
+const TrendTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-white p-4 rounded-xl shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-200">
+        <p className="text-sm font-black text-gray-900 mb-2">{label}</p>
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2 text-[10px] font-black text-[#A78BFA] uppercase">
+            <div className="w-1.5 h-1.5 rounded-full bg-[#A78BFA]" /> Orders Created: {payload[0].value}
+          </div>
+          <div className="flex items-center gap-2 text-[10px] font-black text-[#34D399] uppercase">
+            <div className="w-1.5 h-1.5 rounded-full bg-[#34D399]" /> Orders Released: {payload[1].value}
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
+function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
   const role = user.role;
-  const API_BASE_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '5173'))
-    ? `http://${window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname}:8000/api`
-    : '/api';
 
   const { orders, loading, refreshing, updateOrder } = useOrders();
   const { services } = useServices();
@@ -110,51 +195,79 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
   // Separate Range-Filtered Orders (for Analytics) from Global Orders (for Status Cards)
   const analyticsOrders = useMemo(() => {
     const now = new Date();
-    const isWithinRange = (createdAt: Date) => {
-      const diffDays = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
+    // Safety: check both Today and Yesterday for 'Daily' to catch timezone edge cases
+    const todayStr = dateFnsFormat(now, 'yyyy-MM-dd');
+    
+    const isWithinRange = (order: JobOrder) => {
+      if (!order) return false;
+      const createdAt = new Date(order.createdAt || 0);
+      const transactionDate = new Date(order.transactionDate || order.createdAt || 0);
+      
+      const isDateMatch = (d: Date) => {
+        if (isNaN(d.getTime())) return false;
+        const orderDateStr = dateFnsFormat(d, 'yyyy-MM-dd');
+        const diffHours = (now.getTime() - d.getTime()) / (1000 * 60 * 60);
+        // Ultra-inclusive: Today (local) OR within last 48 hours to bridge any server-db-browser timezone gaps
+        return orderDateStr === todayStr || diffHours < 48;
+      };
+
       if (profitRange === 'Daily') {
-        // Use a 24-hour window instead of strict midnight to fix Timezone/UTC issues
-        return diffDays <= 1.1; 
+        return isDateMatch(transactionDate) || isDateMatch(createdAt);
       }
-      if (profitRange === 'Weekly') return diffDays < 7;
-      if (profitRange === 'Monthly') return diffDays < 30;
-      if (profitRange === 'Quarterly') return diffDays < 90;
-      return diffDays < 365; // Annually
+      
+      const compareDate = isNaN(transactionDate.getTime()) ? createdAt : transactionDate;
+      const diffDays = (now.getTime() - compareDate.getTime()) / (1000 * 60 * 60 * 24);
+      if (profitRange === 'Weekly') return diffDays <= 7.5;
+      if (profitRange === 'Monthly') return diffDays <= 31.5;
+      if (profitRange === 'Quarterly') return diffDays <= 93;
+      return diffDays <= 367; // Annually
     };
 
-    return orders.filter(order => isWithinRange(new Date(order.createdAt)));
+    return (orders || []).filter(order => isWithinRange(order));
   }, [orders, profitRange]);
 
-  // Use the raw 'orders' for Status Summary cards so nothing is hidden by the date filter
+  // Use the range-filtered 'analyticsOrders' for Status Summary cards to respect date filters
   const statusCounts = useMemo(() => {
+    const all = analyticsOrders || [];
     return {
-      new: analyticsOrders.filter(o => o.status === 'new-order').length,
-      ongoing: analyticsOrders.filter(o => o.status === 'on-going').length,
-      forRelease: analyticsOrders.filter(o => o.status === 'for-release').length,
-      claimed: analyticsOrders.filter(o => o.status === 'claimed').length,
+      new: all.filter(o => o.status === 'new-order').length,
+      ongoing: all.filter(o => o.status === 'on-going').length,
+      forRelease: all.filter(o => o.status === 'for-release').length,
+      claimed: all.filter(o => o.status === 'claimed').length,
     };
   }, [analyticsOrders]);
 
   /**
    * MEMO: overviewOrders
-   * Filtered list of orders based on the current drill-down status (e.g., just 'New Orders').
    */
   const overviewOrders = useMemo(() => {
-    // Detailed list view and Summary metrics now follow the Profit Range filter
-    if (!selectedStatus) return analyticsOrders;
-    return analyticsOrders.filter(order => order.status === selectedStatus);
-  }, [analyticsOrders, selectedStatus]);
+    // [CRITICAL FIX] If a specific status is selected, show ALL orders for that status
+    // so we don't 'lose' work-in-progress tasks due to the date filter.
+    const source = selectedStatus ? (orders || []) : (analyticsOrders || []);
+    if (!selectedStatus) return source;
+    return source.filter(order => order.status === selectedStatus);
+  }, [orders, analyticsOrders, selectedStatus]);
 
   const totalSales = useMemo(() => {
-    return analyticsOrders.reduce((sum, order) => sum + (order.amountReceived || 0), 0);
+    return (analyticsOrders || []).reduce((sum, order) => sum + Math.min(order?.grandTotal || 0, order?.amountReceived || 0), 0);
   }, [analyticsOrders]);
 
   const totalPendingPayments = useMemo(() => {
-    return analyticsOrders.reduce((sum, order) => {
-      if (order.paymentStatus === 'fully-paid') return sum;
-      return sum + (order.grandTotal - (order.amountReceived || 0));
+    return (analyticsOrders || []).reduce((sum, order) => {
+      if (order?.paymentStatus === 'fully-paid') return sum;
+      return sum + ((order?.grandTotal || 0) - (order?.amountReceived || 0));
     }, 0);
   }, [analyticsOrders]);
+
+  const { inventoryData } = useInventory();
+  
+  const lowStockItems = useMemo(() => {
+    // [STABILITY] Trigger alert if status is not 'In Stock' OR if quantity is critical (<= package_size or 1)
+    return (inventoryData || []).filter(item => {
+      const limit = (item.package_size && item.package_size > 0) ? item.package_size : 1;
+      return item.isActive && (item.status !== 'In Stock' || Number(item.stock) <= limit);
+    });
+  }, [inventoryData]);
 
   const filteredExpenses = useMemo(() => {
     const now = new Date();
@@ -209,37 +322,42 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
       { name: 'Color Renewal', value: 0, sales: 0 },
     ];
 
-    analyticsOrders.forEach(order => {
-      const items = order.items?.length ? order.items : [{
+    (analyticsOrders || []).forEach(order => {
+      if (!order) return;
+      const items = (order.items && order.items.length) ? order.items : [{
         baseService: Array.isArray(order.baseService) ? order.baseService : [order.baseService],
         addOns: order.addOns || []
       }];
   
       items.forEach(item => {
+        if (!item) return;
         const itemBaseServices = Array.isArray(item.baseService) ? item.baseService : [item.baseService];
-        const primaryBase = (itemBaseServices[0] || 'Other').toLowerCase();
-        const salesShare = (order.grandTotal / (items.length || 1));
+        const salesShare = ((order.grandTotal || 0) / (items.length || 1));
+        const serviceCount = itemBaseServices.length || 1;
         
-        // Dynamic Grouping Logic
-        if (primaryBase.includes('full reglue')) {
-          result[2].value += 1;
-          result[2].sales += salesShare;
-        } else if (primaryBase.includes('minor reglue')) {
-          result[1].value += 1;
-          result[1].sales += salesShare;
-        } else if (primaryBase.includes('color renewal') || primaryBase.includes('color') || primaryBase.includes('renewal')) {
-          result[3].value += 1;
-          result[3].sales += salesShare;
-        } else if (primaryBase.includes('cleaning') || primaryBase.includes('unyellowing') || primaryBase.includes('retouch') || primaryBase.includes('restoration') || primaryBase.includes('basic')) {
-          result[0].value += 1;
-          result[0].sales += salesShare;
+        itemBaseServices.forEach(baseService => {
+          const serviceNameLower = String(baseService || '').toLowerCase();
+          if (!serviceNameLower) return;
           
-          // Breakdown logic maintenance
-          if (primaryBase.includes('unyellowing')) basicCleaningBreakdown['Unyellowing'] += 1;
-          else if (primaryBase.includes('retouch')) basicCleaningBreakdown['Minor Retouch'] += 1;
-          else if (primaryBase.includes('restoration')) basicCleaningBreakdown['Minor Restoration'] += 1;
-          else basicCleaningBreakdown['Basic Cleaning'] += 1;
-        }
+          if (serviceNameLower.includes('full reglue')) {
+            result[2].value += 1;
+            result[2].sales += salesShare / serviceCount;
+          } else if (serviceNameLower.includes('minor reglue')) {
+            result[1].value += 1;
+            result[1].sales += salesShare / serviceCount;
+          } else if (serviceNameLower.includes('color renewal') || serviceNameLower.includes('color') || serviceNameLower.includes('renewal')) {
+            result[3].value += 1;
+            result[3].sales += salesShare / serviceCount;
+          } else if (serviceNameLower.includes('cleaning') || serviceNameLower.includes('unyellowing') || serviceNameLower.includes('retouch') || serviceNameLower.includes('restoration') || serviceNameLower.includes('basic')) {
+            result[0].value += 1;
+            result[0].sales += salesShare / serviceCount;
+            
+            if (serviceNameLower.includes('unyellowing')) basicCleaningBreakdown['Unyellowing'] += 1;
+            else if (serviceNameLower.includes('retouch')) basicCleaningBreakdown['Minor Retouch'] += 1;
+            else if (serviceNameLower.includes('restoration')) basicCleaningBreakdown['Minor Restoration'] += 1;
+            else basicCleaningBreakdown['Basic Cleaning'] += 1;
+          }
+        });
       });
     });
   
@@ -253,6 +371,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
    */
   const timeSeriesData = useMemo(() => {
     const now = new Date();
+    const source = analyticsOrders || [];
 
     if (profitRange === 'Daily') {
       const hours = Array.from({ length: 24 }, (_, i) => i);
@@ -265,18 +384,19 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
 
           return {
             period: `${hour}:00`,
-            newOrders: analyticsOrders.filter(order => {
+            newOrders: source.filter(order => {
+              if (!order?.createdAt) return false;
               const orderTime = new Date(order.createdAt);
               return orderTime >= periodStart && orderTime < periodEnd;
             }).length,
-            releasedOrders: analyticsOrders.filter(order => {
-              if (!order.actualCompletionDate) return false;
+            releasedOrders: source.filter(order => {
+              if (!order?.actualCompletionDate) return false;
               const releaseTime = new Date(order.actualCompletionDate);
               return releaseTime >= periodStart && releaseTime < periodEnd;
             }).length,
           };
         })
-        .filter((_, i) => i >= 9 && i <= 21);
+        .filter((_, i) => i >= 8 && i <= 21);
     }
 
     if (profitRange === 'Weekly') {
@@ -290,12 +410,13 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
 
         return {
           period: date.toLocaleDateString('en-US', { weekday: 'short' }),
-          newOrders: analyticsOrders.filter(order => {
+          newOrders: source.filter(order => {
+            if (!order?.createdAt) return false;
             const orderTime = new Date(order.createdAt);
             return orderTime >= dayStart && orderTime <= dayEnd;
           }).length,
-          releasedOrders: analyticsOrders.filter(order => {
-            if (!order.actualCompletionDate) return false;
+          releasedOrders: source.filter(order => {
+            if (!order?.actualCompletionDate) return false;
             const releaseTime = new Date(order.actualCompletionDate);
             return releaseTime >= dayStart && releaseTime <= dayEnd;
           }).length,
@@ -303,75 +424,35 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
       });
     }
 
-    if (profitRange === 'Monthly') {
-      return Array.from({ length: 30 }, (_, i) => {
+    // Monthly/Quarterly/Annually fallbacks
+    const getSafeTimeSeries = (length: number, dayOffset: number, labelFn: (d: Date, i: number) => string) => {
+      return Array.from({ length }, (_, i) => {
         const date = new Date(now);
-        date.setDate(date.getDate() - (29 - i));
-        const dayStart = new Date(date);
-        dayStart.setHours(0, 0, 0, 0);
-        const dayEnd = new Date(date);
-        dayEnd.setHours(23, 59, 59, 999);
-
+        date.setDate(date.getDate() - (dayOffset - i));
+        const start = new Date(date); start.setHours(0,0,0,0);
+        const end = new Date(date); end.setHours(23,59,59,999);
         return {
-          period: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-          newOrders: analyticsOrders.filter(order => {
-            const orderTime = new Date(order.createdAt);
-            return orderTime >= dayStart && orderTime <= dayEnd;
-          }).length,
-          releasedOrders: analyticsOrders.filter(order => {
-            if (!order.actualCompletionDate) return false;
-            const releaseTime = new Date(order.actualCompletionDate);
-            return releaseTime >= dayStart && releaseTime <= dayEnd;
-          }).length,
+          period: labelFn(date, i),
+          newOrders: source.filter(o => o?.createdAt && new Date(o.createdAt) >= start && new Date(o.createdAt) <= end).length,
+          releasedOrders: source.filter(o => o?.actualCompletionDate && new Date(o.actualCompletionDate) >= start && new Date(o.actualCompletionDate) <= end).length,
         };
       });
-    }
+    };
 
-    if (profitRange === 'Quarterly') {
-      return Array.from({ length: 12 }, (_, i) => {
-        const weekStart = new Date(now);
-        weekStart.setDate(weekStart.getDate() - (11 - i) * 7);
-        weekStart.setHours(0, 0, 0, 0);
-        const weekEnd = new Date(weekStart);
-        weekEnd.setDate(weekEnd.getDate() + 6);
-        weekEnd.setHours(23, 59, 59, 999);
-
-        return {
-          period: `Week ${i + 1}`,
-          newOrders: analyticsOrders.filter(order => {
-            const orderTime = new Date(order.createdAt);
-            return orderTime >= weekStart && orderTime <= weekEnd;
-          }).length,
-          releasedOrders: analyticsOrders.filter(order => {
-            if (!order.actualCompletionDate) return false;
-            const releaseTime = new Date(order.actualCompletionDate);
-            return releaseTime >= weekStart && releaseTime <= weekEnd;
-          }).length,
-        };
-      });
-    }
+    if (profitRange === 'Monthly') return getSafeTimeSeries(30, 29, (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+    if (profitRange === 'Quarterly') return getSafeTimeSeries(12, 84, (_, i) => `Wk ${i+1}`);
 
     return Array.from({ length: 12 }, (_, i) => {
-      const monthStart = new Date(now);
-      monthStart.setMonth(monthStart.getMonth() - (11 - i));
-      monthStart.setDate(1);
-      monthStart.setHours(0, 0, 0, 0);
-      const monthEnd = new Date(monthStart);
-      monthEnd.setMonth(monthEnd.getMonth() + 1);
-      monthEnd.setDate(0);
-      monthEnd.setHours(23, 59, 59, 999);
-
+      const ms = new Date(now);
+      ms.setMonth(ms.getMonth() - (11 - i));
+      ms.setDate(1); ms.setHours(0,0,0,0);
+      const me = new Date(ms);
+      me.setMonth(me.getMonth() + 1);
+      me.setDate(0); me.setHours(23,59,59,999);
       return {
-        period: monthStart.toLocaleDateString('en-US', { month: 'short' }),
-        newOrders: analyticsOrders.filter(order => {
-          const orderTime = new Date(order.createdAt);
-          return orderTime >= monthStart && orderTime <= monthEnd;
-        }).length,
-        releasedOrders: analyticsOrders.filter(order => {
-          if (!order.actualCompletionDate) return false;
-          const releaseTime = new Date(order.actualCompletionDate);
-          return releaseTime >= monthStart && releaseTime <= monthEnd;
-        }).length,
+        period: ms.toLocaleDateString('en-US', { month: 'short' }),
+        newOrders: source.filter(o => o?.createdAt && new Date(o.createdAt) >= ms && new Date(o.createdAt) <= me).length,
+        releasedOrders: source.filter(o => o?.actualCompletionDate && new Date(o.actualCompletionDate) >= ms && new Date(o.actualCompletionDate) <= me).length,
       };
     });
   }, [analyticsOrders, profitRange]);
@@ -450,8 +531,8 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
   }
 
   return (
-    <>
-      <div className="space-y-6 animate-in fade-in duration-700">
+    <div className="dashboard-root-container min-h-screen bg-gray-50/30">
+      <div className="space-y-6 animate-in fade-in duration-700 p-4 sm:p-6 lg:p-8">
         <div className="space-y-4">
           {refreshing && (
             <div className="flex items-center gap-2 px-1 mb-2">
@@ -528,14 +609,6 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
             <Card>
               <CardHeader className="pt-5 pb-0 mb-0 relative group">
                 <CardTitle className="text-center text-base font-bold text-gray-900 uppercase mb-0 pb-0 tracking-tight">Overview Summary</CardTitle>
-                <button 
-                  onClick={async () => {
-                    try { await axios.get(`${API_BASE_URL}/test-crash`); } catch(e) { /* Let global handler handle it */ }
-                  }}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity absolute top-2 right-2 text-[10px] text-red-400 font-mono border border-red-200 px-1 rounded"
-                >
-                  SIMULATE_CRASH
-                </button>
               </CardHeader>
               <CardContent className="pt-0 pb-0 mb-0 -mt-5">
                 <div className={`grid gap-2 ${role === 'owner' ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4' : 'grid-cols-1 md:grid-cols-2'}`}>
@@ -599,16 +672,11 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                   <CardTitle className="text-center text-[15px] font-black text-gray-900 uppercase tracking-[0.1em] leading-tight p-0 m-0">
                     {(() => {
                       switch (selectedStatus) {
-                        case 'new-order':
-                          return 'NEW ORDER';
-                        case 'on-going':
-                          return 'ON-GOING';
-                        case 'for-release':
-                          return 'FOR RELEASE';
-                        case 'claimed':
-                          return 'CLAIMED';
-                        default:
-                          return 'STATUS';
+                        case 'new-order': return 'NEW ORDER';
+                        case 'on-going': return 'ON-GOING';
+                        case 'for-release': return 'FOR RELEASE';
+                        case 'claimed': return 'CLAIMED';
+                        default: return 'STATUS';
                       }
                     })()}
                   </CardTitle>
@@ -757,62 +825,55 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                 {/* Orders Table */}
                 <div>
                   {(() => {
-                    let filtered = analyticsOrders.filter(order => order.status === selectedStatus);
+                    let filtered = (analyticsOrders || []).filter(order => order?.status === selectedStatus);
 
                     if (filterService !== 'all') {
-                      filtered = filtered.filter(order => order.baseService.includes(filterService));
+                      filtered = filtered.filter(order => (order?.baseService || []).includes(filterService));
                     }
 
-                    // Filter by priority
                     if (filterPriority !== 'all') {
-                      filtered = filtered.filter(order => order.priorityLevel === filterPriority);
+                      filtered = filtered.filter(order => order?.priorityLevel === filterPriority);
                     }
 
-                    // Filter by date range
                     if (startDate) {
                       const start = new Date(startDate);
-                      filtered = filtered.filter(order => new Date(order.createdAt) >= start);
+                      filtered = filtered.filter(order => order?.createdAt && new Date(order.createdAt) >= start);
                     }
                     if (endDate) {
                       const end = new Date(endDate);
                       end.setHours(23, 59, 59, 999);
-                      filtered = filtered.filter(order => new Date(order.createdAt) <= end);
+                      filtered = filtered.filter(order => order?.createdAt && new Date(order.createdAt) <= end);
                     }
 
-                    // Filter by search query
                     if (searchQuery) {
                       const query = searchQuery.toLowerCase();
                       filtered = filtered.filter(order =>
-                        order.customerName.toLowerCase().includes(query) ||
-                        order.orderNumber.toLowerCase().includes(query)
+                        (order?.customerName || '').toLowerCase().includes(query) ||
+                        (order?.orderNumber || '').toLowerCase().includes(query)
                       );
                     }
 
-                    /**
-                     * SORTING LOGIC:
-                     * 1. Status Recency: Orders with the most recent status update appear first.
-                     * 2. Priority: If update times match, Rush/Premium orders take precedence.
-                     * 3. Order Number: Final fallback to descending Order Number sequence.
-                     */
                     filtered.sort((a, b) => {
-                      const lastStatusTimeA = a.statusHistory?.length ? new Date(a.statusHistory[a.statusHistory.length - 1].timestamp).getTime() : 0;
-                      const timeA = lastStatusTimeA || new Date(a.updatedAt || a.createdAt).getTime();
-
-                      const lastStatusTimeB = b.statusHistory?.length ? new Date(b.statusHistory[b.statusHistory.length - 1].timestamp).getTime() : 0;
-                      const timeB = lastStatusTimeB || new Date(b.updatedAt || b.createdAt).getTime();
+                      const getTS = (ord: any) => {
+                         if (!ord?.statusHistory?.length) return new Date(ord?.updatedAt || ord?.createdAt || 0).getTime();
+                         const last = ord.statusHistory[ord.statusHistory.length - 1];
+                         return new Date(last?.timestamp || 0).getTime();
+                      };
+                      
+                      const timeA = getTS(a);
+                      const timeB = getTS(b);
 
                       const validA = !isNaN(timeA) ? timeA : 0;
                       const validB = !isNaN(timeB) ? timeB : 0;
 
                       if (validA !== validB) return validB - validA;
 
-                      // Priority Level fallback (Rush first)
                       const priorityOrder = { rush: 0, premium: 1, regular: 2 };
-                      const priorityA = priorityOrder[a.priorityLevel as keyof typeof priorityOrder] ?? 3;
-                      const priorityB = priorityOrder[b.priorityLevel as keyof typeof priorityOrder] ?? 3;
+                      const priorityA = priorityOrder[a?.priorityLevel as keyof typeof priorityOrder] ?? 3;
+                      const priorityB = priorityOrder[b?.priorityLevel as keyof typeof priorityOrder] ?? 3;
                       if (priorityA !== priorityB) return priorityA - priorityB;
 
-                      return b.orderNumber.localeCompare(a.orderNumber);
+                      return (b?.orderNumber || '').localeCompare(a?.orderNumber || '');
                     });
 
                     const totalPages = Math.ceil(filtered.length / itemsPerPage) || 1;
@@ -924,7 +985,6 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                                               Edit Order Detail
                                             </DropdownMenuItem>
                                           )}
-
                                           {order.status === 'on-going' && (
                                             <DropdownMenuItem onClick={(e) => {
                                               e.stopPropagation();
@@ -935,7 +995,6 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                                               Update Stock Inventory
                                             </DropdownMenuItem>
                                           )}
-  
                                           {order.status !== 'new-order' && (
                                             <DropdownMenuItem onClick={(e) => {
                                               e.stopPropagation();
@@ -943,7 +1002,6 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                                                 order.status === 'on-going' ? 'new-order' :
                                                   order.status === 'for-release' ? 'on-going' :
                                                     order.status === 'claimed' ? 'for-release' : null;
-  
                                               if (prevStatus) {
                                                 updateOrder(order.id, {
                                                   status: prevStatus as any,
@@ -964,13 +1022,10 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                                                 order.status === 'for-release' && "text-blue-500",
                                                 order.status === 'claimed' && "text-orange-500"
                                               )} />
-                                              {order.status === 'on-going' ? 'Undo to New Order' :
-                                                order.status === 'for-release' ? 'Undo to On-Going' :
-                                                  'Undo to For Release'}
+                                              {order.status === 'on-going' ? 'Undo to New Order' : order.status === 'for-release' ? 'Undo to On-Going' : 'Undo to For Release'}
                                             </DropdownMenuItem>
                                           )}
-  
-                                          {selectedStatus === 'new-order' && (
+                                          {order.status === 'new-order' && (
                                             <DropdownMenuItem onClick={(e) => {
                                               e.stopPropagation();
                                               updateOrder(order.id, { status: 'on-going', updatedAt: new Date() }, user.username);
@@ -980,7 +1035,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                                               Move to On-Going
                                             </DropdownMenuItem>
                                           )}
-                                          {selectedStatus === 'on-going' && (
+                                          {order.status === 'on-going' && (
                                             <DropdownMenuItem onClick={(e) => {
                                               e.stopPropagation();
                                               updateOrder(order.id, { status: 'for-release', updatedAt: new Date() }, user.username);
@@ -990,7 +1045,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                                               Move to For Release
                                             </DropdownMenuItem>
                                           )}
-                                          {selectedStatus === 'for-release' && (
+                                          {order.status === 'for-release' && (
                                             <DropdownMenuItem onClick={(e) => {
                                               e.stopPropagation();
                                               setProcessClaimOrder(order);
@@ -1009,8 +1064,6 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                           </table>
                         </div>
 
-
-                        {/* Pagination */}
                         <div className="mt-2 flex items-center justify-between pt-1.5 pb-1 border-t border-gray-50 px-3">
                           <div className="text-[11px] text-gray-500 font-bold uppercase tracking-wider">
                             PAGE {currentPage} OF {totalPages}
@@ -1027,7 +1080,6 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                             >
                               <ChevronLeft className="h-4 w-4" />
                             </Button>
-
                             <div className="max-w-[140px] md:max-w-[300px] overflow-x-auto no-scrollbar py-0.5 px-0.5 flex items-center gap-1">
                               {Array.from({ length: totalPages }, (_, i) => {
                                 const pageNum = i + 1;
@@ -1048,7 +1100,6 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                                 );
                               })}
                             </div>
-
                             <Button
                               variant="outline"
                               onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
@@ -1071,10 +1122,7 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
           )}
 
           {/* Order Details Modal */}
-          <Dialog open={!!selectedOrder && !isEditing && !isUpdatingStock} onOpenChange={(open) => {
-            if (!open) setSelectedOrder(null);
-          }}
-          >
+          <Dialog open={!!selectedOrder && !isEditing && !isUpdatingStock} onOpenChange={(open) => { if (!open) setSelectedOrder(null); }}>
             <DialogContent className="max-w-md bg-white">
               <DialogHeader className="border-b border-gray-100 pb-4">
                 <DialogTitle className="text-xl font-bold flex items-center justify-center gap-2">
@@ -1088,10 +1136,9 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                   {/* Customer Section */}
                   <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-3">
                     <div className="flex items-center gap-2 mb-2">
-                      <User size={16} className="text-red-500" />
-                      <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Customer Details</h4>
+                       <User size={16} className="text-red-500" />
+                       <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Customer Details</h4>
                     </div>
-
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Customer Name</Label>
@@ -1099,52 +1146,40 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
                       </div>
                       <div>
                         <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Contact Number</Label>
-                        <div className="flex items-center gap-2">
-                          <Phone size={12} className="text-gray-400" />
-                          <p className="text-sm font-bold text-gray-800">{selectedOrder?.contactNumber || '-'}</p>
-                        </div>
+                        <div className="flex items-center gap-2"><Phone size={12} className="text-gray-400" /><p className="text-sm font-bold text-gray-800">{selectedOrder?.contactNumber || '-'}</p></div>
                       </div>
                     </div>
-
                     <div className="grid grid-cols-2 gap-4 pt-2 border-t border-gray-200/50">
                       <div>
                         <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Order Date</Label>
-                        <div className="flex items-center gap-2">
-                          <CalendarIcon size={12} className="text-gray-400" />
+                        <div className="flex items-center gap-2"><CalendarIcon size={12} className="text-gray-400" />
                           <p className="text-sm font-bold text-gray-800">
                             {(() => {
-                              const d = new Date(selectedOrder?.transactionDate || selectedOrder?.createdAt || new Date());
+                              const d = new Date(selectedOrder?.transactionDate as any || selectedOrder?.createdAt as any || 0);
                               return isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy HH:mm');
                             })()}
                           </p>
                         </div>
                       </div>
                       <div>
-                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Release Date</Label>
-                        <div className="flex items-center gap-2">
-                          <Clock size={12} className="text-gray-400" />
+                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Predicted Release</Label>
+                        <div className="flex items-center gap-2"><Clock size={12} className="text-gray-400" />
                           <p className="text-sm font-bold text-gray-800">
                             {(() => {
                               if (!selectedOrder?.predictedCompletionDate) return '-';
-                              const d = new Date(selectedOrder.predictedCompletionDate);
+                              const d = new Date(selectedOrder.predictedCompletionDate as any);
                               return isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy');
                             })()}
-                            {selectedOrder?.status && ['for-release', 'claimed'].includes(selectedOrder.status) && selectedOrder?.releaseTime && (
-                              <span className="text-xs text-gray-500 ml-1 font-normal">
-                                @ {selectedOrder.releaseTime}
-                              </span>
-                            )}
                           </p>
                         </div>
                       </div>
                       <div>
                         <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Actual Claim Date</Label>
-                        <div className="flex items-center gap-2">
-                          <ClipboardCheck size={12} className="text-green-500" />
+                        <div className="flex items-center gap-2"><ClipboardCheck size={12} className="text-green-500" />
                           <p className="text-sm font-bold text-green-700">
                             {(() => {
                               if (!selectedOrder?.actualCompletionDate) return '-';
-                              const d = new Date(selectedOrder.actualCompletionDate || "");
+                              const d = new Date(selectedOrder.actualCompletionDate as any);
                               return isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy HH:mm');
                             })()}
                           </p>
@@ -1155,451 +1190,212 @@ export default function Dashboard({ user, onSetHeaderActionRight }: DashboardPro
 
                   {/* Shipping Preference */}
                   <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Truck size={16} className="text-red-500" />
-                      <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Shipping Details</h4>
-                    </div>
-
+                    <div className="flex items-center gap-2 mb-2"><Truck size={16} className="text-red-500" /><h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Shipping Details</h4></div>
                     <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Preference</Label>
-                        <p className="text-sm font-bold text-gray-800 uppercase">{selectedOrder?.shippingPreference || 'Pickup'}</p>
-                      </div>
+                      <div><Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Preference</Label><p className="text-sm font-bold text-gray-800 uppercase">{selectedOrder?.shippingPreference || 'Pickup'}</p></div>
                       {selectedOrder?.shippingPreference === 'delivery' && selectedOrder?.deliveryCourier && (
-                        <div>
-                          <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Courier</Label>
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-bold text-gray-800">{selectedOrder.deliveryCourier}</p>
-                          </div>
-                        </div>
+                        <div><Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Courier</Label><p className="text-sm font-bold text-gray-800">{selectedOrder.deliveryCourier}</p></div>
                       )}
                     </div>
-
                     {selectedOrder?.shippingPreference === 'delivery' && (
                       <div className="pt-2 border-t border-gray-200/50">
-                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Full Delivery Address</Label>
-                        <div className="flex items-start gap-2">
-                          <MapPin size={12} className="text-gray-400 mt-0.5" />
-                          <p className="text-sm font-medium text-gray-600 leading-snug">{selectedOrder?.deliveryAddress || 'No address provided'}</p>
-                        </div>
+                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Address</Label>
+                        <div className="flex items-start gap-2"><MapPin size={12} className="text-gray-400 mt-0.5" /><p className="text-sm font-medium text-gray-600">{selectedOrder?.deliveryAddress || 'No address provided'}</p></div>
                       </div>
                     )}
                   </div>
 
-                  {/* Items Loop */}
+                  {/* Items loop */}
                   <div className="space-y-4">
                     {((selectedOrder?.items?.length ? selectedOrder.items : [selectedOrder]) || []).map((item: any, index: number) => (
                       <div key={index} className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-3">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Tag size={16} className="text-red-500" />
-                          <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">
-                            {(selectedOrder?.items?.length || 0) > 1 ? `Item #${index + 1} Details` : 'Shoe & Service Details'}
-                          </h4>
-                        </div>
-
-                        {/* Shoe Details */}
+                        <div className="flex items-center gap-2 mb-2"><Tag size={16} className="text-red-500" /><h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Item #{index + 1}</h4></div>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                          <div>
-                            <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Brand</Label>
-                            <p className="text-sm font-bold text-gray-800">{item?.brand || '-'}</p>
-                          </div>
-                          <div>
-                            <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Model</Label>
-                            <p className="text-sm font-bold text-gray-800">{item?.shoeModel || '-'}</p>
-                          </div>
-                          <div>
-                            <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Material</Label>
-                            <p className="text-sm font-bold text-gray-800">{item?.shoeMaterial || '-'}</p>
-                          </div>
-                          <div>
-                            <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Quantity</Label>
-                            <p className="text-sm font-bold text-gray-800">{item?.quantity || 1} {(item?.quantity || 1) === 1 ? 'Pair' : 'Pairs'}</p>
-                          </div>
+                          <div><Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Brand</Label><p className="text-sm font-bold text-gray-800">{item?.brand || '-'}</p></div>
+                          <div><Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Model</Label><p className="text-sm font-bold text-gray-800">{item?.shoeModel || '-'}</p></div>
+                          <div><Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Material</Label><p className="text-sm font-bold text-gray-800">{item?.shoeMaterial || '-'}</p></div>
+                          <div><Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Qty</Label><p className="text-sm font-bold text-gray-800">{item?.quantity || 1}</p></div>
                         </div>
-
-                        {/* Shoe Condition */}
                         <div className="pt-2 border-t border-gray-200/50">
-                          <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">Shoe Condition</Label>
-                          <div className="flex flex-wrap gap-1.5">
-                            {Object.entries(item?.condition || {}).map(([key, value]) => {
-                              if (key === 'others' && value) return <span key={key} className="px-2 py-1 bg-white border border-gray-200 rounded-md text-[10px] font-bold text-gray-600 shadow-sm">Note: {String(value)}</span>;
-                              if (value === true) {
-                                const labels: Record<string, string> = {
-                                  scratches: 'Scratches',
-                                  yellowing: 'Yellowing',
-                                  ripsHoles: 'Rips/Holes',
-                                  deepStains: 'Deep Stains',
-                                  soleSeparation: 'Sole Separation',
-                                  wornOut: 'Faded/Worn'
-                                };
-                                const label = labels[key] || key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-                                return <span key={key} className="px-2 py-1 bg-red-50 border border-red-100 rounded-md text-[10px] font-bold text-red-600">{label}</span>;
-                              }
-                              return null;
-                            })}
-                            {(!item?.condition || Object.values(item.condition).every(v => !v)) && <p className="text-xs text-slate-400 italic">No conditions applied</p>}
-                          </div>
-                        </div>
-
-                        {/* Service Details */}
-                        <div className="pt-2 border-t border-gray-200/50">
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Base Service</Label>
-                              <p className="text-sm font-bold text-gray-800">
-                                {Array.isArray(item?.baseService)
-                                  ? item.baseService.map((s: string) => String(s || '').replace(' (with basic cleaning)', '')).join(', ')
-                                  : String(item?.baseService || '-').replace(' (with basic cleaning)', '')}
-                              </p>
-                            </div>
-
-                            {item?.addOns && item.addOns.length > 0 && (
-                              <div>
-                                <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Add-ons</Label>
-                                <div className="space-y-1">
-                                  {item.addOns.map((addon: any, idx: number) => (
-                                    <div key={idx} className="flex items-center justify-between text-sm">
-                                      <span className="font-medium text-gray-700">• {addon?.name || 'Unknown Addon'}</span>
-                                      <span className="text-gray-500 text-xs font-bold">x{addon?.quantity || 1}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
+                          <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">Base Service</Label>
+                          <p className="text-sm font-bold text-gray-800">
+                             {Array.isArray(item?.baseService) 
+                               ? item.baseService.map((s: string) => String(s || '').replace(' (with basic cleaning)', '')).join(', ')
+                               : String(item?.baseService || '-').replace(' (with basic cleaning)', '')}
+                          </p>
                         </div>
                       </div>
                     ))}
                   </div>
 
-                  {/* Order Status & Priority */}
-                  <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-3 mt-2">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div>
-                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Order Status</Label>
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize border
-                            ${(selectedStatus === 'new-order' || selectedOrder?.status === 'new-order') ? 'bg-purple-50 text-purple-700 border-purple-100' :
-                            selectedOrder?.status === 'on-going' ? 'bg-blue-50 text-blue-700 border-blue-100' :
-                              selectedOrder?.status === 'for-release' ? 'bg-orange-50 text-orange-700 border-orange-100' :
-                                selectedOrder?.status === 'claimed' ? 'bg-gray-50 text-gray-700 border-gray-200' :
-                                  'bg-red-50 text-red-700 border-red-100'
-                          }`}>
-                          {(selectedOrder?.status || 'unknown').replace('-', ' ')}
-                        </span>
+                  {/* Materials Used section */}
+                  {selectedOrder?.inventoryUsed && selectedOrder.inventoryUsed.length > 0 && (
+                    <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-100 space-y-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Package size={16} className="text-emerald-600" />
+                        <h4 className="text-xs font-black text-emerald-800 uppercase tracking-widest">Materials / Supply Used</h4>
                       </div>
-                      <div>
-                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Priority Level</Label>
-                        {selectedOrder?.priorityLevel === 'rush' ? (
-                          <span className="text-xs font-black text-red-600 uppercase">RUSH</span>
-                        ) : (
-                          <span className="text-xs font-bold text-gray-800 capitalize">{selectedOrder?.priorityLevel || 'normal'}</span>
-                        )}
-                      </div>
-                      <div>
-                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Processed By</Label>
-                        <p className="text-sm font-bold text-gray-700">{selectedOrder?.processedBy || '-'}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Payment Section */}
-                  <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-3">
-                    <div className="flex items-center gap-2 mb-2">
-                       <Wallet size={16} className="text-red-500" />
-                      <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Payment Details</h4>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      {selectedOrder?.paymentMethod && (
-                        <div>
-                          <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Method</Label>
-                          <p className="text-sm font-bold text-gray-800 uppercase">
-                            {selectedOrder.paymentMethod}
-                          </p>
-                        </div>
-                      )}
-                      <div>
-                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Payment Status</Label>
-                        <span className={`text-sm font-black uppercase ${selectedOrder?.paymentStatus === 'fully-paid' ? 'text-green-600' :
-                          selectedOrder?.paymentStatus === 'downpayment' ? 'text-yellow-600' : 'text-red-500'
-                          }`}>
-                          {selectedOrder?.paymentStatus === 'fully-paid' ? 'Fully Paid' : selectedOrder?.paymentStatus === 'downpayment' ? 'Downpayment' : (selectedOrder?.paymentStatus || 'awaiting')?.replace('-', ' ')?.replace(/\b\w/g, l => l.toUpperCase())}
-                        </span>
-                      </div>
-                      {['gcash', 'maya'].includes(selectedOrder?.paymentMethod?.toLowerCase() || '') && (selectedOrder?.paymentStatus === 'fully-paid' || selectedOrder?.paymentStatus === 'downpayment') && (
-                        <div className="col-span-2">
-                          <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Reference Number</Label>
-                          <p className="text-sm font-bold text-gray-800 font-mono tracking-tight">{selectedOrder?.referenceNo || '-'}</p>
-                        </div>
-                      )}
-                      {selectedOrder?.paymentStatus && (
-                        <>
-                          <div>
-                            <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Amount Received</Label>
-                            <p className="text-sm font-bold text-gray-800">₱{(selectedOrder?.amountReceived || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                      <div className="space-y-2">
+                        {selectedOrder.inventoryUsed.map((used: any, idx: number) => (
+                          <div key={idx} className="flex justify-between items-center text-xs font-medium text-slate-700">
+                            <span>{used.name}</span>
+                            <span className="font-bold text-slate-900 bg-emerald-100/60 px-2 py-0.5 rounded-md">
+                              {used.quantity} {used.unit}
+                            </span>
                           </div>
-                          {selectedOrder?.change !== undefined && selectedOrder.change > 0 && (
-                            <div className="col-span-2 pt-2 border-t border-gray-100 mt-1">
-                              <div className="flex justify-between items-center">
-                                <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Customer Change</Label>
-                                <p className="text-sm font-bold text-green-600 underline decoration-dotted underline-offset-4">
-                                  ₱{(selectedOrder.change || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </p>
-                              </div>
-                            </div>
-                          )}
-                        </>
-                      )}
-                      {selectedOrder?.paymentStatus !== 'fully-paid' && (
-                        <div className="pt-2 border-t border-gray-200/50 col-span-2 flex justify-between items-center">
-                          <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Remaining Balance</Label>
-                          <p className={`text-sm font-black ${((selectedOrder?.grandTotal || 0) - (selectedOrder?.amountReceived || 0)) > 0.01 ? 'text-red-500' : 'text-green-600'}`}>
-                            ₱{Math.max(0, (selectedOrder?.grandTotal || 0) - (selectedOrder?.amountReceived || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Pricing Summary */}
-                  <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-2 mt-2">
-                    <div className="flex justify-between items-center text-gray-600/80">
-                      <span className="text-xs font-medium uppercase tracking-wide">Total Quantity</span>
-                      <span className="text-sm font-bold text-gray-800">{selectedOrder?.quantity || 1} {(selectedOrder?.quantity || 1) === 1 ? 'Pair' : 'Pairs'}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-gray-600/80">
-                      <span className="text-xs font-medium uppercase tracking-wide">Base Service Fee</span>
-                      <span className="text-sm font-bold text-gray-800">₱{(selectedOrder?.baseServiceFee || 0).toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-gray-600/80">
-                      <span className="text-xs font-medium uppercase tracking-wide">Add-ons Total</span>
-                      <span className="text-sm font-bold text-gray-800">₱{(selectedOrder?.addOnsTotal || 0).toFixed(2)}</span>
-                    </div>
-                    {selectedOrder?.priorityLevel === 'rush' && (
-                      <div className="flex justify-between items-center text-gray-600/80">
-                        <span className="text-xs font-medium uppercase tracking-wide">Rush Fee</span>
-                        <span className="text-sm font-bold text-gray-800">₱{( (selectedOrder?.grandTotal || 0) - ((selectedOrder?.baseServiceFee || 0) + (selectedOrder?.addOnsTotal || 0)) ).toFixed(2)}</span>
+                        ))}
                       </div>
-                    )}
-                    <div className="flex justify-between items-center pt-3 border-t border-gray-200 mt-2">
-                      <span className="text-base font-black text-gray-900 uppercase tracking-tight">Grand Total</span>
-                      <span className="text-lg font-black text-red-600 tracking-tight">₱{(selectedOrder?.grandTotal || 0).toFixed(2)}</span>
                     </div>
+                  )}
+
+                  {/* Payment section */}
+                  <div className="bg-gray-100/30 p-4 rounded-xl border border-gray-100 space-y-2">
+                    <div className="flex justify-between items-center"><span className="text-xs font-medium uppercase tracking-wide">Grand Total</span><span className="text-lg font-black text-red-600">₱{(selectedOrder?.grandTotal || 0).toFixed(2)}</span></div>
+                    <div className="flex justify-between items-center"><span className="text-xs font-medium uppercase tracking-wide">Paid</span><span className="text-sm font-bold text-green-600">₱{(selectedOrder?.amountReceived || 0).toFixed(2)}</span></div>
+                    {((selectedOrder?.grandTotal || 0) - (selectedOrder?.amountReceived || 0)) > 0.01 && (
+                      <div className="flex justify-between items-center pt-2 border-t border-gray-200"><span className="text-xs font-black uppercase text-red-500">Balance</span><span className="text-sm font-black text-red-600">₱{Math.max(0, (selectedOrder?.grandTotal || 0) - (selectedOrder?.amountReceived || 0)).toFixed(2)}</span></div>
+                    )}
                   </div>
                 </div>
               )}
             </DialogContent>
-          </Dialog >
+          </Dialog>
 
-          {/* Edit Order Modal */}
-          <EditOrderModal
-            order={selectedOrder}
-            open={!!selectedOrder && isEditing}
-            onOpenChange={(open) => {
-              if (!open) {
-                setIsEditing(false);
-              }
-            }}
-            onSave={(id, updates) => {
-              updateOrder(id, updates);
-              setIsEditing(false);
-              toast.success('Order details updated');
-            }}
-          />
+          {/* Other Modals */}
+          <EditOrderModal order={selectedOrder} open={!!selectedOrder && isEditing} onOpenChange={(open) => !open && setIsEditing(false)} onSave={(id, updates) => { updateOrder(id, updates); setIsEditing(false); }} />
+          <StockUpdateModal order={selectedOrder} open={!!selectedOrder && isUpdatingStock} onOpenChange={(open) => !open && setIsUpdatingStock(false)} onSave={(id, updates) => { updateOrder(id, updates); setIsUpdatingStock(false); }} />
+          <ProcessClaimModal order={processClaimOrder} open={!!processClaimOrder} onOpenChange={(open) => !open && setProcessClaimOrder(null)} onConfirm={(id, data) => { updateOrder(id, data, user.username); setProcessClaimOrder(null); }} />
 
-          <StockUpdateModal
-            order={selectedOrder}
-            open={!!selectedOrder && isUpdatingStock}
-            onOpenChange={(open) => {
-              if (!open) {
-                setIsUpdatingStock(false);
-              }
-            }}
-            onSave={(id, updates) => {
-              updateOrder(id, updates);
-              setIsUpdatingStock(false);
-            }}
-          />
+          {!selectedStatus && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 gap-6">
+                {/* Service Volume Chart */}
+                <Card className="border-none shadow-md bg-white overflow-hidden">
+                  <CardHeader className="flex flex-row items-center justify-between pb-2 pt-6 px-6">
+                    <CardTitle className="text-sm font-black uppercase tracking-tight text-gray-800">Service Volume by Type</CardTitle>
+                    <div className="flex items-center gap-4 text-[9px] font-bold uppercase tracking-wider text-gray-500">
+                      <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#A3C9C2]" /> BASIC CLEANING</div>
+                      <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#A78BFA]" /> FULL REGLUE</div>
+                      <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#C4B5FD]" /> MINOR REGLUE</div>
+                      <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#FBBF24]" /> COLOR RENEWAL</div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-4 px-6 pb-8">
+                    <ResponsiveContainer width="100%" height={300}>
+                       <BarChart data={serviceVolumeData} margin={{ top: 5, right: 10, left: 10, bottom: 35 }}>
+                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                         <XAxis 
+                            dataKey="name" 
+                            tick={{ fontSize: 10, fontWeight: 700, fill: '#64748b' }} 
+                            axisLine={{ stroke: '#e2e8f0' }} 
+                            tickLine={false}
+                            dy={10} 
+                            angle={-20}
+                            textAnchor="end"
+                         />
+                         <YAxis 
+                            tick={{ fontSize: 11, fontWeight: 600, fill: '#64748b' }} 
+                            axisLine={{ stroke: '#e2e8f0' }} 
+                            tickLine={false} 
+                         />
+                         <Tooltip content={<ServiceTooltip />} cursor={{fill: '#f8fafc'}} />
+                         <Bar dataKey="value" radius={[4, 4, 0, 0]} barSize={60}>
+                           {serviceVolumeData.map((_item, index) => (
+                             <Cell key={`cell-${index}`} fill={['#A3C9C2', '#C4B5FD', '#A78BFA', '#FBBF24'][index % 4]} />
+                           ))}
+                         </Bar>
+                       </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
 
-          < ProcessClaimModal
-            order={processClaimOrder}
-            open={!!processClaimOrder}
-            onOpenChange={(open) => !open && setProcessClaimOrder(null)}
-            onConfirm={(id, data) => {
-              updateOrder(id, data, user.username);
-              toast.success('Order claimed successfully');
-              setProcessClaimOrder(null);
-            }}
-          />
+                {/* Activity Trend Chart */}
+                <Card className="border-none shadow-md bg-white overflow-hidden">
+                   <CardHeader className="flex flex-row items-center justify-between pb-2 pt-6 px-6">
+                     <CardTitle className="text-sm font-black uppercase tracking-tight text-gray-800">{chartTitle}</CardTitle>
+                     <div className="flex items-center gap-4 text-[9px] font-bold uppercase tracking-wider text-gray-500">
+                        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#A78BFA]" /> ORDERS CREATED</div>
+                        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#34D399]" /> ORDERS RELEASED</div>
+                     </div>
+                   </CardHeader>
+                   <CardContent className="pt-4 px-6 pb-8">
+                     <ResponsiveContainer width="100%" height={300}>
+                       <LineChart data={timeSeriesData}>
+                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                         <XAxis 
+                            dataKey="period" 
+                            tick={{ fontSize: 10, fontWeight: 600, fill: '#64748b' }} 
+                            axisLine={{ stroke: '#e2e8f0' }} 
+                            tickLine={false} 
+                            dy={10}
+                         />
+                         <YAxis 
+                            tick={{ fontSize: 11, fontWeight: 600, fill: '#64748b' }} 
+                            axisLine={{ stroke: '#e2e8f0' }} 
+                            tickLine={false} 
+                         />
+                         <Tooltip content={<TrendTooltip />} />
+                         <Line type="monotone" dataKey="newOrders" stroke="#A78BFA" strokeWidth={3} dot={{ r: 4, fill: '#A78BFA', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
+                         <Line type="monotone" dataKey="releasedOrders" stroke="#34D399" strokeWidth={3} dot={{ r: 4, fill: '#34D399', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
+                       </LineChart>
+                     </ResponsiveContainer>
+                   </CardContent>
+                </Card>
 
-          {/* Charts and Recent Orders - Only Show When No Status Selected */}
-          {
-            !selectedStatus && (
-              <>
-                {/* Charts - Visible to all but revenue protected */}
-                <div className="grid grid-cols-1 gap-6">
-                    <Card>
-                      <CardHeader className="flex flex-col md:flex-row items-center md:items-start justify-between mt-3 py-6 gap-4">
-                        <CardTitle className="text-center md:text-left text-base font-black uppercase whitespace-nowrap tracking-tight">Service Volume by Type</CardTitle>
-                        <div className="grid grid-cols-2 sm:flex sm:flex-wrap justify-center md:justify-end gap-x-6 gap-y-1.5 text-left md:text-right">
-                          <div className="flex items-center gap-2 text-[10px] md:text-[11px] font-bold text-gray-600 uppercase tracking-tight whitespace-nowrap">
-                            <div className="w-2.5 h-2.5 bg-[#84b6af] rounded-full shrink-0"></div>
-                            <span>BASIC CLEANING</span>
+                {/* Low Stock Alerts */}
+                <Card className="border-none shadow-md bg-white">
+                  <CardHeader className="flex flex-row items-center justify-between pb-2 border-b border-gray-50 mb-4 py-4 px-6">
+                    <CardTitle className="text-sm font-black uppercase text-gray-800 flex items-center gap-2">
+                       <Package size={18} className="text-red-500" /> Stock Status Alerts
+                    </CardTitle>
+                    <Badge className="bg-red-50 text-red-600 border-red-100 uppercase text-[9px] font-black shadow-sm">{lowStockItems.length} Warnings</Badge>
+                  </CardHeader>
+                  <CardContent className="space-y-4 px-6 pb-6">
+                    {lowStockItems.length === 0 ? (
+                      <div className="py-12 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                         <ClipboardCheck className="mx-auto mb-2 text-emerald-400" size={32} />
+                         <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">All stock levels normal</p>
+                      </div>
+                    ) : (
+                      lowStockItems.slice(0, 5).map((item, idx) => (
+                        <div key={idx} className="flex items-center justify-between p-4 rounded-2xl bg-white border border-gray-100 shadow-sm transition-all hover:border-red-200 hover:shadow-md group">
+                          <div className="flex items-center gap-4">
+                            <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-transform group-hover:scale-110 ${item.status === 'Critical' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}>
+                              <AlertTriangle size={24} />
+                            </div>
+                            <div>
+                              <p className="text-xs font-black text-gray-800 uppercase leading-none mb-1.5">{item.name}</p>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest bg-gray-100 px-1.5 py-0.5 rounded">{item.category}</span>
+                                <span className="text-[9px] font-bold text-gray-300 italic">Qty: {item.stock}</span>
+                              </div>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2 text-[10px] md:text-[11px] font-bold text-gray-600 uppercase tracking-tight whitespace-nowrap">
-                            <div className="w-2.5 h-2.5 bg-[#c084fc] rounded-full shrink-0"></div>
-                            <span>FULL REGLUE</span>
-                          </div>
-                          <div className="flex items-center gap-2 text-[10px] md:text-[11px] font-bold text-gray-600 uppercase tracking-tight whitespace-nowrap">
-                            <div className="w-2.5 h-2.5 bg-[#a78bfa] rounded-full shrink-0"></div>
-                            <span>MINOR REGLUE</span>
-                          </div>
-                          <div className="flex items-center gap-2 text-[10px] md:text-[11px] font-bold text-gray-600 uppercase tracking-tight whitespace-nowrap">
-                            <div className="w-2.5 h-2.5 bg-[#fbbf24] rounded-full shrink-0"></div>
-                            <span>COLOR RENEWAL</span>
-                          </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="mt-8 ml-0 mb-1">
-                        {serviceVolumeData.length === 0 ? (
-                          <p className="text-sm text-gray-500">No orders in the selected range.</p>
-                        ) : (
-                          <ResponsiveContainer width="90%" height={250}>
-                            <BarChart data={serviceVolumeData} margin={{ left: 15, right: 5, bottom: 24 }}>
-                              <CartesianGrid strokeDasharray="3 3" />
-                              <XAxis
-                                dataKey="name"
-                                axisLine={false}
-                                tickLine={false}
-                                tick={{ fill: '#64748b', fontSize: 11, fontWeight: 500 }}
-                                interval={0}
-                                angle={-20}
-                                textAnchor="end"
-                                height={60}
-                              />
-                              <YAxis allowDecimals={false} />
-                              <Tooltip
-                                content={(props) => {
-                                  if (!props.active || !props.payload || !props.payload.length) return null;
-                                  const data = props.payload[0].payload as {
-                                    name: string;
-                                    value: number;
-                                    sales: number;
-                                    breakdown?: Record<string, number>
-                                  };
-
-                                  return (
-                                    <div className="bg-white p-3 border rounded shadow-lg max-w-xs">
-                                      <p className="font-semibold text-gray-900 mb-2">{data.name}</p>
-                                      <p className="text-sm text-gray-600">Total Orders: {data.value}</p>
-                                      {role === 'owner' && (
-                                        <p className="text-sm text-gray-600 mb-2">Revenue: {'\u20B1'}{data.sales.toLocaleString()}</p>
-                                      )}
-
-                                      {/* Show breakdown for Basic Cleaning */}
-                                      {data.name === 'Basic Cleaning' && data.breakdown && (
-                                        <div className="border-t pt-2 mt-2">
-                                          <p className="text-xs font-medium text-gray-700 mb-1">Service Breakdown:</p>
-                                          <div className="space-y-1">
-                                            <p className="text-xs text-gray-600">Basic Cleaning: {data.breakdown['Basic Cleaning'] || 0}</p>
-                                            <p className="text-xs text-gray-600">Unyellowing: {data.breakdown['Unyellowing'] || 0}</p>
-                                            <p className="text-xs text-gray-600">Minor Retouch: {data.breakdown['Minor Retouch'] || 0}</p>
-                                            <p className="text-xs text-gray-600">Minor Restoration: {data.breakdown['Minor Restoration'] || 0}</p>
-                                          </div>
-                                        </div>
-                                      )}
-
-                                      {/* Show breakdown for Color Renewal */}
-                                      {data.name === 'Color Renewal' && data.breakdown && (
-                                        <div className="border-t pt-2 mt-2">
-                                          <p className="text-xs font-medium text-gray-700 mb-1">Service Breakdown:</p>
-                                          <div className="space-y-1">
-                                            <p className="text-xs text-gray-600">2 Colors: {data.breakdown['2 Colors'] || 0}</p>
-                                            <p className="text-xs text-gray-600">3 Colors: {data.breakdown['3 Colors'] || 0}</p>
-                                          </div>
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                }}
-                              />
-                              <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                                {serviceVolumeData.map((entry, index) => {
-                                  let fillColor = '#dc2626'; // default red
-                                  if (entry.name === 'Basic Cleaning') fillColor = '#0d948880'; // teal-700 with 50% opacity
-                                  else if (entry.name === 'Minor Reglue') fillColor = '#6366f180'; // indigo-500 with 50% opacity
-                                  else if (entry.name === 'Full Reglue') fillColor = '#c026d380'; // violet-600 with 50% opacity
-                                  else if (entry.name === 'Color Renewal') fillColor = '#f59e0b80'; // amber-500 with 50% opacity
-                                  return <Cell key={`cell-${index}`} fill={fillColor} />;
-                                })}
-                              </Bar>
-                            </BarChart>
-                          </ResponsiveContainer>
-                        )}
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader className="flex flex-col md:flex-row items-center md:items-start justify-between mt-3 py-6 gap-4">
-                        <CardTitle className="text-center md:text-left text-base font-black uppercase whitespace-nowrap tracking-tight">{chartTitle}</CardTitle>
-                        <div className="flex flex-row flex-wrap items-center justify-center md:justify-end gap-x-6 gap-y-1.5">
-                          <div className="flex items-center gap-2 text-[10px] md:text-[11px] font-bold text-gray-600 uppercase tracking-tight whitespace-nowrap mt-1">
-                            <div className="w-2.5 h-2.5 bg-purple-500 rounded-full shrink-0"></div>
-                            <span>Orders Created</span>
-                          </div>
-                          <div className="flex items-center gap-2 text-[10px] md:text-[11px] font-bold text-gray-600 uppercase tracking-tight whitespace-nowrap mt-1">
-                            <div className="w-2.5 h-2.5 bg-green-500 rounded-full shrink-0"></div>
-                            <span>Orders Released</span>
+                          <div className="text-right">
+                            <p className="text-sm font-black text-gray-900 mb-1">
+                              {item.stock} {item.package_size && item.package_size > 0 ? item.package_unit : item.unit}
+                            </p>
+                            {(() => {
+                              const isCritical = Number(item.stock || 0) <= 0;
+                              return (
+                                <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full shadow-sm ${isCritical ? 'bg-red-600 text-white' : 'bg-amber-500 text-white'}`}>
+                                  {isCritical ? 'Critical' : 'Low Stock'}
+                                </span>
+                              );
+                            })()}
                           </div>
                         </div>
-                      </CardHeader>
-                      <CardContent className="mt-6 ml-6 mb-2 ">
-                        <ResponsiveContainer width="90%" height={250}>
-                          <LineChart data={timeSeriesData}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="period" />
-                            <YAxis />
-                            <Tooltip
-                              content={(props) => {
-                                if (!props.active || !props.payload || !props.payload.length) return null;
-                                const data = props.payload[0].payload as {
-                                  period: string;
-                                  newOrders: number;
-                                  releasedOrders: number;
-                                };
+                      ))
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          )}
 
-                                return (
-                                  <div className="bg-white p-3 border rounded shadow-lg">
-                                    <p className="font-semibold text-gray-900 mb-2">{data.period}</p>
-                                    <div className="space-y-1">
-                                      <p className="text-sm text-purple-600 font-bold">Orders Created: {data.newOrders}</p>
-                                      <p className="text-sm text-green-600 font-bold">Orders Released: {data.releasedOrders}</p>
-                                    </div>
-                                  </div>
-                                );
-                              }}
-                            />
-                            <Line type="monotone" dataKey="newOrders" stroke="#8b5cf6" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                            <Line type="monotone" dataKey="releasedOrders" stroke="#22c55e" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                          </LineChart>
-                        </ResponsiveContainer>
-                      </CardContent>
-                    </Card>
-                  </div>
-                {/* Staff performance Removed per user request */}
-
-              </>
-            )
-          }
-
-        </div >
-      </div >
-
-      <AddExpenseModal
-        isOpen={isExpenseModalOpen}
-        onClose={() => setIsExpenseModalOpen(false)}
-        onAddExpense={addExpense}
-      />
-    </>
+          <AddExpenseModal isOpen={isExpenseModalOpen} onClose={() => setIsExpenseModalOpen(false)} onAddExpense={addExpense} />
+        </div>
+      </div>
+    </div>
   );
 }

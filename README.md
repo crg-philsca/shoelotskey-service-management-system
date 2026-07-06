@@ -2,7 +2,7 @@
 [![Tech Stack](https://img.shields.io/badge/Stack-FastAPI%20%7C%20React%20%7C%20PostgreSQL-blue)](https://github.com/crg-philsca/shoelotskey-service-management-system)
 [![Deployment](https://img.shields.io/badge/Deploy-Heroku-purple)](https://shoelotskey-villamor-pasay.herokuapp.com)
 
-A professional-grade Service Management System tailored for **Shoelotskey Villamor Pasay**, designed for high-efficiency shoe restoration workflows. This project serves as a Bachelor of Science in Aviation IT Capstone at the **National Aviation Academy of the Philippines (NAAP)**.
+A professional-grade Service Management System tailored for **Shoelotskey Villamor-Pasay**, designed for high-efficiency shoe restoration workflows. This project serves as a Bachelor of Science in Aviation IT Capstone at the **National Aviation Academy of the Philippines (NAAP)**.
 
 ## 🚀 Architectural Highlights
 
