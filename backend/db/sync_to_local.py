@@ -1,6 +1,7 @@
 import os
 import sys
 from sqlalchemy import create_engine, MetaData, text
+from sqlalchemy.exc import OperationalError
 
 # Path normalization to securely locate backend root and import shared database modules
 curr_dir = os.path.dirname(os.path.abspath(__file__))
@@ -8,6 +9,24 @@ backend_dir = os.path.dirname(curr_dir) if os.path.basename(curr_dir) == "db" el
 sys.path.insert(0, backend_dir)
 
 from database import engine as shared_pg_engine, LOCAL_SQLITE_PATH, LOCAL_SQLITE, is_sqlite
+
+# Tables with large row counts that need chunked fetching to avoid RDS connection drops
+LARGE_TABLES = {"audit_logs"}
+CHUNK_SIZE = 500  # Fetch at most 500 rows at a time to avoid timeout on large tables
+
+def _fetch_table_chunked(pg_conn, pg_table):
+    """Fetch large tables in chunks to avoid AWS RDS dropping long-running read connections."""
+    all_rows = []
+    offset = 0
+    while True:
+        chunk = pg_conn.execute(
+            pg_table.select().limit(CHUNK_SIZE).offset(offset)
+        ).fetchall()
+        if not chunk:
+            break
+        all_rows.extend(chunk)
+        offset += CHUNK_SIZE
+    return all_rows
 
 def sync_data():
     print("\n" + "="*60)
@@ -26,6 +45,9 @@ def sync_data():
 
     print(f"[BOOT] Source: Shared Cloud PostgreSQL Singleton Engine")
     print(f"[BOOT] Target: Local SQLite ({sqlite_path})")
+
+    sqlite_engine = None
+    failed_tables = []
 
     try:
         # 2. Establish connections (PG engine is reused from shared singleton)
@@ -73,11 +95,11 @@ def sync_data():
         except Exception as safety_err:
             print(f"[SYNC SAFETY WARNING] Could not verify offline data: {safety_err}")
 
-        # 4. Data Transfer Loop
-        with sqlite_engine.begin() as sqlite_conn, pg_engine.connect() as pg_conn:
+        # 4. Data Transfer Loop — each table is synced in its own transaction for resilience
+        with sqlite_engine.begin() as sqlite_conn:
             # Disable constraints temporarily to prevent foreign key errors during wipe/rewrite
             sqlite_conn.execute(text("PRAGMA foreign_keys = OFF;"))
-            
+
             for table_name in pg_metadata.tables.keys():
                 if table_name not in sqlite_metadata.tables:
                     print(f"Skipping table '{table_name}' (not present in local SQLite)...")
@@ -86,37 +108,56 @@ def sync_data():
                 print(f"Syncing table '{table_name}'...")
                 pg_table = pg_metadata.tables[table_name]
                 sqlite_table = sqlite_metadata.tables[table_name]
-                
-                # Retrieve records from Postgres using single open connection
-                rows = pg_conn.execute(pg_table.select()).fetchall()
-                
-                # Delete existing local records
-                sqlite_conn.execute(text(f"DELETE FROM {table_name};"))
-                
-                if rows:
-                    # Get the columns that actually exist in the target SQLite table
-                    sqlite_cols = set(sqlite_table.columns.keys())
+
+                try:
+                    # Use a fresh connection per table to isolate connection failures
+                    with pg_engine.connect() as pg_conn:
+                        if table_name in LARGE_TABLES:
+                            # Chunked fetch for large tables to prevent RDS connection timeout
+                            rows = _fetch_table_chunked(pg_conn, pg_table)
+                        else:
+                            rows = pg_conn.execute(pg_table.select()).fetchall()
+
+                    # Delete existing local records
+                    sqlite_conn.execute(text(f"DELETE FROM {table_name};"))
                     
-                    # Map SQLAlchemy Row objects to dictionaries and filter out legacy columns
-                    insert_data = []
-                    for row in rows:
-                        row_dict = dict(row._mapping)
-                        # Keep only keys that exist in the target SQLite database columns
-                        filtered_dict = {k: v for k, v in row_dict.items() if k in sqlite_cols}
-                        insert_data.append(filtered_dict)
-                    
-                    # Insert the filtered records into SQLite
-                    sqlite_conn.execute(sqlite_table.insert(), insert_data)
-                    print(f"  -> SUCCESS: Copied {len(rows)} records.")
-                else:
-                    print("  -> NOTE: Table is empty.")
+                    if rows:
+                        # Get the columns that actually exist in the target SQLite table
+                        sqlite_cols = set(sqlite_table.columns.keys())
+                        
+                        # Map SQLAlchemy Row objects to dictionaries and filter out legacy columns
+                        insert_data = []
+                        for row in rows:
+                            row_dict = dict(row._mapping)
+                            # Keep only keys that exist in the target SQLite database columns
+                            filtered_dict = {k: v for k, v in row_dict.items() if k in sqlite_cols}
+                            insert_data.append(filtered_dict)
+                        
+                        # Insert the filtered records into SQLite
+                        sqlite_conn.execute(sqlite_table.insert(), insert_data)
+                        print(f"  -> SUCCESS: Copied {len(rows)} records.")
+                    else:
+                        print("  -> NOTE: Table is empty.")
+
+                except OperationalError as tbl_err:
+                    # Log the failure but continue syncing remaining tables
+                    failed_tables.append(table_name)
+                    print(f"  -> [SYNC WARNING] Skipping {table_name} table sync: {tbl_err}")
+                    print(f"  -> [SYNC RECOVERY] Connection will be refreshed on next table.")
+                    # Dispose stale connections from pool so next table gets a fresh one
+                    pg_engine.dispose()
+                    continue
 
             # Re-enable constraints
             sqlite_conn.execute(text("PRAGMA foreign_keys = ON;"))
 
-        print("\n" + "="*60)
-        print(" SUCCESS: Local database (shoelotskey.db) is fully synchronized!")
-        print("="*60 + "\n")
+        if failed_tables:
+            print(f"\n[SYNC PARTIAL] Sync completed with {len(failed_tables)} skipped table(s): {', '.join(failed_tables)}")
+            print("[SYNC PARTIAL] All other tables synced successfully. Skipped tables retain their previous local data.")
+        else:
+            print("\n" + "="*60)
+            print(" SUCCESS: Local database (shoelotskey.db) is fully synchronized!")
+            print("="*60 + "\n")
 
     except Exception as e:
         print(f"\n[FATAL ERROR] Sync crashed: {e}")
@@ -124,7 +165,7 @@ def sync_data():
 
     finally:
         # Do NOT dispose pg_engine because it is the shared singleton engine used by the live FastAPI app!
-        if 'sqlite_engine' in locals():
+        if sqlite_engine is not None:
             sqlite_engine.dispose()
             print("[SYNC] Closed SQLite engine connection pool. (Shared PG singleton remains intact)")
 
