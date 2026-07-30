@@ -2814,16 +2814,24 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
         raise HTTPException(status_code=500, detail="Database Sync Error")
 
 @app.delete("/api/orders/{order_id}")
-def delete_order(order_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_role("owner"))):
-    """Permanent removal of order (Use with caution - Owner only)."""
+def delete_order(order_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Permanent or cancellation removal of order with full cascade."""
     db_order = db.query(Order).filter(Order.order_id == order_id).first()
     if not db_order:
         raise HTTPException(status_code=404, detail="Order not found")
-    deleted_snapshot = {"order_number": db_order.order_number, "grand_total": float(db_order.grand_total)}
+    deleted_snapshot = {"order_number": db_order.order_number, "grand_total": float(db_order.grand_total), "status": db_order.status}
     
-    # Explicit cascade handling for existing database schemas without ON DELETE CASCADE
-    db.query(StatusLog).filter(StatusLog.order_id == order_id).delete(synchronize_session=False)
-    db.query(InventoryLog).filter(InventoryLog.order_id == order_id).update({"order_id": None}, synchronize_session=False)
+    # Explicit cascade handling for database schemas without ON DELETE CASCADE
+    try:
+        db.execute(text("DELETE FROM item_service_mapping WHERE item_id IN (SELECT item_id FROM items WHERE order_id = :oid)"), {"oid": order_id})
+        db.execute(text("DELETE FROM item_condition_mapping WHERE item_id IN (SELECT item_id FROM items WHERE order_id = :oid)"), {"oid": order_id})
+        db.execute(text("DELETE FROM items WHERE order_id = :oid"), {"oid": order_id})
+        db.execute(text("DELETE FROM payments WHERE order_id = :oid"), {"oid": order_id})
+        db.execute(text("DELETE FROM deliveries WHERE order_id = :oid"), {"oid": order_id})
+        db.query(StatusLog).filter(StatusLog.order_id == order_id).delete(synchronize_session=False)
+        db.query(InventoryLog).filter(InventoryLog.order_id == order_id).update({"order_id": None}, synchronize_session=False)
+    except Exception as cascade_err:
+        print(f"[CASCADE WARNING] Child table cleanup warning during delete: {cascade_err}")
     
     db.delete(db_order)
     db.commit()
@@ -2833,7 +2841,7 @@ def delete_order(order_id: int, db: Session = Depends(get_db), current_user: Use
         old_values=deleted_snapshot,
         module="Job Orders",
     )
-    return {"status": "success", "message": f"Order {order_id} deleted"}
+    return {"status": "success", "message": f"Order {order_id} removed"}
 
 
 # ==========================================
