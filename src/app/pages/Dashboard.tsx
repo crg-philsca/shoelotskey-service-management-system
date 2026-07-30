@@ -245,10 +245,11 @@ const TrendTooltip = ({ active, payload, label }: any) => {
 function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
   const role = user.role;
 
-  const { orders, loading, refreshing, updateOrder } = useOrders();
+  const { orders, loading, refreshing, updateOrder, deleteOrder } = useOrders();
   const { services } = useServices();
   const [isEditing, setIsEditing] = useState(false);
   const [isUpdatingStock, setIsUpdatingStock] = useState(false);
+  const [cancelOrderModal, setCancelOrderModal] = useState<JobOrder | null>(null);
   const [profitRange, setProfitRange] = useState<'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Annually'>('Daily');
   // STATE: Drill-down status filter
   // When a user clicks a status card (e.g., 'New Order'), this state is set
@@ -1067,14 +1068,23 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end" className="w-56 p-2 space-y-1">
                                           {order.status === 'new-order' && (
-                                            <DropdownMenuItem onClick={(e) => {
-                                              e.stopPropagation();
-                                              if (order) setSelectedOrder({...order});
-                                              setIsEditing(true);
-                                            }} className="border border-gray-200 rounded-md px-2.5 py-1.5 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:text-yellow-800 focus:bg-yellow-100 mb-1">
-                                              <Edit className="h-4 w-4 mr-2" />
-                                              Edit Order Detail
-                                            </DropdownMenuItem>
+                                            <>
+                                              <DropdownMenuItem onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (order) setSelectedOrder({...order});
+                                                setIsEditing(true);
+                                              }} className="border border-gray-200 rounded-md px-2.5 py-1.5 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:text-yellow-800 focus:bg-yellow-100 mb-1">
+                                                <Edit className="h-4 w-4 mr-2" />
+                                                Edit Order Detail
+                                              </DropdownMenuItem>
+                                              <DropdownMenuItem onClick={(e) => {
+                                                e.stopPropagation();
+                                                setCancelOrderModal(order);
+                                              }} className="border border-red-200 rounded-md px-2.5 py-1.5 text-red-700 bg-red-50 hover:bg-red-100 focus:text-red-800 focus:bg-red-100 mb-1">
+                                                <AlertTriangle className="h-4 w-4 mr-2 text-red-600" />
+                                                Cancel Order (No Refunds)
+                                              </DropdownMenuItem>
+                                            </>
                                           )}
                                           {order.status === 'on-going' && (
                                             <DropdownMenuItem onClick={(e) => {
@@ -1372,6 +1382,55 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
           )}
 
           <AddExpenseModal isOpen={isExpenseModalOpen} onClose={() => setIsExpenseModalOpen(false)} onAddExpense={addExpense} />
+
+          {/* CANCEL ORDER / NO REFUNDS CONFIRMATION MODAL */}
+          <Dialog open={!!cancelOrderModal} onOpenChange={() => setCancelOrderModal(null)}>
+            <DialogContent className="max-w-[450px] p-6 text-center rounded-2xl shadow-2xl border border-red-100 bg-white">
+              <DialogHeader className="flex flex-col items-center gap-2">
+                <div className="w-16 h-16 rounded-full bg-red-100 border-4 border-red-50 flex items-center justify-center mb-1 text-red-600">
+                  <AlertTriangle size={32} />
+                </div>
+                <DialogTitle className="text-xl font-black text-gray-900 uppercase tracking-tight">
+                  Confirm Order Cancellation
+                </DialogTitle>
+              </DialogHeader>
+              <div className="py-4 space-y-3">
+                <p className="text-xs text-gray-600 leading-relaxed font-medium">
+                  Are you sure you want to cancel <span className="font-black text-red-600 text-sm">#{cancelOrderModal?.orderNumber}</span>?
+                </p>
+                <div className="p-3.5 bg-rose-50 border-2 border-rose-200 rounded-xl text-left flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-black text-rose-900 uppercase tracking-wide">Strict Policy: No Refunds</p>
+                    <p className="text-[11px] font-semibold text-rose-700 mt-0.5 leading-normal">
+                      Canceling this order forfeits all deposit amounts paid (if any). No refunds are permitted under system rules.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <Button
+                  variant="outline"
+                  className="flex-1 bg-gray-100 border-gray-200 text-gray-700 font-black uppercase text-xs h-10 rounded-xl hover:bg-gray-200"
+                  onClick={() => setCancelOrderModal(null)}
+                >
+                  Do Not Cancel
+                </Button>
+                <Button
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white font-black uppercase text-xs h-10 rounded-xl shadow-lg shadow-red-200"
+                  onClick={async () => {
+                    if (cancelOrderModal) {
+                      await deleteOrder(cancelOrderModal.id);
+                      toast.error(`Order #${cancelOrderModal.orderNumber} cancelled. No refund issued.`);
+                      setCancelOrderModal(null);
+                    }
+                  }}
+                >
+                  Yes, Cancel Order
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
     </div>

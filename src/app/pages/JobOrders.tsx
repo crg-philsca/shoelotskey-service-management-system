@@ -7,7 +7,7 @@ import { Input } from '@/app/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu';
-import { Search, Filter, MoreVertical, Edit, ArrowRight, RotateCcw, UserPlus, ShoppingBag } from 'lucide-react';
+import { Search, Filter, MoreVertical, Edit, ArrowRight, RotateCcw, UserPlus, ShoppingBag, AlertTriangle } from 'lucide-react';
 import { useServices } from '@/app/context/ServiceContext';
 import EditOrderModal from '@/app/components/EditOrderModal';
 import JobOrderFormModal from '@/app/components/JobOrderFormModal';
@@ -87,7 +87,7 @@ interface JobOrdersProps {
  * - Detailed Order View & Inline Editing
  */
 export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersProps) {
-    const { orders, loading, updateOrder } = useOrders();
+    const { orders, loading, updateOrder, deleteOrder } = useOrders();
     const { services } = useServices();
     const [searchQuery, setSearchQuery] = useState('');
     const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -97,6 +97,7 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
 
     const [selectedOrder, setSelectedOrder] = useState<JobOrder | null>(null);
     const [processClaimOrder, setProcessClaimOrder] = useState<JobOrder | null>(null);
+    const [cancelOrderModal, setCancelOrderModal] = useState<JobOrder | null>(null);
     const [isEditing, setIsEditing] = useState(false);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [startDate, setStartDate] = useState('');
@@ -344,13 +345,21 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end">
                                                         {order.status === 'new-order' && (
-                                                            <DropdownMenuItem onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setSelectedOrder(order);
-                                                                setIsEditing(true);
-                                                            }}>
-                                                                <Edit className="mr-2 h-4 w-4" /> Edit
-                                                            </DropdownMenuItem>
+                                                            <>
+                                                                <DropdownMenuItem onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setSelectedOrder(order);
+                                                                    setIsEditing(true);
+                                                                }}>
+                                                                    <Edit className="mr-2 h-4 w-4 text-yellow-600" /> Edit Order
+                                                                </DropdownMenuItem>
+                                                                <DropdownMenuItem onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setCancelOrderModal(order);
+                                                                }} className="text-red-600 focus:text-red-700 focus:bg-red-50">
+                                                                    <AlertTriangle className="mr-2 h-4 w-4 text-red-600" /> Cancel (No Refunds)
+                                                                </DropdownMenuItem>
+                                                            </>
                                                         )}
                                                         {order.status !== 'new-order' && (
                                                             <DropdownMenuItem onClick={(e) => {
@@ -557,6 +566,55 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                     toast.success('Order claimed successfully');
                 }}
             />
+
+            {/* CANCEL ORDER / NO REFUNDS CONFIRMATION MODAL */}
+            <Dialog open={!!cancelOrderModal} onOpenChange={() => setCancelOrderModal(null)}>
+                <DialogContent className="max-w-[450px] p-6 text-center rounded-2xl shadow-2xl border border-red-100 bg-white">
+                    <DialogHeader className="flex flex-col items-center gap-2">
+                        <div className="w-16 h-16 rounded-full bg-red-100 border-4 border-red-50 flex items-center justify-center mb-1 text-red-600">
+                            <AlertTriangle size={32} />
+                        </div>
+                        <DialogTitle className="text-xl font-black text-gray-900 uppercase tracking-tight">
+                            Confirm Order Cancellation
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="py-4 space-y-3">
+                        <p className="text-xs text-gray-600 leading-relaxed font-medium">
+                            Are you sure you want to cancel <span className="font-black text-red-600 text-sm">#{cancelOrderModal?.orderNumber}</span>?
+                        </p>
+                        <div className="p-3.5 bg-rose-50 border-2 border-rose-200 rounded-xl text-left flex items-start gap-3">
+                            <AlertTriangle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
+                            <div>
+                                <p className="text-xs font-black text-rose-900 uppercase tracking-wide">Strict Policy: No Refunds</p>
+                                <p className="text-[11px] font-semibold text-rose-700 mt-0.5 leading-normal">
+                                    Canceling this order forfeits all deposit amounts paid (if any). No refunds are permitted under system rules.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="flex gap-3 pt-2">
+                        <Button
+                            variant="outline"
+                            className="flex-1 bg-gray-100 border-gray-200 text-gray-700 font-black uppercase text-xs h-10 rounded-xl hover:bg-gray-200"
+                            onClick={() => setCancelOrderModal(null)}
+                        >
+                            Do Not Cancel
+                        </Button>
+                        <Button
+                            className="flex-1 bg-red-600 hover:bg-red-700 text-white font-black uppercase text-xs h-10 rounded-xl shadow-lg shadow-red-200"
+                            onClick={async () => {
+                                if (cancelOrderModal) {
+                                    await deleteOrder(cancelOrderModal.id);
+                                    toast.error(`Order #${cancelOrderModal.orderNumber} cancelled. No refund issued.`);
+                                    setCancelOrderModal(null);
+                                }
+                            }}
+                        >
+                            Yes, Cancel Order
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
