@@ -74,7 +74,7 @@ def sync_data():
             print(f"[SYNC SAFETY WARNING] Could not verify offline data: {safety_err}")
 
         # 4. Data Transfer Loop
-        with sqlite_engine.begin() as sqlite_conn:
+        with sqlite_engine.begin() as sqlite_conn, pg_engine.connect() as pg_conn:
             # Disable constraints temporarily to prevent foreign key errors during wipe/rewrite
             sqlite_conn.execute(text("PRAGMA foreign_keys = OFF;"))
             
@@ -87,9 +87,8 @@ def sync_data():
                 pg_table = pg_metadata.tables[table_name]
                 sqlite_table = sqlite_metadata.tables[table_name]
                 
-                # Retrieve records from Postgres
-                with pg_engine.connect() as pg_conn:
-                    rows = pg_conn.execute(pg_table.select()).fetchall()
+                # Retrieve records from Postgres using single open connection
+                rows = pg_conn.execute(pg_table.select()).fetchall()
                 
                 # Delete existing local records
                 sqlite_conn.execute(text(f"DELETE FROM {table_name};"))

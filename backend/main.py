@@ -414,6 +414,7 @@ def startup_sequence():
         from sqlalchemy import create_engine
         local_engine = create_engine(LOCAL_SQLITE)
         Base.metadata.create_all(bind=local_engine)
+        local_engine.dispose()
         print("[BOOT] Local Fallback (shoelotskey.db) Structure: OK.")
     except Exception as e:
         print(f"[BOOT] LOCAL DB SYNC WARNING: {e}")
@@ -1194,6 +1195,8 @@ def seed_lookups(db: Session):
                             
                         db.commit()
                         print(f"[RECONCILE] Synced order {sq_order.order_number} successfully.")
+            if 'local_eng' in locals():
+                local_eng.dispose()
     except Exception as recon_err:
         db.rollback()
         print(f"[RECONCILE ERROR] Reconcile sequence failed: {recon_err}")

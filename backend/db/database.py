@@ -67,11 +67,11 @@ try:
                 "keepalives_interval": 10,
                 "keepalives_count": 5
             }, 
-            pool_size=1,          # Absolute minimum to instantly unfreeze AWS RDS limits
-            max_overflow=2,       # Max 3 connections total per Uvicorn worker
-            pool_timeout=15,      # Fail fast if pool is saturated
-            pool_pre_ping=True,   # Heartbeat to drop severed sockets
-            pool_recycle=120      # Recycle every 2 mins aggressively
+            pool_size=2,          # Optimal base size to prevent pool starvation
+            max_overflow=4,       # Max 6 connections total per Uvicorn worker during traffic peaks
+            pool_timeout=20,      # Give AWS RDS connection establishment sufficient buffer
+            pool_pre_ping=True,   # Heartbeat check before checking out connections
+            pool_recycle=60       # Recycle connections every 60s to avoid RDS silently terminating idle sockets
         )
         with primary_engine.connect() as conn:
             conn.execute(text("SELECT 1"))
