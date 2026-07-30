@@ -779,7 +779,7 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                                 <div className="space-y-1">
                                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Record ID</span>
                                     <span className="text-xs font-mono font-black text-red-600 block">
-                                        {(selectedLog.table?.toLowerCase() === 'authentication' || selectedLog.table?.toLowerCase() === 'system' || getModuleBadge(selectedLog).toLowerCase() === 'authentication' || getModuleBadge(selectedLog).toLowerCase() === 'system' || !selectedLog.recordId) ? 'N/A (System Event)' : `#${selectedLog.recordId}`}
+                                        {(selectedLog.table?.toLowerCase() === 'authentication' || selectedLog.table?.toLowerCase() === 'system' || getModuleBadge(selectedLog).toLowerCase() === 'authentication' || getModuleBadge(selectedLog).toLowerCase() === 'system') ? 'N/A (System Event)' : (selectedLog.recordId ? `#${selectedLog.recordId}` : (selectedLog.details.match(/ID:?\s*([A-Za-z0-9-]+)/i)?.[1] ? `#${selectedLog.details.match(/ID:?\s*([A-Za-z0-9-]+)/i)![1]}` : 'N/A'))}
                                     </span>
                                 </div>
                             </div>

@@ -156,7 +156,10 @@ export function ExpenseProvider({ children, user }: { children: ReactNode, user:
                 addActivity({
                     user: currentUser,
                     action: 'Add Expense',
+                    table: 'EXPENSES',
+                    recordId: mappedAdded.id,
                     details: `Logged new expense: ${mappedAdded.category} - ${mappedAdded.amount}`,
+                    newValues: { category: mappedAdded.category, amount: mappedAdded.amount, notes: mappedAdded.notes, date: mappedAdded.date },
                     type: 'expense'
                 });
             })
@@ -173,6 +176,17 @@ export function ExpenseProvider({ children, user }: { children: ReactNode, user:
     };
 
     const updateExpense = (id: string, updatedFields: Partial<Expense>) => {
+        const existing = expenses.find(e => String(e.id) === String(id));
+        const oldVals: any = {};
+        const newVals: any = {};
+        if (existing && updatedFields) {
+            Object.keys(updatedFields).forEach((key) => {
+                const k = key as keyof Expense;
+                oldVals[key] = existing[k];
+                newVals[key] = updatedFields[k];
+            });
+        }
+
         fetch(`${API_BASE}/expenses/${id}`, {
             method: 'PUT',
             headers: { 
@@ -198,7 +212,11 @@ export function ExpenseProvider({ children, user }: { children: ReactNode, user:
                 addActivity({
                     user: currentUser,
                     action: 'Update Expense',
+                    table: 'EXPENSES',
+                    recordId: id,
                     details: `Updated expense record ID: ${id}`,
+                    oldValues: Object.keys(oldVals).length > 0 ? oldVals : undefined,
+                    newValues: Object.keys(newVals).length > 0 ? newVals : undefined,
                     type: 'expense'
                 });
             })
@@ -219,6 +237,7 @@ export function ExpenseProvider({ children, user }: { children: ReactNode, user:
     };
 
     const removeExpense = (id: string) => {
+        const existing = expenses.find(e => String(e.id) === String(id));
         fetch(`${API_BASE}/expenses/${id}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${user.token}` }
@@ -232,7 +251,10 @@ export function ExpenseProvider({ children, user }: { children: ReactNode, user:
                 addActivity({
                     user: currentUser,
                     action: 'Delete Expense',
+                    table: 'EXPENSES',
+                    recordId: id,
                     details: `Deleted expense record ID: ${id}`,
+                    oldValues: existing ? { category: existing.category, amount: existing.amount, notes: existing.notes } : undefined,
                     type: 'expense'
                 });
             })
