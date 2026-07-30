@@ -10,23 +10,43 @@ sys.path.insert(0, backend_dir)
 
 from database import engine as shared_pg_engine, LOCAL_SQLITE_PATH, LOCAL_SQLITE, is_sqlite
 
-# Tables with large row counts that need chunked fetching to avoid RDS connection drops
-LARGE_TABLES = {"audit_logs"}
-CHUNK_SIZE = 500  # Fetch at most 500 rows at a time to avoid timeout on large tables
+# Tables EXCLUDED from cloud-to-local sync.
+# audit_logs: 2000+ rows of write-only JSON, not needed for offline CRUD. 
+# Offline-generated audit logs are stored locally and uploaded when back online.
+SKIP_SYNC_TABLES = {"audit_logs"}
 
-def _fetch_table_chunked(pg_conn, pg_table):
-    """Fetch large tables in chunks to avoid AWS RDS dropping long-running read connections."""
-    all_rows = []
-    offset = 0
-    while True:
-        chunk = pg_conn.execute(
-            pg_table.select().limit(CHUNK_SIZE).offset(offset)
-        ).fetchall()
-        if not chunk:
-            break
-        all_rows.extend(chunk)
-        offset += CHUNK_SIZE
-    return all_rows
+
+def _safe_close_pg_conn(pg_conn):
+    """Close a PostgreSQL connection safely, even if the server has already dropped it."""
+    try:
+        pg_conn.close()
+    except Exception:
+        pass  # Connection already dead from server side — ignore the cleanup error
+
+
+def _fetch_table(pg_engine, pg_table):
+    """Fetch all rows from a PostgreSQL table using a dedicated, isolated connection.
+    
+    Returns (rows, error):
+      - rows: list of row objects on success
+      - error: exception on failure, or None on success
+    """
+    pg_conn = None
+    try:
+        pg_conn = pg_engine.connect()
+        rows = pg_conn.execute(pg_table.select()).fetchall()
+        return rows, None
+    except OperationalError as e:
+        return None, e
+    except Exception as e:
+        return None, e
+    finally:
+        if pg_conn is not None:
+            _safe_close_pg_conn(pg_conn)
+        # Always dispose stale connections from pool after any table fetch
+        # so the next table gets a fresh, validated connection from the pool
+        pg_engine.dispose()
+
 
 def sync_data():
     print("\n" + "="*60)
@@ -95,64 +115,59 @@ def sync_data():
         except Exception as safety_err:
             print(f"[SYNC SAFETY WARNING] Could not verify offline data: {safety_err}")
 
-        # 4. Data Transfer Loop — each table is synced in its own transaction for resilience
+        # 4. Data Transfer Loop — each table uses its own isolated connection for resilience
         with sqlite_engine.begin() as sqlite_conn:
             # Disable constraints temporarily to prevent foreign key errors during wipe/rewrite
             sqlite_conn.execute(text("PRAGMA foreign_keys = OFF;"))
 
             for table_name in pg_metadata.tables.keys():
+                # Skip tables not present in SQLite
                 if table_name not in sqlite_metadata.tables:
                     print(f"Skipping table '{table_name}' (not present in local SQLite)...")
                     continue
                 
+                # Skip intentionally excluded tables (too large or write-only)
+                if table_name in SKIP_SYNC_TABLES:
+                    print(f"Skipping table '{table_name}' (excluded: write-only, not required for offline mode).")
+                    continue
+
                 print(f"Syncing table '{table_name}'...")
                 pg_table = pg_metadata.tables[table_name]
                 sqlite_table = sqlite_metadata.tables[table_name]
 
-                try:
-                    # Use a fresh connection per table to isolate connection failures
-                    with pg_engine.connect() as pg_conn:
-                        if table_name in LARGE_TABLES:
-                            # Chunked fetch for large tables to prevent RDS connection timeout
-                            rows = _fetch_table_chunked(pg_conn, pg_table)
-                        else:
-                            rows = pg_conn.execute(pg_table.select()).fetchall()
+                # Fetch with isolated connection — failure here does NOT crash the entire sync
+                rows, fetch_error = _fetch_table(pg_engine, pg_table)
 
-                    # Delete existing local records
-                    sqlite_conn.execute(text(f"DELETE FROM {table_name};"))
-                    
-                    if rows:
-                        # Get the columns that actually exist in the target SQLite table
-                        sqlite_cols = set(sqlite_table.columns.keys())
-                        
-                        # Map SQLAlchemy Row objects to dictionaries and filter out legacy columns
-                        insert_data = []
-                        for row in rows:
-                            row_dict = dict(row._mapping)
-                            # Keep only keys that exist in the target SQLite database columns
-                            filtered_dict = {k: v for k, v in row_dict.items() if k in sqlite_cols}
-                            insert_data.append(filtered_dict)
-                        
-                        # Insert the filtered records into SQLite
-                        sqlite_conn.execute(sqlite_table.insert(), insert_data)
-                        print(f"  -> SUCCESS: Copied {len(rows)} records.")
-                    else:
-                        print("  -> NOTE: Table is empty.")
-
-                except OperationalError as tbl_err:
-                    # Log the failure but continue syncing remaining tables
+                if fetch_error is not None:
                     failed_tables.append(table_name)
-                    print(f"  -> [SYNC WARNING] Skipping {table_name} table sync: {tbl_err}")
-                    print(f"  -> [SYNC RECOVERY] Connection will be refreshed on next table.")
-                    # Dispose stale connections from pool so next table gets a fresh one
-                    pg_engine.dispose()
+                    print(f"  -> [SYNC WARNING] Skipping '{table_name}': {type(fetch_error).__name__}: {fetch_error}")
+                    print(f"  -> [SYNC RECOVERY] Stale connections flushed. Next table will get a fresh connection.")
                     continue
+
+                # Delete existing local records
+                sqlite_conn.execute(text(f"DELETE FROM {table_name};"))
+                
+                if rows:
+                    # Get the columns that actually exist in the target SQLite table
+                    sqlite_cols = set(sqlite_table.columns.keys())
+                    
+                    # Map SQLAlchemy Row objects to dictionaries and filter out legacy columns
+                    insert_data = [
+                        {k: v for k, v in dict(row._mapping).items() if k in sqlite_cols}
+                        for row in rows
+                    ]
+                    
+                    # Insert the filtered records into SQLite
+                    sqlite_conn.execute(sqlite_table.insert(), insert_data)
+                    print(f"  -> SUCCESS: Copied {len(rows)} records.")
+                else:
+                    print("  -> NOTE: Table is empty.")
 
             # Re-enable constraints
             sqlite_conn.execute(text("PRAGMA foreign_keys = ON;"))
 
         if failed_tables:
-            print(f"\n[SYNC PARTIAL] Sync completed with {len(failed_tables)} skipped table(s): {', '.join(failed_tables)}")
+            print(f"\n[SYNC PARTIAL] Sync completed. Skipped tables due to errors: {', '.join(failed_tables)}")
             print("[SYNC PARTIAL] All other tables synced successfully. Skipped tables retain their previous local data.")
         else:
             print("\n" + "="*60)
@@ -160,7 +175,7 @@ def sync_data():
             print("="*60 + "\n")
 
     except Exception as e:
-        print(f"\n[FATAL ERROR] Sync crashed: {e}")
+        print(f"\n[FATAL ERROR] Sync crashed with unexpected error: {type(e).__name__}: {e}")
         print("="*60 + "\n")
 
     finally:
