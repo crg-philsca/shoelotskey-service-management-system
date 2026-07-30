@@ -625,32 +625,36 @@ def startup_sequence():
             try:
                 al_inspector = inspect(sync_engine)
                 if "audit_logs" in al_inspector.get_table_names():
-                    # 1. ATOMIC MIGRATION: Drop NOT NULL constraint and convert action_type enum in isolated transactions
+                    col_meta = {c['name']: c for c in al_inspector.get_columns("audit_logs")}
+                    # 1. ATOMIC MIGRATION: Drop NOT NULL constraint and convert action_type enum only if needed
                     if is_pg:
                         try:
-                            with sync_engine.begin() as pg_conn:
-                                pg_conn.execute(text("ALTER TABLE audit_logs ALTER COLUMN user_id DROP NOT NULL"))
-                            print(f">>> Migration ({engine_label}): Successfully executed ALTER TABLE audit_logs DROP NOT NULL on user_id and COMMITTED.")
+                            if 'user_id' in col_meta and not col_meta['user_id'].get('nullable', True):
+                                with sync_engine.begin() as pg_conn:
+                                    pg_conn.execute(text("ALTER TABLE audit_logs ALTER COLUMN user_id DROP NOT NULL"))
+                                print(f">>> Migration ({engine_label}): Successfully executed ALTER TABLE audit_logs DROP NOT NULL on user_id and COMMITTED.")
                         except Exception as uid_err:
                             print(f">>> Migration Notice (audit_logs.user_id on {engine_label}): {uid_err}")
 
                         try:
-                            with sync_engine.begin() as pg_conn:
-                                pg_conn.execute(text("ALTER TABLE audit_logs ALTER COLUMN record_id DROP NOT NULL"))
-                            print(f">>> Migration ({engine_label}): Successfully executed ALTER TABLE audit_logs DROP NOT NULL on record_id and COMMITTED.")
+                            if 'record_id' in col_meta and not col_meta['record_id'].get('nullable', True):
+                                with sync_engine.begin() as pg_conn:
+                                    pg_conn.execute(text("ALTER TABLE audit_logs ALTER COLUMN record_id DROP NOT NULL"))
+                                print(f">>> Migration ({engine_label}): Successfully executed ALTER TABLE audit_logs DROP NOT NULL on record_id and COMMITTED.")
                         except Exception as rec_err:
                             print(f">>> Migration Notice (audit_logs.record_id on {engine_label}): {rec_err}")
 
                         try:
-                            with sync_engine.begin() as pg_conn:
-                                pg_conn.execute(text("ALTER TABLE audit_logs ALTER COLUMN action_type TYPE VARCHAR(100) USING action_type::text"))
-                            print(f">>> Migration ({engine_label}): Successfully converted audit_logs.action_type from enum to VARCHAR(100) and COMMITTED.")
+                            act_type_str = str(col_meta.get('action_type', {}).get('type', '')).upper()
+                            if 'VARCHAR' not in act_type_str and 'TEXT' not in act_type_str and 'STRING' not in act_type_str:
+                                with sync_engine.begin() as pg_conn:
+                                    pg_conn.execute(text("ALTER TABLE audit_logs ALTER COLUMN action_type TYPE VARCHAR(100) USING action_type::text"))
+                                print(f">>> Migration ({engine_label}): Successfully converted audit_logs.action_type from enum to VARCHAR(100) and COMMITTED.")
                         except Exception as act_err:
                             print(f">>> Migration Notice (audit_logs.action_type on {engine_label}): {act_err}")
                     else:
                         try:
                             with sync_engine.begin() as conn:
-                                col_meta = {c['name']: c for c in al_inspector.get_columns("audit_logs")}
                                 if 'user_id' in col_meta and not col_meta['user_id'].get('nullable', True):
                                     print(">>> Migration (SQLite): Rebuilding audit_logs to drop NOT NULL on user_id...")
                                     conn.execute(text("PRAGMA foreign_keys=off;"))
