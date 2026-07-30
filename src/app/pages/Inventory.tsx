@@ -2,8 +2,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/ca
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { Input } from '@/app/components/ui/input';
-import { Package, PlusCircle, Search, Filter, AlertTriangle, ArrowUpRight, ChevronLeft, ChevronRight, Edit, Trash2, Printer } from 'lucide-react';
+import { Package, PlusCircle, PackagePlus, Search, Filter, AlertTriangle, ArrowUpRight, ChevronLeft, ChevronRight, Edit, Trash2, Printer } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import RestockModal from '@/app/components/RestockModal';
 import { Switch } from '@/app/components/ui/switch';
 import { 
     Dialog, 
@@ -18,7 +19,7 @@ import { toast } from 'sonner';
 import { useInventory } from '@/app/context/InventoryContext';
 import { useServices } from '@/app/context/ServiceContext';
 import { InventoryItem } from '@/app/types';
-
+import { getInventoryPresentation } from '@/app/lib/inventoryPresentation';
 interface InventoryProps {
     onSetHeaderActionRight?: (action: React.ReactNode) => void;
     user: { token: string; role?: string };
@@ -31,6 +32,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
     const [searchQuery, setSearchQuery] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
+    const [isRestockOpen, setIsRestockOpen] = useState(false);
     
     // Filter State
     const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -71,40 +73,51 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
     useEffect(() => {
         if (onSetHeaderActionRight && user.role?.toLowerCase() === 'owner') {
             onSetHeaderActionRight(
-                <Button 
-                    className="w-10 h-10 sm:w-40 flex items-center justify-center rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-[11px] font-black uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 tracking-widest"
-                    onClick={() => {
-                        setEditingItem(null);
-                        setFormData({ 
-                            name: '', 
-                            category: 'Chemicals', 
-                            stock: 0, 
-                            unit: 'Bottles', 
-                            price: 0, 
-                            isActive: true,
-                            autoDeduct: false,
-                            autoDeductTrigger: 'on-going',
-                            triggerService: 'All',
-                            consumptionQty: 0,
-                            consumptionUnit: '',
-                            packageSize: 0,
-                            packageUnit: '',
-                            lowStockThreshold: 0
-                        });
-                        setIsCustomCategory(false);
-                        setIsCustomUnit(false);
-                        setIsModalOpen(true);
-                    }}
-                >
-                    <PlusCircle className="h-4 w-4 sm:mr-2 shrink-0" />
-                    <span className="hidden sm:inline">New Item</span>
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button 
+                        className="w-10 h-10 sm:w-36 flex items-center justify-center rounded-md border border-red-200 bg-white px-2 sm:px-3 py-2 hover:bg-red-50 text-[11px] font-black uppercase text-red-600 shadow-sm transition focus:outline-none focus:ring-2 focus:ring-red-500 tracking-widest"
+                        onClick={() => setIsRestockOpen(true)}
+                        title="Restock Whole Product"
+                    >
+                        <PackagePlus className="h-4 w-4 sm:mr-1.5 shrink-0 text-red-600" />
+                        <span className="hidden sm:inline">Restock</span>
+                    </Button>
+                    <Button 
+                        className="w-10 h-10 sm:w-36 flex items-center justify-center rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-[11px] font-black uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 tracking-widest"
+                        onClick={() => {
+                            setEditingItem(null);
+                            setFormData({ 
+                                name: '', 
+                                category: 'Chemicals', 
+                                stock: 0, 
+                                unit: 'Bottles', 
+                                price: 0, 
+                                isActive: true,
+                                autoDeduct: false,
+                                autoDeductTrigger: 'on-going',
+                                triggerService: 'All',
+                                consumptionQty: 0,
+                                consumptionUnit: '',
+                                packageSize: 0,
+                                packageUnit: '',
+                                lowStockThreshold: 0
+                            });
+                            setIsCustomCategory(false);
+                            setIsCustomUnit(false);
+                            setIsModalOpen(true);
+                        }}
+                        title="Add New Item"
+                    >
+                        <PlusCircle className="h-4 w-4 sm:mr-1.5 shrink-0" />
+                        <span className="hidden sm:inline">New Item</span>
+                    </Button>
+                </div>
             );
         }
         return () => {
             if (onSetHeaderActionRight) onSetHeaderActionRight(null);
         };
-    }, [onSetHeaderActionRight, user.role]);
+    }, [onSetHeaderActionRight, user.role, setIsRestockOpen]);
  
     const handleSaveItem = () => {
         if (!formData.name) return;
@@ -127,9 +140,15 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
         };
  
         if (editingItem) {
-            updateItem({ ...editingItem, ...saveItemPayload });
+            const updated = { ...editingItem, ...saveItemPayload };
+            updateItem(updated);
             addActivity({
-                type: 'system',
+                type: 'inventory',
+                module: 'Inventory',
+                table: 'Inventory',
+                recordId: editingItem.id,
+                oldValues: editingItem,
+                newValues: updated,
                 user: 'Owner',
                 action: 'Update Inventory',
                 details: `Updated details for ${formData.name}`
@@ -138,9 +157,12 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
         } else {
             addItem(saveItemPayload);
             addActivity({
-                type: 'system',
+                type: 'inventory',
+                module: 'Inventory',
+                table: 'Inventory',
+                newValues: saveItemPayload,
                 user: 'Owner',
-                action: 'Add Inventory',
+                action: 'Create Inventory',
                 details: `Added new item: ${formData.name}`
             });
             toast.success(`Successfully added ${formData.name}`);
@@ -154,7 +176,11 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
         if (confirm(`Are you sure you want to delete ${item?.name}?`)) {
             deleteItem(id);
             addActivity({
-                type: 'system',
+                type: 'inventory',
+                module: 'Inventory',
+                table: 'Inventory',
+                recordId: id,
+                oldValues: item,
                 user: 'Owner',
                 action: 'Delete Inventory',
                 details: `Removed ${item?.name} from inventory`
@@ -418,35 +444,42 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                         <td className="px-6 py-4 text-xs font-bold text-gray-600 uppercase">{item.category}</td>
                                         <td className="px-6 py-4 text-right font-black text-xs text-gray-900">₱{(item.price || 0).toLocaleString()}</td>
                                         <td className="px-6 py-4 text-right">
-                                            {item.package_size && item.package_size > 0 ? (
-                                                <div>
-                                                    <span className="text-sm font-black text-gray-900">{item.stock}</span>
-                                                    <span className="text-[10px] text-gray-400 ml-1 font-bold">{item.unit}</span>
-                                                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wide leading-none mt-0.5">
-                                                        ~{Math.round(item.stock / item.package_size)} {item.package_unit}
-                                                    </p>
-                                                </div>
-                                            ) : (
-                                                <div>
-                                                    <span className="text-sm font-black text-gray-900">{item.stock}</span>
-                                                    <span className="text-[10px] text-gray-400 ml-1 font-bold">{item.unit}</span>
-                                                </div>
-                                            )}
+                                            {(() => {
+                                                const pres = getInventoryPresentation(item);
+                                                return (
+                                                    <div>
+                                                        <span className="text-sm font-black text-gray-900">{item.stock}</span>
+                                                        <span className="text-[10px] text-gray-400 ml-1 font-bold">{item.unit}</span>
+                                                        {pres.isPackaged && (
+                                                            <p className="text-[10px] text-slate-500 font-bold tracking-tight mt-0.5">
+                                                                {pres.containersLabel}
+                                                            </p>
+                                                        )}
+                                                        {pres.containersSubLabel && (
+                                                            <p className="text-[9px] text-indigo-600 font-extrabold uppercase mt-0.5">
+                                                                {pres.containersSubLabel}
+                                                            </p>
+                                                        )}
+                                                        {pres.daysRemainingLabel && (
+                                                            <p className="text-[9px] text-emerald-600 font-extrabold mt-0.5">
+                                                                {pres.daysRemainingLabel}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })()}
                                         </td>
                                         <td className="px-6 py-4 text-center">
                                             {(() => {
-                                                const qty = Number(item.stock || 0);
-                                                const threshold = (item.low_stock_threshold && item.low_stock_threshold > 0)
-                                                    ? item.low_stock_threshold
-                                                    : ((item.package_size && item.package_size > 0) ? item.package_size : 1);
-                                                const status = qty <= 0 ? 'Critical' : (qty <= threshold ? 'Low Stock' : 'In Stock');
+                                                const pres = getInventoryPresentation(item);
+                                                const status = pres.stockStatus;
                                                 return (
                                                     <Badge className={`
                                                         ${status === 'In Stock' ? 'bg-blue-50 text-blue-700 border-blue-100' : ''}
                                                         ${status === 'Low Stock' ? 'bg-amber-50 text-amber-700 border-amber-100' : ''}
                                                         ${status === 'Critical' ? 'bg-red-50 text-red-700 border-red-100' : ''}
                                                         text-[10px] font-black uppercase
-                                                    `}>
+                                                    `} title={pres.reorderRecommendation}>
                                                         {status}
                                                     </Badge>
                                                 );
@@ -763,10 +796,10 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                                     />
                                                     <span>All Services</span>
                                                 </label>
-                                                {services.map(svc => {
+                                                {services.map((svc: any) => {
                                                     const currentList = formData.triggerService === 'All'
-                                                        ? services.map(s => s.name)
-                                                        : formData.triggerService.split(',').map(s => s.trim()).filter(Boolean);
+                                                        ? services.map((s: any) => s.name)
+                                                        : formData.triggerService.split(',').map((s: string) => s.trim()).filter(Boolean);
                                                     const isChecked = formData.triggerService === 'All' || currentList.includes(svc.name);
                                                     return (
                                                         <label key={svc.id} className="flex items-center gap-2 text-xs font-medium cursor-pointer select-none text-gray-600 hover:text-red-600 transition-colors pl-2 border-l border-red-50/50">
@@ -776,16 +809,16 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                                                 checked={isChecked}
                                                                 disabled={formData.triggerService === 'All'}
                                                                 onChange={(e) => {
-                                                                    const current = formData.triggerService.split(',').map(s => s.trim()).filter(Boolean);
+                                                                    const current = formData.triggerService.split(',').map((s: string) => s.trim()).filter(Boolean);
                                                                     let next: string[];
                                                                     if (e.target.checked) {
                                                                         next = [...current, svc.name];
                                                                     } else {
-                                                                        next = current.filter(s => s !== svc.name);
+                                                                        next = current.filter((s: string) => s !== svc.name);
                                                                     }
                                                                     const sortedNext = services
-                                                                        .filter(s => next.includes(s.name))
-                                                                        .map(s => s.name);
+                                                                        .filter((s: any) => next.includes(s.name))
+                                                                        .map((s: any) => s.name);
                                                                     setFormData(prev => ({ ...prev, triggerService: sortedNext.join(', ') }));
                                                                 }}
                                                             />
@@ -846,6 +879,8 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                     </div>
                 </DialogContent>
             </Dialog>
+
+            <RestockModal open={isRestockOpen} onOpenChange={setIsRestockOpen} user={JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}')} />
         </div>
     );
 }

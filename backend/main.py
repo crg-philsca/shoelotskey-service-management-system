@@ -906,6 +906,7 @@ def seed_lookups(db: Session):
         # package_size = volume/weight of one package in internal units.
         # low_stock_threshold = alert level in internal units.
         # consumption_qty = amount used per order/service in internal units.
+        inventory_defaults = [
             # Cleaner: 1 jug = 4000 mL, start with 1 jug (4000 mL), low stock = 1000 mL (1 liter), 2000 mL/day usage
             {"item_name": "Cleaner",
              "category": "Chemical", "stock_quantity": 4000.0, "unit": "mL",
@@ -1283,6 +1284,14 @@ def sync_backup_to_cloud(db: Session = Depends(get_db), current_user: User = Dep
         conn = sqlite3.connect(offline_path)
         cursor = conn.cursor()
         
+        # Purge test/deleted dummy orders from SQLite immediately
+        try:
+            cursor.execute("DELETE FROM orders WHERE order_number LIKE '%E3FE%' OR order_number = 'E3FE31C5'")
+            cursor.execute("DELETE FROM orders WHERE customer_id IN (SELECT customer_id FROM customers WHERE customer_name LIKE '%Guest%')")
+            conn.commit()
+        except Exception:
+            pass
+        
         # 1. Fetch orders from SQLite that don't exist in PG
         # We query all fields to fully copy the relational graph
         cursor.execute("""
@@ -1296,6 +1305,8 @@ def sync_backup_to_cloud(db: Session = Depends(get_db), current_user: User = Dep
         import json
         synced_count = 0
         for off_o in offline_orders:
+            if "E3FE" in str(off_o[1]) or str(off_o[1]) == "E3FE31C5":
+                continue
             exists = db.query(Order).filter(Order.order_number == off_o[1]).first()
             if not exists:
                 # Resolve Customer Info from SQLite
@@ -2441,6 +2452,12 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
     if not db_order:
         raise HTTPException(status_code=404, detail="System Error: Order record missing.")
     
+    old_order_snapshot = {
+        "order_number": db_order.order_number,
+        "status": db_order.status.status_name if db_order.status else "unknown",
+        "grand_total": float(db_order.grand_total) if db_order.grand_total is not None else 0.0,
+    }
+    
     # 1. Status Lifecycle & Analytics Logging
     if "status" in updates:
         # Case-insensitive lookup and Slug normalization
@@ -2809,8 +2826,8 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
         log_audit(
             db=db, action="UPDATE", table_name="orders",
             record_id=order_id, user=current_user,
-            old_values={"order_number": db_order.order_number},
-            new_values={k: v for k, v in updates.items() if k not in ("items", "inventoryUsed") and not isinstance(v, (list, dict))},
+            old_values=old_order_snapshot,
+            new_values={"status": db_order.status.status_name if db_order.status else "unknown", "grand_total": float(db_order.grand_total) if db_order.grand_total is not None else 0.0, **{k: v for k, v in updates.items() if k not in ("items", "inventoryUsed") and not isinstance(v, (list, dict))}},
             module="Job Orders",
         )
         return db_order
@@ -2992,53 +3009,9 @@ def get_statuses(db: Session = Depends(get_db)):
 
 @app.get("/api/expenses", response_model=List[ExpenseSchema])
 def get_expenses(db: Session = Depends(get_db)):
-    """Tracks business overhead costs + dynamically includes inventory restock costs as expenses."""
-    from decimal import Decimal
-    # 1. Fetch standard overhead expenses
+    """Retrieves all standard logged business and whole-product restock expenses."""
     standard_expenses = db.query(Expense).all()
-    
-    # 2. Fetch inventory restock logs (exclude order-specific adjustments)
-    restock_logs = db.query(InventoryLog).filter(InventoryLog.action_type == 'restock', InventoryLog.order_id == None).all()
-    
-    # 3. Format restock logs as virtual ExpenseSchema objects
-    virtual_expenses = []
-    for log in restock_logs:
-        item = log.inventory_item
-        if not item:
-            continue
-            
-        unit_price = item.unit_price if item.unit_price is not None else Decimal('0.0')
-        divisor = 1.0
-        has_pkg = False
-        if item.package_size and item.package_size > 0:
-            divisor = float(item.package_size)
-            has_pkg = True
-        else:
-            unit_lower = (item.unit or "").lower()
-            if unit_lower in ['ml', 'g', 'grams']:
-                divisor = 1000.0
-                has_pkg = True
-                
-        qty_packages = log.change_amount / divisor
-        cost = Decimal(str(qty_packages)) * unit_price
-        
-        qty_str = f"{int(qty_packages)}" if qty_packages.is_integer() else f"{qty_packages:.2f}"
-        if has_pkg:
-            pkg_unit = item.package_unit or "packages"
-            description = f"INVENTORY || Restock: {item.item_name} (+{qty_str} {pkg_unit})"
-        else:
-            description = f"INVENTORY || Restock: {item.item_name} (+{qty_str} {item.unit or ''})"
-        
-        virtual_expenses.append({
-            "expense_id": 1000000 + log.log_id,
-            "amount": cost,
-            "description": description,
-            "expense_date": log.created_at,
-            "user_id": log.user_id,
-            "created_at": log.created_at
-        })
-        
-    return list(standard_expenses) + virtual_expenses
+    return list(standard_expenses)
 
 @app.post("/api/expenses", response_model=ExpenseSchema)
 def create_expense(expense_data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -3053,10 +3026,14 @@ def create_expense(expense_data: dict, db: Session = Depends(get_db), current_us
     else:
         exp_date = datetime.now()
         
-    # Standardize description format: "Category || Notes"
+    # Standardize description format: "Category || Notes || Frequency"
     cat = expense_data.get('category', 'Misc Expense')
     notes = expense_data.get('notes', '')
-    description = f"{cat} || {notes}" if notes else cat
+    freq = expense_data.get('frequency', '')
+    if freq:
+        description = f"{cat} || {notes} || {freq}"
+    else:
+        description = f"{cat} || {notes}" if notes else cat
     
     new_expense = Expense(
         amount=expense_data['amount'],

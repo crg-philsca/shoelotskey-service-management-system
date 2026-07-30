@@ -16,6 +16,7 @@ import { CreatableCombobox } from './ui/creatable-combobox';
 import { useActivities } from '@/app/context/ActivityContext';
 import { useInventory } from '../context/InventoryContext';
 import { trainPredictionModel } from '@/app/lib/mlPredictor';
+import { getInventoryPresentation } from '@/app/lib/inventoryPresentation';
 
 // Dropdown options
 const SHOE_BRANDS = [
@@ -1545,13 +1546,10 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                                     </SelectTrigger>
                                                                     <SelectContent>
                                                                         {inventoryData.map((inv: any) => {
-                                                                            const hasPkg = inv.package_size && inv.package_size > 0;
-                                                                            const displayStockLabel = hasPkg 
-                                                                                ? `${inv.stock} ${inv.package_unit || inv.unit} (~${(inv.stock / inv.package_size).toFixed(2)} ${inv.unit})`
-                                                                                : `${inv.stock} ${inv.unit}`;
+                                                                            const pres = getInventoryPresentation(inv);
                                                                             return (
                                                                                 <SelectItem key={inv.id} value={inv.id?.toString() || ""} className="text-[11px] font-medium">
-                                                                                    {inv.name} ({displayStockLabel} left)
+                                                                                    {inv.name} - {pres.dropdownLabel}
                                                                                 </SelectItem>
                                                                             );
                                                                         })}

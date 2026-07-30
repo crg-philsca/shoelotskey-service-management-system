@@ -7,6 +7,7 @@ import { useInventory } from '@/app/context/InventoryContext';
 import { Package, Plus, Minus, Trash2, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { JobOrder, InventoryUsed } from '@/app/types';
+import { getInventoryPresentation } from '@/app/lib/inventoryPresentation';
 
 interface StockUpdateModalProps {
     order: JobOrder | null;
@@ -168,16 +169,12 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave }: 
                                             </SelectTrigger>
                                             <SelectContent className="rounded-xl border-gray-100 shadow-xl">
                                                 {inventoryData.filter(i => i.isActive && i.stock > 0).map(item => {
-                                                    const packageSize = item.package_size ?? 0;
-                                                    const hasPkg = packageSize > 0;
-                                                    const displayStockLabel = hasPkg 
-                                                        ? `${item.stock} ${item.package_unit || item.unit} (~${(item.stock / packageSize).toFixed(2)} ${item.unit})`
-                                                        : `${item.stock} ${item.unit}`;
+                                                    const pres = getInventoryPresentation(item);
                                                     return (
                                                         <SelectItem key={item.id} value={item.id.toString()} className="text-xs font-medium py-2.5">
                                                             <div className="flex justify-between w-full gap-8">
                                                                 <span>{item.name}</span>
-                                                                <span className="text-gray-400">({displayStockLabel} left)</span>
+                                                                <span className="text-gray-400">({pres.dropdownLabel})</span>
                                                             </div>
                                                         </SelectItem>
                                                     );

@@ -74,6 +74,7 @@ export function ExpenseProvider({ children, user }: { children: ReactNode, user:
                                 amount: item.amount,
                                 category: parts[0] || 'Misc Expense',
                                 notes: parts[1] || '',
+                                frequency: parts[2] || (parts[0]?.toUpperCase() === 'INVENTORY' ? 'Variable / Restock' : (item.frequency || 'One-Time')),
                                 date: item.expense_date || item.date
                             };
                         });
@@ -108,6 +109,7 @@ export function ExpenseProvider({ children, user }: { children: ReactNode, user:
                                 amount: item.amount,
                                 category: parts[0] || 'Misc Expense',
                                 notes: parts[1] || '',
+                                frequency: parts[2] || (parts[0]?.toUpperCase() === 'INVENTORY' ? 'Variable / Restock' : (item.frequency || 'One-Time')),
                                 date: item.expense_date || item.date
                             };
                         });
@@ -150,6 +152,7 @@ export function ExpenseProvider({ children, user }: { children: ReactNode, user:
                     amount: Number(data.amount),
                     category: parts[0] || expense.category || 'Misc Expense',
                     notes: parts[1] || expense.notes || '',
+                    frequency: parts[2] || expense.frequency || (parts[0]?.toUpperCase() === 'INVENTORY' ? 'Variable / Restock' : 'One-Time'),
                     date: data.expense_date || data.date
                 };
                 setExpenses((prev) => [mappedAdded, ...prev]);

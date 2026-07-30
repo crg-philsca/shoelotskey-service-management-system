@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { format as dateFnsFormat } from 'date-fns';
 import { useLocation } from 'react-router-dom';
-import { cn } from '@/app/components/ui/utils';
 import type { ReactNode } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
@@ -23,6 +22,7 @@ import { useServices } from '@/app/context/ServiceContext';
 import { useOrders } from '@/app/context/OrderContext';
 import { useExpenses } from '@/app/context/ExpenseContext';
 import { useInventory } from '@/app/context/InventoryContext';
+import { getInventoryPresentation } from '@/app/lib/inventoryPresentation';
 import AddExpenseModal from '@/app/components/AddExpenseModal';
 import ProcessClaimModal from '@/app/components/ProcessClaimModal';
 import {
@@ -47,6 +47,7 @@ import {
   ChevronLeft,
   ChevronRight,
   AlertTriangle,
+  CheckCircle2,
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Cell } from 'recharts';
 import type { JobOrder } from '@/app/types';
@@ -1071,97 +1072,103 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                             <>
                                               <DropdownMenuItem onClick={(e) => {
                                                 e.stopPropagation();
+                                                updateOrder(order.id, { status: 'on-going', updatedAt: new Date() }, user.username);
+                                                toast.success('Order moved to On-Going');
+                                              }} className="border border-blue-200 rounded-md px-2.5 py-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 focus:text-blue-700 focus:bg-blue-100 font-bold mb-1">
+                                                <ArrowRight className="h-4 w-4 mr-2 text-blue-600" />
+                                                Move to On-Going
+                                              </DropdownMenuItem>
+                                              <DropdownMenuItem onClick={(e) => {
+                                                e.stopPropagation();
                                                 if (order) setSelectedOrder({...order});
                                                 setIsEditing(true);
-                                              }} className="border border-gray-200 rounded-md px-2.5 py-1.5 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:text-yellow-800 focus:bg-yellow-100 mb-1">
-                                                <Edit className="h-4 w-4 mr-2" />
+                                              }} className="border border-yellow-200 rounded-md px-2.5 py-1.5 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:text-yellow-800 focus:bg-yellow-100 font-bold mb-1">
+                                                <Edit className="h-4 w-4 mr-2 text-yellow-600" />
                                                 Edit Order Detail
                                               </DropdownMenuItem>
                                               <DropdownMenuItem onClick={(e) => {
                                                 e.stopPropagation();
                                                 setCancelOrderModal(order);
-                                              }} className="border border-red-200 rounded-md px-2.5 py-1.5 text-red-700 bg-red-50 hover:bg-red-100 focus:text-red-800 focus:bg-red-100 mb-1">
+                                              }} className="border border-red-200 rounded-md px-2.5 py-1.5 text-red-700 bg-red-50 hover:bg-red-100 focus:text-red-800 focus:bg-red-100 font-bold mb-1">
                                                 <AlertTriangle className="h-4 w-4 mr-2 text-red-600" />
-                                                Cancel Order (No Refunds)
+                                                Cancel Order
                                               </DropdownMenuItem>
                                             </>
                                           )}
                                           {order.status === 'on-going' && (
-                                            <DropdownMenuItem onClick={(e) => {
-                                              e.stopPropagation();
-                                              if (order) setSelectedOrder({...order});
-                                              setIsUpdatingStock(true);
-                                            }} className="border border-gray-200 rounded-md px-2.5 py-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 focus:text-emerald-800 focus:bg-emerald-100 mb-1">
-                                              <Package className="h-4 w-4 mr-2 text-emerald-600" />
-                                              Update Stock Inventory
-                                            </DropdownMenuItem>
-                                          )}
-                                          {order.status !== 'new-order' && (
-                                            <DropdownMenuItem onClick={(e) => {
-                                              e.stopPropagation();
-                                              const prevStatus =
-                                                order.status === 'on-going' ? 'new-order' :
-                                                  order.status === 'for-release' ? 'on-going' :
-                                                    order.status === 'claimed' ? 'for-release' : null;
-                                              if (prevStatus) {
-                                                const depositAmt = order.depositAmount || 0;
-                                                const paymentUpdates = (order.status === 'claimed' && depositAmt < order.grandTotal) ? {
-                                                    paymentStatus: 'downpayment' as any,
-                                                    amountReceived: depositAmt,
-                                                    balance: order.grandTotal - depositAmt,
-                                                    change: 0
-                                                } : {};
-
-                                                updateOrder(order.id, {
-                                                  status: prevStatus as any,
-                                                  updatedAt: new Date(),
-                                                  actualCompletionDate: undefined,
-                                                  ...paymentUpdates
-                                                }, user.username);
-                                                toast.success(`Order reverted to ${prevStatus.replace('-', ' ')}`);
-                                              }
-                                            }} className={cn(
-                                              "border rounded-md px-2.5 py-1.5 mb-1 focus:outline-none",
-                                              order.status === 'on-going' && "border-purple-200 text-purple-600 bg-purple-50 hover:bg-purple-100 focus:text-purple-700 focus:bg-purple-100",
-                                              order.status === 'for-release' && "border-blue-200 text-blue-600 bg-blue-50 hover:bg-blue-100 focus:text-blue-700 focus:bg-blue-100",
-                                              order.status === 'claimed' && "border-orange-200 text-orange-600 bg-orange-50 hover:bg-orange-100 focus:text-orange-700 focus:bg-orange-100"
-                                            )}>
-                                              <RotateCcw className={cn(
-                                                "h-4 w-4 mr-2",
-                                                order.status === 'on-going' && "text-purple-500",
-                                                order.status === 'for-release' && "text-blue-500",
-                                                order.status === 'claimed' && "text-orange-500"
-                                              )} />
-                                              {order.status === 'on-going' ? 'Undo to New Order' : order.status === 'for-release' ? 'Undo to On-Going' : 'Undo to For Release'}
-                                            </DropdownMenuItem>
-                                          )}
-                                          {order.status === 'new-order' && (
-                                            <DropdownMenuItem onClick={(e) => {
-                                              e.stopPropagation();
-                                              updateOrder(order.id, { status: 'on-going', updatedAt: new Date() }, user.username);
-                                              toast.success('Order moved to On-Going');
-                                            }} className="border border-gray-200 rounded-md px-2.5 py-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 focus:text-blue-700 focus:bg-blue-100">
-                                              <ArrowRight className="h-4 w-4 mr-2" />
-                                              Move to On-Going
-                                            </DropdownMenuItem>
-                                          )}
-                                          {order.status === 'on-going' && (
-                                            <DropdownMenuItem onClick={(e) => {
-                                              e.stopPropagation();
-                                              updateOrder(order.id, { status: 'for-release', updatedAt: new Date() }, user.username);
-                                              toast.success('Order moved to For Release');
-                                            }} className="border border-gray-200 rounded-md px-2.5 py-1.5 text-orange-600 bg-orange-50 hover:bg-orange-100 focus:text-orange-700 focus:bg-orange-100">
-                                              <ArrowRight className="h-4 w-4 mr-2" />
-                                              Move to For Release
-                                            </DropdownMenuItem>
+                                            <>
+                                              <DropdownMenuItem onClick={(e) => {
+                                                e.stopPropagation();
+                                                updateOrder(order.id, { status: 'for-release', updatedAt: new Date() }, user.username);
+                                                toast.success('Order moved to For Release');
+                                              }} className="border border-orange-200 rounded-md px-2.5 py-1.5 text-orange-600 bg-orange-50 hover:bg-orange-100 focus:text-orange-700 focus:bg-orange-100 font-bold mb-1">
+                                                <ArrowRight className="h-4 w-4 mr-2 text-orange-600" />
+                                                Move to For Release
+                                              </DropdownMenuItem>
+                                              <DropdownMenuItem onClick={(e) => {
+                                                e.stopPropagation();
+                                                updateOrder(order.id, { status: 'new-order', updatedAt: new Date(), actualCompletionDate: undefined }, user.username);
+                                                toast.success('Order reverted to new order');
+                                              }} className="border border-purple-200 rounded-md px-2.5 py-1.5 text-purple-600 bg-purple-50 hover:bg-purple-100 focus:text-purple-700 focus:bg-purple-100 font-bold mb-1">
+                                                <RotateCcw className="h-4 w-4 mr-2 text-purple-500" />
+                                                Undo to New Order
+                                              </DropdownMenuItem>
+                                              <DropdownMenuItem onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (order) setSelectedOrder({...order});
+                                                setIsUpdatingStock(true);
+                                              }} className="border border-emerald-200 rounded-md px-2.5 py-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 focus:text-emerald-800 focus:bg-emerald-100 font-bold mb-1">
+                                                <Package className="h-4 w-4 mr-2 text-emerald-600" />
+                                                Update Stock Inventory
+                                              </DropdownMenuItem>
+                                              <DropdownMenuItem onClick={(e) => {
+                                                e.stopPropagation();
+                                                setCancelOrderModal(order);
+                                              }} className="border border-red-200 rounded-md px-2.5 py-1.5 text-red-700 bg-red-50 hover:bg-red-100 focus:text-red-800 focus:bg-red-100 font-bold mb-1">
+                                                <AlertTriangle className="h-4 w-4 mr-2 text-red-600" />
+                                                Cancel Order
+                                              </DropdownMenuItem>
+                                            </>
                                           )}
                                           {order.status === 'for-release' && (
+                                            <>
+                                              <DropdownMenuItem onClick={(e) => {
+                                                e.stopPropagation();
+                                                setProcessClaimOrder(order);
+                                              }} className="border border-blue-200 rounded-md px-2.5 py-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 focus:text-blue-700 focus:bg-blue-100 font-bold mb-1">
+                                                <ArrowRight className="h-4 w-4 mr-2 text-blue-600" />
+                                                Move to Claimed
+                                              </DropdownMenuItem>
+                                              <DropdownMenuItem onClick={(e) => {
+                                                e.stopPropagation();
+                                                updateOrder(order.id, { status: 'on-going', updatedAt: new Date(), actualCompletionDate: undefined }, user.username);
+                                                toast.success('Order reverted to on going');
+                                              }} className="border border-blue-200 rounded-md px-2.5 py-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 focus:text-blue-700 focus:bg-blue-100 font-bold mb-1">
+                                                <RotateCcw className="h-4 w-4 mr-2 text-blue-500" />
+                                                Undo to On-Going
+                                              </DropdownMenuItem>
+                                            </>
+                                          )}
+                                          {order.status === 'claimed' && (
                                             <DropdownMenuItem onClick={(e) => {
                                               e.stopPropagation();
-                                              setProcessClaimOrder(order);
-                                            }} className="border border-gray-200 rounded-md px-2.5 py-1.5 text-gray-600 bg-gray-50 hover:bg-gray-100 focus:text-gray-700 focus:bg-gray-100">
-                                              <ArrowRight className="h-4 w-4 mr-2" />
-                                              Move to Claimed
+                                              const depositAmt = order.depositAmount || 0;
+                                              const paymentUpdates = (depositAmt < order.grandTotal) ? {
+                                                  paymentStatus: 'downpayment' as any,
+                                                  amountReceived: depositAmt,
+                                                  balance: order.grandTotal - depositAmt,
+                                                  change: 0
+                                              } : {};
+                                              updateOrder(order.id, {
+                                                status: 'for-release' as any,
+                                                updatedAt: new Date(),
+                                                actualCompletionDate: undefined,
+                                                ...paymentUpdates
+                                              }, user.username);
+                                              toast.success('Order reverted to for release');
+                                            }} className="border border-orange-200 rounded-md px-2.5 py-1.5 text-orange-600 bg-orange-50 hover:bg-orange-100 focus:text-orange-700 focus:bg-orange-100 font-bold mb-1">
+                                              <RotateCcw className="h-4 w-4 mr-2 text-orange-500" />
+                                              Undo to For Release
                                             </DropdownMenuItem>
                                           )}
                                         </DropdownMenuContent>
@@ -1356,11 +1363,10 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                           <div className="text-right">
                             <p className="text-sm font-black text-gray-900 mb-1">
                               {(() => {
-                                const packageSize = item.package_size ?? 0;
-                                const hasPkg = packageSize > 0;
-                                return hasPkg 
-                                  ? `${item.stock} ${item.unit} (~${Math.round(item.stock / packageSize)} ${item.package_unit || 'packages'})` 
-                                  : `${item.stock} ${item.unit}`;
+                                const pres = getInventoryPresentation(item);
+                                return pres.isPackaged 
+                                  ? `${pres.currentQuantityLabel} (${pres.containersLabel})` 
+                                  : pres.currentQuantityLabel;
                               })()}
                             </p>
                             {(() => {
@@ -1383,52 +1389,75 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
 
           <AddExpenseModal isOpen={isExpenseModalOpen} onClose={() => setIsExpenseModalOpen(false)} onAddExpense={addExpense} />
 
-          {/* CANCEL ORDER / NO REFUNDS CONFIRMATION MODAL */}
+          {/* CANCEL ORDER / DYNAMIC REFUND POLICY CONFIRMATION MODAL */}
           <Dialog open={!!cancelOrderModal} onOpenChange={() => setCancelOrderModal(null)}>
-            <DialogContent className="max-w-[450px] p-6 text-center rounded-2xl shadow-2xl border border-red-100 bg-white">
-              <DialogHeader className="flex flex-col items-center gap-2">
-                <div className="w-16 h-16 rounded-full bg-red-100 border-4 border-red-50 flex items-center justify-center mb-1 text-red-600">
-                  <AlertTriangle size={32} />
-                </div>
-                <DialogTitle className="text-xl font-black text-gray-900 uppercase tracking-tight">
-                  Confirm Order Cancellation
-                </DialogTitle>
-              </DialogHeader>
-              <div className="py-4 space-y-3">
-                <p className="text-xs text-gray-600 leading-relaxed font-medium">
-                  Are you sure you want to cancel <span className="font-black text-red-600 text-sm">#{cancelOrderModal?.orderNumber}</span>?
-                </p>
-                <div className="p-3.5 bg-rose-50 border-2 border-rose-200 rounded-xl text-left flex items-start gap-3">
-                  <AlertTriangle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-xs font-black text-rose-900 uppercase tracking-wide">Strict Policy: No Refunds</p>
-                    <p className="text-[11px] font-semibold text-rose-700 mt-0.5 leading-normal">
-                      Canceling this order forfeits all deposit amounts paid (if any). No refunds are permitted under system rules.
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="flex gap-3 pt-2">
-                <Button
-                  variant="outline"
-                  className="flex-1 bg-gray-100 border-gray-200 text-gray-700 font-black uppercase text-xs h-10 rounded-xl hover:bg-gray-200"
-                  onClick={() => setCancelOrderModal(null)}
-                >
-                  Do Not Cancel
-                </Button>
-                <Button
-                  className="flex-1 bg-red-600 hover:bg-red-700 text-white font-black uppercase text-xs h-10 rounded-xl shadow-lg shadow-red-200"
-                  onClick={async () => {
-                    if (cancelOrderModal) {
-                      await deleteOrder(cancelOrderModal.id);
-                      toast.error(`Order #${cancelOrderModal.orderNumber} cancelled. No refund issued.`);
-                      setCancelOrderModal(null);
-                    }
-                  }}
-                >
-                  Yes, Cancel Order
-                </Button>
-              </div>
+            <DialogContent className="max-w-[460px] p-6 text-center rounded-2xl shadow-2xl border border-red-100 bg-white">
+              {(() => {
+                const isRefundAllowed = cancelOrderModal?.status === 'new-order';
+                return (
+                  <>
+                    <DialogHeader className="flex flex-col items-center gap-2">
+                      <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-1 border-4 ${isRefundAllowed ? 'bg-emerald-100 border-emerald-50 text-emerald-600' : 'bg-red-100 border-red-50 text-red-600'}`}>
+                        {isRefundAllowed ? <CheckCircle2 size={32} /> : <AlertTriangle size={32} />}
+                      </div>
+                      <DialogTitle className="text-xl font-black text-gray-900 uppercase tracking-tight">
+                        {isRefundAllowed ? "Confirm Cancellation & Refund" : "Confirm Order Cancellation"}
+                      </DialogTitle>
+                    </DialogHeader>
+                    <div className="py-4 space-y-3">
+                      <p className="text-xs text-gray-600 leading-relaxed font-medium">
+                        Are you sure you want to cancel <span className="font-black text-red-600 text-sm">#{cancelOrderModal?.orderNumber}</span>?
+                      </p>
+                      {isRefundAllowed ? (
+                        <div className="p-3.5 bg-emerald-50 border-2 border-emerald-200 rounded-xl text-left flex items-start gap-3 shadow-sm">
+                          <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-xs font-black text-emerald-950 uppercase tracking-wide">Pre-Service Policy: Refund Allowed</p>
+                            <p className="text-[11px] font-semibold text-emerald-800 mt-0.5 leading-normal">
+                              Since this job order is in 'New Order' status and treatment has not commenced, canceling will issue a FULL REFUND of paid deposits (₱{(cancelOrderModal?.amountReceived || 0).toLocaleString()} paid).
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-3.5 bg-rose-50 border-2 border-rose-200 rounded-xl text-left flex items-start gap-3 shadow-sm">
+                          <AlertTriangle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-xs font-black text-rose-900 uppercase tracking-wide">Strict Policy: No Refunds</p>
+                            <p className="text-[11px] font-semibold text-rose-700 mt-0.5 leading-normal">
+                              This job order is currently 'On-Going' (or active) and treatment has already commenced. Canceling at this stage forfeits all deposit amounts paid (₱{(cancelOrderModal?.amountReceived || 0).toLocaleString()}). Payment cannot be refunded once work has started.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-3 pt-2">
+                      <Button
+                        variant="outline"
+                        className="flex-1 bg-gray-100 border-gray-200 text-gray-700 font-black uppercase text-xs h-10 rounded-xl hover:bg-gray-200"
+                        onClick={() => setCancelOrderModal(null)}
+                      >
+                        Do Not Cancel
+                      </Button>
+                      <Button
+                        className={`flex-1 text-white font-black uppercase text-xs h-10 rounded-xl shadow-lg ${isRefundAllowed ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200' : 'bg-red-600 hover:bg-red-700 shadow-red-200'}`}
+                        onClick={async () => {
+                          if (cancelOrderModal) {
+                            await deleteOrder(cancelOrderModal.id);
+                            if (cancelOrderModal.status === 'new-order') {
+                              toast.success(`Order #${cancelOrderModal.orderNumber} cancelled. Full refund of ₱${(cancelOrderModal.amountReceived || 0).toLocaleString()} issued since service had not commenced.`);
+                            } else {
+                              toast.error(`Order #${cancelOrderModal.orderNumber} cancelled. No refund issued per policy (service already commenced).`);
+                            }
+                            setCancelOrderModal(null);
+                          }
+                        }}
+                      >
+                        {isRefundAllowed ? "Yes, Cancel & Refund" : "Yes, Cancel (No Refund)"}
+                      </Button>
+                    </div>
+                  </>
+                );
+              })()}
             </DialogContent>
           </Dialog>
         </div>

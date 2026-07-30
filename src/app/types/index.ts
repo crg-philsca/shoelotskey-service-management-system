@@ -92,6 +92,8 @@ export interface BaseJobOrderData {
   referenceNo?: string;
   depositAmount?: number;
   releaseTime?: string;
+  refundAmount?: number;
+  refundReason?: string;
 
   // Metadata
   transactionDate: Date;

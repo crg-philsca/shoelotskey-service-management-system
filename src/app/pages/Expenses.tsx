@@ -350,14 +350,14 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
                                             </TableCell>
                                             <TableCell className="text-center">
                                                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200">
-                                                    {expense.frequency || 'Monthly'}
+                                                    {expense.frequency || (expense.category?.toUpperCase() === 'INVENTORY' ? 'Variable / Restock' : 'One-Time')}
                                                 </span>
                                             </TableCell>
                                             <TableCell className="text-gray-700">
                                                 {expense.notes || <span className="text-gray-400 italic">-</span>}
                                             </TableCell>
                                             <TableCell className="text-right font-bold text-sm text-red-700">
-                                                ₱{expense.amount.toLocaleString()}
+                                                ₱{Number(expense.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                             </TableCell>
                                             <TableCell className="text-center">
                                                 <div className="flex items-center justify-center gap-2">

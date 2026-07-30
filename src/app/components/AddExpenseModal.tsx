@@ -6,7 +6,7 @@ import { Label } from '@/app/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { Textarea } from '@/app/components/ui/textarea';
 import { toast } from 'sonner';
-import { Search, Plus, Trash2, Users, Package, DollarSign } from 'lucide-react';
+import { Search, Plus, Trash2, Users, Package } from 'lucide-react';
 
 interface AddExpenseModalProps {
     isOpen: boolean;
@@ -338,7 +338,7 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditE
                                 </Button>
                             </div>
                             <div className="space-y-2">
-                                {staffItems.map((item, index) => (
+                                {staffItems.map((item) => (
                                     <div key={item.id} className="grid grid-cols-12 gap-2 items-center bg-white p-2 rounded-lg border border-red-100 shadow-xs">
                                         <div className="col-span-5">
                                             <Input
@@ -413,7 +413,7 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditE
                                 </Button>
                             </div>
                             <div className="space-y-2">
-                                {supplyItems.map((item, index) => (
+                                {supplyItems.map((item) => (
                                     <div key={item.id} className="grid grid-cols-12 gap-2 items-center bg-white p-2 rounded-lg border border-amber-100 shadow-xs">
                                         <div className="col-span-7">
                                             <Input

@@ -590,6 +590,9 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
     };
 
     const updateOrder = async (id: string, updates: Partial<JobOrder>, statusUser?: string) => {
+        const targetOrder = orders.find(o => o.id === id);
+        const oldStatus = targetOrder?.status ? targetOrder.status.replace('-', ' ') : 'unknown';
+        const newStatus = updates.status ? updates.status.replace('-', ' ') : 'unknown';
         const effectiveReleasedBy = statusUser || user.username || 'staff';
         const now = new Date();
         const finalUpdates: any = {
@@ -658,10 +661,12 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
             // Log Activity
             if (updates.status) {
                 addActivity({
-                    user: statusUser || 'System',
+                    user: statusUser || user.username || 'System',
                     action: 'Status Change',
-                    details: `Order ID ${id} moved to "${updates.status.replace('-', ' ')}"`,
-                    type: 'order'
+                    details: `Order ID ${id} status state changed from "${oldStatus}" to "${newStatus}"`,
+                    type: 'order',
+                    oldValues: { status: oldStatus },
+                    newValues: { status: newStatus }
                 });
             }
         } catch (err: any) {

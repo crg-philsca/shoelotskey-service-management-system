@@ -6,7 +6,8 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { JobOrder, PaymentMethod } from "@/app/types";
-import { CheckCircle2, User } from "lucide-react";
+import { CheckCircle2, User, ShieldAlert } from "lucide-react";
+import { toast } from "sonner";
 
 interface ProcessClaimModalProps {
     order: JobOrder | null;
@@ -35,12 +36,18 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
     const [change, setChange] = useState<number>(0);
     const [referenceNo, setReferenceNo] = useState("");
 
-    // Calculate remaining balance
+    // Conditional refund states
+    const [enableRefund, setEnableRefund] = useState(false);
+    const [refundReason, setRefundReason] = useState("Minor Restoration: Paint did not adhere to shoes and faded");
+    const [customRefundReason, setCustomRefundReason] = useState("");
+    const [refundAmount, setRefundAmount] = useState<number>(0);
+
+    // Calculate remaining balance after any conditional refund deduction
     const totalAmount = order?.grandTotal || 0;
     const amountPaid = order?.amountReceived || 0;
-    // If status is not paid, remaining balance is total - paid. If paid, 0.
+    const effectiveTotal = Math.max(0, totalAmount - (enableRefund ? refundAmount : 0));
     const isFullyPaid = order?.paymentStatus === 'fully-paid';
-    const remainingBalance = isFullyPaid ? 0 : Math.max(0, totalAmount - amountPaid);
+    const remainingBalance = isFullyPaid ? 0 : Math.max(0, effectiveTotal - amountPaid);
 
     useEffect(() => {
         if (order && open) {
@@ -49,6 +56,10 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
             setAmountReceived(0);
             setChange(0);
             setReferenceNo("");
+            setEnableRefund(false);
+            setRefundReason("Minor Restoration: Paint did not adhere to shoes and faded");
+            setCustomRefundReason("");
+            setRefundAmount(0);
         }
     }, [order, open]);
 
@@ -92,17 +103,33 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
             actualCompletionDate: new Date(),
         };
 
+        let currentTotal = order.grandTotal;
+        if (enableRefund && refundAmount > 0) {
+            const finalReason = refundReason === 'Custom Quality / Service Warranty Defect' ? customRefundReason : refundReason;
+            currentTotal = Math.max(0, order.grandTotal - refundAmount);
+            updateData.grandTotal = currentTotal;
+            updateData.refundAmount = refundAmount;
+            updateData.refundReason = finalReason;
+            
+            toast.success(`Order #${order.orderNumber} claimed with ₱${refundAmount.toLocaleString()} conditional refund deducted from sales (${finalReason}).`);
+        }
+
         if (remainingBalance > 0) {
             updateData.paymentStatus = 'fully-paid';
             updateData.paymentMethod = paymentMethod;
             updateData.amountReceived = (order.amountReceived || 0) + amountReceived;
             updateData.balance = 0;
-            updateData.change = Math.max(0, updateData.amountReceived - order.grandTotal);
+            updateData.change = Math.max(0, updateData.amountReceived - currentTotal);
             if (['gcash', 'maya'].includes(paymentMethod)) {
                 updateData.referenceNo = referenceNo;
             }
         } else {
+            updateData.paymentStatus = 'fully-paid';
             updateData.balance = 0;
+            if (enableRefund && refundAmount > 0) {
+                // Deduct refund from received revenue so sales reports reflect accurate collection
+                updateData.amountReceived = Math.max(0, (order.amountReceived || 0) - refundAmount);
+            }
         }
 
         onConfirm(order.id, updateData);
@@ -110,21 +137,22 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
     };
 
     const isPaymentValid = (remainingBalance <= 0 || amountReceived >= remainingBalance) &&
-        (!['gcash', 'maya'].includes(paymentMethod) || referenceNo.trim().length > 0);
+        (!['gcash', 'maya'].includes(paymentMethod) || referenceNo.trim().length > 0) &&
+        (!enableRefund || (refundAmount >= 0 && refundAmount <= totalAmount && (refundReason !== 'Custom Quality / Service Warranty Defect' || customRefundReason.trim().length > 0)));
 
     if (!order) return null;
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-[340px] bg-white p-0 gap-0 overflow-hidden border-none shadow-2xl rounded-2xl">
-                <DialogHeader className="px-4 py-3 bg-white border-b border-gray-50 flex flex-row items-center justify-between">
+            <DialogContent className="max-w-[400px] max-h-[82vh] flex flex-col bg-white p-0 gap-0 overflow-hidden border-none shadow-2xl rounded-2xl">
+                <DialogHeader className="px-4 py-3 bg-white border-b border-gray-50 flex flex-row items-center justify-between shrink-0">
                     <DialogTitle className="text-[14px] font-black uppercase tracking-tight text-gray-800 flex items-center gap-1.5">
                         <CheckCircle2 className="w-4 h-4 text-red-600" />
                         Process Claim
                     </DialogTitle>
                 </DialogHeader>
 
-                <div className="p-4 space-y-3.5">
+                <div className="p-4 space-y-3.5 overflow-y-auto max-h-[60vh] flex-1">
                     {/* Compact Order Summary Card */}
                     <div className="bg-[#F9FAFB] p-3 rounded-xl border border-gray-100 flex flex-col gap-2 shadow-sm">
                         <div className="flex justify-between items-start border-b border-gray-200/50 pb-2">
@@ -228,6 +256,91 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
                                 </div>
                             </div>
                         )}
+
+                        {/* Conditional Service Refund / Warranty Claim */}
+                        <div className="pt-2.5 border-t border-gray-100">
+                            <label className="flex items-center gap-2 cursor-pointer p-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors">
+                                <input
+                                    type="checkbox"
+                                    checked={enableRefund}
+                                    onChange={(e) => setEnableRefund(e.target.checked)}
+                                    className="rounded border-gray-300 text-amber-600 focus:ring-amber-500 w-3.5 h-3.5"
+                                />
+                                <span className="text-[10px] font-black uppercase tracking-wide text-slate-700 flex items-center gap-1.5">
+                                    <ShieldAlert className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                                    Apply Conditional Service Refund
+                                </span>
+                            </label>
+
+                            {enableRefund && (
+                                <div className="mt-2.5 p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                                    <p className="text-[10px] text-amber-900 leading-tight font-medium">
+                                        Refunds during claim are strictly allowed only for specific service quality conditions (e.g., paint fading or material non-adherence) and deduct from sales revenue.
+                                    </p>
+                                    
+                                    <div className="space-y-1">
+                                        <Label className="text-[9px] font-black uppercase text-amber-950 tracking-wider">Condition / Refund Reason</Label>
+                                        <Select value={refundReason} onValueChange={(val) => setRefundReason(val)}>
+                                            <SelectTrigger className="h-8 text-[11px] font-bold bg-white border-amber-300/80 text-slate-800 rounded-lg shadow-sm">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent className="rounded-xl border-amber-100 max-h-56">
+                                                <SelectItem value="Minor Restoration: Paint did not adhere to shoes and faded" className="text-[11px] font-semibold text-slate-800">
+                                                    Minor Restoration: Paint did not adhere / faded
+                                                </SelectItem>
+                                                <SelectItem value="Deep Cleaning: Persistent stain could not be safely removed" className="text-[11px] font-medium text-slate-800">
+                                                    Deep Cleaning: Persistent stain unremoved
+                                                </SelectItem>
+                                                <SelectItem value="Sole Restoration: Yellowing re-emerged post-treatment" className="text-[11px] font-medium text-slate-800">
+                                                    Sole Restoration: Yellowing re-emerged
+                                                </SelectItem>
+                                                <SelectItem value="Unglued / Re-attachment: Adhesive bonding defect" className="text-[11px] font-medium text-slate-800">
+                                                    Unglued: Adhesive bonding defect
+                                                </SelectItem>
+                                                <SelectItem value="Custom Quality / Service Warranty Defect" className="text-[11px] font-black text-amber-700">
+                                                    + Custom Condition Reason...
+                                                </SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    {refundReason === 'Custom Quality / Service Warranty Defect' && (
+                                        <div className="space-y-1">
+                                            <Input
+                                                value={customRefundReason}
+                                                onChange={(e) => setCustomRefundReason(e.target.value)}
+                                                placeholder="Enter specific service defect reason..."
+                                                className="h-8 text-[11px] bg-white border-amber-300/80 rounded-lg placeholder:text-gray-400 font-medium"
+                                            />
+                                        </div>
+                                    )}
+
+                                    <div className="space-y-1">
+                                        <Label className="text-[9px] font-black uppercase text-amber-950 tracking-wider flex items-center justify-between">
+                                            <span>Refund Amount to Deduct</span>
+                                            <span className="text-gray-500 font-bold lowercase text-[9px]">(max ₱{totalAmount})</span>
+                                        </Label>
+                                        <div className="relative">
+                                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-gray-400">₱</span>
+                                            <Input
+                                                type="number"
+                                                min="0"
+                                                max={totalAmount}
+                                                value={refundAmount || ''}
+                                                onChange={(e) => setRefundAmount(Math.min(totalAmount, Math.max(0, parseFloat(e.target.value) || 0)))}
+                                                placeholder="0.00"
+                                                className="h-8 pl-6 text-[12px] font-black bg-white border-amber-300/80 rounded-lg text-rose-600 shadow-sm"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="p-2 bg-white rounded-lg border border-amber-200 flex justify-between items-center text-[11px]">
+                                        <span className="font-bold text-slate-600">Adjusted Sales Revenue:</span>
+                                        <span className="font-black text-emerald-700">₱{Math.max(0, totalAmount - (refundAmount || 0)).toFixed(2)}</span>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 

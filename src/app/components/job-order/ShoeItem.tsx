@@ -9,6 +9,7 @@ import { Trash2, ShoppingBag, X, Plus } from 'lucide-react';
 import { formatPeso } from '@/app/lib/utils';
 import { useServices } from '@/app/context/ServiceContext';
 import { useInventory } from '@/app/context/InventoryContext';
+import { getInventoryPresentation } from '@/app/lib/inventoryPresentation';
 
 interface ShoeItemProps {
     shoe: any;
@@ -281,13 +282,10 @@ export const ShoeItem: React.FC<ShoeItemProps> = ({ shoe, index, updateShoe, rem
                                                     </SelectTrigger>
                                                     <SelectContent>
                                                         {inventoryData.map((inv: any) => {
-                                                            const hasPkg = inv.package_size && inv.package_size > 0;
-                                                            const displayStockLabel = hasPkg 
-                                                                ? `${inv.stock} ${inv.package_unit || inv.unit} (~${(inv.stock / inv.package_size).toFixed(2)} ${inv.unit})`
-                                                                : `${inv.stock} ${inv.unit}`;
+                                                            const pres = getInventoryPresentation(inv);
                                                             return (
                                                                 <SelectItem key={inv.id} value={inv.id?.toString()} className="text-[11px]">
-                                                                    {inv.name} ({displayStockLabel} left)
+                                                                    {inv.name} - {pres.dropdownLabel}
                                                                 </SelectItem>
                                                             );
                                                         })}

@@ -327,10 +327,34 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
 
         // Handle UPDATE (Both exist)
         if (oldVals && newVals && typeof oldVals === 'object' && typeof newVals === 'object') {
-            const allKeys = Array.from(new Set([...Object.keys(oldVals), ...Object.keys(newVals)]));
-            const changedKeys = allKeys.filter(k => JSON.stringify(oldVals[k]) !== JSON.stringify(newVals[k]));
+            const normMap: { [key: string]: { label: string; oldVal?: any; newVal?: any } } = {};
+            const ignoredKeys = new Set(['id', 'order_id', 'item_id', 'user_id', 'customer_id', 'created_at', 'updated_at', 'history', 'items', 'inventory_used', '_id', 'token', 'password']);
 
-            if (changedKeys.length === 0) {
+            Object.keys(oldVals).forEach(k => {
+                const norm = k.toLowerCase().replace(/[_-\s]/g, '');
+                if (!ignoredKeys.has(norm) && !ignoredKeys.has(k)) {
+                    normMap[norm] = { label: k, oldVal: oldVals[k] };
+                }
+            });
+
+            Object.keys(newVals).forEach(k => {
+                const norm = k.toLowerCase().replace(/[_-\s]/g, '');
+                if (!ignoredKeys.has(norm) && !ignoredKeys.has(k)) {
+                    if (!normMap[norm]) normMap[norm] = { label: k };
+                    normMap[norm].newVal = newVals[k];
+                    normMap[norm].label = k;
+                }
+            });
+
+            const changedItems = Object.values(normMap).filter(item => {
+                if ((item.oldVal === undefined || item.oldVal === null || item.oldVal === '') && 
+                    (item.newVal === undefined || item.newVal === null || item.newVal === '')) {
+                    return false;
+                }
+                return JSON.stringify(item.oldVal) !== JSON.stringify(item.newVal);
+            });
+
+            if (changedItems.length === 0) {
                 return (
                     <div className="bg-gray-50 p-4 rounded-xl border border-dashed border-gray-200 text-center">
                         <span className="text-[11px] font-bold text-gray-500 italic">No specific property diff found (Timestamp or background metadata update)</span>
@@ -344,16 +368,16 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                         Changed Fields (Before vs After)
                     </span>
                     <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
-                        {changedKeys.map(k => (
-                            <div key={k} className="flex flex-col sm:flex-row sm:items-center justify-between py-1.5 border-b border-slate-200/60 last:border-0 gap-2">
-                                <span className="font-extrabold text-slate-700 uppercase text-xs tracking-wide">{k}</span>
+                        {changedItems.map(({ label, oldVal, newVal }) => (
+                            <div key={label} className="flex flex-col sm:flex-row sm:items-center justify-between py-1.5 border-b border-slate-200/60 last:border-0 gap-2">
+                                <span className="font-extrabold text-slate-700 uppercase text-xs tracking-wide">{label.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ')}</span>
                                 <div className="flex items-center gap-2 text-xs">
                                     <span className="line-through font-mono font-bold bg-rose-100 text-rose-800 px-2 py-0.5 rounded border border-rose-200">
-                                        {String(oldVals[k] ?? 'Empty')}
+                                        {String(oldVal ?? 'Empty')}
                                     </span>
                                     <span className="text-gray-400 font-black">➔</span>
                                     <span className="font-mono font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded border border-emerald-200">
-                                        {String(newVals[k] ?? 'Empty')}
+                                        {String(newVal ?? 'Empty')}
                                     </span>
                                 </div>
                             </div>
