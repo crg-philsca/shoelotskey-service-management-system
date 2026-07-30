@@ -12,7 +12,7 @@ import { useServices } from '@/app/context/ServiceContext';
 
 interface ServiceManagementProps {
   onSetHeaderActionRight?: (action: React.ReactNode | null) => void;
-  user: { token: string };
+  user: { token: string; role?: string };
 }
 
 export default function ServiceManagement({ onSetHeaderActionRight, user }: ServiceManagementProps) {
@@ -45,7 +45,7 @@ export default function ServiceManagement({ onSetHeaderActionRight, user }: Serv
   }, [user.token]);
 
   useEffect(() => {
-    if (onSetHeaderActionRight) {
+    if (onSetHeaderActionRight && user.role?.toLowerCase() === 'owner') {
       onSetHeaderActionRight(
         <div className="flex items-center gap-2">
         <Button 
@@ -62,7 +62,7 @@ export default function ServiceManagement({ onSetHeaderActionRight, user }: Serv
       );
     }
     return () => onSetHeaderActionRight?.(null);
-  }, [onSetHeaderActionRight, navigate]);
+  }, [onSetHeaderActionRight, navigate, user.role]);
 
   const handleSaveService = (service: Service) => {
     const exists = services.find(s => s.id === service.id);
@@ -126,14 +126,16 @@ export default function ServiceManagement({ onSetHeaderActionRight, user }: Serv
                         <Badge className={`${service.active ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'} text-[9px] font-bold uppercase tracking-wider shadow-none border-none`}>
                           {service.active ? 'Active' : 'Inactive'}
                         </Badge>
-                        <div className="flex items-center gap-1.5" onPointerDown={e => e.stopPropagation()}>
-                          <Button variant="ghost" size="sm" onClick={() => handleEditService(service)} className="h-7 w-7 p-0 text-amber-600 border border-amber-600 hover:bg-amber-50 rounded-md">
-                            <Edit size={12} />
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => handleDeleteService(service.id)} className="h-7 w-7 p-0 text-red-600 border border-red-600 hover:bg-red-50 rounded-md">
-                            <Trash size={12} />
-                          </Button>
-                        </div>
+                        {user.role?.toLowerCase() === 'owner' && (
+                          <div className="flex items-center gap-1.5" onPointerDown={e => e.stopPropagation()}>
+                            <Button variant="ghost" size="sm" onClick={() => handleEditService(service)} className="h-7 w-7 p-0 text-amber-600 border border-amber-600 hover:bg-amber-50 rounded-md">
+                              <Edit size={12} />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleDeleteService(service.id)} className="h-7 w-7 p-0 text-red-600 border border-red-600 hover:bg-red-50 rounded-md">
+                              <Trash size={12} />
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     </Reorder.Item>
                   ))}
@@ -168,14 +170,16 @@ export default function ServiceManagement({ onSetHeaderActionRight, user }: Serv
                         <Badge className={`${service.active ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'} text-[9px] font-bold uppercase tracking-wider shadow-none border-none`}>
                           {service.active ? 'Active' : 'Inactive'}
                         </Badge>
-                        <div className="flex items-center gap-1.5" onPointerDown={e => e.stopPropagation()}>
-                          <Button variant="ghost" size="sm" onClick={() => handleEditService(service)} className="h-7 w-7 p-0 text-amber-600 border border-amber-600 hover:bg-amber-50 rounded-md">
-                            <Edit size={12} />
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => handleDeleteService(service.id)} className="h-7 w-7 p-0 text-red-600 border border-red-600 hover:bg-red-50 rounded-md">
-                            <Trash size={12} />
-                          </Button>
-                        </div>
+                        {user.role?.toLowerCase() === 'owner' && (
+                          <div className="flex items-center gap-1.5" onPointerDown={e => e.stopPropagation()}>
+                            <Button variant="ghost" size="sm" onClick={() => handleEditService(service)} className="h-7 w-7 p-0 text-amber-600 border border-amber-600 hover:bg-amber-50 rounded-md">
+                              <Edit size={12} />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleDeleteService(service.id)} className="h-7 w-7 p-0 text-red-600 border border-red-600 hover:bg-red-50 rounded-md">
+                              <Trash size={12} />
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     </Reorder.Item>
                   ))}
@@ -213,14 +217,16 @@ export default function ServiceManagement({ onSetHeaderActionRight, user }: Serv
                       <Badge className={`${service.active ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'} text-[9px] font-bold uppercase tracking-wider shadow-none border-none`}>
                         {service.active ? 'Active' : 'Inactive'}
                       </Badge>
-                      <div className="flex items-center gap-1.5" onPointerDown={e => e.stopPropagation()}>
-                        <Button variant="ghost" size="sm" onClick={() => handleEditService(service)} className="h-7 w-7 p-0 text-amber-600 border border-amber-600 hover:bg-amber-50 rounded-md">
-                          <Edit size={12} />
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleDeleteService(service.id)} className="h-7 w-7 p-0 text-red-600 border border-red-600 hover:bg-red-50 rounded-md">
-                          <Trash size={12} />
-                        </Button>
-                      </div>
+                      {user.role?.toLowerCase() === 'owner' && (
+                        <div className="flex items-center gap-1.5" onPointerDown={e => e.stopPropagation()}>
+                          <Button variant="ghost" size="sm" onClick={() => handleEditService(service)} className="h-7 w-7 p-0 text-amber-600 border border-amber-600 hover:bg-amber-50 rounded-md">
+                            <Edit size={12} />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleDeleteService(service.id)} className="h-7 w-7 p-0 text-red-600 border border-red-600 hover:bg-red-50 rounded-md">
+                            <Trash size={12} />
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </Reorder.Item>
                 ))}

@@ -41,6 +41,7 @@ export interface InventoryItem {
   consumption_unit?: string;
   package_size?: number;
   package_unit?: string;
+  low_stock_threshold?: number;
 }
 
 export interface BaseJobOrderData {
@@ -87,6 +88,7 @@ export interface BaseJobOrderData {
   paymentStatus: PaymentStatus;
   amountReceived?: number;
   change?: number;
+  balance?: number;
   referenceNo?: string;
   depositAmount?: number;
   releaseTime?: string;
@@ -121,12 +123,14 @@ export interface JobOrder extends BaseJobOrderData {
   status: JobStatus;
   assignedTo?: string;
   predictedCompletionDate?: Date;
+  actualReleaseDate?: Date;
   actualCompletionDate?: Date;
   createdAt: Date;
   updatedAt: Date;
   items?: ShoeItem[];
   releaseTime?: string;
   claimedBy?: string;
+  releasedBy?: string;
   statusHistory: Array<{
     status: JobStatus;
     timestamp: Date;

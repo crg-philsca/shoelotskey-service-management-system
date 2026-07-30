@@ -21,6 +21,8 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave }: 
     const [originalUsed, setOriginalUsed] = useState<InventoryUsed[]>([]);
     const [selectedItem, setSelectedItem] = useState<string>('');
     const [isApplied, setIsApplied] = useState(false);
+    // [FIX] Track quantity inputs as strings to allow partial decimal typing (e.g. "0." or ".3")
+    const [quantityInputs, setQuantityInputs] = useState<Record<number, string>>({});
 
     useEffect(() => {
         if (order) {
@@ -39,6 +41,10 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave }: 
             setInventoryUsed([...parsedArray]);
             setOriginalUsed(JSON.parse(JSON.stringify(parsedArray)));
             setIsApplied(order.inventoryApplied || false);
+            // Reset input string states whenever modal re-opens
+            const inputMap: Record<number, string> = {};
+            parsedArray.forEach((i: InventoryUsed) => { inputMap[i.itemId] = String(i.quantity); });
+            setQuantityInputs(inputMap);
         }
     }, [order, open]);
 
@@ -61,6 +67,7 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave }: 
             quantity: defaultQty,
             unit: displayUnit
         }]);
+        setQuantityInputs(prev => ({ ...prev, [item.id]: String(defaultQty) }));
         setSelectedItem('');
     };
 
@@ -72,9 +79,12 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave }: 
         const step = isPackaged ? (item.consumption_qty || 10) : 1;
         const delta = direction * step;
 
-        setInventoryUsed(prev => prev.map(i => 
-            i.itemId === itemId ? { ...i, quantity: Math.max(0, parseFloat((i.quantity + delta).toFixed(2))) } : i
-        ));
+        setInventoryUsed(prev => prev.map(i => {
+            if (i.itemId !== itemId) return i;
+            const newQty = Math.max(0, parseFloat(((i.quantity + delta)).toFixed(2)));
+            setQuantityInputs(pv => ({ ...pv, [itemId]: String(newQty) }));
+            return { ...i, quantity: newQty };
+        }));
     };
 
     const handleRemoveItem = (itemId: number) => {
@@ -187,9 +197,14 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave }: 
                             </div>
 
                             <div className="space-y-3">
-                                <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest block mb-1">
-                                    Materials to Deduct ({inventoryUsed.length})
-                                </label>
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest block mb-1">
+                                        Materials to Deduct ({inventoryUsed.length})
+                                    </label>
+                                    <p className="text-[10px] text-amber-600 font-semibold bg-amber-50 border border-amber-100 rounded-lg px-3 py-1.5 mb-2">
+                                        ℹ️ Enter quantities in <strong>consumption units</strong> (e.g. mL, grams, Liters) — not in packages (bottles/cans).
+                                    </p>
+                                </div>
                                 <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1 custom-scrollbar">
                                     {(inventoryUsed || []).map((item) => (
                                         <div key={item.itemId} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100 group hover:border-emerald-200 transition-all">
@@ -211,16 +226,31 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave }: 
                                                         <Minus size={14} />
                                                     </button>
                                                     <input 
-                                                        type="number"
-                                                        step="any"
-                                                        value={item.quantity}
+                                                        type="text"
+                                                        inputMode="decimal"
+                                                        value={quantityInputs[item.itemId] ?? String(item.quantity)}
                                                         onChange={(e) => {
-                                                            const val = parseFloat(e.target.value) || 0;
+                                                            const raw = e.target.value;
+                                                            // Allow only valid decimal partial inputs (e.g. ".", "0.", "1.5")
+                                                            if (raw === '' || /^[0-9]*\.?[0-9]*$/.test(raw)) {
+                                                                setQuantityInputs(prev => ({ ...prev, [item.itemId]: raw }));
+                                                                const parsed = parseFloat(raw);
+                                                                if (!isNaN(parsed)) {
+                                                                    setInventoryUsed(prev => prev.map(i => 
+                                                                        i.itemId === item.itemId ? { ...i, quantity: parsed } : i
+                                                                    ));
+                                                                }
+                                                            }
+                                                        }}
+                                                        onBlur={() => {
+                                                            // On blur, ensure quantity is a valid number
+                                                            const parsed = parseFloat(quantityInputs[item.itemId] ?? '') || 0;
+                                                            setQuantityInputs(prev => ({ ...prev, [item.itemId]: String(parsed) }));
                                                             setInventoryUsed(prev => prev.map(i => 
-                                                                i.itemId === item.itemId ? { ...i, quantity: val } : i
+                                                                i.itemId === item.itemId ? { ...i, quantity: parsed } : i
                                                             ));
                                                         }}
-                                                        className="text-xs font-black w-[40px] text-center bg-transparent border-none focus:ring-0 p-0"
+                                                        className="text-xs font-black w-[52px] text-center bg-transparent border-none focus:ring-0 p-0"
                                                     />
                                                     <button 
                                                         onClick={() => handleUpdateQty(item.itemId, 1)}

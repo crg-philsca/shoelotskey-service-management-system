@@ -14,8 +14,63 @@ import AddExpenseModal from '@/app/components/AddExpenseModal';
 
 type ExpensesProps = {
     onSetHeaderActionRight?: (action: ReactNode | null) => void;
-    user: { token: string };
+    user: { token: string; role?: string };
 };
+
+function FormattedDateInput({ value, onChange, className, id }: { value: string; onChange: (val: string) => void; className?: string; id?: string }) {
+    const toDisplay = (iso: string) => {
+        if (!iso) return '';
+        const parts = iso.split('-');
+        if (parts.length === 3) {
+            return `${parts[1]}/${parts[2]}/${parts[0]}`;
+        }
+        return iso;
+    };
+
+    const [localVal, setLocalVal] = useState(toDisplay(value));
+
+    useEffect(() => {
+        setLocalVal(toDisplay(value));
+    }, [value]);
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        let inputVal = e.target.value;
+        let digits = inputVal.replace(/[^0-9]/g, '');
+        if (digits.length > 8) digits = digits.substring(0, 8);
+
+        let formatted = digits;
+        if (digits.length > 2) {
+            formatted = digits.substring(0, 2) + '/' + digits.substring(2);
+        }
+        if (digits.length > 4) {
+            formatted = digits.substring(0, 2) + '/' + digits.substring(2, 4) + '/' + digits.substring(4);
+        }
+
+        setLocalVal(formatted);
+
+        if (digits.length === 8) {
+            const mm = digits.substring(0, 2);
+            const dd = digits.substring(2, 4);
+            const yyyy = digits.substring(4, 8);
+            const iso = `${yyyy}-${mm}-${dd}`;
+            const dateObj = new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd));
+            if (!isNaN(dateObj.getTime())) {
+                onChange(iso);
+            }
+        }
+    };
+
+    return (
+        <Input
+            id={id}
+            type="text"
+            placeholder="MM/DD/YYYY"
+            value={localVal}
+            onChange={handleChange}
+            className={className}
+        />
+    );
+}
 
 export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps) {
     useEffect(() => {
@@ -112,18 +167,6 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
 
         let filtered = expenses
             .filter((exp) => {
-                const category = exp.category.toLowerCase();
-                const isDaily = category.includes('(daily)');
-                const isWeekly = category.includes('(weekly)');
-                const isMonthly = category.includes('(monthly)') || 
-                                 category.includes('water') || 
-                                 category.includes('electricity');
-                
-                // Enforce STRICT timeframe buckets as per user request
-                if (isDaily && profitRange !== 'Daily') return false;
-                if (isWeekly && profitRange !== 'Weekly') return false;
-                if (isMonthly && (profitRange !== 'Monthly' && profitRange !== 'Quarterly' && profitRange !== 'Annually')) return false;
-                
                 // For non-bucketed/Other expenses, standard date range logic applies
                 return isWithinRange(new Date(exp.date));
             })
@@ -280,6 +323,7 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
                                 <TableRow className="bg-[#fef5f3]">
                                     <TableHead className="font-black text-gray-600 uppercase text-xs">Date</TableHead>
                                     <TableHead className="font-black text-gray-600 uppercase text-xs">Category</TableHead>
+                                    <TableHead className="font-black text-gray-600 uppercase text-xs text-center">Frequency</TableHead>
                                     <TableHead className="font-black text-gray-600 uppercase text-xs">Notes</TableHead>
                                     <TableHead className="font-black text-gray-600 uppercase text-xs text-right">Amount</TableHead>
                                     <TableHead className="font-black text-gray-600 uppercase text-[11px] text-center tracking-wider">Actions</TableHead>
@@ -288,7 +332,7 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
                             <TableBody>
                                 {paginatedExpenses.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={5} className="text-center text-gray-400 py-12">
+                                        <TableCell colSpan={6} className="text-center text-gray-400 py-12">
                                             <div className="flex flex-col items-center gap-2">
                                                 <Receipt className="h-10 w-10 text-gray-300" />
                                                 <p className="font-semibold">No expenses found.</p>
@@ -303,6 +347,11 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
                                             </TableCell>
                                             <TableCell>
                                                 <span className="font-semibold text-gray-800">{expense.category}</span>
+                                            </TableCell>
+                                            <TableCell className="text-center">
+                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200">
+                                                    {expense.frequency || 'Monthly'}
+                                                </span>
                                             </TableCell>
                                             <TableCell className="text-gray-700">
                                                 {expense.notes || <span className="text-gray-400 italic">-</span>}
@@ -320,14 +369,16 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
                                                     >
                                                         <Pencil size={14} strokeWidth={2.5} />
                                                     </Button>
-                                                    <Button 
-                                                        variant="ghost" 
-                                                        className="h-8 w-8 p-0 rounded-lg border border-red-500 text-red-600 hover:bg-red-50 transition-colors"
-                                                        onClick={() => setExpenseToDelete(expense)}
-                                                        title="Delete Expense"
-                                                    >
-                                                        <Trash2 size={14} strokeWidth={2.5} />
-                                                    </Button>
+                                                    {user.role?.toLowerCase() === 'owner' && (
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            className="h-8 w-8 p-0 rounded-lg border border-red-500 text-red-600 hover:bg-red-50 transition-colors"
+                                                            onClick={() => setExpenseToDelete(expense)}
+                                                            title="Delete Expense"
+                                                        >
+                                                            <Trash2 size={14} strokeWidth={2.5} />
+                                                        </Button>
+                                                    )}
                                                 </div>
                                             </TableCell>
                                         </TableRow>
@@ -417,20 +468,18 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
 
                         <div className="space-y-2">
                             <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">Start Date</label>
-                            <Input
-                                type="date"
+                            <FormattedDateInput
                                 value={startDate}
-                                onChange={(e) => setStartDate(e.target.value)}
+                                onChange={(val) => setStartDate(val)}
                                 className="h-9 text-xs border-gray-100 bg-gray-50/50 text-center"
                             />
                         </div>
 
                         <div className="space-y-2">
                             <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">End Date</label>
-                            <Input
-                                type="date"
+                            <FormattedDateInput
                                 value={endDate}
-                                onChange={(e) => setEndDate(e.target.value)}
+                                onChange={(val) => setEndDate(val)}
                                 className="h-9 text-xs border-gray-100 bg-gray-50/50 text-center"
                             />
                         </div>

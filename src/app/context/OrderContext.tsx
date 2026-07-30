@@ -210,11 +210,22 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
             updatedAt: parseUTC(bo.updated_at || bo.created_at),
             transactionDate: parseUTC(bo.created_at),
             predictedCompletionDate: bo.expected_at ? parseUTC(bo.expected_at) : undefined,
-            actualCompletionDate: bo.released_at ? parseUTC(bo.released_at) : undefined,
+            actualReleaseDate: bo.released_at ? parseUTC(bo.released_at) : (() => {
+                const log = bo.status_logs?.find((sl: any) => mapBackendStatus(sl.status?.status_name) === 'for-release');
+                return log ? new Date(log.changed_at) : undefined;
+            })(),
+            actualCompletionDate: bo.claimed_at ? parseUTC(bo.claimed_at) : (() => {
+                const log = bo.status_logs?.find((sl: any) => mapBackendStatus(sl.status?.status_name) === 'claimed');
+                return log ? new Date(log.changed_at) : undefined;
+            })(),
 
             // Items Mapping - conditions come from 3NF conditions[] array
             items: bo.items?.map((bi: any) => {
-                const condNames: string[] = bi.conditions?.map((c: any) => c.condition_name?.toLowerCase()) || [];
+                // [FIX] Normalize condition names: strip spaces and slashes so
+                // "Rips/Holes" -> "ripsholes", "Deep Stains" -> "deepstains", etc.
+                const condNames: string[] = bi.conditions?.map(
+                    (c: any) => (c.condition_name || '').toLowerCase().replace(/\s+/g, '').replace(/\//g, '')
+                ) || [];
                 return {
                     id: bi.item_id?.toString() || Math.random().toString(),
                     brand: bi.brand || 'Other',
@@ -246,15 +257,21 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
             shoeModel: firstItem.shoe_model || 'Unknown',
             shoeMaterial: bo.items?.map((i: any) => i.material).filter(Boolean).join(', ') || 'Unknown',
             quantity: bo.items?.reduce((acc: number, item: any) => acc + (item.quantity || 1), 0) || 1,
-            condition: bo.items?.[0] ? {
-                scratches:      bo.items[0].conditions?.some((c: any) => c.condition_name?.toLowerCase() === 'scratches') || false,
-                yellowing:      bo.items[0].conditions?.some((c: any) => c.condition_name?.toLowerCase() === 'yellowing') || false,
-                ripsHoles:      bo.items[0].conditions?.some((c: any) => c.condition_name?.toLowerCase() === 'ripsholes') || false,
-                deepStains:     bo.items[0].conditions?.some((c: any) => c.condition_name?.toLowerCase() === 'deepstains') || false,
-                soleSeparation: bo.items[0].conditions?.some((c: any) => c.condition_name?.toLowerCase() === 'soleseparation') || false,
-                wornOut:        bo.items[0].conditions?.some((c: any) => c.condition_name?.toLowerCase() === 'wornout') || false,
-                others: bo.items[0].item_notes || ''
-            } : {
+            // Fallback root-level condition (uses first item, same fix)
+            condition: bo.items?.[0] ? (() => {
+                const cNames: string[] = bo.items[0].conditions?.map(
+                    (c: any) => (c.condition_name || '').toLowerCase().replace(/\s+/g, '').replace(/\//g, '')
+                ) || [];
+                return {
+                    scratches:      cNames.includes('scratches'),
+                    yellowing:      cNames.includes('yellowing'),
+                    ripsHoles:      cNames.includes('ripsholes'),
+                    deepStains:     cNames.includes('deepstains'),
+                    soleSeparation: cNames.includes('soleseparation'),
+                    wornOut:        cNames.includes('wornout'),
+                    others: bo.items[0].item_notes || ''
+                };
+            })() : {
                 scratches: false, yellowing: false, ripsHoles: false,
                 deepStains: false, soleSeparation: false, wornOut: false, others: ''
             },
@@ -269,6 +286,8 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                 (s.category?.category_name || s.category) === 'addon'
             ).map((s: any) => ({ name: s.service_name, quantity: 1 })) || [],
             processedBy: bo.processor?.username || 'System',
+            claimedBy: bo.claimed_by || bo.claimedBy || (mapBackendStatus(bo.status?.status_name) === 'claimed' ? (bo.customer?.full_name || bo.customer_name) : undefined),
+            releasedBy: bo.released_by || bo.releasedBy || (mapBackendStatus(bo.status?.status_name) === 'claimed' ? (bo.status_logs?.find((sl: any) => mapBackendStatus(sl.status?.status_name) === 'claimed')?.user?.username || bo.processor?.username || 'owner') : undefined),
             inventoryUsed: bo.inventory_used || [],
 
             statusHistory: bo.status_logs?.map((sl: any) => ({
@@ -330,13 +349,17 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
             'Completed': 'for-release',
             'Claimed': 'claimed',
         };
-        return map[statusName] || 'new-order';
+        // [FIX] Only fall back to 'new-order' if the statusName itself is empty/null.
+        // If DB returns an unexpected value, keep it as-is to avoid silent downgrade.
+        if (!statusName) return 'new-order';
+        return map[statusName] ?? map[statusName.toLowerCase()] ?? 'new-order';
     };
 
     /**
      * @function refreshOrders
      * @description Force-refetches the latest data from the database.
-     * Useful for resolving temporary out-of-sync states or confirming optimistic updates.
+     * Merges backend data with any locally-pending sync queue updates so that
+     * optimistic status changes (applied while offline) are NOT overwritten.
      */
     const refreshOrders = async () => {
         try {
@@ -346,7 +369,35 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
             if (response.ok) {
                 const data = await response.json();
                 const mapped = data.map(mapBackendToFrontend);
-                setOrders(mergePendingOrders(mapped));
+                const withPending = mergePendingOrders(mapped);
+
+                // [FIX] Preserve optimistic local updates for orders in the sync queue.
+                // The sync queue holds UPDATE tasks for orders that were edited offline.
+                // We merge by ID: server data takes precedence EXCEPT for fields that are
+                // present in a pending UPDATE payload (those were locally edited and not yet synced).
+                const queueStr = localStorage.getItem('order_sync_queue');
+                if (queueStr) {
+                    try {
+                        const queue: any[] = JSON.parse(queueStr);
+                        const pendingUpdates: Record<string, any> = {};
+                        queue.filter(t => t.type === 'UPDATE').forEach(t => {
+                            pendingUpdates[t.id] = { ...(pendingUpdates[t.id] || {}), ...t.payload };
+                        });
+
+                        const merged = withPending.map(order => {
+                            const pending = pendingUpdates[order.id];
+                            if (!pending) return order;
+                            // Overlay only the explicitly updated fields from local queue
+                            return { ...order, ...pending, updatedAt: order.updatedAt };
+                        });
+                        setOrders(merged);
+                        localStorage.setItem('jobOrders_v19_cache', JSON.stringify(merged));
+                        return;
+                    } catch (_) { /* fall through to plain set */ }
+                }
+
+                setOrders(withPending);
+                localStorage.setItem('jobOrders_v19_cache', JSON.stringify(withPending));
             }
         } catch (err) {
             console.error('[DEBUG] OrderProvider: Refresh failed.', err);
@@ -539,15 +590,37 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
     };
 
     const updateOrder = async (id: string, updates: Partial<JobOrder>, statusUser?: string) => {
+        const effectiveReleasedBy = statusUser || user.username || 'staff';
+        const now = new Date();
+        const finalUpdates: any = {
+            ...updates,
+            ...(updates.status === 'for-release' ? {
+                actualReleaseDate: updates.actualReleaseDate || now,
+                actualCompletionDate: undefined,
+                claimedBy: undefined,
+                releasedBy: undefined,
+            } : {}),
+            ...(updates.status === 'claimed' ? {
+                actualCompletionDate: updates.actualCompletionDate || now,
+                releasedBy: updates.releasedBy || effectiveReleasedBy
+            } : {}),
+            ...(updates.status === 'on-going' || updates.status === 'new-order' ? {
+                actualReleaseDate: undefined,
+                actualCompletionDate: undefined,
+                claimedBy: undefined,
+                releasedBy: undefined,
+            } : {})
+        };
+
         // Optimistic Update
         setOrders((prev) => prev.map((order) => {
             if (order.id === id) {
-                return { ...order, ...updates, updatedAt: new Date() };
+                return { ...order, ...finalUpdates, updatedAt: new Date() };
             }
             return order;
         }));
 
-        const payload = { ...updates, updater_id: user.id };
+        const payload = { ...finalUpdates, updater_id: user.id };
 
         try {
             const dbId = parseInt(id);
@@ -573,6 +646,9 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                     return;
                 }
 
+                if (response.status === 400 || response.status === 401 || response.status === 403) {
+                    throw new Error(`HTTP_${response.status}`);
+                }
                 if (!response.ok) throw new Error('API update failed');
             } else {
                 // If it doesn't have a valid ID yet, it was likely created offline recently
@@ -588,8 +664,13 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                     type: 'order'
                 });
             }
-        } catch (err) {
-            console.error('[DEBUG] OrderProvider: Backend sync pending. Queueing task.', err);
+        } catch (err: any) {
+            console.error('[DEBUG] OrderProvider: Update failed or sync pending.', err);
+            if (err?.message && err.message.startsWith('HTTP_')) {
+                import('sonner').then(({ toast }) => toast.error("Update denied by server (400/401/403)."));
+                refreshOrders();
+                return;
+            }
             queueSyncTask({ type: 'UPDATE', id, payload });
         }
     };

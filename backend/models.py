@@ -97,7 +97,7 @@ class User(Base):
     locked_until = Column(DateTime, nullable=True)
     reset_token = Column(String(255), nullable=True)
     reset_token_expiry = Column(DateTime, nullable=True)
-    created_at = Column(TIMESTAMP, server_default=func.now())
+    created_at = Column(TIMESTAMP, default=datetime.now)
     
     # Relationships
     role = relationship("Role", back_populates="users")
@@ -111,7 +111,7 @@ class Customer(Base):
     customer_id = Column(Integer, primary_key=True, autoincrement=True)
     customer_name = Column(String(100), nullable=False, index=True)
     contact_number = Column(String(20), nullable=False)
-    created_at = Column(TIMESTAMP, server_default=func.now())
+    created_at = Column(TIMESTAMP, default=datetime.now)
     
     # Relationship to history
     orders = relationship("Order", back_populates="customer")
@@ -143,7 +143,7 @@ class Expense(Base):
     description = Column(Text)
     expense_date = Column(DateTime, nullable=False)
     user_id = Column(Integer, ForeignKey("users.user_id"), nullable=False)
-    created_at = Column(TIMESTAMP, server_default=func.now())
+    created_at = Column(TIMESTAMP, default=datetime.now)
     
     user = relationship("User", back_populates="expenses")
 
@@ -168,8 +168,8 @@ class Order(Base):
     user_id = Column(Integer, ForeignKey("users.user_id"), nullable=False)
     inventory_applied = Column(Boolean, default=False)
     inventory_used = Column(JSON, nullable=True)
-    created_at = Column(TIMESTAMP, server_default=func.now())
-    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
+    created_at = Column(TIMESTAMP, default=datetime.now)
+    updated_at = Column(TIMESTAMP, default=datetime.now, onupdate=datetime.now)
     
     # Relationships
     customer = relationship("Customer", back_populates="orders")
@@ -177,7 +177,7 @@ class Order(Base):
     priority = relationship("PriorityLevel")
     processor = relationship("User", back_populates="orders")
     items = relationship("Item", back_populates="order", cascade="all, delete-orphan")
-    status_logs = relationship("StatusLog", back_populates="order")
+    status_logs = relationship("StatusLog", back_populates="order", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="order", cascade="all, delete-orphan")
     delivery = relationship("Delivery", back_populates="order", uselist=False, cascade="all, delete-orphan")
 
@@ -196,7 +196,7 @@ class Payment(Base):
     balance = Column(DECIMAL(10, 2), default=0.0)
     reference_no = Column(String(100), nullable=True)
     deposit_amount = Column(DECIMAL(10, 2), default=0.0)
-    created_at = Column(TIMESTAMP, server_default=func.now())
+    created_at = Column(TIMESTAMP, default=datetime.now)
     
     order = relationship("Order", back_populates="payments")
     method = relationship("PaymentMethod")
@@ -262,26 +262,45 @@ class StatusLog(Base):
     """Tracks time spent in each status for ML Lead-time optimization."""
     __tablename__ = "status_log"
     status_log_id = Column(Integer, primary_key=True, autoincrement=True)
-    order_id = Column(Integer, ForeignKey("orders.order_id"), nullable=False)
+    order_id = Column(Integer, ForeignKey("orders.order_id", ondelete="CASCADE"), nullable=False)
     status_id = Column(Integer, ForeignKey("status.status_id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.user_id"), nullable=False)
-    changed_at = Column(TIMESTAMP, server_default=func.now())
+    changed_at = Column(TIMESTAMP, default=datetime.now)
     
     order = relationship("Order", back_populates="status_logs")
     status = relationship("Status", back_populates="logs")
     user = relationship("User", back_populates="status_logs")
 
 class AuditLog(Base):
-    """System-wide audit trail for security and debugging."""
+    """
+    System-wide audit trail for security, compliance, and forensic analysis.
+    
+    Design Note (ISO 27001 / NIST SP 800-92 Compliance):
+    - username and role are INTENTIONALLY DENORMALIZED.
+    - Audit logs must capture the actor's identity at the exact moment of the event.
+    - If a user is deleted or renamed later, the audit trail must still show who performed the action.
+    - Joining against the users table at query time violates forensic integrity.
+    """
     __tablename__ = "audit_logs"
     audit_log_id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey("users.user_id"), nullable=False)
-    action_type = Column(String(20), nullable=False) # Simplified for 3NF
+    user_id = Column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)  # nullable: system events may have no user
+
+    # Denormalized identity snapshot (forensic integrity - see docstring above)
+    username = Column(String(50), nullable=True, index=True)   # Captured at event time
+    role = Column(String(20), nullable=True)                   # Captured at event time
+
+    action_type = Column(String(30), nullable=False, index=True)  # CREATE, UPDATE, DELETE, LOGIN, etc.
+    module = Column(String(50), nullable=True, index=True)     # Human-readable: Job Orders, Inventory, etc.
     table_name = Column(String(50), nullable=False)
-    record_id = Column(Integer, nullable=False)
+    record_id = Column(Integer, nullable=True)                 # nullable: some events have no specific record
     old_values = Column(JSON)
     new_values = Column(JSON)
-    created_at = Column(TIMESTAMP, server_default=func.now())
+
+    # Optional forensic context
+    ip_address = Column(String(50), nullable=True)
+    user_agent = Column(String(255), nullable=True)
+
+    created_at = Column(TIMESTAMP, default=datetime.now, index=True)
 
 # ==========================================
 # 8. INVENTORY & STOCK MANAGEMENT
@@ -305,11 +324,23 @@ class Inventory(Base):
     trigger_service = Column(String(100), default="All")
     consumption_qty = Column(Float, default=0.0)
     consumption_unit = Column(String(20), default="")
-    package_size = Column(Float, default=0.0)
-    package_unit = Column(String(20), default="")
+    package_size = Column(Float, default=0.0)   # e.g. 4000 (mL per bottle)
+    package_unit = Column(String(20), default="")  # e.g. "bottle"
+    low_stock_threshold = Column(Float, default=0.0)  # Alert threshold in internal units (mL / g)
 
-    created_at = Column(TIMESTAMP, server_default=func.now())
-    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
+    def recalculate_status(self):
+        threshold = self.low_stock_threshold if (self.low_stock_threshold and self.low_stock_threshold > 0.0) else (
+            self.package_size if (self.package_size and self.package_size > 0.0) else 1.0
+        )
+        if self.stock_quantity <= 0.0:
+            self.status = "Critical"
+        elif self.stock_quantity <= threshold:
+            self.status = "Low Stock"
+        else:
+            self.status = "In Stock"
+
+    created_at = Column(TIMESTAMP, default=datetime.now)
+    updated_at = Column(TIMESTAMP, default=datetime.now, onupdate=datetime.now)
 
 class InventoryLog(Base):
     """Audit trail for stock adjustments (deductions/restocks)."""
@@ -318,9 +349,9 @@ class InventoryLog(Base):
     item_id = Column(Integer, ForeignKey("inventory.item_id"), nullable=False)
     change_amount = Column(Float, nullable=False)
     action_type = Column(String(20), nullable=False) # 'deduction', 'restock', 'manual_edit'
-    order_id = Column(Integer, ForeignKey("orders.order_id"), nullable=True) # Linked to job order if needed
+    order_id = Column(Integer, ForeignKey("orders.order_id", ondelete="SET NULL"), nullable=True) # Linked to job order if needed
     user_id = Column(Integer, ForeignKey("users.user_id"), nullable=False)
-    created_at = Column(TIMESTAMP, server_default=func.now())
+    created_at = Column(TIMESTAMP, default=datetime.now)
     
     inventory_item = relationship("Inventory")
     order = relationship("Order")

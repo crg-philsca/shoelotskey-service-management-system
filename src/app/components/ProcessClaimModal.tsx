@@ -95,26 +95,14 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
         if (remainingBalance > 0) {
             updateData.paymentStatus = 'fully-paid';
             updateData.paymentMethod = paymentMethod;
-            // Total amount received is previous paid + current payment
-            // But the type expectation for `onConfirm` might need adjustment or we handle logic here.
-            // Let's update the total amount received to equal the grand total + any change (technically amount tendered)
-            // or just simpler: `amountReceived` field in DB usually stores total amount tendered.
-            // If I paid 500 before, and 500 now for a 1000 item. Total tendered is 1000.
-            // If I pay 1000 now for 500 balance (old 500 paid), total tendered is 500 + 1000 = 1500.
-
-            // Actually, let's just ensure the status becomes 'fully-paid'. 
-            // We will pass the `amountReceived` as the TOTAL amount tendered for the whole order?
-            // Or just the amount tendered in this transaction? 
-            // The mock logic seems to treat `amountReceived` as total amount paid.
-
-            // Let's just pass what we have and let the parent handle the merge if needed, 
-            // but typically we just want to save that it's paid.
-
             updateData.amountReceived = (order.amountReceived || 0) + amountReceived;
+            updateData.balance = 0;
             updateData.change = Math.max(0, updateData.amountReceived - order.grandTotal);
             if (['gcash', 'maya'].includes(paymentMethod)) {
                 updateData.referenceNo = referenceNo;
             }
+        } else {
+            updateData.balance = 0;
         }
 
         onConfirm(order.id, updateData);

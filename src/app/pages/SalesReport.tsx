@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useExpenses } from '@/app/context/ExpenseContext';
 import { useOrders } from '@/app/context/OrderContext';
+import { useActivities } from '@/app/context/ActivityContext';
 import type { JobOrder } from '@/app/types';
 
 interface SalesReportProps {
@@ -35,6 +36,7 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
   const { orders: allOrders, loading } = useOrders();
   const { expenses } = useExpenses();
   const { services } = useServices();
+  const { addActivity } = useActivities();
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('all');
   const [printMode, setPrintMode] = useState<'all' | 'Sales' | 'Expenses' | 'ROI'>('all');
   const [dateRange, setDateRange] = useState<'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Annually'>(() => {
@@ -69,18 +71,6 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
   const filteredExpensesByDate = useMemo<any[]>(() => {
     const todayStr = dateFnsFormat(now, 'yyyy-MM-dd');
     return expenses.filter((exp: any) => {
-      const category = (exp.category || '').toLowerCase();
-      const isDaily = category.includes('(daily)');
-      const isWeekly = category.includes('(weekly)');
-      const isMonthly = category.includes('(monthly)') || 
-                        category.includes('water') || 
-                        category.includes('electricity');
-      
-      // Enforce STRICT timeframe buckets as per user request
-      if (isDaily && dateRange !== 'Daily') return false;
-      if (isWeekly && dateRange !== 'Weekly') return false;
-      if (isMonthly && (dateRange !== 'Monthly' && dateRange !== 'Quarterly' && dateRange !== 'Annually')) return false;
-
       const date = new Date(exp.date);
       if (isNaN(date.getTime())) return false;
       const expDateStr = dateFnsFormat(date, 'yyyy-MM-dd');
@@ -101,17 +91,27 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
   // 2. DATA SEGMENTATION
   // Total Revenue (Total billable amount)
   const totalRevenue = useMemo(() => {
-    return filteredOrdersByDate.reduce((sum: number, order: JobOrder) => sum + (order.grandTotal || 0), 0);
+    return filteredOrdersByDate.reduce((sum: number, order: JobOrder) => {
+      if ((order?.status as string)?.toLowerCase() === 'cancelled') return sum;
+      return sum + (order.grandTotal || 0);
+    }, 0);
   }, [filteredOrdersByDate]);
 
   // Total Pending Payments (Total unpaid balance)
   const totalPendingPayments = useMemo(() => {
-    return filteredOrdersByDate.reduce((sum: number, order: JobOrder) => sum + ((order.grandTotal || 0) - (order.amountReceived || 0)), 0);
+    return filteredOrdersByDate.reduce((sum: number, order: JobOrder) => {
+      if ((order?.status as string)?.toLowerCase() === 'cancelled') return sum;
+      if (order?.paymentStatus === 'fully-paid') return sum;
+      return sum + ((order.grandTotal || 0) - (order.amountReceived || 0));
+    }, 0);
   }, [filteredOrdersByDate]);
 
   // Total Sales & Analytics Data (Includes Fully Paid and Downpayment Orders)
   const totalSalesData = useMemo(() => {
-    return filteredOrdersByDate.filter((order: JobOrder) => order.paymentStatus === 'fully-paid' || order.paymentStatus === 'downpayment');
+    return filteredOrdersByDate.filter((order: JobOrder) => 
+      (order.status as string)?.toLowerCase() !== 'cancelled' && 
+      (order.paymentStatus === 'fully-paid' || order.paymentStatus === 'downpayment')
+    );
   }, [filteredOrdersByDate]);
 
   // 3. CHART & METRIC DATA
@@ -183,6 +183,14 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
 
   // 4. PRINT & EXPORT LOGIC
   const handleExport = (type: 'Sales' | 'Expenses' | 'ROI') => {
+    addActivity({
+      type: 'Reports',
+      module: 'Reports',
+      user: JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}').username,
+      action: 'PRINT',
+      table: 'Sales Report',
+      details: `Printed ${type} Report for period: ${dateRange}`
+    });
     setPrintMode(type);
     // Give React a tick to update the DOM with print-only hidden classes
     setTimeout(() => {

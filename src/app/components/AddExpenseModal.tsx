@@ -32,11 +32,67 @@ const EXPENSE_CATEGORIES = [
 const LABEL_STYLE = "text-[11px] font-bold text-gray-500 mb-1 block uppercase tracking-tight";
 const INPUT_STYLE = "bg-[#F8F9FA] border-gray-100 h-9 text-xs focus:ring-red-50 focus:border-red-100 transition-all";
 
+function FormattedDateInput({ value, onChange, className, id }: { value: string; onChange: (val: string) => void; className?: string; id?: string }) {
+    const toDisplay = (iso: string) => {
+        if (!iso) return '';
+        const parts = iso.split('-');
+        if (parts.length === 3) {
+            return `${parts[1]}/${parts[2]}/${parts[0]}`;
+        }
+        return iso;
+    };
+
+    const [localVal, setLocalVal] = useState(toDisplay(value));
+
+    useEffect(() => {
+        setLocalVal(toDisplay(value));
+    }, [value]);
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        let inputVal = e.target.value;
+        let digits = inputVal.replace(/[^0-9]/g, '');
+        if (digits.length > 8) digits = digits.substring(0, 8);
+
+        let formatted = digits;
+        if (digits.length > 2) {
+            formatted = digits.substring(0, 2) + '/' + digits.substring(2);
+        }
+        if (digits.length > 4) {
+            formatted = digits.substring(0, 2) + '/' + digits.substring(2, 4) + '/' + digits.substring(4);
+        }
+
+        setLocalVal(formatted);
+
+        if (digits.length === 8) {
+            const mm = digits.substring(0, 2);
+            const dd = digits.substring(2, 4);
+            const yyyy = digits.substring(4, 8);
+            const iso = `${yyyy}-${mm}-${dd}`;
+            const dateObj = new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd));
+            if (!isNaN(dateObj.getTime())) {
+                onChange(iso);
+            }
+        }
+    };
+
+    return (
+        <Input
+            id={id}
+            type="text"
+            placeholder="MM/DD/YYYY"
+            value={localVal}
+            onChange={handleChange}
+            className={className}
+        />
+    );
+}
+
 export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditExpense, initialData }: AddExpenseModalProps) {
     const [category, setCategory] = useState<string>('');
     const [customCategory, setCustomCategory] = useState('');
     const [categorySearch, setCategorySearch] = useState('');
     const [amount, setAmount] = useState('');
+    const [frequency, setFrequency] = useState<string>('Monthly');
     const [date, setDate] = useState('');
     const [time, setTime] = useState('');
     const [notes, setNotes] = useState('');
@@ -49,6 +105,7 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditE
                 setCategory(isCustom ? 'Other (Manual Insert)' : initialData.category);
                 if (isCustom) setCustomCategory(initialData.category);
                 setAmount(formatAmount(initialData.amount.toString()));
+                setFrequency(initialData.frequency || 'Monthly');
                 setNotes(initialData.notes || '');
                 
                 const d = new Date(initialData.date);
@@ -67,10 +124,20 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditE
                 setCategory('');
                 setCustomCategory('');
                 setAmount('');
+                setFrequency('Monthly');
                 setNotes('');
             }
         }
     }, [isOpen, initialData]);
+
+    const handleCategorySelect = (selectedCat: string) => {
+        setCategory(selectedCat);
+        if (selectedCat.includes('(Daily)')) setFrequency('Daily');
+        else if (selectedCat.includes('(Weekly)')) setFrequency('Weekly');
+        else if (selectedCat.includes('(Monthly)')) setFrequency('Monthly');
+        else if (selectedCat.includes('(Quarterly)')) setFrequency('Quarterly');
+        else if (selectedCat.includes('(Yearly)')) setFrequency('Yearly');
+    };
 
     const formatAmount = (value: string) => {
         const cleanValue = value.replace(/,/g, '');
@@ -114,6 +181,7 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditE
             id: initialData?.id || Math.random().toString(36).substr(2, 9),
             category: finalCategory,
             amount: finalAmount,
+            frequency: frequency || 'Monthly',
             date: `${date}T${time}`,
             notes
         };
@@ -151,7 +219,7 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditE
                     <div className="grid grid-cols-2 gap-4">
                         <div className={`space-y-2 ${category === 'Other (Manual Insert)' ? 'col-span-1' : 'col-span-2'}`}>
                             <Label htmlFor="category" className={LABEL_STYLE}>Category</Label>
-                            <Select value={category} onValueChange={setCategory}>
+                            <Select value={category} onValueChange={handleCategorySelect}>
                                 <SelectTrigger id="category" className={INPUT_STYLE}>
                                     <SelectValue placeholder="Select expense type" />
                                 </SelectTrigger>
@@ -196,8 +264,8 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditE
                         )}
                     </div>
 
-                    <div className="grid grid-cols-12 gap-4">
-                        <div className="col-span-4 space-y-2">
+                    <div className="grid grid-cols-12 gap-3">
+                        <div className="col-span-3 space-y-2">
                             <Label htmlFor="amount" className={LABEL_STYLE}>Amount</Label>
                             <div className="relative group">
                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-sm">₱</span>
@@ -213,18 +281,32 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditE
                                 />
                             </div>
                         </div>
-                        <div className="col-span-4 space-y-2">
+                        <div className="col-span-3 space-y-2">
+                            <Label htmlFor="frequency" className={LABEL_STYLE}>Frequency</Label>
+                            <Select value={frequency} onValueChange={setFrequency}>
+                                <SelectTrigger id="frequency" className={INPUT_STYLE}>
+                                    <SelectValue placeholder="Select Frequency" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Daily" className="font-medium text-xs">Daily</SelectItem>
+                                    <SelectItem value="Weekly" className="font-medium text-xs">Weekly</SelectItem>
+                                    <SelectItem value="Monthly" className="font-medium text-xs">Monthly</SelectItem>
+                                    <SelectItem value="Quarterly" className="font-medium text-xs">Quarterly</SelectItem>
+                                    <SelectItem value="Yearly" className="font-medium text-xs">Yearly</SelectItem>
+                                    <SelectItem value="One-Time" className="font-medium text-xs">One-Time</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="col-span-3 space-y-2">
                             <Label htmlFor="date" className={LABEL_STYLE}>Date <span className="lowercase opacity-70">(mm/dd/yyyy)</span></Label>
-                            <Input
+                            <FormattedDateInput
                                 id="date"
-                                type="date"
                                 value={date}
-                                onChange={(e) => setDate(e.target.value)}
-                                className={`${INPUT_STYLE} accent-red-600`}
-                                required
+                                onChange={(val) => setDate(val)}
+                                className={`${INPUT_STYLE}`}
                             />
                         </div>
-                        <div className="col-span-4 space-y-2">
+                        <div className="col-span-3 space-y-2">
                             <Label htmlFor="time" className={LABEL_STYLE}>Time <span className="lowercase opacity-70">(24h)</span></Label>
                             <Input
                                 id="time"

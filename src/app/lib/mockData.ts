@@ -129,10 +129,12 @@ function generateMockOrders(): JobOrder[] {
       updatedAt: statusHistory[statusHistory.length - 1].timestamp,
       processedBy: 'staff',
       claimedBy: isClaimed ? customerName : undefined,
+      releasedBy: isClaimed ? 'owner' : undefined,
       status: config.status,
       assignedTo: 'staff',
       predictedCompletionDate: new Date(orderTime.getTime() + finalDays * 24 * 60 * 60 * 1000),
-      actualCompletionDate: finalClaimDate,
+      actualReleaseDate: statusHistory.find(s => s.status === 'for-release')?.timestamp || (config.status === 'for-release' || isClaimed ? new Date(orderTime.getTime() + Math.max(1, finalDays - 1) * 24 * 60 * 60 * 1000) : undefined),
+      actualCompletionDate: isClaimed ? finalClaimDate : undefined,
       statusHistory,
     };
   });
@@ -167,10 +169,11 @@ export interface Expense {
   category: string;
   amount: number;
   date: string;
+  frequency?: 'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Yearly' | 'One-Time' | string;
   notes?: string;
 }
 
 export const mockExpenses: Expense[] = [
-  { id: '1', category: 'Water', amount: 600, date: new Date().toISOString().split('T')[0] },
-  { id: '2', category: 'Electricity', amount: 500, date: new Date().toISOString().split('T')[0] }
+  { id: '1', category: 'Water', amount: 600, date: new Date().toISOString().split('T')[0], frequency: 'Monthly' },
+  { id: '2', category: 'Electricity', amount: 500, date: new Date().toISOString().split('T')[0], frequency: 'Monthly' }
 ];

@@ -29,8 +29,63 @@ import { toast } from 'sonner';
 
 type TotalSalesProps = {
     onSetHeaderActionRight?: (action: ReactNode | null) => void;
-    user: { token: string };
+    user: { token: string; role?: string };
 };
+
+function FormattedDateInput({ value, onChange, className, id }: { value: string; onChange: (val: string) => void; className?: string; id?: string }) {
+    const toDisplay = (iso: string) => {
+        if (!iso) return '';
+        const parts = iso.split('-');
+        if (parts.length === 3) {
+            return `${parts[1]}/${parts[2]}/${parts[0]}`;
+        }
+        return iso;
+    };
+
+    const [localVal, setLocalVal] = useState(toDisplay(value));
+
+    useEffect(() => {
+        setLocalVal(toDisplay(value));
+    }, [value]);
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        let inputVal = e.target.value;
+        let digits = inputVal.replace(/[^0-9]/g, '');
+        if (digits.length > 8) digits = digits.substring(0, 8);
+
+        let formatted = digits;
+        if (digits.length > 2) {
+            formatted = digits.substring(0, 2) + '/' + digits.substring(2);
+        }
+        if (digits.length > 4) {
+            formatted = digits.substring(0, 2) + '/' + digits.substring(2, 4) + '/' + digits.substring(4);
+        }
+
+        setLocalVal(formatted);
+
+        if (digits.length === 8) {
+            const mm = digits.substring(0, 2);
+            const dd = digits.substring(2, 4);
+            const yyyy = digits.substring(4, 8);
+            const iso = `${yyyy}-${mm}-${dd}`;
+            const dateObj = new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd));
+            if (!isNaN(dateObj.getTime())) {
+                onChange(iso);
+            }
+        }
+    };
+
+    return (
+        <Input
+            id={id}
+            type="text"
+            placeholder="MM/DD/YYYY"
+            value={localVal}
+            onChange={handleChange}
+            className={className}
+        />
+    );
+}
 
 export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesProps) {
     useEffect(() => {
@@ -126,6 +181,7 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
         };
 
         return orders
+            .filter((order: JobOrder) => (order.status as string)?.toLowerCase() !== 'cancelled')
             .filter((order: JobOrder) => order.paymentStatus === 'fully-paid' || order.paymentStatus === 'downpayment')
             .filter((order: JobOrder) => isWithinRange(new Date(order.transactionDate || order.createdAt)));
     }, [orders, profitRange]);
@@ -378,14 +434,16 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                                                         >
                                                             <Pencil size={14} strokeWidth={2.5} />
                                                         </Button>
-                                                        <Button 
-                                                            variant="ghost" 
-                                                            className="h-8 w-8 p-0 rounded-lg border border-red-500 text-red-600 hover:bg-red-50 transition-colors"
-                                                            onClick={() => setOrderToDelete(order)}
-                                                            title="Delete Order"
-                                                        >
-                                                            <Trash2 size={14} strokeWidth={2.5} />
-                                                        </Button>
+                                                        {user.role?.toLowerCase() === 'owner' && (
+                                                            <Button 
+                                                                variant="ghost" 
+                                                                className="h-8 w-8 p-0 rounded-lg border border-red-500 text-red-600 hover:bg-red-50 transition-colors"
+                                                                onClick={() => setOrderToDelete(order)}
+                                                                title="Delete Order"
+                                                            >
+                                                                <Trash2 size={14} strokeWidth={2.5} />
+                                                            </Button>
+                                                        )}
                                                     </div>
                                                 </TableCell>
                                             </TableRow>
@@ -490,20 +548,18 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
 
                         <div className="space-y-2">
                             <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">Start Date</label>
-                            <Input
-                                type="date"
+                            <FormattedDateInput
                                 value={startDate}
-                                onChange={(e) => setStartDate(e.target.value)}
+                                onChange={(val) => setStartDate(val)}
                                 className="h-9 text-xs border-gray-100 bg-gray-50/50 text-center"
                             />
                         </div>
 
                         <div className="space-y-2">
                             <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">End Date</label>
-                            <Input
-                                type="date"
+                            <FormattedDateInput
                                 value={endDate}
-                                onChange={(e) => setEndDate(e.target.value)}
+                                onChange={(val) => setEndDate(val)}
                                 className="h-9 text-xs border-gray-100 bg-gray-50/50 text-center"
                             />
                         </div>
@@ -541,6 +597,7 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                     order={selectedOrder}
                     onSave={(id, updates) => {
                         updateOrder(id, updates, "Owner");
+                        setSelectedOrder((prev: any) => prev ? { ...prev, ...updates } : null);
                         setIsEditing(false);
                         toast.success('Order updated successfully');
                     }}

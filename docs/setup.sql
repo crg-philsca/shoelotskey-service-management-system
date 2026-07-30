@@ -205,8 +205,13 @@ CREATE TABLE IF NOT EXISTS status_log (
 
 CREATE TABLE IF NOT EXISTS audit_logs (
     audit_log_id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES users(user_id),
-    action_type VARCHAR(20), 
+    user_id INTEGER REFERENCES users(user_id) ON DELETE SET NULL,
+    username VARCHAR(50),
+    role VARCHAR(20),
+    module VARCHAR(50),
+    ip_address VARCHAR(50),
+    user_agent VARCHAR(255),
+    action_type VARCHAR(30), 
     table_name VARCHAR(50),
     record_id INTEGER,
     old_values JSON, -- Universal JSON type support

@@ -29,6 +29,7 @@ __pycache__/
 !.env.example
 
 # Diagnostic Scripts (Local ONLY)
+backend/scripts/
 check_cols.py
 check_db.py
 diagnose.py

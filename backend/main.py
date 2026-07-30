@@ -10,7 +10,87 @@ import os
 import uuid
 import json
 import sys
+import os
 import requests
+import shutil
+
+def auto_organize_workspace():
+    try:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        tests_dir = os.path.join(base_dir, "tests")
+        db_dir = os.path.join(base_dir, "db")
+        os.makedirs(tests_dir, exist_ok=True)
+        os.makedirs(db_dir, exist_ok=True)
+        sys.path.insert(0, db_dir)
+
+        for pkg_dir in [tests_dir, db_dir]:
+            init_file = os.path.join(pkg_dir, "__init__.py")
+            if not os.path.exists(init_file):
+                with open(init_file, "w") as f:
+                    f.write("# Auto-generated package init\n")
+
+        test_files = [
+            "api_tests.py", "e2e_system_evaluation_test.py", "qa_tester.py", "system_tests.py",
+            "test_auth.py", "test_health.py", "test_heroku_offline_sync.py",
+            "verify_defense_checklist.py"
+        ]
+        for tf in test_files:
+            src = os.path.join(base_dir, tf)
+            dst = os.path.join(tests_dir, tf)
+            if os.path.exists(src):
+                try:
+                    with open(src, "r", encoding="utf-8", errors="ignore") as file_read:
+                        content = file_read.read()
+                    if "sys.path.append(os.path.dirname(os.path.abspath(__file__)))" in content and "dirname(os.path.dirname" not in content:
+                        content = content.replace("sys.path.append(os.path.dirname(os.path.abspath(__file__)))", "sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))")
+                    elif "sys.path" not in content:
+                        content = "import sys, os\nsys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))\n\n" + content
+                    with open(dst, "w", encoding="utf-8") as file_write:
+                        file_write.write(content)
+                    os.remove(src)
+                    print(f"[WORKSPACE CLEANUP] Organized {tf} -> tests/{tf}")
+                except Exception as err:
+                    print(f"[WORKSPACE CLEANUP ERROR] {tf}: {err}")
+
+        db_files = ["seed_inventory.py", "setup_stored_procedure.py", "sync_to_local.py", "repositories.py", "qa_sandbox.db"]
+        for dbf in db_files:
+            src = os.path.join(base_dir, dbf)
+            dst = os.path.join(db_dir, dbf)
+            if os.path.exists(src):
+                try:
+                    if dbf.endswith(".py"):
+                        with open(src, "r", encoding="utf-8", errors="ignore") as fr:
+                            content = fr.read()
+                        if "sys.path" not in content:
+                            content = "import sys, os\nsys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))\n\n" + content
+                        with open(dst, "w", encoding="utf-8") as fw:
+                            fw.write(content)
+                        os.remove(src)
+                    else:
+                        shutil.move(src, dst)
+                    print(f"[WORKSPACE CLEANUP] Organized {dbf} -> db/{dbf}")
+                except Exception as err:
+                    print(f"[WORKSPACE CLEANUP ERROR] {dbf}: {err}")
+        
+        # Remove old duplicate files in root now that they are cleanly located inside db/ and tests/
+        old_duplicates = [
+            os.path.join(base_dir, "database.py"),
+            os.path.join(base_dir, "shoelotskey.db"),
+            os.path.join(os.path.dirname(base_dir), "shoelotskey.db"),
+            os.path.join(base_dir, "e2e_offline_sync_verification_test.py")
+        ]
+        for dup in old_duplicates:
+            if os.path.exists(dup):
+                try:
+                    os.remove(dup)
+                    print(f"[WORKSPACE CLEANUP] Removed redundant copy: {dup}")
+                except Exception:
+                    pass
+    except Exception as e:
+        print(f"[WORKSPACE CLEANUP] Auto organize warning: {e}")
+
+auto_organize_workspace()
+
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -39,13 +119,14 @@ from models import (
     ItemConditionMapping, ShippingPreference, PaymentMethod, PaymentStatus,
     Inventory, InventoryLog
 )
+from db.repositories import InventoryRepository
 from schemas import (
     OrderSchema, ServiceSchema, ExpenseSchema, UserSchema, LoginRequest, 
     ForgotPasswordRequest, ResetPasswordRequest, RoleSchema, StatusSchema, 
     ItemSchema, PaymentSchema, DeliverySchema, UserCreateSchema, UserUpdateSchema,
     InventorySchema, InventoryUpdateSchema, InventoryLogSchema
 )
-from database import engine, get_db, SessionLocal, DATABASE_URL, is_sqlite, conn_error, LOCAL_SQLITE_PATH, LOCAL_SQLITE
+from db.database import engine, get_db, SessionLocal, DATABASE_URL, is_sqlite, conn_error, LOCAL_SQLITE_PATH, LOCAL_SQLITE
 from ml_engine import predictor
 from auth_utils import get_current_user, require_role, create_access_token, sanitize_error
 
@@ -54,6 +135,121 @@ from auth_utils import get_current_user, require_role, create_access_token, sani
 # ------------------------------------------
 DB_TYPE = "PostgreSQL" if "postgresql" in DATABASE_URL else "SQLite"
 ENV = "Production" if os.getenv("PORT") else "Localhost"
+
+def parse_local_date(iso_str: Optional[str]) -> datetime:
+    if not iso_str:
+        return datetime.now()
+    try:
+        # Standardize UTC indicator to '+00:00' for fromisoformat compatibility
+        clean_str = iso_str.replace('Z', '+00:00')
+        dt = datetime.fromisoformat(clean_str)
+        if dt.tzinfo is not None:
+            # Convert to local timezone and strip timezone metadata to make it naive local
+            return dt.astimezone().replace(tzinfo=None)
+        return dt
+    except Exception as e:
+        print(f"[DATE PARSER] Warning: Failed to parse '{iso_str}', returning current time. Error: {e}")
+        return datetime.now()
+
+def recalculate_inventory_status(item: Inventory):
+    item.recalculate_status()
+
+# ==========================================
+# AUDIT TRAIL HELPER
+# ==========================================
+
+# Maps internal table names to human-readable module labels for the Activity History UI.
+TABLE_TO_MODULE: dict = {
+    "orders":              "Job Orders",
+    "items":               "Job Orders",
+    "users":               "User Management",
+    "roles":               "User Management",
+    "inventory":           "Inventory",
+    "inventory_logs":      "Inventory",
+    "services":            "Services",
+    "service_categories":  "Services",
+    "expenses":            "Expenses",
+    "auth":                "Authentication",
+    "audit_logs":          "System",
+    "backend_v2":          "System",
+    "router_v2":           "System",
+    "ml_engine":           "Machine Learning",
+    "sales":               "Sales",
+    "payments":            "Sales",
+    "deliveries":          "Job Orders",
+    "status_log":          "Job Orders",
+    "customers":           "Job Orders",
+}
+
+def log_audit(
+    db: Session,
+    action: str,
+    table_name: str,
+    record_id: Optional[int] = None,
+    user: Optional[Any] = None,
+    old_values: Optional[dict] = None,
+    new_values: Optional[dict] = None,
+    request: Optional[Any] = None,
+    module: Optional[str] = None,
+) -> Optional[AuditLog]:
+    """
+    Centralized, fail-safe audit log writer.
+
+    Design Principles:
+    - NEVER raises an exception. A logging failure must never abort a business transaction.
+    - Captures username/role at event-time (forensic integrity — not via JOIN at query-time).
+    - Automatically resolves module from table_name if not explicitly provided.
+
+    Args:
+        db:          Active SQLAlchemy session.
+        action:      Action type string (CREATE, UPDATE, DELETE, LOGIN, LOGOUT, etc.)
+        table_name:  The database table affected.
+        record_id:   The primary key of the affected record.
+        user:        The authenticated User ORM object (or None for system events).
+        old_values:  Snapshot of values BEFORE the change (for UPDATE/DELETE).
+        new_values:  Snapshot of values AFTER the change (for CREATE/UPDATE).
+        request:     FastAPI Request object for IP/User-Agent extraction (optional).
+        module:      Human-readable module override. Auto-resolved from table_name if not set.
+    """
+    try:
+        resolved_module = module or TABLE_TO_MODULE.get(table_name, table_name.replace('_', ' ').title())
+
+        ip_address = None
+        user_agent = None
+        if request is not None:
+            try:
+                ip_address = request.client.host if request.client else None
+                user_agent = request.headers.get("user-agent", None)
+                if user_agent and len(user_agent) > 255:
+                    user_agent = user_agent[:252] + "..."
+            except Exception:
+                pass  # Never crash on metadata extraction
+
+        entry = AuditLog(
+            user_id=user.user_id if user else None,
+            username=user.username if user else "system",
+            role=user.role.role_name if (user and user.role) else "system",
+            action_type=action,
+            module=resolved_module,
+            table_name=table_name,
+            record_id=record_id,
+            old_values=old_values,
+            new_values=new_values,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+        db.add(entry)
+        db.commit()
+        return entry
+    except Exception as audit_err:
+        # CRITICAL: Swallow all exceptions. Log to console for server-side debugging only.
+        # A broken audit logger must NEVER take down the application.
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        print(f"[AUDIT WARNING] Failed to write audit log for action '{action}' on '{table_name}': {audit_err}")
+        return None
 
 print(f"\n[BOOT] Shoelotskey SMS v2.0 - Environment: {ENV} ({DB_TYPE})")
 
@@ -95,20 +291,21 @@ async def not_found_exception_handler(request: Request, exc: Exception):
     # Log to DB for defense review
     try:
         db = SessionLocal()
-        new_log = AuditLog(
-            user_id=1, 
-            action_type="404_NOT_FOUND",
+        log_audit(
+            db=db,
+            action="404_NOT_FOUND",
             table_name="router_v2",
             record_id=0,
+            user=None,
             old_values={"broken_url": path},
             new_values={
                 "method": request.method,
                 "client": request.client.host if request.client else "unknown",
                 "user_agent": request.headers.get("user-agent")
-            }
+            },
+            request=request,
+            module="Routing"
         )
-        db.add(new_log)
-        db.commit()
     except: pass
     finally:
         if 'db' in locals(): db.close()
@@ -142,21 +339,22 @@ async def global_exception_handler(request: Request, exc: Exception):
     # [VITAL DEFENSE TOOL] Log to DB for Audit UI
     try:
         db = SessionLocal()
-        new_log = AuditLog(
-            user_id=1, 
-            action_type="SERVER_ERROR",
+        log_audit(
+            db=db,
+            action="SERVER_ERROR",
             table_name="backend_v2",
             record_id=0,
+            user=None,
             old_values={"error": raw_msg},
             new_values={
                 "file": file_name,
                 "line": line_no,
                 "url": request.url.path,
                 "method": request.method
-            }
+            },
+            request=request,
+            module="System"
         )
-        db.add(new_log)
-        db.commit()
     except: pass
     finally:
         if 'db' in locals(): db.close()
@@ -241,11 +439,12 @@ def startup_sequence():
     # 1. Create Tables (Idempotent)
     Base.metadata.create_all(bind=engine)
     inspector = inspect(engine)
+    existing_tables = set(inspector.get_table_names())
     
-    # 2. Dialect-Safe Migrations
+    # 2. Dialect-Safe Migrations (Isolated for resilience)
+    # User Table: Reset Tokens
     try:
-        # User Table: Reset Tokens
-        if "users" in inspector.get_table_names():
+        if "users" in existing_tables:
             columns = [c['name'] for c in inspector.get_columns("users")]
             with engine.begin() as conn:
                 if "reset_token" not in columns:
@@ -254,9 +453,12 @@ def startup_sequence():
                 if "reset_token_expiry" not in columns:
                     try: conn.execute(text("ALTER TABLE users ADD COLUMN reset_token_expiry TIMESTAMP"))
                     except: pass
+    except Exception as e:
+        print(f">>> Migration Warning (users table): {e}")
 
-        # Items Table: Machine Learning Features (Condition Flags)
-        if "items" in inspector.get_table_names():
+    # Items Table: Machine Learning Features (Condition Flags)
+    try:
+        if "items" in existing_tables:
             columns = [c['name'] for c in inspector.get_columns("items")]
             missing = [
                 ("cond_scratches", "BOOLEAN DEFAULT FALSE"),
@@ -272,23 +474,28 @@ def startup_sequence():
                         print(f">>> Migration: Adding {col_name} to items")
                         try: conn.execute(text(f"ALTER TABLE items ADD COLUMN {col_name} {col_type}"))
                         except: pass
+    except Exception as e:
+        print(f">>> Migration Warning (items table): {e}")
 
-        # Services Table: Sorting
-        if "services" in inspector.get_table_names():
+    # Services Table: Sorting
+    try:
+        if "services" in existing_tables:
             columns = [c['name'] for c in inspector.get_columns("services")]
             if "sort_order" not in columns:
                 print(">>> Migration: Adding sort_order to services")
                 with engine.begin() as conn:
                     try: conn.execute(text("ALTER TABLE services ADD COLUMN sort_order INTEGER DEFAULT 0"))
                     except: pass
+    except Exception as e:
+        print(f">>> Migration Warning (services table): {e}")
 
-        # Inventory Table: Automated Consumption Settings
-        if "inventory" in inspector.get_table_names():
+    # Inventory Table: Automated Consumption Settings
+    try:
+        if "inventory" in existing_tables:
             columns = [c['name'] for c in inspector.get_columns("inventory")]
             active_is_sqlite = is_sqlite
             engines_to_migrate = [(engine, active_is_sqlite)]
             
-            # If online, also migrate SQLite backup database so schemas align for background sync
             if not is_sqlite:
                 try:
                     from sqlalchemy import create_engine
@@ -299,13 +506,12 @@ def startup_sequence():
                     
             for mig_engine, is_sqlite_target in engines_to_migrate:
                 db_name = "SQLite" if is_sqlite_target else "PostgreSQL"
-                # Check target columns inside target database
                 try:
                     with mig_engine.connect() as check_conn:
                         target_inspector = inspect(mig_engine)
                         target_columns = [c['name'] for c in target_inspector.get_columns("inventory")]
                 except Exception:
-                    target_columns = columns # fallback
+                    target_columns = columns
                     
                 try:
                     with mig_engine.begin() as conn:
@@ -316,7 +522,8 @@ def startup_sequence():
                             ("consumption_qty", "DOUBLE PRECISION DEFAULT 0.0" if not is_sqlite_target else "REAL DEFAULT 0.0"),
                             ("consumption_unit", "VARCHAR(20) DEFAULT ''"),
                             ("package_size", "DOUBLE PRECISION DEFAULT 0.0" if not is_sqlite_target else "REAL DEFAULT 0.0"),
-                            ("package_unit", "VARCHAR(20) DEFAULT ''")
+                            ("package_unit", "VARCHAR(20) DEFAULT ''"),
+                            ("low_stock_threshold", "DOUBLE PRECISION DEFAULT 0.0" if not is_sqlite_target else "REAL DEFAULT 0.0")
                         ]:
                             if col_name not in target_columns:
                                 try:
@@ -326,21 +533,25 @@ def startup_sequence():
                                     pass
                 except Exception as mig_err:
                     print(f"[SCHEMA MIGRATION WARNING] Failed to migrate {db_name}: {mig_err}")
+    except Exception as e:
+        print(f">>> Migration Warning (inventory table): {e}")
 
-        # 3. Data Normalization (Legacy 2.0 -> 3NF)
-        # We wrap this in a sub-try since it relies on old columns that might already be deleted
-        try:
-            if "payments" in inspector.get_table_names() and "deliveries" in inspector.get_table_names():
+    # 3. Data Normalization (Legacy 2.0 -> 3NF)
+    try:
+        if {"payments", "deliveries", "orders"}.issubset(existing_tables):
+            order_cols = [c['name'] for c in inspector.get_columns('orders')]
+            if "amount_received" in order_cols:
                 with engine.begin() as conn:
                     conn.execute(text("""
                         INSERT INTO payments (order_id, method_id, status_id, amount_received, balance, reference_no, deposit_amount)
                         SELECT order_id, 1, 1, amount_received, balance, reference_no, deposit_amount
                         FROM orders WHERE order_id NOT IN (SELECT order_id FROM payments)
                     """))
-        except:
-            print(">>> Migration: Data extraction skipped (already normalized)")
+    except Exception as e:
+        print(f">>> Migration Warning (data normalization): {e}")
 
-        # 4. Cleanup/Hygiene
+    # 4. Cleanup/Hygiene
+    try:
         db_exec = SessionLocal()
         try:
             db_exec.execute(text("DELETE FROM services WHERE service_name LIKE '%Premium%'"))
@@ -350,7 +561,7 @@ def startup_sequence():
         finally:
             db_exec.close()
     except Exception as e:
-        print(f">>> Migration Warning (Phase 1): {e}")
+        print(f">>> Migration Warning (cleanup): {e}")
 
     # 2. Schema Migration & Synchronization (Cross-Engine)
     # We ensure BOTH Cloud and Local mirror each other's structure
@@ -391,10 +602,133 @@ def startup_sequence():
                         else:
                             conn.execute(text(f"ALTER TABLE items ADD COLUMN inventory_used {json_type} DEFAULT '[]'"))
                 
+                # Fix INVENTORY table — add low_stock_threshold if missing
+                if 'inventory' in tables:
+                    inv_cols = [c['name'] for c in inspector.get_columns('inventory')]
+                    if 'low_stock_threshold' not in inv_cols:
+                        print(f">>> Migration ({engine_name}): Adding inventory.low_stock_threshold")
+                        conn.execute(text("ALTER TABLE inventory ADD COLUMN low_stock_threshold FLOAT DEFAULT 0.0"))
+                
         except Exception as e:
             print(f">>> Migration Warning ({sync_engine.url}): {e}")
 
     print(">>> Migration: Dual-Engine Schema check complete.")
+
+    # --- NEW: Audit Logs Table Enhancement Migration ---
+    # Adds the 5 forensic columns required for the improved Activity History module.
+    # Runs against both Cloud (PostgreSQL) and Local (SQLite) engines for dual-engine parity.
+    try:
+        for sync_engine in engines_to_sync:
+            is_pg = "postgresql" in str(sync_engine.url)
+            engine_label = "PostgreSQL" if is_pg else "SQLite"
+            try:
+                al_inspector = inspect(sync_engine)
+                if "audit_logs" in al_inspector.get_table_names():
+                    # 1. ATOMIC MIGRATION: Drop NOT NULL constraint and convert action_type enum in isolated transactions
+                    if is_pg:
+                        try:
+                            with sync_engine.begin() as pg_conn:
+                                pg_conn.execute(text("ALTER TABLE audit_logs ALTER COLUMN user_id DROP NOT NULL"))
+                            print(f">>> Migration ({engine_label}): Successfully executed ALTER TABLE audit_logs DROP NOT NULL on user_id and COMMITTED.")
+                        except Exception as uid_err:
+                            print(f">>> Migration Notice (audit_logs.user_id on {engine_label}): {uid_err}")
+
+                        try:
+                            with sync_engine.begin() as pg_conn:
+                                pg_conn.execute(text("ALTER TABLE audit_logs ALTER COLUMN record_id DROP NOT NULL"))
+                            print(f">>> Migration ({engine_label}): Successfully executed ALTER TABLE audit_logs DROP NOT NULL on record_id and COMMITTED.")
+                        except Exception as rec_err:
+                            print(f">>> Migration Notice (audit_logs.record_id on {engine_label}): {rec_err}")
+
+                        try:
+                            with sync_engine.begin() as pg_conn:
+                                pg_conn.execute(text("ALTER TABLE audit_logs ALTER COLUMN action_type TYPE VARCHAR(100) USING action_type::text"))
+                            print(f">>> Migration ({engine_label}): Successfully converted audit_logs.action_type from enum to VARCHAR(100) and COMMITTED.")
+                        except Exception as act_err:
+                            print(f">>> Migration Notice (audit_logs.action_type on {engine_label}): {act_err}")
+                    else:
+                        try:
+                            with sync_engine.begin() as conn:
+                                col_meta = {c['name']: c for c in al_inspector.get_columns("audit_logs")}
+                                if 'user_id' in col_meta and not col_meta['user_id'].get('nullable', True):
+                                    print(">>> Migration (SQLite): Rebuilding audit_logs to drop NOT NULL on user_id...")
+                                    conn.execute(text("PRAGMA foreign_keys=off;"))
+                                    conn.execute(text("ALTER TABLE audit_logs RENAME TO audit_logs_temp_old;"))
+                                    conn.execute(text("""
+                                        CREATE TABLE audit_logs (
+                                            audit_log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                            user_id INTEGER REFERENCES users(user_id) ON DELETE SET NULL,
+                                            username VARCHAR(50),
+                                            role VARCHAR(20),
+                                            action_type VARCHAR(30) NOT NULL,
+                                            module VARCHAR(50),
+                                            table_name VARCHAR(50) NOT NULL,
+                                            record_id INTEGER,
+                                            old_values JSON,
+                                            new_values JSON,
+                                            ip_address VARCHAR(50),
+                                            user_agent VARCHAR(255),
+                                            created_at TIMESTAMP
+                                        );
+                                    """))
+                                    conn.execute(text("""
+                                        INSERT INTO audit_logs (audit_log_id, user_id, username, role, action_type, module, table_name, record_id, old_values, new_values, ip_address, user_agent, created_at)
+                                        SELECT audit_log_id, user_id, username, role, action_type, module, table_name, record_id, old_values, new_values, ip_address, user_agent, created_at
+                                        FROM audit_logs_temp_old;
+                                    """))
+                                    conn.execute(text("DROP TABLE audit_logs_temp_old;"))
+                                    conn.execute(text("PRAGMA foreign_keys=on;"))
+                                    print(f">>> Migration ({engine_label}): Successfully executed ALTER TABLE audit_logs DROP NOT NULL on user_id and COMMITTED.")
+                        except Exception as uid_err:
+                            print(f">>> Migration Notice (audit_logs.user_id on {engine_label}): {uid_err}")
+
+                    # Verify live database schema immediately after atomic commit
+                    try:
+                        post_insp = inspect(sync_engine)
+                        for col in post_insp.get_columns("audit_logs"):
+                            if col['name'] in ('user_id', 'action_type'):
+                                print(f">>> Live Schema Verification ({engine_label}): audit_logs.{col['name']} type={col.get('type')} nullable={col.get('nullable', False)}")
+                    except Exception as ver_err:
+                        print(f">>> Schema Verification Notice ({engine_label}): {ver_err}")
+
+                    # 2. ATOMIC MIGRATION: Add missing forensic columns (each in an isolated transaction)
+                    al_cols = [c['name'] for c in al_inspector.get_columns("audit_logs")]
+                    for col_name, pg_type, sq_type in [
+                        ("username",   "VARCHAR(50)",  "VARCHAR(50)"),
+                        ("role",       "VARCHAR(20)",  "VARCHAR(20)"),
+                        ("module",     "VARCHAR(50)",  "VARCHAR(50)"),
+                        ("ip_address", "VARCHAR(50)",  "VARCHAR(50)"),
+                        ("user_agent", "VARCHAR(255)", "VARCHAR(255)"),
+                    ]:
+                        if col_name not in al_cols:
+                            col_type = pg_type if is_pg else sq_type
+                            print(f">>> Migration ({engine_label}): Adding audit_logs.{col_name}")
+                            try:
+                                with sync_engine.begin() as col_conn:
+                                    col_conn.execute(text(f"ALTER TABLE audit_logs ADD COLUMN {col_name} {col_type}"))
+                            except Exception as col_err:
+                                print(f">>> Migration Notice (adding {col_name} on {engine_label}): {col_err}")
+
+                    # 3. ATOMIC MIGRATION: Composite performance indexes (each in an isolated transaction)
+                    for idx_name, idx_cols in [
+                        ("idx_audit_logs_username",    "username"),
+                        ("idx_audit_logs_module",      "module"),
+                        ("idx_audit_logs_action_type", "action_type"),
+                        ("idx_audit_logs_created_at",  "created_at DESC" if is_pg else "created_at"),
+                    ]:
+                        try:
+                            with sync_engine.begin() as idx_conn:
+                                idx_conn.execute(text(
+                                    f"CREATE INDEX IF NOT EXISTS {idx_name} ON audit_logs ({idx_cols})"
+                                ))
+                        except Exception:
+                            pass
+            except Exception as al_mig_err:
+                print(f">>> Migration Warning (audit_logs on {engine_label}): {al_mig_err}")
+    except Exception as al_outer_err:
+        print(f">>> Migration Warning (audit_logs outer): {al_outer_err}")
+
+
 
     # 3. Seed Lookups & Static Data
     # ------------------------------------------
@@ -563,27 +897,91 @@ def seed_lookups(db: Session):
     # 4. Inventory Record Seeding
     if db.query(Inventory).count() == 0:
         print(">>> Inventory Sync: First boot detected, seeding default chemicals and supplies...")
+        # All stock_quantity values are in the INTERNAL unit (mL or g).
+        # package_size = volume/weight of one package in internal units.
+        # low_stock_threshold = alert level in internal units.
+        # consumption_qty = amount used per order/service in internal units.
         inventory_defaults = [
-            {"item_name": "Cleaner", "category": "Chemical", "stock_quantity": 500.0, "unit": "Liters", "unit_price": 0.0},
-            {"item_name": "Bleach", "category": "Chemical", "stock_quantity": 350.0, "unit": "Liters", "unit_price": 0.0},
-            {"item_name": "Stain Remover", "category": "Chemical", "stock_quantity": 480.0, "unit": "bottle", "unit_price": 0.0},
-            {"item_name": "Deodorizer", "category": "Chemical", "stock_quantity": 150.0, "unit": "can", "unit_price": 0.0},
-            {"item_name": "Leather Conditioner", "category": "Chemical", "stock_quantity": 280.0, "unit": "tub", "unit_price": 0.0},
-            {"item_name": "Standard Shoe Cleaner", "category": "Chemicals", "stock_quantity": 25.0, "unit": "Bottles", "unit_price": 150.0},
-            {"item_name": "Soft Bristle Brush", "category": "Tools", "stock_quantity": 15.0, "unit": "Pcs", "unit_price": 85.0},
-            {"item_name": "Microfiber Cloth", "category": "Supplies", "stock_quantity": 50.0, "unit": "Pcs", "unit_price": 25.0}
+            # Cleaner: 1 bottle = 4000 mL, start with 1 bottle (4000 mL), low stock = 1000 mL, 2000 mL/day
+            {"item_name": "Cleaner",
+             "category": "Chemical", "stock_quantity": 4000.0, "unit": "mL",
+             "package_size": 4000.0, "package_unit": "bottle",
+             "low_stock_threshold": 1000.0, "consumption_qty": 2000.0, "consumption_unit": "mL"},
+            # Bleach: 3 jugs default, 1 jug = 4000 mL -> 12000 mL; low stock = 1000 mL, 1000 mL/day
+            {"item_name": "Bleach",
+             "category": "Chemical", "stock_quantity": 12000.0, "unit": "mL",
+             "package_size": 4000.0, "package_unit": "jug",
+             "low_stock_threshold": 1000.0, "consumption_qty": 1000.0, "consumption_unit": "mL"},
+            # Stain Remover: 1 jug = 4000 mL; low stock = 1000 mL, 1000 mL/day
+            {"item_name": "Stain Remover",
+             "category": "Chemical", "stock_quantity": 4000.0, "unit": "mL",
+             "package_size": 4000.0, "package_unit": "jug",
+             "low_stock_threshold": 1000.0, "consumption_qty": 1000.0, "consumption_unit": "mL"},
+            # Leather Conditioner: 1 tub = 260 g; low stock = 50 g, 5 g/use
+            {"item_name": "Leather Conditioner",
+             "category": "Chemical", "stock_quantity": 260.0, "unit": "g",
+             "package_size": 260.0, "package_unit": "tub",
+             "low_stock_threshold": 50.0, "consumption_qty": 5.0, "consumption_unit": "g"},
+            # Deodorizer: 1 box = 12 cans, 1 can = 360 mL -> start with 12 cans = 4320 mL
+            # low stock = 1 can = 360 mL, 180 mL usage per order
+            {"item_name": "Deodorizer",
+             "category": "Chemical", "stock_quantity": 4320.0, "unit": "mL",
+             "package_size": 360.0, "package_unit": "can",
+             "low_stock_threshold": 360.0, "consumption_qty": 180.0, "consumption_unit": "mL"},
+            # Non-liquid supplies (kept as-is, no packaging conversion)
+            {"item_name": "Standard Shoe Cleaner",
+             "category": "Chemicals", "stock_quantity": 25.0, "unit": "Bottles",
+             "package_size": 0.0, "package_unit": "",
+             "low_stock_threshold": 3.0, "consumption_qty": 1.0, "consumption_unit": "Bottles"},
+            {"item_name": "Soft Bristle Brush",
+             "category": "Tools", "stock_quantity": 15.0, "unit": "Pcs",
+             "package_size": 0.0, "package_unit": "",
+             "low_stock_threshold": 2.0, "consumption_qty": 1.0, "consumption_unit": "Pcs"},
+            {"item_name": "Microfiber Cloth",
+             "category": "Supplies", "stock_quantity": 50.0, "unit": "Pcs",
+             "package_size": 0.0, "package_unit": "",
+             "low_stock_threshold": 5.0, "consumption_qty": 1.0, "consumption_unit": "Pcs"}
         ]
-        for item in inventory_defaults:
-            db.add(Inventory(**item, status="In Stock", is_active=True))
+        for item_data in inventory_defaults:
+            threshold = item_data.get("low_stock_threshold", 0.0)
+            qty = item_data["stock_quantity"]
+            calc_status = "Critical" if qty <= 0 else ("Low Stock" if qty <= threshold else "In Stock")
+            db.add(Inventory(**item_data, status=calc_status, is_active=True, unit_price=0.0))
         db.commit()
     else:
-        # Perform internal unit migration for existing items
-        legacy_items = db.query(Inventory).filter(func.lower(Inventory.unit) == '4 liters').all()
-        for legacy in legacy_items:
-            legacy.unit = 'Liters'
-        if legacy_items:
-            db.commit()
-            print(f">>> Inventory Migration: Updated {len(legacy_items)} items to 'Liters'.")
+        # Perform internal unit migration for existing items: migrate legacy Cleaner/Bleach/etc.
+        # that may have been seeded with old values.
+        migration_map = {
+            # item_name: (new_stock_qty, new_unit, new_pkg_size, new_pkg_unit, new_threshold, new_consumption)
+            "Cleaner":            (4000.0,  "mL", 4000.0, "bottle", 1000.0, 2000.0, "mL"),
+            "Bleach":             (12000.0, "mL", 4000.0, "jug",    1000.0, 1000.0, "mL"),
+            "Stain Remover":      (4000.0,  "mL", 4000.0, "jug",    1000.0, 1000.0, "mL"),
+            "Leather Conditioner":(260.0,   "g",  260.0,  "tub",     50.0,     5.0, "g"),
+            "Deodorizer":         (4320.0,  "mL", 360.0,  "can",    360.0,  180.0, "mL"),
+        }
+        for name, (stock, unit, pkg_sz, pkg_unit, threshold, cons_qty, cons_unit) in migration_map.items():
+            inv_item = db.query(Inventory).filter(Inventory.item_name == name).first()
+            if inv_item:
+                # Only migrate if unit doesn't match (prevents double migration)
+                if inv_item.unit != unit:
+                    print(f">>> Inventory Migration: Updating '{name}' to {unit}-based tracking")
+                    inv_item.unit = unit
+                    inv_item.package_size = pkg_sz
+                    inv_item.package_unit = pkg_unit
+                    inv_item.low_stock_threshold = threshold
+                    inv_item.consumption_qty = cons_qty
+                    inv_item.consumption_unit = cons_unit
+                elif inv_item.low_stock_threshold == 0.0:
+                    # Just update threshold/package info if missing
+                    inv_item.package_size = pkg_sz
+                    inv_item.package_unit = pkg_unit
+                    inv_item.low_stock_threshold = threshold
+                    inv_item.consumption_qty = cons_qty
+                    inv_item.consumption_unit = cons_unit
+                # Recalculate status with new threshold
+                qty = inv_item.stock_quantity
+                inv_item.status = "Critical" if qty <= 0 else ("Low Stock" if qty <= inv_item.low_stock_threshold else "In Stock")
+        db.commit()
 
     # 5. User Account Seeding
     if db.query(User).count() == 0:
@@ -635,13 +1033,13 @@ def seed_lookups(db: Session):
                     ldb.commit()
                     print(f">>> Boot Cleanup (Local SQLite): Purged {len(ldb_health)} HEALTH- check orders.")
 
-                # Scan for orders to sync to cloud
+                # Scan for orders to sync to cloud (Batch-check to prevent sequential network roundtrips during server startup)
+                existing_pg_order_nums = {o[0] for o in db.query(Order.order_number).all()}
                 sqlite_orders = ldb.query(Order).all()
                 for sq_order in sqlite_orders:
-                    if sq_order.order_number.startswith("HEALTH-"):
+                    if sq_order.order_number.startswith("HEALTH-") or sq_order.order_number in existing_pg_order_nums:
                         continue
-                    exists = db.query(Order).filter(Order.order_number == sq_order.order_number).first()
-                    if not exists:
+                    if True: # Retain indentation structure for reconciliation of new offline order
                         print(f"[RECONCILE] Syncing offline order {sq_order.order_number} to Cloud PostgreSQL...")
                         # A. Resolve Customer
                         sq_cust = ldb.query(Customer).filter(Customer.customer_id == sq_order.customer_id).first()
@@ -807,10 +1205,10 @@ def seed_lookups(db: Session):
     try:
         import threading
         import time
-        from sync_to_local import sync_data
+        from db.sync_to_local import sync_data
         
         def auto_sync_loop():
-            # Wait 5 seconds after boot to let the server bind and settle
+            # Wait 5 seconds after boot to ensure local backup is quickly synchronized in case internet drops
             time.sleep(5)
             while True:
                 try:
@@ -828,6 +1226,16 @@ def seed_lookups(db: Session):
         print(f"[AUTO-SYNC] Failed to initialize background thread: {t_err}")
 
 # Startup events are now handled by startup_sequence()
+
+@app.on_event("shutdown")
+def shutdown_event():
+    """Cleanly dispose database connection pools on Windows server termination or StatReload."""
+    try:
+        if engine:
+            engine.dispose()
+            print("[SHUTDOWN] Cleanly terminated database connection pool.")
+    except Exception as e:
+        print(f"[SHUTDOWN WARNING] {e}")
 
 @app.get("/api/health-check")
 def health_check_extended(db: Session = Depends(get_db)):
@@ -863,25 +1271,209 @@ def sync_backup_to_cloud(db: Session = Depends(get_db), current_user: User = Dep
         cursor = conn.cursor()
         
         # 1. Fetch orders from SQLite that don't exist in PG
-        # We use order_number as the unique key
-        cursor.execute("SELECT order_number, customer_id, status_id, priority_id, grand_total, expected_at, created_at FROM orders")
+        # We query all fields to fully copy the relational graph
+        cursor.execute("""
+            SELECT order_id, order_number, customer_id, status_id, priority_id, 
+                   grand_total, expected_at, released_at, claimed_at, user_id, 
+                   inventory_applied, inventory_used, created_at, updated_at 
+            FROM orders
+        """)
         offline_orders = cursor.fetchall()
         
+        import json
         synced_count = 0
         for off_o in offline_orders:
-            exists = db.query(Order).filter(Order.order_number == off_o[0]).first()
+            exists = db.query(Order).filter(Order.order_number == off_o[1]).first()
             if not exists:
+                # Resolve Customer Info from SQLite
+                cursor.execute("SELECT customer_name, contact_number FROM customers WHERE customer_id = ?", (off_o[2],))
+                cust_row = cursor.fetchone()
+                if not cust_row:
+                    continue  # Skip order if customer metadata doesn't exist
+                c_name, c_contact = cust_row
+
+                # Find or Create Customer in PG
+                c_pg = db.query(Customer).filter(
+                    Customer.customer_name == c_name, 
+                    Customer.contact_number == c_contact
+                ).first()
+                if not c_pg:
+                    c_pg = Customer(customer_name=c_name, contact_number=c_contact)
+                    db.add(c_pg)
+                    db.flush()
+
+                # Resolve Status Lookup
+                cursor.execute("SELECT status_name FROM status WHERE status_id = ?", (off_o[3],))
+                st_row = cursor.fetchone()
+                st_name = st_row[0] if st_row else "new-order"
+                st_pg = db.query(Status).filter(Status.status_name == st_name).first()
+                st_id = st_pg.status_id if st_pg else 1
+
+                # Resolve Priority Lookup
+                cursor.execute("SELECT priority_name FROM priority_levels WHERE priority_id = ?", (off_o[4],))
+                pr_row = cursor.fetchone()
+                pr_name = pr_row[0] if pr_row else "regular"
+                pr_pg = db.query(PriorityLevel).filter(PriorityLevel.priority_name == pr_name).first()
+                pr_id = pr_pg.priority_id if pr_pg else 1
+
+                # Resolve User Lookup
+                cursor.execute("SELECT username FROM users WHERE user_id = ?", (off_o[9],))
+                usr_row = cursor.fetchone()
+                usr_name = usr_row[0] if usr_row else "admin"
+                usr_pg = db.query(User).filter(User.username == usr_name).first()
+                usr_id = usr_pg.user_id if usr_pg else 1
+
+                # Deserialize inventory_used JSON safely
+                inv_used_data = None
+                if off_o[11]:
+                    try:
+                        inv_used_data = json.loads(off_o[11])
+                    except Exception:
+                        pass
+
+                # Create Order in PG
                 new_o = Order(
-                    order_number=off_o[0],
-                    customer_id=off_o[1], # Note: Customer IDs might mismatch between DBs, but name logic usually handles it
-                    status_id=off_o[2],
-                    priority_id=off_o[3],
-                    grand_total=off_o[4],
-                    expected_at=datetime.fromisoformat(off_o[5]) if off_o[5] else None,
-                    created_at=datetime.fromisoformat(off_o[6]) if off_o[6] else datetime.now()
+                    order_number=off_o[1],
+                    customer_id=c_pg.customer_id,
+                    status_id=st_id,
+                    priority_id=pr_id,
+                    grand_total=off_o[5],
+                    expected_at=datetime.fromisoformat(off_o[6]) if off_o[6] else None,
+                    released_at=datetime.fromisoformat(off_o[7]) if off_o[7] else None,
+                    claimed_at=datetime.fromisoformat(off_o[8]) if off_o[8] else None,
+                    user_id=usr_id,
+                    inventory_applied=bool(off_o[10]),
+                    inventory_used=inv_used_data,
+                    created_at=datetime.fromisoformat(off_o[12]) if off_o[12] else datetime.now(),
+                    updated_at=datetime.fromisoformat(off_o[13]) if off_o[13] else datetime.now()
                 )
                 db.add(new_o)
+                db.flush()
+
+                # Sync Items for this order
+                cursor.execute("""
+                    SELECT item_id, brand, material, shoe_model, quantity, item_notes, inventory_used 
+                    FROM items WHERE order_id = ?
+                """, (off_o[0],))
+                offline_items = cursor.fetchall()
+                for off_item in offline_items:
+                    old_item_id = off_item[0]
+                    item_inv_used = None
+                    if off_item[6]:
+                        try:
+                            item_inv_used = json.loads(off_item[6])
+                        except Exception:
+                            pass
+
+                    new_item = Item(
+                        order_id=new_o.order_id,
+                        brand=off_item[1],
+                        material=off_item[2],
+                        shoe_model=off_item[3],
+                        quantity=off_item[4],
+                        item_notes=off_item[5],
+                        inventory_used=item_inv_used
+                    )
+                    db.add(new_item)
+                    db.flush()
+
+                    # Copy Item Service Mappings
+                    cursor.execute("SELECT service_id, actual_price FROM item_service_mapping WHERE item_id = ?", (old_item_id,))
+                    for mapping in cursor.fetchall():
+                        cursor.execute("SELECT service_name, service_code FROM services WHERE service_id = ?", (mapping[0],))
+                        svc_row = cursor.fetchone()
+                        if svc_row:
+                            svc_name, svc_code = svc_row
+                            svc_pg = db.query(Service).filter(
+                                (Service.service_code == svc_code) | (Service.service_name == svc_name)
+                            ).first()
+                            if svc_pg:
+                                db.add(ItemServiceMapping(
+                                    item_id=new_item.item_id,
+                                    service_id=svc_pg.service_id,
+                                    actual_price=mapping[1]
+                                ))
+
+                    # Copy Item Condition Mappings
+                    cursor.execute("SELECT condition_id FROM item_condition_mapping WHERE item_id = ?", (old_item_id,))
+                    for mapping in cursor.fetchall():
+                        cursor.execute("SELECT condition_name FROM conditions WHERE condition_id = ?", (mapping[0],))
+                        cond_row = cursor.fetchone()
+                        if cond_row:
+                            cond_name = cond_row[0]
+                            cond_pg = db.query(Condition).filter(Condition.condition_name == cond_name).first()
+                            if cond_pg:
+                                db.add(ItemConditionMapping(
+                                    item_id=new_item.item_id,
+                                    condition_id=cond_pg.condition_id
+                                ))
+
+                # Sync Payments for this order
+                cursor.execute("""
+                    SELECT method_id, status_id, amount_received, balance, reference_no, deposit_amount, created_at 
+                    FROM payments WHERE order_id = ?
+                """, (off_o[0],))
+                for p_row in cursor.fetchall():
+                    cursor.execute("SELECT method_name FROM payment_methods WHERE method_id = ?", (p_row[0],))
+                    pm_row = cursor.fetchone()
+                    pm_name = pm_row[0] if pm_row else 'cash'
+                    pm_pg = db.query(PaymentMethod).filter(PaymentMethod.method_name == pm_name).first()
+                    pm_id_pg = pm_pg.method_id if pm_pg else 1
+
+                    cursor.execute("SELECT status_name FROM payment_statuses WHERE p_status_id = ?", (p_row[1],))
+                    ps_row = cursor.fetchone()
+                    ps_name = ps_row[0] if ps_row else 'unpaid'
+                    ps_pg = db.query(PaymentStatus).filter(PaymentStatus.status_name == ps_name).first()
+                    ps_id_pg = ps_pg.p_status_id if ps_pg else 1
+
+                    db.add(Payment(
+                        order_id=new_o.order_id,
+                        method_id=pm_id_pg,
+                        status_id=ps_id_pg,
+                        amount_received=p_row[2],
+                        balance=p_row[3],
+                        reference_no=p_row[4],
+                        deposit_amount=p_row[5],
+                        created_at=datetime.fromisoformat(p_row[6]) if p_row[6] else datetime.now()
+                    ))
+
+                # Sync Delivery details for this order
+                cursor.execute("""
+                    SELECT pref_id, delivery_address, delivery_courier, release_time, province, city, barangay, zip_code 
+                    FROM deliveries WHERE order_id = ?
+                """, (off_o[0],))
+                d_row = cursor.fetchone()
+                if d_row:
+                    cursor.execute("SELECT pref_name FROM shipping_preferences WHERE pref_id = ?", (d_row[0],))
+                    sp_row = cursor.fetchone()
+                    sp_name = sp_row[0] if sp_row else 'pickup'
+                    sp_pg = db.query(ShippingPreference).filter(ShippingPreference.pref_name == sp_name).first()
+                    sp_id_pg = sp_pg.pref_id if sp_pg else 1
+
+                    db.add(Delivery(
+                        order_id=new_o.order_id,
+                        pref_id=sp_id_pg,
+                        delivery_address=d_row[1],
+                        delivery_courier=d_row[2],
+                        release_time=d_row[3],
+                        province=d_row[4],
+                        city=d_row[5],
+                        barangay=d_row[6],
+                        zip_code=d_row[7]
+                    ))
+
                 synced_count += 1
+            else:
+                # Update existing order if status changed while offline
+                cursor.execute("SELECT status_name FROM status WHERE status_id = ?", (off_o[3],))
+                st_row = cursor.fetchone()
+                st_name = st_row[0] if st_row else None
+                if st_name and (not exists.status or exists.status.status_name != st_name):
+                    st_pg = db.query(Status).filter(Status.status_name == st_name).first()
+                    if st_pg:
+                        exists.status_id = st_pg.status_id
+                        exists.updated_at = datetime.fromisoformat(off_o[13]) if off_o[13] and isinstance(off_o[13], str) else (off_o[13] or datetime.now())
+                        synced_count += 1
 
         # 1.5. Sync inventory from SQLite to PG
         try:
@@ -929,16 +1521,64 @@ def sync_backup_to_cloud(db: Session = Depends(get_db), current_user: User = Dep
             print("[SYNC] Inventory table sync processed successfully.")
         except Exception as inv_sync_err:
             print(f"[SYNC WARNING] Skipping inventory table sync: {inv_sync_err}")
+
+        # 1.6. Sync expenses from SQLite to PG
+        try:
+            cursor.execute("SELECT amount, description, expense_date, user_id, created_at FROM expenses")
+            for off_exp in cursor.fetchall():
+                exists_exp = db.query(Expense).filter(Expense.description == off_exp[1], Expense.amount == off_exp[0]).first()
+                if not exists_exp:
+                    cursor.execute("SELECT username FROM users WHERE user_id = ?", (off_exp[3],))
+                    usr_row = cursor.fetchone()
+                    usr_name = usr_row[0] if usr_row else "owner"
+                    usr_pg = db.query(User).filter(User.username == usr_name).first()
+                    u_id = usr_pg.user_id if usr_pg else 1
+                    
+                    new_exp = Expense(
+                        amount=off_exp[0],
+                        description=off_exp[1],
+                        expense_date=datetime.fromisoformat(off_exp[2]) if off_exp[2] and isinstance(off_exp[2], str) else (off_exp[2] or datetime.now()),
+                        user_id=u_id,
+                        created_at=datetime.fromisoformat(off_exp[4]) if off_exp[4] and isinstance(off_exp[4], str) else (off_exp[4] or datetime.now())
+                    )
+                    db.add(new_exp)
+                    synced_count += 1
+            print("[SYNC] Expenses table sync processed successfully.")
+        except Exception as exp_sync_err:
+            print(f"[SYNC WARNING] Skipping expenses table sync: {exp_sync_err}")
+
+        # 1.7. Sync audit_logs from SQLite to PG
+        try:
+            cursor.execute("SELECT username, role, action_type, module, table_name, record_id, old_values, new_values, ip_address FROM audit_logs")
+            for off_log in cursor.fetchall():
+                exists_log = db.query(AuditLog).filter(
+                    AuditLog.action_type == off_log[2],
+                    AuditLog.module == off_log[3],
+                    AuditLog.table_name == off_log[4],
+                    AuditLog.username == off_log[0]
+                ).all()
+                is_dup = any(str(x.new_values) == str(off_log[7]) for x in exists_log) if exists_log else False
+                if not is_dup:
+                    new_log = AuditLog(
+                        username=off_log[0],
+                        role=off_log[1],
+                        action_type=off_log[2],
+                        module=off_log[3],
+                        table_name=off_log[4],
+                        record_id=off_log[5],
+                        old_values=json.loads(off_log[6]) if off_log[6] and isinstance(off_log[6], str) else off_log[6],
+                        new_values=json.loads(off_log[7]) if off_log[7] and isinstance(off_log[7], str) else off_log[7],
+                        ip_address=off_log[8]
+                    )
+                    db.add(new_log)
+            print("[SYNC] Audit logs table sync processed successfully.")
+        except Exception as log_sync_err:
+            print(f"[SYNC WARNING] Skipping audit_logs table sync: {log_sync_err}")
         
         db.commit()
         conn.close()
         
-        # Rename file to mark as processed (Defense strategy)
-        bak_path = os.path.join(
-            os.path.dirname(offline_path), 
-            f"shoelotskey_offline_synced_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db.bak"
-        )
-        os.rename(offline_path, bak_path)
+        # Active database is kept intact and synced (No file duplication/renaming)
         
         return {"status": "success", "synced_records": synced_count}
     except Exception as e:
@@ -1044,7 +1684,7 @@ def trigger_daily_sales_procedure(db: Session = Depends(get_db)):
 # ==========================================
 
 @app.post("/api/login")
-def login(request: LoginRequest, db: Session = Depends(get_db)):
+def login(request: LoginRequest, db: Session = Depends(get_db), http_request: Request = None):
     """
     LOGIC: User Authentication with 3-Attempt Locking
     1. Query User + Related Role
@@ -1092,18 +1732,13 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
             print(f"[AUTH] Granted: {db_user.username} authenticated.")
             access_token = create_access_token(data={"sub": db_user.username})
             
-            # Security Log: Success (OWASP A09)
-            try:
-                sec_log = AuditLog(
-                    user_id=db_user.user_id,
-                    action_type="LOGIN_SUCCESS",
-                    table_name="auth",
-                    record_id=db_user.user_id,
-                    new_values={"user_agent": request.headers.get("user-agent")}
-                )
-                db.add(sec_log)
-                db.commit()
-            except: pass
+            # Security Log: Success (OWASP A09) — FIXED: removed request.headers (LoginRequest has no .headers)
+            log_audit(
+                db=db, action="LOGIN", table_name="auth",
+                record_id=db_user.user_id, user=db_user,
+                new_values={"status": "success"},
+                request=http_request, module="Authentication",
+            )
 
             return {
                 "user_id": db_user.user_id,
@@ -1120,6 +1755,13 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
                 db_user.locked_until = datetime.utcnow() + timedelta(minutes=15)
                 db.commit()
                 print(f"[AUTH] Security: Account '{request.username}' locked for 15 mins (3 failures).")
+                # Audit: Account locked
+                log_audit(
+                    db=db, action="LOGIN_FAILED", table_name="auth",
+                    record_id=db_user.user_id, user=db_user,
+                    new_values={"reason": "account_locked", "failed_attempts": db_user.failed_login_attempts},
+                    request=http_request, module="Authentication",
+                )
                 raise HTTPException(
                     status_code=403, 
                     detail="Too many failed attempts. Account locked for 15 minutes."
@@ -1127,6 +1769,13 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
             
             db.commit()
             print(f"[AUTH] Denied: Fail #{db_user.failed_login_attempts} for '{request.username}'.")
+            # Audit: Failed login attempt
+            log_audit(
+                db=db, action="LOGIN_FAILED", table_name="auth",
+                record_id=db_user.user_id, user=db_user,
+                new_values={"reason": "wrong_password", "failed_attempts": db_user.failed_login_attempts},
+                request=http_request, module="Authentication",
+            )
             raise HTTPException(status_code=401, detail="Invalid username or password")
             
     except HTTPException:
@@ -1134,6 +1783,23 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     except Exception as e:
         print(f"[FATAL ERROR] Auth System Failure: {e}")
         raise HTTPException(status_code=500, detail="Internal Authentication Error")
+
+@app.post("/api/logout")
+def logout(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """
+    Logout endpoint purely for audit trail logging.
+    JWTs are stateless — the actual token invalidation happens client-side by clearing localStorage.
+    This endpoint records the LOGOUT event so it appears in the Activity History.
+    """
+    log_audit(
+        db=db, action="LOGOUT", table_name="auth",
+        record_id=current_user.user_id, user=current_user,
+        new_values={"status": "logged_out"},
+        module="Authentication",
+    )
+    print(f"[AUTH] Logout recorded for: {current_user.username}")
+    return {"status": "success", "message": "Logout recorded"}
+
 
 # ==========================================
 # 2.2 PASSWORD RECOVERY (Mailgun Integration)
@@ -1274,10 +1940,10 @@ def health_check(db: Session = Depends(get_db)):
     }
 
 @app.post("/api/reset-password")
-async def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
+async def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db), http_request: Request = None):
     """Verifies the token and updates the password header."""
     print(f"[AUTH] Verifying reset token...")
-    user = db.query(User).filter(User.reset_token == request.token).first()
+    user = db.query(User).options(joinedload(User.role)).filter(User.reset_token == request.token).first()
     
     if not user:
         raise HTTPException(status_code=400, detail="Invalid or expired reset token.")
@@ -1296,6 +1962,15 @@ async def reset_password(request: ResetPasswordRequest, db: Session = Depends(ge
     user.reset_token_expiry = None
     db.commit()
     
+    # Audit trail logging: record password reset event without exposing secret hash values
+    log_audit(
+        db=db, action="PASSWORD_RESET", table_name="auth",
+        record_id=user.user_id, user=user,
+        old_values={"password_hash": "[PROTECTED_OLD_HASH]", "reset_token_status": "active"},
+        new_values={"password_hash": "[PROTECTED_NEW_HASH]", "reset_token_status": "cleared", "details": f"Password reset completed for account '{user.username}'"},
+        request=http_request, module="Authentication",
+    )
+
     print(f"[AUTH] Password successfully updated for {user.username}")
     return {"message": "Password updated successfully"}
 
@@ -1329,6 +2004,11 @@ def train_model(db: Session = Depends(get_db), current_user: User = Depends(requ
     """Triggers retraining of the ML model based on history (Owner only)."""
     success = predictor.train_from_history(db)
     if success:
+        log_audit(
+            db=db, action="ML_TRAIN", table_name="ml_engine",
+            user=current_user, new_values={"status": "success", "retrained_by": current_user.username},
+            module="Machine Learning",
+        )
         return {"message": "Model retrained successfully"}
     else:
         return {"message": "Retraining skipped - insufficient historical data"}
@@ -1365,6 +2045,12 @@ def create_user(user_data: UserCreateSchema, db: Session = Depends(get_db), curr
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
+    log_audit(
+        db=db, action="CREATE", table_name="users",
+        record_id=new_user.user_id, user=current_user,
+        new_values={"username": new_user.username, "email": new_user.email, "role": user_data.role_name},
+        module="User Management",
+    )
     return new_user
 
 @app.put("/api/users/{user_id}", response_model=UserSchema)
@@ -1374,6 +2060,13 @@ def update_user(user_id: int, user_update: UserUpdateSchema, db: Session = Depen
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
         
+    # Capture before-state for audit diff
+    old_snapshot = {
+        "username": db_user.username,
+        "email": db_user.email,
+        "is_active": db_user.is_active,
+    }
+
     if user_update.username:
         # Check uniqueness
         if db.query(User).filter(User.username == user_update.username, User.user_id != user_id).first():
@@ -1388,6 +2081,14 @@ def update_user(user_id: int, user_update: UserUpdateSchema, db: Session = Depen
     if user_update.password:
         db_user.password_hash = bcrypt.hash(user_update.password)
         
+    # [PRIORITY 2 FIX] Prevent demotion or deactivation of the last active Owner
+    is_demoting = user_update.role_name and user_update.role_name != 'owner'
+    is_deactivating = user_update.is_active is False
+    if db_user.role.role_name == 'owner' and db_user.is_active and (is_demoting or is_deactivating):
+        active_owner_count = db.query(User).join(Role).filter(Role.role_name == 'owner', User.is_active == True).count()
+        if active_owner_count <= 1:
+            raise HTTPException(status_code=400, detail="Cannot demote or deactivate the last active owner account")
+
     if user_update.role_name:
         db_role = db.query(Role).filter(Role.role_name == user_update.role_name).first()
         if not db_role:
@@ -1399,11 +2100,18 @@ def update_user(user_id: int, user_update: UserUpdateSchema, db: Session = Depen
 
     db.commit()
     db.refresh(db_user)
+    log_audit(
+        db=db, action="UPDATE", table_name="users",
+        record_id=user_id, user=current_user,
+        old_values=old_snapshot,
+        new_values={"username": db_user.username, "email": db_user.email, "is_active": db_user.is_active},
+        module="User Management",
+    )
     return db_user
 
 @app.delete("/api/users/{user_id}")
 def delete_user(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_role("owner"))):
-    """Remove user access (Owner only)."""
+    """Remove user access (Owner only). Deactivates account if historical transactions exist to preserve referential integrity."""
     db_user = db.query(User).filter(User.user_id == user_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -1413,9 +2121,37 @@ def delete_user(user_id: int, db: Session = Depends(get_db), current_user: User 
         owner_count = db.query(User).join(Role).filter(Role.role_name == 'owner').count()
         if owner_count <= 1:
             raise HTTPException(status_code=400, detail="Cannot delete the last owner account")
-            
+
+    # [PRIORITY 1 FIX] Prevent Foreign Key constraint violations and preserve audit trail integrity:
+    # If the user has any transaction history (Orders, Expenses, Status Logs, Inventory Logs), deactivate instead of hard-deleting.
+    has_history = (
+        db.query(Order.order_id).filter(Order.processor_id == user_id).first() or
+        db.query(Expense.expense_id).filter(Expense.user_id == user_id).first() or
+        db.query(StatusLog.log_id).filter(StatusLog.user_id == user_id).first() or
+        db.query(InventoryLog.log_id).filter(InventoryLog.user_id == user_id).first()
+    )
+    if has_history:
+        db_user.is_active = False
+        db.commit()
+        log_audit(
+            db=db, action="UPDATE", table_name="users",
+            record_id=user_id, user=current_user,
+            old_values={"is_active": True},
+            new_values={"is_active": False, "reason": "Deactivated instead of hard deletion due to historical transactions"},
+            module="User Management",
+        )
+        return {"status": "success", "message": f"User {user_id} has historical transactions and was deactivated instead of deleted."}
+
+    # Capture before-state for audit trail (after deletion the record is gone)
+    deleted_snapshot = {"username": db_user.username, "email": db_user.email, "role": db_user.role.role_name}
     db.delete(db_user)
     db.commit()
+    log_audit(
+        db=db, action="DELETE", table_name="users",
+        record_id=user_id, user=current_user,
+        old_values=deleted_snapshot,
+        module="User Management",
+    )
     return {"status": "success", "message": f"User {user_id} deleted"}
 
 # ==========================================
@@ -1503,13 +2239,13 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
         # Predicted Completion Handling (Integrated ML)
         expected_iso = order_data.get("predictedCompletionDate")
         if expected_iso:
-            try:
-                expected_dt = datetime.fromisoformat(expected_iso.replace('Z', '+00:00'))
-            except Exception:
-                expected_dt = predictor.predict_completion(db, order_data)
+            expected_dt = parse_local_date(expected_iso)
         else:
             # AUTO-ML: Generate prediction based on services, material, and workload
             expected_dt = predictor.predict_completion(db, order_data)
+
+        t_date = order_data.get("transactionDate") or order_data.get("createdAt")
+        created_dt = parse_local_date(t_date) if t_date else datetime.now()
 
         db_order = Order(
             order_number=order_data.get("orderNumber") or str(uuid.uuid4())[:8].upper(),
@@ -1518,6 +2254,8 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
             priority_id=db_prio.priority_id,
             grand_total=order_data.get("grandTotal", 0.0),
             expected_at=expected_dt,
+            created_at=created_dt,
+            updated_at=created_dt,
             user_id=current_user.user_id  # Use authenticated user's ID
         )
         db.add(db_order)
@@ -1606,7 +2344,8 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
                         inv_item = db.query(Inventory).filter(Inventory.item_id == inv_id).first()
                         if inv_item:
                             print(f"[INVENTORY] Deducting {inv_amount} {inv_item.unit} of '{inv_item.item_name}' for Order {db_order.order_number}")
-                            inv_item.stock_quantity -= inv_amount
+                            inv_item.stock_quantity = max(0.0, inv_item.stock_quantity - inv_amount)
+                            recalculate_inventory_status(inv_item)
                             
                             # Log the stock movement
                             inv_log = InventoryLog(
@@ -1660,6 +2399,17 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
         db.commit()
         db.refresh(db_order)
         print(f"[TRANS] Success: Job Order {db_order.order_number} verified with {len(db_order.items)} items.")
+        log_audit(
+            db=db, action="CREATE", table_name="orders",
+            record_id=db_order.order_id, user=current_user,
+            new_values={
+                "order_number": db_order.order_number,
+                "customer": order_data.get("customerName"),
+                "grand_total": float(db_order.grand_total),
+                "items_count": len(db_order.items),
+            },
+            module="Job Orders",
+        )
         return db_order
         
     except Exception as e:
@@ -1764,14 +2514,10 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
                             deduct_amount = qty_consumed
                             
                             if deduct_amount > 0.0:
-                                # Decrement stock quantity
-                                item.stock_quantity -= deduct_amount
+                                # Decrement stock quantity without going below zero
+                                item.stock_quantity = max(0.0, item.stock_quantity - deduct_amount)
                                 
-                                # Update status based on levels (limit based on package size)
-                                limit = item.package_size if (item.package_size and item.package_size > 0.0) else 1.0
-                                if item.stock_quantity <= 0: item.status = "Critical"
-                                elif item.stock_quantity <= limit: item.status = "Low Stock"
-                                else: item.status = "In Stock"
+                                recalculate_inventory_status(item)
                                 
                                 # Add to order's inventory_used list for frontend tracking
                                 current_used = db_order.inventory_used or []
@@ -1906,7 +2652,10 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
                             i_id = u.get("itemId") or u.get("id")
                             i_amt = float(u.get("amount") or 0)
                             if i_id:
-                                db.query(Inventory).filter(Inventory.item_id == i_id).update({Inventory.stock_quantity: Inventory.stock_quantity + i_amt})
+                                inv_item = db.query(Inventory).filter(Inventory.item_id == i_id).first()
+                                if inv_item:
+                                    inv_item.stock_quantity += i_amt
+                                    recalculate_inventory_status(inv_item)
                     
                     if isinstance(new_usage, list):
                         for u in new_usage:
@@ -1915,7 +2664,8 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
                             if i_id and i_amt > 0:
                                 inv_item = db.query(Inventory).filter(Inventory.item_id == i_id).first()
                                 if inv_item:
-                                    inv_item.stock_quantity -= i_amt
+                                    inv_item.stock_quantity = max(0.0, inv_item.stock_quantity - i_amt)
+                                    recalculate_inventory_status(inv_item)
                                     db.add(InventoryLog(item_id=i_id, change_amount=-i_amt, action_type='manual_edit', order_id=db_order.order_id, user_id=current_user.user_id))
                     
                     db_item.inventory_used = new_usage
@@ -1935,6 +2685,7 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
                     inv_item = db.query(Inventory).filter(Inventory.item_id == inv_id).first()
                     if inv_item:
                         inv_item.stock_quantity += inv_amount # Restock previous usage
+                        recalculate_inventory_status(inv_item)
         
         # 2. Apply new usage (Deduct)
         if isinstance(new_usage, list):
@@ -1944,7 +2695,8 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
                 if inv_id and inv_amount > 0:
                     inv_item = db.query(Inventory).filter(Inventory.item_id == inv_id).first()
                     if inv_item:
-                        inv_item.stock_quantity -= inv_amount # Deduct new usage
+                        inv_item.stock_quantity = max(0.0, inv_item.stock_quantity - inv_amount) # Deduct new usage
+                        recalculate_inventory_status(inv_item)
                         
                         # Log the adjustment
                         db.add(InventoryLog(
@@ -1964,31 +2716,25 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
     if "transactionDate" in updates:
         td_iso = updates["transactionDate"]
         if td_iso:
-            try:
-                db_order.created_at = datetime.fromisoformat(td_iso.replace('Z', '+00:00'))
-            except Exception as e:
-                print(f"[EDIT] Error parsing transactionDate: {e}")
+            db_order.created_at = parse_local_date(td_iso)
 
     if "predictedCompletionDate" in updates:
         expected_iso = updates["predictedCompletionDate"]
         if expected_iso:
-            try:
-                db_order.expected_at = datetime.fromisoformat(expected_iso.replace('Z', '+00:00'))
-            except Exception as e:
-                print(f"[EDIT] Error parsing predictedCompletionDate: {e}")
-                db_order.expected_at = predictor.predict_completion(db, updates)
+            db_order.expected_at = parse_local_date(expected_iso)
         else:
-             db_order.expected_at = predictor.predict_completion(db, updates)
+            db_order.expected_at = predictor.predict_completion(db, updates)
     elif "status" in updates or "priorityLevel" in updates:
         # Re-run prediction if status/priority changed but date wasn't manually set
         db_order.expected_at = predictor.predict_completion(db, updates)
 
     # 6. Cascading Updates: Items, Conditions, and Services
     items_updates = updates.get("items", [])
-    if not items_updates and ("brand" in updates or "shoeMaterial" in updates):
+    if not items_updates and ("brand" in updates or "shoeMaterial" in updates or "shoeModel" in updates or "condition" in updates):
         # Fallback for single-item updates from flat structures
         items_updates = [{
             "brand": updates.get("brand", db_order.items[0].brand if db_order.items else "Unknown"),
+            "shoeModel": updates.get("shoeModel", db_order.items[0].shoe_model if db_order.items else "Unknown"),
             "shoeMaterial": updates.get("shoeMaterial", db_order.items[0].material if db_order.items else "Unknown"),
             "quantity": updates.get("quantity", db_order.items[0].quantity if db_order.items else 1),
             "condition": updates.get("condition"),
@@ -2018,14 +2764,15 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
             if "condition" in item_data and isinstance(item_data["condition"], dict) and "others" in item_data["condition"]:
                 db_item.item_notes = item_data["condition"]["others"]
 
-            # Sync Conditions (3NF Bridge)
+            # Sync Conditions (3NF Bridge) with normalized matching (strips spaces & slashes)
             if "condition" in item_data and isinstance(item_data["condition"], dict):
                 db_item.conditions = [] 
                 c_data = item_data["condition"]
                 c_map = {"scratches":"scratches", "yellowing":"yellowing", "ripsHoles":"ripsholes", "deepStains":"deepstains", "soleSeparation":"soleseparation", "wornOut":"wornout"}
                 for key, val in c_map.items():
                     if c_data.get(key):
-                        c_obj = db.query(Condition).filter(func.lower(Condition.condition_name) == val.lower()).first()
+                        val_lower = val.replace(' ', '').replace('/', '').lower()
+                        c_obj = db.query(Condition).filter(func.replace(func.replace(func.lower(Condition.condition_name), ' ', ''), '/', '') == val_lower).first()
                         if c_obj: db_item.conditions.append(c_obj)
 
             # Sync Services (Pricing Snapshots)
@@ -2046,6 +2793,13 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
         db.commit()
         db.refresh(db_order)
         print(f"[TRANS] Success: Order {db_order.order_number} state synchronized.")
+        log_audit(
+            db=db, action="UPDATE", table_name="orders",
+            record_id=order_id, user=current_user,
+            old_values={"order_number": db_order.order_number},
+            new_values={k: v for k, v in updates.items() if k not in ("items", "inventoryUsed") and not isinstance(v, (list, dict))},
+            module="Job Orders",
+        )
         return db_order
     except Exception as e:
         db.rollback()
@@ -2058,8 +2812,20 @@ def delete_order(order_id: int, db: Session = Depends(get_db), current_user: Use
     db_order = db.query(Order).filter(Order.order_id == order_id).first()
     if not db_order:
         raise HTTPException(status_code=404, detail="Order not found")
+    deleted_snapshot = {"order_number": db_order.order_number, "grand_total": float(db_order.grand_total)}
+    
+    # Explicit cascade handling for existing database schemas without ON DELETE CASCADE
+    db.query(StatusLog).filter(StatusLog.order_id == order_id).delete(synchronize_session=False)
+    db.query(InventoryLog).filter(InventoryLog.order_id == order_id).update({"order_id": None}, synchronize_session=False)
+    
     db.delete(db_order)
     db.commit()
+    log_audit(
+        db=db, action="DELETE", table_name="orders",
+        record_id=order_id, user=current_user,
+        old_values=deleted_snapshot,
+        module="Job Orders",
+    )
     return {"status": "success", "message": f"Order {order_id} deleted"}
 
 
@@ -2101,6 +2867,12 @@ def create_service(service_data: dict, db: Session = Depends(get_db), current_us
     db.add(db_service)
     db.commit()
     db.refresh(db_service)
+    log_audit(
+        db=db, action="CREATE", table_name="services",
+        record_id=db_service.service_id, user=current_user,
+        new_values={"service_name": db_service.service_name, "base_price": float(db_service.base_price), "category": cat_name},
+        module="Services",
+    )
     return db_service
 
 @app.put("/api/services/reorder")
@@ -2129,6 +2901,9 @@ def update_service(service_id: int, service_update: dict, db: Session = Depends(
     if not db_service:
         raise HTTPException(status_code=404, detail="Service not found")
     
+    # Capture before-state
+    old_svc_snapshot = {"service_name": db_service.service_name, "base_price": float(db_service.base_price), "is_active": db_service.is_active}
+
     # Handle category update via string resolution if provided
     if "category" in service_update:
         cat_name = service_update.pop("category")
@@ -2143,6 +2918,13 @@ def update_service(service_id: int, service_update: dict, db: Session = Depends(
             
     db.commit()
     db.refresh(db_service)
+    log_audit(
+        db=db, action="UPDATE", table_name="services",
+        record_id=service_id, user=current_user,
+        old_values=old_svc_snapshot,
+        new_values={"service_name": db_service.service_name, "base_price": float(db_service.base_price), "is_active": db_service.is_active},
+        module="Services",
+    )
     return db_service
 
 @app.delete("/api/services/{service_id}")
@@ -2152,10 +2934,33 @@ def delete_service(service_id: int, db: Session = Depends(get_db), current_user:
     if not db_service:
         raise HTTPException(status_code=404, detail="Service not found")
     
-    # S.O.L.I.D: Soft Delete implementation to maintain 3NF Integrity
-    db_service.is_active = False
-    db.commit()
-    return {"status": "success", "message": "Service deactivated (Soft Delete)"}
+    # Check if this service is referenced in any order item mappings
+    referenced = db.query(ItemServiceMapping).filter(ItemServiceMapping.service_id == service_id).first()
+    svc_name = db_service.service_name
+    
+    if referenced:
+        # Soft delete to maintain 3NF Integrity with past orders
+        db_service.is_active = False
+        db.commit()
+        log_audit(
+            db=db, action="DEACTIVATE", table_name="services",
+            record_id=service_id, user=current_user,
+            old_values={"service_name": svc_name, "was_active": True},
+            new_values={"is_active": False, "reason": "linked_to_past_orders"},
+            module="Services",
+        )
+        return {"status": "success", "message": "Service deactivated (Soft Delete) because it is linked to past orders"}
+    else:
+        # Permanent hard delete (clean up duplicates or unused services)
+        db.delete(db_service)
+        db.commit()
+        log_audit(
+            db=db, action="DELETE", table_name="services",
+            record_id=service_id, user=current_user,
+            old_values={"service_name": svc_name},
+            module="Services",
+        )
+        return {"status": "success", "message": "Service deleted permanently"}
 
 
 @app.get("/api/lookups/statuses", response_model=List[StatusSchema])
@@ -2171,8 +2976,8 @@ def get_expenses(db: Session = Depends(get_db)):
     # 1. Fetch standard overhead expenses
     standard_expenses = db.query(Expense).all()
     
-    # 2. Fetch inventory restock logs
-    restock_logs = db.query(InventoryLog).filter(InventoryLog.action_type == 'restock').all()
+    # 2. Fetch inventory restock logs (exclude order-specific adjustments)
+    restock_logs = db.query(InventoryLog).filter(InventoryLog.action_type == 'restock', InventoryLog.order_id == None).all()
     
     # 3. Format restock logs as virtual ExpenseSchema objects
     virtual_expenses = []
@@ -2182,10 +2987,26 @@ def get_expenses(db: Session = Depends(get_db)):
             continue
             
         unit_price = item.unit_price if item.unit_price is not None else Decimal('0.0')
-        cost = Decimal(str(log.change_amount)) * unit_price
+        divisor = 1.0
+        has_pkg = False
+        if item.package_size and item.package_size > 0:
+            divisor = float(item.package_size)
+            has_pkg = True
+        else:
+            unit_lower = (item.unit or "").lower()
+            if unit_lower in ['ml', 'g', 'grams']:
+                divisor = 1000.0
+                has_pkg = True
+                
+        qty_packages = log.change_amount / divisor
+        cost = Decimal(str(qty_packages)) * unit_price
         
-        # Follow the database's "Category || Notes" standard to map correctly in React context
-        description = f"INVENTORY || Restock: {item.item_name} (+{int(log.change_amount)} {item.unit or ''})"
+        qty_str = f"{int(qty_packages)}" if qty_packages.is_integer() else f"{qty_packages:.2f}"
+        if has_pkg:
+            pkg_unit = item.package_unit or "packages"
+            description = f"INVENTORY || Restock: {item.item_name} (+{qty_str} {pkg_unit})"
+        else:
+            description = f"INVENTORY || Restock: {item.item_name} (+{qty_str} {item.unit or ''})"
         
         virtual_expenses.append({
             "expense_id": 1000000 + log.log_id,
@@ -2207,36 +3028,112 @@ def create_expense(expense_data: dict, db: Session = Depends(get_db), current_us
     # Map frontend 'date' if provided
     exp_date = expense_data.get('date')
     if exp_date:
-        if isinstance(exp_date, str):
-            try:
-                exp_date = datetime.fromisoformat(exp_date.replace('Z', ''))
-            except ValueError:
-                exp_date = datetime.now()
+        exp_date = parse_local_date(exp_date)
     else:
         exp_date = datetime.now()
-
-    # Combine category and notes to fit into the single 'description' column in 3NF DB
+        
+    # Standardize description format: "Category || Notes"
     cat = expense_data.get('category', 'Misc Expense')
     notes = expense_data.get('notes', '')
-    desc_str = f"{cat} || {notes}" if notes else cat
-
-    db_expense = Expense(
-        amount=expense_data.get('amount', 0.0),
-        description=desc_str,
+    description = f"{cat} || {notes}" if notes else cat
+    
+    new_expense = Expense(
+        amount=expense_data['amount'],
+        description=description,
         expense_date=exp_date,
         user_id=user_id
     )
-    db.add(db_expense)
+    db.add(new_expense)
     db.commit()
-    db.refresh(db_expense)
-    return db_expense
+    db.refresh(new_expense)
+    log_audit(
+        db=db, action="CREATE", table_name="expenses",
+        record_id=new_expense.expense_id, user=current_user,
+        new_values={"amount": float(new_expense.amount), "description": new_expense.description},
+        module="Expenses",
+    )
+    return new_expense
 
 @app.put("/api/expenses/{expense_id}", response_model=ExpenseSchema)
 def update_expense(expense_id: int, expense_data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Updates an existing expense (Auth Required)."""
+    if expense_id >= 1000000:
+        log_id = expense_id - 1000000
+        log = db.query(InventoryLog).filter(InventoryLog.log_id == log_id).first()
+        if not log:
+            raise HTTPException(status_code=404, detail="Expense (Restock Log) not found")
+        item = log.inventory_item
+        if not item:
+            raise HTTPException(status_code=404, detail="Inventory item for restock log not found")
+            
+        from decimal import Decimal
+        unit_price = item.unit_price if item.unit_price is not None else Decimal('0.0')
+        
+        # If amount is changed, we adjust the change_amount and the inventory stock level
+        if 'amount' in expense_data:
+            new_amount = Decimal(str(expense_data['amount']))
+            if unit_price > 0:
+                qty_packages = float(new_amount / unit_price)
+                old_change = log.change_amount
+                
+                divisor = 1.0
+                if item.package_size and item.package_size > 0:
+                    divisor = float(item.package_size)
+                else:
+                    unit_lower = (item.unit or "").lower()
+                    if unit_lower in ['ml', 'g', 'grams']:
+                        divisor = 1000.0
+                        
+                new_change = qty_packages * divisor
+                log.change_amount = new_change
+                # Adjust stock quantity by the difference
+                item.stock_quantity += (new_change - old_change)
+                recalculate_inventory_status(item)
+                
+        if 'date' in expense_data:
+            exp_date = expense_data['date']
+            if exp_date:
+                log.created_at = parse_local_date(exp_date)
+                
+        db.commit()
+        db.refresh(log)
+        
+        # Calculate virtual values for response
+        divisor = 1.0
+        has_pkg = False
+        if item.package_size and item.package_size > 0:
+            divisor = float(item.package_size)
+            has_pkg = True
+        else:
+            unit_lower = (item.unit or "").lower()
+            if unit_lower in ['ml', 'g', 'grams']:
+                divisor = 1000.0
+                has_pkg = True
+                
+        qty_packages = log.change_amount / divisor
+        cost = Decimal(str(qty_packages)) * unit_price
+        
+        qty_str = f"{int(qty_packages)}" if qty_packages.is_integer() else f"{qty_packages:.2f}"
+        if has_pkg:
+            pkg_unit = item.package_unit or "packages"
+            description = f"INVENTORY || Restock: {item.item_name} (+{qty_str} {pkg_unit})"
+        else:
+            description = f"INVENTORY || Restock: {item.item_name} (+{qty_str} {item.unit or ''})"
+            
+        return {
+            "expense_id": expense_id,
+            "amount": cost,
+            "description": description,
+            "expense_date": log.created_at,
+            "user_id": log.user_id,
+            "created_at": log.created_at
+        }
+
     db_exp = db.query(Expense).filter(Expense.expense_id == expense_id).first()
     if not db_exp:
         raise HTTPException(status_code=404, detail="Expense not found")
+
+    old_exp_snapshot = {"amount": float(db_exp.amount), "description": db_exp.description}
     
     if 'amount' in expense_data:
         db_exp.amount = expense_data['amount']
@@ -2254,76 +3151,237 @@ def update_expense(expense_id: int, expense_data: dict, db: Session = Depends(ge
     
     if 'date' in expense_data:
         exp_date = expense_data['date']
-        if isinstance(exp_date, str):
-            try:
-                db_exp.expense_date = datetime.fromisoformat(exp_date.replace('Z', ''))
-            except ValueError:
-                pass
+        if exp_date:
+            db_exp.expense_date = parse_local_date(exp_date)
                 
     db.commit()
     db.refresh(db_exp)
+    log_audit(
+        db=db, action="UPDATE", table_name="expenses",
+        record_id=expense_id, user=current_user,
+        old_values=old_exp_snapshot,
+        new_values={"amount": float(db_exp.amount), "description": db_exp.description},
+        module="Expenses",
+    )
     return db_exp
 
 @app.delete("/api/expenses/{expense_id}")
 def delete_expense(expense_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_role("owner"))):
     """Permanently deletes an expense record (Owner only)."""
+    if expense_id >= 1000000:
+        log_id = expense_id - 1000000
+        log = db.query(InventoryLog).filter(InventoryLog.log_id == log_id).first()
+        if not log:
+            raise HTTPException(status_code=404, detail="Expense (Restock Log) not found")
+        item = log.inventory_item
+        if item:
+            # Reverse the restock quantity from stock_quantity without going below zero
+            item.stock_quantity = max(0.0, item.stock_quantity - log.change_amount)
+            recalculate_inventory_status(item)
+        db.delete(log)
+        db.commit()
+        log_audit(
+            db=db, action="DELETE", table_name="expenses",
+            record_id=expense_id, user=current_user,
+            old_values={"type": "inventory_restock", "item": item.item_name if item else "unknown"},
+            module="Expenses",
+        )
+        return {"status": "success", "message": "Restock log deleted."}
+
     db_exp = db.query(Expense).filter(Expense.expense_id == expense_id).first()
     if not db_exp:
         raise HTTPException(status_code=404, detail="Expense not found")
+    exp_snapshot = {"amount": float(db_exp.amount), "description": db_exp.description}
     db.delete(db_exp)
     db.commit()
+    log_audit(
+        db=db, action="DELETE", table_name="expenses",
+        record_id=expense_id, user=current_user,
+        old_values=exp_snapshot,
+        module="Expenses",
+    )
     return {"status": "success", "message": "Expense deleted."}
 
 @app.get("/api/activities")
-def get_activities(db: Session = Depends(get_db)):
-    """Retrieves formatted system audit logs for UI."""
-    logs = db.query(AuditLog).order_by(AuditLog.created_at.desc()).limit(50).all()
-    results = []
-    for log in logs:
-        u = db.query(User).filter(User.user_id == log.user_id).first()
-        
-        # [VITAL DEBUGGING TOOL] Extract descriptive details for the Activity History UI
-        details = f"{log.action_type} on {log.table_name}"
-        if log.action_type == "404_NOT_FOUND" and log.old_values:
+def get_activities(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("owner")),  # SECURITY FIX: Owner-only (OWASP A01)
+    limit: int = 100,
+    offset: int = 0,
+    module: Optional[str] = None,
+    action: Optional[str] = None,
+    username: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+):
+    """
+    OWNER-ONLY: Retrieves paginated, filterable audit logs for the Activity History UI.
+
+    Security: Requires owner role. Staff users receive HTTP 403.
+    Performance: Uses denormalized username/module columns (no N+1 joins).
+    Pagination: Accepts ?limit=&offset= for large datasets.
+    Filtering: Supports ?module=, ?action=, ?username=, ?start_date=, ?end_date=
+    """
+    READABLE_TABLE_MAP = {
+        "orders":           "Job Orders",
+        "items":            "Job Orders",
+        "users":            "User Management",
+        "inventory":        "Inventory",
+        "inventory_logs":   "Inventory",
+        "services":         "Services",
+        "expenses":         "Expenses",
+        "auth":             "Authentication",
+        "audit_logs":       "System",
+        "backend_v2":       "System",
+        "ml_engine":        "Machine Learning",
+        "payments":         "Sales",
+        "deliveries":       "Job Orders",
+        "customers":        "Job Orders",
+    }
+
+    def resolve_details(log) -> str:
+        """Build a human-readable detail string without raw JSON."""
+        if log.action_type in ("404_NOT_FOUND",) and log.old_values:
             broken_url = log.old_values.get("broken_url", "unknown")
             client = log.new_values.get("client", "unknown") if log.new_values else "unknown"
-            details = f"Page Not Found: {broken_url} (Request from {client})"
-        elif log.action_type == "UPDATE" and log.new_values:
-            # If it's a standard update, show what changed
-            details = f"Updated {log.table_name}: {json.dumps(log.new_values)}"
-        elif log.action_type == "SERVER_ERROR" and log.new_values:
-            f = log.new_values.get("file", "unknown")
-            l = log.new_values.get("line", 0)
-            e = log.old_values.get("error", "Unknown error")
-            details = f"CRITICAL: {e} | File: {f} | Line: {l}"
+            return f"Page Not Found: {broken_url} (from {client})"
+        if log.action_type == "SERVER_ERROR" and (log.new_values or log.old_values):
+            f_name = (log.new_values or {}).get("file", "unknown")
+            line   = (log.new_values or {}).get("line", 0)
+            error  = (log.old_values or {}).get("error", "Unknown error")
+            return f"CRITICAL: {error} | File: {f_name} | Line: {line}"
+        if log.action_type in ("LOGIN", "LOGIN_SUCCESS"):
+            actor = log.username or "unknown user"
+            return f"{actor} logged into the system"
+        if log.action_type in ("LOGIN_FAILED",):
+            actor = log.username or "unknown user"
+            return f"Failed login attempt for '{actor}'"
+        if log.action_type == "LOGOUT":
+            actor = log.username or "unknown user"
+            return f"{actor} logged out"
+        if log.action_type == "PASSWORD_RESET":
+            actor = log.username or "unknown user"
+            return f"{actor} reset their password"
+        if log.action_type == "ML_TRAIN":
+            return "Machine Learning model retrained on latest historical data"
+
+        # Generic meaningful detail
+        readable_table = READABLE_TABLE_MAP.get(log.table_name or "", log.table_name or "Record")
+        if log.action_type == "CREATE":
+            return f"New {readable_table} record created (ID: {log.record_id})"
+        if log.action_type == "UPDATE":
+            changed_keys = list((log.new_values or {}).keys()) or ["fields"]
+            return f"{readable_table} record #{log.record_id} updated — changed: {', '.join(changed_keys[:5])}"
+        if log.action_type == "DELETE":
+            return f"{readable_table} record #{log.record_id} permanently deleted"
+        return f"{log.action_type} on {readable_table}"
+
+    # Build base query
+    q = db.query(AuditLog)
+
+    # Apply server-side filters
+    if module and module.lower() not in ("all", "all types", ""):
+        q = q.filter(AuditLog.module == module)
+    if action and action.lower() not in ("all", ""):
+        # Match against action_type (stored without spaces, e.g. LOGIN_SUCCESS)
+        action_clean = action.upper().replace(" ", "_")
+        q = q.filter(AuditLog.action_type == action_clean)
+    if username and username.lower() not in ("all", ""):
+        q = q.filter(AuditLog.username == username)
+    if start_date:
+        try:
+            q = q.filter(AuditLog.created_at >= parse_local_date(start_date))
+        except Exception:
+            pass
+    if end_date:
+        try:
+            from datetime import timedelta
+            end_dt = parse_local_date(end_date) + timedelta(days=1)
+            q = q.filter(AuditLog.created_at < end_dt)
+        except Exception:
+            pass
+
+    total_count = q.count()
+    logs = q.order_by(AuditLog.created_at.desc()).offset(offset).limit(limit).all()
+
+    results = []
+    for log in logs:
+        readable_table = READABLE_TABLE_MAP.get(log.table_name or "", log.table_name or "System")
+        resolved_module = log.module or readable_table
+
+        # Action type classification for frontend badge coloring
+        action_upper = (log.action_type or "").upper()
+        if action_upper in ("SERVER_ERROR", "DELETE", "LOGIN_FAILED"):
+            log_type = "critical"
+        elif action_upper in ("404_NOT_FOUND", "SYSTEM"):
+            log_type = "system"
+        elif action_upper in ("LOGIN", "LOGIN_SUCCESS", "LOGOUT", "PASSWORD_RESET"):
+            log_type = "auth"
+        else:
+            log_type = "order"
 
         results.append({
-            "id": str(log.audit_log_id),
-            "timestamp": log.created_at.strftime('%m/%d/%Y, %H:%M') if log.created_at else "",
-            "user": u.username if u else "System",
-            "action": log.action_type.replace('_', ' '),
-            "details": details,
-            "type": "critical" if log.action_type == "SERVER_ERROR" else ("system" if log.action_type == "404_NOT_FOUND" else "order")
+            "id":         str(log.audit_log_id),
+            "timestamp":  log.created_at.strftime('%m/%d/%Y, %H:%M') if log.created_at else "",
+            "user":       log.username or "System",       # Uses denormalized column (no N+1)
+            "role":       log.role or "system",
+            "action":     (log.action_type or "").replace("_", " "),
+            "actionRaw":  log.action_type or "",          # Raw for badge mapping
+            "module":     resolved_module,
+            "table":      readable_table,
+            "recordId":   log.record_id,
+            "oldValues":  log.old_values,
+            "newValues":  log.new_values,
+            "details":    resolve_details(log),
+            "type":       log_type,
+            "ipAddress":  log.ip_address,
         })
-    return results
+    return {
+        "total":  total_count,
+        "offset": offset,
+        "limit":  limit,
+        "items":  results,
+    }
 
 @app.post("/api/activities")
 def log_custom_activity(activity: dict, db: Session = Depends(get_db)):
-    """Generic endpoint for frontend to log UI-specific events."""
-    # Map to AuditLog model
-    u = db.query(User).filter(User.username == activity.get('user')).first()
-    new_log = AuditLog(
-        user_id=u.user_id if u else 1,
-        action_type='UPDATE' if activity.get('type') == 'service' else 'CREATE',
-        table_name=activity.get('type') or 'system',
-        record_id=0,
-        new_values={"details": activity.get('details')}
-    )
-    db.add(new_log)
-    db.commit()
-    db.refresh(new_log)
-    return activity
+    """
+    Frontend event logger for UI-specific actions (PRINT, LOGOUT, etc.).
+    Now correctly maps all action types — no more hardcoded 'UPDATE'/'CREATE' fallback.
 
+    Note: No auth required intentionally — frontend logs events like LOGOUT after the token is cleared.
+    The endpoint ONLY creates log entries; it cannot read, modify, or delete existing logs.
+    """
+    # Resolve user by username (fallback to user_id if provided)
+    actor_username = activity.get("user") or activity.get("username")
+    actor_user_id = activity.get("userId") or activity.get("user_id")
+    u = None
+    if actor_username:
+        u = db.query(User).filter(User.username == actor_username).first()
+    elif actor_user_id:
+        try:
+            u = db.query(User).filter(User.user_id == int(actor_user_id)).first()
+        except Exception:
+            pass
+
+    # Map action type — pass through as-is (no more hardcoded fallback)
+    action_type = (activity.get("action") or activity.get("type") or "CREATE").upper().replace(" ", "_")
+
+    # Resolve module from payload or from table name
+    table_name = activity.get("table") or activity.get("module") or "system"
+    module = activity.get("module") or TABLE_TO_MODULE.get(table_name, table_name.replace('_', ' ').title())
+
+    entry = log_audit(
+        db=db,
+        action=action_type,
+        table_name=table_name,
+        record_id=activity.get("recordId") or activity.get("record_id") or None,
+        user=u,
+        old_values=activity.get("oldValues") or activity.get("old_values"),
+        new_values={"details": activity.get("details")} if activity.get("details") else (activity.get("newValues") or activity.get("new_values")),
+        module=module,
+    )
+    return {"status": "logged", "id": entry.audit_log_id if entry else None}
 
 
 
@@ -2335,21 +3393,20 @@ def log_custom_activity(activity: dict, db: Session = Depends(get_db)):
 @app.get("/api/inventory", response_model=List[InventorySchema])
 def get_inventory(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Fetch all supply items."""
-    return db.query(Inventory).all()
+    repo = InventoryRepository(db)
+    return repo.get_all()
 
 @app.post("/api/inventory", response_model=InventorySchema)
 def create_inventory_item(item: InventorySchema, db: Session = Depends(get_db), current_user: User = Depends(require_role(["owner"]))):
     """Admin-only: Add new material to catalog."""
-    limit = item.package_size if (item.package_size and item.package_size > 0.0) else 1.0
-    calculated_status = "Critical" if item.stock_quantity <= 0.0 else ("Low Stock" if item.stock_quantity <= limit else "In Stock")
-    
+    if item.stock_quantity < 0:
+        raise HTTPException(status_code=400, detail="Stock quantity cannot be negative.")
     new_item = Inventory(
         item_name=item.item_name,
         category=item.category,
         stock_quantity=item.stock_quantity,
         unit=item.unit,
         unit_price=item.unit_price,
-        status=calculated_status,
         is_active=item.is_active,
         auto_deduct=item.auto_deduct,
         auto_deduct_trigger=item.auto_deduct_trigger,
@@ -2357,41 +3414,94 @@ def create_inventory_item(item: InventorySchema, db: Session = Depends(get_db), 
         consumption_qty=item.consumption_qty,
         consumption_unit=item.consumption_unit,
         package_size=item.package_size,
-        package_unit=item.package_unit
+        package_unit=item.package_unit,
+        low_stock_threshold=item.low_stock_threshold
     )
-    db.add(new_item)
-    db.commit()
-    db.refresh(new_item)
+    recalculate_inventory_status(new_item)
+    repo = InventoryRepository(db)
+    repo.add(new_item)
+    
+    # S.O.L.I.D & 3NF: Log initial stock as restock to record it in expenses
+    if new_item.stock_quantity > 0:
+        db.add(InventoryLog(
+            item_id=new_item.item_id,
+            change_amount=new_item.stock_quantity,
+            action_type='restock',
+            user_id=current_user.user_id
+        ))
+        repo.commit()
+
+    log_audit(
+        db=db, action="CREATE", table_name="inventory",
+        record_id=new_item.item_id, user=current_user,
+        new_values={"item_name": new_item.item_name, "stock_quantity": new_item.stock_quantity, "unit": new_item.unit, "unit_price": float(new_item.unit_price)},
+        module="Inventory",
+    )
     return new_item
 
 @app.put("/api/inventory/{item_id}", response_model=InventorySchema)
 def update_inventory_item(item_id: int, updates: InventoryUpdateSchema, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Modify stock or metadata."""
-    item = db.query(Inventory).filter(Inventory.item_id == item_id).first()
+    repo = InventoryRepository(db)
+    item = repo.get_by_id(item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
     
+    # Store old stock quantity to compute the diff
+    old_stock = item.stock_quantity
+    
+    # Store old snapshot for audit diff
+    old_inv_snapshot = {"item_name": item.item_name, "stock_quantity": item.stock_quantity}
+
     update_data = updates.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(item, key, value)
         
-    limit = item.package_size if (item.package_size and item.package_size > 0.0) else 1.0
-    item.status = "Critical" if item.stock_quantity <= 0.0 else ("Low Stock" if item.stock_quantity <= limit else "In Stock")
+    if item.stock_quantity < 0:
+        raise HTTPException(status_code=400, detail="Stock quantity cannot be negative.")
+        
+    recalculate_inventory_status(item)
     
-    db.commit()
-    db.refresh(item)
+    # S.O.L.I.D & 3NF: Log stock difference if it changed
+    if item.stock_quantity != old_inv_snapshot["stock_quantity"]:
+        diff = item.stock_quantity - old_inv_snapshot["stock_quantity"]
+        db.add(InventoryLog(
+            item_id=item.item_id,
+            change_amount=diff,
+            action_type='restock' if diff > 0 else 'deduction',
+            user_id=current_user.user_id
+        ))
+    
+    repo.commit()
+    repo.refresh(item)
+    log_audit(
+        db=db, action="UPDATE", table_name="inventory",
+        record_id=item_id, user=current_user,
+        old_values=old_inv_snapshot,
+        new_values={"item_name": item.item_name, "stock_quantity": item.stock_quantity},
+        module="Inventory",
+    )
     return item
 
 @app.delete("/api/inventory/{item_id}")
 def delete_inventory_item(item_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_role(["owner"]))):
     """Admin-only: Soft-delete item from catalog."""
-    item = db.query(Inventory).filter(Inventory.item_id == item_id).first()
+    repo = InventoryRepository(db)
+    item = repo.get_by_id(item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
     
     # Soft delete to preserve transaction logs and relational integrity (3NF)
+    item_name = item.item_name
     item.is_active = False
-    db.commit()
+    repo.commit()
+    log_audit(
+        db=db, action="DELETE", table_name="inventory",
+        record_id=item_id, user=current_user,
+        old_values={"item_name": item_name, "was_active": True},
+        new_values={"is_active": False},
+        module="Inventory",
+    )
     return {"status": "success", "message": "Item deactivated"}
 
 @app.post("/api/inventory/adjust")
@@ -2404,21 +3514,25 @@ def adjust_stock(
     current_user: User = Depends(get_current_user)
 ):
     """Record stock movement and update balance."""
-    item = db.query(Inventory).filter(Inventory.item_id == item_id).first()
+    repo = InventoryRepository(db)
+    item = repo.get_by_id(item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
     
+    if amount < 0:
+        raise HTTPException(status_code=400, detail="Adjustment amount cannot be negative.")
+    old_stock = item.stock_quantity
+
     # 1. Update the inventory balance
     if action == 'deduction':
-        item.stock_quantity -= amount
+        if (item.stock_quantity - amount) < 0:
+            raise HTTPException(status_code=400, detail="Insufficient stock: quantity cannot be negative.")
+        item.stock_quantity = max(0.0, item.stock_quantity - amount)
     else:
         item.stock_quantity += amount
     
-    # 2. Update status based on levels (limit based on package size)
-    limit = item.package_size if (item.package_size and item.package_size > 0.0) else 1.0
-    if item.stock_quantity <= 0.0: item.status = "Critical"
-    elif item.stock_quantity <= limit: item.status = "Low Stock"
-    else: item.status = "In Stock"
+    # 2. Update status using helper
+    recalculate_inventory_status(item)
 
     # 3. Log the transaction
     log = InventoryLog(
@@ -2430,7 +3544,16 @@ def adjust_stock(
     )
     
     db.add(log)
-    db.commit()
+    repo.commit()
+    
+    # Write manual inventory adjustment to system audit trail
+    log_audit(
+        db=db, action="UPDATE", table_name="inventory",
+        record_id=item_id, user=current_user,
+        old_values={"item_name": item.item_name, "stock_quantity": old_stock},
+        new_values={"item_name": item.item_name, "stock_quantity": item.stock_quantity, "action": action, "amount": amount},
+        module="Inventory",
+    )
     return {"status": "success", "new_stock": item.stock_quantity}
 
 # ------------------------------------------

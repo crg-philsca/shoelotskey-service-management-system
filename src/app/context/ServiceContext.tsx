@@ -172,6 +172,9 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
             body: JSON.stringify(payload)
         })
             .then(res => {
+                if (res.status === 400 || res.status === 401 || res.status === 403) {
+                    throw new Error(`HTTP_${res.status}: Permission denied or invalid data.`);
+                }
                 if (!res.ok) throw new Error('API failed');
                 return res.json();
             })
@@ -189,7 +192,11 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
                 setServices((prev) => [...prev, newSvc]);
             })
             .catch(err => {
-                console.error("Service sync failed. Queueing offline POST.", err);
+                console.error("Service sync failed:", err);
+                if (err.message && err.message.startsWith('HTTP_')) {
+                    import('sonner').then(({ toast }) => toast.error('Action denied (400/401/403).'));
+                    return;
+                }
                 const newSvc: Service = { ...service, id: Math.random().toString() };
                 setServices((prev) => [...prev, newSvc]); // Fallback locally
                 queueServiceSync({ type: 'POST', payload });
@@ -215,6 +222,9 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
             body: JSON.stringify(payload)
         })
             .then(res => {
+                if (res.status === 400 || res.status === 401 || res.status === 403) {
+                    throw new Error(`HTTP_${res.status}: Permission denied or invalid data.`);
+                }
                 if (!res.ok) throw new Error('API failed');
                 return res.json();
             })
@@ -231,7 +241,11 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
                 } : service));
             })
             .catch(err => {
-                console.error("Service sync failed. Queueing offline PUT.", err);
+                console.error("Service sync failed:", err);
+                if (err.message && err.message.startsWith('HTTP_')) {
+                    import('sonner').then(({ toast }) => toast.error('Update denied (400/401/403).'));
+                    return;
+                }
                 setServices((prev) => prev.map((service) => service.id === id ? { ...service, ...updates } : service)); // Fallback
                 queueServiceSync({ type: 'PUT', id, payload });
             });
@@ -242,11 +256,19 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${user.token}` }
         })
-            .then(() => {
+            .then((res) => {
+                if (res.status === 400 || res.status === 401 || res.status === 403) {
+                    throw new Error(`HTTP_${res.status}: Permission denied or invalid data.`);
+                }
+                if (!res.ok) throw new Error('Delete failed');
                 setServices((prev) => prev.filter((s) => s.id !== id));
             })
             .catch(err => {
-                console.error("Service sync failed. Queueing offline DELETE.", err);
+                console.error("Service sync failed:", err);
+                if (err.message && err.message.startsWith('HTTP_')) {
+                    import('sonner').then(({ toast }) => toast.error('Delete denied (400/401/403).'));
+                    return;
+                }
                 setServices((prev) => prev.filter((s) => s.id !== id)); // Fallback
                 queueServiceSync({ type: 'DELETE', id });
             });

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { format as dateFnsFormat } from 'date-fns';
 import { useLocation } from 'react-router-dom';
 import { cn } from '@/app/components/ui/utils';
@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/app/componen
 import { Input } from '@/app/components/ui/input';
 import EditOrderModal from '@/app/components/EditOrderModal';
 import StockUpdateModal from '@/app/components/StockUpdateModal';
-import { Label } from '@/app/components/ui/label';
+import OrderDetailModal from '@/app/components/OrderDetailModal';
 import { Badge } from '@/app/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import {
@@ -46,12 +46,6 @@ import {
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
-  User,
-  Phone,
-  Clock,
-  Tag,
-  MapPin,
-  Truck,
   AlertTriangle,
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Cell } from 'recharts';
@@ -91,6 +85,99 @@ class DashboardErrorBoundary extends React.Component<{children: React.ReactNode}
 interface DashboardProps {
   user: { username: string; role: 'owner' | 'staff'; token: string };
   onSetHeaderActionRight?: (action: ReactNode | null) => void;
+}
+
+function FormattedDateInput({ value, onChange, className, id }: { value: string; onChange: (val: string) => void; className?: string; id?: string }) {
+  const hiddenDateRef = useRef<HTMLInputElement>(null);
+
+  const toDisplay = (iso: string) => {
+    if (!iso) return '';
+    const parts = iso.split('-');
+    if (parts.length === 3) {
+      return `${parts[1]}/${parts[2]}/${parts[0]}`;
+    }
+    return iso;
+  };
+
+  const [localVal, setLocalVal] = useState(toDisplay(value));
+
+  useEffect(() => {
+    setLocalVal(toDisplay(value));
+  }, [value]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let inputVal = e.target.value;
+    let digits = inputVal.replace(/[^0-9]/g, '');
+    if (digits.length > 8) digits = digits.substring(0, 8);
+
+    let formatted = digits;
+    if (digits.length > 2) {
+      formatted = digits.substring(0, 2) + '/' + digits.substring(2);
+    }
+    if (digits.length > 4) {
+      formatted = digits.substring(0, 2) + '/' + digits.substring(2, 4) + '/' + digits.substring(4);
+    }
+
+    setLocalVal(formatted);
+
+    if (digits.length === 8) {
+      const mm = digits.substring(0, 2);
+      const dd = digits.substring(2, 4);
+      const yyyy = digits.substring(4, 8);
+      const iso = `${yyyy}-${mm}-${dd}`;
+      const dateObj = new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd));
+      if (!isNaN(dateObj.getTime())) {
+        onChange(iso);
+      }
+    }
+  };
+
+  const handlePickerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const isoVal = e.target.value;
+    if (isoVal) {
+      setLocalVal(toDisplay(isoVal));
+      onChange(isoVal);
+    }
+  };
+
+  const openPicker = () => {
+    if (hiddenDateRef.current) {
+      if (typeof hiddenDateRef.current.showPicker === 'function') {
+        hiddenDateRef.current.showPicker();
+      } else {
+        hiddenDateRef.current.click();
+      }
+    }
+  };
+
+  return (
+    <div className="relative w-full flex items-center">
+      <Input
+        id={id}
+        type="text"
+        placeholder="MM/DD/YYYY"
+        value={localVal}
+        onChange={handleChange}
+        className={`${className || ''} pr-8 text-left`}
+      />
+      <button
+        type="button"
+        onClick={openPicker}
+        title="Select date"
+        className="absolute right-2.5 text-gray-400 hover:text-red-600 transition-colors cursor-pointer p-0.5"
+      >
+        <CalendarIcon size={14} />
+      </button>
+      <input
+        ref={hiddenDateRef}
+        type="date"
+        value={value || ''}
+        onChange={handlePickerChange}
+        className="sr-only absolute pointer-events-none opacity-0"
+        tabIndex={-1}
+      />
+    </div>
+  );
 }
 
 export default function Dashboard(props: DashboardProps) {
@@ -249,11 +336,15 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
   }, [orders, analyticsOrders, selectedStatus]);
 
   const totalSales = useMemo(() => {
-    return (analyticsOrders || []).reduce((sum, order) => sum + Math.min(order?.grandTotal || 0, order?.amountReceived || 0), 0);
+    return (analyticsOrders || []).reduce((sum, order) => {
+      if ((order?.status as string)?.toLowerCase() === 'cancelled') return sum;
+      return sum + Math.min(order?.grandTotal || 0, order?.amountReceived || 0);
+    }, 0);
   }, [analyticsOrders]);
 
   const totalPendingPayments = useMemo(() => {
     return (analyticsOrders || []).reduce((sum, order) => {
+      if ((order?.status as string)?.toLowerCase() === 'cancelled') return sum;
       if (order?.paymentStatus === 'fully-paid') return sum;
       return sum + ((order?.grandTotal || 0) - (order?.amountReceived || 0));
     }, 0);
@@ -262,10 +353,12 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
   const { inventoryData } = useInventory();
   
   const lowStockItems = useMemo(() => {
-    // [STABILITY] Trigger alert if status is not 'In Stock' OR if quantity is critical (<= package_size or 1)
+    // [STABILITY] Trigger alert if status is not 'In Stock' OR if quantity is critical (<= threshold)
     return (inventoryData || []).filter(item => {
-      const limit = (item.package_size && item.package_size > 0) ? item.package_size : 1;
-      return item.isActive && (item.status !== 'In Stock' || Number(item.stock) <= limit);
+      const threshold = (item.low_stock_threshold && item.low_stock_threshold > 0)
+        ? item.low_stock_threshold
+        : ((item.package_size && item.package_size > 0) ? item.package_size : 1);
+      return item.isActive && (item.status !== 'In Stock' || Number(item.stock) <= threshold);
     });
   }, [inventoryData]);
 
@@ -283,17 +376,6 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
     };
 
     return expenses.filter(exp => {
-      const category = (exp.category || '').toLowerCase();
-      const isDaily = category.includes('(daily)');
-      const isWeekly = category.includes('(weekly)');
-      const isMonthly = category.includes('(monthly)') || 
-                        category.includes('water') || 
-                        category.includes('electricity');
-
-      if (isDaily && profitRange !== 'Daily') return false;
-      if (isWeekly && profitRange !== 'Weekly') return false;
-      if (isMonthly && (profitRange !== 'Monthly' && profitRange !== 'Quarterly' && profitRange !== 'Annually')) return false;
-
       return isWithinRange(new Date(exp.date));
     });
   }, [expenses, profitRange]);
@@ -783,20 +865,18 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
 
                       <div className="space-y-2">
                         <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">Start Date</label>
-                        <Input
-                          type="date"
+                        <FormattedDateInput
                           value={startDate}
-                          onChange={(e) => setStartDate(e.target.value)}
+                          onChange={(val) => setStartDate(val)}
                           className="h-9 text-xs border-gray-100 bg-gray-50/50 text-center"
                         />
                       </div>
 
                       <div className="space-y-2">
                         <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">End Date</label>
-                        <Input
-                          type="date"
+                        <FormattedDateInput
                           value={endDate}
-                          onChange={(e) => setEndDate(e.target.value)}
+                          onChange={(val) => setEndDate(val)}
                           className="h-9 text-xs border-gray-100 bg-gray-50/50 text-center"
                         />
                       </div>
@@ -893,6 +973,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                 <th className="px-3 py-3 text-center text-[10px] md:text-xs font-bold text-gray-600 uppercase">Order Date</th>
                                 <th className="px-3 py-3 text-center text-[10px] md:text-xs font-bold text-gray-600 uppercase">Release Date</th>
                                 <th className="px-3 py-3 text-center text-[10px] md:text-xs font-bold text-gray-600 uppercase">Priority Level</th>
+                                {selectedStatus === 'claimed' && <th className="px-3 py-3 text-center text-[10px] md:text-xs font-bold text-gray-600 uppercase hidden md:table-cell">Claimed Date</th>}
                                 {selectedStatus === 'claimed' && <th className="px-3 py-3 text-center text-[10px] md:text-xs font-bold text-gray-600 uppercase hidden md:table-cell">Claimed By</th>}
                                 <th className="px-3 py-3 text-center text-[10px] md:text-xs font-bold text-gray-600 uppercase hidden md:table-cell">Processed By</th>
                                 <th className="px-3 py-3 text-center text-[10px] md:text-xs font-bold text-gray-600 uppercase">Actions</th>
@@ -901,7 +982,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                             <tbody className="divide-y divide-gray-200">
                               {paginatedOrders.length === 0 ? (
                                 <tr>
-                                  <td colSpan={selectedStatus === 'claimed' ? 10 : 9} className="px-6 py-20 text-center">
+                                  <td colSpan={selectedStatus === 'claimed' ? 11 : 9} className="px-6 py-20 text-center">
                                     <div className="flex flex-col items-center justify-center space-y-3 opacity-40">
                                       <ClipboardCheck size={48} className="text-gray-300" />
                                       <p className="text-sm font-black text-gray-400 uppercase tracking-[0.2em]">
@@ -964,7 +1045,17 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                         {order.priorityLevel}
                                       </span>
                                     </td>
-                                    {selectedStatus === 'claimed' && <td className="px-3 py-3 text-xs text-center hidden md:table-cell">{order.claimedBy || '-'}</td>}
+                                     {selectedStatus === 'claimed' && (
+                                       <td className="px-3 py-3 text-xs text-center hidden md:table-cell">
+                                         {(() => {
+                                           const claimDate = order.actualCompletionDate || ((order as any).statusHistory?.find((s: any) => s.status === 'claimed')?.timestamp);
+                                           if (!claimDate) return '-';
+                                           const d = new Date(claimDate);
+                                           return isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy');
+                                         })()}
+                                       </td>
+                                     )}
+                                    {selectedStatus === 'claimed' && <td className="px-3 py-3 text-xs text-center hidden md:table-cell">{order.claimedBy || order.customerName || '-'}</td>}
                                     <td className="px-3 py-3 text-center text-xs hidden md:table-cell">{order.processedBy || '-'}</td>
                                     <td className="px-3 py-3 text-xs text-center" onClick={(e) => e.stopPropagation()}>
                                       <DropdownMenu>
@@ -1003,10 +1094,19 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                                   order.status === 'for-release' ? 'on-going' :
                                                     order.status === 'claimed' ? 'for-release' : null;
                                               if (prevStatus) {
+                                                const depositAmt = order.depositAmount || 0;
+                                                const paymentUpdates = (order.status === 'claimed' && depositAmt < order.grandTotal) ? {
+                                                    paymentStatus: 'downpayment' as any,
+                                                    amountReceived: depositAmt,
+                                                    balance: order.grandTotal - depositAmt,
+                                                    change: 0
+                                                } : {};
+
                                                 updateOrder(order.id, {
                                                   status: prevStatus as any,
                                                   updatedAt: new Date(),
-                                                  actualCompletionDate: undefined
+                                                  actualCompletionDate: undefined,
+                                                  ...paymentUpdates
                                                 }, user.username);
                                                 toast.success(`Order reverted to ${prevStatus.replace('-', ' ')}`);
                                               }
@@ -1122,148 +1222,15 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
           )}
 
           {/* Order Details Modal */}
-          <Dialog open={!!selectedOrder && !isEditing && !isUpdatingStock} onOpenChange={(open) => { if (!open) setSelectedOrder(null); }}>
-            <DialogContent className="max-w-md bg-white">
-              <DialogHeader className="border-b border-gray-100 pb-4">
-                <DialogTitle className="text-xl font-bold flex items-center justify-center gap-2">
-                  Order #
-                  <span className="bg-gray-100/80 px-3 py-1 rounded-full text-sm text-gray-700">{selectedOrder?.orderNumber}</span>
-                </DialogTitle>
-              </DialogHeader>
-
-              {selectedOrder && (
-                <div className="space-y-6 pt-2 max-h-[75vh] overflow-y-auto px-1 pr-2 pb-10">
-                  {/* Customer Section */}
-                  <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-3">
-                    <div className="flex items-center gap-2 mb-2">
-                       <User size={16} className="text-red-500" />
-                       <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Customer Details</h4>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Customer Name</Label>
-                        <p className="text-sm font-bold text-gray-800">{selectedOrder?.customerName || '-'}</p>
-                      </div>
-                      <div>
-                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Contact Number</Label>
-                        <div className="flex items-center gap-2"><Phone size={12} className="text-gray-400" /><p className="text-sm font-bold text-gray-800">{selectedOrder?.contactNumber || '-'}</p></div>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4 pt-2 border-t border-gray-200/50">
-                      <div>
-                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Order Date</Label>
-                        <div className="flex items-center gap-2"><CalendarIcon size={12} className="text-gray-400" />
-                          <p className="text-sm font-bold text-gray-800">
-                            {(() => {
-                              const d = new Date(selectedOrder?.transactionDate as any || selectedOrder?.createdAt as any || 0);
-                              return isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy HH:mm');
-                            })()}
-                          </p>
-                        </div>
-                      </div>
-                      <div>
-                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Predicted Release</Label>
-                        <div className="flex items-center gap-2"><Clock size={12} className="text-gray-400" />
-                          <p className="text-sm font-bold text-gray-800">
-                            {(() => {
-                              if (!selectedOrder?.predictedCompletionDate) return '-';
-                              const d = new Date(selectedOrder.predictedCompletionDate as any);
-                              return isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy');
-                            })()}
-                          </p>
-                        </div>
-                      </div>
-                      <div>
-                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Actual Claim Date</Label>
-                        <div className="flex items-center gap-2"><ClipboardCheck size={12} className="text-green-500" />
-                          <p className="text-sm font-bold text-green-700">
-                            {(() => {
-                              if (!selectedOrder?.actualCompletionDate) return '-';
-                              const d = new Date(selectedOrder.actualCompletionDate as any);
-                              return isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy HH:mm');
-                            })()}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Shipping Preference */}
-                  <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-3">
-                    <div className="flex items-center gap-2 mb-2"><Truck size={16} className="text-red-500" /><h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Shipping Details</h4></div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div><Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Preference</Label><p className="text-sm font-bold text-gray-800 uppercase">{selectedOrder?.shippingPreference || 'Pickup'}</p></div>
-                      {selectedOrder?.shippingPreference === 'delivery' && selectedOrder?.deliveryCourier && (
-                        <div><Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Courier</Label><p className="text-sm font-bold text-gray-800">{selectedOrder.deliveryCourier}</p></div>
-                      )}
-                    </div>
-                    {selectedOrder?.shippingPreference === 'delivery' && (
-                      <div className="pt-2 border-t border-gray-200/50">
-                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Address</Label>
-                        <div className="flex items-start gap-2"><MapPin size={12} className="text-gray-400 mt-0.5" /><p className="text-sm font-medium text-gray-600">{selectedOrder?.deliveryAddress || 'No address provided'}</p></div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Items loop */}
-                  <div className="space-y-4">
-                    {((selectedOrder?.items?.length ? selectedOrder.items : [selectedOrder]) || []).map((item: any, index: number) => (
-                      <div key={index} className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-3">
-                        <div className="flex items-center gap-2 mb-2"><Tag size={16} className="text-red-500" /><h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Item #{index + 1}</h4></div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                          <div><Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Brand</Label><p className="text-sm font-bold text-gray-800">{item?.brand || '-'}</p></div>
-                          <div><Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Model</Label><p className="text-sm font-bold text-gray-800">{item?.shoeModel || '-'}</p></div>
-                          <div><Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Material</Label><p className="text-sm font-bold text-gray-800">{item?.shoeMaterial || '-'}</p></div>
-                          <div><Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Qty</Label><p className="text-sm font-bold text-gray-800">{item?.quantity || 1}</p></div>
-                        </div>
-                        <div className="pt-2 border-t border-gray-200/50">
-                          <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">Base Service</Label>
-                          <p className="text-sm font-bold text-gray-800">
-                             {Array.isArray(item?.baseService) 
-                               ? item.baseService.map((s: string) => String(s || '').replace(' (with basic cleaning)', '')).join(', ')
-                               : String(item?.baseService || '-').replace(' (with basic cleaning)', '')}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Materials Used section */}
-                  {selectedOrder?.inventoryUsed && selectedOrder.inventoryUsed.length > 0 && (
-                    <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-100 space-y-3">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Package size={16} className="text-emerald-600" />
-                        <h4 className="text-xs font-black text-emerald-800 uppercase tracking-widest">Materials / Supply Used</h4>
-                      </div>
-                      <div className="space-y-2">
-                        {selectedOrder.inventoryUsed.map((used: any, idx: number) => (
-                          <div key={idx} className="flex justify-between items-center text-xs font-medium text-slate-700">
-                            <span>{used.name}</span>
-                            <span className="font-bold text-slate-900 bg-emerald-100/60 px-2 py-0.5 rounded-md">
-                              {used.quantity} {used.unit}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Payment section */}
-                  <div className="bg-gray-100/30 p-4 rounded-xl border border-gray-100 space-y-2">
-                    <div className="flex justify-between items-center"><span className="text-xs font-medium uppercase tracking-wide">Grand Total</span><span className="text-lg font-black text-red-600">₱{(selectedOrder?.grandTotal || 0).toFixed(2)}</span></div>
-                    <div className="flex justify-between items-center"><span className="text-xs font-medium uppercase tracking-wide">Paid</span><span className="text-sm font-bold text-green-600">₱{(selectedOrder?.amountReceived || 0).toFixed(2)}</span></div>
-                    {((selectedOrder?.grandTotal || 0) - (selectedOrder?.amountReceived || 0)) > 0.01 && (
-                      <div className="flex justify-between items-center pt-2 border-t border-gray-200"><span className="text-xs font-black uppercase text-red-500">Balance</span><span className="text-sm font-black text-red-600">₱{Math.max(0, (selectedOrder?.grandTotal || 0) - (selectedOrder?.amountReceived || 0)).toFixed(2)}</span></div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </DialogContent>
-          </Dialog>
+          <OrderDetailModal
+            order={selectedOrder}
+            open={!!selectedOrder && !isEditing && !isUpdatingStock}
+            onOpenChange={(open: boolean) => { if (!open) setSelectedOrder(null); }}
+          />
 
           {/* Other Modals */}
-          <EditOrderModal order={selectedOrder} open={!!selectedOrder && isEditing} onOpenChange={(open) => !open && setIsEditing(false)} onSave={(id, updates) => { updateOrder(id, updates); setIsEditing(false); }} />
-          <StockUpdateModal order={selectedOrder} open={!!selectedOrder && isUpdatingStock} onOpenChange={(open) => !open && setIsUpdatingStock(false)} onSave={(id, updates) => { updateOrder(id, updates); setIsUpdatingStock(false); }} />
+          <EditOrderModal order={selectedOrder} open={!!selectedOrder && isEditing} onOpenChange={(open) => !open && setIsEditing(false)} onSave={(id, updates) => { updateOrder(id, updates); setSelectedOrder((prev: any) => prev ? { ...prev, ...updates } : null); setIsEditing(false); }} />
+          <StockUpdateModal order={selectedOrder} open={!!selectedOrder && isUpdatingStock} onOpenChange={(open) => !open && setIsUpdatingStock(false)} onSave={(id, updates) => { updateOrder(id, updates); setSelectedOrder((prev: any) => prev ? { ...prev, ...updates } : null); setIsUpdatingStock(false); }} />
           <ProcessClaimModal order={processClaimOrder} open={!!processClaimOrder} onOpenChange={(open) => !open && setProcessClaimOrder(null)} onConfirm={(id, data) => { updateOrder(id, data, user.username); setProcessClaimOrder(null); }} />
 
           {!selectedStatus && (
@@ -1367,13 +1334,24 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                               <p className="text-xs font-black text-gray-800 uppercase leading-none mb-1.5">{item.name}</p>
                               <div className="flex items-center gap-2">
                                 <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest bg-gray-100 px-1.5 py-0.5 rounded">{item.category}</span>
-                                <span className="text-[9px] font-bold text-gray-300 italic">Qty: {item.stock}</span>
+                                {(() => {
+                                  const displayStock = `${item.stock} ${item.unit}`;
+                                  return (
+                                    <span className="text-[9px] font-bold text-gray-400 italic">Qty: {displayStock}</span>
+                                  );
+                                })()}
                               </div>
                             </div>
                           </div>
                           <div className="text-right">
                             <p className="text-sm font-black text-gray-900 mb-1">
-                              {item.stock} {item.package_size && item.package_size > 0 ? item.package_unit : item.unit}
+                              {(() => {
+                                const packageSize = item.package_size ?? 0;
+                                const hasPkg = packageSize > 0;
+                                return hasPkg 
+                                  ? `${item.stock} ${item.unit} (~${Math.round(item.stock / packageSize)} ${item.package_unit || 'packages'})` 
+                                  : `${item.stock} ${item.unit}`;
+                              })()}
                             </p>
                             {(() => {
                               const isCritical = Number(item.stock || 0) <= 0;

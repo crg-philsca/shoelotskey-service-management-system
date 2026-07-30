@@ -21,7 +21,7 @@ import { InventoryItem } from '@/app/types';
 
 interface InventoryProps {
     onSetHeaderActionRight?: (action: React.ReactNode) => void;
-    user: { token: string };
+    user: { token: string; role?: string };
 }
 
 export default function Inventory({ onSetHeaderActionRight, user }: InventoryProps) {
@@ -58,7 +58,8 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
         consumptionQty: 0,
         consumptionUnit: '',
         packageSize: 0,
-        packageUnit: ''
+        packageUnit: '',
+        lowStockThreshold: 0
     });
 
     useEffect(() => {
@@ -68,7 +69,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
     }, [user.token]);
 
     useEffect(() => {
-        if (onSetHeaderActionRight) {
+        if (onSetHeaderActionRight && user.role?.toLowerCase() === 'owner') {
             onSetHeaderActionRight(
                 <Button 
                     className="w-10 h-10 sm:w-40 flex items-center justify-center rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-[11px] font-black uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 tracking-widest"
@@ -87,7 +88,8 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                             consumptionQty: 0,
                             consumptionUnit: '',
                             packageSize: 0,
-                            packageUnit: ''
+                            packageUnit: '',
+                            lowStockThreshold: 0
                         });
                         setIsCustomCategory(false);
                         setIsCustomUnit(false);
@@ -102,18 +104,15 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
         return () => {
             if (onSetHeaderActionRight) onSetHeaderActionRight(null);
         };
-    }, [onSetHeaderActionRight]);
+    }, [onSetHeaderActionRight, user.role]);
  
     const handleSaveItem = () => {
         if (!formData.name) return;
 
-        const packageSize = formData.packageSize || 0;
-        const dbStock = packageSize > 0 ? (formData.stock * packageSize) : formData.stock;
-
         const saveItemPayload = {
             name: formData.name,
             category: formData.category,
-            stock: dbStock,
+            stock: formData.stock,
             unit: formData.unit,
             price: formData.price,
             isActive: formData.isActive,
@@ -123,7 +122,8 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
             consumption_qty: formData.consumptionQty,
             consumption_unit: formData.consumptionUnit,
             package_size: formData.packageSize,
-            package_unit: formData.packageUnit
+            package_unit: formData.packageUnit,
+            low_stock_threshold: formData.lowStockThreshold
         };
  
         if (editingItem) {
@@ -165,12 +165,10 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
  
     const handleEditItem = (item: InventoryItem) => {
         setEditingItem(item);
-        const packageSize = item.package_size ?? 0;
-        const hasPkg = packageSize > 0;
         setFormData({
             name: item.name,
             category: item.category,
-            stock: hasPkg ? parseFloat((item.stock / packageSize).toFixed(2)) : item.stock,
+            stock: item.stock,
             unit: item.unit,
             price: item.price,
             isActive: item.isActive,
@@ -182,7 +180,8 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
             consumptionQty: item.consumption_qty || 0,
             consumptionUnit: item.consumption_unit || '',
             packageSize: item.package_size || 0,
-            packageUnit: item.package_unit || ''
+            packageUnit: item.package_unit || '',
+            lowStockThreshold: item.low_stock_threshold || 0
         });
         setIsCustomCategory(false);
         setIsCustomUnit(false);
@@ -193,7 +192,11 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
         const name = item.name || '';
         const category = item.category || '';
         const qty = Number(item.stock || 0);
-        const status = qty <= 0 ? 'Critical' : (qty <= 1 ? 'Low Stock' : 'In Stock');
+        // [FIX] Use per-item threshold for accurate status
+        const threshold = (item.low_stock_threshold && item.low_stock_threshold > 0)
+            ? item.low_stock_threshold
+            : ((item.package_size && item.package_size > 0) ? item.package_size : 1);
+        const status = qty <= 0 ? 'Critical' : (qty <= threshold ? 'Low Stock' : 'In Stock');
 
         const matchesSearch = 
             name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -247,8 +250,10 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                             <h3 className="text-2xl font-black text-gray-900 leading-tight">
                                 {inventoryData.filter(i => {
                                     const qty = Number(i.stock || 0);
-                                    const limit = (i.package_size && i.package_size > 0) ? i.package_size : 1;
-                                    return qty <= limit;
+                                    const threshold = (i.low_stock_threshold && i.low_stock_threshold > 0)
+                                        ? i.low_stock_threshold
+                                        : ((i.package_size && i.package_size > 0) ? i.package_size : 1);
+                                    return qty <= threshold;
                                 }).length}
                             </h3>
                         </div>
@@ -373,7 +378,17 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                         <Button 
                             variant="outline" 
                             className="h-10 w-10 p-0 rounded-xl border-gray-100 text-gray-500 hover:border-red-600 hover:text-red-600 hover:bg-red-50 no-print"
-                            onClick={() => window.print()}
+                            onClick={() => {
+                                addActivity({
+                                    type: 'inventory',
+                                    module: 'Inventory',
+                                    user: JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}').username,
+                                    action: 'PRINT',
+                                    table: 'Inventory',
+                                    details: 'Printed Stock Inventory list and alert levels'
+                                });
+                                window.print();
+                            }}
                             title="Print Stock Inventory"
                         >
                             <Printer size={18} />
@@ -406,9 +421,9 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                             {item.package_size && item.package_size > 0 ? (
                                                 <div>
                                                     <span className="text-sm font-black text-gray-900">{item.stock}</span>
-                                                    <span className="text-[10px] text-gray-400 ml-1 font-bold">{item.package_unit || item.unit}</span>
+                                                    <span className="text-[10px] text-gray-400 ml-1 font-bold">{item.unit}</span>
                                                     <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wide leading-none mt-0.5">
-                                                        ~{(item.stock / item.package_size).toFixed(2)} {item.unit}
+                                                        ~{Math.round(item.stock / item.package_size)} {item.package_unit}
                                                     </p>
                                                 </div>
                                             ) : (
@@ -421,8 +436,10 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                         <td className="px-6 py-4 text-center">
                                             {(() => {
                                                 const qty = Number(item.stock || 0);
-                                                const limit = (item.package_size && item.package_size > 0) ? item.package_size : 1;
-                                                const status = qty <= 0 ? 'Critical' : (qty <= limit ? 'Low Stock' : 'In Stock');
+                                                const threshold = (item.low_stock_threshold && item.low_stock_threshold > 0)
+                                                    ? item.low_stock_threshold
+                                                    : ((item.package_size && item.package_size > 0) ? item.package_size : 1);
+                                                const status = qty <= 0 ? 'Critical' : (qty <= threshold ? 'Low Stock' : 'In Stock');
                                                 return (
                                                     <Badge className={`
                                                         ${status === 'In Stock' ? 'bg-blue-50 text-blue-700 border-blue-100' : ''}
@@ -454,13 +471,15 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                                 >
                                                     <Edit size={14} strokeWidth={2.5} />
                                                 </Button>
-                                                <Button 
-                                                    variant="ghost" 
-                                                    className="h-8 w-8 p-0 rounded-lg border border-red-500 text-red-600 hover:bg-red-50 transition-colors"
-                                                    onClick={() => handleDeleteItem(item.id)}
-                                                >
-                                                    <Trash2 size={14} strokeWidth={2.5} />
-                                                </Button>
+                                                {user.role?.toLowerCase() === 'owner' && (
+                                                    <Button 
+                                                        variant="ghost" 
+                                                        className="h-8 w-8 p-0 rounded-lg border border-red-500 text-red-600 hover:bg-red-50 transition-colors"
+                                                        onClick={() => handleDeleteItem(item.id)}
+                                                    >
+                                                        <Trash2 size={14} strokeWidth={2.5} />
+                                                    </Button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>
@@ -521,15 +540,14 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                     </div>
                 </CardContent>
             </Card>
-
             <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-                <DialogContent className="sm:max-w-[425px]">
+                <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle className="text-[12px] font-black uppercase tracking-widest text-center">
                             {editingItem ? 'Edit Inventory Item' : 'New Inventory Item'}
                         </DialogTitle>
                     </DialogHeader>
-                    <div className="grid gap-4 py-4">
+                    <div className="grid gap-3 py-2">
                         <div className="space-y-2">
                             <label className="text-[10px] font-black uppercase text-gray-400">Item Name</label>
                             <Input 
@@ -652,7 +670,9 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                         {/* Package Details */}
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase text-gray-400">Package Size</label>
+                                <label className="text-[10px] font-black uppercase text-gray-400">
+                                    Package Size {formData.unit ? `(${formData.unit} per ${formData.packageUnit || 'package'})` : ''}
+                                </label>
                                 <Input 
                                     className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs" 
                                     type="number" 
@@ -674,6 +694,24 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                     onChange={(e) => setFormData(prev => ({ ...prev, packageUnit: e.target.value }))}
                                 />
                             </div>
+                        </div>
+
+                        {/* Low Stock Alert */}
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase text-gray-400">
+                                Low Stock Alert Level {formData.unit ? `(${formData.unit})` : ''}
+                            </label>
+                            <Input 
+                                className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs" 
+                                type="number" 
+                                step="any"
+                                placeholder="Alert when stock drops to this level (e.g. 1000 mL or 50 g)" 
+                                value={formData.lowStockThreshold || ''}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    setFormData(prev => ({ ...prev, lowStockThreshold: val === '' ? 0 : parseFloat(val) }));
+                                }}
+                            />
                         </div>
 
                         {/* Collapsible/Expandable Consumption Settings */}

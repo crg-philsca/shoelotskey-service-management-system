@@ -14,7 +14,7 @@ import sys
 import os
 
 # Add parent directory to path so we can import our modules for testing
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
     from fastapi.testclient import TestClient
@@ -25,6 +25,25 @@ except ImportError as e:
     sys.exit(1)
 
 client = TestClient(app)
+
+# [TEST ISOLATION] Override database session with a sandboxed in-memory SQLite instance
+from database import get_db
+from models import Base
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+test_engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+Base.metadata.create_all(bind=test_engine)
+
+def override_get_db():
+    db = TestingSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+app.dependency_overrides[get_db] = override_get_db
 
 # Helper function for terminal UI
 def print_result(test_name, success, info=""):

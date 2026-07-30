@@ -1,54 +1,49 @@
 import os
 import sys
 from sqlalchemy import create_engine, MetaData, text
-from dotenv import load_dotenv
 
-# Path normalization for local dev imports
-backend_dir = os.path.dirname(os.path.abspath(__file__))
-root_dir = os.path.dirname(backend_dir)
-sys.path.append(backend_dir)
+# Path normalization to securely locate backend root and import shared database modules
+curr_dir = os.path.dirname(os.path.abspath(__file__))
+backend_dir = os.path.dirname(curr_dir) if os.path.basename(curr_dir) == "db" else curr_dir
+sys.path.insert(0, backend_dir)
+
+from database import engine as shared_pg_engine, LOCAL_SQLITE_PATH, LOCAL_SQLITE, is_sqlite
 
 def sync_data():
     print("\n" + "="*60)
     print("      SHOELOTSKEY DATABASE SYNCHRONIZER: CLOUD -> LOCAL")
     print("="*60)
 
-    # 1. Load configuration
-    load_dotenv(os.path.join(backend_dir, ".env"), override=True)
-    pg_url = os.getenv("DATABASE_URL")
-    
-    if not pg_url:
-        print("[ERROR] DATABASE_URL not found in backend/.env")
+    # 1. Verify availability of shared online engine from database.py
+    if is_sqlite or shared_pg_engine is None:
+        print("[SYNC ABORT] Cannot run cloud-to-local sync while operating in SQLite offline fallback mode.")
         return
 
-    if pg_url.startswith("postgres://"):
-        pg_url = pg_url.replace("postgres://", "postgresql://", 1)
+    # REUSE SINGLETON ENGINE: Do not call create_engine for PostgreSQL!
+    pg_engine = shared_pg_engine
+    sqlite_url = LOCAL_SQLITE
+    sqlite_path = LOCAL_SQLITE_PATH
 
-    # Dedicate path to the local fallback in the root directory
-    sqlite_path = os.path.join(root_dir, "shoelotskey.db")
-    sqlite_url = f"sqlite:///{sqlite_path}"
-
-    print(f"[BOOT] Source: Cloud PostgreSQL ({pg_url.split('@')[-1]})")
+    print(f"[BOOT] Source: Shared Cloud PostgreSQL Singleton Engine")
     print(f"[BOOT] Target: Local SQLite ({sqlite_path})")
 
     try:
-        # 2. Establish connections
-        pg_engine = create_engine(pg_url)
-        sqlite_engine = create_engine(sqlite_url)
+        # 2. Establish connections (PG engine is reused from shared singleton)
+        sqlite_engine = create_engine(sqlite_url, connect_args={"check_same_thread": False})
 
-        # First connection handshake
+        # First connection handshake using shared engine connection
         with pg_engine.connect() as pg_conn:
             pg_conn.execute(text("SELECT 1"))
-        print("[INIT] Connected to PostgreSQL (Cloud).")
+        print("[INIT] Connected to PostgreSQL (via Shared Singleton Engine).")
 
         with sqlite_engine.connect() as sqlite_conn:
             sqlite_conn.execute(text("SELECT 1"))
         print("[INIT] Connected to SQLite (Local).")
 
-        # 3. Schema Sync: Reflect PG tables & make sure they exist in SQLite
-        print("[SYNC] Reflecting database tables...")
-        pg_metadata = MetaData()
-        pg_metadata.reflect(bind=pg_engine)
+        # 3. Schema Sync: Use lightweight in-memory schema (avoids slow AWS RDS pg_catalog reflection & DBeaver read timeouts)
+        print("[SYNC] Verifying table schemas from in-memory definitions...")
+        from models import Base
+        pg_metadata = Base.metadata
         
         # This will create tables in SQLite matching PG's structure if they don't exist
         pg_metadata.create_all(bind=sqlite_engine)
@@ -127,6 +122,12 @@ def sync_data():
     except Exception as e:
         print(f"\n[FATAL ERROR] Sync crashed: {e}")
         print("="*60 + "\n")
+
+    finally:
+        # Do NOT dispose pg_engine because it is the shared singleton engine used by the live FastAPI app!
+        if 'sqlite_engine' in locals():
+            sqlite_engine.dispose()
+            print("[SYNC] Closed SQLite engine connection pool. (Shared PG singleton remains intact)")
 
 if __name__ == "__main__":
     sync_data()

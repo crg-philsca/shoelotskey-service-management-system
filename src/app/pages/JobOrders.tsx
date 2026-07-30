@@ -7,14 +7,70 @@ import { Input } from '@/app/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu';
-import { Search, Filter, MoreVertical, Edit, ArrowRight, RotateCcw, User, Phone, Clock, Wallet, Tag, MapPin, UserPlus, Calendar as CalendarIcon, Truck, ShoppingBag, Package } from 'lucide-react';
-import { format as dateFnsFormat } from 'date-fns';
+import { Search, Filter, MoreVertical, Edit, ArrowRight, RotateCcw, UserPlus, ShoppingBag } from 'lucide-react';
 import { useServices } from '@/app/context/ServiceContext';
 import EditOrderModal from '@/app/components/EditOrderModal';
 import JobOrderFormModal from '@/app/components/JobOrderFormModal';
+import ProcessClaimModal from '@/app/components/ProcessClaimModal';
+import OrderDetailModal from '@/app/components/OrderDetailModal';
 import { toast } from 'sonner';
 import { Label } from '@/app/components/ui/label';
 import { Checkbox } from '@/app/components/ui/checkbox';
+
+function FormattedDateInput({ value, onChange, className, id }: { value: string; onChange: (val: string) => void; className?: string; id?: string }) {
+    const toDisplay = (iso: string) => {
+        if (!iso) return '';
+        const parts = iso.split('-');
+        if (parts.length === 3) {
+            return `${parts[1]}/${parts[2]}/${parts[0]}`;
+        }
+        return iso;
+    };
+
+    const [localVal, setLocalVal] = useState(toDisplay(value));
+
+    useEffect(() => {
+        setLocalVal(toDisplay(value));
+    }, [value]);
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        let inputVal = e.target.value;
+        let digits = inputVal.replace(/[^0-9]/g, '');
+        if (digits.length > 8) digits = digits.substring(0, 8);
+
+        let formatted = digits;
+        if (digits.length > 2) {
+            formatted = digits.substring(0, 2) + '/' + digits.substring(2);
+        }
+        if (digits.length > 4) {
+            formatted = digits.substring(0, 2) + '/' + digits.substring(2, 4) + '/' + digits.substring(4);
+        }
+
+        setLocalVal(formatted);
+
+        if (digits.length === 8) {
+            const mm = digits.substring(0, 2);
+            const dd = digits.substring(2, 4);
+            const yyyy = digits.substring(4, 8);
+            const iso = `${yyyy}-${mm}-${dd}`;
+            const dateObj = new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd));
+            if (!isNaN(dateObj.getTime())) {
+                onChange(iso);
+            }
+        }
+    };
+
+    return (
+        <Input
+            id={id}
+            type="text"
+            placeholder="MM/DD/YYYY"
+            value={localVal}
+            onChange={handleChange}
+            className={className}
+        />
+    );
+}
 
 interface JobOrdersProps {
     user: { username: string; role: 'owner' | 'staff'; token: string };
@@ -40,6 +96,7 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
     const itemsPerPage = 10;
 
     const [selectedOrder, setSelectedOrder] = useState<JobOrder | null>(null);
+    const [processClaimOrder, setProcessClaimOrder] = useState<JobOrder | null>(null);
     const [isEditing, setIsEditing] = useState(false);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [startDate, setStartDate] = useState('');
@@ -304,10 +361,19 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                                                                             order.status === 'claimed' ? 'for-release' : null;
 
                                                                 if (prevStatus) {
+                                                                    const depositAmt = order.depositAmount || 0;
+                                                                    const paymentUpdates = (order.status === 'claimed' && depositAmt < order.grandTotal) ? {
+                                                                        paymentStatus: 'downpayment' as any,
+                                                                        amountReceived: depositAmt,
+                                                                        balance: order.grandTotal - depositAmt,
+                                                                        change: 0
+                                                                    } : {};
+
                                                                     updateOrder(order.id, {
                                                                         status: prevStatus as any,
                                                                         updatedAt: new Date(),
-                                                                        actualCompletionDate: undefined
+                                                                        actualCompletionDate: undefined,
+                                                                        ...paymentUpdates
                                                                     }, user.username);
                                                                     toast.success(`Order reverted to ${prevStatus.replace('-', ' ')}`);
                                                                 }
@@ -318,22 +384,23 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                                                                         'Undo to For Release'}
                                                             </DropdownMenuItem>
                                                         )}
-                                                        {['new-order', 'on-going', 'for-release', 'claimed'].includes(order.status) && order.status !== 'claimed' && (
+                                                        {['new-order', 'on-going', 'for-release'].includes(order.status) && (
                                                             <DropdownMenuItem onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                const nextStatus =
-                                                                    order.status === 'new-order' ? 'on-going' :
-                                                                        order.status === 'on-going' ? 'for-release' :
-                                                                            order.status === 'for-release' ? 'claimed' : null;
+                                                                if (order.status === 'for-release') {
+                                                                    setProcessClaimOrder(order);
+                                                                } else {
+                                                                    const nextStatus =
+                                                                        order.status === 'new-order' ? 'on-going' :
+                                                                            order.status === 'on-going' ? 'for-release' : null;
 
-                                                                if (nextStatus) {
-                                                                    updateOrder(order.id, {
-                                                                        status: nextStatus as any,
-                                                                        updatedAt: new Date(),
-                                                                        actualCompletionDate: nextStatus === 'claimed' ? new Date() : undefined,
-                                                                        claimedBy: nextStatus === 'claimed' ? order.customerName : order.claimedBy
-                                                                    }, user.username);
-                                                                    toast.success(`Order moved to ${nextStatus.replace('-', ' ')}`);
+                                                                    if (nextStatus) {
+                                                                        updateOrder(order.id, {
+                                                                            status: nextStatus as any,
+                                                                            updatedAt: new Date()
+                                                                        }, user.username);
+                                                                        toast.success(`Order moved to ${nextStatus.replace('-', ' ')}`);
+                                                                    }
                                                                 }
                                                             }}>
                                                                 <ArrowRight className="mr-2 h-4 w-4" /> Move Next
@@ -429,350 +496,19 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                     order={selectedOrder}
                     onSave={(id, updates) => {
                         updateOrder(id, updates, user.username);
+                        setSelectedOrder((prev: any) => prev ? { ...prev, ...updates } : null);
                         setIsEditing(false);
                         toast.success('Order updated successfully');
                     }}
                 />
             )}
 
-            {/* View Modal (Simple version if not editing) */}
-            {!isEditing && selectedOrder && (
-                <Dialog open={!!selectedOrder} onOpenChange={(open) => !open && setSelectedOrder(null)}>
-                    <DialogContent className="max-w-md bg-white">
-                        <DialogHeader className="border-b border-gray-100 pb-4">
-                            <DialogTitle className="text-xl font-bold flex items-center justify-center gap-2">
-                                Order #
-                                <span className="bg-gray-100/80 px-3 py-1 rounded-full text-sm text-gray-700">{selectedOrder.orderNumber}</span>
-                            </DialogTitle>
-                        </DialogHeader>
-
-                        <div className="space-y-6 pt-2 max-h-[70vh] overflow-y-auto px-1 pr-2 no-scrollbar">
-                            {/* Customer Section */}
-                            <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-3">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <User size={16} className="text-red-500" />
-                                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Customer Details</h4>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Customer Name</Label>
-                                        <p className="text-sm font-bold text-gray-800">{selectedOrder.customerName}</p>
-                                    </div>
-                                    <div>
-                                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Contact Number</Label>
-                                        <div className="flex items-center gap-2">
-                                            <Phone size={12} className="text-gray-400" />
-                                            <p className="text-sm font-bold text-gray-800">{selectedOrder.contactNumber}</p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4 pt-2 border-t border-gray-200/50">
-                                    <div>
-                                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Order Date</Label>
-                                        <div className="flex items-center gap-2">
-                                            <CalendarIcon size={12} className="text-gray-400" />
-                                            <p className="text-sm font-bold text-gray-800">
-                                                {(() => {
-                                                    const d = new Date(selectedOrder.transactionDate || selectedOrder.createdAt);
-                                                    return isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy HH:mm');
-                                                })()}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Release Date</Label>
-                                        <div className="flex items-center gap-2">
-                                            <Clock size={12} className="text-gray-400" />
-                                            <p className="text-sm font-bold text-gray-800">
-                                                {(() => {
-                                                    if (!selectedOrder.predictedCompletionDate) return '-';
-                                                    const d = new Date(selectedOrder.predictedCompletionDate);
-                                                    return isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy HH:mm');
-                                                })()}
-                                                {['for-release', 'claimed'].includes(selectedOrder.status) && selectedOrder.releaseTime && (
-                                                    <span className="text-xs text-gray-500 ml-1 font-normal">
-                                                        @ {selectedOrder.releaseTime}
-                                                    </span>
-                                                )}
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Shipping Details */}
-                                <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-3">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <Truck size={16} className="text-red-500" />
-                                        <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Shipping Details</h4>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Preference</Label>
-                                            <p className="text-sm font-bold text-gray-800 uppercase">{selectedOrder.shippingPreference || 'Pickup'}</p>
-                                        </div>
-                                        {selectedOrder.shippingPreference === 'delivery' && selectedOrder.deliveryCourier && (
-                                            <div>
-                                                <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Courier</Label>
-                                                <div className="flex items-center gap-2">
-                                                    <p className="text-sm font-bold text-gray-800">{selectedOrder.deliveryCourier}</p>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {selectedOrder.shippingPreference === 'delivery' && (
-                                        <div className="pt-2 border-t border-gray-200/50">
-                                            <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Full Delivery Address</Label>
-                                            <div className="flex items-start gap-2">
-                                                <MapPin size={12} className="text-gray-400 mt-0.5" />
-                                                <p className="text-sm font-medium text-gray-600 leading-snug">{selectedOrder.deliveryAddress || 'No address provided'}</p>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Items Loop */}
-                            <div className="space-y-4">
-                                {(selectedOrder.items?.length ? selectedOrder.items : [selectedOrder]).map((item: any, index: number) => (
-                                    <div key={index} className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-3">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <Tag size={16} className="text-red-500" />
-                                            <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">
-                                                {(selectedOrder.items?.length || 0) > 1 ? `Item #${index + 1} Details` : 'Shoe & Service Details'}
-                                            </h4>
-                                        </div>
-
-                                        {/* Shoe Details */}
-                                        <div className="grid grid-cols-3 gap-4">
-                                            <div>
-                                                <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Brand</Label>
-                                                <p className="text-sm font-bold text-gray-800">{item.brand || '-'}</p>
-                                            </div>
-                                            <div>
-                                                <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Material</Label>
-                                                <p className="text-sm font-bold text-gray-800">{item.shoeMaterial || '-'}</p>
-                                            </div>
-                                            <div>
-                                                <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Quantity</Label>
-                                                <p className="text-sm font-bold text-gray-800">{item.quantity || 1} {(item.quantity || 1) === 1 ? 'Pair' : 'Pairs'}</p>
-                                            </div>
-                                        </div>
-
-                                        {/* Shoe Condition */}
-                                        <div className="pt-2 border-t border-gray-200/50">
-                                            <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">Shoe Condition</Label>
-                                            <div className="flex flex-wrap gap-1.5">
-                                                {Object.entries(item.condition || {}).map(([key, value]) => {
-                                                    if (key === 'others' && value) return <span key={key} className="px-2 py-1 bg-white border border-gray-200 rounded-xl text-[10px] font-bold text-gray-600 shadow-sm">Note: {String(value)}</span>;
-                                                    if (value === true) {
-                                                        const labels: Record<string, string> = {
-                                                            scratches: 'Scratches',
-                                                            yellowing: 'Yellowing',
-                                                            ripsHoles: 'Rips/Holes',
-                                                            deepStains: 'Deep Stains',
-                                                            soleSeparation: 'Sole Separation',
-                                                            wornOut: 'Faded/Worn'
-                                                        };
-                                                        const label = labels[key] || key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-                                                        return <span key={key} className="px-2 py-1 bg-red-50 border border-red-100 rounded-xl text-[10px] font-bold text-red-600">{label}</span>;
-                                                    }
-                                                    return null;
-                                                })}
-                                                {Object.values(item.condition || {}).every(v => !v) && <p className="text-xs text-slate-400 italic">No conditions applied</p>}
-                                            </div>
-                                        </div>
-
-                                        {/* Service Details for this Item */}
-                                        <div className="pt-2 border-t border-gray-200/50">
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div>
-                                                    <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Base Service</Label>
-                                                    <p className="text-sm font-bold text-gray-800">
-                                                        {Array.isArray(item.baseService)
-                                                            ? item.baseService.map((s: string) => s.replace(' (with basic cleaning)', '')).join(', ')
-                                                            : String(item.baseService).replace(' (with basic cleaning)', '')}
-                                                    </p>
-                                                </div>
-
-                                                {item.addOns && item.addOns.length > 0 && (
-                                                    <div>
-                                                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Add-ons</Label>
-                                                        <div className="space-y-1">
-                                                            {item.addOns.map((addon: any, idx: number) => (
-                                                                <div key={idx} className="flex items-center justify-between text-sm">
-                                                                    <span className="font-medium text-gray-700">• {addon.name}</span>
-                                                                    <span className="text-gray-500 text-xs font-bold">x{addon.quantity}</span>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/* Order Status & Metadata Summary */}
-                            <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-4 mt-2">
-                                <div className="grid grid-cols-2 gap-4 pb-3 border-b border-gray-200/50">
-                                    <div>
-                                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Order Status</Label>
-                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize border
-                                            ${selectedOrder.status === 'new-order' ? 'bg-purple-50 text-purple-700 border-purple-100' :
-                                                selectedOrder.status === 'on-going' ? 'bg-blue-50 text-blue-700 border-blue-100' :
-                                                    selectedOrder.status === 'for-release' ? 'bg-orange-50 text-orange-700 border-orange-100' :
-                                                        selectedOrder.status === 'claimed' ? 'bg-gray-50 text-gray-700 border-gray-200' :
-                                                            'bg-red-50 text-red-700 border-red-100'
-                                            }`}>
-                                            {selectedOrder.status.replace('-', ' ')}
-                                        </span>
-                                    </div>
-                                    <div className="text-right">
-                                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Priority Level</Label>
-                                        {selectedOrder.priorityLevel === 'rush' ? (
-                                            <span className="text-xs font-black text-red-600 uppercase">RUSH</span>
-                                        ) : (
-                                            <span className="text-xs font-bold text-gray-800 capitalize">{selectedOrder.priorityLevel}</span>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* [REQUESTED ROW]: Order ID | Processed By | Payment Status (End Right) */}
-                                <div className="grid grid-cols-3 gap-4 items-center">
-                                    <div>
-                                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Order ID</Label>
-                                        <p className="text-sm font-bold text-gray-700">#{selectedOrder.orderNumber}</p>
-                                    </div>
-                                    <div>
-                                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Processed By</Label>
-                                        <p className="text-sm font-bold text-gray-700">{selectedOrder.processedBy || 'Current User'}</p>
-                                    </div>
-                                    <div className="text-right">
-                                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Payment Status</Label>
-                                        <span className={`text-sm font-black uppercase ${selectedOrder.paymentStatus === 'fully-paid' ? 'text-green-600' :
-                                            selectedOrder.paymentStatus === 'downpayment' ? 'text-yellow-600' : 'text-red-500'
-                                            }`}>
-                                            {selectedOrder.paymentStatus === 'fully-paid' ? 'Fully Paid' : selectedOrder.paymentStatus === 'downpayment' ? 'Downpayment' : selectedOrder.paymentStatus?.charAt(0).toUpperCase() + (selectedOrder.paymentStatus?.slice(1) || '')}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Payment Section */}
-                            <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-3">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <Wallet size={16} className="text-red-500" />
-                                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Payment Details</h4>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    {selectedOrder.paymentMethod && selectedOrder.paymentStatus !== 'downpayment' && (
-                                        <div>
-                                            <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Method</Label>
-                                            <p className="text-sm font-bold text-gray-800 uppercase">
-                                                {selectedOrder.paymentMethod || '-'}
-                                            </p>
-                                        </div>
-                                    )}
-                                    {/* Removed redundant Payment Status - now in Summary row */}
-                                    {['gcash', 'maya'].includes(selectedOrder.paymentMethod?.toLowerCase()) && (selectedOrder.paymentStatus === 'fully-paid' || selectedOrder.paymentStatus === 'downpayment') && (
-                                        <div className="col-span-2">
-                                            <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Reference Number</Label>
-                                            <p className="text-sm font-bold text-gray-800 font-mono tracking-tight">{selectedOrder.referenceNo || '-'}</p>
-                                        </div>
-                                    )}
-                                    {selectedOrder.paymentStatus && (
-                                        <>
-                                            <div>
-                                                <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Amount Received</Label>
-                                                <p className="text-sm font-bold text-gray-800">₱{(selectedOrder.amountReceived || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                                            </div>
-                                            {selectedOrder.change !== undefined && selectedOrder.change > 0 && (
-                                                <div className="col-span-2 pt-2 border-t border-gray-100 mt-1">
-                                                    <div className="flex justify-between items-center">
-                                                        <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Customer Change</Label>
-                                                        <p className="text-sm font-bold text-green-600 underline decoration-dotted underline-offset-4">
-                                                            ₱{(selectedOrder.change || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </>
-                                    )}
-                                    {selectedOrder.paymentStatus !== 'fully-paid' && (
-                                        <div className="pt-2 border-t border-gray-200/50 col-span-2 flex justify-between items-center">
-                                            <Label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Remaining Balance</Label>
-                                            <p className={`text-sm font-black ${((selectedOrder.grandTotal || 0) - (selectedOrder.amountReceived || 0)) > 0.01 ? 'text-red-500' : 'text-green-600'}`}>
-                                                ₱{Math.max(0, (selectedOrder.grandTotal || 0) - (selectedOrder.amountReceived || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                            </p>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Materials Used section */}
-                            {selectedOrder.inventoryUsed && selectedOrder.inventoryUsed.length > 0 && (
-                                <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-100 space-y-3 mt-2">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <Package size={16} className="text-emerald-600" />
-                                        <h4 className="text-xs font-black text-emerald-800 uppercase tracking-widest">Materials / Supply Used</h4>
-                                    </div>
-                                    <div className="space-y-2">
-                                        {selectedOrder.inventoryUsed.map((used: any, idx: number) => (
-                                            <div key={idx} className="flex justify-between items-center text-xs font-medium text-slate-700">
-                                                <span>{used.name}</span>
-                                                <span className="font-bold text-slate-900 bg-emerald-100/60 px-2 py-0.5 rounded-md">
-                                                    {used.quantity} {used.unit}
-                                                </span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Pricing Summary */}
-                            <div className="bg-gray-50/50 p-4 rounded-xl border border-gray-100 space-y-2 mt-2">
-                                <div className="flex justify-between items-center text-gray-600/80">
-                                    <span className="text-xs font-medium uppercase tracking-wide">Total Quantity</span>
-                                    <span className="text-sm font-bold text-gray-800">{selectedOrder.quantity || 1} {(selectedOrder.quantity || 1) === 1 ? 'Pair' : 'Pairs'}</span>
-                                </div>
-                                <div className="flex justify-between items-center text-gray-600/80">
-                                    <span className="text-xs font-medium uppercase tracking-wide">Base Service Fee</span>
-                                    <span className="text-sm font-bold text-gray-800">₱{(selectedOrder.baseServiceFee || 0).toFixed(2)}</span>
-                                </div>
-                                <div className="flex justify-between items-center text-gray-600/80">
-                                    <span className="text-xs font-medium uppercase tracking-wide">Add-ons Total</span>
-                                    <span className="text-sm font-bold text-gray-800">₱{(selectedOrder.addOnsTotal || 0).toFixed(2)}</span>
-                                </div>
-                                {selectedOrder.priorityLevel === 'rush' && (
-                                    <div className="flex justify-between items-center text-gray-600/80">
-                                        <span className="text-xs font-medium uppercase tracking-wide">Rush Fee</span>
-                                        <span className="text-sm font-bold text-gray-800">₱{(selectedOrder.grandTotal - ((selectedOrder.baseServiceFee || 0) + (selectedOrder.addOnsTotal || 0))).toFixed(2)}</span>
-                                    </div>
-                                )}
-                                <div className="flex justify-between items-center pt-3 border-t border-gray-200 mt-2">
-                                    <span className="text-base font-black text-gray-900 uppercase tracking-tight">Grand Total</span>
-                                    <span className="text-lg font-black text-red-600 tracking-tight">₱{(selectedOrder.grandTotal || 0).toFixed(2)}</span>
-                                </div>
-                            </div>
-
-                            <div className="flex justify-end pt-4 pb-2">
-                                <Button
-                                    onClick={() => setIsEditing(true)}
-                                    className="bg-red-600 hover:bg-red-700 text-white font-bold h-10 px-6 rounded-xl shadow-lg shadow-red-100 transition-all uppercase tracking-wider"
-                                >
-                                    Edit Order Detail
-                                </Button>
-                            </div>
-                        </div>
-                    </DialogContent>
-                </Dialog>
-            )}
+            {/* View Modal */}
+            <OrderDetailModal
+                order={selectedOrder}
+                open={!isEditing && !!selectedOrder}
+                onOpenChange={(open) => !open && setSelectedOrder(null)}
+            />
 
             {/* Filter Dialog */}
             <Dialog open={isFilterOpen} onOpenChange={setIsFilterOpen}>
@@ -794,8 +530,8 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                         <div>
                             <Label>Date Range</Label>
                             <div className="grid grid-cols-2 gap-2 mt-1.5">
-                                <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
-                                <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                                <FormattedDateInput value={startDate} onChange={val => setStartDate(val)} />
+                                <FormattedDateInput value={endDate} onChange={val => setEndDate(val)} />
                             </div>
                         </div>
                         <div className="flex justify-end gap-2 pt-2">
@@ -810,6 +546,17 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                     </div>
                 </DialogContent>
             </Dialog>
+
+            <ProcessClaimModal
+                order={processClaimOrder}
+                open={!!processClaimOrder}
+                onOpenChange={(open) => !open && setProcessClaimOrder(null)}
+                onConfirm={(id, data) => {
+                    updateOrder(id, data, user.username);
+                    setProcessClaimOrder(null);
+                    toast.success('Order claimed successfully');
+                }}
+            />
         </div>
     );
 }

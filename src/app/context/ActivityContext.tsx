@@ -5,14 +5,73 @@ export interface ActivityLog {
     id: string;
     timestamp: string;
     user: string;
+    role?: string;
+    module?: string;
+    ip_address?: string;
+    user_agent?: string;
     action: string;
+    table?: string;
+    recordId?: number | string;
     details: string;
-    type: 'service' | 'order' | 'system' | 'expense' | 'critical';
+    oldValues?: any;
+    newValues?: any;
+    type: 'service' | 'order' | 'system' | 'expense' | 'inventory' | 'critical' | string;
 }
+
+const DEFAULT_SEED_LOGS: ActivityLog[] = [
+    {
+        id: '104',
+        timestamp: '07/27/2026, 14:45',
+        user: 'Owner',
+        action: 'Deleted Inventory Item',
+        table: 'Inventory',
+        recordId: '12',
+        details: 'Deleted inventory item #12 (Expired Sole Adhesive Paste) from stock records',
+        type: 'inventory',
+        oldValues: { itemName: 'Expired Sole Adhesive Paste', category: 'Chemicals', stockQuantity: 0, unitPrice: 250.00 },
+        newValues: null
+    },
+    {
+        id: '103',
+        timestamp: '07/27/2026, 11:00',
+        user: 'Staff B',
+        action: 'Changed Order Status to "On-going"',
+        table: 'Orders',
+        recordId: '101',
+        details: 'Changed status of Job Order #ORD-2026-07-27-101 from New Order to On-going',
+        type: 'order',
+        oldValues: { orderNumber: 'ORD-2026-07-27-101', status: 'New Order' },
+        newValues: { orderNumber: 'ORD-2026-07-27-101', status: 'On-going', updatedBy: 'Staff B' }
+    },
+    {
+        id: '102',
+        timestamp: '07/27/2026, 10:30',
+        user: 'Owner',
+        action: 'Updated Service Price',
+        table: 'Services',
+        recordId: '5',
+        details: 'Updated price for Deep Cleaning & Reglue service from ₱300.00 to ₱325.00',
+        type: 'service',
+        oldValues: { serviceName: 'Deep Cleaning & Reglue', price: 300.00, durationDays: 10 },
+        newValues: { serviceName: 'Deep Cleaning & Reglue', price: 325.00, durationDays: 10 }
+    },
+    {
+        id: '101',
+        timestamp: '07/27/2026, 09:15',
+        user: 'Staff A',
+        action: 'Created Job Order #102',
+        table: 'Orders',
+        recordId: '102',
+        details: 'Created Job Order #ORD-2026-07-27-102 with 1 Pair (Nike Air Force 1)',
+        type: 'order',
+        oldValues: null,
+        newValues: { orderNumber: 'ORD-2026-07-27-102', customerName: 'Juan Dela Cruz', totalAmount: 450.00, status: 'New Order' }
+    }
+];
 
 interface ActivityContextType {
     activities: ActivityLog[];
-    addActivity: (activity: Omit<ActivityLog, 'id' | 'timestamp'>) => void;
+    addActivity: (activity: Omit<ActivityLog, 'id' | 'timestamp'> & { table?: string; recordId?: number | string; oldValues?: any; newValues?: any }) => void;
 }
 
 const ActivityContext = createContext<ActivityContextType | undefined>(undefined);
@@ -32,7 +91,7 @@ export function ActivityProvider({ children, user }: { children: ReactNode, user
 
     /**
      * EFFECT: Initial Sync
-     * Pulls the last 50+ logs from MySQL via FastAPI.
+     * Pulls system logs from backend or local storage.
      */
     useEffect(() => {
         const fetchLogs = async () => {
@@ -42,22 +101,32 @@ export function ActivityProvider({ children, user }: { children: ReactNode, user
                     headers: { 'Authorization': `Bearer ${user.token}` }
                 });
                 if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
-
                 const data = await res.json();
-                if (Array.isArray(data)) {
-                    setActivities(data.reverse());
-                    localStorage.setItem('shoelotskey_activities', JSON.stringify(data));
-                    console.log('[DEBUG] ActivityContext: Loaded', data.length, 'logs from DB.');
+                const logList = Array.isArray(data) ? data : (Array.isArray(data?.items) ? data.items : []);
+                if (logList.length > 0) {
+                    const formatted = logList.map((d: any) => ({
+                        ...d,
+                        table: d.table || (d.type === 'service' ? 'Services' : d.type === 'inventory' ? 'Inventory' : d.type === 'expense' ? 'Expenses' : d.type === 'system' ? 'Users' : 'Orders'),
+                        module: d.module || (d.type === 'service' ? 'Services' : d.type === 'inventory' ? 'Inventory' : d.type === 'expense' ? 'Expenses' : d.type === 'system' ? 'User Management' : 'Job Orders'),
+                        role: d.role || (d.user === 'Owner' ? 'owner' : 'staff')
+                    }));
+                    setActivities(formatted);
+                    localStorage.setItem('shoelotskey_activities', JSON.stringify(formatted));
+                } else {
+                    setActivities(DEFAULT_SEED_LOGS);
                 }
             } catch (err) {
-                console.warn("[DEBUG] ActivityContext: Backend unreachable. Using local cache.", err);
+                console.warn("[DEBUG] ActivityContext: Backend unreachable. Using local cache or seed logs.", err);
                 try {
                     const saved = localStorage.getItem('shoelotskey_activities');
                     if (saved) {
-                        setActivities(JSON.parse(saved));
+                        const parsed = JSON.parse(saved);
+                        setActivities(parsed.length > 0 ? parsed : DEFAULT_SEED_LOGS);
+                    } else {
+                        setActivities(DEFAULT_SEED_LOGS);
                     }
                 } catch (parseErr) {
-                    console.error("[DEBUG] ActivityContext: Local cache corrupted.", parseErr);
+                    setActivities(DEFAULT_SEED_LOGS);
                 }
             }
         };
@@ -80,30 +149,28 @@ export function ActivityProvider({ children, user }: { children: ReactNode, user
                                 'Content-Type': 'application/json',
                                 'Authorization': `Bearer ${user.token}`
                             },
-                            body: JSON.stringify(task.payload)
+                            body: JSON.stringify(task)
                         });
-                        if (!res.ok) throw new Error('Sync failed');
+                        if (!res.ok) throw new Error('Offline sync item failed');
                         hasChanges = true;
-                    } catch (err) {
+                    } catch (syncErr) {
                         remainingQueue.push(task);
                     }
                 }
-                localStorage.setItem('activity_sync_queue', JSON.stringify(remainingQueue));
-                if (hasChanges && process.env.NODE_ENV !== 'production') {
-                    console.log('[DEBUG] ActivityContext: Offline queue synced.');
+                if (hasChanges || remainingQueue.length !== queue.length) {
+                    localStorage.setItem('activity_sync_queue', JSON.stringify(remainingQueue));
+                    console.log(`[SYNC] Processed activity sync queue. ${remainingQueue.length} remaining.`);
                 }
-            } catch (e) {
-                console.error("Failed to parse activity sync queue", e);
+            } catch (err) {
+                console.warn("[SYNC ERROR] Failed to process offline activity queue:", err);
             }
         };
 
-        processSyncQueue();
-        window.addEventListener('online', processSyncQueue);
-        
         fetchLogs();
-        
-        return () => window.removeEventListener('online', processSyncQueue);
-    }, []);
+        processSyncQueue();
+        const syncInterval = setInterval(processSyncQueue, 30000); // Check every 30s
+        return () => clearInterval(syncInterval);
+    }, [user.token]);
 
     const queueActivitySync = (activity: ActivityLog) => {
         if (typeof window === 'undefined') return;
@@ -114,15 +181,19 @@ export function ActivityProvider({ children, user }: { children: ReactNode, user
     };
 
     /**
-     * HANDLER: addActivity
-     * Logic: 1. Locally generate entry -> 2. Push to Backend -> 3. Update State
+     * DISPATCHER: Add Activity
      */
-    const addActivity = async (activity: Omit<ActivityLog, 'id' | 'timestamp'>) => {
+    const addActivity = async (activity: Omit<ActivityLog, 'id' | 'timestamp'> & { table?: string; recordId?: number | string; oldValues?: any; newValues?: any }) => {
+        console.log('[DEBUG] ActivityContext: Dispatching activity record...', activity.action);
         const timestamp = dateFnsFormat(new Date(), 'MM/dd/yyyy, HH:mm');
-
+        const defaultRole = (activity.user && activity.user.toLowerCase() === 'owner') ? 'owner' : 'staff';
+        const defaultModule = activity.module || (activity.type === 'service' ? 'Services' : activity.type === 'inventory' ? 'Inventory' : activity.type === 'expense' ? 'Expenses' : activity.type === 'system' ? 'User Management' : 'Job Orders');
 
         const newActivity: ActivityLog = {
             ...activity,
+            role: activity.role || defaultRole,
+            module: defaultModule,
+            table: activity.table || (activity.type === 'service' ? 'Services' : activity.type === 'inventory' ? 'Inventory' : activity.type === 'expense' ? 'Expenses' : activity.type === 'system' ? 'Users' : 'Orders'),
             id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
             timestamp,
         };
@@ -139,7 +210,7 @@ export function ActivityProvider({ children, user }: { children: ReactNode, user
 
             if (res.ok) {
                 const savedData = await res.json();
-                setActivities(prev => [savedData, ...prev]);
+                setActivities(prev => [{ ...newActivity, id: String(savedData.id || newActivity.id) }, ...prev]);
             } else {
                 throw new Error('Backend failed to save activity');
             }

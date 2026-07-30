@@ -136,7 +136,13 @@ export function ExpenseProvider({ children, user }: { children: ReactNode, user:
             },
             body: JSON.stringify(expense)
         })
-            .then(res => res.json())
+            .then(res => {
+                if (res.status === 400 || res.status === 401 || res.status === 403) {
+                    throw new Error(`HTTP_${res.status}: Permission denied or invalid data.`);
+                }
+                if (!res.ok) throw new Error('Network or server error');
+                return res.json();
+            })
             .then(data => {
                 const parts = (data.description || '').split(' || ');
                 const mappedAdded = {
@@ -155,7 +161,11 @@ export function ExpenseProvider({ children, user }: { children: ReactNode, user:
                 });
             })
             .catch(err => {
-                console.error("Expense backend sync failed, queueing offline sync.", err);
+                console.error("Expense backend sync failed:", err);
+                if (err.message && err.message.startsWith('HTTP_')) {
+                    import('sonner').then(({ toast }) => toast.error('Action denied (400/401/403).'));
+                    return;
+                }
                 // Fallback for offline mode
                 setExpenses((prev) => [expense, ...prev]);
                 queueExpenseSync(expense);
@@ -172,6 +182,9 @@ export function ExpenseProvider({ children, user }: { children: ReactNode, user:
             body: JSON.stringify(updatedFields)
         })
             .then(res => {
+                if (res.status === 400 || res.status === 401 || res.status === 403) {
+                    throw new Error(`HTTP_${res.status}: Permission denied or invalid data.`);
+                }
                 if (!res.ok) throw new Error('Update failed');
                 return res.json();
             })
@@ -190,7 +203,11 @@ export function ExpenseProvider({ children, user }: { children: ReactNode, user:
                 });
             })
             .catch(err => {
-                console.error("Expense update failed.", err);
+                console.error("Expense update failed:", err);
+                if (err.message && err.message.startsWith('HTTP_')) {
+                    import('sonner').then(({ toast }) => toast.error('Update denied (400/401/403).'));
+                    return;
+                }
                 // Optimistic UI fallback
                 setExpenses(prev => prev.map(exp => {
                     if (String(exp.id) === String(id)) {
@@ -207,6 +224,9 @@ export function ExpenseProvider({ children, user }: { children: ReactNode, user:
             headers: { 'Authorization': `Bearer ${user.token}` }
         })
             .then(res => {
+                if (res.status === 400 || res.status === 401 || res.status === 403) {
+                    throw new Error(`HTTP_${res.status}: Permission denied or invalid data.`);
+                }
                 if (!res.ok) throw new Error('Delete failed');
                 setExpenses(prev => prev.filter(exp => String(exp.id) !== String(id)));
                 addActivity({
@@ -217,7 +237,11 @@ export function ExpenseProvider({ children, user }: { children: ReactNode, user:
                 });
             })
             .catch(err => {
-                console.error("Expense delete failed.", err);
+                console.error("Expense delete failed:", err);
+                if (err.message && err.message.startsWith('HTTP_')) {
+                    import('sonner').then(({ toast }) => toast.error('Delete denied (400/401/403).'));
+                    return;
+                }
                 // Optimistic UI fallback
                 setExpenses(prev => prev.filter(exp => String(exp.id) !== String(id)));
             });

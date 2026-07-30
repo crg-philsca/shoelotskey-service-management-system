@@ -96,7 +96,12 @@ fs.watch('.', { recursive: true }, (eventType, filename) => {
     if (!filename) return;
     
     const normalizedName = filename.replace(/\\/g, '/');
-    if (normalizedName.includes('node_modules') || normalizedName.includes('/venv') || normalizedName.includes('/.git')) return;
+    if (normalizedName.includes('node_modules') || normalizedName.includes('/venv') || normalizedName.includes('/.git') || normalizedName.includes('.gemini')) return;
+
+    // Filter to source and config file extensions to avoid reading binary databases (like shoelotskey.db)
+    const allowedExtensions = ['.tsx', '.ts', '.js', '.jsx', '.css', '.py', '.html', '.json', '.yml', '.yaml'];
+    const ext = path.extname(normalizedName).toLowerCase();
+    if (!allowedExtensions.includes(ext)) return;
 
     // Use a small buffer to wait for file writing to finish
     setTimeout(() => {

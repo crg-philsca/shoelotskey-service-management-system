@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/app/components/ui/checkbox';
 import { Textarea } from '@/app/components/ui/textarea';
 import { toast } from 'sonner';
-import { Plus, X, User, Hash, ClipboardList, RotateCcw } from 'lucide-react';
+import { Plus, X, User, Hash, ClipboardList, RotateCcw, Calendar as CalendarIcon, Clock } from 'lucide-react';
 import { useOrders } from '../context/OrderContext';
 import { useServices } from '../context/ServiceContext';
 import type { ShippingPreference, PaymentMethod, PaymentStatus, Priority } from '@/app/types';
@@ -15,7 +15,7 @@ import { format as dateFnsFormat } from 'date-fns';
 import { CreatableCombobox } from './ui/creatable-combobox';
 import { useActivities } from '@/app/context/ActivityContext';
 import { useInventory } from '../context/InventoryContext';
-import { trainPredictionModel, predictCompletionDays } from '@/app/lib/mlPredictor';
+import { trainPredictionModel } from '@/app/lib/mlPredictor';
 
 // Dropdown options
 const SHOE_BRANDS = [
@@ -170,6 +170,134 @@ function ClearableInput({ id, value, onChange, placeholder, className, required,
     );
 }
 
+function FormattedDateInput({ value, onChange, className, id }: { value: string; onChange: (val: string) => void; className?: string; id?: string }) {
+    const hiddenDateRef = useRef<HTMLInputElement>(null);
+
+    const toDisplay = (iso: string) => {
+        if (!iso) return '';
+        const parts = iso.split('-');
+        if (parts.length === 3) {
+            return `${parts[1]}/${parts[2]}/${parts[0]}`;
+        }
+        return iso;
+    };
+
+    const [localVal, setLocalVal] = useState(toDisplay(value));
+
+    useEffect(() => {
+        setLocalVal(toDisplay(value));
+    }, [value]);
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        let inputVal = e.target.value;
+        let digits = inputVal.replace(/[^0-9]/g, '');
+        if (digits.length > 8) digits = digits.substring(0, 8);
+
+        let formatted = digits;
+        if (digits.length > 2) {
+            formatted = digits.substring(0, 2) + '/' + digits.substring(2);
+        }
+        if (digits.length > 4) {
+            formatted = digits.substring(0, 2) + '/' + digits.substring(2, 4) + '/' + digits.substring(4);
+        }
+
+        setLocalVal(formatted);
+
+        if (digits.length === 8) {
+            const mm = digits.substring(0, 2);
+            const dd = digits.substring(2, 4);
+            const yyyy = digits.substring(4, 8);
+            const iso = `${yyyy}-${mm}-${dd}`;
+            const dateObj = new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd));
+            if (!isNaN(dateObj.getTime())) {
+                onChange(iso);
+            }
+        }
+    };
+
+    const handlePickerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const isoVal = e.target.value;
+        if (isoVal) {
+            setLocalVal(toDisplay(isoVal));
+            onChange(isoVal);
+        }
+    };
+
+    const openPicker = () => {
+        if (hiddenDateRef.current) {
+            if (typeof hiddenDateRef.current.showPicker === 'function') {
+                hiddenDateRef.current.showPicker();
+            } else {
+                hiddenDateRef.current.click();
+            }
+        }
+    };
+
+    return (
+        <div className="relative w-full flex items-center">
+            <Input
+                id={id}
+                type="text"
+                placeholder="MM/DD/YYYY"
+                value={localVal}
+                onChange={handleChange}
+                className={`${className || ''} pr-8 text-left`}
+            />
+            <button
+                type="button"
+                onClick={openPicker}
+                title="Select date"
+                className="absolute right-2.5 text-gray-400 hover:text-red-600 transition-colors cursor-pointer p-0.5"
+            >
+                <CalendarIcon size={14} />
+            </button>
+            <input
+                ref={hiddenDateRef}
+                type="date"
+                value={value || ''}
+                onChange={handlePickerChange}
+                className="sr-only absolute pointer-events-none opacity-0"
+                tabIndex={-1}
+            />
+        </div>
+    );
+}
+
+function FormattedTimeInput({ value, onChange, className, id }: { value: string; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; className?: string; id?: string }) {
+    const hiddenTimeRef = useRef<HTMLInputElement>(null);
+
+    const openPicker = () => {
+        if (hiddenTimeRef.current) {
+            if (typeof hiddenTimeRef.current.showPicker === 'function') {
+                hiddenTimeRef.current.showPicker();
+            } else {
+                hiddenTimeRef.current.click();
+            }
+        }
+    };
+
+    return (
+        <div className="relative w-full flex items-center">
+            <Input
+                id={id}
+                ref={hiddenTimeRef}
+                type="time"
+                value={value}
+                onChange={onChange}
+                className={`${className || ''} pr-8 text-left font-normal [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer`}
+            />
+            <button
+                type="button"
+                onClick={openPicker}
+                title="Select time"
+                className="absolute right-2.5 text-gray-400 hover:text-red-600 transition-colors cursor-pointer p-0.5 pointer-events-none"
+            >
+                <Clock size={14} />
+            </button>
+        </div>
+    );
+}
+
 export default function JobOrderFormComponent({ user, onSuccess, onCancel }: JobOrderFormProps) {
     const { addOrder, orders } = useOrders();
     const { services } = useServices();
@@ -212,7 +340,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
     }, [orders]);
 
     const [priorityLevel, setPriorityLevel] = useState<Priority>('regular');
-    const [basicCleaningRushReduction, setBasicCleaningRushReduction] = useState(5);
+    const [basicCleaningRushReduction, setBasicCleaningRushReduction] = useState('9');
     const [deliveryAddress, setDeliveryAddress] = useState({
         houseNo: '',
         street: '',
@@ -274,7 +402,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
 
         // Reset Order Details
         setPriorityLevel('regular');
-        setBasicCleaningRushReduction(5);
+        setBasicCleaningRushReduction('9');
         setPaymentMethod('cash');
         setPaymentStatus('downpayment');
         setAmountReceived('');
@@ -312,24 +440,32 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
         setGeneratedOrderNumber(`${prefix}${nextSeq}`);
     }, [orders]);
 
+    const isRushEligible = useMemo(() => {
+        if (shoes.length === 0) return false;
+        // Rush is ONLY eligible if:
+        // Across all shoes in the order:
+        // 1. The ONLY service selected is 'Basic Cleaning'
+        // 2. There are no add-on services selected
+        return shoes.every(shoe => {
+            const baseServices = Array.isArray(shoe.baseService) ? shoe.baseService : [];
+            const addOns = Array.isArray(shoe.addOns) ? shoe.addOns : [];
+            return baseServices.length === 1 && baseServices[0] === 'Basic Cleaning' && addOns.length === 0;
+        });
+    }, [shoes]);
+
     // Auto-reset priority level if conditions are not met
     useEffect(() => {
-        const hasRushEligibleService = shoes.some(shoe => {
-            const services = Array.isArray(shoe.baseService) ? shoe.baseService : [];
-            return services.some(s => s === 'Basic Cleaning' || s.includes('Reglue'));
-        });
-
         const hasPremiumEligibleService = shoes.some(shoe => {
             const services = Array.isArray(shoe.baseService) ? shoe.baseService : [];
             return services.some(s => s.includes('Color Renewal'));
         });
 
-        if (priorityLevel === 'rush' && !hasRushEligibleService) {
+        if (priorityLevel === 'rush' && !isRushEligible) {
             setPriorityLevel('regular');
         } else if (priorityLevel === 'premium' && !hasPremiumEligibleService) {
             setPriorityLevel('regular');
         }
-    }, [shoes, priorityLevel]);
+    }, [shoes, priorityLevel, isRushEligible]);
 
     const activeServices = services.filter(s => s.active);
     const baseServices = activeServices.filter(s => s.category === 'base');
@@ -360,42 +496,93 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
         let addOnDays = 0;
         let priorityDays = 0;
 
+        // Gather all services across all shoes
+        let hasBasicCleaning = false;
+        let hasMinorReglue = false;
+        let hasFullReglue = false;
+        let hasColorRenewal = false;
+        let hasUnyellowing = false;
+        let hasMinorRestoration = false;
+        let hasMinorRetouch = false;
+
         shoes.forEach(shoe => {
-            let servicesArr = shoe.baseService || [];
+            const baseServicesArr = shoe.baseService || [];
+            const addOnsArr = shoe.addOns || [];
 
-            // Logic: Basic Cleaning duration is included in Reglue and Color Renewal. 
-            const hasDurationInclusive = servicesArr.some(s =>
-                s.toLowerCase().includes('reglue') || s.toLowerCase().includes('color renewal')
-            );
+            if (baseServicesArr.includes('Basic Cleaning')) hasBasicCleaning = true;
+            if (baseServicesArr.includes('Minor Reglue')) hasMinorReglue = true;
+            if (baseServicesArr.includes('Full Reglue')) hasFullReglue = true;
+            if (baseServicesArr.includes('Color Renewal')) hasColorRenewal = true;
 
-            const filteredDurationServices = hasDurationInclusive
-                ? servicesArr.filter(s => s !== 'Basic Cleaning')
-                : servicesArr;
-
-            filteredDurationServices.forEach((serviceName: string) => {
-                const service = baseServices.find(s => s.name === serviceName);
-                if (service && service.durationDays !== undefined) {
-                    baseDays += parseDuration(service.durationDays);
-                } else if (serviceName === 'Basic Cleaning') {
-                    baseDays += 10;
-                } else {
-                    baseDays += 25;
-                }
+            addOnsArr.forEach((a: any) => {
+                const name = typeof a === 'string' ? a : (a.name || '');
+                if (name === 'Unyellowing') hasUnyellowing = true;
+                if (name === 'Minor Restoration') hasMinorRestoration = true;
+                if (name === 'Minor Retouch') hasMinorRetouch = true;
             });
+        });
 
-            shoe.addOns.forEach((addon: { name: string; quantity?: number }) => {
-                const addOnDetail = addOnServices.find(s => s.name === addon.name);
-                if (addOnDetail && addOnDetail.durationDays !== undefined) {
-                    addOnDays += parseDuration(addOnDetail.durationDays) * (addon.quantity || 1);
-                }
+        // Apply rules:
+        let overriddenDays: number | null = null;
+
+        // Basic Cleaning + other services rules
+        if (hasBasicCleaning) {
+            if (hasColorRenewal || hasFullReglue) {
+                overriddenDays = 25;
+            } else if (hasMinorRestoration || hasMinorRetouch) {
+                overriddenDays = 20;
+            } else if (hasUnyellowing) {
+                overriddenDays = 15;
+            } else if (hasMinorReglue) {
+                overriddenDays = 10;
+            }
+        } 
+        // Other services (Full Reglue, Color Renewal) + Unyellowing -> 25 days default
+        else if ((hasFullReglue || hasColorRenewal) && hasUnyellowing) {
+            overriddenDays = 25;
+        }
+
+        if (overriddenDays !== null) {
+            baseDays = overriddenDays;
+            addOnDays = 0;
+            priorityDays = 0;
+        } else {
+            shoes.forEach(shoe => {
+                let servicesArr = shoe.baseService || [];
+
+                // Logic: Basic Cleaning duration is included in Reglue and Color Renewal. 
+                const hasDurationInclusive = servicesArr.some(s =>
+                    s.toLowerCase().includes('reglue') || s.toLowerCase().includes('color renewal')
+                );
+
+                const filteredDurationServices = hasDurationInclusive
+                    ? servicesArr.filter(s => s !== 'Basic Cleaning')
+                    : servicesArr;
+
+                filteredDurationServices.forEach((serviceName: string) => {
+                    const service = baseServices.find(s => s.name === serviceName);
+                    if (service && service.durationDays !== undefined) {
+                        baseDays += parseDuration(service.durationDays);
+                    } else if (serviceName === 'Basic Cleaning') {
+                        baseDays += 10;
+                    } else {
+                        baseDays += 25;
+                    }
+                });
+
+                shoe.addOns.forEach((addon: { name: string; quantity?: number }) => {
+                    const addOnDetail = addOnServices.find(s => s.name === addon.name);
+                    if (addOnDetail && addOnDetail.durationDays !== undefined) {
+                        addOnDays += parseDuration(addOnDetail.durationDays) * (addon.quantity || 1);
+                    }
+                });
             });
 
             if (priorityLevel === 'rush') {
-                if (servicesArr.includes('Basic Cleaning')) {
-                    priorityDays -= (basicCleaningRushReduction || 0);
-                }
+                priorityDays = - (parseInt(basicCleaningRushReduction, 10) || 9);
             }
-        });
+        }
+
         const safeShoes = Array.isArray(shoes) ? shoes : [];
         const hasServices = safeShoes.some(shoe => (Array.isArray(shoe.baseService) ? shoe.baseService : []).length > 0 || (Array.isArray(shoe.addOns) ? shoe.addOns : []).length > 0);
         const totalDays = hasServices ? Math.max(1, baseDays + addOnDays + priorityDays) : 0;
@@ -405,15 +592,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
     const calculatePredictedDays = () => {
         const hasServices = shoes.some(shoe => (Array.isArray(shoe.baseService) ? shoe.baseService : []).length > 0 || shoe.addOns.length > 0);
         if (!hasServices) return 0;
-
-        const tempOrder = {
-            items: shoes as any,
-            priorityLevel: priorityLevel
-        };
-
-        const predicted = predictCompletionDays(tempOrder, mlBreakdown.totalDays, orders.length);
-        // Safety: Ensure it's a number and not NaN
-        return (typeof predicted === 'number' && !isNaN(predicted)) ? predicted : (mlBreakdown.totalDays || 7);
+        return mlBreakdown.totalDays;
     };
 
     const getShoeTotal = (shoe: ShoeEntry) => {
@@ -573,9 +752,18 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
             return;
         }
 
-        const [oHours, oMinutes] = orderTime.split(':').map(Number);
+        let [oHours, oMinutes] = [0, 0];
+        if (orderTime) {
+            const timeParts = orderTime.split(':').map(Number);
+            oHours = timeParts[0] || 0;
+            oMinutes = timeParts[1] || 0;
+        } else {
+            const now = new Date();
+            oHours = now.getHours();
+            oMinutes = now.getMinutes();
+        }
         const createdDate = new Date(orderDate);
-        createdDate.setHours(oHours || 0, oMinutes || 0, 0, 0);
+        createdDate.setHours(oHours, oMinutes, 0, 0);
 
         // Helper to format delivery address
         const formatAddress = () => {
@@ -622,6 +810,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
             paymentMethod,
             paymentStatus,
             amountReceived: totals.amountReceivedNum,
+            balance: totals.remainingBalance,
             change: totals.change,
             referenceNo,
             // shelfLocation removed
@@ -1029,24 +1218,21 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                             min="1"
                                                             value={shoe.quantity}
                                                             onChange={(e) => updateShoe(shoe.id, { quantity: parseInt(e.target.value) || 1 })}
-                                                            className={`${INPUT_STYLE} text-center font-bold px-1`}
+                                                            className={`${INPUT_STYLE} text-center font-normal px-1`}
                                                         />
                                                     </div>
                                                     <div className={`col-span-1 ${priorityLevel === 'rush' && (Array.isArray(shoe.baseService) ? shoe.baseService : []).includes('Basic Cleaning') ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
                                                         <Label className={LABEL_STYLE}>Priority Level</Label>
                                                         <div className="relative group/select">
                                                             <Select value={priorityLevel} onValueChange={(val: any) => setPriorityLevel(val)}>
-                                                                <SelectTrigger className={INPUT_STYLE}>
+                                                                <SelectTrigger className={`${INPUT_STYLE} font-normal`}>
                                                                     <SelectValue placeholder="Regular" />
                                                                 </SelectTrigger>
                                                                 <SelectContent align="start" side="bottom" position="popper" sideOffset={5}>
                                                                     <SelectItem value="regular">Regular</SelectItem>
-                                                                    {shoes.some(shoe => {
-                                                                        const services = Array.isArray(shoe.baseService) ? shoe.baseService : [];
-                                                                        return services.includes('Basic Cleaning');
-                                                                    }) && (
-                                                                            <SelectItem value="rush">Rush</SelectItem>
-                                                                        )}
+                                                                    {isRushEligible && (
+                                                                        <SelectItem value="rush">Rush</SelectItem>
+                                                                    )}
                                                                 </SelectContent>
                                                             </Select>
                                                             {priorityLevel !== 'regular' && (
@@ -1064,11 +1250,15 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                         <div className="col-span-1 lg:col-span-1">
                                                             <Label className={LABEL_STYLE} title="Days Reduced">Days Reduced</Label>
                                                             <Input
-                                                                type="number"
-                                                                min="0"
-                                                                max="30"
+                                                                type="text"
+                                                                inputMode="numeric"
+                                                                pattern="[0-9]*"
                                                                 value={basicCleaningRushReduction}
-                                                                onChange={(e: any) => setBasicCleaningRushReduction(parseInt(e.target.value) || 0)}
+                                                                onChange={(e: any) => {
+                                                                    const val = e.target.value.replace(/\D/g, '');
+                                                                    const cleanVal = val.replace(/^0+/, '') || '0';
+                                                                    setBasicCleaningRushReduction(cleanVal);
+                                                                }}
                                                                 className={`${INPUT_STYLE} !text-left font-bold px-3`}
                                                             />
                                                         </div>
@@ -1483,44 +1673,43 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                             {/* Row 1: Order Date, Order Time, Release Date & Release Time */}
                                             <div className="space-y-1 col-span-1 md:col-span-3">
                                                 <Label className={LABEL_STYLE}>Order Date</Label>
-                                                <Input
-                                                    type="date"
+                                                <FormattedDateInput
+                                                    id="orderDate"
                                                     value={orderDate}
-                                                    onChange={(e) => setOrderDate(e.target.value)}
-                                                    className="bg-white border-gray-100/50 h-9 rounded-xl text-xs text-gray-900 shadow-sm px-3 cursor-pointer w-full relative pr-8 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-4"
+                                                    onChange={(val) => setOrderDate(val)}
+                                                    className="bg-white border-gray-100/50 h-9 rounded-xl text-xs text-gray-900 shadow-sm px-3 w-full"
                                                 />
                                             </div>
                                             <div className="space-y-1 col-span-1 md:col-span-3">
                                                 <Label className={LABEL_STYLE}>Order Time</Label>
-                                                <Input
-                                                    type="time"
+                                                <FormattedTimeInput
+                                                    id="orderTime"
                                                     value={orderTime}
                                                     onChange={(e) => setOrderTime(e.target.value)}
-                                                    className="bg-white border-gray-100/50 h-9 rounded-xl text-xs text-gray-900 shadow-sm px-3 w-full relative pr-8 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-4"
+                                                    className="bg-white border-gray-100/50 h-9 rounded-xl text-xs text-gray-900 shadow-sm px-3 w-full"
                                                 />
                                             </div>
                                             <div className="space-y-1 col-span-1 md:col-span-3">
                                                 <Label className={LABEL_STYLE}>Release Date</Label>
-                                                <Input
-                                                    type="date"
+                                                <FormattedDateInput
+                                                    id="releaseDate"
                                                     value={manualReleaseDate || (() => {
                                                         const daysToAdd = calculatePredictedDays();
                                                         const val = isNaN(daysToAdd) ? 7 : daysToAdd;
                                                         const d = new Date(new Date(orderDate).getTime() + val * 24 * 60 * 60 * 1000);
                                                         return dateFnsFormat(isNaN(d.getTime()) ? new Date() : d, 'yyyy-MM-dd');
                                                     })()}
-                                                    onChange={(e) => setManualReleaseDate(e.target.value)}
-                                                    className="bg-white border-gray-100/50 h-9 rounded-xl text-xs text-gray-900 shadow-sm px-3 cursor-pointer w-full relative pr-8 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-4"
+                                                    onChange={(val) => setManualReleaseDate(val)}
+                                                    className="bg-white border-gray-100/50 h-9 rounded-xl text-xs text-gray-900 shadow-sm px-3 w-full"
                                                 />
                                             </div>
                                             <div className="space-y-1 col-span-1 md:col-span-3">
                                                 <Label className={LABEL_STYLE}>Release Time</Label>
-                                                <Input
-                                                    type="time"
+                                                <FormattedTimeInput
+                                                    id="releaseTime"
                                                     value={releaseTime}
                                                     onChange={(e) => setReleaseTime(e.target.value)}
-                                                    placeholder="--:--"
-                                                    className="bg-white border-gray-100/50 h-9 rounded-xl text-xs text-gray-900 shadow-sm px-3 w-full relative pr-8 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-4"
+                                                    className="bg-white border-gray-100/50 h-9 rounded-xl text-xs text-gray-900 shadow-sm px-3 w-full"
                                                 />
                                             </div>
                                             {/* ML Predicted Duration Breakdown */}
@@ -1540,9 +1729,9 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                             {/* Row 2: Order ID, Processed By */}
                                             <div className="space-y-1 col-span-1 md:col-span-4">
                                                 <Label className={LABEL_STYLE}>Order ID</Label>
-                                                <div className="flex items-center bg-white h-9 rounded-xl px-3 text-[11px] text-gray-900 border border-gray-100/50 shadow-sm">
+                                                <div className="flex items-center bg-white h-9 rounded-xl px-3 text-xs font-normal text-gray-900 border border-gray-100/50 shadow-sm">
                                                     <Hash size={14} className="mr-2 text-gray-400" />
-                                                    <span className="whitespace-nowrap">{generatedOrderNumber || 'Generating...'}</span>
+                                                    <span className="whitespace-nowrap font-normal">{generatedOrderNumber || 'Generating...'}</span>
                                                 </div>
                                             </div>
                                             <div className="space-y-1 col-span-1 md:col-span-4">
@@ -1718,7 +1907,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                     </div>
                                     <div className="flex justify-between items-center text-[13px] pt-2 border-t border-gray-100">
                                         <span className="text-gray-500 font-medium">Total Quantity (Per Unit)</span>
-                                        <span className="text-gray-800">{shoes.reduce((sum, s) => sum + s.quantity, 0)} {shoes.reduce((sum, s) => sum + s.quantity, 0) === 1 ? 'Pair' : 'Pairs'}</span>
+                                        <span className="font-bold text-gray-800">{shoes.reduce((sum, s) => sum + s.quantity, 0)} {shoes.reduce((sum, s) => sum + s.quantity, 0) === 1 ? 'Pair' : 'Pairs'}</span>
                                     </div>
                                 </div>
                                 <div className="pt-3 mt-auto border-t border-solid border-gray-500 flex justify-between items-baseline">

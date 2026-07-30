@@ -34,6 +34,10 @@ const PageLoader = () => (
   </div>
 );
 
+const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '5173'))
+  ? `http://${window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname}:8000/api`
+  : '/api';
+
 // --- OWASP A01: BROKEN ACCESS CONTROL (RBAC) ---
 const ProtectedRoute = ({ children, allowedRoles, user }: { children: React.ReactNode, allowedRoles: string[], user: { role: string } | null }) => {
   if (!user) return <Navigate to="/login" replace />;
@@ -84,7 +88,16 @@ export default function App() {
 
 
   const handleLogout = () => {
-    setUser(null);
+    const currentToken = user?.token;
+    setUser(null); // Log out immediately on the very first click without network delay
+    if (currentToken) {
+      fetch(`${API_BASE}/logout`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${currentToken}` }
+      }).catch((err) => {
+        console.warn('[SECURITY] Failed to record backend logout event:', err);
+      });
+    }
   };
 
 

@@ -28,6 +28,61 @@ type TotalOrdersProps = {
     user: { token: string };
 };
 
+function FormattedDateInput({ value, onChange, className, id }: { value: string; onChange: (val: string) => void; className?: string; id?: string }) {
+    const toDisplay = (iso: string) => {
+        if (!iso) return '';
+        const parts = iso.split('-');
+        if (parts.length === 3) {
+            return `${parts[1]}/${parts[2]}/${parts[0]}`;
+        }
+        return iso;
+    };
+
+    const [localVal, setLocalVal] = useState(toDisplay(value));
+
+    useEffect(() => {
+        setLocalVal(toDisplay(value));
+    }, [value]);
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        let inputVal = e.target.value;
+        let digits = inputVal.replace(/[^0-9]/g, '');
+        if (digits.length > 8) digits = digits.substring(0, 8);
+
+        let formatted = digits;
+        if (digits.length > 2) {
+            formatted = digits.substring(0, 2) + '/' + digits.substring(2);
+        }
+        if (digits.length > 4) {
+            formatted = digits.substring(0, 2) + '/' + digits.substring(2, 4) + '/' + digits.substring(4);
+        }
+
+        setLocalVal(formatted);
+
+        if (digits.length === 8) {
+            const mm = digits.substring(0, 2);
+            const dd = digits.substring(2, 4);
+            const yyyy = digits.substring(4, 8);
+            const iso = `${yyyy}-${mm}-${dd}`;
+            const dateObj = new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd));
+            if (!isNaN(dateObj.getTime())) {
+                onChange(iso);
+            }
+        }
+    };
+
+    return (
+        <Input
+            id={id}
+            type="text"
+            placeholder="MM/DD/YYYY"
+            value={localVal}
+            onChange={handleChange}
+            className={className}
+        />
+    );
+}
+
 export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrdersProps) {
     useEffect(() => {
         // [OWASP A09] Security Audit: Logging view access with token context
@@ -438,20 +493,18 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
 
                         <div className="space-y-2">
                             <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">Start Date</label>
-                            <Input
-                                type="date"
+                            <FormattedDateInput
                                 value={startDate}
-                                onChange={(e) => setStartDate(e.target.value)}
+                                onChange={(val) => setStartDate(val)}
                                 className="h-9 text-xs border-gray-100 bg-gray-50/50 text-center"
                             />
                         </div>
 
                         <div className="space-y-2">
                             <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">End Date</label>
-                            <Input
-                                type="date"
+                            <FormattedDateInput
                                 value={endDate}
-                                onChange={(e) => setEndDate(e.target.value)}
+                                onChange={(val) => setEndDate(val)}
                                 className="h-9 text-xs border-gray-100 bg-gray-50/50 text-center"
                             />
                         </div>

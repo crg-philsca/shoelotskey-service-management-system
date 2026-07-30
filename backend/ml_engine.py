@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
+from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 from models import Order, Item, Service, Condition, Status, PriorityLevel
@@ -68,6 +69,64 @@ class ShoelotskeyPredictor:
         status_ids = [s.status_id for s in active_statuses]
         return db.query(Order).filter(Order.status_id.in_(status_ids)).count()
 
+    def get_rule_override(self, order_data: dict) -> Optional[int]:
+        items = order_data.get('items', [])
+        has_basic_cleaning = False
+        has_minor_reglue = False
+        has_full_reglue = False
+        has_color_renewal = False
+        has_unyellowing = False
+        has_minor_restoration = False
+        has_minor_retouch = False
+
+        for item in items:
+            base_services = item.get('baseService', [])
+            if isinstance(base_services, str):
+                base_services = [base_services]
+            elif not isinstance(base_services, list):
+                base_services = []
+            
+            addons = item.get('addOns', [])
+            if isinstance(addons, str):
+                addons = [addons]
+            elif not isinstance(addons, list):
+                addons = []
+            
+            if 'Basic Cleaning' in base_services:
+                has_basic_cleaning = True
+            if 'Minor Reglue' in base_services:
+                has_minor_reglue = True
+            if 'Full Reglue' in base_services:
+                has_full_reglue = True
+            if 'Color Renewal' in base_services:
+                has_color_renewal = True
+
+            for addon in addons:
+                name = addon.get('name') if isinstance(addon, dict) else addon
+                if name == 'Unyellowing':
+                    has_unyellowing = True
+                elif name == 'Minor Restoration':
+                    has_minor_restoration = True
+                elif name == 'Minor Retouch':
+                    has_minor_retouch = True
+
+        # Rule 1: Other services (Full Reglue, Color Renewal) + Unyellowing -> 25 days default
+        if (has_full_reglue or has_color_renewal) and has_unyellowing:
+            return 25
+        # Rule 2: Basic Cleaning + (Unyellowing or Minor Restoration or Minor Retouch) -> 20 days
+        if has_basic_cleaning and (has_unyellowing or has_minor_restoration or has_minor_retouch):
+            return 20
+        # Rule 3: Basic Cleaning + Minor Reglue -> 10 days
+        if has_basic_cleaning and has_minor_reglue and not has_full_reglue and not has_color_renewal and not has_unyellowing and not has_minor_restoration and not has_minor_retouch:
+            return 10
+        # Rule 4: Color Renewal + Basic Cleaning -> 15 days
+        if has_color_renewal and has_basic_cleaning and not has_minor_reglue and not has_full_reglue and not has_unyellowing and not has_minor_restoration and not has_minor_retouch:
+            return 15
+
+        return None
+
+
+
     def predict_completion(self, db: Session, order_data: dict) -> datetime:
         """
         Public API to predict completion date.
@@ -98,6 +157,24 @@ class ShoelotskeyPredictor:
                     conds = db.query(Condition.condition_id).filter(Condition.condition_name.in_(active_c_names)).all()
                     all_condition_ids.extend([c[0] for c in conds])
 
+        # Parse base_date from transactionDate if specified
+        base_date = datetime.now()
+        td_iso = order_data.get('transactionDate')
+        if td_iso:
+            try:
+                dt = datetime.fromisoformat(td_iso.replace('Z', '+00:00'))
+                if dt.tzinfo is not None:
+                    base_date = dt.astimezone().replace(tzinfo=None)
+                else:
+                    base_date = dt
+            except Exception:
+                pass
+
+        # Check for rule overrides first
+        rule_override = self.get_rule_override(order_data)
+        if rule_override is not None:
+            return base_date + timedelta(days=rule_override)
+
         # 2. Get Baselines
         heuristic_days = self.calculate_heuristic_days(db, list(set(all_service_ids)), list(set(all_condition_ids)), primary_material)
         workload = self.get_current_workload(db)
@@ -119,7 +196,7 @@ class ShoelotskeyPredictor:
             
             predicted_days = heuristic_days + workload_delay
 
-        return datetime.now() + timedelta(days=round(predicted_days))
+        return base_date + timedelta(days=round(predicted_days))
 
     def train_from_history(self, db: Session):
         """

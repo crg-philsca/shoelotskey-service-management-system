@@ -118,10 +118,64 @@ export function trainPredictionModel(orders: JobOrder[]) {
     }
 }
 
+function getRuleDaysOverride(order: JobOrder): number | null {
+    const items = order.items || [];
+    let hasBasicCleaning = false;
+    let hasMinorReglue = false;
+    let hasFullReglue = false;
+    let hasColorRenewal = false;
+    let hasUnyellowing = false;
+    let hasMinorRestoration = false;
+    let hasMinorRetouch = false;
+
+    const itemsList = items.length > 0 ? items : [order];
+
+    itemsList.forEach((item: any) => {
+        const baseServices = Array.isArray(item.baseService) ? item.baseService : (item.baseService ? [item.baseService] : []);
+        const addOns = Array.isArray(item.addOns) ? item.addOns : [];
+
+        if (baseServices.includes('Basic Cleaning')) hasBasicCleaning = true;
+        if (baseServices.includes('Minor Reglue')) hasMinorReglue = true;
+        if (baseServices.includes('Full Reglue')) hasFullReglue = true;
+        if (baseServices.includes('Color Renewal')) hasColorRenewal = true;
+
+        addOns.forEach((a: any) => {
+            const name = typeof a === 'string' ? a : (a.name || '');
+            if (name === 'Unyellowing') hasUnyellowing = true;
+            if (name === 'Minor Restoration') hasMinorRestoration = true;
+            if (name === 'Minor Retouch') hasMinorRetouch = true;
+        });
+    });
+
+    // Rule 1: Other services (Full Reglue, Color Renewal) + Unyellowing -> 25 days default
+    if ((hasFullReglue || hasColorRenewal) && hasUnyellowing) {
+        return 25;
+    }
+    // Rule 2: Basic Cleaning + (Unyellowing or Minor Restoration or Minor Retouch) -> 20 days
+    if (hasBasicCleaning && (hasUnyellowing || hasMinorRestoration || hasMinorRetouch)) {
+        return 20;
+    }
+    // Rule 3: Basic Cleaning + Minor Reglue -> 10 days
+    if (hasBasicCleaning && hasMinorReglue && !hasFullReglue && !hasColorRenewal && !hasUnyellowing && !hasMinorRestoration && !hasMinorRetouch) {
+        return 10;
+    }
+    // Rule 4: Color Renewal + Basic Cleaning -> 15 days
+    if (hasColorRenewal && hasBasicCleaning && !hasMinorReglue && !hasFullReglue && !hasUnyellowing && !hasMinorRestoration && !hasMinorRetouch) {
+        return 15;
+    }
+
+    return null;
+}
+
 /**
  * Expects a JobOrder object or similar structure to extract features from and predict completion days.
  */
 export function predictCompletionDays(order: Partial<JobOrder>, fallbackLogicDays: number, currentWorkload: number = 0): number {
+    const ruleOverride = getRuleDaysOverride(order as JobOrder);
+    if (ruleOverride !== null) {
+        return ruleOverride;
+    }
+
     if (!model) {
         return fallbackLogicDays;
     }

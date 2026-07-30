@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/app/components/ui/dialog';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
@@ -9,7 +9,7 @@ import { Checkbox } from '@/app/components/ui/checkbox';
 import { useServices } from '@/app/context/ServiceContext';
 import { useInventory } from '@/app/context/InventoryContext';
 import type { JobOrder, JobStatus, PaymentStatus, PaymentMethod, InventoryUsed } from '@/app/types';
-import { Package, Plus, Minus, Trash2 } from 'lucide-react';
+import { Package, Plus, Minus, Trash2, Calendar as CalendarIcon } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface EditOrderModalProps {
@@ -78,6 +78,99 @@ const MODEL_MATERIALS: Record<string, string> = {
 const DELIVERY_COURIERS = [
     'Lalamove', 'JRS', 'LBC', 'Grab', 'Other'
 ];
+
+function FormattedDateInput({ value, onChange, className, id }: { value: string; onChange: (val: string) => void; className?: string; id?: string }) {
+    const hiddenDateRef = useRef<HTMLInputElement>(null);
+
+    const toDisplay = (iso: string) => {
+        if (!iso) return '';
+        const parts = iso.split('-');
+        if (parts.length === 3) {
+            return `${parts[1]}/${parts[2]}/${parts[0]}`;
+        }
+        return iso;
+    };
+
+    const [localVal, setLocalVal] = useState(toDisplay(value));
+
+    useEffect(() => {
+        setLocalVal(toDisplay(value));
+    }, [value]);
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        let inputVal = e.target.value;
+        let digits = inputVal.replace(/[^0-9]/g, '');
+        if (digits.length > 8) digits = digits.substring(0, 8);
+
+        let formatted = digits;
+        if (digits.length > 2) {
+            formatted = digits.substring(0, 2) + '/' + digits.substring(2);
+        }
+        if (digits.length > 4) {
+            formatted = digits.substring(0, 2) + '/' + digits.substring(2, 4) + '/' + digits.substring(4);
+        }
+
+        setLocalVal(formatted);
+
+        if (digits.length === 8) {
+            const mm = digits.substring(0, 2);
+            const dd = digits.substring(2, 4);
+            const yyyy = digits.substring(4, 8);
+            const iso = `${yyyy}-${mm}-${dd}`;
+            const dateObj = new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd));
+            if (!isNaN(dateObj.getTime())) {
+                onChange(iso);
+            }
+        }
+    };
+
+    const handlePickerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const isoVal = e.target.value;
+        if (isoVal) {
+            setLocalVal(toDisplay(isoVal));
+            onChange(isoVal);
+        }
+    };
+
+    const openPicker = () => {
+        if (hiddenDateRef.current) {
+            if (typeof hiddenDateRef.current.showPicker === 'function') {
+                hiddenDateRef.current.showPicker();
+            } else {
+                hiddenDateRef.current.click();
+            }
+        }
+    };
+
+    return (
+        <div className="relative w-full flex items-center">
+            <Input
+                id={id}
+                type="text"
+                placeholder="MM/DD/YYYY"
+                value={localVal}
+                onChange={handleChange}
+                className={`${className || ''} pr-8 text-left`}
+            />
+            <button
+                type="button"
+                onClick={openPicker}
+                title="Select date"
+                className="absolute right-2.5 text-gray-400 hover:text-red-600 transition-colors cursor-pointer p-0.5"
+            >
+                <CalendarIcon size={14} />
+            </button>
+            <input
+                ref={hiddenDateRef}
+                type="date"
+                value={value || ''}
+                onChange={handlePickerChange}
+                className="sr-only absolute pointer-events-none opacity-0"
+                tabIndex={-1}
+            />
+        </div>
+    );
+}
 
 export default function EditOrderModal({ order, open, onOpenChange, onSave }: EditOrderModalProps) {
     const [formData, setFormData] = useState<JobOrder | null>(null);
@@ -323,27 +416,25 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <Label className={LABEL_STYLE}>Order Date</Label>
-                                <Input
-                                    type="date"
+                                <FormattedDateInput
                                     value={(() => {
                                         if (!formData?.transactionDate) return '';
                                         const d = new Date(formData.transactionDate);
                                         return isNaN(d.getTime()) ? '' : d.toISOString().split('T')[0];
                                     })()}
-                                    onChange={(e) => updateFormData({ transactionDate: new Date(e.target.value).toISOString() })}
+                                    onChange={(val) => updateFormData({ transactionDate: new Date(val).toISOString() })}
                                     className={INPUT_STYLE}
                                 />
                             </div>
                             <div>
-                                <Label className={LABEL_STYLE}>Target Release Date</Label>
-                                <Input
-                                    type="date"
+                                <Label className={LABEL_STYLE}>Predicted Release Date</Label>
+                                <FormattedDateInput
                                     value={(() => {
                                         if (!formData?.predictedCompletionDate) return '';
                                         const d = new Date(formData.predictedCompletionDate);
                                         return isNaN(d.getTime()) ? '' : d.toISOString().split('T')[0];
                                     })()}
-                                    onChange={(e) => updateFormData({ predictedCompletionDate: new Date(e.target.value).toISOString() })}
+                                    onChange={(val) => updateFormData({ predictedCompletionDate: new Date(val).toISOString() })}
                                     className={INPUT_STYLE}
                                 />
                             </div>
@@ -845,7 +936,19 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                         Cancel
                     </Button>
                     <Button
-                        onClick={() => onSave?.(formData.id, formData)}
+                        onClick={() => {
+                            const amountRec = formData.amountReceived || 0;
+                            if (formData.status === 'claimed' && (formData.grandTotal - amountRec > 0.01)) {
+                                toast.error(`Cannot claim: Order has an outstanding balance of \u20b1${(formData.grandTotal - amountRec).toFixed(2)}. Please update payment to fully paid.`);
+                                return;
+                            }
+                            const currentBalance = Math.max(0, formData.grandTotal - amountRec);
+                            const updatedFormData = {
+                                ...formData,
+                                balance: currentBalance
+                            };
+                            onSave?.(formData.id, updatedFormData);
+                        }}
                         className="bg-red-600 hover:bg-red-700 text-white font-bold shadow-lg shadow-red-100 h-11 px-8 rounded-xl uppercase tracking-wider text-xs flex-1 transition-all active:scale-95"
                     >
                         Save

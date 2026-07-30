@@ -307,6 +307,7 @@ class InventorySchema(BaseModel):
     consumption_unit: str = ""
     package_size: float = 0.0
     package_unit: str = ""
+    low_stock_threshold: float = 0.0  # Alert threshold in internal units
 
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -330,6 +331,7 @@ class InventoryUpdateSchema(BaseModel):
     consumption_unit: Optional[str] = None
     package_size: Optional[float] = None
     package_unit: Optional[str] = None
+    low_stock_threshold: Optional[float] = None
 
 class InventoryLogSchema(BaseModel):
     log_id: Optional[int] = None
