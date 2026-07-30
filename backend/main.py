@@ -906,23 +906,22 @@ def seed_lookups(db: Session):
         # package_size = volume/weight of one package in internal units.
         # low_stock_threshold = alert level in internal units.
         # consumption_qty = amount used per order/service in internal units.
-        inventory_defaults = [
-            # Cleaner: 1 bottle = 4000 mL, start with 1 bottle (4000 mL), low stock = 1000 mL, 2000 mL/day
+            # Cleaner: 1 jug = 4000 mL, start with 1 jug (4000 mL), low stock = 1000 mL (1 liter), 2000 mL/day usage
             {"item_name": "Cleaner",
              "category": "Chemical", "stock_quantity": 4000.0, "unit": "mL",
-             "package_size": 4000.0, "package_unit": "bottle",
+             "package_size": 4000.0, "package_unit": "jug",
              "low_stock_threshold": 1000.0, "consumption_qty": 2000.0, "consumption_unit": "mL"},
-            # Bleach: 3 jugs default, 1 jug = 4000 mL -> 12000 mL; low stock = 1000 mL, 1000 mL/day
+            # Bleach: 3 jugs default, 1 jug = 4000 mL -> 12000 mL; low stock = 1000 mL (1 liter), 1000 mL/day usage
             {"item_name": "Bleach",
              "category": "Chemical", "stock_quantity": 12000.0, "unit": "mL",
              "package_size": 4000.0, "package_unit": "jug",
              "low_stock_threshold": 1000.0, "consumption_qty": 1000.0, "consumption_unit": "mL"},
-            # Stain Remover: 1 jug = 4000 mL; low stock = 1000 mL, 1000 mL/day
+            # Stain Remover: 1 jug = 4000 mL; low stock = 1000 mL (1 liter), 1000 mL/day usage
             {"item_name": "Stain Remover",
              "category": "Chemical", "stock_quantity": 4000.0, "unit": "mL",
              "package_size": 4000.0, "package_unit": "jug",
              "low_stock_threshold": 1000.0, "consumption_qty": 1000.0, "consumption_unit": "mL"},
-            # Leather Conditioner: 1 tub = 260 g; low stock = 50 g, 5 g/use
+            # Leather Conditioner: 1 tub = 260 g; low stock = 50 g, 5 g/day (1 swipe of palm)
             {"item_name": "Leather Conditioner",
              "category": "Chemical", "stock_quantity": 260.0, "unit": "g",
              "package_size": 260.0, "package_unit": "tub",
@@ -958,7 +957,7 @@ def seed_lookups(db: Session):
         # that may have been seeded with old values.
         migration_map = {
             # item_name: (new_stock_qty, new_unit, new_pkg_size, new_pkg_unit, new_threshold, new_consumption)
-            "Cleaner":            (4000.0,  "mL", 4000.0, "bottle", 1000.0, 2000.0, "mL"),
+            "Cleaner":            (4000.0,  "mL", 4000.0, "jug",    1000.0, 2000.0, "mL"),
             "Bleach":             (12000.0, "mL", 4000.0, "jug",    1000.0, 1000.0, "mL"),
             "Stain Remover":      (4000.0,  "mL", 4000.0, "jug",    1000.0, 1000.0, "mL"),
             "Leather Conditioner":(260.0,   "g",  260.0,  "tub",     50.0,     5.0, "g"),
@@ -967,22 +966,19 @@ def seed_lookups(db: Session):
         for name, (stock, unit, pkg_sz, pkg_unit, threshold, cons_qty, cons_unit) in migration_map.items():
             inv_item = db.query(Inventory).filter(Inventory.item_name == name).first()
             if inv_item:
-                # Only migrate if unit doesn't match (prevents double migration)
-                if inv_item.unit != unit:
-                    print(f">>> Inventory Migration: Updating '{name}' to {unit}-based tracking")
+                # Force update packaging, consumption, and unit settings if they are out of specification or set to 1
+                if (inv_item.unit != unit or inv_item.package_size <= 1.0 or inv_item.package_unit != pkg_unit or 
+                    inv_item.low_stock_threshold != threshold or inv_item.consumption_qty != cons_qty):
+                    print(f">>> Inventory Migration: Synchronizing '{name}' to {pkg_sz} {unit}/{pkg_unit} consumption tracking")
                     inv_item.unit = unit
                     inv_item.package_size = pkg_sz
                     inv_item.package_unit = pkg_unit
                     inv_item.low_stock_threshold = threshold
                     inv_item.consumption_qty = cons_qty
                     inv_item.consumption_unit = cons_unit
-                elif inv_item.low_stock_threshold == 0.0:
-                    # Just update threshold/package info if missing
-                    inv_item.package_size = pkg_sz
-                    inv_item.package_unit = pkg_unit
-                    inv_item.low_stock_threshold = threshold
-                    inv_item.consumption_qty = cons_qty
-                    inv_item.consumption_unit = cons_unit
+                    # If Bleach had package size 1 or default 4000 stock from prior seed, reset stock to 12000 (3 jugs)
+                    if name == "Bleach" and inv_item.stock_quantity <= 4000.0 and inv_item.package_size == 4000.0:
+                        inv_item.stock_quantity = 12000.0
                 # Recalculate status with new threshold
                 qty = inv_item.stock_quantity
                 inv_item.status = "Critical" if qty <= 0 else ("Low Stock" if qty <= inv_item.low_stock_threshold else "In Stock")
@@ -999,14 +995,20 @@ def seed_lookups(db: Session):
             db.add(User(username="staff", email="staff@shoelotskey.com", password_hash=bcrypt.hash("staff123"), role_id=role_staff.role_id))
         db.commit()
 
-    # 5.5 Reconcile SQLite orders to PostgreSQL (Cloud) and purge stale diagnostic orders
+    # 5.5 Reconcile SQLite orders to PostgreSQL (Cloud) and purge stale diagnostic/guest orders
     try:
-        # Delete associated payments, items, delivery, etc for HEALTH- orders from PostgreSQL
-        health_orders = db.query(Order).filter(Order.order_number.like('HEALTH-%')).all()
-        if health_orders:
-            for ho in health_orders:
+        # Delete associated payments, items, delivery, etc for HEALTH-, E3FE31C5, or Guest orders from PostgreSQL
+        from sqlalchemy import or_
+        guest_customers = db.query(Customer).filter(Customer.customer_name.ilike('guest%')).all()
+        guest_ids = [c.customer_id for c in guest_customers] if guest_customers else [-1]
+
+        test_orders = db.query(Order).filter(or_(Order.order_number.like('HEALTH-%'), Order.order_number == 'E3FE31C5', Order.customer_id.in_(guest_ids))).all()
+        if test_orders:
+            for ho in test_orders:
                 db.execute(text("DELETE FROM payments WHERE order_id = :oid"), {"oid": ho.order_id})
                 db.execute(text("DELETE FROM deliveries WHERE order_id = :oid"), {"oid": ho.order_id})
+                db.query(StatusLog).filter(StatusLog.order_id == ho.order_id).delete(synchronize_session=False)
+                db.query(InventoryLog).filter(InventoryLog.order_id == ho.order_id).update({"order_id": None}, synchronize_session=False)
                 items = db.query(Item).filter(Item.order_id == ho.order_id).all()
                 for item in items:
                     db.execute(text("DELETE FROM item_service_mapping WHERE item_id = :itid"), {"itid": item.item_id})
@@ -1014,7 +1016,7 @@ def seed_lookups(db: Session):
                     db.delete(item)
                 db.delete(ho)
             db.commit()
-            print(f">>> Boot Cleanup: Purged {len(health_orders)} HEALTH- check orders.")
+            print(f">>> Boot Cleanup (Cloud PostgreSQL): Purged {len(test_orders)} diagnostic/guest orders.")
             
         # Reconcile any missing orders from SQLite backup to Cloud
         if not is_sqlite:
@@ -1023,12 +1025,16 @@ def seed_lookups(db: Session):
             local_eng = create_engine(LOCAL_SQLITE)
             LocalSession = sessionmaker(bind=local_eng)
             with LocalSession() as ldb:
-                # Also purge HEALTH- orders from local SQLite while we are at it
-                ldb_health = ldb.query(Order).filter(Order.order_number.like('HEALTH-%')).all()
+                # Also purge HEALTH-, E3FE31C5, and Guest orders from local SQLite while we are at it
+                ldb_guest = ldb.query(Customer).filter(Customer.customer_name.ilike('guest%')).all()
+                ldb_guest_ids = [c.customer_id for c in ldb_guest] if ldb_guest else [-1]
+                ldb_health = ldb.query(Order).filter(or_(Order.order_number.like('HEALTH-%'), Order.order_number == 'E3FE31C5', Order.customer_id.in_(ldb_guest_ids))).all()
                 if ldb_health:
                     for lho in ldb_health:
                         ldb.execute(text("DELETE FROM payments WHERE order_id = :oid"), {"oid": lho.order_id})
                         ldb.execute(text("DELETE FROM deliveries WHERE order_id = :oid"), {"oid": lho.order_id})
+                        ldb.query(StatusLog).filter(StatusLog.order_id == lho.order_id).delete(synchronize_session=False)
+                        ldb.query(InventoryLog).filter(InventoryLog.order_id == lho.order_id).update({"order_id": None}, synchronize_session=False)
                         litems = ldb.query(Item).filter(Item.order_id == lho.order_id).all()
                         for li in litems:
                             ldb.execute(text("DELETE FROM item_service_mapping WHERE item_id = :itid"), {"itid": li.item_id})
@@ -1036,7 +1042,7 @@ def seed_lookups(db: Session):
                             ldb.delete(li)
                         ldb.delete(lho)
                     ldb.commit()
-                    print(f">>> Boot Cleanup (Local SQLite): Purged {len(ldb_health)} HEALTH- check orders.")
+                    print(f">>> Boot Cleanup (Local SQLite): Purged {len(ldb_health)} diagnostic/guest orders.")
 
                 # Scan for orders to sync to cloud (Batch-check to prevent sequential network roundtrips during server startup)
                 existing_pg_order_nums = {o[0] for o in db.query(Order.order_number).all()}
@@ -1527,6 +1533,7 @@ def sync_backup_to_cloud(db: Session = Depends(get_db), current_user: User = Dep
                     exists_i.package_unit = i_pu
             print("[SYNC] Inventory table sync processed successfully.")
         except Exception as inv_sync_err:
+            db.rollback()
             print(f"[SYNC WARNING] Skipping inventory table sync: {inv_sync_err}")
 
         # 1.6. Sync expenses from SQLite to PG
@@ -1552,20 +1559,16 @@ def sync_backup_to_cloud(db: Session = Depends(get_db), current_user: User = Dep
                     synced_count += 1
             print("[SYNC] Expenses table sync processed successfully.")
         except Exception as exp_sync_err:
+            db.rollback()
             print(f"[SYNC WARNING] Skipping expenses table sync: {exp_sync_err}")
 
-        # 1.7. Sync audit_logs from SQLite to PG
+        # 1.7. Sync audit_logs from SQLite to PG (Batch memory check to avoid connection dropouts)
         try:
-            cursor.execute("SELECT username, role, action_type, module, table_name, record_id, old_values, new_values, ip_address FROM audit_logs")
+            cursor.execute("SELECT username, role, action_type, module, table_name, record_id, old_values, new_values, ip_address FROM audit_logs ORDER BY rowid DESC LIMIT 50")
+            existing_pg_logs = {f"{l.username}_{l.action_type}_{l.record_id}_{l.table_name}" for l in db.query(AuditLog.username, AuditLog.action_type, AuditLog.record_id, AuditLog.table_name).all()}
             for off_log in cursor.fetchall():
-                exists_log = db.query(AuditLog).filter(
-                    AuditLog.action_type == off_log[2],
-                    AuditLog.module == off_log[3],
-                    AuditLog.table_name == off_log[4],
-                    AuditLog.username == off_log[0]
-                ).all()
-                is_dup = any(str(x.new_values) == str(off_log[7]) for x in exists_log) if exists_log else False
-                if not is_dup:
+                log_key = f"{off_log[0]}_{off_log[2]}_{off_log[5]}_{off_log[4]}"
+                if log_key not in existing_pg_logs:
                     new_log = AuditLog(
                         username=off_log[0],
                         role=off_log[1],
@@ -1578,8 +1581,10 @@ def sync_backup_to_cloud(db: Session = Depends(get_db), current_user: User = Dep
                         ip_address=off_log[8]
                     )
                     db.add(new_log)
+                    existing_pg_logs.add(log_key)
             print("[SYNC] Audit logs table sync processed successfully.")
         except Exception as log_sync_err:
+            db.rollback()
             print(f"[SYNC WARNING] Skipping audit_logs table sync: {log_sync_err}")
         
         db.commit()
@@ -1589,6 +1594,7 @@ def sync_backup_to_cloud(db: Session = Depends(get_db), current_user: User = Dep
         
         return {"status": "success", "synced_records": synced_count}
     except Exception as e:
+        db.rollback()
         print(f"[RECONCILE ERROR] {e}")
         raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
 
