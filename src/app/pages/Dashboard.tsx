@@ -190,7 +190,7 @@ export default function Dashboard(props: DashboardProps) {
 }
 
 // [AESTHETIC] Custom Tooltip for Service Volume Chart
-const ServiceTooltip = ({ active, payload }: any) => {
+const ServiceTooltip = ({ active, payload, isOwner }: any) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload;
     return (
@@ -201,10 +201,12 @@ const ServiceTooltip = ({ active, payload }: any) => {
              <span className="text-gray-400">Total Orders:</span>
              <span className="text-gray-900">{data.value}</span>
            </div>
-           <div className="flex justify-between text-[11px] font-bold">
-             <span className="text-gray-400">Revenue:</span>
-             <span className="text-emerald-600 font-black">{'\u20B1'}{Number(data.sales || 0).toLocaleString()}</span>
-           </div>
+           {isOwner && (
+             <div className="flex justify-between text-[11px] font-bold">
+               <span className="text-gray-400">Revenue:</span>
+               <span className="text-emerald-600 font-black">{'\u20B1'}{Number(data.sales || 0).toLocaleString()}</span>
+             </div>
+           )}
         </div>
         {data.breakdown && (
           <div className="space-y-1.5">
@@ -1282,7 +1284,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                             axisLine={{ stroke: '#e2e8f0' }} 
                             tickLine={false} 
                          />
-                         <Tooltip content={<ServiceTooltip />} cursor={{fill: '#f8fafc'}} />
+                         <Tooltip content={<ServiceTooltip isOwner={role === 'owner'} />} cursor={{fill: '#f8fafc'}} />
                          <Bar dataKey="value" radius={[4, 4, 0, 0]} barSize={60}>
                            {serviceVolumeData.map((_item, index) => (
                              <Cell key={`cell-${index}`} fill={['#A3C9C2', '#C4B5FD', '#A78BFA', '#FBBF24'][index % 4]} />

@@ -147,9 +147,9 @@ export default function Layout({ children, user, onLogout, headerAction, headerA
   );
 
   return (
-    <div className={`flex h-screen bg-gray-50 ${isCollapsed ? 'sidebar-collapsed' : 'sidebar-expanded'}`}>
+    <div className={`flex h-[100dvh] md:h-screen bg-gray-50 ${isCollapsed ? 'sidebar-collapsed' : 'sidebar-expanded'}`}>
       {/* Desktop Sidebar */}
-      <div className={`${isCollapsed ? 'w-20' : 'w-64'} bg-red-700 text-white hidden lg:flex flex-col transition-all duration-300 relative`}>
+      <div className={`${isCollapsed ? 'w-20' : 'w-64'} bg-red-700 text-white hidden md:flex flex-col transition-all duration-300 relative`}>
         <SidebarContent collapsed={isCollapsed} />
 
         {/* Collapse/Expand Button */}
@@ -164,16 +164,16 @@ export default function Layout({ children, user, onLogout, headerAction, headerA
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden min-h-0">
-        <header className="bg-white border-b border-gray-200 px-4 lg:px-8 h-16 shrink-0 flex items-center relative overflow-visible">
+        <header className="bg-white border-b border-gray-200 px-3 md:px-6 h-16 shrink-0 flex items-center relative overflow-visible sticky top-0 z-30 shadow-xs">
           {/* Mobile Menu Toggle */}
-          <div className="lg:hidden mr-4">
+          <div className="md:hidden mr-3">
             <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon" className="text-red-700 hover:bg-red-50">
                   <Menu className="h-6 w-6" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="p-0 bg-red-700 border-red-800 w-64">
+              <SheetContent side="left" className="p-0 bg-red-700 border-red-800 w-64 z-[1000] overflow-y-auto max-h-[100dvh]">
                 <div className="h-full flex flex-col text-white">
                   <SidebarContent collapsed={false} />
                 </div>
@@ -183,23 +183,23 @@ export default function Layout({ children, user, onLogout, headerAction, headerA
 
           <div className="flex items-center flex-grow min-w-0">
             {headerActionLeft && (
-              <div className="flex items-center mr-4" style={{ zIndex: 20 }}>
+              <div className="flex items-center mr-3" style={{ zIndex: 20 }}>
                 {headerActionLeft}
               </div>
             )}
-            <h2 className="text-lg lg:text-2xl font-bold text-red-600 uppercase truncate">
+            <h2 className="text-base md:text-2xl font-bold text-red-600 uppercase truncate">
               {pageTitles[location.pathname] || 'Dashboard'}
             </h2>
           </div>
 
           {headerAction && (
-            <div className="ml-4 flex-shrink-0">
+            <div className="ml-2 md:ml-4 flex-shrink-0">
               {headerAction}
             </div>
           )}
         </header>
 
-        <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pt-3 px-4 lg:px-8 pb-8">
+        <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pt-3 px-3 md:px-6 pb-8">
           {children}
         </main>
       </div>

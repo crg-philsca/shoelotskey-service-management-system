@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useState, lazy, Suspense, useEffect } from 'react';
 import { Toaster } from '@/app/components/ui/sonner';
+import { toast } from 'sonner';
 import Login from '@/app/pages/Login';
 import ForgotPassword from '@/app/pages/ForgotPassword';
 import ResetPassword from '@/app/pages/ResetPassword';
@@ -59,9 +60,8 @@ const ProtectedRoute = ({ children, allowedRoles, user }: { children: React.Reac
  */
 export default function App() {
   const [user, setUser] = useState<{ id?: number; username: string; email?: string; role: 'owner' | 'staff', token: string } | null>(() => {
-
-    // Initialize from localStorage
-    const saved = localStorage.getItem('user');
+    // Check both localStorage (Remember Me checked) and sessionStorage (Remember Me unchecked)
+    const saved = localStorage.getItem('user') || sessionStorage.getItem('user');
     return saved ? JSON.parse(saved) : null;
   });
   const [headerActionRight, setHeaderActionRight] = useState<React.ReactNode>(null);
@@ -73,23 +73,30 @@ export default function App() {
     return () => { delete (window as any).toggleActivityLog; };
   }, []);
 
-  // Persist user to localStorage whenever it changes
-  useEffect(() => {
-    if (user) {
-      localStorage.setItem('user', JSON.stringify(user));
+  const handleLogin = (id: number, username: string, role: 'owner' | 'staff', token: string, rememberMe: boolean = false) => {
+    const userData = { id, username, email: `${username}@shoelotskey.com`, role, token };
+    setUser(userData);
+    if (rememberMe) {
+      localStorage.setItem('user', JSON.stringify(userData));
+      sessionStorage.removeItem('user');
     } else {
+      sessionStorage.setItem('user', JSON.stringify(userData));
       localStorage.removeItem('user');
     }
-  }, [user]);
-
-  const handleLogin = (id: number, username: string, role: 'owner' | 'staff', token: string) => {
-    setUser({ id, username, email: `${username}@shoelotskey.com`, role, token });
   };
 
-
-  const handleLogout = () => {
+  const handleLogout = (customMessage?: any) => {
     const currentToken = user?.token;
     setUser(null); // Log out immediately on the very first click without network delay
+    localStorage.removeItem('user');
+    sessionStorage.removeItem('user');
+    localStorage.removeItem('shoelotskey_offline_auth');
+    sessionStorage.removeItem('shoelotskey_offline_auth');
+    
+    if (customMessage && typeof customMessage === 'string') {
+      setTimeout(() => toast.error(customMessage, { duration: 6000 }), 150);
+    }
+
     if (currentToken) {
       fetch(`${API_BASE}/logout`, {
         method: 'POST',
@@ -100,6 +107,61 @@ export default function App() {
     }
   };
 
+  // --- STARTUP JWT VALIDATION (OWASP A07 & ISO/IEC 25010 Security) ---
+  useEffect(() => {
+    if (!user?.token) return;
+    
+    // 1. Client-side expiration check (handles offline timeout immediately)
+    try {
+      const parts = user.token.split('.');
+      if (parts.length === 3) {
+        const payload = JSON.parse(atob(parts[1]));
+        if (payload.exp && payload.exp * 1000 < Date.now()) {
+          handleLogout('Your session has expired. Please log in again.');
+          return;
+        }
+      }
+    } catch (e) {
+      handleLogout('Your session is invalid. Please log in again.');
+      return;
+    }
+
+    // 2. Server-side session verification on startup
+    fetch(`${API_BASE}/auth/verify-token`, {
+      headers: { 'Authorization': `Bearer ${user.token}` }
+    }).then(res => {
+      if (res.status === 401 || res.status === 403) {
+        handleLogout('Your session has expired. Please log in again.');
+      }
+    }).catch(() => {
+      console.warn('[AUTH] Server offline or network failure during startup token verification. Operating from local cache.');
+    });
+  }, []);
+
+  // --- 30-MINUTE INACTIVITY TIMEOUT (OWASP A07) ---
+  useEffect(() => {
+    if (!user) return;
+    
+    let timeoutId: any;
+    const TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes in milliseconds
+    
+    const resetTimer = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        handleLogout('Your session has expired due to inactivity. Please log in again.');
+      }, TIMEOUT_MS);
+    };
+
+    const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
+    events.forEach(evt => window.addEventListener(evt, resetTimer, { passive: true }));
+    
+    resetTimer(); // Initial startup timer
+
+    return () => {
+      clearTimeout(timeoutId);
+      events.forEach(evt => window.removeEventListener(evt, resetTimer));
+    };
+  }, [user]);
 
   if (!user) {
     return (
@@ -113,6 +175,8 @@ export default function App() {
       </BrowserRouter>
     );
   }
+
+  const allRoles = ['owner', 'staff'];
 
   return (
     <BrowserRouter>
@@ -128,48 +192,44 @@ export default function App() {
                     <Route path="/" element={<Navigate to="/dashboard" replace />} />
                     <Route
                       path="/dashboard"
-                      element={<Dashboard user={user} onSetHeaderActionRight={setHeaderActionRight} />}
+                      element={<ProtectedRoute allowedRoles={allRoles} user={user}><Dashboard user={user} onSetHeaderActionRight={setHeaderActionRight} /></ProtectedRoute>}
                     />
-                    <Route path="/job-order-form" element={<JobOrderForm user={user} onSetHeaderActionRight={setHeaderActionRight} />} />
-                    <Route path="/job-orders" element={<JobOrders user={user} onSetHeaderActionRight={setHeaderActionRight} />} />
-                    <Route path="/release-calendar" element={<ReleaseCalendar user={user} onSetHeaderActionRight={setHeaderActionRight} />} />
-                    <Route path="/claim-record" element={<ClaimRecord user={user} />} />
-                    <Route path="/activity-history" element={<ActivityHistory user={user} />} />
-                    <Route path="/total-sales" element={<TotalSales user={user} onSetHeaderActionRight={setHeaderActionRight} />} />
-                    <Route path="/total-orders" element={<TotalOrders user={user} onSetHeaderActionRight={setHeaderActionRight} />} />
-                    <Route path="/expenses" element={<Expenses user={user} onSetHeaderActionRight={setHeaderActionRight} />} />
+                    <Route path="/job-order-form" element={<ProtectedRoute allowedRoles={allRoles} user={user}><JobOrderForm user={user} onSetHeaderActionRight={setHeaderActionRight} /></ProtectedRoute>} />
+                    <Route path="/job-orders" element={<ProtectedRoute allowedRoles={allRoles} user={user}><JobOrders user={user} onSetHeaderActionRight={setHeaderActionRight} /></ProtectedRoute>} />
+                    <Route path="/release-calendar" element={<ProtectedRoute allowedRoles={allRoles} user={user}><ReleaseCalendar user={user} onSetHeaderActionRight={setHeaderActionRight} /></ProtectedRoute>} />
+                    <Route path="/claim-record" element={<ProtectedRoute allowedRoles={allRoles} user={user}><ClaimRecord user={user} /></ProtectedRoute>} />
+                    <Route path="/activity-history" element={<ProtectedRoute allowedRoles={allRoles} user={user}><ActivityHistory user={user} /></ProtectedRoute>} />
+                    <Route path="/total-sales" element={<ProtectedRoute allowedRoles={allRoles} user={user}><TotalSales user={user} onSetHeaderActionRight={setHeaderActionRight} /></ProtectedRoute>} />
+                    <Route path="/total-orders" element={<ProtectedRoute allowedRoles={allRoles} user={user}><TotalOrders user={user} onSetHeaderActionRight={setHeaderActionRight} /></ProtectedRoute>} />
+                    <Route path="/expenses" element={<ProtectedRoute allowedRoles={allRoles} user={user}><Expenses user={user} onSetHeaderActionRight={setHeaderActionRight} /></ProtectedRoute>} />
                     <Route 
                       path="/inventory" 
-                      element={<Inventory user={user} onSetHeaderActionRight={setHeaderActionRight} />} 
+                      element={<ProtectedRoute allowedRoles={allRoles} user={user}><Inventory user={user} onSetHeaderActionRight={setHeaderActionRight} /></ProtectedRoute>} 
                     />
-                    {user.role === 'owner' && (
-                      <>
-                        <Route 
-                          path="/sales-report" 
-                          element={
-                            <ProtectedRoute allowedRoles={['owner']} user={user}>
-                              <SalesReport user={user} onSetHeaderActionRight={setHeaderActionRight} />
-                            </ProtectedRoute>
-                          } 
-                        />
-                        <Route 
-                          path="/service-management" 
-                          element={
-                            <ProtectedRoute allowedRoles={['owner']} user={user}>
-                              <ServiceManagement user={user} onSetHeaderActionRight={setHeaderActionRight} />
-                            </ProtectedRoute>
-                          } 
-                        />
-                        <Route 
-                          path="/user-management" 
-                          element={
-                            <ProtectedRoute allowedRoles={['owner']} user={user}>
-                              <UserManagement user={user} onSetHeaderActionRight={setHeaderActionRight} />
-                            </ProtectedRoute>
-                          } 
-                        />
-                      </>
-                    )}
+                    <Route 
+                      path="/sales-report" 
+                      element={
+                        <ProtectedRoute allowedRoles={['owner']} user={user}>
+                          <SalesReport user={user} onSetHeaderActionRight={setHeaderActionRight} />
+                        </ProtectedRoute>
+                      } 
+                    />
+                    <Route 
+                      path="/service-management" 
+                      element={
+                        <ProtectedRoute allowedRoles={['owner']} user={user}>
+                          <ServiceManagement user={user} onSetHeaderActionRight={setHeaderActionRight} />
+                        </ProtectedRoute>
+                      } 
+                    />
+                    <Route 
+                      path="/user-management" 
+                      element={
+                        <ProtectedRoute allowedRoles={['owner']} user={user}>
+                          <UserManagement user={user} onSetHeaderActionRight={setHeaderActionRight} />
+                        </ProtectedRoute>
+                      } 
+                    />
                     <Route path="*" element={<Navigate to="/dashboard" replace />} />
                   </Routes>
                 </Suspense>

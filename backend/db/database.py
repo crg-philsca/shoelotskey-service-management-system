@@ -95,13 +95,86 @@ if engine is None:
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+def ensure_sqlite_schema_and_defaults(target_engine):
+    """
+    Guarantees that Local SQLite database contains all updated schemas, columns, and default user credentials.
+    Prevents Internal Server Errors (500) during offline login or offline user management.
+    """
+    try:
+        from models import Base, User, Role
+        from sqlalchemy import inspect as sql_inspect, text
+        import bcrypt
+        
+        # 1. Create any missing tables in SQLite
+        Base.metadata.create_all(bind=target_engine)
+        
+        # 2. Inspect and migrate any missing columns on existing SQLite tables
+        inspector = sql_inspect(target_engine)
+        with target_engine.begin() as conn:
+            for table_name, table_obj in Base.metadata.tables.items():
+                if table_name in inspector.get_table_names():
+                    existing_cols = {c['name'] for c in inspector.get_columns(table_name)}
+                    for col in table_obj.columns:
+                        if col.name not in existing_cols:
+                            col_type_str = "VARCHAR(255)" if str(col.type).startswith("VARCHAR") or str(col.type).startswith("String") else "INTEGER DEFAULT 0" if "INT" in str(col.type).upper() else "BOOLEAN DEFAULT 1" if "BOOL" in str(col.type).upper() else "TIMESTAMP NULL"
+                            try:
+                                conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {col.name} {col_type_str}"))
+                                print(f"[OFFLINE MIGRATION] Automatically added column '{col.name}' to local table '{table_name}'.")
+                            except Exception:
+                                pass
+                                
+        # 3. Ensure default Roles and Users exist so offline login and viewing users never fail
+        from sqlalchemy.orm import sessionmaker
+        SubSession = sessionmaker(bind=target_engine)
+        with SubSession() as ldb:
+            if ldb.query(Role).count() == 0:
+                ldb.add(Role(role_name="owner"))
+                ldb.add(Role(role_name="staff"))
+                ldb.commit()
+            if ldb.query(User).count() == 0:
+                role_owner = ldb.query(Role).filter(Role.role_name == "owner").first()
+                role_staff = ldb.query(Role).filter(Role.role_name == "staff").first()
+                if role_owner:
+                    ldb.add(User(username="owner", email="owner@shoelotskey.com", password_hash=bcrypt.hash("owner123"), role_id=role_owner.role_id, is_active=True))
+                if role_staff:
+                    ldb.add(User(username="staff", email="staff@shoelotskey.com", password_hash=bcrypt.hash("staff123"), role_id=role_staff.role_id, is_active=True))
+                ldb.commit()
+    except Exception as e:
+        print(f"[OFFLINE SCHEMA WARNING] Non-fatal check: {e}")
+
+if is_sqlite and engine is not None:
+    ensure_sqlite_schema_and_defaults(engine)
+
+def switch_to_offline_sqlite():
+    """Dynamically failover to Local SQLite runtime engine when cloud connectivity drops."""
+    global engine, is_sqlite, SessionLocal, DATABASE_URL
+    if not is_sqlite:
+        print("[HYBRID FAILOVER] Switching active runtime engine to Local SQLite (shoelotskey.db).")
+        DATABASE_URL = LOCAL_SQLITE
+        is_sqlite = True
+        connect_args = {"check_same_thread": False}
+        engine = create_engine(DATABASE_URL, connect_args=connect_args)
+        ensure_sqlite_schema_and_defaults(engine)
+        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    return SessionLocal
+
 def get_db():
     """
     DEPENDENCY: get_db
     Provides a database session for each API request.
-    Ensures safe closing of connections after transaction.
+    Includes dynamic runtime auto-switch to Local SQLite if Cloud Postgres drops or is offline.
     """
+    global is_sqlite, SessionLocal
     db = SessionLocal()
+    if not is_sqlite:
+        try:
+            # Lightweight health check before processing request
+            db.execute(text("SELECT 1"))
+        except Exception as e:
+            print(f"[HYBRID AUTO-SWITCH] Postgres unreachable during request ({str(e)[:80]}...). Switching to offline SQLite.")
+            db.close()
+            new_session_maker = switch_to_offline_sqlite()
+            db = new_session_maker()
     try:
         yield db
     finally:

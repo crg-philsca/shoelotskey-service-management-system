@@ -406,39 +406,49 @@ def startup_sequence():
     print("\n" + "="*50)
     print(" SHOELOTSKEY SMS v2.0 - SYSTEM BOOT")
     print("="*50)
-    print(f"[BOOT] Connecting to: {str(engine.url).split('@')[-1]}")
+    global engine, is_sqlite, SessionLocal, DATABASE_URL, DB_TYPE
+    import db.database as db_mod
+    
+    print(f"[BOOT] Target: {str(db_mod.engine.url).split('@')[-1] if db_mod.engine else 'None'}")
     
     # [USER REQUEST] Ensure local fallback database is ALWAYS ready even if we are online.
-    # We briefly initialize the local SQLite engine to push the schema if it's missing.
     try:
         from sqlalchemy import create_engine
         local_engine = create_engine(LOCAL_SQLITE)
-        Base.metadata.create_all(bind=local_engine)
+        if hasattr(db_mod, "ensure_sqlite_schema_and_defaults"):
+            db_mod.ensure_sqlite_schema_and_defaults(local_engine)
+        else:
+            Base.metadata.create_all(bind=local_engine)
         local_engine.dispose()
-        print("[BOOT] Local Fallback (shoelotskey.db) Structure: OK.")
+        print("[BOOT] Local Fallback (shoelotskey.db) Structure & Defaults: OK.")
     except Exception as e:
         print(f"[BOOT] LOCAL DB SYNC WARNING: {e}")
 
-    # 1. Base Schema Generation (Primary Engine)
+    # 1. Verify primary database connection and fallback to Local SQLite if Cloud Postgres is unreachable
     try:
-        print("[DATABASE] SUCCESS: Linked")
-        Base.metadata.create_all(bind=engine)
-    except Exception as e:
-        print(f"[BOOT] DATABASE ERROR: {e}")
-        return # Cannot continue safely
-    
-    # 0. Connection check for Defense
-    try:
-        with engine.connect() as conn:
+        with db_mod.engine.connect() as conn:
             conn.execute(text("SELECT 1"))
-        print(f"[DATABASE] SUCCESS: Linked to {DB_TYPE}")
+        print(f"[DATABASE] SUCCESS: Connected to Online PostgreSQL")
     except Exception as e:
-        print(f"[DATABASE] CRITICAL ERROR: Could not connect.")
-        print(f"           Tip: Check if your IP is whitelisted or if the DB is active.")
-        print(f"           Error Trace: {str(e)[:100]}...")
+        print(f"[DATABASE OFFLINE AUTO-SWITCH] Cloud Postgres unreachable ({str(e)[:80]}...). Switching directly to Local SQLite.")
+        if hasattr(db_mod, "switch_to_offline_sqlite"):
+            db_mod.switch_to_offline_sqlite()
+        else:
+            from sqlalchemy.orm import sessionmaker
+            db_mod.is_sqlite = True
+            db_mod.DATABASE_URL = LOCAL_SQLITE
+            db_mod.engine = create_engine(LOCAL_SQLITE, connect_args={"check_same_thread": False})
+            db_mod.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=db_mod.engine)
+    
+    engine = db_mod.engine
+    is_sqlite = db_mod.is_sqlite
+    SessionLocal = db_mod.SessionLocal
+    DATABASE_URL = db_mod.DATABASE_URL
+    DB_TYPE = "SQLite" if is_sqlite else "PostgreSQL"
 
-    # 1. Create Tables (Idempotent)
+    # 2. Schema Verification & Creation (Active Engine)
     Base.metadata.create_all(bind=engine)
+    print(f"[DATABASE] Operating in Mode: {'OFFLINE (Local SQLite)' if is_sqlite else 'ONLINE (Cloud PostgreSQL)'}")
     inspector = inspect(engine)
     existing_tables = set(inspector.get_table_names())
     
@@ -1719,9 +1729,19 @@ def login(request: LoginRequest, db: Session = Depends(get_db), http_request: Re
     
     try:
 
-        db_user = db.query(User).options(joinedload(User.role)).filter(
-            or_(User.username == request.username, User.email == request.username)
-        ).first()
+        try:
+            db_user = db.query(User).options(joinedload(User.role)).filter(
+                or_(User.username == request.username, User.email == request.username)
+            ).first()
+        except Exception as query_err:
+            print(f"[AUTH OFFLINE RESILIENCE] Primary query failed ({query_err}). Auto-switching to offline SQLite...")
+            import db.database as db_mod
+            db.close()
+            fallback_session_maker = db_mod.switch_to_offline_sqlite()
+            db = fallback_session_maker()
+            db_user = db.query(User).options(joinedload(User.role)).filter(
+                or_(User.username == request.username, User.email == request.username)
+            ).first()
         
         if not db_user:
             raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -1823,6 +1843,21 @@ def logout(db: Session = Depends(get_db), current_user: User = Depends(get_curre
     )
     print(f"[AUTH] Logout recorded for: {current_user.username}")
     return {"status": "success", "message": "Logout recorded"}
+
+@app.get("/api/auth/verify-token")
+@app.get("/api/me")
+def verify_token(current_user: User = Depends(get_current_user)):
+    """
+    OWASP A07 / A01: Validates active JWT session with backend on startup.
+    Ensures UI pages cannot be accessed by fabricated client storage without a valid server-recognized session.
+    """
+    return {
+        "status": "valid",
+        "user_id": current_user.user_id,
+        "username": current_user.username,
+        "role": current_user.role.role_name,
+        "email": current_user.email
+    }
 
 
 # ==========================================
@@ -2043,8 +2078,16 @@ def train_model(db: Session = Depends(get_db), current_user: User = Depends(requ
 
 @app.get("/api/users", response_model=List[UserSchema])
 def get_users(db: Session = Depends(get_db), current_user: User = Depends(require_role("owner"))):
-    """Fetch all users (Owner only - OWASP A01)."""
-    users = db.query(User).options(joinedload(User.role)).all()
+    """Fetch all users (Owner only - OWASP A01). Supports seamless offline SQLite failover."""
+    try:
+        users = db.query(User).options(joinedload(User.role)).all()
+    except Exception as e:
+        print(f"[USER MGT OFFLINE RESILIENCE] Query failed ({e}). Auto-switching to SQLite...")
+        import db.database as db_mod
+        db.close()
+        fallback_maker = db_mod.switch_to_offline_sqlite()
+        db = fallback_maker()
+        users = db.query(User).options(joinedload(User.role)).all()
     return users
 
 @app.post("/api/users", response_model=UserSchema)

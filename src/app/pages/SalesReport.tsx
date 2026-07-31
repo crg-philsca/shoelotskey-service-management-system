@@ -131,20 +131,21 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
       }
     });
 
-    return [
+    const allStats = [
       { name: 'Cash', value: counts.cash.count, amount: counts.cash.amount, color: '#9333ea' },
       { name: 'GCash', value: counts.gcash.count, amount: counts.gcash.amount, color: '#2563eb' },
       { name: 'Maya', value: counts.maya.count, amount: counts.maya.amount, color: '#16a34a' },
     ];
-  }, [totalSalesData]);
+    if (selectedPaymentMethod && selectedPaymentMethod !== 'all') {
+      return allStats.filter(p => p.name.toLowerCase() === selectedPaymentMethod.toLowerCase());
+    }
+    return allStats;
+  }, [totalSalesData, selectedPaymentMethod]);
 
   // Total Sales Amount (Controlled by Payment Filter)
   const totalSalesAmount = useMemo(() => {
-    if (selectedPaymentMethod === 'all') {
-      return paymentMethodStats.reduce((sum: number, item) => sum + item.amount, 0);
-    }
-    return paymentMethodStats.find(p => p.name.toLowerCase() === selectedPaymentMethod.toLowerCase())?.amount || 0;
-  }, [selectedPaymentMethod, paymentMethodStats]);
+    return paymentMethodStats.reduce((sum: number, item) => sum + item.amount, 0);
+  }, [paymentMethodStats]);
 
   // Total Orders: All filtered orders
   const totalOrdersCount = filteredOrdersByDate.length;
@@ -506,11 +507,13 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
             </div>
 
             {/* Simple legend below chart - matching Total Sales style */}
-            <div className="grid grid-cols-3 gap-x-4 gap-y-2 mt-4 justify-items-start max-w-lg mx-auto">
+            <div className="flex flex-wrap items-center justify-center gap-3 mt-4 max-w-lg mx-auto">
               {paymentMethodStats.map((item) => (
-                <div key={item.name} className="flex items-center gap-2 text-[10px] font-bold text-gray-600 uppercase tracking-widest">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
-                  <span>{item.name}</span>
+                <div key={item.name} className="flex items-center gap-1.5 text-[10px] font-bold text-gray-700 uppercase tracking-widest bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200 shadow-xs">
+                  <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+                  <span>{item.name}:</span>
+                  <span className="font-black text-gray-900">{'\u20B1'}{item.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span className="text-[9px] text-gray-500 font-semibold">({item.value} {item.value === 1 ? 'txn' : 'txns'})</span>
                 </div>
               ))}
             </div>

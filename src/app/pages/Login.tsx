@@ -9,7 +9,7 @@ import { Eye, EyeOff, User, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface LoginProps {
-  onLogin: (id: number, username: string, role: 'owner' | 'staff', token: string) => void;
+  onLogin: (id: number, username: string, role: 'owner' | 'staff', token: string, rememberMe?: boolean) => void;
 }
 
 
@@ -88,7 +88,7 @@ export default function Login({ onLogin }: LoginProps) {
         }
 
         // Pass to App-level state management with token (OWASP A01 Compliance)
-        onLogin(data.user_id, data.username, data.role as 'owner' | 'staff', data.access_token);
+        onLogin(data.user_id, data.username, data.role as 'owner' | 'staff', data.access_token, rememberMe);
 
       } else {
         // FAIL: Handle specific status codes (e.g., 401 Unauthorized, 403 Forbidden)
@@ -115,7 +115,7 @@ export default function Login({ onLogin }: LoginProps) {
               const passwordHash = await hashPassword(password);
               if (parsed.username === username && parsed._key === passwordHash) {
                   toast.success(`Offline login successful! Operating from local cache.`);
-                  onLogin(parsed.user_id, parsed.username, parsed.role, parsed.access_token || '');
+                  onLogin(parsed.user_id, parsed.username, parsed.role, parsed.access_token || '', true);
                   setIsLoading(false);
                   return; // Stop execution here to prevent network error toast
               }
