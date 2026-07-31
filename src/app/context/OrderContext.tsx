@@ -458,22 +458,26 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                 for (const task of queue) {
                     try {
                         const endpoint = task.type === 'ADD' ? `${API_BASE}/orders` : `${API_BASE}/orders/${parseInt(task.id)}`;
-                        const method = task.type === 'ADD' ? 'POST' : 'PUT';
+                        const method = task.type === 'ADD' ? 'POST' : task.type === 'DELETE' ? 'DELETE' : 'PUT';
                         
-                        if (task.type === 'UPDATE' && isNaN(parseInt(task.id))) {
-                             // Defer UPDATEs for temp IDs if they weren't linked just now
+                        if ((task.type === 'UPDATE' || task.type === 'DELETE') && isNaN(parseInt(task.id))) {
+                             // Defer for temp IDs if they weren't linked just now, or remove if temp ID delete
+                             if (task.type === 'DELETE') continue;
                              remainingQueue.push(task);
                              continue;
                         }
 
-                        const response = await fetch(endpoint, {
+                        const fetchOptions: any = {
                             method,
                             headers: { 
                                 'Content-Type': 'application/json',
                                 'Authorization': `Bearer ${user.token}`
-                            },
-                            body: JSON.stringify(task.payload)
-                        });
+                            }
+                        };
+                        if (task.type !== 'DELETE') {
+                            fetchOptions.body = JSON.stringify(task.payload);
+                        }
+                        const response = await fetch(endpoint, fetchOptions);
                         
                         if (response.ok) {
                             hasChanges = true;
@@ -681,18 +685,21 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
     };
     
     const deleteOrder = async (id: string) => {
-        // Optimistic Update
-        const oldOrders = [...orders];
+        // Optimistic Update: immediately remove from view
         setOrders((prev) => prev.filter(o => o.id !== id));
         
         try {
             const dbId = parseInt(id);
             if (!isNaN(dbId)) {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 3500);
                 const response = await fetch(`${API_BASE}/orders/${dbId}`, {
                     method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${user.token}` }
+                    headers: { 'Authorization': `Bearer ${user.token}` },
+                    signal: controller.signal
                 });
-                if (!response.ok) throw new Error('Delete failed');
+                clearTimeout(timeoutId);
+                if (!response.ok) throw new Error('Delete failed on server');
                 
                 addActivity({
                     user: user.username,
@@ -700,13 +707,29 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                     details: `Deleted order ID ${id}`,
                     type: 'order'
                 });
+            } else {
+                // If temporary offline order ID, remove any pending additions/updates from the offline sync queue
+                if (typeof window !== 'undefined') {
+                    const queueStr = localStorage.getItem('order_sync_queue');
+                    if (queueStr) {
+                        let queue: any[] = JSON.parse(queueStr);
+                        queue = queue.filter(t => t.id !== id && t.payload?.id !== id);
+                        localStorage.setItem('order_sync_queue', JSON.stringify(queue));
+                    }
+                }
             }
         } catch (err) {
-            console.error('[ERROR] OrderProvider: Delete failed.', err);
-            setOrders(oldOrders);
-            import('sonner').then(({ toast }) => {
-                toast.error('Failed to delete order. Restoring logic.');
-            });
+            console.warn('[WARN] OrderProvider: Delete API unreachable or offline. Queueing offline DELETE sync task.', err);
+            const dbId = parseInt(id);
+            if (!isNaN(dbId)) {
+                queueSyncTask({ type: 'DELETE', id });
+                addActivity({
+                    user: user.username,
+                    action: 'Delete Order',
+                    details: `Offline deletion queued for order ID ${id}`,
+                    type: 'order'
+                });
+            }
         }
     };
 

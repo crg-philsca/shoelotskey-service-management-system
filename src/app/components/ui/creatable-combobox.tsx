@@ -43,10 +43,20 @@ export function CreatableCombobox({
         setSearchValue("")
     }
 
-    // Check if the current value is one of the standard options (excluding "Other")
-    const isFixedValue = options.filter(opt => opt !== 'Other').some(opt => opt.toLowerCase() === value.toLowerCase());
+    // Check if the current value is one of the standard options
+    const isFixedValue = options.some(opt => opt.toLowerCase() === value.toLowerCase());
 
     const inputRef = React.useRef<HTMLInputElement>(null)
+
+    // Filter suggestions dynamically while typing, removing 'Other' completely from dropdown
+    const filteredOptions = React.useMemo(() => {
+        const query = searchValue.toLowerCase().trim();
+        return options.filter((option) => {
+            if (option === 'Other' || option.toLowerCase() === 'other') return false;
+            if (!query) return true;
+            return option.toLowerCase().includes(query);
+        });
+    }, [options, searchValue]);
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
@@ -57,21 +67,19 @@ export function CreatableCombobox({
                             ref={inputRef}
                             type="text"
                             value={searchValue || value || ""}
-                            readOnly={isFixedValue && !open}
+                            readOnly={isFixedValue && !open && value !== 'Other'}
                             onChange={(e) => {
                                 setSearchValue(e.target.value)
                                 onChange(e.target.value)
                                 if (!open) setOpen(true)
                             }}
                             onFocus={() => {
-                                // Just ensure it opens
                                 setOpen(true)
                             }}
                             onPointerDown={() => {
-                                // For mobile/touch/pointer devices, ensures it opens
                                 if (!open) setOpen(true)
                             }}
-                            placeholder={value === "" && !searchValue ? "Type custom value..." : placeholder}
+                            placeholder={value === "" && !searchValue ? "Type for custom" : placeholder}
                             className={cn(
                                 "w-full flex h-9 rounded-md border border-gray-200 bg-white px-3 py-1 text-xs shadow-sm transition-colors placeholder:text-gray-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-100 focus-visible:border-red-100 disabled:cursor-not-allowed disabled:opacity-50 pr-8",
                                 isFixedValue && !open ? "cursor-default" : "cursor-text"
@@ -112,7 +120,6 @@ export function CreatableCombobox({
                         e.preventDefault();
                         return;
                     }
-                    // Reset search value when closing
                     setSearchValue("")
                 }}
             >
@@ -133,42 +140,19 @@ export function CreatableCombobox({
                                 </div>
                             ) : (
                                 <div className="text-muted-foreground px-2 py-1 text-center">
-                                    <p>Find or type custom value</p>
+                                    <p>No results found</p>
                                 </div>
                             )}
                         </CommandEmpty>
                         <CommandGroup>
-                            {options.map((option) => (
+                            {filteredOptions.map((option) => (
                                 <CommandItem
                                     key={option}
                                     value={option}
                                     onSelect={() => {
-                                        if (option === 'Other') {
-                                            onChange("")
-                                            setSearchValue("")
-                                            // The onSelect would normally close the popover.
-                                            // We keep it open to allow immediate typing.
-                                            return
-                                        }
                                         onChange(option)
                                         setOpen(false)
                                         setSearchValue("")
-                                    }}
-                                    onPointerDown={(e) => {
-                                        if (option === 'Other') {
-                                            // Prevent the item click from stealing focus/closing
-                                            e.preventDefault()
-                                            e.stopPropagation()
-                                            onChange("")
-                                            setSearchValue("")
-                                            inputRef.current?.focus()
-                                        }
-                                    }}
-                                    onPointerUp={(e) => {
-                                        if (option === 'Other') {
-                                            e.preventDefault()
-                                            e.stopPropagation()
-                                        }
                                     }}
                                     className="text-xs"
                                 >
@@ -181,12 +165,9 @@ export function CreatableCombobox({
                                                 )}
                                             />
                                             <span className={cn(option === 'Other' && "font-semibold text-red-600")}>
-                                                {option === 'Other' ? 'Other (Type custom value...)' : option}
+                                                {option}
                                             </span>
                                         </div>
-                                        {option === 'Other' && (
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-pencil opacity-50"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /><path d="m15 5 4 4" /></svg>
-                                        )}
                                     </div>
                                 </CommandItem>
                             ))}

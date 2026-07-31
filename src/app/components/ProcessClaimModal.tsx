@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { JobOrder, PaymentMethod } from "@/app/types";
 import { CheckCircle2, User, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
+import { formatReferenceNo } from "@/app/lib/utils";
 
 interface ProcessClaimModalProps {
     order: JobOrder | null;
@@ -137,7 +138,7 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
     };
 
     const isPaymentValid = (remainingBalance <= 0 || amountReceived >= remainingBalance) &&
-        (!['gcash', 'maya'].includes(paymentMethod) || referenceNo.trim().length > 0) &&
+        (paymentMethod === 'gcash' ? referenceNo.replace(/\D/g, '').length === 13 : paymentMethod === 'maya' ? referenceNo.replace(/[^a-zA-Z0-9]/g, '').length === 12 : true) &&
         (!enableRefund || (refundAmount >= 0 && refundAmount <= totalAmount && (refundReason !== 'Custom Quality / Service Warranty Defect' || customRefundReason.trim().length > 0)));
 
     if (!order) return null;
@@ -243,9 +244,9 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
                                         <Label className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Reference Number <span className="text-red-500">*</span></Label>
                                         <Input
                                             value={referenceNo}
-                                            onChange={(e) => setReferenceNo(e.target.value)}
+                                            onChange={(e) => setReferenceNo(formatReferenceNo(e.target.value, paymentMethod))}
                                             className="h-9 text-[11px] font-mono font-bold bg-white border-gray-200 rounded-lg focus:ring-red-50 shadow-sm"
-                                            placeholder="Enter Transaction ID"
+                                            placeholder={paymentMethod === 'gcash' ? "xxxx-xxx-xxx-xxx" : "xxxx-xxxx-xxxx"}
                                         />
                                     </div>
                                 )}

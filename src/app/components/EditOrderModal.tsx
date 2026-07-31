@@ -212,16 +212,31 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
         }
     }, [order]);
 
-    const formatReferenceNo = (value: string) => {
-        const digits = value.replace(/\D/g, '').slice(0, 12);
-        let formatted = '';
-        for (let i = 0; i < digits.length; i++) {
-            formatted += digits[i];
-            if ((i === 2 || i === 5 || i === 8) && i !== digits.length - 1) {
-                formatted += '-';
+    const formatReferenceNo = (value: string, method?: string) => {
+        const targetMethod = method || formData?.paymentMethod;
+        if (targetMethod === 'gcash') {
+            const digits = value.replace(/\D/g, '').slice(0, 13);
+            let formatted = '';
+            for (let i = 0; i < digits.length; i++) {
+                formatted += digits[i];
+                if ((i === 3 || i === 6 || i === 9) && i !== digits.length - 1) {
+                    formatted += '-';
+                }
             }
+            return formatted;
         }
-        return formatted;
+        if (targetMethod === 'maya') {
+            const chars = value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 12);
+            let formatted = '';
+            for (let i = 0; i < chars.length; i++) {
+                formatted += chars[i];
+                if ((i === 3 || i === 7) && i !== chars.length - 1) {
+                    formatted += '-';
+                }
+            }
+            return formatted;
+        }
+        return value;
     };
 
     const { services } = useServices();
@@ -924,7 +939,7 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                     value={formData.referenceNo || ''}
                                     onChange={(e) => setFormData({ ...formData, referenceNo: formatReferenceNo(e.target.value) })}
                                     className={INPUT_STYLE}
-                                    placeholder="XXXX-XXXX-XXXX"
+                                    placeholder={formData.paymentMethod === 'gcash' ? "xxxx-xxx-xxx-xxx" : "xxxx-xxxx-xxxx"}
                                 />
                             </div>
                         )}
@@ -937,6 +952,19 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                     </Button>
                     <Button
                         onClick={() => {
+                            if (formData.paymentMethod === 'gcash') {
+                                const digits = (formData.referenceNo || '').replace(/\D/g, '');
+                                if (digits.length !== 13) {
+                                    toast.error('GCash reference number must be filled out and exactly 13 digits.');
+                                    return;
+                                }
+                            } else if (formData.paymentMethod === 'maya') {
+                                const clean = (formData.referenceNo || '').replace(/[^a-zA-Z0-9]/g, '');
+                                if (clean.length !== 12) {
+                                    toast.error('Maya reference number/ID must be filled out and exactly 12 alphanumeric characters.');
+                                    return;
+                                }
+                            }
                             const amountRec = formData.amountReceived || 0;
                             if (formData.status === 'claimed' && (formData.grandTotal - amountRec > 0.01)) {
                                 toast.error(`Cannot claim: Order has an outstanding balance of \u20b1${(formData.grandTotal - amountRec).toFixed(2)}. Please update payment to fully paid.`);

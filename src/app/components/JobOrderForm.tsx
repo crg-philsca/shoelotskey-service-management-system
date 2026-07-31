@@ -722,14 +722,42 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (!customerName || !contactNumber) {
-            toast.error('Please fill in customer information');
+        if (!customerName || !customerName.trim()) {
+            toast.error('Please enter customer name (required)');
             return;
         }
 
-        if (shoes.some(shoe => !shoe.baseService || shoe.baseService.length === 0)) {
-            toast.error('Please select base service for all shoes');
+        const contactDigits = contactNumber ? contactNumber.replace(/\D/g, '') : '';
+        if (contactDigits.length !== 11) {
+            toast.error('Contact number must be exactly 11 digits (e.g., 09xx-xxx-xxxx)');
             return;
+        }
+
+        const hasMissingShoeDetails = shoes.some(shoe => {
+            const b = shoe.brand === 'Other' ? shoe.otherBrand : shoe.brand;
+            const m = shoe.shoeModel === 'Other' ? shoe.otherModel : shoe.shoeModel;
+            const mat = shoe.shoeMaterial === 'Other' ? shoe.otherMaterial : shoe.shoeMaterial;
+            const noCondition = !shoe.condition || (!shoe.condition.scratches && !shoe.condition.ripsHoles && !shoe.condition.wornOut && !shoe.condition.soleSeparation && !shoe.condition.yellowing && !shoe.condition.deepStains && !shoe.condition.others.trim());
+            const noService = !shoe.baseService || shoe.baseService.length === 0;
+            return !b || !b.trim() || !m || !m.trim() || !mat || !mat.trim() || noCondition || noService;
+        });
+        if (hasMissingShoeDetails) {
+            toast.error('All shoe details (Brand, Model, Material, Condition, and Base Service) must be filled out for every item.');
+            return;
+        }
+
+        if (paymentMethod === 'gcash') {
+            const cleanRef = referenceNo ? referenceNo.replace(/\D/g, '') : '';
+            if (!cleanRef || cleanRef.length !== 13) {
+                toast.error('GCash reference number must be filled out and exactly 13 digits.');
+                return;
+            }
+        } else if (paymentMethod === 'maya') {
+            const cleanRef = referenceNo ? referenceNo.replace(/[^a-zA-Z0-9]/g, '') : '';
+            if (!cleanRef || cleanRef.length !== 12) {
+                toast.error('Maya reference number/ID must be filled out and exactly 12 alphanumeric characters.');
+                return;
+            }
         }
 
         if (shippingPreference === 'delivery') {
@@ -908,17 +936,29 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
     };
 
     const formatReferenceNo = (value: string) => {
-        // Remove non-digits, limit to 12 digits
-        const digits = value.replace(/\D/g, '').slice(0, 12);
-        // Format as xxxx-xxxx-xxxx
-        let formatted = '';
-        for (let i = 0; i < digits.length; i++) {
-            formatted += digits[i];
-            if ((i === 2 || i === 5 || i === 8) && i !== digits.length - 1) {
-                formatted += '-';
+        if (paymentMethod === 'gcash') {
+            const digits = value.replace(/\D/g, '').slice(0, 13);
+            let formatted = '';
+            for (let i = 0; i < digits.length; i++) {
+                formatted += digits[i];
+                if ((i === 3 || i === 6 || i === 9) && i !== digits.length - 1) {
+                    formatted += '-';
+                }
             }
+            return formatted;
         }
-        return formatted;
+        if (paymentMethod === 'maya') {
+            const chars = value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 12);
+            let formatted = '';
+            for (let i = 0; i < chars.length; i++) {
+                formatted += chars[i];
+                if ((i === 3 || i === 7) && i !== chars.length - 1) {
+                    formatted += '-';
+                }
+            }
+            return formatted;
+        }
+        return value;
     };
     const formatContactNumber = (value: string) => {
         // Keep digits only and cap at 11
@@ -1786,7 +1826,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                         id="refNo"
                                                         value={referenceNo}
                                                         onChange={(e: any) => setReferenceNo(formatReferenceNo(e.target.value))}
-                                                        placeholder="XXXX-XXXX-XXXX"
+                                                        placeholder={paymentMethod === 'gcash' ? "xxxx-xxx-xxx-xxx" : "xxxx-xxxx-xxxx"}
                                                         className="bg-white border-gray-100/50 h-9 rounded-xl text-xs shadow-sm transition-all hover:border-red-200"
                                                     />
                                                 </div>
