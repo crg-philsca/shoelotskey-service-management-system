@@ -5,6 +5,7 @@ from typing import Optional, Dict, Any
 from fastapi import HTTPException, Depends, Security
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
+from sqlalchemy import func, or_
 from models import User, Role
 from database import get_db
 
@@ -55,7 +56,34 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Security(securi
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Could not validate credentials")
 
-    user = db.query(User).filter(User.username == username).first()
+    target = str(username).strip().lower()
+    try:
+        user = db.query(User).filter(
+            or_(
+                func.lower(User.username) == target,
+                func.lower(User.email) == target
+            )
+        ).first()
+        if not user and str(username).isdigit():
+            user = db.query(User).filter(User.user_id == int(username)).first()
+    except Exception as query_err:
+        print(f"[AUTH OFFLINE RESILIENCE] get_current_user DB query failed ({query_err}). Auto-switching to offline SQLite...")
+        import db.database as db_mod
+        try:
+            db.close()
+        except:
+            pass
+        fallback_session_maker = db_mod.switch_to_offline_sqlite()
+        db = fallback_session_maker()
+        user = db.query(User).filter(
+            or_(
+                func.lower(User.username) == target,
+                func.lower(User.email) == target
+            )
+        ).first()
+        if not user and str(username).isdigit():
+            user = db.query(User).filter(User.user_id == int(username)).first()
+
     if user is None:
         raise HTTPException(status_code=401, detail="User not found in system")
     

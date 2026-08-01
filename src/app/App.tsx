@@ -126,14 +126,22 @@ export default function App() {
       return;
     }
 
-    // 2. Server-side session verification on startup
+    // 2. Server-side session verification on startup (with timeout resilience)
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4000);
+
     fetch(`${API_BASE}/auth/verify-token`, {
-      headers: { 'Authorization': `Bearer ${user.token}` }
+      headers: { 'Authorization': `Bearer ${user.token}` },
+      signal: controller.signal
     }).then(res => {
+      clearTimeout(timer);
       if (res.status === 401 || res.status === 403) {
         handleLogout('Your session has expired. Please log in again.');
+      } else if (res.status >= 500) {
+        console.warn(`[AUTH] Server exception (${res.status}) during startup verification. Maintaining valid local JWT session.`);
       }
     }).catch(() => {
+      clearTimeout(timer);
       console.warn('[AUTH] Server offline or network failure during startup token verification. Operating from local cache.');
     });
   }, []);

@@ -44,6 +44,25 @@ export default function Login({ onLogin }: LoginProps) {
     console.log('[AUTH_DEBUG] Login attempt initiated:', { username, timestamp: new Date().toISOString() });
     setIsLoading(true);
 
+    // Helper to attempt offline login from cache
+    const tryOfflineLogin = async () => {
+      const offlineAuth = localStorage.getItem('shoelotskey_offline_auth');
+      if (offlineAuth) {
+        try {
+          const parsed = JSON.parse(offlineAuth);
+          const passwordHash = await hashPassword(password);
+          if (parsed.username.toLowerCase() === username.trim().toLowerCase() && parsed._key === passwordHash) {
+            toast.success(`Offline login successful! Operating from local cache.`);
+            onLogin(parsed.user_id, parsed.username, parsed.role, parsed.access_token || '', rememberMe);
+            return true;
+          }
+        } catch (e) {
+          console.warn('[AUTH_OFFLINE] Error reading offline cache:', e);
+        }
+      }
+      return false;
+    };
+
     try {
       // 1. INPUT VALIDATION (Local Responsibility)
       if (!username.trim() || !password.trim()) {
@@ -54,13 +73,18 @@ export default function Login({ onLogin }: LoginProps) {
         return;
       }
 
-      // 2. BACKEND COMMUNICATION (I/O Operation)
+      // 2. BACKEND COMMUNICATION WITH TIMEOUT RESILIENCE
       console.log('[AUTH_DEBUG] Sending credentials to backend...');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      
       const response = await fetch(`${API_BASE}/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ username, password }),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
 
       // 3. RESPONSE HANDLING
       console.log('[AUTH_DEBUG] Backend responded with status:', response.status);
@@ -72,58 +96,55 @@ export default function Login({ onLogin }: LoginProps) {
 
         toast.success(`Welcome back, ${data.username}!`);
         
-        // --- OFFLINE FALLBACK LOGIC ---
-        // If Remember Me is checked, we encrypt and save an offline key so the user
-        // can authenticate seamlessly even if the internet drops and the backend goes unreachable.
-        if (rememberMe) {
-            try {
-                const passwordHash = await hashPassword(password);
-                localStorage.setItem('shoelotskey_offline_auth', JSON.stringify({
-                    ...data,
-                    _key: passwordHash
-                }));
-            } catch(e) {}
-        } else {
-            localStorage.removeItem('shoelotskey_offline_auth');
+        // Always securely cache hashed credentials for offline fallback & network loss during shifts
+        try {
+          const passwordHash = await hashPassword(password);
+          localStorage.setItem('shoelotskey_offline_auth', JSON.stringify({
+            ...data,
+            _key: passwordHash,
+            cachedAt: Date.now()
+          }));
+        } catch (e) {
+          console.warn('[AUTH] Failed to cache offline credentials:', e);
         }
 
         // Pass to App-level state management with token (OWASP A01 Compliance)
         onLogin(data.user_id, data.username, data.role as 'owner' | 'staff', data.access_token, rememberMe);
 
+      } else if (response.status >= 500) {
+        // BACKEND EXCEPTION OR API GATEWAY FAILURE (500, 502, 503, 504)
+        console.warn(`[AUTH] Backend exception (${response.status}). Attempting offline fallback...`);
+        const offlineSuccess = await tryOfflineLogin();
+        if (!offlineSuccess) {
+          toast.error(`System Server Error (${response.status}): Unable to connect to authentication server.`);
+        }
       } else {
         // FAIL: Handle specific status codes (e.g., 401 Unauthorized, 403 Forbidden)
-        const err = await response.json();
-        console.error('[AUTH_DEBUG] Auth Denied:', err.detail);
+        let errMsg = 'Invalid username or password';
+        try {
+          const errData = await response.json();
+          errMsg = errData.detail || errMsg;
+        } catch (e) {
+          console.warn('[AUTH] Non-JSON error response received.');
+        }
 
         if (response.status === 403) {
-          toast.error(`Security Block: ${err.detail}`, { duration: 6000 });
+          toast.error(`Security Block: ${errMsg}`, { duration: 6000 });
         } else {
-          toast.error(err.detail || 'Invalid username or password');
+          toast.error(errMsg);
         }
       }
     } catch (err) {
       /**
-       * CATCH: Network/Connection Exceptions
-       * Triggered if: Backend is offline, CORS issues, or DNS failure.
+       * CATCH: Network/Connection Exceptions or Timeout
+       * Triggered if: Backend is offline, CORS issues, DNS failure, or 6s timeout exceeded.
        */
-       
-      // --- OFFLINE FALLBACK INTERCEPTOR ---
-      const offlineAuth = localStorage.getItem('shoelotskey_offline_auth');
-      if (offlineAuth) {
-          try {
-              const parsed = JSON.parse(offlineAuth);
-              const passwordHash = await hashPassword(password);
-              if (parsed.username === username && parsed._key === passwordHash) {
-                  toast.success(`Offline login successful! Operating from local cache.`);
-                  onLogin(parsed.user_id, parsed.username, parsed.role, parsed.access_token || '', true);
-                  setIsLoading(false);
-                  return; // Stop execution here to prevent network error toast
-              }
-          } catch(e) {}
+      console.warn('[AUTH] Network or timeout exception during login. Attempting offline fallback...');
+      const offlineSuccess = await tryOfflineLogin();
+      if (!offlineSuccess) {
+        console.error('[AUTH_FATAL] Network/Server Exception:', err);
+        toast.error('Service Unreachable: The system server is currently offline or timed out.');
       }
-
-      console.error('[AUTH_FATAL] Network/Server Exception:', err);
-      toast.error('Service Unreachable: The system server is currently offline.');
     } finally {
       // Cleanup UI state regardless of outcome
       setIsLoading(false);

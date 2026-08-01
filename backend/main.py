@@ -1769,20 +1769,24 @@ def login(request: LoginRequest, db: Session = Depends(get_db), http_request: Re
 
         if pw_match:
             # SUCCESS: Reset attempts and unlock
-            db_user.failed_login_attempts = 0
-            db_user.locked_until = None
-            db.commit()
-            
+            try:
+                db_user.failed_login_attempts = 0
+                db_user.locked_until = None
+                db.commit()
+                
+                # Security Log: Success (OWASP A09)
+                log_audit(
+                    db=db, action="LOGIN", table_name="auth",
+                    record_id=db_user.user_id, user=db_user,
+                    new_values={"status": "success"},
+                    request=http_request, module="Authentication",
+                )
+            except Exception as auth_db_err:
+                print(f"[AUTH RESILIENCE] Non-fatal warning: Failed to save login audit/reset attempt counters: {auth_db_err}")
+                db.rollback()
+
             print(f"[AUTH] Granted: {db_user.username} authenticated.")
             access_token = create_access_token(data={"sub": db_user.username})
-            
-            # Security Log: Success (OWASP A09) — FIXED: removed request.headers (LoginRequest has no .headers)
-            log_audit(
-                db=db, action="LOGIN", table_name="auth",
-                record_id=db_user.user_id, user=db_user,
-                new_values={"status": "success"},
-                request=http_request, module="Authentication",
-            )
 
             return {
                 "user_id": db_user.user_id,

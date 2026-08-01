@@ -58,7 +58,9 @@ export default function ResetPassword() {
       if (response.ok) {
         toast.success('Password updated successfully!');
         setSubmitted(true);
-        setTimeout(() => navigate('/'), 2000);
+        setTimeout(() => {
+          window.location.replace('/');
+        }, 1800);
       } else {
         const err = await response.json();
         toast.error(err.detail || 'Failed to reset password');
@@ -146,7 +148,7 @@ export default function ResetPassword() {
                   <button
                     type="button"
                     className="text-sm text-black hover:text-red-600 hover:underline transition-colors font-normal cursor-pointer"
-                    onClick={() => navigate('/')}
+                    onClick={() => { window.location.href = '/'; }}
                   >
                     Back to Login
                   </button>

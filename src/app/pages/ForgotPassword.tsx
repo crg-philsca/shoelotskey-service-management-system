@@ -105,7 +105,7 @@ export default function ForgotPassword() {
               <button
                 type="button"
                 className="text-sm text-black hover:text-red-600 hover:underline transition-colors font-normal cursor-pointer"
-                onClick={() => navigate('/')}
+                onClick={() => { window.location.href = '/'; }}
               >
                 Back to Login
               </button>
