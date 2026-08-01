@@ -297,9 +297,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
       const isDateMatch = (d: Date) => {
         if (isNaN(d.getTime())) return false;
         const orderDateStr = dateFnsFormat(d, 'yyyy-MM-dd');
-        const diffHours = (now.getTime() - d.getTime()) / (1000 * 60 * 60);
-        // Ultra-inclusive: Today (local) OR within last 48 hours to bridge any server-db-browser timezone gaps
-        return orderDateStr === todayStr || diffHours < 48;
+        return orderDateStr === todayStr;
       };
 
       if (profitRange === 'Daily') {
@@ -371,7 +369,8 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
     const isWithinRange = (dateValue: Date) => {
       const diffDays = (now.getTime() - dateValue.getTime()) / (1000 * 60 * 60 * 24);
       if (profitRange === 'Daily') {
-        return diffDays <= 1.1;
+        if (isNaN(dateValue.getTime())) return false;
+        return dateFnsFormat(dateValue, 'yyyy-MM-dd') === dateFnsFormat(now, 'yyyy-MM-dd');
       }
       if (profitRange === 'Weekly') return diffDays < 7;
       if (profitRange === 'Monthly') return diffDays < 30;

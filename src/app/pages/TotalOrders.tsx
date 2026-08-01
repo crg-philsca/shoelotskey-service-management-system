@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, useRef, type ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useOrders } from '@/app/context/OrderContext';
 import {
@@ -21,6 +21,7 @@ import { Input } from '@/app/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu';
 import { useServices } from '@/app/context/ServiceContext';
+import OrderDetailModal from '@/app/components/OrderDetailModal';
 import type { JobOrder } from '@/app/types';
 
 type TotalOrdersProps = {
@@ -29,6 +30,7 @@ type TotalOrdersProps = {
 };
 
 function FormattedDateInput({ value, onChange, className, id }: { value: string; onChange: (val: string) => void; className?: string; id?: string }) {
+    const hiddenDateRef = useRef<HTMLInputElement>(null);
     const toDisplay = (iso: string) => {
         if (!iso) return '';
         const parts = iso.split('-');
@@ -71,15 +73,51 @@ function FormattedDateInput({ value, onChange, className, id }: { value: string;
         }
     };
 
+    const handlePickerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const isoVal = e.target.value;
+        if (isoVal) {
+            setLocalVal(toDisplay(isoVal));
+            onChange(isoVal);
+        }
+    };
+
+    const openPicker = () => {
+        if (hiddenDateRef.current) {
+            if (typeof hiddenDateRef.current.showPicker === 'function') {
+                hiddenDateRef.current.showPicker();
+            } else {
+                hiddenDateRef.current.click();
+            }
+        }
+    };
+
     return (
-        <Input
-            id={id}
-            type="text"
-            placeholder="MM/DD/YYYY"
-            value={localVal}
-            onChange={handleChange}
-            className={className}
-        />
+        <div className="relative w-full flex items-center">
+            <Input
+                id={id}
+                type="text"
+                placeholder="MM/DD/YYYY"
+                value={localVal}
+                onChange={handleChange}
+                className={`${className || ''} pr-8 text-left`}
+            />
+            <button
+                type="button"
+                onClick={openPicker}
+                title="Select date"
+                className="absolute right-2.5 text-gray-400 hover:text-red-600 transition-colors cursor-pointer p-0.5"
+            >
+                <CalendarIcon size={14} />
+            </button>
+            <input
+                ref={hiddenDateRef}
+                type="date"
+                value={value || ''}
+                onChange={handlePickerChange}
+                className="sr-only absolute pointer-events-none opacity-0"
+                tabIndex={-1}
+            />
+        </div>
     );
 }
 
@@ -105,10 +143,13 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
     const [endDate, setEndDate] = useState('');
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
+    const [selectedOrder, setSelectedOrder] = useState<JobOrder | null>(null);
     const itemsPerPage = 15;
 
-    const formatNumericDateTime = (value: string | number | Date) => {
+    const formatNumericDateTime = (value: string | number | Date | undefined) => {
+        if (!value) return '-';
         const d = new Date(value);
+        if (isNaN(d.getTime())) return '-';
         const mm = String(d.getMonth() + 1).padStart(2, '0');
         const dd = String(d.getDate()).padStart(2, '0');
         const yy = String(d.getFullYear()).slice(-2);
@@ -118,7 +159,7 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
     };
 
     const { services } = useServices();
-    const baseServices = services.filter((s) => s.category === 'base' && s.active);
+    const baseServices = (services || []).filter((s) => s?.category === 'base' && s?.active);
 
     useEffect(() => {
         if (!onSetHeaderActionRight) return;
@@ -159,11 +200,10 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
     const filteredOrders = useMemo(() => {
         const now = new Date();
         const isWithinRange = (createdAt: Date) => {
+            if (isNaN(createdAt.getTime())) return false;
             const diffDays = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
             if (profitRange === 'Daily') {
-                const startOfToday = new Date(now);
-                startOfToday.setHours(0, 0, 0, 0);
-                return createdAt >= startOfToday;
+                return createdAt.toLocaleDateString('en-CA') === now.toLocaleDateString('en-CA');
             }
             if (profitRange === 'Weekly') return diffDays < 7;
             if (profitRange === 'Monthly') return diffDays < 30;
@@ -172,10 +212,14 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
             return true;
         };
 
-        let filtered = orders.filter((order: JobOrder) => isWithinRange(new Date(order.createdAt)));
+        let filtered = (orders || []).filter((order: JobOrder) => order && isWithinRange(new Date(order.createdAt || 0)));
 
         if (filterService !== 'all') {
-            filtered = filtered.filter((order) => order.baseService.includes(filterService));
+            filtered = filtered.filter((order) => {
+                if (Array.isArray(order.baseService)) return order.baseService.some(s => String(s || '').toLowerCase().includes(filterService.toLowerCase()));
+                if (typeof order.baseService === 'string') return order.baseService.toLowerCase().includes(filterService.toLowerCase());
+                return false;
+            });
         }
 
         if (filterPriority !== 'all') {
@@ -184,28 +228,37 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
 
         if (startDate) {
             const start = new Date(startDate);
-            filtered = filtered.filter((order) => new Date(order.createdAt) >= start);
+            filtered = filtered.filter((order) => {
+                const d = new Date(order.createdAt || 0);
+                return !isNaN(d.getTime()) && d >= start;
+            });
         }
         if (endDate) {
             const end = new Date(endDate);
             end.setHours(23, 59, 59, 999);
-            filtered = filtered.filter((order) => new Date(order.createdAt) <= end);
+            filtered = filtered.filter((order) => {
+                const d = new Date(order.createdAt || 0);
+                return !isNaN(d.getTime()) && d <= end;
+            });
         }
 
         if (searchQuery) {
             const query = searchQuery.toLowerCase();
             filtered = filtered.filter((order) =>
-                order.customerName.toLowerCase().includes(query) || order.orderNumber.toLowerCase().includes(query)
+                String(order.customerName || '').toLowerCase().includes(query) ||
+                String(order.orderNumber || order.id || '').toLowerCase().includes(query)
             );
         }
 
         // Sort: Recently updated/created first, then by priority, then by Order Number descending
         filtered.sort((a, b) => {
-            const lastStatusTimeA = a.statusHistory?.length ? new Date(a.statusHistory[a.statusHistory.length - 1].timestamp).getTime() : 0;
-            const timeA = lastStatusTimeA || new Date(a.updatedAt || a.createdAt).getTime();
+            const lastStatusTimeA = (a.statusHistory && a.statusHistory.length > 0 && a.statusHistory[a.statusHistory.length - 1]?.timestamp)
+                ? new Date(a.statusHistory[a.statusHistory.length - 1].timestamp).getTime() : 0;
+            const timeA = lastStatusTimeA || (a.updatedAt ? new Date(a.updatedAt).getTime() : a.createdAt ? new Date(a.createdAt).getTime() : 0);
 
-            const lastStatusTimeB = b.statusHistory?.length ? new Date(b.statusHistory[b.statusHistory.length - 1].timestamp).getTime() : 0;
-            const timeB = lastStatusTimeB || new Date(b.updatedAt || b.createdAt).getTime();
+            const lastStatusTimeB = (b.statusHistory && b.statusHistory.length > 0 && b.statusHistory[b.statusHistory.length - 1]?.timestamp)
+                ? new Date(b.statusHistory[b.statusHistory.length - 1].timestamp).getTime() : 0;
+            const timeB = lastStatusTimeB || (b.updatedAt ? new Date(b.updatedAt).getTime() : b.createdAt ? new Date(b.createdAt).getTime() : 0);
 
             const validA = !isNaN(timeA) ? timeA : 0;
             const validB = !isNaN(timeB) ? timeB : 0;
@@ -218,7 +271,7 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
             const priorityB = priorityOrder[b.priorityLevel as keyof typeof priorityOrder] ?? 2;
             if (priorityA !== priorityB) return priorityA - priorityB;
 
-            return b.orderNumber.localeCompare(a.orderNumber);
+            return String(b.orderNumber || '').localeCompare(String(a.orderNumber || ''));
         });
 
         return filtered;
@@ -368,13 +421,13 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                                     </TableRow>
                                 ) : (
                                     paginatedOrders.map((order) => (
-                                        <TableRow key={order.id} className="hover:bg-gray-50">
-                                            <TableCell className="font-semibold text-gray-800">{order.orderNumber || order.id}</TableCell>
-                                            <TableCell className="font-medium text-gray-800">{order.customerName}</TableCell>
+                                        <TableRow key={order.id} onClick={() => setSelectedOrder(order)} className="hover:bg-red-50/30 cursor-pointer transition-colors">
+                                            <TableCell className="font-semibold text-gray-800">{order.orderNumber || order.id || '-'}</TableCell>
+                                            <TableCell className="font-medium text-gray-800">{order.customerName || 'Walk-In'}</TableCell>
                                             <TableCell className="text-sm text-gray-700">
                                                 {Array.isArray(order.baseService)
-                                                    ? order.baseService.map((s) => s.replace(' (with basic cleaning)', '')).join(', ')
-                                                    : String(order.baseService).replace(' (with basic cleaning)', '')}
+                                                    ? order.baseService.map((s) => String(s || '').replace(' (with basic cleaning)', '')).join(', ')
+                                                    : String(order.baseService || '-').replace(' (with basic cleaning)', '')}
                                             </TableCell>
                                             <TableCell className="text-sm text-gray-700">
                                                 {formatNumericDateTime(order.createdAt)}
@@ -384,13 +437,19 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                                                     ? 'Rush'
                                                     : order.priorityLevel === 'regular'
                                                         ? 'Regular'
-                                                        : order.priorityLevel}
+                                                        : (order.priorityLevel || 'Normal')}
                                             </TableCell>
                                             <TableCell className="text-sm font-semibold text-gray-800">
-                                                {order.paymentStatus === 'fully-paid' ? 'Fully Paid' : order.paymentStatus === 'downpayment' ? 'Downpayment' : order.paymentStatus.charAt(0).toUpperCase() + order.paymentStatus.slice(1)}
+                                                {order.paymentStatus === 'fully-paid'
+                                                    ? 'Fully Paid'
+                                                    : order.paymentStatus === 'downpayment'
+                                                        ? 'Downpayment'
+                                                        : order.paymentStatus
+                                                            ? order.paymentStatus.charAt(0).toUpperCase() + order.paymentStatus.slice(1)
+                                                            : 'Pending'}
                                             </TableCell>
                                             <TableCell className="text-right font-bold text-sm text-gray-900">
-                                                ₱{(order.grandTotal || 0).toLocaleString()}
+                                                ₱{(Number(order.grandTotal) || 0).toLocaleString()}
                                             </TableCell>
                                         </TableRow>
                                     ))
@@ -530,6 +589,12 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                     </div>
                 </DialogContent>
             </Dialog>
+
+            <OrderDetailModal
+                order={selectedOrder}
+                open={!!selectedOrder}
+                onOpenChange={(open) => !open && setSelectedOrder(null)}
+            />
         </div>
     );
 }

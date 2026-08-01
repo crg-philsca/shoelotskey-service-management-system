@@ -56,7 +56,7 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
       const diffHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
 
       if (dateRange === 'Daily') {
-        return orderDateStr === todayStr || diffHours < 48;
+        return orderDateStr === todayStr;
       }
       
       const diffDays = diffHours / 24;

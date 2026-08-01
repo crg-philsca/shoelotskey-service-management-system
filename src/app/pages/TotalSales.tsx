@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, useRef, type ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useOrders } from '@/app/context/OrderContext';
 import type { JobOrder } from '@/app/types';
@@ -25,6 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu';
 import { useServices } from '@/app/context/ServiceContext';
 import EditOrderModal from '@/app/components/EditOrderModal';
+import OrderDetailModal from '@/app/components/OrderDetailModal';
 import { toast } from 'sonner';
 
 type TotalSalesProps = {
@@ -33,6 +34,7 @@ type TotalSalesProps = {
 };
 
 function FormattedDateInput({ value, onChange, className, id }: { value: string; onChange: (val: string) => void; className?: string; id?: string }) {
+    const hiddenDateRef = useRef<HTMLInputElement>(null);
     const toDisplay = (iso: string) => {
         if (!iso) return '';
         const parts = iso.split('-');
@@ -75,15 +77,51 @@ function FormattedDateInput({ value, onChange, className, id }: { value: string;
         }
     };
 
+    const handlePickerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const isoVal = e.target.value;
+        if (isoVal) {
+            setLocalVal(toDisplay(isoVal));
+            onChange(isoVal);
+        }
+    };
+
+    const openPicker = () => {
+        if (hiddenDateRef.current) {
+            if (typeof hiddenDateRef.current.showPicker === 'function') {
+                hiddenDateRef.current.showPicker();
+            } else {
+                hiddenDateRef.current.click();
+            }
+        }
+    };
+
     return (
-        <Input
-            id={id}
-            type="text"
-            placeholder="MM/DD/YYYY"
-            value={localVal}
-            onChange={handleChange}
-            className={className}
-        />
+        <div className="relative w-full flex items-center">
+            <Input
+                id={id}
+                type="text"
+                placeholder="MM/DD/YYYY"
+                value={localVal}
+                onChange={handleChange}
+                className={`${className || ''} pr-8 text-left`}
+            />
+            <button
+                type="button"
+                onClick={openPicker}
+                title="Select date"
+                className="absolute right-2.5 text-gray-400 hover:text-red-600 transition-colors cursor-pointer p-0.5"
+            >
+                <CalendarIcon size={14} />
+            </button>
+            <input
+                ref={hiddenDateRef}
+                type="date"
+                value={value || ''}
+                onChange={handlePickerChange}
+                className="sr-only absolute pointer-events-none opacity-0"
+                tabIndex={-1}
+            />
+        </div>
     );
 }
 
@@ -100,6 +138,7 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
     const { orders, updateOrder, deleteOrder } = useOrders();
 
     const [selectedOrder, setSelectedOrder] = useState<JobOrder | null>(null);
+    const [viewingOrder, setViewingOrder] = useState<JobOrder | null>(null);
     const [isEditing, setIsEditing] = useState(false);
     const [orderToDelete, setOrderToDelete] = useState<JobOrder | null>(null);
 
@@ -115,8 +154,10 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 15;
 
-    const formatNumericDateTime = (value: string | number | Date) => {
+    const formatNumericDateTime = (value: string | number | Date | undefined) => {
+        if (!value) return '-';
         const d = new Date(value);
+        if (isNaN(d.getTime())) return '-';
         const mm = String(d.getMonth() + 1).padStart(2, '0');
         const dd = String(d.getDate()).padStart(2, '0');
         const yy = String(d.getFullYear()).slice(-2);
@@ -126,7 +167,7 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
     };
 
     const { services } = useServices();
-    const baseServices = services.filter((s) => s.category === 'base' && s.active);
+    const baseServices = (services || []).filter((s) => s?.category === 'base' && s?.active);
 
     useEffect(() => {
         if (!onSetHeaderActionRight) return;
@@ -167,11 +208,10 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
     const salesOrders = useMemo(() => {
         const now = new Date();
         const isWithinRange = (createdAt: Date) => {
+            if (isNaN(createdAt.getTime())) return false;
             const diffDays = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
             if (profitRange === 'Daily') {
-                const startOfToday = new Date(now);
-                startOfToday.setHours(0, 0, 0, 0);
-                return createdAt >= startOfToday;
+                return createdAt.toLocaleDateString('en-CA') === now.toLocaleDateString('en-CA');
             }
             if (profitRange === 'Weekly') return diffDays < 7;
             if (profitRange === 'Monthly') return diffDays < 30;
@@ -403,9 +443,9 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                                             .filter(Boolean);
 
                                         return (
-                                            <TableRow key={order.id} className="hover:bg-gray-50">
-                                                <TableCell className="font-semibold text-gray-800 whitespace-nowrap text-xs sm:text-sm">{order.orderNumber || order.id}</TableCell>
-                                                <TableCell className="text-sm text-gray-700 font-medium max-w-[150px] truncate" title={order.customerName}>{order.customerName}</TableCell>
+                                            <TableRow key={order.id} onClick={() => setViewingOrder(order)} className="hover:bg-red-50/30 cursor-pointer transition-colors">
+                                                <TableCell className="font-semibold text-gray-800 whitespace-nowrap text-xs sm:text-sm">{order.orderNumber || order.id || '-'}</TableCell>
+                                                <TableCell className="text-sm text-gray-700 font-medium max-w-[150px] truncate" title={order.customerName}>{order.customerName || 'Walk-In'}</TableCell>
                                                 <TableCell className="text-xs sm:text-sm text-gray-700 max-w-[200px] py-2.5">
                                                     <div className="flex flex-col gap-1">
                                                         {servicesList.length > 0 ? (
@@ -423,15 +463,15 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                                                     {formatNumericDateTime(orderDate)}
                                                 </TableCell>
                                                 <TableCell className="text-xs sm:text-sm font-semibold text-gray-800 uppercase whitespace-nowrap">
-                                                    {order.paymentMethod?.toUpperCase()}
+                                                    {(order.paymentMethod || '-').toUpperCase()}
                                                 </TableCell>
                                                 <TableCell className="text-sm whitespace-nowrap">
                                                     <span className={`px-2 py-0.5 rounded-md text-[11px] font-bold uppercase tracking-wider ${badgeClass}`}>
-                                                        {pStatus === 'fully-paid' ? 'Fully Paid' : pStatus === 'downpayment' ? 'Downpayment' : pStatus.charAt(0).toUpperCase() + pStatus.slice(1)}
+                                                        {pStatus === 'fully-paid' ? 'Fully Paid' : pStatus === 'downpayment' ? 'Downpayment' : pStatus ? pStatus.charAt(0).toUpperCase() + pStatus.slice(1) : 'Pending'}
                                                     </span>
                                                 </TableCell>
                                                 <TableCell className="text-right font-extrabold text-sm text-gray-900 whitespace-nowrap">
-                                                    ₱{(order.amountReceived || 0).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}
+                                                    ₱{(Number(order.amountReceived) || 0).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}
                                                 </TableCell>
                                                 <TableCell className="text-right font-bold text-sm text-gray-700 whitespace-nowrap">
                                                     ₱{Math.max(remainingBalance, 0).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}
@@ -441,7 +481,8 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                                                         <Button 
                                                             variant="ghost" 
                                                             className="h-7 w-7 p-0 rounded-lg border border-amber-500/80 text-amber-600 hover:bg-amber-50 transition-colors"
-                                                            onClick={() => {
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
                                                                 setSelectedOrder(order);
                                                                 setIsEditing(true);
                                                             }}
@@ -453,7 +494,10 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                                                             <Button 
                                                                 variant="ghost" 
                                                                 className="h-7 w-7 p-0 rounded-lg border border-red-500/80 text-red-600 hover:bg-red-50 transition-colors"
-                                                                onClick={() => setOrderToDelete(order)}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setOrderToDelete(order);
+                                                                }}
                                                                 title="Delete Order"
                                                             >
                                                                 <Trash2 size={13} strokeWidth={2.5} />
@@ -658,6 +702,12 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                     </div>
                 </DialogContent>
             </Dialog>
+
+            <OrderDetailModal
+                order={viewingOrder}
+                open={!!viewingOrder}
+                onOpenChange={(open) => !open && setViewingOrder(null)}
+            />
         </div>
     );
 }

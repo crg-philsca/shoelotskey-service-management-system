@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, useRef, type ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useExpenses } from '@/app/context/ExpenseContext';
 import { ArrowLeft, ChevronLeft, PlusCircle, Receipt, Calendar as CalendarIcon, ChevronRight, Filter, Search, ChevronDown, Wallet, Pencil, Trash2 } from 'lucide-react';
@@ -10,6 +10,8 @@ import { Input } from '@/app/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu';
 import AddExpenseModal from '@/app/components/AddExpenseModal';
+import ExpenseDetailModal from '@/app/components/ExpenseDetailModal';
+
 
 
 type ExpensesProps = {
@@ -18,6 +20,7 @@ type ExpensesProps = {
 };
 
 function FormattedDateInput({ value, onChange, className, id }: { value: string; onChange: (val: string) => void; className?: string; id?: string }) {
+    const hiddenDateRef = useRef<HTMLInputElement>(null);
     const toDisplay = (iso: string) => {
         if (!iso) return '';
         const parts = iso.split('-');
@@ -60,15 +63,51 @@ function FormattedDateInput({ value, onChange, className, id }: { value: string;
         }
     };
 
+    const handlePickerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const isoVal = e.target.value;
+        if (isoVal) {
+            setLocalVal(toDisplay(isoVal));
+            onChange(isoVal);
+        }
+    };
+
+    const openPicker = () => {
+        if (hiddenDateRef.current) {
+            if (typeof hiddenDateRef.current.showPicker === 'function') {
+                hiddenDateRef.current.showPicker();
+            } else {
+                hiddenDateRef.current.click();
+            }
+        }
+    };
+
     return (
-        <Input
-            id={id}
-            type="text"
-            placeholder="MM/DD/YYYY"
-            value={localVal}
-            onChange={handleChange}
-            className={className}
-        />
+        <div className="relative w-full flex items-center">
+            <Input
+                id={id}
+                type="text"
+                placeholder="MM/DD/YYYY"
+                value={localVal}
+                onChange={handleChange}
+                className={`${className || ''} pr-8 text-left`}
+            />
+            <button
+                type="button"
+                onClick={openPicker}
+                title="Select date"
+                className="absolute right-2.5 text-gray-400 hover:text-red-600 transition-colors cursor-pointer p-0.5"
+            >
+                <CalendarIcon size={14} />
+            </button>
+            <input
+                ref={hiddenDateRef}
+                type="date"
+                value={value || ''}
+                onChange={handlePickerChange}
+                className="sr-only absolute pointer-events-none opacity-0"
+                tabIndex={-1}
+            />
+        </div>
     );
 }
 
@@ -84,6 +123,7 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
     const location = useLocation();
     const { expenses, addExpense, updateExpense, removeExpense } = useExpenses();
     const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
+    const [viewingExpense, setViewingExpense] = useState<any | null>(null);
     const [expenseToEdit, setExpenseToEdit] = useState<any | null>(null);
     const [expenseToDelete, setExpenseToDelete] = useState<any | null>(null);
     const [profitRange, setProfitRange] = useState<'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Annually'>(() => {
@@ -154,9 +194,8 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
         const isWithinRange = (dateValue: Date) => {
             const diffDays = (now.getTime() - dateValue.getTime()) / (1000 * 60 * 60 * 24);
             if (profitRange === 'Daily') {
-                const startOfToday = new Date(now);
-                startOfToday.setHours(0, 0, 0, 0);
-                return dateValue >= startOfToday;
+                if (isNaN(dateValue.getTime())) return false;
+                return dateValue.toLocaleDateString('en-CA') === now.toLocaleDateString('en-CA');
             }
             if (profitRange === 'Weekly') return diffDays < 7;
             if (profitRange === 'Monthly') return diffDays < 30;
@@ -341,7 +380,7 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
                                     </TableRow>
                                 ) : (
                                     paginatedExpenses.map((expense) => (
-                                        <TableRow key={expense.id} className="hover:bg-gray-50">
+                                        <TableRow key={expense.id} onClick={() => setViewingExpense(expense)} className="hover:bg-red-50/30 cursor-pointer transition-colors">
                                             <TableCell className="font-medium text-gray-800">
                                                 {formatNumericDate(expense.date)}
                                             </TableCell>
@@ -364,7 +403,10 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
                                                     <Button 
                                                         variant="ghost" 
                                                         className="h-8 w-8 p-0 rounded-lg border border-amber-500 text-amber-600 hover:bg-amber-50 transition-colors"
-                                                        onClick={() => setExpenseToEdit(expense)}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setExpenseToEdit(expense);
+                                                        }}
                                                         title="Edit Expense"
                                                     >
                                                         <Pencil size={14} strokeWidth={2.5} />
@@ -373,7 +415,10 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
                                                         <Button 
                                                             variant="ghost" 
                                                             className="h-8 w-8 p-0 rounded-lg border border-red-500 text-red-600 hover:bg-red-50 transition-colors"
-                                                            onClick={() => setExpenseToDelete(expense)}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setExpenseToDelete(expense);
+                                                            }}
                                                             title="Delete Expense"
                                                         >
                                                             <Trash2 size={14} strokeWidth={2.5} />
@@ -556,7 +601,6 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
                         <Button type="button" variant="destructive" onClick={() => {
                             if (expenseToDelete) {
                                 removeExpense(expenseToDelete.id);
-                                // Optional custom toast via sonner if required later
                             }
                             setExpenseToDelete(null);
                         }} className="flex-1 bg-red-600 hover:bg-red-700 font-bold uppercase shadow-sm">
@@ -565,6 +609,14 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
                     </div>
                 </DialogContent>
             </Dialog>
+
+            <ExpenseDetailModal
+                expense={viewingExpense}
+                open={!!viewingExpense}
+                onOpenChange={(open) => !open && setViewingExpense(null)}
+                onEdit={(exp) => setExpenseToEdit(exp)}
+                user={user}
+            />
         </div>
     );
 }

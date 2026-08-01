@@ -67,13 +67,11 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave, us
                         isSuggested = true;
                     }
                     if (isSuggested && !suggested.some(s => s.itemId === inv.id)) {
-                        const isPackaged = inv.package_size && inv.package_size > 0;
-                        const displayUnit = isPackaged ? (inv.package_unit || inv.unit) : inv.unit;
                         suggested.push({
                             itemId: inv.id,
                             name: inv.name,
                             quantity: 0, // Recommended initial value of 0 mL without deducting inventory
-                            unit: displayUnit || 'mL',
+                            unit: inv.unit || 'mL', // Always use consumption unit (e.g. mL, grams), never packaging container unit (CAN, JUG)
                             staffMember: user?.username || 'Staff',
                             date: new Date().toLocaleDateString(),
                             time: new Date().toLocaleTimeString()
@@ -120,7 +118,7 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave, us
             return;
         }
 
-        const displayUnit = isPackaged ? (item.package_unit || item.unit) : item.unit;
+        const displayUnit = item.unit || 'mL';
 
         const updatedList: InventoryUsed[] = [...inventoryUsed, {
             itemId: item.id,
@@ -152,6 +150,7 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave, us
             return { 
                 ...i, 
                 quantity: newQty,
+                unit: itemObj?.unit || i.unit || 'mL',
                 staffMember: user?.username || i.staffMember || 'Staff',
                 date: new Date().toLocaleDateString(),
                 time: new Date().toLocaleTimeString()
@@ -164,17 +163,18 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave, us
     const handleQuickAdd = (itemId: number, addVal: number) => {
         const itemObj = inventoryData.find(i => i.id === itemId);
         const currentItem = inventoryUsed.find(i => i.itemId === itemId);
-        if (itemObj && currentItem && (currentItem.quantity + addVal) > itemObj.stock) {
+        if (addVal > 0 && itemObj && currentItem && (currentItem.quantity + addVal) > itemObj.stock) {
             toast.error('Insufficient stock available.');
             return;
         }
         const updatedList = inventoryUsed.map(i => {
             if (i.itemId !== itemId) return i;
-            const newQty = parseFloat((i.quantity + addVal).toFixed(2));
+            const newQty = Math.max(0, parseFloat((i.quantity + addVal).toFixed(2)));
             setQuantityInputs(pv => ({ ...pv, [itemId]: String(newQty) }));
             return { 
                 ...i, 
                 quantity: newQty,
+                unit: itemObj?.unit || i.unit || 'mL',
                 staffMember: user?.username || i.staffMember || 'Staff',
                 date: new Date().toLocaleDateString(),
                 time: new Date().toLocaleTimeString()
@@ -277,37 +277,37 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave, us
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[480px] p-0 overflow-hidden rounded-3xl border-none shadow-2xl">
-                <DialogHeader className="bg-emerald-600 px-6 py-8 text-white text-center">
-                    <div className="mx-auto w-12 h-12 bg-white/20 rounded-full flex items-center justify-center mb-4">
-                        <Package size={24} className="text-white" />
+            <DialogContent className="sm:max-w-[540px] max-h-[85vh] p-0 flex flex-col overflow-hidden rounded-3xl border-none shadow-2xl bg-white">
+                <DialogHeader className="shrink-0 bg-emerald-600 px-6 py-5 text-white text-center">
+                    <div className="mx-auto w-10 h-10 bg-white/20 rounded-full flex items-center justify-center mb-2">
+                        <Package size={20} className="text-white" />
                     </div>
-                    <DialogTitle className="text-lg font-black uppercase tracking-widest">
+                    <DialogTitle className="text-base font-black uppercase tracking-widest">
                         Update Inventory
                     </DialogTitle>
-                    <p className="text-emerald-100 text-[11px] mt-1 font-bold uppercase tracking-wide">
+                    <p className="text-emerald-100 text-[11px] font-bold uppercase tracking-wide">
                         Order #{order.orderNumber} • {order.customerName}
                     </p>
                 </DialogHeader>
 
-                <div className="p-6 space-y-6">
+                <div className="flex-1 overflow-y-auto p-5 space-y-5 custom-scrollbar">
                     {isApplied ? (
-                        <div className="bg-amber-50/70 border border-amber-100 rounded-2xl p-4 flex gap-3 items-start">
-                            <CheckCircle2 size={18} className="text-amber-600 mt-0.5 flex-shrink-0" />
+                        <div className="bg-amber-50/70 border border-amber-100 rounded-2xl p-3.5 flex gap-3 items-start">
+                            <CheckCircle2 size={16} className="text-amber-600 mt-0.5 shrink-0" />
                             <p className="text-xs font-medium text-amber-900 leading-relaxed">
                                 <strong>Notice:</strong> Inventory was already deducted for this order. Changes here will immediately adjust current stock balances.
                             </p>
                         </div>
                     ) : (
-                        <div className="bg-emerald-50/70 border border-emerald-100 rounded-2xl p-4 flex gap-3 items-start">
-                            <Info size={18} className="text-emerald-600 mt-0.5 flex-shrink-0" />
+                        <div className="bg-emerald-50/70 border border-emerald-100 rounded-2xl p-3.5 flex gap-3 items-start">
+                            <Info size={16} className="text-emerald-600 mt-0.5 shrink-0" />
                             <p className="text-xs font-medium text-emerald-900 leading-relaxed">
                                 <strong>Record Materials:</strong> Gradually record materials during service. Changes are saved immediately without deducting inventory until order claiming.
                             </p>
                         </div>
                     )}
 
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                         <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest block">
                             Add Material / Supply
                         </label>
@@ -333,7 +333,7 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave, us
                                 type="button" 
                                 onClick={() => handleAddItem(selectedItem)}
                                 disabled={!selectedItem}
-                                className="bg-emerald-600 hover:bg-emerald-700 h-11 w-11 p-0 rounded-xl shadow-lg shadow-emerald-100"
+                                className="bg-emerald-600 hover:bg-emerald-700 h-11 w-11 p-0 rounded-xl shadow-lg shadow-emerald-100 shrink-0"
                             >
                                 <Plus className="h-5 w-5" />
                             </Button>
@@ -349,90 +349,118 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave, us
                                 Total: {totalUsage.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })} units
                             </span>
                         </div>
-                        <p className="text-[10px] text-amber-600 font-semibold bg-amber-50 border border-amber-100 rounded-lg px-3 py-1.5 mb-2">
-                            ℹ️ Enter quantities in <strong>consumption units</strong> (e.g. mL, grams) or click quick action buttons.
+                        <p className="text-[11px] text-amber-700 font-medium bg-amber-50/80 border border-amber-200/60 rounded-xl px-3.5 py-2 leading-snug">
+                            💡 <strong>Tip:</strong> Click any quantity box to type exact usage directly, or use quick adjustment buttons below each item. All units are in <strong>consumption measurement</strong> (e.g., mL, grams).
                         </p>
-                        <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
-                            {(inventoryUsed || []).map((item) => (
-                                <div key={item.itemId} className="p-3 bg-gray-50 rounded-2xl border border-gray-100 group hover:border-emerald-200 transition-all space-y-2">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <div className="h-9 w-9 rounded-xl bg-white flex items-center justify-center text-emerald-600 shadow-sm border border-gray-100 group-hover:scale-110 transition-transform">
-                                                <Package size={18} />
+                        <div className="space-y-2.5">
+                            {(inventoryUsed || []).map((item) => {
+                                const invObj = inventoryData.find(i => i.id === item.itemId);
+                                const rawUnit = invObj?.unit || item.unit || 'mL';
+                                const actualUnit = (rawUnit.toUpperCase() === 'CAN' || rawUnit.toUpperCase() === 'JUG' || rawUnit.toUpperCase() === 'BOTTLE' || rawUnit.toUpperCase() === 'CANS' || rawUnit.toUpperCase() === 'JUGS') ? (invObj?.unit !== rawUnit ? (invObj?.unit || 'mL') : 'mL') : rawUnit;
+
+                                return (
+                                    <div key={item.itemId} className="p-3.5 bg-gray-50/80 rounded-2xl border border-gray-100 group hover:border-emerald-200 hover:bg-white transition-all shadow-2xs space-y-2.5">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <div className="h-10 w-10 shrink-0 rounded-xl bg-white flex items-center justify-center text-emerald-600 shadow-xs border border-gray-100 group-hover:scale-105 transition-transform">
+                                                    <Package size={18} />
+                                                </div>
+                                                <div className="min-w-0 truncate">
+                                                    <p className="text-sm font-black text-gray-900 truncate">{item.name}</p>
+                                                    <p className="text-[10px] text-emerald-700 font-extrabold uppercase tracking-wider">{actualUnit}</p>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <p className="text-sm font-black text-gray-900">{item.name}</p>
-                                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{item.unit}</p>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <div className="flex items-center gap-1.5 bg-white rounded-xl border border-gray-100 p-1 shadow-sm">
-                                                <button 
-                                                    onClick={() => handleUpdateQty(item.itemId, -1)}
-                                                    className="h-7 w-7 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                                                >
-                                                    <Minus size={13} />
-                                                </button>
-                                                <input 
-                                                    type="text"
-                                                    inputMode="decimal"
-                                                    value={quantityInputs[item.itemId] ?? String(item.quantity)}
-                                                    onChange={(e) => {
-                                                        const raw = e.target.value;
-                                                        if (raw === '' || /^[0-9]*\.?[0-9]*$/.test(raw)) {
-                                                            setQuantityInputs(prev => ({ ...prev, [item.itemId]: raw }));
-                                                            const parsed = parseFloat(raw);
-                                                            if (!isNaN(parsed)) {
-                                                                const updated = inventoryUsed.map(i => 
-                                                                    i.itemId === item.itemId ? { ...i, quantity: parsed, staffMember: user?.username || i.staffMember || 'Staff', date: new Date().toLocaleDateString(), time: new Date().toLocaleTimeString() } : i
-                                                                );
-                                                                setInventoryUsed(updated);
-                                                                saveImmediately(updated);
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                <div className="flex items-center gap-1 bg-white rounded-xl border border-gray-200/80 p-1 shadow-2xs">
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => handleUpdateQty(item.itemId, -1)}
+                                                        className="h-7 w-7 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                                        title="Subtract 1 unit"
+                                                    >
+                                                        <Minus size={13} />
+                                                    </button>
+                                                    <input 
+                                                        type="text"
+                                                        inputMode="decimal"
+                                                        value={quantityInputs[item.itemId] ?? String(item.quantity)}
+                                                        onChange={(e) => {
+                                                            const raw = e.target.value;
+                                                            if (raw === '' || /^[0-9]*\.?[0-9]*$/.test(raw)) {
+                                                                setQuantityInputs(prev => ({ ...prev, [item.itemId]: raw }));
+                                                                const parsed = parseFloat(raw);
+                                                                if (!isNaN(parsed)) {
+                                                                    const updated = inventoryUsed.map(i => 
+                                                                        i.itemId === item.itemId ? { ...i, quantity: parsed, unit: actualUnit, staffMember: user?.username || i.staffMember || 'Staff', date: new Date().toLocaleDateString(), time: new Date().toLocaleTimeString() } : i
+                                                                    );
+                                                                    setInventoryUsed(updated);
+                                                                    saveImmediately(updated);
+                                                                }
                                                             }
-                                                        }
-                                                    }}
-                                                    onBlur={() => {
-                                                        const parsed = parseFloat(quantityInputs[item.itemId] ?? '') || 0;
-                                                        setQuantityInputs(prev => ({ ...prev, [item.itemId]: String(parsed) }));
-                                                        const updated = inventoryUsed.map(i => 
-                                                            i.itemId === item.itemId ? { ...i, quantity: parsed, staffMember: user?.username || i.staffMember || 'Staff', date: new Date().toLocaleDateString(), time: new Date().toLocaleTimeString() } : i
-                                                        );
-                                                        setInventoryUsed(updated);
-                                                        saveImmediately(updated);
-                                                    }}
-                                                    className="text-xs font-black w-[52px] text-center bg-transparent border-none focus:ring-0 p-0"
-                                                />
+                                                        }}
+                                                        onFocus={(e) => e.target.select()}
+                                                        onBlur={() => {
+                                                            const parsed = Math.max(0, parseFloat(quantityInputs[item.itemId] ?? '') || 0);
+                                                            setQuantityInputs(prev => ({ ...prev, [item.itemId]: String(parsed) }));
+                                                            const updated = inventoryUsed.map(i => 
+                                                                i.itemId === item.itemId ? { ...i, quantity: parsed, unit: actualUnit, staffMember: user?.username || i.staffMember || 'Staff', date: new Date().toLocaleDateString(), time: new Date().toLocaleTimeString() } : i
+                                                            );
+                                                            setInventoryUsed(updated);
+                                                            saveImmediately(updated);
+                                                        }}
+                                                        title="Click to type exact usage"
+                                                        className="w-14 h-7 text-xs font-black text-center bg-emerald-50/40 hover:bg-white border border-emerald-200/80 rounded-md text-gray-900 focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none transition-all px-1 shadow-inner"
+                                                    />
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => handleUpdateQty(item.itemId, 1)}
+                                                        className="h-7 w-7 flex items-center justify-center text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
+                                                        title="Add 1 unit"
+                                                    >
+                                                        <Plus size={13} />
+                                                    </button>
+                                                </div>
                                                 <button 
-                                                    onClick={() => handleUpdateQty(item.itemId, 1)}
-                                                    className="h-7 w-7 flex items-center justify-center text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
+                                                    type="button"
+                                                    onClick={() => handleRemoveItem(item.itemId)}
+                                                    className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                                    title="Remove item completely"
                                                 >
-                                                    <Plus size={13} />
+                                                    <Trash2 size={16} />
                                                 </button>
                                             </div>
-                                            <button 
-                                                onClick={() => handleRemoveItem(item.itemId)}
-                                                className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                        </div>
+                                        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-gray-200/60">
+                                            <button
+                                                type="button"
+                                                onClick={() => handleUpdateQty(item.itemId, -item.quantity)}
+                                                disabled={item.quantity === 0}
+                                                className="px-2 py-0.5 bg-white hover:bg-red-50 text-gray-500 hover:text-red-600 border border-gray-200 hover:border-red-200 rounded-md text-[10px] font-extrabold tracking-wide transition-all disabled:opacity-40 disabled:pointer-events-none"
                                             >
-                                                <Trash2 size={16} />
+                                                Reset to 0
                                             </button>
+                                            <div className="flex items-center gap-1">
+                                                <span className="text-[9px] font-black uppercase tracking-wider text-gray-400 mr-1">Adjust:</span>
+                                                {[-10, -5, 5, 10, 25, 50].map((val) => (
+                                                    <button
+                                                        key={val}
+                                                        type="button"
+                                                        onClick={() => handleQuickAdd(item.itemId, val)}
+                                                        disabled={val < 0 && item.quantity === 0}
+                                                        className={`px-2 py-0.5 rounded-md text-[10px] font-black shadow-2xs transition-all border disabled:opacity-40 disabled:pointer-events-none ${
+                                                            val < 0 
+                                                                ? 'bg-white hover:bg-red-50/80 border-gray-200 text-red-600' 
+                                                                : 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200 text-emerald-700'
+                                                        }`}
+                                                    >
+                                                        {val > 0 ? `+${val}` : val}
+                                                    </button>
+                                                ))}
+                                            </div>
                                         </div>
                                     </div>
-                                    {/* [REQUIREMENT 2] Quick Quantity Buttons (+10, +20, +50, +100) */}
-                                    <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-gray-100/80">
-                                        <span className="text-[9px] font-extrabold uppercase tracking-wider text-gray-400 mr-1">Quick Add:</span>
-                                        {[10, 20, 50, 100].map((val) => (
-                                            <button
-                                                key={val}
-                                                type="button"
-                                                onClick={() => handleQuickAdd(item.itemId, val)}
-                                                className="px-2 py-0.5 bg-white border border-emerald-100 hover:bg-emerald-100 text-emerald-700 rounded-md text-[10px] font-black shadow-2xs transition-all"
-                                            >
-                                                +{val}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                             {inventoryUsed.length === 0 && (
                                 <div className="text-center py-8 border-2 border-dashed border-gray-100 rounded-2xl">
                                     <Package size={32} className="text-gray-200 mx-auto mb-2" />
@@ -443,17 +471,17 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave, us
                     </div>
                 </div>
 
-                <DialogFooter className="bg-gray-50/50 p-6 border-t border-gray-100 flex gap-3 sm:justify-center">
+                <DialogFooter className="shrink-0 bg-gray-50 p-5 border-t border-gray-100 flex gap-3 sm:justify-center">
                     <Button 
                         variant="ghost" 
                         onClick={() => onOpenChange(false)} 
-                        className="flex-1 h-12 rounded-2xl text-[11px] font-black uppercase tracking-widest text-gray-500 bg-white border border-gray-100 hover:bg-gray-100"
+                        className="flex-1 h-11 rounded-xl text-[11px] font-black uppercase tracking-widest text-gray-500 bg-white border border-gray-200 hover:bg-gray-100"
                     >
                         Cancel
                     </Button>
                     <Button 
                         onClick={handleSaveAndClose}
-                        className="flex-1 h-12 rounded-2xl text-[11px] font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700 text-white shadow-xl shadow-emerald-100 active:scale-95 transition-all"
+                        className="flex-1 h-11 rounded-xl text-[11px] font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-100 active:scale-95 transition-all"
                     >
                         {isApplied ? 'Save & Adjust Stock' : 'Save Usage Record'}
                     </Button>
