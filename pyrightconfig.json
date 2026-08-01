@@ -6,6 +6,15 @@
     "backend/db",
     "venv/Lib/site-packages"
   ],
+  "exclude": [
+    "**/__pyrefly_virtual__/**",
+    "**/inmemory/**",
+    "**/venv/**",
+    "**/brain/**",
+    "**/tmp/**",
+    "**/scratch/**",
+    "c:/__pyrefly_virtual__/**"
+  ],
   "reportMissingImports": "none",
   "reportMissingModuleSource": "none"
 }

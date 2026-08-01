@@ -6,11 +6,11 @@ Pooling is optimized for multi-user access (10 base connections + 20 overflow).
 """
 
 import os
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
-from dotenv import load_dotenv
+from sqlalchemy import create_engine, text, inspect as sql_inspect # type: ignore # pyre-ignore
+from sqlalchemy.orm import sessionmaker # type: ignore # pyre-ignore
+from dotenv import load_dotenv # type: ignore # pyre-ignore
 from pathlib import Path
-import bcrypt as _native_bcrypt
+import bcrypt as _native_bcrypt # type: ignore # pyre-ignore
 import urllib.parse
 
 def _hash_pw(password: str) -> str:
@@ -105,8 +105,7 @@ def ensure_sqlite_schema_and_defaults(target_engine):
     Prevents Internal Server Errors (500) during offline login or offline user management.
     """
     try:
-        from models import Base, User, Role
-        from sqlalchemy import inspect as sql_inspect, text
+        from models import Base, User, Role # type: ignore # pyre-ignore # pyrefly: ignore # pyrefly-ignore
         
         # 1. Create any missing tables in SQLite
         Base.metadata.create_all(bind=target_engine)
@@ -127,7 +126,6 @@ def ensure_sqlite_schema_and_defaults(target_engine):
                                 pass
                                 
         # 3. Ensure default Roles and Users exist so offline login and viewing users never fail
-        from sqlalchemy.orm import sessionmaker
         SubSession = sessionmaker(bind=target_engine)
         with SubSession() as ldb:
             if ldb.query(Role).count() == 0:

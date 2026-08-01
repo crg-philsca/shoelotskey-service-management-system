@@ -38,8 +38,13 @@ hard_reset_db.py
 recreate_db.py
 seed_now.py
 tmp_rebuild.txt
-
 # IDE / System
 .vscode/
 Thumbs.db
 .DS_Store
+
+# Temporary & AI Log Directories
+brain/
+scratch/
+tmp/
+.gemini/

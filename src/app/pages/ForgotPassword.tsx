@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
@@ -11,6 +12,7 @@ const API_BASE = (typeof window !== 'undefined' && (window.location.hostname ===
   : '/api';
 
 export default function ForgotPassword() {
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
@@ -103,7 +105,7 @@ export default function ForgotPassword() {
               <button
                 type="button"
                 className="text-sm text-black hover:text-red-600 hover:underline transition-colors font-normal cursor-pointer"
-                onClick={() => { window.location.href = '/'; }}
+                onClick={() => { navigate('/login', { replace: true }); }}
               >
                 Back to Login
               </button>

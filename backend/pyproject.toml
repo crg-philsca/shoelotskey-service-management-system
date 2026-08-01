@@ -1,0 +1,23 @@
+[tool.pyrefly]
+import_root = "."
+import_roots = [".", "db", "../venv/Lib/site-packages"]
+search_paths = [
+    ".",
+    "db",
+    "../venv/Lib/site-packages",
+    "c:/Users/charm/Desktop/Shoelotskey Service Management System/backend",
+    "c:/Users/charm/Desktop/Shoelotskey Service Management System/venv/Lib/site-packages"
+]
+ignore_missing_imports = true
+exclude = [
+    "**/__pyrefly_virtual__/**",
+    "**/inmemory/**",
+    "**/*__pyrefly_virtual__*/**"
+]
+
+[tool.pyre]
+source_directories = [".", "db"]
+search_path = [
+    "../venv/Lib/site-packages",
+    "."
+]

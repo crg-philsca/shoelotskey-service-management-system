@@ -128,6 +128,10 @@ export default function Login({ onLogin }: LoginProps) {
           console.warn('[AUTH] Non-JSON error response received.');
         }
 
+        if (response.status === 403 || response.status === 401) {
+          localStorage.removeItem('shoelotskey_offline_auth');
+        }
+
         if (response.status === 403) {
           toast.error(`Security Block: ${errMsg}`, { duration: 6000 });
         } else {

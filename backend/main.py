@@ -1746,6 +1746,11 @@ def login(request: LoginRequest, db: Session = Depends(get_db), http_request: Re
         if not db_user:
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
+        # 0. CHECK ACTIVE STATUS (Block Deactivated Users)
+        if not db_user.is_active:
+            print(f"[AUTH] Denied: Account '{request.username}' is inactive/deactivated.")
+            raise HTTPException(status_code=403, detail="Account is deactivated. Please contact an administrator.")
+
         # 1. CHECK LOCK STATUS
         if db_user.locked_until and db_user.locked_until > datetime.utcnow():
             remaining = (db_user.locked_until - datetime.utcnow()).total_seconds() / 60
@@ -1897,7 +1902,7 @@ def send_reset_email(user_email, reset_link):
                     <img src="{logo_url}" alt="Shoelotskey Logo" style="height: 100px; width: auto;" />
                 </div>
                 <h3 style="color: #e11d48; text-align: center; margin-top: 0;">Password Reset Request</h3>
-                <p>We received a request to reset your password for your <strong>Shoelotskey</strong> account.</p>
+                <p>We received a request to reset your password for your Shoelotskey account.</p>
                 <p>Click the button below to set a new password. This link is unique and will expire in 1 hour.</p>
                 <div style="text-align: center; margin: 30px 0;">
                     <a href="{reset_link}" style="background-color: #e11d48; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">Reset My Password</a>

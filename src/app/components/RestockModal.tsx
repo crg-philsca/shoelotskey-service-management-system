@@ -257,18 +257,18 @@ export default function RestockModal({ open, onOpenChange, user }: RestockModalP
                         />
                     </div>
 
-                    <DialogFooter className="pt-4 border-t border-gray-100 flex items-center justify-end gap-2">
+                    <DialogFooter className="pt-4 border-t border-gray-100 flex flex-row gap-3 sm:justify-center sm:space-x-0 w-full">
                         <Button
                             type="button"
                             variant="outline"
                             onClick={() => onOpenChange(false)}
-                            className="h-11 px-5 rounded-xl font-bold text-xs text-gray-600 uppercase border-gray-200 hover:bg-gray-100 tracking-wider"
+                            className="flex-1 h-11 bg-gray-100 border-gray-200 text-gray-700 rounded-xl font-black text-xs uppercase hover:bg-gray-200 tracking-wider flex items-center justify-center"
                         >
                             Cancel
                         </Button>
                         <Button
                             type="submit"
-                            className="h-11 px-6 rounded-xl font-black text-xs text-white uppercase bg-red-600 hover:bg-red-500 shadow-lg shadow-red-600/25 transition-all tracking-wider flex items-center gap-2"
+                            className="flex-1 h-11 rounded-xl font-black text-xs text-white uppercase bg-red-600 hover:bg-red-700 shadow-lg shadow-red-600/25 transition-all tracking-wider flex items-center justify-center gap-2"
                         >
                             <CheckCircle2 className="w-4 h-4" />
                             <span>Confirm Restock</span>

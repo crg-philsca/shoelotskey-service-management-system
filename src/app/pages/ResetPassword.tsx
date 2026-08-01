@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
@@ -18,6 +18,7 @@ export default function ResetPassword() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   const token = searchParams.get('token'); // Get token from URL params
   const [loading, setLoading] = useState(false);
@@ -83,7 +84,7 @@ export default function ResetPassword() {
         toast.success('Password updated successfully!');
         setSubmitted(true);
         setTimeout(() => {
-          window.location.replace('/');
+          navigate('/login', { replace: true });
         }, 1800);
       } else {
         const err = await response.json();
@@ -126,14 +127,14 @@ export default function ResetPassword() {
                 <div className="space-y-2">
                   <Button
                     type="button"
-                    onClick={() => { window.location.href = '/forgot-password'; }}
+                    onClick={() => { navigate('/forgot-password', { replace: true }); }}
                     className="w-full bg-red-600 hover:bg-red-700 cursor-pointer text-sm font-medium"
                   >
                     Request New Reset Link
                   </Button>
                   <button
                     type="button"
-                    onClick={() => { window.location.href = '/'; }}
+                    onClick={() => { navigate('/login', { replace: true }); }}
                     className="w-full text-sm text-black hover:text-red-600 hover:underline transition-colors font-normal cursor-pointer py-2"
                   >
                     Back to Login
@@ -198,7 +199,7 @@ export default function ResetPassword() {
                   <button
                     type="button"
                     className="text-sm text-black hover:text-red-600 hover:underline transition-colors font-normal cursor-pointer"
-                    onClick={() => { window.location.href = '/'; }}
+                    onClick={() => { navigate('/login', { replace: true }); }}
                   >
                     Back to Login
                   </button>
