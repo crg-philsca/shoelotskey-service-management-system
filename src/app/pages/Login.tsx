@@ -36,7 +36,14 @@ export default function Login({ onLogin }: LoginProps) {
     const msg = sessionStorage.getItem('logout_message');
     if (msg) {
       sessionStorage.removeItem('logout_message');
-      setTimeout(() => toast.error(msg, { duration: 6000 }), 150);
+      const parts = msg.split('|');
+      if (parts[0] === 'success') {
+        setTimeout(() => toast.success(parts[1] || 'Logged out successfully.', { duration: 4500 }), 150);
+      } else if (parts[0] === 'error') {
+        setTimeout(() => toast.error(parts[1] || 'Session closed.', { duration: 6000 }), 150);
+      } else {
+        setTimeout(() => toast.error(msg, { duration: 6000 }), 150);
+      }
     }
   }, []);
 

@@ -2049,7 +2049,7 @@ async def reset_password(request: ResetPasswordRequest, db: Session = Depends(ge
 
     if is_same_password:
         print(f"[AUTH] Security: Rejected password reset for {user.username} (identical to current password).")
-        raise HTTPException(status_code=400, detail="New password cannot be the same as your current password.")
+        raise HTTPException(status_code=400, detail="The new password must be different from the current password.")
 
     # 1. Update password (Secure Hashing)
     user.password_hash = bcrypt.hash(request.new_password)
@@ -2182,6 +2182,14 @@ def update_user(user_id: int, user_update: UserUpdateSchema, db: Session = Depen
         db_user.email = user_update.email
         
     if user_update.password:
+        is_same_password = False
+        try:
+            is_same_password = bcrypt.verify(user_update.password, db_user.password_hash)
+        except:
+            if db_user.password_hash == user_update.password:
+                is_same_password = True
+        if is_same_password:
+            raise HTTPException(status_code=400, detail="The new password must be different from the current password.")
         db_user.password_hash = bcrypt.hash(user_update.password)
         
     # [PRIORITY 2 FIX] Prevent demotion or deactivation of the last active Owner

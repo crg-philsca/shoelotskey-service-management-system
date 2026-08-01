@@ -11,6 +11,20 @@ const API_BASE = (typeof window !== 'undefined' && (window.location.hostname ===
   ? `http://${window.location.hostname}:8000/api`
   : '/api';
 
+const formatError = (detail: any, fallback: string): string => {
+  if (!detail) return fallback;
+  if (typeof detail === 'string') return detail.replace(/^Value error,\s*/i, '');
+  if (Array.isArray(detail)) {
+    return detail
+      .map((d: any) => (d.msg || JSON.stringify(d)).replace(/^Value error,\s*/i, ''))
+      .join(' | ');
+  }
+  if (typeof detail === 'object') {
+    return detail.message || detail.msg || JSON.stringify(detail);
+  }
+  return String(detail);
+};
+
 export default function ResetPassword() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -36,7 +50,7 @@ export default function ResetPassword() {
         const res = await fetch(`${API_BASE}/verify-reset-token?token=${encodeURIComponent(token)}`);
         if (!res.ok) {
           const errData = await res.json().catch(() => ({ detail: "This password reset link is invalid or has already been used." }));
-          setTokenError(errData.detail || "This password reset link is invalid or has already been used.");
+          setTokenError(formatError(errData.detail, "This password reset link is invalid or has already been used."));
         } else {
           setTokenError(null);
         }
@@ -87,8 +101,8 @@ export default function ResetPassword() {
           navigate('/login', { replace: true });
         }, 1800);
       } else {
-        const err = await response.json();
-        toast.error(err.detail || 'Failed to reset password');
+        const err = await response.json().catch(() => ({}));
+        toast.error(formatError(err.detail, 'Failed to reset password'));
       }
     } catch (err) {
       toast.error('Service Unreachable: The system server is currently offline.');

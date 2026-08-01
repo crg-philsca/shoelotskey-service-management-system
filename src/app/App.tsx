@@ -94,7 +94,9 @@ export default function App() {
     sessionStorage.removeItem('shoelotskey_offline_auth');
     
     if (customMessage && typeof customMessage === 'string') {
-      sessionStorage.setItem('logout_message', customMessage);
+      sessionStorage.setItem('logout_message', `error|${customMessage}`);
+    } else {
+      sessionStorage.setItem('logout_message', 'success|You have successfully logged out.');
     }
 
     if (currentToken) {

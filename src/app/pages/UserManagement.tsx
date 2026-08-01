@@ -28,6 +28,20 @@ const API_BASE = (typeof window !== 'undefined' && (window.location.hostname ===
   ? 'http://localhost:8000/api'
   : '/api';
 
+const formatError = (detail: any, fallback: string): string => {
+  if (!detail) return fallback;
+  if (typeof detail === 'string') return detail.replace(/^Value error,\s*/i, '');
+  if (Array.isArray(detail)) {
+    return detail
+      .map((d: any) => (d.msg || JSON.stringify(d)).replace(/^Value error,\s*/i, ''))
+      .join(' | ');
+  }
+  if (typeof detail === 'object') {
+    return detail.message || detail.msg || JSON.stringify(detail);
+  }
+  return String(detail);
+};
+
 export default function UserManagement({ onSetHeaderActionRight, user }: { onSetHeaderActionRight?: (action: React.ReactNode) => void, user: { token: string } }) {
   const navigate = useNavigate();
     const [currentPage, setCurrentPage] = useState(1);
@@ -173,8 +187,8 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
             });
             toast.success('User updated successfully');
           } else {
-            const err = await response.json();
-            toast.error(`Update failed: ${err.detail || 'Unknown error'}`);
+            const err = await response.json().catch(() => ({}));
+            toast.error(`Update failed: ${formatError(err.detail, 'Unknown error')}`);
             return; // keep modal open if error
           }
         } else {
@@ -203,8 +217,8 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
             });
             toast.success('User created successfully');
           } else {
-            const err = await response.json();
-            toast.error(`Creation failed: ${err.detail || 'Unknown error'}`);
+            const err = await response.json().catch(() => ({}));
+            toast.error(`Creation failed: ${formatError(err.detail, 'Unknown error')}`);
             return; // keep modal open if error
           }
         }
@@ -234,8 +248,8 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
             });
             toast.success('User deleted successfully');
           } else {
-            const err = await response.json();
-            toast.error(`Deletion failed: ${err.detail || 'Unknown error'}`);
+            const err = await response.json().catch(() => ({}));
+            toast.error(`Deletion failed: ${formatError(err.detail, 'Unknown error')}`);
           }
         } catch (error) {
           console.error('Error deleting user:', error);
