@@ -28,18 +28,23 @@ const API_BASE = (typeof window !== 'undefined' && (window.location.hostname ===
   ? 'http://localhost:8000/api'
   : '/api';
 
-const formatError = (detail: any, fallback: string): string => {
-  if (!detail) return fallback;
-  if (typeof detail === 'string') return detail.replace(/^Value error,\s*/i, '');
-  if (Array.isArray(detail)) {
-    return detail
-      .map((d: any) => (d.msg || JSON.stringify(d)).replace(/^Value error,\s*/i, ''))
+const formatError = (errOrDetail: any, fallback: string = 'Operation failed'): string => {
+  if (!errOrDetail) return fallback;
+  const target = errOrDetail.detail || errOrDetail.message || errOrDetail.error || errOrDetail.msg || errOrDetail;
+  if (typeof target === 'string') return target.replace(/^Value error,\s*/i, '');
+  if (Array.isArray(target)) {
+    return target
+      .map((d: any) => {
+        const str = typeof d === 'string' ? d : (d.msg || d.message || d.detail || JSON.stringify(d));
+        return String(str).replace(/^Value error,\s*/i, '');
+      })
       .join(' | ');
   }
-  if (typeof detail === 'object') {
-    return detail.message || detail.msg || JSON.stringify(detail);
+  if (typeof target === 'object') {
+    const str = target.msg || target.message || target.detail || JSON.stringify(target);
+    return String(str).replace(/^Value error,\s*/i, '');
   }
-  return String(detail);
+  return String(target).replace(/^Value error,\s*/i, '');
 };
 
 export default function UserManagement({ onSetHeaderActionRight, user }: { onSetHeaderActionRight?: (action: React.ReactNode) => void, user: { token: string } }) {

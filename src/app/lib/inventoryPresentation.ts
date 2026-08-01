@@ -14,8 +14,8 @@ export interface InventoryPresentation {
     isPackaged: boolean;
     stockStatus: 'Critical' | 'Low Stock' | 'In Stock';
     statusLabel: string;
-    reorderRecommendation: string;
-    dropdownLabel: string;               // Clean string for select options: e.g., "1000 mL (≈ 1 Jug - 25% left)"
+    dropdownLabel: string;               // Clean string for select options: e.g., "4000 mL (11 cans, 340 mL remaining)"
+    availableText: string;               // Alias for dropdownLabel
 }
 
 /**
@@ -55,32 +55,23 @@ export function getInventoryPresentation(item: any): InventoryPresentation {
         if (stock <= 0) {
             totalContainers = 0;
             percentageInCurrentPackage = 0;
-            containersLabel = `0 ${formatUnitName(packageUnit, 0)}`;
+            containersLabel = `0 ${formatUnitName(packageUnit, 0).toLowerCase()}`;
         } else {
             // Any leftover liquid/powder is inside a real, physical container
             totalContainers = Math.ceil(stock / packageSize);
             const fullContainers = Math.floor(stock / packageSize);
-            
-            // Handle precision issues with remainder
-            const remainder = Number((stock - (fullContainers * packageSize)).toFixed(4));
+            const remainder = Math.round(Number((stock - (fullContainers * packageSize)).toFixed(4)));
             
             if (remainder === 0) {
-                // Exact multiple of containers
                 percentageInCurrentPackage = 100;
-                if (fullContainers === 1) {
-                    containersLabel = `≈ 1 ${formatUnitName(packageUnit, 1)} (100%)`;
-                } else {
-                    containersLabel = `≈ ${fullContainers} ${formatUnitName(packageUnit, fullContainers)} (100%)`;
-                }
+                containersLabel = `${fullContainers} ${formatUnitName(packageUnit, fullContainers).toLowerCase()}`;
             } else {
                 percentageInCurrentPackage = Math.round((remainder / packageSize) * 100);
                 if (fullContainers === 0) {
-                    // Only 1 partially filled container remains
-                    containersLabel = `≈ 1 ${formatUnitName(packageUnit, 1)} (${percentageInCurrentPackage}%)`;
+                    containersLabel = `${remainder} ${unit} remaining`;
                 } else {
-                    // Multiple containers: at least 1 full plus 1 opened partial container
-                    containersLabel = `≈ ${totalContainers} ${formatUnitName(packageUnit, totalContainers)}`;
-                    containersSubLabel = `${fullContainers} Full + ${percentageInCurrentPackage}%`;
+                    containersLabel = `${fullContainers} ${formatUnitName(packageUnit, fullContainers).toLowerCase()}, ${remainder} ${unit} remaining`;
+                    containersSubLabel = `${remainder} ${unit} left`;
                 }
             }
         }
@@ -126,15 +117,12 @@ export function getInventoryPresentation(item: any): InventoryPresentation {
         reorderRecommendation = 'Stock levels sufficient';
     }
 
-    // 4. Dropdown Label (used in Job Orders, Expense items, Stock update modal)
+    // 4. Dropdown Label & Available Text
     let dropdownLabel = currentQuantityLabel;
     if (isPackaged) {
-        if (containersSubLabel) {
-            dropdownLabel = `${currentQuantityLabel} (${containersLabel}: ${containersSubLabel} left)`;
-        } else {
-            dropdownLabel = `${currentQuantityLabel} (${containersLabel} left)`;
-        }
+        dropdownLabel = `${currentQuantityLabel} (${containersLabel})`;
     }
+    const availableText = dropdownLabel;
 
     return {
         currentQuantityLabel,
@@ -148,6 +136,7 @@ export function getInventoryPresentation(item: any): InventoryPresentation {
         stockStatus,
         statusLabel,
         reorderRecommendation,
-        dropdownLabel
+        dropdownLabel,
+        availableText
     };
 }

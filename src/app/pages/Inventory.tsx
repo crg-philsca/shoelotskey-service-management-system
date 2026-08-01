@@ -51,7 +51,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
         name: '',
         category: 'Chemicals',
         stock: 0,
-        unit: 'Bottles',
+        unit: 'mL',
         price: 0,
         isActive: true,
         autoDeduct: false,
@@ -60,7 +60,8 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
         consumptionQty: 0,
         consumptionUnit: '',
         packageSize: 0,
-        packageUnit: '',
+        packageUnit: 'Can',
+        packageQty: 0,
         lowStockThreshold: 0
     });
 
@@ -90,7 +91,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                 name: '', 
                                 category: 'Chemicals', 
                                 stock: 0, 
-                                unit: 'Bottles', 
+                                unit: 'mL', 
                                 price: 0, 
                                 isActive: true,
                                 autoDeduct: false,
@@ -99,7 +100,8 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                 consumptionQty: 0,
                                 consumptionUnit: '',
                                 packageSize: 0,
-                                packageUnit: '',
+                                packageUnit: 'Can',
+                                packageQty: 0,
                                 lowStockThreshold: 0
                             });
                             setIsCustomCategory(false);
@@ -120,23 +122,41 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
     }, [onSetHeaderActionRight, user.role, setIsRestockOpen]);
  
     const handleSaveItem = () => {
-        if (!formData.name) return;
+        if (!formData.name) {
+            toast.error('Item name is required.');
+            return;
+        }
+        const pkgQty = Number(formData.packageQty || 0);
+        const pkgSize = Number(formData.packageSize || 0);
+        if (pkgQty <= 0) {
+            toast.error('Package Quantity must be greater than zero.');
+            return;
+        }
+        if (pkgSize <= 0) {
+            toast.error('Volume per Package must be greater than zero.');
+            return;
+        }
+        const calculatedStock = Number((pkgQty * pkgSize).toFixed(2));
+        if (calculatedStock < 0) {
+            toast.error('Stock quantity cannot be negative.');
+            return;
+        }
 
         const saveItemPayload = {
             name: formData.name,
             category: formData.category,
-            stock: formData.stock,
-            unit: formData.unit,
-            price: formData.price,
+            stock: calculatedStock,
+            unit: formData.unit || 'mL',
+            price: Number(formData.price || 0),
             isActive: formData.isActive,
             auto_deduct: formData.autoDeduct,
             auto_deduct_trigger: formData.autoDeductTrigger,
             trigger_service: formData.triggerService,
-            consumption_qty: formData.consumptionQty,
-            consumption_unit: formData.consumptionUnit,
-            package_size: formData.packageSize,
-            package_unit: formData.packageUnit,
-            low_stock_threshold: formData.lowStockThreshold
+            consumption_qty: Number(formData.consumptionQty || 0),
+            consumption_unit: formData.consumptionUnit || (formData.unit || 'mL'),
+            package_size: pkgSize,
+            package_unit: formData.packageUnit || 'Can',
+            low_stock_threshold: Number(formData.lowStockThreshold || 0)
         };
  
         if (editingItem) {
@@ -191,11 +211,15 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
  
     const handleEditItem = (item: InventoryItem) => {
         setEditingItem(item);
+        const pkgSize = Number(item.package_size || item.packageSize || 0);
+        const stockVal = Number(item.stock || 0);
+        const calcPkgQty = pkgSize > 0 ? Number((stockVal / pkgSize).toFixed(2)) : (stockVal || 0);
+
         setFormData({
             name: item.name,
             category: item.category,
-            stock: item.stock,
-            unit: item.unit,
+            stock: stockVal,
+            unit: item.unit || 'mL',
             price: item.price,
             isActive: item.isActive,
             autoDeduct: item.auto_deduct || false,
@@ -204,9 +228,10 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                (item.auto_deduct_trigger || 'on-going')),
             triggerService: item.trigger_service || 'All',
             consumptionQty: item.consumption_qty || 0,
-            consumptionUnit: item.consumption_unit || '',
-            packageSize: item.package_size || 0,
-            packageUnit: item.package_unit || '',
+            consumptionUnit: item.consumption_unit || (item.unit || 'mL'),
+            packageSize: pkgSize,
+            packageUnit: item.package_unit || item.packageUnit || 'Can',
+            packageQty: calcPkgQty,
             lowStockThreshold: item.low_stock_threshold || 0
         });
         setIsCustomCategory(false);
@@ -629,7 +654,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                             </div>
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between">
-                                    <label className="text-[10px] font-black uppercase text-gray-400">Unit</label>
+                                    <label className="text-[10px] font-black uppercase text-gray-400">Package Type</label>
                                     <button 
                                         type="button" 
                                         onClick={() => setIsCustomUnit(!isCustomUnit)} 
@@ -641,26 +666,29 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                 {isCustomUnit ? (
                                     <Input 
                                         className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs" 
-                                        placeholder="New Unit"
-                                        value={formData.unit}
-                                        onChange={(e) => setFormData(prev => ({ ...prev, unit: e.target.value }))}
+                                        placeholder="New Package Type"
+                                        value={formData.packageUnit}
+                                        onChange={(e) => setFormData(prev => ({ ...prev, packageUnit: e.target.value }))}
                                         autoFocus
                                     />
                                 ) : (
                                     <select 
                                         className="w-full h-9 rounded-lg border border-red-100 bg-white px-3 text-xs focus:ring-2 focus:ring-red-500"
-                                        value={formData.unit}
-                                        onChange={(e) => setFormData(prev => ({ ...prev, unit: e.target.value }))}
+                                        value={formData.packageUnit}
+                                        onChange={(e) => setFormData(prev => ({ ...prev, packageUnit: e.target.value }))}
                                     >
                                         <option value="">(NONE / CLEAR)</option>
-                                        <option value="Liters">LITERS</option>
-                                        <option value="bottle">BOTTLE</option>
-                                        <option value="can">CAN</option>
-                                        <option value="tub">TUB</option>
-                                        <option value="ml">ML</option>
-                                        <option value="pcs">PCS</option>
-                                        <option value="pairs">PAIRS</option>
-                                        {inventoryData.map(item => item.unit).filter((v, i, a) => !['liters', 'bottle', 'can', 'tub', 'ml', 'pcs', 'pairs'].includes(v.toLowerCase()) && a.indexOf(v) === i).map(unit => (
+                                        <option value="Can">CAN</option>
+                                        <option value="Bottle">BOTTLE</option>
+                                        <option value="Jug">JUG</option>
+                                        <option value="Gallon">GALLON</option>
+                                        <option value="Sachet">SACHET</option>
+                                        <option value="Box">BOX</option>
+                                        <option value="Tube">TUBE</option>
+                                        <option value="Tub">TUB</option>
+                                        <option value="Pcs">PCS</option>
+                                        <option value="Pairs">PAIRS</option>
+                                        {inventoryData.map(item => item.package_unit).filter((v, i, a) => v && !['Can', 'Bottle', 'Jug', 'Gallon', 'Sachet', 'Box', 'Tube', 'Tub', 'Pcs', 'Pairs'].includes(v) && a.indexOf(v) === i).map(unit => (
                                             <option key={unit} value={unit}>{unit.toUpperCase()}</option>
                                         ))}
                                     </select>
@@ -670,19 +698,68 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black uppercase text-gray-400">
-                                    Stock Qty {formData.unit ? `(${formData.unit})` : ''}
+                                    Number of Packages {formData.packageUnit ? `(${formData.packageUnit}s)` : ''}
                                 </label>
                                 <Input 
                                     className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs" 
                                     type="number" 
                                     step="any"
-                                    placeholder="0" 
-                                    value={formData.stock || ''}
+                                    min="0"
+                                    placeholder="e.g. 12" 
+                                    value={formData.packageQty || ''}
                                     onChange={(e) => {
                                         const val = e.target.value;
-                                        setFormData(prev => ({ ...prev, stock: val === '' ? 0 : parseFloat(val) }));
+                                        const pkgQty = val === '' ? 0 : Math.max(0, parseFloat(val) || 0);
+                                        const calcStock = Number((pkgQty * (formData.packageSize || 0)).toFixed(2));
+                                        setFormData(prev => ({ ...prev, packageQty: pkgQty, stock: calcStock }));
                                     }}
                                 />
+                            </div>
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-[10px] font-black uppercase text-gray-400">
+                                        Volume per Package ({formData.unit || 'mL'})
+                                    </label>
+                                    <select
+                                        value={formData.unit || 'mL'}
+                                        onChange={(e) => setFormData(prev => ({ ...prev, unit: e.target.value }))}
+                                        className="text-[9px] font-black text-red-600 uppercase bg-transparent border-none p-0 focus:outline-none cursor-pointer hover:underline"
+                                    >
+                                        <option value="mL">mL</option>
+                                        <option value="g">g</option>
+                                        <option value="L">L</option>
+                                        <option value="fl oz">fl oz</option>
+                                        <option value="pcs">pcs</option>
+                                        <option value="pairs">pairs</option>
+                                    </select>
+                                </div>
+                                <Input 
+                                    className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs" 
+                                    type="number" 
+                                    step="any"
+                                    min="0"
+                                    placeholder="e.g. 360" 
+                                    value={formData.packageSize || ''}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        const pkgSize = val === '' ? 0 : Math.max(0, parseFloat(val) || 0);
+                                        const calcStock = Number(((formData.packageQty || 0) * pkgSize).toFixed(2));
+                                        setFormData(prev => ({ ...prev, packageSize: pkgSize, stock: calcStock }));
+                                    }}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Calculated Stock & Price */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black uppercase text-gray-400">
+                                    Total Stock (Calculated)
+                                </label>
+                                <div className="h-9 rounded-lg border border-gray-200 bg-gray-50 px-3 text-xs flex items-center justify-between font-bold text-gray-700 select-none">
+                                    <span>{(Number(formData.stock) || 0).toLocaleString()}</span>
+                                    <span className="text-[10px] text-gray-400 uppercase font-black">{formData.unit || 'mL'}</span>
+                                </div>
                             </div>
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black uppercase text-gray-400">Unit Price (₱)</label>
@@ -690,41 +767,13 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                     className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs" 
                                     type="number" 
                                     step="any"
+                                    min="0"
                                     placeholder="0.00" 
                                     value={formData.price || ''}
                                     onChange={(e) => {
                                         const val = e.target.value;
-                                        setFormData(prev => ({ ...prev, price: val === '' ? 0 : parseFloat(val) }));
+                                        setFormData(prev => ({ ...prev, price: val === '' ? 0 : Math.max(0, parseFloat(val) || 0) }));
                                     }}
-                                />
-                            </div>
-                        </div>
-
-                        {/* Package Details */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase text-gray-400">
-                                    Package Size {formData.unit ? `(${formData.unit} per ${formData.packageUnit || 'package'})` : ''}
-                                </label>
-                                <Input 
-                                    className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs" 
-                                    type="number" 
-                                    step="any"
-                                    placeholder="e.g. 250" 
-                                    value={formData.packageSize || ''}
-                                    onChange={(e) => {
-                                        const val = e.target.value;
-                                        setFormData(prev => ({ ...prev, packageSize: val === '' ? 0 : parseFloat(val) }));
-                                    }}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase text-gray-400">Package Size Unit</label>
-                                <Input 
-                                    className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs" 
-                                    placeholder="e.g. mL" 
-                                    value={formData.packageUnit || ''}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, packageUnit: e.target.value }))}
                                 />
                             </div>
                         </div>
@@ -738,11 +787,12 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                 className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs" 
                                 type="number" 
                                 step="any"
-                                placeholder="Alert when stock drops to this level (e.g. 1000 mL or 50 g)" 
+                                min="0"
+                                placeholder={`Alert when total stock drops to this level (e.g. 1000 ${formData.unit || 'mL'})`}
                                 value={formData.lowStockThreshold || ''}
                                 onChange={(e) => {
                                     const val = e.target.value;
-                                    setFormData(prev => ({ ...prev, lowStockThreshold: val === '' ? 0 : parseFloat(val) }));
+                                    setFormData(prev => ({ ...prev, lowStockThreshold: val === '' ? 0 : Math.max(0, parseFloat(val) || 0) }));
                                 }}
                             />
                         </div>
@@ -871,9 +921,9 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                             </div>
                         </div>
                     </div>
-                    <div className="flex justify-center gap-2 mt-4">
-                        <Button variant="outline" className="h-9 text-xs font-bold uppercase tracking-widest border-red-100 hover:bg-red-50" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-                        <Button className="h-9 text-xs font-bold uppercase tracking-widest bg-red-600 hover:bg-red-700 text-white" onClick={handleSaveItem}>
+                    <div className="flex justify-center gap-3 mt-5">
+                        <Button variant="outline" className="w-40 h-10 text-xs font-black uppercase tracking-widest border-red-100 hover:bg-red-50" onClick={() => setIsModalOpen(false)}>Cancel</Button>
+                        <Button className="w-40 h-10 text-xs font-black uppercase tracking-widest bg-red-600 hover:bg-red-700 text-white" onClick={handleSaveItem}>
                             {editingItem ? 'Update' : 'Save'}
                         </Button>
                     </div>

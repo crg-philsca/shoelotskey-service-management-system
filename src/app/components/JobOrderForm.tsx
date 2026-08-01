@@ -308,6 +308,32 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
     const [contactNumber, setContactNumber] = useState('');
     // State for Shipping Preference
     const [shippingPreference, setShippingPreference] = useState<string>("pickup");
+    const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
+
+    // [REQUIREMENT 9] Smarter Search: Match any partial word across previous customer names (e.g. "John" finds "John Michael", "John Dela Cruz")
+    const customerSuggestions = useMemo(() => {
+        const query = customerName.trim().toLowerCase();
+        if (query.length < 1) return [];
+        const queryTerms = query.split(/\s+/).filter(Boolean);
+
+        const customerMap = new Map<string, { name: string; contactNumber: string; }>();
+
+        orders.forEach(order => {
+            if (!order.customerName) return;
+            const nameKey = order.customerName.trim().toLowerCase();
+            if (!customerMap.has(nameKey)) {
+                customerMap.set(nameKey, {
+                    name: order.customerName.trim(),
+                    contactNumber: order.contactNumber || ''
+                });
+            }
+        });
+
+        return Array.from(customerMap.values()).filter(cust => {
+            const custNameLower = cust.name.toLowerCase();
+            return queryTerms.every(term => custNameLower.includes(term));
+        }).slice(0, 6);
+    }, [customerName, orders]);
 
 
     // Auto-reset priority level if conditions are not met
@@ -722,12 +748,17 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (!customerName || !customerName.trim()) {
+        // [REQUIREMENT 11] Auto Trim Spaces: "   John Doe" becomes "John Doe"
+        const finalCustomerName = customerName.trim().replace(/\s+/g, ' ');
+        const finalContactNumber = contactNumber.trim();
+
+        if (!finalCustomerName) {
             toast.error('Please enter customer name (required)');
             return;
         }
+        setCustomerName(finalCustomerName);
 
-        const contactDigits = contactNumber ? contactNumber.replace(/\D/g, '') : '';
+        const contactDigits = finalContactNumber ? finalContactNumber.replace(/\D/g, '') : '';
         if (contactDigits.length !== 11) {
             toast.error('Contact number must be exactly 11 digits (e.g., 09xx-xxx-xxxx)');
             return;
@@ -804,8 +835,8 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
         const newOrder: any = {
             id: `JO-${Date.now()}`,
             orderNumber: generatedOrderNumber,
-            customerName,
-            contactNumber,
+            customerName: finalCustomerName,
+            contactNumber: finalContactNumber,
             // Fallback fields (using first shoe data)
             brand: shoes[0].brand === 'Other' ? (shoes[0].otherBrand || 'Other') : (shoes[0].brand || 'Other'),
             shoeMaterial: shoes[0].shoeMaterial === 'Other' ? (shoes[0].otherMaterial || 'Other') : (shoes[0].shoeMaterial || 'Other'),
@@ -880,7 +911,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
         addActivity({
             user: user?.username || 'Current User',
             action: 'New Order',
-            details: `Created new job order #${newOrder.orderNumber} with ${shoes.length} shoes for ${customerName}`,
+            details: `Created new job order #${newOrder.orderNumber} with ${shoes.length} shoes for ${finalCustomerName}`,
             type: 'order'
         });
 
@@ -992,16 +1023,54 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                 </CardHeader>
                 <CardContent className="px-6 pt-0 pb-4 space-y-4">
                     <div className={`grid gap-3 md:gap-4 -mt-1 ${shippingPreference === 'pickup' ? 'grid-cols-1 md:grid-cols-3' : 'grid-cols-1 md:grid-cols-12 mb-2.5'}`}>
-                        <div className={shippingPreference === 'pickup' ? 'col-span-1' : 'col-span-1 md:col-span-6'}>
+                        <div className={`relative ${shippingPreference === 'pickup' ? 'col-span-1' : 'col-span-1 md:col-span-6'}`}>
                             <Label htmlFor="customerName" className={LABEL_STYLE}>Customer Name</Label>
                             <ClearableInput
                                 id="customerName"
                                 value={customerName}
-                                onChange={(e: any) => setCustomerName(e.target.value)}
-                                placeholder="Enter name"
+                                onChange={(e: any) => {
+                                    setCustomerName(e.target.value);
+                                    setShowCustomerSuggestions(true);
+                                }}
+                                onFocus={() => setShowCustomerSuggestions(true)}
+                                onBlur={() => {
+                                    setTimeout(() => {
+                                        setShowCustomerSuggestions(false);
+                                        setCustomerName(prev => prev.trim().replace(/\s+/g, ' '));
+                                    }, 200);
+                                }}
+                                placeholder="Enter name (or search past customer...)"
                                 className={INPUT_STYLE}
                                 required
                             />
+                            {showCustomerSuggestions && customerSuggestions.length > 0 && (
+                                <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-2xl z-50 max-h-56 overflow-y-auto divide-y divide-gray-100 no-print">
+                                    <div className="px-3 py-1.5 bg-red-50 text-[10px] font-extrabold uppercase tracking-wider text-red-700 flex items-center justify-between">
+                                        <span>Matching Customers</span>
+                                        <span className="text-[9px] text-gray-400 font-medium">Click to select</span>
+                                    </div>
+                                    {customerSuggestions.map((cust, idx) => (
+                                        <button
+                                            key={idx}
+                                            type="button"
+                                            className="w-full px-3.5 py-2.5 text-left hover:bg-gray-50 focus:bg-gray-50 transition-colors flex items-center justify-between group"
+                                            onMouseDown={(e) => {
+                                                e.preventDefault();
+                                                setCustomerName(cust.name);
+                                                if (cust.contactNumber) setContactNumber(formatContactNumber(cust.contactNumber));
+                                                setShowCustomerSuggestions(false);
+                                                toast.success(`Selected customer: ${cust.name}`);
+                                            }}
+                                        >
+                                            <div>
+                                                <div className="text-xs font-bold text-slate-800 group-hover:text-red-600">{cust.name}</div>
+                                                <div className="text-[11px] text-gray-500 font-medium">{cust.contactNumber || 'No contact recorded'}</div>
+                                            </div>
+                                            <span className="text-[10px] font-black text-red-600 bg-red-50 px-2 py-0.5 rounded uppercase opacity-0 group-hover:opacity-100 transition-opacity">Select</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                         <div className={shippingPreference === 'pickup' ? 'col-span-1' : 'col-span-1 md:col-span-6'}>
                             <Label htmlFor="contactNumber" className={LABEL_STYLE}>Contact Number</Label>

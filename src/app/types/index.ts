@@ -23,6 +23,11 @@ export interface InventoryUsed {
   name: string;
   quantity: number;
   unit: string;
+  price?: number;
+  staffMember?: string;
+  date?: string;
+  time?: string;
+  isRetail?: boolean;
 }
 
 export interface InventoryItem {

@@ -1,7 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useState, lazy, Suspense, useEffect } from 'react';
 import { Toaster } from '@/app/components/ui/sonner';
-import { toast } from 'sonner';
 import Login from '@/app/pages/Login';
 import ForgotPassword from '@/app/pages/ForgotPassword';
 import ResetPassword from '@/app/pages/ResetPassword';

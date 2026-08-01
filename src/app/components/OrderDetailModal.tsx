@@ -16,7 +16,9 @@ import {
   Check,
   Sparkles,
   CheckCircle2,
+  Printer,
 } from 'lucide-react';
+import { Button } from '@/app/components/ui/button';
 import { toast } from 'sonner';
 import { useOrders } from '@/app/context/OrderContext';
 import type { JobOrder } from '@/app/types';
@@ -33,6 +35,7 @@ export default function OrderDetailModal({
   onOpenChange,
 }: OrderDetailModalProps) {
   const [copied, setCopied] = useState(false);
+  const [showPrintSummary, setShowPrintSummary] = useState(false);
   const { orders } = useOrders();
 
   // Dynamically retrieve the real-time updated order from OrderContext so edits are reflected immediately
@@ -74,8 +77,15 @@ export default function OrderDetailModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md bg-white p-0 gap-0 overflow-hidden rounded-2xl max-h-[85vh] flex flex-col border-none shadow-2xl">
-        {/* Header Bar with Interactive Copyable Order ID */}
-        <DialogHeader className="p-4 border-b border-gray-100 bg-white flex flex-row items-center justify-center">
+        {/* Header Bar with Interactive Copyable Order ID & Print Icon */}
+        <DialogHeader className="p-4 border-b border-gray-100 bg-white flex flex-row items-center justify-between">
+          <button
+            onClick={() => setShowPrintSummary(true)}
+            title="Print Job Order Summary"
+            className="h-8 w-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-red-600 border border-slate-200 flex items-center justify-center transition-colors shadow-2xs no-print"
+          >
+            <Printer size={16} />
+          </button>
           <DialogTitle className="text-lg font-bold flex items-center justify-center gap-2 text-slate-900">
             <span>Order #</span>
             <button
@@ -91,6 +101,7 @@ export default function OrderDetailModal({
               )}
             </button>
           </DialogTitle>
+          <div className="w-8" /> {/* Spacer to keep title centered */}
         </DialogHeader>
 
         {/* Scrollable Content Body - Cleanly Categorized Cards */}
@@ -652,6 +663,199 @@ export default function OrderDetailModal({
           </div>
         </div>
       </DialogContent>
+
+      {/* Printable Job Order Summary Modal */}
+      <Dialog open={showPrintSummary} onOpenChange={setShowPrintSummary}>
+        <DialogContent className="max-w-[500px] bg-white p-6 sm:p-8 rounded-3xl border-none shadow-2xl overflow-y-auto max-h-[90vh]">
+          <div id="print-job-summary" className="space-y-4 font-mono text-xs text-slate-800 print:p-0 print:m-0 print:shadow-none print:border-none print:w-full">
+            {/* Logo and Header */}
+            <div className="text-center space-y-1.5 pb-2">
+              <div className="flex justify-center mb-2">
+                <img src="/logo.png" alt="Shoelotskey Logo" className="h-14 w-14 object-contain mx-auto" />
+              </div>
+              <p className="text-gray-400 font-bold tracking-tighter">--------------------------------------------------------</p>
+              <h2 className="text-base font-black uppercase tracking-widest text-slate-900 font-sans">SHOELOTSKEY</h2>
+              <p className="text-xs font-semibold text-slate-700 font-sans">Shoe Cleaning & Restoration Services</p>
+              <p className="text-[11px] text-slate-500 font-sans">Villamor, Pasay City</p>
+              <p className="text-gray-400 font-bold tracking-tighter">--------------------------------------------------------</p>
+            </div>
+
+            {/* Order Summary Section */}
+            <div className="space-y-1">
+              <h3 className="font-bold text-slate-900 uppercase tracking-wider font-sans text-xs">ORDER SUMMARY</h3>
+              <div className="grid grid-cols-[130px_1fr] gap-2 pt-1">
+                <span className="text-slate-600">Order No.</span>
+                <span className="font-bold text-slate-900">: {order.orderNumber}</span>
+                <span className="text-slate-600">Status</span>
+                <span className="font-bold capitalize text-slate-900">: {order.status?.replace('-', ' ')}</span>
+              </div>
+            </div>
+
+            {/* Customer Section */}
+            <div className="space-y-1 pt-2">
+              <h3 className="font-bold text-slate-900 uppercase tracking-wider font-sans text-xs">Customer</h3>
+              <p className="text-gray-400 font-bold tracking-tighter">--------------------------------------------------------</p>
+              <div className="grid grid-cols-[130px_1fr] gap-2">
+                <span className="text-slate-600">Name</span>
+                <span className="font-bold text-slate-900">: {order.customerName || '-'}</span>
+                <span className="text-slate-600">Contact Number</span>
+                <span className="font-bold text-slate-900">: {order.contactNumber || '-'}</span>
+              </div>
+            </div>
+
+            {/* Service Details Section */}
+            <div className="space-y-2 pt-2">
+              <h3 className="font-bold text-slate-900 uppercase tracking-wider font-sans text-xs">Service Details</h3>
+              <p className="text-gray-400 font-bold tracking-tighter">--------------------------------------------------------</p>
+              <div className="space-y-1">
+                <span className="font-bold text-slate-800 block">Services:</span>
+                {Array.from(new Set(itemsToDisplay.flatMap((it: any) => 
+                  Array.isArray(it.baseService) ? it.baseService : [it.baseService || 'General Service']
+                ))).filter(Boolean).map((srv: string, idx: number) => (
+                  <p key={idx} className="text-slate-700 pl-2">• {srv}</p>
+                ))}
+              </div>
+              <div className="space-y-1 pt-1">
+                <span className="font-bold text-slate-800 block">Shoe Information:</span>
+                {itemsToDisplay.map((it: any, idx: number) => (
+                  <div key={idx} className="pl-2 space-y-0.5 pb-1">
+                    <p className="text-slate-900 font-semibold">• {it.brand} {it.shoeModel}</p>
+                    <p className="text-slate-600">• {it.shoeMaterial || 'Material N/A'}</p>
+                    <p className="text-slate-600">• {it.quantity || 1} Pair{(it.quantity || 1) > 1 ? 's' : ''}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Additional Products Section (If customer bought products) */}
+            {(() => {
+              const retailItems = (order.inventoryUsed || []).filter((i: any) => i.isRetail || (i.price && i.price > 0));
+              const extraProducts = (order as any).purchasedProducts || (retailItems.length > 0 ? retailItems : []);
+              if (extraProducts.length === 0) return null;
+              return (
+                <div className="space-y-1.5 pt-2">
+                  <h3 className="font-bold text-slate-900 uppercase tracking-wider font-sans text-xs">Additional Products</h3>
+                  <p className="text-gray-400 font-bold tracking-tighter">--------------------------------------------------------</p>
+                  <div className="space-y-1">
+                    {extraProducts.map((prod: any, idx: number) => {
+                      const qty = prod.quantity || 1;
+                      const price = prod.price || 0;
+                      return (
+                        <div key={idx} className="flex justify-between items-center text-slate-800">
+                          <span>• {prod.name} ×{qty} <span className="text-gray-300 font-mono">.............</span></span>
+                          <span className="font-bold">₱{(qty * price).toFixed(2)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Schedule Section */}
+            <div className="space-y-1 pt-2">
+              <h3 className="font-bold text-slate-900 uppercase tracking-wider font-sans text-xs">Schedule</h3>
+              <p className="text-gray-400 font-bold tracking-tighter">--------------------------------------------------------</p>
+              <div className="grid grid-cols-[130px_1fr] gap-2">
+                <span className="text-slate-600">Order Date</span>
+                <span className="font-bold text-slate-900">: {(() => {
+                  try { return dateFnsFormat(new Date(order.createdAt || (order as any).orderDate || Date.now()), 'MMMM d, yyyy'); }
+                  catch { return '-'; }
+                })()}</span>
+                <span className="text-slate-600">Release Date</span>
+                <span className="font-bold text-slate-900">: {(() => {
+                  try { return dateFnsFormat(new Date(order.estimatedReleaseDate || (order as any).releaseDate || Date.now()), 'MMMM d, yyyy'); }
+                  catch { return '-'; }
+                })()}</span>
+                {isClaimed && (
+                  <>
+                    <span className="text-slate-600">Claim Date</span>
+                    <span className="font-bold text-slate-900">: {(() => {
+                      try {
+                        const claimHist = order.statusHistory?.find((h: any) => h.status === 'claimed');
+                        return dateFnsFormat(new Date(claimHist?.timestamp || order.updatedAt || Date.now()), 'MMMM d, yyyy');
+                      } catch { return '-'; }
+                    })()}</span>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Payment Summary Section */}
+            <div className="space-y-1 pt-2">
+              <h3 className="font-bold text-slate-900 uppercase tracking-wider font-sans text-xs">Payment Summary</h3>
+              <p className="text-gray-400 font-bold tracking-tighter">--------------------------------------------------------</p>
+              <div className="grid grid-cols-[130px_1fr] gap-1.5">
+                <span className="text-slate-600">Service Total</span>
+                <span className="font-bold text-slate-900">: ₱{(baseTotal + addOnsTotal + calculatedRushFee).toFixed(2)}</span>
+                
+                {(() => {
+                  const retailItems = (order.inventoryUsed || []).filter((i: any) => i.isRetail || (i.price && i.price > 0));
+                  const extraProducts = (order as any).purchasedProducts || (retailItems.length > 0 ? retailItems : []);
+                  const addlTotal = extraProducts.reduce((acc: number, item: any) => acc + ((item.quantity || 1) * (item.price || 0)), 0);
+                  return (
+                    <>
+                      <span className="text-slate-600">Additional Items</span>
+                      <span className="font-bold text-slate-900">: ₱{addlTotal.toFixed(2)}</span>
+                    </>
+                  );
+                })()}
+
+                <span className="text-slate-600">Discount/Refund</span>
+                <span className="font-bold text-slate-900">: ₱{((order as any).discountAmount || (order as any).refundAmount || 0).toFixed(2)}</span>
+                
+                <span className="text-slate-600">Total Amount</span>
+                <span className="font-bold text-slate-900">: ₱{(order.grandTotal || 0).toFixed(2)}</span>
+                
+                <span className="text-slate-600">Deposit</span>
+                <span className="font-bold text-slate-900">: ₱{(order.paymentStatus === 'downpayment' ? (order.amountReceived || (order.grandTotal || 0) / 2) : (order.amountReceived || 0)).toFixed(2)}</span>
+                
+                <span className="text-slate-600">Balance Paid</span>
+                <span className="font-bold text-slate-900">: ₱{isClaimed ? Math.max(0, (order.grandTotal || 0) - (order.amountReceived || 0)).toFixed(2) : '0.00'}</span>
+                
+                <span className="text-slate-600">Payment Status</span>
+                <span className="font-bold capitalize text-slate-900">: {isClaimed ? 'Fully Paid' : (order.paymentStatus?.replace('-', ' ') || 'Pending')}</span>
+              </div>
+            </div>
+
+            {/* Claimed By Section */}
+            {isClaimed && (
+              <div className="space-y-1 pt-2">
+                <h3 className="font-bold text-slate-900 uppercase tracking-wider font-sans text-xs">Claimed By</h3>
+                <p className="text-gray-400 font-bold tracking-tighter">--------------------------------------------------------</p>
+                <div className="grid grid-cols-[130px_1fr] gap-1.5">
+                  <span className="text-slate-600">Customer</span>
+                  <span className="font-bold text-slate-900">: {order.claimedBy || order.customerName || '-'}</span>
+                  <span className="text-slate-600">Released By</span>
+                  <span className="font-bold text-slate-900">: {(() => {
+                    const claimHist = order.statusHistory?.find((h: any) => h.status === 'claimed');
+                    return claimHist?.user || 'Staff';
+                  })()}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Disclaimer Footer */}
+            <div className="text-center pt-4 space-y-1">
+              <p className="text-gray-400 font-bold tracking-tighter">--------------------------------------------------------</p>
+              <p className="text-[11px] text-slate-500 font-sans italic leading-tight">
+                This document is generated for reference purposes only.<br />
+                It is not a BIR Official Receipt or Sales Invoice.
+              </p>
+              <p className="text-gray-400 font-bold tracking-tighter">--------------------------------------------------------</p>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-gray-100 no-print">
+            <Button variant="outline" onClick={() => setShowPrintSummary(false)} className="rounded-xl font-bold">
+              Close
+            </Button>
+            <Button onClick={() => window.print()} className="bg-red-600 hover:bg-red-700 text-white font-bold px-6 rounded-xl flex items-center gap-2 shadow-md">
+              <Printer size={16} /> Print Summary
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

@@ -244,3 +244,5 @@ export function useActivities() {
     }
     return context;
 }
+
+export const useActivity = useActivities;

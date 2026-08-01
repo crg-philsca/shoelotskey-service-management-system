@@ -1121,7 +1121,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                                 setIsUpdatingStock(true);
                                               }} className="border border-emerald-200 rounded-md px-2.5 py-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 focus:text-emerald-800 focus:bg-emerald-100 font-bold mb-1">
                                                 <Package className="h-4 w-4 mr-2 text-emerald-600" />
-                                                Update Stock Inventory
+                                                Update Inventory
                                               </DropdownMenuItem>
                                               <DropdownMenuItem onClick={(e) => {
                                                 e.stopPropagation();
@@ -1137,8 +1137,8 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                               <DropdownMenuItem onClick={(e) => {
                                                 e.stopPropagation();
                                                 setProcessClaimOrder(order);
-                                              }} className="border border-blue-200 rounded-md px-2.5 py-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 focus:text-blue-700 focus:bg-blue-100 font-bold mb-1">
-                                                <ArrowRight className="h-4 w-4 mr-2 text-blue-600" />
+                                              }} className="border border-gray-200 rounded-md px-2.5 py-1.5 text-gray-700 bg-gray-50 hover:bg-gray-100 focus:text-gray-800 focus:bg-gray-100 font-bold mb-1">
+                                                <ArrowRight className="h-4 w-4 mr-2 text-gray-600" />
                                                 Move to Claimed
                                               </DropdownMenuItem>
                                               <DropdownMenuItem onClick={(e) => {
@@ -1250,7 +1250,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
           {/* Other Modals */}
           <EditOrderModal order={selectedOrder} open={!!selectedOrder && isEditing} onOpenChange={(open) => !open && setIsEditing(false)} onSave={(id, updates) => { updateOrder(id, updates); setSelectedOrder((prev: any) => prev ? { ...prev, ...updates } : null); setIsEditing(false); }} />
           <StockUpdateModal order={selectedOrder} open={!!selectedOrder && isUpdatingStock} onOpenChange={(open) => !open && setIsUpdatingStock(false)} onSave={(id, updates) => { updateOrder(id, updates); setSelectedOrder((prev: any) => prev ? { ...prev, ...updates } : null); setIsUpdatingStock(false); }} />
-          <ProcessClaimModal order={processClaimOrder} open={!!processClaimOrder} onOpenChange={(open) => !open && setProcessClaimOrder(null)} onConfirm={(id, data) => { updateOrder(id, data, user.username); setProcessClaimOrder(null); }} />
+          <ProcessClaimModal order={processClaimOrder} open={!!processClaimOrder} onOpenChange={(open) => !open && setProcessClaimOrder(null)} onConfirm={(id, data) => { updateOrder(id, data, user.username); }} user={user} />
 
           {!selectedStatus && (
             <div className="space-y-6">

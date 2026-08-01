@@ -577,9 +577,8 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                 onOpenChange={(open) => !open && setProcessClaimOrder(null)}
                 onConfirm={(id, data) => {
                     updateOrder(id, data, user.username);
-                    setProcessClaimOrder(null);
-                    toast.success('Order claimed successfully');
                 }}
+                user={user}
             />
 
             {/* CANCEL ORDER / DYNAMIC REFUND POLICY CONFIRMATION MODAL */}

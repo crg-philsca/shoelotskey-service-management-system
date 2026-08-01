@@ -3486,6 +3486,8 @@ def create_inventory_item(item: InventorySchema, db: Session = Depends(get_db), 
     """Admin-only: Add new material to catalog."""
     if item.stock_quantity < 0:
         raise HTTPException(status_code=400, detail="Stock quantity cannot be negative.")
+    if item.package_size <= 0:
+        raise HTTPException(status_code=400, detail="Volume per Package must be greater than zero.")
     new_item = Inventory(
         item_name=item.item_name,
         category=item.category,
