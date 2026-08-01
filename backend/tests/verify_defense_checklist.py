@@ -4,12 +4,11 @@ import time
 from datetime import datetime, timedelta
 from fastapi.testclient import TestClient
 from sqlalchemy import text
-from passlib.hash import bcrypt
 
 # Add backend directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from main import app, get_db
+from main import app, get_db, bcrypt
 from models import User, Role, AuditLog, Order, Inventory, Expense, StatusLog, InventoryLog
 from database import SessionLocal, engine, is_sqlite, LOCAL_SQLITE, DATABASE_URL
 

@@ -1,6 +1,6 @@
 import os
 import sys
-from sqlalchemy import create_engine, MetaData, text
+from sqlalchemy import create_engine, MetaData, text, NullPool
 from sqlalchemy.exc import OperationalError
 
 # Path normalization to securely locate backend root and import shared database modules
@@ -68,8 +68,8 @@ def sync_data():
     failed_tables = []
 
     try:
-        # 2. Establish connections (PG engine is reused from shared singleton)
-        sqlite_engine = create_engine(sqlite_url, connect_args={"check_same_thread": False})
+        # 2. Establish connections (PG engine is reused from shared singleton; SQLite uses NullPool to avoid leftover transaction locks)
+        sqlite_engine = create_engine(sqlite_url, connect_args={"check_same_thread": False}, poolclass=NullPool)
 
         # First connection handshake using shared engine connection
         try:

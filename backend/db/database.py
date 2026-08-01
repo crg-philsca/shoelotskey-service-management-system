@@ -10,8 +10,11 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
 from pathlib import Path
-from passlib.hash import bcrypt
+import bcrypt as _native_bcrypt
 import urllib.parse
+
+def _hash_pw(password: str) -> str:
+    return _native_bcrypt.hashpw(password.encode('utf-8'), _native_bcrypt.gensalt()).decode('utf-8')
 
 # Load variables from .env located in the parent backend/ folder
 env_path = Path(__file__).parent.parent / ".env"
@@ -135,12 +138,16 @@ def ensure_sqlite_schema_and_defaults(target_engine):
                 role_owner = ldb.query(Role).filter(Role.role_name == "owner").first()
                 role_staff = ldb.query(Role).filter(Role.role_name == "staff").first()
                 if role_owner:
-                    ldb.add(User(username="owner", email="owner@shoelotskey.com", password_hash=bcrypt.hash("owner123"), role_id=role_owner.role_id, is_active=True))
+                    ldb.add(User(username="owner", email="owner@shoelotskey.com", password_hash=_hash_pw("owner123"), role_id=role_owner.role_id, is_active=True))
                 if role_staff:
-                    ldb.add(User(username="staff", email="staff@shoelotskey.com", password_hash=bcrypt.hash("staff123"), role_id=role_staff.role_id, is_active=True))
+                    ldb.add(User(username="staff", email="staff@shoelotskey.com", password_hash=_hash_pw("staff123"), role_id=role_staff.role_id, is_active=True))
                 ldb.commit()
     except Exception as e:
         print(f"[OFFLINE SCHEMA WARNING] Non-fatal check: {e}")
+        try:
+            target_engine.dispose()
+        except Exception:
+            pass
 
 if is_sqlite and engine is not None:
     ensure_sqlite_schema_and_defaults(engine)
