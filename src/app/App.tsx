@@ -86,17 +86,21 @@ export default function App() {
 
   const handleLogout = (customMessage?: any) => {
     const currentToken = user?.token;
-    setUser(null); // Log out immediately on the very first click without network delay
+    
+    // 1. Set storage items before triggering state transitions to prevent missing toast messages
+    if (customMessage && typeof customMessage === 'string') {
+      sessionStorage.setItem('logout_message', `error|${customMessage}`);
+    } else {
+      sessionStorage.setItem('logout_message', 'success|Logged out successfully!');
+    }
+
     localStorage.removeItem('user');
     sessionStorage.removeItem('user');
     localStorage.removeItem('shoelotskey_offline_auth');
     sessionStorage.removeItem('shoelotskey_offline_auth');
     
-    if (customMessage && typeof customMessage === 'string') {
-      sessionStorage.setItem('logout_message', `error|${customMessage}`);
-    } else {
-      sessionStorage.setItem('logout_message', 'success|You have successfully logged out.');
-    }
+    // 2. Clear user state (React Router immediately handles clean history replacement and redirection to /login)
+    setUser(null);
 
     if (currentToken) {
       fetch(`${API_BASE}/logout`, {
@@ -105,11 +109,6 @@ export default function App() {
       }).catch((err) => {
         console.warn('[SECURITY] Failed to record backend logout event:', err);
       });
-    }
-
-    // Completely reset location to /login to flush browser history and keep address bar in sync
-    if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-      window.location.replace('/login');
     }
   };
 
