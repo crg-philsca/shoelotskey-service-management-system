@@ -94,7 +94,7 @@ export default function App() {
     sessionStorage.removeItem('shoelotskey_offline_auth');
     
     if (customMessage && typeof customMessage === 'string') {
-      setTimeout(() => toast.error(customMessage, { duration: 6000 }), 150);
+      sessionStorage.setItem('logout_message', customMessage);
     }
 
     if (currentToken) {
@@ -104,6 +104,11 @@ export default function App() {
       }).catch((err) => {
         console.warn('[SECURITY] Failed to record backend logout event:', err);
       });
+    }
+
+    // Completely reset location to /login to flush browser history and keep address bar in sync
+    if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+      window.location.replace('/login');
     }
   };
 

@@ -2039,6 +2039,18 @@ async def reset_password(request: ResetPasswordRequest, db: Session = Depends(ge
         db.commit()
         raise HTTPException(status_code=400, detail="Reset link has expired. Please request a new one.")
 
+    # 3. Check if new password is identical to current password (OWASP A07 / NIST 800-63B)
+    is_same_password = False
+    try:
+        is_same_password = bcrypt.verify(request.new_password, user.password_hash)
+    except:
+        if user.password_hash == request.new_password:
+            is_same_password = True
+
+    if is_same_password:
+        print(f"[AUTH] Security: Rejected password reset for {user.username} (identical to current password).")
+        raise HTTPException(status_code=400, detail="New password cannot be the same as your current password.")
+
     # 1. Update password (Secure Hashing)
     user.password_hash = bcrypt.hash(request.new_password)
     user.reset_token = None # Clear token after use

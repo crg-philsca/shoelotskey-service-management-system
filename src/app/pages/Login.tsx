@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
@@ -31,6 +31,14 @@ export default function Login({ onLogin }: LoginProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    const msg = sessionStorage.getItem('logout_message');
+    if (msg) {
+      sessionStorage.removeItem('logout_message');
+      setTimeout(() => toast.error(msg, { duration: 6000 }), 150);
+    }
+  }, []);
 
   /**
    * HANDLER: handleSubmit
