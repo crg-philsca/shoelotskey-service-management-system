@@ -2,9 +2,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/ca
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { Input } from '@/app/components/ui/input';
-import { Package, PlusCircle, PackagePlus, Search, Filter, AlertTriangle, ArrowUpRight, ChevronLeft, ChevronRight, Edit, Trash2, Printer } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import RestockModal from '@/app/components/RestockModal';
+import InventoryDetailModal from '@/app/components/InventoryDetailModal';
 import { Switch } from '@/app/components/ui/switch';
 import { 
     Dialog, 
@@ -44,6 +44,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
     const itemsPerPage = 5;
 
     // Modal/Form State
+    const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
     const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
     const [isCustomCategory, setIsCustomCategory] = useState(false);
     const [isCustomUnit, setIsCustomUnit] = useState(false);
@@ -461,7 +462,11 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                                 {paginatedInventory.map((item) => (
-                                    <tr key={item.id} className="hover:bg-gray-50/50 transition-colors">
+                                    <tr 
+                                        key={item.id} 
+                                        onClick={() => setSelectedItem(item)}
+                                        className="hover:bg-gray-50/80 transition-colors cursor-pointer"
+                                    >
                                         <td className="px-6 py-4">
                                             <p className="text-sm font-bold text-gray-900 leading-none">{item.name}</p>
                                             <p className="text-[10px] text-gray-400 mt-1 uppercase font-semibold">ID: INV-{item.id.toString().padStart(4, '0')}</p>
@@ -469,30 +474,10 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                         <td className="px-6 py-4 text-xs font-bold text-gray-600 uppercase">{item.category}</td>
                                         <td className="px-6 py-4 text-right font-black text-xs text-gray-900">₱{(item.price || 0).toLocaleString()}</td>
                                         <td className="px-6 py-4 text-right">
-                                            {(() => {
-                                                const pres = getInventoryPresentation(item);
-                                                return (
-                                                    <div>
-                                                        <span className="text-sm font-black text-gray-900">{item.stock}</span>
-                                                        <span className="text-[10px] text-gray-400 ml-1 font-bold">{item.unit}</span>
-                                                        {pres.isPackaged && (
-                                                            <p className="text-[10px] text-slate-500 font-bold tracking-tight mt-0.5">
-                                                                {pres.containersLabel}
-                                                            </p>
-                                                        )}
-                                                        {pres.containersSubLabel && (
-                                                            <p className="text-[9px] text-indigo-600 font-extrabold uppercase mt-0.5">
-                                                                {pres.containersSubLabel}
-                                                            </p>
-                                                        )}
-                                                        {pres.daysRemainingLabel && (
-                                                            <p className="text-[9px] text-emerald-600 font-extrabold mt-0.5">
-                                                                {pres.daysRemainingLabel}
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })()}
+                                            <div className="flex items-center justify-end gap-1.5">
+                                                <span className="text-sm font-black text-gray-900">{(item.stock || 0).toLocaleString()}</span>
+                                                <span className="text-[10px] font-extrabold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded uppercase">{item.unit || ''}</span>
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4 text-center">
                                             {(() => {
@@ -520,12 +505,15 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                                 </Badge>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4 text-center no-print">
+                                        <td className="px-6 py-4 text-center no-print" onClick={(e) => e.stopPropagation()}>
                                             <div className="flex items-center justify-center gap-2">
                                                 <Button 
                                                     variant="ghost" 
                                                     className="h-8 w-8 p-0 rounded-lg border border-amber-500 text-amber-600 hover:bg-amber-50 transition-colors"
-                                                    onClick={() => handleEditItem(item)}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleEditItem(item);
+                                                    }}
                                                 >
                                                     <Edit size={14} strokeWidth={2.5} />
                                                 </Button>
@@ -533,7 +521,10 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                                     <Button 
                                                         variant="ghost" 
                                                         className="h-8 w-8 p-0 rounded-lg border border-red-500 text-red-600 hover:bg-red-50 transition-colors"
-                                                        onClick={() => handleDeleteItem(item.id)}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleDeleteItem(item.id);
+                                                        }}
                                                     >
                                                         <Trash2 size={14} strokeWidth={2.5} />
                                                     </Button>
@@ -931,6 +922,18 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
             </Dialog>
 
             <RestockModal open={isRestockOpen} onOpenChange={setIsRestockOpen} user={JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}')} />
+            
+            <InventoryDetailModal
+                item={selectedItem}
+                open={!!selectedItem}
+                onOpenChange={(open) => {
+                    if (!open) setSelectedItem(null);
+                }}
+                onEdit={(item) => {
+                    setSelectedItem(null);
+                    handleEditItem(item);
+                }}
+            />
         </div>
     );
 }
