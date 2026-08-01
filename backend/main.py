@@ -117,7 +117,8 @@ from models import (
     User, Customer, Role, Status, AuditLog, ItemServiceMapping,
     Payment, Delivery, ServiceCategory, PriorityLevel, Condition,
     ItemConditionMapping, ShippingPreference, PaymentMethod, PaymentStatus,
-    Inventory, InventoryLog
+    Inventory, InventoryLog,
+    HistoricalOrder, HistoricalItem, HistoricalItemService, HistoricalPrediction
 )
 from db.repositories import InventoryRepository
 from schemas import (
@@ -128,6 +129,7 @@ from schemas import (
 )
 from db.database import engine, get_db, SessionLocal, DATABASE_URL, is_sqlite, conn_error, LOCAL_SQLITE_PATH, LOCAL_SQLITE
 from ml_engine import predictor
+from historical_ml_engine import historical_ml_engine
 from auth_utils import get_current_user, require_role, create_access_token, sanitize_error
 
 # ------------------------------------------
@@ -3689,8 +3691,582 @@ async def read_index():
         return FileResponse(index_path)
     return {"status": "error", "message": "UI not found. Build is required."}
 
+# ===========================================================
+# HISTORICAL RECORDS MODULE — API ROUTES
+# Completely isolated from live /api/orders routes.
+# Tables: historical_orders, historical_items, historical_item_services, historical_predictions
+# ===========================================================
+
+from fastapi.responses import StreamingResponse
+import io
+
+
+# ------------------------------------------------------------------
+# GET /api/historical/orders  — List all historical orders
+# ------------------------------------------------------------------
+@app.get("/api/historical/orders")
+async def list_historical_orders(
+    search: Optional[str] = None,
+    branch: Optional[str] = None,
+    service: Optional[str] = None,
+    priority: Optional[str] = None,
+    sync_status: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    page: int = 1,
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    query = db.query(HistoricalOrder)
+
+    if search:
+        sq = f"%{search}%"
+        query = query.join(Customer, HistoricalOrder.customer_id == Customer.customer_id, isouter=True)
+        query = query.filter(
+            or_(
+                HistoricalOrder.order_id.ilike(sq),
+                Customer.customer_name.ilike(sq),
+            )
+        )
+    if branch:
+        query = query.filter(HistoricalOrder.branch.ilike(f"%{branch}%"))
+    if priority:
+        query = query.filter(HistoricalOrder.priority == priority)
+    if sync_status:
+        query = query.filter(HistoricalOrder.sync_status == sync_status)
+    if start_date:
+        try:
+            query = query.filter(HistoricalOrder.date_received >= datetime.fromisoformat(start_date))
+        except Exception:
+            pass
+    if end_date:
+        try:
+            query = query.filter(HistoricalOrder.date_received <= datetime.fromisoformat(end_date))
+        except Exception:
+            pass
+
+    total = query.count()
+    orders = (
+        query
+        .order_by(HistoricalOrder.date_received.desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .all()
+    )
+
+    results = []
+    for o in orders:
+        results.append({
+            "historical_order_id": o.historical_order_id,
+            "order_id": o.order_id,
+            "customer_name": o.customer.customer_name if o.customer else "",
+            "contact_number": o.customer.contact_number if o.customer else "",
+            "branch": o.branch,
+            "date_received": o.date_received.isoformat() if o.date_received else None,
+            "expected_release_date": o.expected_release_date.isoformat() if o.expected_release_date else None,
+            "claimed_date": o.claimed_date.isoformat() if o.claimed_date else None,
+            "completion_days": o.completion_days,
+            "total_pairs": o.total_pairs,
+            "grand_total": float(o.grand_total or 0),
+            "downpayment": float(o.downpayment or 0),
+            "balance": float(o.balance or 0),
+            "priority": o.priority,
+            "sync_status": o.sync_status,
+            "status": "Completed",
+            "items": [
+                {
+                    "historical_item_id": item.historical_item_id,
+                    "brand": item.brand,
+                    "model": item.model,
+                    "color": item.color,
+                    "size": item.size,
+                    "material": item.material,
+                    "priority": item.priority,
+                    "remarks": item.remarks,
+                    "services": [
+                        {"service_name": svc.service_name, "service_type": svc.service_type, "price": float(svc.price or 0)}
+                        for svc in item.services
+                    ],
+                }
+                for item in o.items
+            ],
+        })
+
+    return {"total": total, "page": page, "limit": limit, "data": results}
+
+
+# ------------------------------------------------------------------
+# POST /api/historical/orders  — Create historical order
+# ------------------------------------------------------------------
+@app.post("/api/historical/orders", status_code=201)
+async def create_historical_order(
+    payload: dict = Body(...),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    # Uniqueness check
+    existing = db.query(HistoricalOrder).filter(HistoricalOrder.order_id == payload.get("order_id")).first()
+    if existing:
+        raise HTTPException(status_code=409, detail=f"Order ID '{payload.get('order_id')}' already exists.")
+
+    # Customer — find or create
+    customer_name = (payload.get("customer_name") or "").strip()
+    contact_number = (payload.get("contact_number") or "").strip()
+    if not customer_name:
+        raise HTTPException(status_code=422, detail="customer_name is required.")
+
+    customer = db.query(Customer).filter(
+        func.lower(Customer.customer_name) == customer_name.lower(),
+        Customer.contact_number == contact_number,
+    ).first()
+    if not customer:
+        customer = Customer(customer_name=customer_name, contact_number=contact_number)
+        db.add(customer)
+        db.flush()
+
+    # Date parsing
+    def _parse(val):
+        if not val:
+            return None
+        try:
+            return datetime.fromisoformat(str(val).replace("Z", "+00:00")).replace(tzinfo=None)
+        except Exception:
+            return None
+
+    date_received = _parse(payload.get("date_received"))
+    expected_release_date = _parse(payload.get("expected_release_date"))
+    claimed_date = _parse(payload.get("claimed_date"))
+
+    if not date_received:
+        raise HTTPException(status_code=422, detail="date_received is required.")
+    if not expected_release_date:
+        raise HTTPException(status_code=422, detail="expected_release_date is required.")
+    if expected_release_date < date_received:
+        raise HTTPException(status_code=422, detail="Expected release date cannot be earlier than date received.")
+    if claimed_date and claimed_date < date_received:
+        raise HTTPException(status_code=422, detail="Claimed date cannot be earlier than date received.")
+
+    # Auto-calculate completion days
+    completion_days = None
+    if claimed_date:
+        completion_days = (claimed_date - date_received).days
+
+    grand_total  = float(payload.get("grand_total", 0))
+    downpayment  = float(payload.get("downpayment", 0))
+    balance      = round(grand_total - downpayment, 2)
+    total_pairs  = int(payload.get("total_pairs", 1))
+
+    order = HistoricalOrder(
+        order_id=payload.get("order_id"),
+        customer_id=customer.customer_id,
+        branch=payload.get("branch"),
+        date_received=date_received,
+        expected_release_date=expected_release_date,
+        claimed_date=claimed_date,
+        completion_days=completion_days,
+        total_pairs=total_pairs,
+        grand_total=grand_total,
+        downpayment=downpayment,
+        balance=balance,
+        priority=payload.get("priority", "regular"),
+        sync_status="pending",
+    )
+    db.add(order)
+    db.flush()
+
+    # Items
+    items_payload = payload.get("items", [])
+    for item_data in items_payload:
+        item = HistoricalItem(
+            historical_order_id=order.historical_order_id,
+            brand=item_data.get("brand"),
+            model=item_data.get("model"),
+            color=item_data.get("color"),
+            size=item_data.get("size"),
+            material=item_data.get("material"),
+            priority=item_data.get("priority"),
+            remarks=item_data.get("remarks"),
+        )
+        db.add(item)
+        db.flush()
+
+        for svc_data in item_data.get("services", []):
+            svc = HistoricalItemService(
+                historical_item_id=item.historical_item_id,
+                service_name=svc_data.get("service_name", ""),
+                service_type=svc_data.get("service_type", "base"),
+                price=float(svc_data.get("price", 0)),
+            )
+            db.add(svc)
+
+    db.commit()
+    return {"status": "created", "historical_order_id": order.historical_order_id, "order_id": order.order_id}
+
+
+# ------------------------------------------------------------------
+# PUT /api/historical/orders/{id} — Update historical order
+# ------------------------------------------------------------------
+@app.put("/api/historical/orders/{historical_order_id}")
+async def update_historical_order(
+    historical_order_id: int,
+    payload: dict = Body(...),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    order = db.query(HistoricalOrder).filter(HistoricalOrder.historical_order_id == historical_order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Historical order not found.")
+
+    def _parse(val):
+        if not val:
+            return None
+        try:
+            return datetime.fromisoformat(str(val).replace("Z", "+00:00")).replace(tzinfo=None)
+        except Exception:
+            return None
+
+    if "date_received" in payload:
+        order.date_received = _parse(payload["date_received"]) or order.date_received
+    if "expected_release_date" in payload:
+        order.expected_release_date = _parse(payload["expected_release_date"]) or order.expected_release_date
+    if "claimed_date" in payload:
+        order.claimed_date = _parse(payload["claimed_date"])
+    if order.claimed_date and order.date_received:
+        order.completion_days = (order.claimed_date - order.date_received).days
+    if "branch" in payload:
+        order.branch = payload["branch"]
+    if "priority" in payload:
+        order.priority = payload["priority"]
+    if "grand_total" in payload:
+        order.grand_total = float(payload["grand_total"])
+    if "downpayment" in payload:
+        order.downpayment = float(payload["downpayment"])
+    order.balance = round(float(order.grand_total or 0) - float(order.downpayment or 0), 2)
+    if "total_pairs" in payload:
+        order.total_pairs = int(payload["total_pairs"])
+
+    # Replace items if provided
+    if "items" in payload:
+        for old_item in list(order.items):
+            db.delete(old_item)
+        db.flush()
+        for item_data in payload["items"]:
+            item = HistoricalItem(
+                historical_order_id=order.historical_order_id,
+                brand=item_data.get("brand"),
+                model=item_data.get("model"),
+                color=item_data.get("color"),
+                size=item_data.get("size"),
+                material=item_data.get("material"),
+                priority=item_data.get("priority"),
+                remarks=item_data.get("remarks"),
+            )
+            db.add(item)
+            db.flush()
+            for svc_data in item_data.get("services", []):
+                db.add(HistoricalItemService(
+                    historical_item_id=item.historical_item_id,
+                    service_name=svc_data.get("service_name", ""),
+                    service_type=svc_data.get("service_type", "base"),
+                    price=float(svc_data.get("price", 0)),
+                ))
+
+    db.commit()
+    return {"status": "updated", "historical_order_id": order.historical_order_id}
+
+
+# ------------------------------------------------------------------
+# DELETE /api/historical/orders/{id} — Delete historical order
+# ------------------------------------------------------------------
+@app.delete("/api/historical/orders/{historical_order_id}")
+async def delete_historical_order(
+    historical_order_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    order = db.query(HistoricalOrder).filter(HistoricalOrder.historical_order_id == historical_order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Historical order not found.")
+    db.delete(order)
+    db.commit()
+    return {"status": "deleted", "historical_order_id": historical_order_id}
+
+
+# ------------------------------------------------------------------
+# GET /api/historical/analytics — Analytics aggregates
+# ------------------------------------------------------------------
+@app.get("/api/historical/analytics")
+async def get_historical_analytics(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    branch: Optional[str] = None,
+    priority: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    require_role(["owner"])(current_user)
+
+    query = db.query(HistoricalOrder)
+    if start_date:
+        try:
+            query = query.filter(HistoricalOrder.date_received >= datetime.fromisoformat(start_date))
+        except Exception:
+            pass
+    if end_date:
+        try:
+            query = query.filter(HistoricalOrder.date_received <= datetime.fromisoformat(end_date))
+        except Exception:
+            pass
+    if branch:
+        query = query.filter(HistoricalOrder.branch.ilike(f"%{branch}%"))
+    if priority:
+        query = query.filter(HistoricalOrder.priority == priority)
+
+    orders = query.all()
+
+    total_records    = len(orders)
+    total_revenue    = sum(float(o.grand_total or 0) for o in orders)
+    total_pairs      = sum(int(o.total_pairs or 0) for o in orders)
+    customer_ids     = list({o.customer_id for o in orders})
+    total_customers  = len(customer_ids)
+
+    completed = [o for o in orders if o.completion_days is not None and o.completion_days > 0]
+    avg_completion = round(sum(o.completion_days for o in completed) / len(completed), 1) if completed else 0
+
+    # Service frequency
+    service_freq: Dict[str, int] = {}
+    brand_freq: Dict[str, int] = {}
+    for o in orders:
+        for item in o.items:
+            brand = item.brand or "Unknown"
+            brand_freq[brand] = brand_freq.get(brand, 0) + 1
+            for svc in item.services:
+                svc_name = svc.service_name or "Other"
+                service_freq[svc_name] = service_freq.get(svc_name, 0) + 1
+
+    most_requested_service = max(service_freq, key=service_freq.get) if service_freq else "N/A"
+    most_serviced_brand    = max(brand_freq, key=brand_freq.get) if brand_freq else "N/A"
+
+    # Monthly transaction chart data
+    monthly: Dict[str, int] = {}
+    for o in orders:
+        key = o.date_received.strftime("%Y-%m") if o.date_received else "Unknown"
+        monthly[key] = monthly.get(key, 0) + 1
+    monthly_chart = sorted(
+        [{"period": k, "count": v} for k, v in monthly.items()],
+        key=lambda x: x["period"]
+    )
+
+    # Revenue trend
+    revenue_trend: Dict[str, float] = {}
+    for o in orders:
+        key = o.date_received.strftime("%Y-%m") if o.date_received else "Unknown"
+        revenue_trend[key] = round(revenue_trend.get(key, 0) + float(o.grand_total or 0), 2)
+    revenue_chart = sorted(
+        [{"period": k, "revenue": v} for k, v in revenue_trend.items()],
+        key=lambda x: x["period"]
+    )
+
+    # Top services
+    top_services = sorted(
+        [{"service": k, "count": v} for k, v in service_freq.items()],
+        key=lambda x: x["count"], reverse=True
+    )[:10]
+
+    # Top brands
+    top_brands = sorted(
+        [{"brand": k, "count": v} for k, v in brand_freq.items()],
+        key=lambda x: x["count"], reverse=True
+    )[:10]
+
+    # Highest revenue orders
+    high_revenue = sorted(
+        orders, key=lambda o: float(o.grand_total or 0), reverse=True
+    )[:10]
+    highest_revenue_orders = [
+        {
+            "order_id": o.order_id,
+            "customer_name": o.customer.customer_name if o.customer else "",
+            "grand_total": float(o.grand_total or 0),
+            "date_received": o.date_received.strftime("%Y-%m-%d") if o.date_received else "",
+        }
+        for o in high_revenue
+    ]
+
+    # Completion time distribution
+    completion_chart = [
+        {"order_id": o.order_id, "completion_days": o.completion_days}
+        for o in completed
+    ][:50]
+
+    return {
+        "overview": {
+            "total_records": total_records,
+            "total_revenue": round(total_revenue, 2),
+            "avg_completion_time": avg_completion,
+            "total_pairs": total_pairs,
+            "total_customers": total_customers,
+            "most_requested_service": most_requested_service,
+            "most_serviced_brand": most_serviced_brand,
+        },
+        "monthly_chart": monthly_chart,
+        "revenue_chart": revenue_chart,
+        "service_distribution": top_services,
+        "brand_distribution": top_brands,
+        "highest_revenue_orders": highest_revenue_orders,
+        "completion_chart": completion_chart,
+    }
+
+
+# ------------------------------------------------------------------
+# GET /api/historical/export-csv — Stream CSV download
+# ------------------------------------------------------------------
+@app.get("/api/historical/export-csv")
+async def export_historical_csv(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    csv_bytes = historical_ml_engine.export_dataset(db)
+    return StreamingResponse(
+        io.BytesIO(csv_bytes),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=historical_dataset.csv"},
+    )
+
+
+# ------------------------------------------------------------------
+# POST /api/historical/train — Train Random Forest
+# ------------------------------------------------------------------
+@app.post("/api/historical/train")
+async def train_historical_model(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    require_role(["owner"])(current_user)
+    result = historical_ml_engine.train_model(db)
+    return result
+
+
+# ------------------------------------------------------------------
+# POST /api/historical/predict — Predict release date
+# ------------------------------------------------------------------
+@app.post("/api/historical/predict")
+async def predict_historical_release(
+    payload: dict = Body(...),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    require_role(["owner"])(current_user)
+
+    date_received_str = payload.get("date_received")
+    date_received = None
+    if date_received_str:
+        try:
+            date_received = datetime.fromisoformat(str(date_received_str).replace("Z", "+00:00")).replace(tzinfo=None)
+        except Exception:
+            pass
+
+    priority_map = {"regular": 0, "rush": 1, "premium": 2}
+    priority_raw = (payload.get("priority") or "regular").lower()
+
+    features = {
+        "total_pairs":            int(payload.get("total_pairs", 1)),
+        "basic_cleaning_qty":     int(payload.get("basic_cleaning_qty", 0)),
+        "full_reglue_qty":        int(payload.get("full_reglue_qty", 0)),
+        "minor_reglue_qty":       int(payload.get("minor_reglue_qty", 0)),
+        "full_restoration_qty":   int(payload.get("full_restoration_qty", 0)),
+        "minor_restoration_qty":  int(payload.get("minor_restoration_qty", 0)),
+        "color_renewal_qty":      int(payload.get("color_renewal_qty", 0)),
+        "unyellowing_qty":        int(payload.get("unyellowing_qty", 0)),
+        "priority_encoded":       priority_map.get(priority_raw, 0),
+        "grand_total":            float(payload.get("grand_total", 0)),
+        "day_of_week_received":   (date_received.weekday() if date_received else datetime.now().weekday()),
+        "month_received":         (date_received.month if date_received else datetime.now().month),
+    }
+
+    result = historical_ml_engine.predict(features, date_received)
+
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+
+    # Persist prediction to DB (optionally linked to historical_order_id)
+    hist_order_id = payload.get("historical_order_id")
+    predicted_release_date = None
+    try:
+        predicted_release_date = datetime.fromisoformat(result["predicted_release_date"])
+    except Exception:
+        predicted_release_date = datetime.now() + timedelta(days=result["predicted_completion_days"])
+
+    prediction = HistoricalPrediction(
+        historical_order_id=hist_order_id,
+        predicted_completion_days=result["predicted_completion_days"],
+        predicted_release_date=predicted_release_date,
+        algorithm=result.get("algorithm", "Random Forest Regressor"),
+        model_version=result.get("model_version", "1.0"),
+        input_snapshot=features,
+    )
+    db.add(prediction)
+    db.commit()
+
+    result["prediction_id"] = prediction.prediction_id
+    return result
+
+
+# ------------------------------------------------------------------
+# GET /api/historical/predictions — List all predictions
+# ------------------------------------------------------------------
+@app.get("/api/historical/predictions")
+async def list_historical_predictions(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    require_role(["owner"])(current_user)
+    preds = (
+        db.query(HistoricalPrediction)
+        .order_by(HistoricalPrediction.prediction_date.desc())
+        .limit(100)
+        .all()
+    )
+    return [
+        {
+            "prediction_id": p.prediction_id,
+            "historical_order_id": p.historical_order_id,
+            "order_id": p.order.order_id if p.order else None,
+            "predicted_completion_days": p.predicted_completion_days,
+            "actual_completion_days": p.actual_completion_days,
+            "prediction_error": p.prediction_error,
+            "predicted_release_date": p.predicted_release_date.strftime("%Y-%m-%d") if p.predicted_release_date else None,
+            "algorithm": p.algorithm,
+            "model_version": p.model_version,
+            "prediction_date": p.prediction_date.isoformat() if p.prediction_date else None,
+            "input_snapshot": p.input_snapshot,
+        }
+        for p in preds
+    ]
+
+
+# ------------------------------------------------------------------
+# GET /api/historical/model-info — ML model status
+# ------------------------------------------------------------------
+@app.get("/api/historical/model-info")
+async def get_historical_model_info(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    require_role(["owner"])(current_user)
+    record_count = db.query(HistoricalOrder).filter(
+        HistoricalOrder.claimed_date.isnot(None),
+        HistoricalOrder.completion_days.isnot(None),
+    ).count()
+    info = historical_ml_engine.get_model_info()
+    info["records_available"] = record_count
+    return info
+
+
 # 3. SPA Support (Catch-all)
 # Ensures pages like /orders or /settings work even after a browser refresh.
+# MUST BE AT THE BOTTOM to avoid intercepting other GET routes
 @app.get("/{full_path:path}")
 async def catch_all(full_path: str):
     # Only serve the UI if it's NOT an API call
@@ -3708,5 +4284,6 @@ async def catch_all(full_path: str):
     if os.path.exists(index_path):
         return FileResponse(index_path)
     return {"status": "error", "message": "UI not found."}
+
 
 # EOF: Backend Entry Point

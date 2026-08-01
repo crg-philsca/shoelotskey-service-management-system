@@ -356,3 +356,124 @@ class InventoryLog(Base):
     inventory_item = relationship("Inventory")
     order = relationship("Order")
     user = relationship("User")
+
+
+# ==========================================
+# 9. HISTORICAL RECORDS MODULE
+#    Completely isolated from live tables.
+#    Used for: Data Analytics + ML Training
+# ==========================================
+
+class HistoricalOrder(Base):
+    """
+    Archived completed job orders encoded from old paper receipts.
+    NEVER linked to the live 'orders' table.
+    Serves as the ML training dataset repository.
+    """
+    __tablename__ = "historical_orders"
+    historical_order_id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # User-entered order identifier from paper receipt (e.g. ORD-2025-08-15-001)
+    order_id = Column(String(50), unique=True, nullable=False, index=True)
+
+    # Reuse existing customers table (normalized CRM)
+    customer_id = Column(Integer, ForeignKey("customers.customer_id"), nullable=False)
+
+    branch        = Column(String(100), nullable=True)   # Free-text branch name
+    date_received = Column(DateTime, nullable=False)
+    expected_release_date = Column(DateTime, nullable=False)
+    claimed_date  = Column(DateTime, nullable=True)
+
+    # ML Feature: automatically calculated on save
+    completion_days = Column(Integer, nullable=True)
+
+    total_pairs  = Column(Integer, default=1)
+    grand_total  = Column(DECIMAL(10, 2), nullable=False)
+    downpayment  = Column(DECIMAL(10, 2), default=0.0)
+    balance      = Column(DECIMAL(10, 2), default=0.0)
+
+    # Snapshot strings (not FKs — preserves historical integrity even if live data changes)
+    priority     = Column(String(30), default="regular")
+
+    # Offline sync tracking
+    sync_status  = Column(String(20), default="pending")  # 'pending', 'synced', 'failed'
+
+    created_at   = Column(TIMESTAMP, default=datetime.now)
+    updated_at   = Column(TIMESTAMP, default=datetime.now, onupdate=datetime.now)
+
+    # Relationships
+    customer = relationship("Customer")
+    items    = relationship("HistoricalItem", back_populates="order",
+                            cascade="all, delete-orphan")
+    predictions = relationship("HistoricalPrediction", back_populates="order",
+                               cascade="all, delete-orphan")
+
+
+class HistoricalItem(Base):
+    """
+    Individual shoe entries belonging to a historical order.
+    Mirrors the live 'items' table but is logically isolated.
+    """
+    __tablename__ = "historical_items"
+    historical_item_id  = Column(Integer, primary_key=True, autoincrement=True)
+    historical_order_id = Column(Integer,
+                                  ForeignKey("historical_orders.historical_order_id",
+                                             ondelete="CASCADE"),
+                                  nullable=False)
+
+    brand    = Column(String(50), nullable=True)
+    model    = Column(String(50), nullable=True)
+    color    = Column(String(50), nullable=True)
+    size     = Column(String(20), nullable=True)
+    material = Column(String(50), nullable=True)
+    priority = Column(String(30), nullable=True)
+    remarks  = Column(Text, nullable=True)
+
+    order    = relationship("HistoricalOrder", back_populates="items")
+    services = relationship("HistoricalItemService", back_populates="item",
+                            cascade="all, delete-orphan")
+
+
+class HistoricalItemService(Base):
+    """
+    Snapshot of services applied to each shoe in a historical order.
+    Uses varchar service_name to remain independent of the live services catalog.
+    """
+    __tablename__ = "historical_item_services"
+    id                  = Column(Integer, primary_key=True, autoincrement=True)
+    historical_item_id  = Column(Integer,
+                                  ForeignKey("historical_items.historical_item_id",
+                                             ondelete="CASCADE"),
+                                  nullable=False)
+    service_name        = Column(String(100), nullable=False)  # e.g. "Basic Cleaning"
+    service_type        = Column(String(20), default="base")   # 'base' or 'addon'
+    price               = Column(DECIMAL(10, 2), default=0.0)
+
+    item = relationship("HistoricalItem", back_populates="services")
+
+
+class HistoricalPrediction(Base):
+    """
+    Stores ML prediction results generated from the trained Random Forest model.
+    Written only when the user triggers 'Predict Release Date' in the ML tab.
+    """
+    __tablename__ = "historical_predictions"
+    prediction_id           = Column(Integer, primary_key=True, autoincrement=True)
+    historical_order_id     = Column(Integer,
+                                      ForeignKey("historical_orders.historical_order_id",
+                                                 ondelete="CASCADE"),
+                                      nullable=True)
+
+    predicted_completion_days = Column(Integer, nullable=False)
+    predicted_release_date    = Column(DateTime, nullable=False)
+    actual_completion_days    = Column(Integer, nullable=True)
+    prediction_error          = Column(Float, nullable=True)
+    prediction_date           = Column(TIMESTAMP, default=datetime.now)
+    algorithm                 = Column(String(50), default="Random Forest Regressor")
+    model_version             = Column(String(30), nullable=True)
+
+    # Optional: free-form input snapshot used for the prediction (not tied to an order)
+    input_snapshot = Column(JSON, nullable=True)
+
+    order = relationship("HistoricalOrder", back_populates="predictions")
+

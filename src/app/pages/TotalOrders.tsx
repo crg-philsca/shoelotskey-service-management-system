@@ -217,7 +217,7 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
         if (filterService !== 'all') {
             filtered = filtered.filter((order) => {
                 if (Array.isArray(order.baseService)) return order.baseService.some(s => String(s || '').toLowerCase().includes(filterService.toLowerCase()));
-                if (typeof order.baseService === 'string') return order.baseService.toLowerCase().includes(filterService.toLowerCase());
+                if (typeof order.baseService === 'string') return (order.baseService as string).toLowerCase().includes(filterService.toLowerCase());
                 return false;
             });
         }

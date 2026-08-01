@@ -267,3 +267,230 @@ class ShoelotskeyPredictor:
 
 # Singleton Instance
 predictor = ShoelotskeyPredictor()
+
+
+
+class HistoricalMLEngine:
+    """
+    Random Forest engine trained exclusively on historical_orders data.
+    Used by the Historical Records module for:
+      - Dataset export (CSV)
+      - Model training
+      - Release date prediction
+    """
+
+    def __init__(self, model_path: str = ""):
+        self.model_path = model_path
+        self.model = self._load_model()
+        self.last_train_date: Optional[str] = None
+        self.dataset_size: int = 0
+
+    def _load_model(self):
+        if os.path.exists(self.model_path):
+            with open(self.model_path, "rb") as f:
+                return pickle.load(f)
+        return None
+
+    # ------------------------------------------------------------------
+    # PUBLIC: Export dataset
+    # ------------------------------------------------------------------
+    def export_dataset(self, db: Session) -> bytes:
+        """
+        Builds a CSV dataset from historical tables.
+        Returns CSV bytes ready to stream as a download.
+        """
+        from models import HistoricalOrder, HistoricalItem, HistoricalItemService, Customer
+
+        orders = (
+            db.query(HistoricalOrder)
+            .filter(HistoricalOrder.claimed_date.isnot(None))
+            .all()
+        )
+
+        rows = []
+        for o in orders:
+            customer_name = o.customer.customer_name if o.customer else ""
+            all_services = []
+            for item in o.items:
+                for svc in item.services:
+                    all_services.append({"service_name": svc.service_name})
+
+            rows.append({
+                "order_id": o.order_id,
+                "customer_name": customer_name,
+                "branch": o.branch or "",
+                "date_received": o.date_received.strftime("%Y-%m-%d") if o.date_received else "",
+                "expected_release_date": o.expected_release_date.strftime("%Y-%m-%d") if o.expected_release_date else "",
+                "claimed_date": o.claimed_date.strftime("%Y-%m-%d") if o.claimed_date else "",
+                "completion_days": o.completion_days or 0,
+                "total_pairs": o.total_pairs or 1,
+                "grand_total": float(o.grand_total or 0),
+                "downpayment": float(o.downpayment or 0),
+                "balance": float(o.balance or 0),
+                "priority": o.priority or "regular",
+                "priority_encoded": _PRIORITY_MAP.get((o.priority or "regular").lower(), 0),
+                "basic_cleaning_qty": _count_service(all_services, "Basic Cleaning"),
+                "full_reglue_qty": _count_service(all_services, "Full Reglue"),
+                "minor_reglue_qty": _count_service(all_services, "Minor Reglue"),
+                "full_restoration_qty": _count_service(all_services, "Full Restoration"),
+                "minor_restoration_qty": _count_service(all_services, "Minor Restoration"),
+                "color_renewal_qty": _count_service(all_services, "Color Renewal"),
+                "unyellowing_qty": _count_service(all_services, "Unyellowing"),
+                "day_of_week_received": o.date_received.weekday() if o.date_received else 0,
+                "month_received": o.date_received.month if o.date_received else 1,
+            })
+
+        if not rows:
+            # Return header-only CSV
+            header = "order_id,customer_name,branch,date_received,expected_release_date,claimed_date,completion_days,total_pairs,grand_total,downpayment,balance,priority,priority_encoded,basic_cleaning_qty,full_reglue_qty,minor_reglue_qty,full_restoration_qty,minor_restoration_qty,color_renewal_qty,unyellowing_qty,day_of_week_received,month_received\n"
+            return header.encode("utf-8")
+
+        df = pd.DataFrame(rows)
+        return df.to_csv(index=False).encode("utf-8")
+
+    # ------------------------------------------------------------------
+    # PUBLIC: Train model
+    # ------------------------------------------------------------------
+    def train_model(self, db: Session) -> Dict[str, Any]:
+        """
+        Trains RandomForestRegressor on historical_orders where claimed_date is set.
+        Target: completion_days.
+        Returns: dict with status, dataset_size, r2_score, mae, model_version.
+        """
+        from models import HistoricalOrder
+
+        orders = (
+            db.query(HistoricalOrder)
+            .filter(
+                HistoricalOrder.claimed_date.isnot(None),
+                HistoricalOrder.completion_days.isnot(None),
+                HistoricalOrder.completion_days > 0,
+            )
+            .all()
+        )
+
+        if len(orders) < 5:
+            return {
+                "status": "insufficient_data",
+                "message": f"Need at least 5 completed records to train. Currently have {len(orders)}.",
+                "dataset_size": len(orders),
+            }
+
+        feature_cols = [
+            "total_pairs", "basic_cleaning_qty", "full_reglue_qty",
+            "minor_reglue_qty", "full_restoration_qty", "minor_restoration_qty",
+            "color_renewal_qty", "unyellowing_qty", "priority_encoded",
+            "grand_total", "day_of_week_received", "month_received",
+        ]
+
+        rows = []
+        for o in orders:
+            all_services = []
+            for item in o.items:
+                for svc in item.services:
+                    all_services.append({"service_name": svc.service_name})
+            rows.append({
+                "total_pairs": o.total_pairs or 1,
+                "basic_cleaning_qty": _count_service(all_services, "Basic Cleaning"),
+                "full_reglue_qty": _count_service(all_services, "Full Reglue"),
+                "minor_reglue_qty": _count_service(all_services, "Minor Reglue"),
+                "full_restoration_qty": _count_service(all_services, "Full Restoration"),
+                "minor_restoration_qty": _count_service(all_services, "Minor Restoration"),
+                "color_renewal_qty": _count_service(all_services, "Color Renewal"),
+                "unyellowing_qty": _count_service(all_services, "Unyellowing"),
+                "priority_encoded": _PRIORITY_MAP.get((o.priority or "regular").lower(), 0),
+                "grand_total": float(o.grand_total or 0),
+                "day_of_week_received": o.date_received.weekday() if o.date_received else 0,
+                "month_received": o.date_received.month if o.date_received else 1,
+                "completion_days": o.completion_days,
+            })
+
+        df = pd.DataFrame(rows)
+        X = df[feature_cols]
+        y = df["completion_days"]
+
+        # Train-test split (80/20)
+        from sklearn.model_selection import train_test_split
+        from sklearn.metrics import mean_absolute_error, r2_score as sk_r2
+
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42
+        )
+
+        rf = RandomForestRegressor(n_estimators=150, random_state=42, max_depth=10)
+        rf.fit(X_train.values, y_train)
+
+        y_pred = rf.predict(X_test.values)
+        r2  = round(float(sk_r2(y_test, y_pred)), 4)
+        mae = round(float(mean_absolute_error(y_test, y_pred)), 2)
+
+        self.model = rf
+        os.makedirs(os.path.dirname(self.model_path) if os.path.dirname(self.model_path) else ".", exist_ok=True)
+        with open(self.model_path, "wb") as f:
+            pickle.dump(rf, f)
+
+        self.last_train_date = datetime.now().strftime("%Y-%m-%d %H:%M")
+        self.dataset_size = len(orders)
+
+        print(f">>> HistoricalMLEngine: Trained on {len(orders)} records | R²={r2} | MAE={mae}")
+        return {
+            "status": "success",
+            "dataset_size": len(orders),
+            "r2_score": r2,
+            "mae": mae,
+            "model_version": HISTORICAL_MODEL_VERSION,
+            "trained_at": self.last_train_date,
+        }
+
+    # ------------------------------------------------------------------
+    # PUBLIC: Predict
+    # ------------------------------------------------------------------
+    def predict(self, features: Dict[str, Any], date_received: Optional[datetime] = None) -> Dict[str, Any]:
+        """
+        Predicts completion days and estimated release date.
+        features must contain the same keys as feature_cols above.
+        """
+        if self.model is None:
+            return {"error": "Model not trained yet. Please train the model first."}
+
+        feature_cols = [
+            "total_pairs", "basic_cleaning_qty", "full_reglue_qty",
+            "minor_reglue_qty", "full_restoration_qty", "minor_restoration_qty",
+            "color_renewal_qty", "unyellowing_qty", "priority_encoded",
+            "grand_total", "day_of_week_received", "month_received",
+        ]
+
+        row = [features.get(col, 0) for col in feature_cols]
+        predicted_days = max(1, int(round(self.model.predict([row])[0])))
+
+        ref_date = date_received or datetime.now()
+        predicted_release = ref_date + timedelta(days=predicted_days)
+
+        return {
+            "predicted_completion_days": predicted_days,
+            "predicted_release_date": predicted_release.strftime("%Y-%m-%d"),
+            "algorithm": "Random Forest Regressor",
+            "model_version": HISTORICAL_MODEL_VERSION,
+        }
+
+    # ------------------------------------------------------------------
+    # PUBLIC: Model info
+    # ------------------------------------------------------------------
+    def get_model_info(self) -> Dict[str, Any]:
+        model_exists = os.path.exists(self.model_path)
+        trained_at = None
+        if model_exists:
+            mtime = os.path.getmtime(self.model_path)
+            trained_at = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
+        return {
+            "model_trained": model_exists,
+            "algorithm": "Random Forest Regressor",
+            "model_version": HISTORICAL_MODEL_VERSION,
+            "last_trained_at": trained_at or self.last_train_date,
+            "dataset_size": self.dataset_size,
+        }
+
+
+# Singleton
+historical_ml_engine = HistoricalMLEngine()
+

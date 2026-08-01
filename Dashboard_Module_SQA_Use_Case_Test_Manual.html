@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shoelotskey Service Management System - Dashboard Module SQA Use Case Test Table</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #b91c1c;
+            --primary-light: #fef2f2;
+            --primary-dark: #991b1b;
+            --secondary: #0f172a;
+            --slate: #334155;
+            --muted: #64748b;
+            --border: #e2e8f0;
+            --card-bg: #ffffff;
+            --page-bg: #f8fafc;
+            --passed: #10b981;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--page-bg);
+            color: var(--secondary);
+            line-height: 1.5;
+            padding: 2rem 1.5rem;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            padding: 2.5rem 2rem;
+            border-radius: 1rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+        }
+
+        .header-title h1 {
+            font-size: 2.25rem;
+            font-weight: 900;
+            letter-spacing: -0.025em;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+        }
+
+        .header-title p {
+            font-size: 1.1rem;
+            color: #e2e8f0;
+            max-width: 800px;
+        }
+
+        .print-btn {
+            background-color: #ffffff;
+            color: var(--primary);
+            font-family: 'Outfit', sans-serif;
+            font-size: 1rem;
+            font-weight: 700;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .print-btn:hover {
+            background-color: var(--primary-light);
+            transform: translateY(-2px);
+        }
+
+        .table-container {
+            background: var(--card-bg);
+            border-radius: 1rem;
+            border: 1px solid var(--border);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            min-w: 1000px;
+        }
+
+        th {
+            background-color: #f1f5f9;
+            color: var(--slate);
+            font-weight: 800;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 1.25rem 1rem;
+            border-bottom: 2px solid var(--border);
+            white-space: nowrap;
+        }
+
+        td {
+            padding: 1.25rem 1rem;
+            border-bottom: 1px solid var(--border);
+            vertical-align: middle;
+            font-size: 0.95rem;
+            color: var(--secondary);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background-color: #f8fafc;
+        }
+
+        .id-cell {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            color: var(--primary);
+            background: #fff5f5;
+            padding: 0.35rem 0.6rem;
+            border-radius: 0.375rem;
+            border: 1px solid #fed7d7;
+            display: inline-block;
+            white-space: nowrap;
+        }
+
+        .title-cell {
+            font-weight: 700;
+            color: var(--secondary);
+        }
+
+        .actions-cell {
+            color: var(--slate);
+            font-weight: 500;
+        }
+
+        .output-cell {
+            color: var(--secondary);
+            font-weight: 600;
+        }
+
+        .actual-cell {
+            min-width: 180px;
+            background-color: #f8fafc;
+            border-left: 1px dashed var(--border) !important;
+            border-right: 1px dashed var(--border) !important;
+            text-align: center;
+            color: var(--muted);
+            font-style: italic;
+            font-size: 0.85rem;
+        }
+
+        .remarks-cell {
+            text-align: center;
+        }
+
+        .badge-passed {
+            background-color: #d1fae5;
+            color: #065f46;
+            font-weight: 800;
+            font-size: 0.75rem;
+            padding: 0.4rem 0.75rem;
+            border-radius: 0.375rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            display: inline-block;
+            border: 1px solid #6ee7b7;
+        }
+
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+                color: black;
+            }
+            header {
+                background: none !important;
+                color: black !important;
+                box-shadow: none;
+                border-bottom: 2px solid black;
+                border-radius: 0;
+                padding: 0 0 1.5rem 0;
+                margin-bottom: 1.5rem;
+            }
+            .header-title p {
+                color: #333 !important;
+            }
+            .print-btn {
+                display: none !important;
+            }
+            .table-container {
+                box-shadow: none;
+                border: 1px solid #aaa;
+            }
+            th {
+                background: #eee !important;
+                color: black !important;
+                border-bottom: 2px solid black;
+            }
+            td {
+                border-bottom: 1px solid #ccc;
+            }
+            .actual-cell {
+                background: white !important;
+                border: 1px solid #ccc !important;
+            }
+            .badge-passed {
+                border: 1px solid black;
+                color: black !important;
+                background: none !important;
+            }
+            tr {
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-title">
+                <h1>Dashboard Module SQA Use Case Test Table</h1>
+                <p>Complete Software Quality Assurance (SQA) test suite inspecting every actual feature, validation, filter, dialog, and business logic of the Shoelotskey Dashboard Module.</p>
+            </div>
+            <button class="print-btn" onclick="window.print()">
+                <span>🖨️</span> Print / Save as PDF
+            </button>
+        </header>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 10%;">TEST CASE ID</th>
+                        <th style="width: 20%;">TEST CASE TITLE</th>
+                        <th style="width: 20%;">ACTIONS</th>
+                        <th style="width: 25%;">EXPECTED OUTPUT</th>
+                        <th style="width: 15%;">ACTUAL OUTPUT</th>
+                        <th style="width: 10%;">REMARKS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="id-cell">TC-001</span></td>
+                        <td><div class="title-cell">View Dashboard Loading Indicator</div></td>
+                        <td><div class="actions-cell">View the Dashboard page during initial data retrieval.</div></td>
+                        <td><div class="output-cell">The system displays a loading spinner while retrieving operational statistics.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-002</span></td>
+                        <td><div class="title-cell">View Dashboard Operational Summary</div></td>
+                        <td><div class="actions-cell">Open the Dashboard page from the navigation sidebar.</div></td>
+                        <td><div class="output-cell">The system displays the latest dashboard statistics and operational information.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-003</span></td>
+                        <td><div class="title-cell">Filter Dashboard by Time Range</div></td>
+                        <td><div class="actions-cell">Select a time range filter from the header dropdown.</div></td>
+                        <td><div class="output-cell">The system updates all statistics cards based on the selected period.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-004</span></td>
+                        <td><div class="title-cell">View Status Summary Cards</div></td>
+                        <td><div class="actions-cell">View the Status Summary statistics cards on the Dashboard.</div></td>
+                        <td><div class="output-cell">The system displays four interactive cards showing order quantities by status.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-005</span></td>
+                        <td><div class="title-cell">Filter by New Order Status Card</div></td>
+                        <td><div class="actions-cell">Click the New Order card under Status Summary.</div></td>
+                        <td><div class="output-cell">The system updates the screen to display the itemized New Order table.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-006</span></td>
+                        <td><div class="title-cell">Filter by On-Going Status Card</div></td>
+                        <td><div class="actions-cell">Click the On-Going card under Status Summary.</div></td>
+                        <td><div class="output-cell">The system updates the screen to display the itemized On-Going table.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-007</span></td>
+                        <td><div class="title-cell">Filter by For Release Status Card</div></td>
+                        <td><div class="actions-cell">Click the For Release card under Status Summary.</div></td>
+                        <td><div class="output-cell">The system updates the screen to display the itemized For Release table.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-008</span></td>
+                        <td><div class="title-cell">Filter by Claimed Status Card</div></td>
+                        <td><div class="actions-cell">Click the Claimed card under Status Summary.</div></td>
+                        <td><div class="output-cell">The system updates the screen to display the itemized Claimed table.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-009</span></td>
+                        <td><div class="title-cell">Return to Dashboard via Back Button</div></td>
+                        <td><div class="actions-cell">Click the red Back button above the Status Table.</div></td>
+                        <td><div class="output-cell">The system displays the full dashboard view with summary cards and charts.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-010</span></td>
+                        <td><div class="title-cell">Search Status Table by Customer Name</div></td>
+                        <td><div class="actions-cell">Enter a customer name in the Status Table search bar.</div></td>
+                        <td><div class="output-cell">The system updates the table to show matching customer order records.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-011</span></td>
+                        <td><div class="title-cell">Search Status Table by Order Number</div></td>
+                        <td><div class="actions-cell">Enter an order tracking number in the search bar.</div></td>
+                        <td><div class="output-cell">The system updates the table to show the corresponding order record.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-012</span></td>
+                        <td><div class="title-cell">Open Status Table Filter Dialog</div></td>
+                        <td><div class="actions-cell">Click the filter icon button above the Status Table.</div></td>
+                        <td><div class="output-cell">The system displays the filter dialog with service and priority criteria.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-013</span></td>
+                        <td><div class="title-cell">Filter Status Table by Service Type</div></td>
+                        <td><div class="actions-cell">Select a restoration service type in the filter dialog.</div></td>
+                        <td><div class="output-cell">The system updates the table to show orders matching the service type.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-014</span></td>
+                        <td><div class="title-cell">Filter Status Table by Priority Level</div></td>
+                        <td><div class="actions-cell">Select a rush priority level in the filter dialog.</div></td>
+                        <td><div class="output-cell">The system updates the table to show orders matching the priority level.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-015</span></td>
+                        <td><div class="title-cell">Filter Status Table by Date Range</div></td>
+                        <td><div class="actions-cell">Enter start and end dates in the filter dialog.</div></td>
+                        <td><div class="output-cell">The system updates the table to show orders within the date window.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-016</span></td>
+                        <td><div class="title-cell">Apply Criteria in Filter Dialog</div></td>
+                        <td><div class="actions-cell">Click the Apply button inside the filter dialog.</div></td>
+                        <td><div class="output-cell">The system updates the table results and closes the filter dialog.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-017</span></td>
+                        <td><div class="title-cell">Reset Criteria in Filter Dialog</div></td>
+                        <td><div class="actions-cell">Click the Reset button inside the filter dialog.</div></td>
+                        <td><div class="output-cell">The system displays the unfiltered table list and clears active criteria.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-018</span></td>
+                        <td><div class="title-cell">View Owner Overview Summary Cards</div></td>
+                        <td><div class="actions-cell">View the Overview Summary cards as an Owner account.</div></td>
+                        <td><div class="output-cell">The system displays four cards: Active Orders, Pending Payments, Total Sales, and Total Expenses.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-019</span></td>
+                        <td><div class="title-cell">View Staff Overview Summary Restriction</div></td>
+                        <td><div class="actions-cell">View the Overview Summary cards as a Staff account.</div></td>
+                        <td><div class="output-cell">The system displays only Active Orders and conceals all financial cards.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-020</span></td>
+                        <td><div class="title-cell">Open New Expense Dialog from Table</div></td>
+                        <td><div class="actions-cell">Click the New Expense button above the Status Table.</div></td>
+                        <td><div class="output-cell">The system displays the dialog for recording shop operational expenditures.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-021</span></td>
+                        <td><div class="title-cell">Submit Valid Operating Expense Record</div></td>
+                        <td><div class="actions-cell">Enter valid expenditure details and click save expense button.</div></td>
+                        <td><div class="output-cell">The system records the expense and updates the Total Expenses card.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-022</span></td>
+                        <td><div class="title-cell">Submit Expense with Missing Fields</div></td>
+                        <td><div class="actions-cell">Click save expense without entering mandatory expenditure cost details.</div></td>
+                        <td><div class="output-cell">The system prevents submission and displays required field error validation warnings.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-023</span></td>
+                        <td><div class="title-cell">View Service Volume by Type Chart</div></td>
+                        <td><div class="actions-cell">View the Service Volume by Type visual bar chart.</div></td>
+                        <td><div class="output-cell">The system displays a color-coded bar chart categorized across four restoration service types.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-024</span></td>
+                        <td><div class="title-cell">Hover over Service Volume Bar</div></td>
+                        <td><div class="actions-cell">Hover over a bar inside the Service Volume chart.</div></td>
+                        <td><div class="output-cell">The system displays an interactive tooltip with exact order counts and revenue figures.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-025</span></td>
+                        <td><div class="title-cell">View Order Activity Trends Chart</div></td>
+                        <td><div class="actions-cell">View the Order Activity Trends visual line chart.</div></td>
+                        <td><div class="output-cell">The system displays a dual-line graph comparing created versus released orders over time.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-026</span></td>
+                        <td><div class="title-cell">Hover over Activity Trend Milestone</div></td>
+                        <td><div class="actions-cell">Hover over a plotted point in Activity Trends chart.</div></td>
+                        <td><div class="output-cell">The system displays a tooltip showing created and released order counts for that date.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-027</span></td>
+                        <td><div class="title-cell">View Stock Status Low Warnings</div></td>
+                        <td><div class="actions-cell">View the Stock Status Alerts when inventory is low.</div></td>
+                        <td><div class="output-cell">The system displays an amber warning badge with item volume and category details.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-028</span></td>
+                        <td><div class="title-cell">View Stock Status Critical Warnings</div></td>
+                        <td><div class="actions-cell">View the Stock Status Alerts when inventory reaches zero.</div></td>
+                        <td><div class="output-cell">The system displays a red critical alert badge indicating total stock depletion.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-029</span></td>
+                        <td><div class="title-cell">View Stock Status Normal State</div></td>
+                        <td><div class="actions-cell">View the Stock Status Alerts when inventory is healthy.</div></td>
+                        <td><div class="output-cell">The system displays a green confirmation icon stating all stock levels are normal.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-030</span></td>
+                        <td><div class="title-cell">View Order Details from Status Table</div></td>
+                        <td><div class="actions-cell">Click an order row inside the Status Table view.</div></td>
+                        <td><div class="output-cell">The system displays the dialog containing comprehensive customer and shoe restoration details.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-031</span></td>
+                        <td><div class="title-cell">Move Status to On-Going via Menu</div></td>
+                        <td><div class="actions-cell">Click Move to On-Going in row actions menu.</div></td>
+                        <td><div class="output-cell">The system updates the status to On-Going and displays a green confirmation notice.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-032</span></td>
+                        <td><div class="title-cell">Move Status to For Release via Menu</div></td>
+                        <td><div class="actions-cell">Click Move to For Release in row actions menu.</div></td>
+                        <td><div class="output-cell">The system updates the status to For Release and displays a success notification.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-033</span></td>
+                        <td><div class="title-cell">Move Status to Claimed via Menu</div></td>
+                        <td><div class="actions-cell">Click Move to Claimed in row actions menu.</div></td>
+                        <td><div class="output-cell">The system displays the claim processing dialog to settle remaining payment balance.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-034</span></td>
+                        <td><div class="title-cell">Undo Status to New Order via Menu</div></td>
+                        <td><div class="actions-cell">Click Undo to New Order in row actions menu.</div></td>
+                        <td><div class="output-cell">The system updates the status back to New Order and refreshes dashboard counters.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-035</span></td>
+                        <td><div class="title-cell">Undo Status to On-Going via Menu</div></td>
+                        <td><div class="actions-cell">Click Undo to On-Going in row actions menu.</div></td>
+                        <td><div class="output-cell">The system updates the status back to On-Going and refreshes dashboard counters.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-036</span></td>
+                        <td><div class="title-cell">Undo Status to For Release via Menu</div></td>
+                        <td><div class="actions-cell">Click Undo to For Release in row actions menu.</div></td>
+                        <td><div class="output-cell">The system updates the status back to For Release and adjusts payment totals.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-037</span></td>
+                        <td><div class="title-cell">Open Edit Order Dialog from Table</div></td>
+                        <td><div class="actions-cell">Click Edit Order Detail in row actions menu.</div></td>
+                        <td><div class="output-cell">The system displays the edit dialog containing customizable customer and restoration inputs.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-038</span></td>
+                        <td><div class="title-cell">Open Update Inventory Dialog from Table</div></td>
+                        <td><div class="actions-cell">Click Update Inventory in row actions menu.</div></td>
+                        <td><div class="output-cell">The system displays the stock usage dialog with editable consumption lists and exact measurement units.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-039</span></td>
+                        <td><div class="title-cell">Open Cancel Order Warning from Table</div></td>
+                        <td><div class="actions-cell">Click Cancel Order in row actions menu.</div></td>
+                        <td><div class="output-cell">The system displays a confirmation warning dialog before terminating the active job order.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-040</span></td>
+                        <td><div class="title-cell">View Cloud Sync Background Refresh Badge</div></td>
+                        <td><div class="actions-cell">View the pulsing badge during background database synchronization.</div></td>
+                        <td><div class="output-cell">The system displays a pulsing status indicator when actively refreshing dashboard figures.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-041</span></td>
+                        <td><div class="title-cell">Navigate Status Table to Next Page</div></td>
+                        <td><div class="actions-cell">Click the Next page button in Status Table pagination.</div></td>
+                        <td><div class="output-cell">The system updates the table view to display the subsequent page of order records.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-042</span></td>
+                        <td><div class="title-cell">Navigate Status Table to Previous Page</div></td>
+                        <td><div class="actions-cell">Click the Previous page button in table pagination.</div></td>
+                        <td><div class="output-cell">The system updates the table view to display the preceding page of order records.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-043</span></td>
+                        <td><div class="title-cell">Navigate Status Table via Page Numbers</div></td>
+                        <td><div class="actions-cell">Click a page number pill in table pagination controls.</div></td>
+                        <td><div class="output-cell">The system updates the table view to show records corresponding to the chosen page.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-044</span></td>
+                        <td><div class="title-cell">View Empty Table State Notice</div></td>
+                        <td><div class="actions-cell">Filter the status table when zero matching records exist.</div></td>
+                        <td><div class="output-cell">The system displays an empty table notice confirming no corresponding orders were found.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-045</span></td>
+                        <td><div class="title-cell">View Dashboard Error Boundary Recovery</div></td>
+                        <td><div class="actions-cell">View the dashboard recovery screen during an unexpected rendering failure.</div></td>
+                        <td><div class="output-cell">The system displays a structured error fallback screen containing a Re-Ignite Engine reload button.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                    <tr>
+                        <td><span class="id-cell">TC-046</span></td>
+                        <td><div class="title-cell">Verify Automatic Dashboard Statistics Update</div></td>
+                        <td><div class="actions-cell">Update an order status and view summary card figures.</div></td>
+                        <td><div class="output-cell">The system updates all dashboard statistic counters and chart totals automatically without requiring a browser reload.</div></td>
+                        <td class="actual-cell"></td>
+                        <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>

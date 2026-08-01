@@ -1,0 +1,1673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shoelotskey Service Management System - Capstone Use Case Testing Manual</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #b91c1c;
+            --primary-light: #fef2f2;
+            --primary-dark: #991b1b;
+            --secondary: #0f172a;
+            --slate: #334155;
+            --muted: #64748b;
+            --border: #e2e8f0;
+            --card-bg: #ffffff;
+            --page-bg: #f8fafc;
+            --highlight: #fef3c7;
+            --highlight-text: #92400e;
+            --passed: #10b981;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--page-bg);
+            color: var(--secondary);
+            line-height: 1.5;
+            padding: 2rem 1.5rem;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            padding: 2.5rem 2rem;
+            border-radius: 1rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+        }
+
+        header::after {
+            content: "";
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: 300px;
+            height: 100%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 70%);
+            pointer-events: none;
+        }
+
+        .header-title h1 {
+            font-size: 2.25rem;
+            font-weight: 900;
+            letter-spacing: -0.025em;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+        }
+
+        .header-title p {
+            font-size: 1.1rem;
+            color: #e2e8f0;
+            max-width: 750px;
+            font-weight: 400;
+        }
+
+        .print-btn {
+            background-color: #ffffff;
+            color: var(--primary);
+            font-family: 'Outfit', sans-serif;
+            font-size: 1rem;
+            font-weight: 700;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .print-btn:hover {
+            background-color: var(--primary-light);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        .controls-section {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            margin-bottom: 2.5rem;
+            background: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 1rem;
+            border: 1px solid var(--border);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        }
+
+        .search-container {
+            position: relative;
+            width: 100%;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 1rem 1.25rem 1rem 3.5rem;
+            font-size: 1.05rem;
+            font-family: 'Outfit', sans-serif;
+            border: 2px solid var(--border);
+            border-radius: 0.75rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            outline: none;
+            color: var(--secondary);
+        }
+
+        .search-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(185, 28, 28, 0.15);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 1.25rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--muted);
+            font-size: 1.25rem;
+            pointer-events: none;
+        }
+
+        .tabs-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            border-top: 1px solid var(--border);
+            padding-top: 1.25rem;
+        }
+
+        .tab-btn {
+            background: var(--page-bg);
+            color: var(--slate);
+            border: 1px solid var(--border);
+            padding: 0.6rem 1.2rem;
+            border-radius: 9999px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tab-btn:hover {
+            background: var(--primary-light);
+            color: var(--primary-dark);
+            border-color: #fca5a5;
+        }
+
+        .tab-btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+            box-shadow: 0 4px 6px -1px rgba(185, 28, 28, 0.3);
+        }
+
+        .module-section {
+            background: var(--card-bg);
+            border-radius: 1rem;
+            border: 1px solid var(--border);
+            margin-bottom: 2.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            overflow: hidden;
+        }
+
+        .module-header {
+            background: var(--page-bg);
+            border-bottom: 2px solid var(--border);
+            padding: 1.25rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .module-title {
+            font-size: 1.35rem;
+            font-weight: 800;
+            color: var(--secondary);
+            text-transform: uppercase;
+            letter-spacing: -0.015em;
+            border-left: 5px solid var(--primary);
+            padding-left: 1rem;
+        }
+
+        .module-badge {
+            background: var(--primary-light);
+            color: var(--primary);
+            font-size: 0.8rem;
+            font-weight: 700;
+            padding: 0.35rem 0.75rem;
+            border-radius: 9999px;
+            text-transform: uppercase;
+            border: 1px solid #fca5a5;
+        }
+
+        .table-responsive {
+            overflow-x: auto;
+            width: 100%;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f1f5f9;
+            color: var(--slate);
+            font-weight: 700;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 1rem 1.25rem;
+            border-bottom: 2px solid var(--border);
+            white-space: nowrap;
+        }
+
+        td {
+            padding: 1.25rem;
+            border-bottom: 1px solid var(--border);
+            vertical-align: top;
+            font-size: 0.95rem;
+            color: var(--secondary);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background-color: #f8fafc;
+        }
+
+        .id-cell {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            color: var(--primary);
+            white-space: nowrap;
+            background: #fff5f5;
+            padding: 0.35rem 0.6rem;
+            border-radius: 0.375rem;
+            border: 1px solid #fed7d7;
+            display: inline-block;
+        }
+
+        .title-cell {
+            font-weight: 700;
+            color: var(--secondary);
+            font-size: 1rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .actions-cell {
+            color: var(--slate);
+        }
+
+        .output-cell {
+            color: var(--secondary);
+            font-weight: 500;
+        }
+
+        .remarks-cell {
+            text-align: center;
+        }
+
+        .badge-passed {
+            background-color: #d1fae5;
+            color: #065f46;
+            font-weight: 800;
+            font-size: 0.75rem;
+            padding: 0.4rem 0.75rem;
+            border-radius: 0.375rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            display: inline-block;
+            border: 1px solid #6ee7b7;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        }
+
+        .screenshot-box {
+            margin-top: 0.75rem;
+            background-color: var(--highlight);
+            border-left: 4px solid #f59e0b;
+            padding: 0.75rem 1rem;
+            border-radius: 0.375rem;
+            font-size: 0.85rem;
+            color: var(--highlight-text);
+            line-height: 1.4;
+        }
+
+        .screenshot-title {
+            font-weight: 800;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--muted);
+            font-size: 1.2rem;
+            font-weight: 600;
+            display: none;
+        }
+
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+                color: black;
+            }
+            header {
+                background: none !important;
+                color: black !important;
+                box-shadow: none;
+                border-bottom: 2px solid black;
+                border-radius: 0;
+                padding: 0 0 1.5rem 0;
+                margin-bottom: 1.5rem;
+            }
+            .header-title p {
+                color: #333 !important;
+            }
+            .print-btn, .controls-section {
+                display: none !important;
+            }
+            .module-section {
+                box-shadow: none;
+                border: 1px solid #aaa;
+                margin-bottom: 2rem;
+                page-break-inside: avoid;
+            }
+            .module-header {
+                background: #eee !important;
+                border-bottom: 1px solid #aaa;
+            }
+            th {
+                background: #eee !important;
+                color: black !important;
+                border-bottom: 2px solid black;
+            }
+            td {
+                border-bottom: 1px solid #ccc;
+            }
+            .badge-passed {
+                border: 1px solid black;
+                color: black !important;
+                background: none !important;
+            }
+            .screenshot-box {
+                background: #fff8eb !important;
+                border: 1px dashed #d97706;
+                color: #78350f !important;
+            }
+            .module-section {
+                display: block !important;
+            }
+            tr {
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-title">
+                <h1>Shoelotskey Use Case Testing Manual</h1>
+                <p>Comprehensive functional verification test manual and Requirements Traceability Matrix (RTM) calibrated directly to the actual built components, charts, KPI summaries, and workflows of the Shoelotskey Service Management System.</p>
+            </div>
+            <button class="print-btn" onclick="window.print()">
+                <span>🖨️</span> Print / Save as PDF
+            </button>
+        </header>
+
+        <section class="controls-section">
+            <div class="search-container">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="searchInput" class="search-input" placeholder="Search test cases by keyword, title, action, expected output, or ID...">
+            </div>
+            <div class="tabs-container" id="tabsContainer">
+                <button class="tab-btn active" data-target="all">All Modules (103 Cases)</button>
+                <button class="tab-btn" data-target="mod-auth">1. Authentication</button>
+                <button class="tab-btn" data-target="mod-dash">2. Dashboard & Analytics</button>
+                <button class="tab-btn" data-target="mod-job">3. Job Order Form</button>
+                <button class="tab-btn" data-target="mod-ord">4. Order Management</button>
+                <button class="tab-btn" data-target="mod-rel">5. Release Calendar</button>
+                <button class="tab-btn" data-target="mod-inv">6. Inventory & Restock</button>
+                <button class="tab-btn" data-target="mod-sales">7. Sales & Expenses</button>
+                <button class="tab-btn" data-target="mod-serv">8. Service Management</button>
+                <button class="tab-btn" data-target="mod-user">9. User Management</button>
+                <button class="tab-btn" data-target="mod-sec">10. Claims & Audit Logs</button>
+            </div>
+        </section>
+
+        <div id="noResults" class="no-results">
+            No matching test cases found. Please try a different search keyword or switch to "All Modules".
+        </div>
+
+        <!-- MODULE 1 -->
+        <section class="module-section" id="mod-auth">
+            <div class="module-header">
+                <div class="module-title">1. Authentication Module</div>
+                <div class="module-badge">6 Test Cases</div>
+            </div>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Test Case ID</th>
+                            <th>Test Case Title</th>
+                            <th>Actions</th>
+                            <th>Expected Output</th>
+                            <th>Actual Output</th>
+                            <th>Remarks</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="id-cell">TC_1</span></td>
+                            <td><div class="title-cell">Owner Login with Valid Credentials</div></td>
+                            <td><div class="actions-cell">Enter valid Owner username and password on the login screen and click Login.</div></td>
+                            <td><div class="output-cell">The system authenticates the Owner, unlocks full administrative privileges, and redirects to the Owner Dashboard displaying Status Summary and financial Overview Summary cards.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the login screen filled with valid owner credentials, followed by the resulting Owner Dashboard showing active financial KPI cards.</div></td>
+                            <td><div class="output-cell">The system authenticates the Owner, unlocks full administrative privileges, and redirects to the Owner Dashboard displaying Status Summary and financial Overview Summary cards.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_2</span></td>
+                            <td><div class="title-cell">Staff Login with Valid Credentials</div></td>
+                            <td><div class="actions-cell">Enter valid Staff credentials on the login screen and click Login.</div></td>
+                            <td><div class="output-cell">The system authenticates the Staff member and redirects to the Staff Dashboard where financial summaries (Total Sales, Pending Payments, Total Expenses) are strictly hidden.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the Staff Dashboard confirming that only Active Orders appear in Overview Summary while Sales Reports and User Management are hidden from the sidebar.</div></td>
+                            <td><div class="output-cell">The system authenticates the Staff member and redirects to the Staff Dashboard where financial summaries (Total Sales, Pending Payments, Total Expenses) are strictly hidden.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_3</span></td>
+                            <td><div class="title-cell">Login with Invalid Credentials</div></td>
+                            <td><div class="actions-cell">Enter an incorrect username or wrong password and click Login.</div></td>
+                            <td><div class="output-cell">The system denies access and displays a clear red toast alert stating "Invalid username or password."</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the login page showing the red error notification toast when wrong credentials are submitted.</div></td>
+                            <td><div class="output-cell">The system denies access and displays a clear red toast alert stating "Invalid username or password."</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_4</span></td>
+                            <td><div class="title-cell">Login with Empty Required Fields</div></td>
+                            <td><div class="actions-cell">Leave the username or password fields completely blank and click Login.</div></td>
+                            <td><div class="output-cell">The browser prevents submission and displays a validation popup stating "Please fill out this field."</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the form validation tooltip pointing to an empty password or username box.</div></td>
+                            <td><div class="output-cell">The browser prevents submission and displays a validation popup stating "Please fill out this field."</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_5</span></td>
+                            <td><div class="title-cell">Password Reset Request (Forgot Password)</div></td>
+                            <td><div class="actions-cell">Click "Forgot Password?" on the login page, enter a registered account email, and submit the reset request.</div></td>
+                            <td><div class="output-cell">The system validates the registered email and transmits a secure password reset link to the user's email address.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the "Reset link sent" confirmation dialog on the Forgot Password screen.</div></td>
+                            <td><div class="output-cell">The system validates the registered email and transmits a secure password reset link to the user's email address.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_6</span></td>
+                            <td><div class="title-cell">System Logout from Red Sidebar</div></td>
+                            <td><div class="actions-cell">Click the dedicated Logout button located at the bottom of the left red navigation sidebar.</div></td>
+                            <td><div class="output-cell">The system instantly destroys the user session token and securely redirects back to the main Login page.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot highlighting the Logout icon at the bottom of the red sidebar, followed by the redirected Login screen.</div></td>
+                            <td><div class="output-cell">The system instantly destroys the user session token and securely redirects back to the main Login page.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- MODULE 2 -->
+        <section class="module-section" id="mod-dash">
+            <div class="module-header">
+                <div class="module-title">2. Dashboard & Analytics Module</div>
+                <div class="module-badge">12 Test Cases</div>
+            </div>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Test Case ID</th>
+                            <th>Test Case Title</th>
+                            <th>Actions</th>
+                            <th>Expected Output</th>
+                            <th>Actual Output</th>
+                            <th>Remarks</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="id-cell">TC_7</span></td>
+                            <td><div class="title-cell">Status Summary Cards Display & Clickability</div></td>
+                            <td><div class="actions-cell">Observe the 4 interactive status cards under "Status Summary" (New Order, On-Going, For Release, Claimed) and click on any card.</div></td>
+                            <td><div class="output-cell">Each card displays real-time order quantities. Clicking a card hides the general charts and instantly opens an itemized Status Table specific to that selected status.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot showing the 4 color-coded status summary cards (Purple, Blue, Orange, Gray) on the Dashboard.</div></td>
+                            <td><div class="output-cell">Each card displays real-time order quantities. Clicking a card hides the general charts and instantly opens an itemized Status Table specific to that selected status.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_8</span></td>
+                            <td><div class="title-cell">Status Table Search & Date Filter Operations</div></td>
+                            <td><div class="actions-cell">While inside an expanded Status Table, enter a customer name in the search bar or pick a custom Start Date and End Date.</div></td>
+                            <td><div class="output-cell">The table dynamically filters displayed orders in real-time, matching the entered text or falling strictly within the chosen date boundary.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the expanded Status Table displaying filtered results when a date range is applied.</div></td>
+                            <td><div class="output-cell">The table dynamically filters displayed orders in real-time, matching the entered text or falling strictly within the chosen date boundary.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_9</span></td>
+                            <td><div class="title-cell">Status Table Back Button Return</div></td>
+                            <td><div class="actions-cell">Click the red "← Back" button at the top-left of an expanded Status Table.</div></td>
+                            <td><div class="output-cell">The system exits the drill-down table view and seamlessly restores the full Dashboard featuring charts, trends, and stock alerts.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot highlighting the red "Back" button above the status table.</div></td>
+                            <td><div class="output-cell">The system exits the drill-down table view and seamlessly restores the full Dashboard featuring charts, trends, and stock alerts.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_10</span></td>
+                            <td><div class="title-cell">Overview Summary Display for Owner</div></td>
+                            <td><div class="actions-cell">Log in as Owner and observe the "Overview Summary" section directly below Status Summary.</div></td>
+                            <td><div class="output-cell">The system displays 4 distinct KPI cards: Active Orders (Yellow), Pending Payments (Red border with dollar amount), Total Sales (Green border), and Total Expenses (Orange border).</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the Owner's Overview Summary row displaying exact financial totals for sales, pending payments, and expenses.</div></td>
+                            <td><div class="output-cell">The system displays 4 distinct KPI cards: Active Orders (Yellow), Pending Payments (Red border with dollar amount), Total Sales (Green border), and Total Expenses (Orange border).</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_11</span></td>
+                            <td><div class="title-cell">Overview Summary Restriction for Staff</div></td>
+                            <td><div class="actions-cell">Log in as Staff and check the "Overview Summary" section on the Dashboard.</div></td>
+                            <td><div class="output-cell">Only the "Active Orders" count card is rendered; all sensitive financial cards (Pending Payments, Total Sales, and Total Expenses) are entirely suppressed.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot showing the Staff view where Overview Summary solely displays the Active Orders KPI card.</div></td>
+                            <td><div class="output-cell">Only the "Active Orders" count card is rendered; all sensitive financial cards (Pending Payments, Total Sales, and Total Expenses) are entirely suppressed.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_12</span></td>
+                            <td><div class="title-cell">Service Volume by Type Chart Rendering</div></td>
+                            <td><div class="actions-cell">Inspect the "Service Volume by Type" bar chart section on the Dashboard.</div></td>
+                            <td><div class="output-cell">The system renders color-coded horizontal bar charts breaking down completed job quantities across Basic Cleaning, Full Reglue, Minor Reglue, and Color Renewal services.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the visual bar chart showing service distribution by type.</div></td>
+                            <td><div class="output-cell">The system renders color-coded horizontal bar charts breaking down completed job quantities across Basic Cleaning, Full Reglue, Minor Reglue, and Color Renewal services.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_13</span></td>
+                            <td><div class="title-cell">Service Volume Chart Tooltip Hover</div></td>
+                            <td><div class="actions-cell">Hover the mouse pointer over any vertical bar inside the Service Volume by Type chart.</div></td>
+                            <td><div class="output-cell">A dark interactive tooltip box appears showing the exact numerical order count and (for owners) the revenue contribution of that specific service category.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot capturing the hover tooltip popped up over a service bar.</div></td>
+                            <td><div class="output-cell">A dark interactive tooltip box appears showing the exact numerical order count and (for owners) the revenue contribution of that specific service category.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_14</span></td>
+                            <td><div class="title-cell">Order Activity Trends Line Chart Display</div></td>
+                            <td><div class="actions-cell">Scroll down to inspect the "Order Activity Trends" line chart comparing order lifecycle movements over time.</div></td>
+                            <td><div class="output-cell">The system renders a dynamic dual-line chart tracing "Orders Created" (Purple line) against "Orders Released" (Green line) across historical timeline intervals.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the dual-line graph tracking created vs released shoe restorations.</div></td>
+                            <td><div class="output-cell">The system renders a dynamic dual-line chart tracing "Orders Created" (Purple line) against "Orders Released" (Green line) across historical timeline intervals.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_15</span></td>
+                            <td><div class="title-cell">Order Activity Trend Tooltip Inspection</div></td>
+                            <td><div class="actions-cell">Hover over a plotted data node on the Order Activity Trends graph.</div></td>
+                            <td><div class="output-cell">An interactive summary pop-over appears listing exact counts for new intake vs finished claim releases for that specific date/month.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot showing the trend tooltip over a timeline milestone.</div></td>
+                            <td><div class="output-cell">An interactive summary pop-over appears listing exact counts for new intake vs finished claim releases for that specific date/month.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_16</span></td>
+                            <td><div class="title-cell">Stock Status Alerts (Low & Critical Warnings)</div></td>
+                            <td><div class="actions-cell">Inspect the "Stock Status Alerts" card located at the bottom of the Dashboard when an item falls below safety thresholds.</div></td>
+                            <td><div class="output-cell">The card explicitly displays affected items with an amber "Low Stock" badge or red "Critical" badge, listing the item category and remaining quantity.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the Stock Status Alerts widget showing warnings for items like Leather Glue or Soler-Clean.</div></td>
+                            <td><div class="output-cell">The card explicitly displays affected items with an amber "Low Stock" badge or red "Critical" badge, listing the item category and remaining quantity.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_17</span></td>
+                            <td><div class="title-cell">Stock Status Alerts Normal State Display</div></td>
+                            <td><div class="actions-cell">View the Stock Status Alerts section when all inventory supplies maintain sufficient volume above threshold levels.</div></td>
+                            <td><div class="output-cell">The card displays a clean green check icon accompanied by the text "All stock levels normal" and a 0 Warnings badge.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the healthy inventory confirmation state on the Dashboard.</div></td>
+                            <td><div class="output-cell">The card displays a clean green check icon accompanied by the text "All stock levels normal" and a 0 Warnings badge.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_18</span></td>
+                            <td><div class="title-cell">Red Sidebar Expand and Collapse Control</div></td>
+                            <td><div class="actions-cell">Click the circular white chevron button located on the edge of the left red navigation sidebar.</div></td>
+                            <td><div class="output-cell">The red sidebar cleanly collapses into a narrow icon-only column to maximize working dashboard width, and re-expands upon secondary click.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Before and after screenshot demonstration showing the red sidebar in expanded vs collapsed mode.</div></td>
+                            <td><div class="output-cell">The red sidebar cleanly collapses into a narrow icon-only column to maximize working dashboard width, and re-expands upon secondary click.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- MODULE 3 -->
+        <section class="module-section" id="mod-job">
+            <div class="module-header">
+                <div class="module-title">3. Job Order Form Module</div>
+                <div class="module-badge">12 Test Cases</div>
+            </div>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Test Case ID</th>
+                            <th>Test Case Title</th>
+                            <th>Actions</th>
+                            <th>Expected Output</th>
+                            <th>Actual Output</th>
+                            <th>Remarks</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="id-cell">TC_19</span></td>
+                            <td><div class="title-cell">Navigate to Job Order Form from Sidebar</div></td>
+                            <td><div class="actions-cell">Click on "Job Order Form" in the red navigation sidebar.</div></td>
+                            <td><div class="output-cell">The system opens the centralized intake creation form featuring clearly delineated Customer Details, Shoe Details, and Job Order Summary sections.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the clean, freshly loaded Job Order Form interface.</div></td>
+                            <td><div class="output-cell">The system opens the centralized intake creation form featuring clearly delineated Customer Details, Shoe Details, and Job Order Summary sections.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_20</span></td>
+                            <td><div class="title-cell">Customer Details Input & Validation</div></td>
+                            <td><div class="actions-cell">Enter customer contact information (Name, Phone Number, Email Address) into the Customer Details card.</div></td>
+                            <td><div class="output-cell">The text fields accept input smoothly and instantly mirror the customer profile inside the live Job Order Summary panel on the right.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot showing filled customer profile details appearing synchronously in the summary box.</div></td>
+                            <td><div class="output-cell">The text fields accept input smoothly and instantly mirror the customer profile inside the live Job Order Summary panel on the right.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_21</span></td>
+                            <td><div class="title-cell">Shoe Item Specification Entry</div></td>
+                            <td><div class="actions-cell">Under "Shoe Details", input the Shoe Brand, Model/Name, Colorway, and description of current physical shoe condition/issues.</div></td>
+                            <td><div class="output-cell">The shoe profile card formats neatly, labeling the header dynamically with the typed shoe name (e.g. "Jordan 1 Retro High").</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot showing the Shoe Details card populated with specific footwear identifiers and repair notes.</div></td>
+                            <td><div class="output-cell">The shoe profile card formats neatly, labeling the header dynamically with the typed shoe name (e.g. "Jordan 1 Retro High").</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_22</span></td>
+                            <td><div class="title-cell">Multi-Pair Shoe Addition via "+ Add Shoe" Button</div></td>
+                            <td><div class="actions-cell">Click the "+ Add Shoe" button at the bottom of the Shoe Details section for a customer bringing in multiple pairs.</div></td>
+                            <td><div class="output-cell">A new independent shoe specification tab/card expands instantly below the first pair, allowing customized service selection per footwear item.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of two distinct shoe entry boxes displayed simultaneously inside a single Job Order creation screen.</div></td>
+                            <td><div class="output-cell">A new independent shoe specification tab/card expands instantly below the first pair, allowing customized service selection per footwear item.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_23</span></td>
+                            <td><div class="title-cell">Remove Extra Shoe Item via Trash Icon</div></td>
+                            <td><div class="actions-cell">Click the delete trash icon located on the top corner of a secondary added shoe card.</div></td>
+                            <td><div class="output-cell">The selected secondary shoe item is cleanly removed from the form, and total order pricing automatically subtracts its associated service fees.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot showing the deletion confirmation or immediate removal of an extra shoe card from the order summary.</div></td>
+                            <td><div class="output-cell">The selected secondary shoe item is cleanly removed from the form, and total order pricing automatically subtracts its associated service fees.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_24</span></td>
+                            <td><div class="title-cell">Base Service Selection and Price Integration</div></td>
+                            <td><div class="actions-cell">Select a core service (e.g., "Full Reglue - ₱650") from the Base Services selection buttons or dropdown.</div></td>
+                            <td><div class="output-cell">The chosen base service highlights actively, adding its exact price to the Total Amount and displaying under Service Details in the Job Order Summary.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot showing the active blue/green highlight on the selected Base Service and its immediate reflection in the price summary.</div></td>
+                            <td><div class="output-cell">The chosen base service highlights actively, adding its exact price to the Total Amount and displaying under Service Details in the Job Order Summary.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_25</span></td>
+                            <td><div class="title-cell">Priority Fees Selection (Rush vs Standard)</div></td>
+                            <td><div class="actions-cell">Select an optional Priority Fee option (such as Express Rush 24hrs or VIP Turnaround) for a shoe item.</div></td>
+                            <td><div class="output-cell">The priority fee correctly appends to the service cost, adjusts estimated turnaround days, and marks the item with a priority indicator in the summary.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot capturing the addition of a Priority Fee option and the corresponding adjustments to price and timeline.</div></td>
+                            <td><div class="output-cell">The priority fee correctly appends to the service cost, adjusts estimated turnaround days, and marks the item with a priority indicator in the summary.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_26</span></td>
+                            <td><div class="title-cell">Add-On Services Checkbox Selection</div></td>
+                            <td><div class="actions-cell">Tick one or more supplementary Add-On Services (such as Sole Protect, Deoxidizing, or Water Repellent Spray).</div></td>
+                            <td><div class="output-cell">All checked add-ons attach cleanly to the specific shoe item, compounding their fees into the grand Total Amount calculation.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot displaying multiple selected Add-On checkboxes itemized in the right-hand Job Order Summary panel.</div></td>
+                            <td><div class="output-cell">All checked add-ons attach cleanly to the specific shoe item, compounding their fees into the grand Total Amount calculation.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_27</span></td>
+                            <td><div class="title-cell">Downpayment Input and Remaining Balance Math</div></td>
+                            <td><div class="actions-cell">Enter an upfront downpayment amount (e.g., ₱300) into the Downpayment input field inside Payment Summary.</div></td>
+                            <td><div class="output-cell">The system calculates Remaining Balance automatically (Total Amount minus Downpayment) in real-time without requiring manual calculation.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the Payment Summary box proving mathematically precise Remaining Balance calculation upon downpayment entry.</div></td>
+                            <td><div class="output-cell">The system calculates Remaining Balance automatically (Total Amount minus Downpayment) in real-time without requiring manual calculation.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_28</span></td>
+                            <td><div class="title-cell">Payment Method Selection (Cash, GCash, Bank)</div></td>
+                            <td><div class="actions-cell">Select a payment medium from the Payment Method dropdown selector (Cash, GCash, or Bank Transfer).</div></td>
+                            <td><div class="output-cell">The chosen payment mode locks into the order record, ensuring proper categorization for downstream financial analytics and receipt printing.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot showing the opened Payment Method selection menu with "GCash" selected.</div></td>
+                            <td><div class="output-cell">The chosen payment mode locks into the order record, ensuring proper categorization for downstream financial analytics and receipt printing.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_29</span></td>
+                            <td><div class="title-cell">Submit Job Order with Incomplete Mandatory Fields</div></td>
+                            <td><div class="actions-cell">Attempt to click the primary "Submit Order" button without entering a Customer Name or selecting a Base Service.</div></td>
+                            <td><div class="output-cell">The form rejects submission, halts execution, and displays conspicuous warning toasts highlighting the missing mandatory inputs.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot showing red validation border highlights around blank mandatory customer name and service fields.</div></td>
+                            <td><div class="output-cell">The form rejects submission, halts execution, and displays conspicuous warning toasts highlighting the missing mandatory inputs.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_30</span></td>
+                            <td><div class="title-cell">Successful Job Order Creation & Receipt Generation</div></td>
+                            <td><div class="actions-cell">With all details validated, click "Create Job Order" at the bottom of the form.</div></td>
+                            <td><div class="output-cell">The system stores the order in the database, emits a green "Job order created successfully" toast, generates a unique Order #, and opens the printable intake summary receipt.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot capturing the success toast notification alongside the freshly generated printable Job Order Intake Summary.</div></td>
+                            <td><div class="output-cell">The system stores the order in the database, emits a green "Job order created successfully" toast, generates a unique Order #, and opens the printable intake summary receipt.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- MODULE 4 -->
+        <section class="module-section" id="mod-ord">
+            <div class="module-header">
+                <div class="module-title">4. Order Management & Directory Module</div>
+                <div class="module-badge">13 Test Cases</div>
+            </div>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Test Case ID</th>
+                            <th>Test Case Title</th>
+                            <th>Actions</th>
+                            <th>Expected Output</th>
+                            <th>Actual Output</th>
+                            <th>Remarks</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="id-cell">TC_31</span></td>
+                            <td><div class="title-cell">View Job Orders Directory Table</div></td>
+                            <td><div class="actions-cell">Navigate to the Job Orders list (via `/job-orders` or drill-down tables) and observe the column layout.</div></td>
+                            <td><div class="output-cell">The table displays Order Number, Customer Name, Shoes/Services summary, Current Status Badge, Total Amount, Remaining Balance, and Action buttons.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the Job Orders Directory table showcasing clean, columnar arrangement of client footwear records.</div></td>
+                            <td><div class="output-cell">The table displays Order Number, Customer Name, Shoes/Services summary, Current Status Badge, Total Amount, Remaining Balance, and Action buttons.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_32</span></td>
+                            <td><div class="title-cell">Search Orders by Customer Name or Tracking #</div></td>
+                            <td><div class="actions-cell">Type a customer's name or specific order number into the search bar above the directory table.</div></td>
+                            <td><div class="output-cell">The directory filters live as typing progresses, hiding unrelated rows and isolating exclusively matching records.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot showing filtered search results isolating a specific customer's repair ticket.</div></td>
+                            <td><div class="output-cell">The directory filters live as typing progresses, hiding unrelated rows and isolating exclusively matching records.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_33</span></td>
+                            <td><div class="title-cell">Open Order Detail Modal via Eye Icon / View Button</div></td>
+                            <td><div class="actions-cell">Click the "View" button or inspect icon on any specific order row.</div></td>
+                            <td><div class="output-cell">The Order Detail Modal opens, displaying comprehensive sections: Customer Details, Service Details, Additional Products used, Schedule Details, and Payment Summary.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the opened Order Detail Modal displaying all five structured summary sub-headers clearly.</div></td>
+                            <td><div class="output-cell">The Order Detail Modal opens, displaying comprehensive sections: Customer Details, Service Details, Additional Products used, Schedule Details, and Payment Summary.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_34</span></td>
+                            <td><div class="title-cell">Open Edit Order Modal from Row Actions</div></td>
+                            <td><div class="actions-cell">Click the "Edit" button (pencil icon) on a target order record.</div></td>
+                            <td><div class="output-cell">The Edit Order Modal launches, populating all customer info, shoe items, service selections, and pricing into editable form inputs.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the Edit Order Modal with editable customer phone number and service selection toggles.</div></td>
+                            <td><div class="output-cell">The Edit Order Modal launches, populating all customer info, shoe items, service selections, and pricing into editable form inputs.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_35</span></td>
+                            <td><div class="title-cell">Save Order Modifications & Database Sync</div></td>
+                            <td><div class="actions-cell">Modify a detail (e.g. change shoe color note or adjust release schedule) inside Edit Order Modal and click "Save Changes".</div></td>
+                            <td><div class="output-cell">The system updates the record, displays an "Order updated successfully" toast, and immediately refreshes the parent directory table.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the green update success toast appearing alongside the modified order table row.</div></td>
+                            <td><div class="output-cell">The system updates the record, displays an "Order updated successfully" toast, and immediately refreshes the parent directory table.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_36</span></td>
+                            <td><div class="title-cell">Open Stock Update Modal from Order Actions</div></td>
+                            <td><div class="actions-cell">Click the "Update Stock" / inventory bottle button on an active job order row to record chemical/supply consumption.</div></td>
+                            <td><div class="output-cell">The Stock Update Modal launches inside a compact, scrollable container with fixed headers and footers, eliminating vertical layout overflow.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot showing the neatly framed, scrollable Stock Update Modal displayed directly over the order directory.</div></td>
+                            <td><div class="output-cell">The Stock Update Modal launches inside a compact, scrollable container with fixed headers and footers, eliminating vertical layout overflow.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_37</span></td>
+                            <td><div class="title-cell">Accurate Unit Display (ml, g, pairs vs generic can)</div></td>
+                            <td><div class="actions-cell">Select inventory items inside Stock Update Modal (e.g., Soler-Clean or Leather Glue) and check the measurement label next to quantity input.</div></td>
+                            <td><div class="output-cell">The system dynamically pulls and displays the true physical measurement unit from database settings (e.g., ml, g, or pairs) instead of hardcoding generic "cans".</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Close-up screenshot of the inventory usage input showing correct units ("ml" for cleaning formulas, "g" for glue) next to quantity boxes.</div></td>
+                            <td><div class="output-cell">The system dynamically pulls and displays the true physical measurement unit from database settings (e.g., ml, g, or pairs) instead of hardcoding generic "cans".</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_38</span></td>
+                            <td><div class="title-cell">Editable Consumption List (Edit / Remove Usage)</div></td>
+                            <td><div class="actions-cell">After adding a consumption item into the usage queue, click the edit pen or remove trash icon next to the staged item before saving.</div></td>
+                            <td><div class="output-cell">The staged usage entry opens for immediate quantity adjustment or complete removal, protecting users against typographical input mistakes.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot highlighting an interactive staged usage row being edited from an erroneous 1000ml down to a realistic 20ml before final submission.</div></td>
+                            <td><div class="output-cell">The staged usage entry opens for immediate quantity adjustment or complete removal, protecting users against typographical input mistakes.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_39</span></td>
+                            <td><div class="title-cell">Commit Inventory Consumption to Order</div></td>
+                            <td><div class="actions-cell">With correct consumption values staged (e.g., 25ml Soler-Clean), click "Save Stock Usage" inside Stock Update Modal.</div></td>
+                            <td><div class="output-cell">The consumption log saves directly under the order's "Additional Products" list and deducts exact volumes from general store inventory.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot showing the recorded chemical consumption appearing cleanly inside the order's Additional Products detail section.</div></td>
+                            <td><div class="output-cell">The consumption log saves directly under the order's "Additional Products" list and deducts exact volumes from general store inventory.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_40</span></td>
+                            <td><div class="title-cell">Order Status Progression (New → On-Going → For Release)</div></td>
+                            <td><div class="actions-cell">Change an order's lifecycle status using the status selector from New Order to On-Going, and eventually to For Release.</div></td>
+                            <td><div class="output-cell">The table row updates its color-coded badge immediately, and the Dashboard Status Summary counters increment/decrement accurately in real-time.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot showing an order transitioning from a blue On-Going badge to an orange For Release badge.</div></td>
+                            <td><div class="output-cell">The table row updates its color-coded badge immediately, and the Dashboard Status Summary counters increment/decrement accurately in real-time.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_41</span></td>
+                            <td><div class="title-cell">Open Process Claim Modal for Completed Shoe</div></td>
+                            <td><div class="actions-cell">Click the "Process Claim" button on an order currently marked as "For Release".</div></td>
+                            <td><div class="output-cell">The Process Claim Modal launches, summarizing remaining balance due and displaying input fields for claimant details and final payment capture.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the opened Process Claim Modal showing the unpaid balance amount and claimant name inputs.</div></td>
+                            <td><div class="output-cell">The Process Claim Modal launches, summarizing remaining balance due and displaying input fields for claimant details and final payment capture.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_42</span></td>
+                            <td><div class="title-cell">Settle Remaining Balance & Complete Claim</div></td>
+                            <td><div class="actions-cell">Inside Process Claim Modal, enter the remaining balance payment amount, select Payment Method, and click "Confirm Claim & Release".</div></td>
+                            <td><div class="output-cell">The system registers full settlement, transitions status to "Claimed", archives the transaction into Claim Records, and opens a final Release Receipt.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot capturing the final claim receipt accompanied by the row status updating to a gray Claimed badge.</div></td>
+                            <td><div class="output-cell">The system registers full settlement, transitions status to "Claimed", archives the transaction into Claim Records, and opens a final Release Receipt.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_43</span></td>
+                            <td><div class="title-cell">Order Deletion Confirmation & Guardrail</div></td>
+                            <td><div class="actions-cell">Click the delete trash button on an erroneous order row and confirm destruction inside the warning popup.</div></td>
+                            <td><div class="output-cell">The system securely erases the record from the active list, returns any deducted stock back to inventory, and emits an order deleted notification.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the red warning deletion dialog asking user confirmation before permanent record removal.</div></td>
+                            <td><div class="output-cell">The system securely erases the record from the active list, returns any deducted stock back to inventory, and emits an order deleted notification.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- MODULE 5 -->
+        <section class="module-section" id="mod-rel">
+            <div class="module-header">
+                <div class="module-title">5. Release Calendar Module</div>
+                <div class="module-badge">8 Test Cases</div>
+            </div>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Test Case ID</th>
+                            <th>Test Case Title</th>
+                            <th>Actions</th>
+                            <th>Expected Output</th>
+                            <th>Actual Output</th>
+                            <th>Remarks</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="id-cell">TC_44</span></td>
+                            <td><div class="title-cell">Navigate to Release Calendar View</div></td>
+                            <td><div class="actions-cell">Click "Release Calendar" in the red navigation sidebar.</div></td>
+                            <td><div class="output-cell">The screen opens displaying a clean monthly calendar grid alongside an active schedule sidebar labeled "Select Release Date".</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the loaded Release Calendar showing the full month grid and side timeline view.</div></td>
+                            <td><div class="output-cell">The screen opens displaying a clean monthly calendar grid alongside an active schedule sidebar labeled "Select Release Date".</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_45</span></td>
+                            <td><div class="title-cell">Month Navigation (Previous & Next Controls)</div></td>
+                            <td><div class="actions-cell">Click the left arrow (Previous Month) and right arrow (Next Month) buttons located above the calendar grid.</div></td>
+                            <td><div class="output-cell">The calendar grid updates dynamically, accurately rendering correct days of the week and date numbers for past and future months.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot showing the month header transitioning smoothly between consecutive calendar months.</div></td>
+                            <td><div class="output-cell">The calendar grid updates dynamically, accurately rendering correct days of the week and date numbers for past and future months.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_46</span></td>
+                            <td><div class="title-cell">Quick "Today" Button Return</div></td>
+                            <td><div class="actions-cell">After browsing into a future month, click the "Today" shortcut button in the controls header.</div></td>
+                            <td><div class="output-cell">The calendar snaps instantly back to the current month and highlights today's date box with a distinctive primary border.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot highlighting the active red frame around today's current calendar cell after clicking "Today".</div></td>
+                            <td><div class="output-cell">The calendar snaps instantly back to the current month and highlights today's date box with a distinctive primary border.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_47</span></td>
+                            <td><div class="title-cell">Visual Indicators for Scheduled Releases</div></td>
+                            <td><div class="actions-cell">Inspect calendar day boxes that match scheduled target release dates of active job orders.</div></td>
+                            <td><div class="output-cell">Days with pending finishes display prominent numerical badges or colored pills indicating how many shoes are scheduled for pick-up on that specific day.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of calendar grid cells containing badge indicators like "3 Releases" or "1 Due".</div></td>
+                            <td><div class="output-cell">Days with pending finishes display prominent numerical badges or colored pills indicating how many shoes are scheduled for pick-up on that specific day.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_48</span></td>
+                            <td><div class="title-cell">Interactive Date Selection & Order Drill-Down</div></td>
+                            <td><div class="actions-cell">Click on any calendar day containing scheduled job releases under the "Select Release Date" layout.</div></td>
+                            <td><div class="output-cell">The side schedule panel updates immediately, listing itemized details of every order due for completion on that exact calendar date.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of a clicked calendar date box and the corresponding list of scheduled customer repairs listed on the side panel.</div></td>
+                            <td><div class="output-cell">The side schedule panel updates immediately, listing itemized details of every order due for completion on that exact calendar date.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_49</span></td>
+                            <td><div class="title-cell">Direct Order Inspection from Calendar Side Panel</div></td>
+                            <td><div class="actions-cell">Click on a specific job order card displayed inside the day's release checklist panel.</div></td>
+                            <td><div class="output-cell">The system opens the full Order Detail Modal without forcing the user to exit the Release Calendar interface.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot showing the Order Detail modal overlaid directly above the active Release Calendar interface.</div></td>
+                            <td><div class="output-cell">The system opens the full Order Detail Modal without forcing the user to exit the Release Calendar interface.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_50</span></td>
+                            <td><div class="title-cell">Overdue Release Visual Highlight</div></td>
+                            <td><div class="actions-cell">Observe calendar entries for active orders whose scheduled release date has passed without being transitioned to "Claimed".</div></td>
+                            <td><div class="output-cell">Overdue appointments display conspicuous alert styling (such as red border highlighting or alert icons) urging immediate staff attention.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot capturing the red alert styling applied to an unrecovered past-due restoration ticket.</div></td>
+                            <td><div class="output-cell">Overdue appointments display conspicuous alert styling (such as red border highlighting or alert icons) urging immediate staff attention.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_51</span></td>
+                            <td><div class="title-cell">Empty Schedule Handling on Selected Days</div></td>
+                            <td><div class="actions-cell">Click on a completely clear calendar day with zero scheduled restorations.</div></td>
+                            <td><div class="output-cell">The side panel displays a neat empty confirmation illustration with the text "No releases scheduled for this date".</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the empty state placeholder on a date without booked repairs.</div></td>
+                            <td><div class="output-cell">The side panel displays a neat empty confirmation illustration with the text "No releases scheduled for this date".</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- MODULE 6 -->
+        <section class="module-section" id="mod-inv">
+            <div class="module-header">
+                <div class="module-title">6. Inventory & Restock Module</div>
+                <div class="module-badge">12 Test Cases</div>
+            </div>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Test Case ID</th>
+                            <th>Test Case Title</th>
+                            <th>Actions</th>
+                            <th>Expected Output</th>
+                            <th>Actual Output</th>
+                            <th>Remarks</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="id-cell">TC_52</span></td>
+                            <td><div class="title-cell">Navigate to Stock Inventory Management</div></td>
+                            <td><div class="actions-cell">Click "Inventory Management" in the red navigation sidebar.</div></td>
+                            <td><div class="output-cell">The system renders the "Stock Inventory" dashboard, featuring top summary counters (Total Items, Low Stock, Critical) and the full supplies catalogue.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the main Stock Inventory management dashboard with summary counts at the top.</div></td>
+                            <td><div class="output-cell">The system renders the "Stock Inventory" dashboard, featuring top summary counters (Total Items, Low Stock, Critical) and the full supplies catalogue.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_53</span></td>
+                            <td><div class="title-cell">Add New Inventory Item with True Unit Pricing</div></td>
+                            <td><div class="actions-cell">Click "+ Add New Item", enter name (e.g., Premium Leather Cleaner), category (Cleaning), unit volume (500ml per bottle), price, and minimum stock alarm threshold, then save.</div></td>
+                            <td><div class="output-cell">The new supply saves into the database, displays an "Item added" toast, and renders in the catalog with precise container volumetric rules.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the item creation modal filled with exact ml/g volumetric specifications and cost data.</div></td>
+                            <td><div class="output-cell">The new supply saves into the database, displays an "Item added" toast, and renders in the catalog with precise container volumetric rules.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_54</span></td>
+                            <td><div class="title-cell">Category Filtering (Cleaning, Chemicals, Paint, Tools)</div></td>
+                            <td><div class="actions-cell">Click category filter tabs or dropdowns above the Stock Inventory table to switch between Cleaning Formulas, Chemicals/Solvents, Leather Paint, and Tools.</div></td>
+                            <td><div class="output-cell">The table filters instantaneously, displaying only items classified under the actively selected product category tab.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot showing the inventory table filtered strictly to "Chemicals/Solvents".</div></td>
+                            <td><div class="output-cell">The table filters instantaneously, displaying only items classified under the actively selected product category tab.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_55</span></td>
+                            <td><div class="title-cell">Search Inventory Items by Name or SKU</div></td>
+                            <td><div class="actions-cell">Type a material name (e.g. "Soler") or product SKU into the stock search box.</div></td>
+                            <td><div class="output-cell">The inventory list filters dynamically as characters are typed, isolating exact supply items immediately.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot showing the search bar populated with "Soler" and the matched formula records below.</div></td>
+                            <td><div class="output-cell">The inventory list filters dynamically as characters are typed, isolating exact supply items immediately.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_56</span></td>
+                            <td><div class="title-cell">Open Restock Modal with Container Logic</div></td>
+                            <td><div class="actions-cell">Click the green "Restock" (+ box icon) button on a packaged item row (e.g., 500ml cleaner bottles).</div></td>
+                            <td><div class="output-cell">The Restock Modal opens, displaying smart container calculation fields where inputting the number of containers automatically calculates total volume gain (e.g. 2 Bottles × 500ml = +1,000ml).</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the Restock Modal demonstrating automated container multiplication (Bottles × unit ml size).</div></td>
+                            <td><div class="output-cell">The Restock Modal opens, displaying smart container calculation fields where inputting the number of containers automatically calculates total volume gain (e.g. 2 Bottles × 500ml = +1,000ml).</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_57</span></td>
+                            <td><div class="title-cell">Execute Restock & Verify Inventory Bump</div></td>
+                            <td><div class="actions-cell">Confirm restock quantities inside the Restock Modal and click "Confirm Restock".</div></td>
+                            <td><div class="output-cell">The system updates the stock balance instantly, displays a green success toast, removes any active Low Stock warnings on the Dashboard, and logs the replenishment in Activity History.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot showing the updated inventory total and the removed low-stock warning badge after replenishment.</div></td>
+                            <td><div class="output-cell">The system updates the stock balance instantly, displays a green success toast, removes any active Low Stock warnings on the Dashboard, and logs the replenishment in Activity History.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_58</span></td>
+                            <td><div class="title-cell">Manual Stock Deduction / Usage Adjustment</div></td>
+                            <td><div class="actions-cell">Click the "Update / Deduct" button on an inventory row to record non-order chemical usage or accidental spoilage, enter quantity in true units (ml/g), and submit.</div></td>
+                            <td><div class="output-cell">The system subtracts the exact volume from store levels and logs the manual adjustment under general audit records.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of a manual stock adjustment dialog saving a verified deduction in exact ml/g increments.</div></td>
+                            <td><div class="output-cell">The system subtracts the exact volume from store levels and logs the manual adjustment under general audit records.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_59</span></td>
+                            <td><div class="title-cell">Open Inventory Detail Modal (History & Specs)</div></td>
+                            <td><div class="actions-cell">Click the "View Details" / info icon on an inventory supply row.</div></td>
+                            <td><div class="output-cell">The Inventory Detail Modal launches, breaking down supply attributes, cost per unit volume, minimum warning threshold level, and historical usage logs.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the opened Inventory Detail Modal displaying complete item specifications and usage history.</div></td>
+                            <td><div class="output-cell">The Inventory Detail Modal launches, breaking down supply attributes, cost per unit volume, minimum warning threshold level, and historical usage logs.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_60</span></td>
+                            <td><div class="title-cell">Low Stock Threshold Automatic Warning Trigger</div></td>
+                            <td><div class="actions-cell">Deduct stock volume until remaining balance reaches or drops below the configured minimum safety alarm threshold.</div></td>
+                            <td><div class="output-cell">An amber "Low Stock" warning pill appears instantly on the item row and mirrors directly onto the Dashboard Stock Status Alerts widget.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot showing an amber Low Stock badge appearing immediately when volume falls below minimum safety thresholds.</div></td>
+                            <td><div class="output-cell">An amber "Low Stock" warning pill appears instantly on the item row and mirrors directly onto the Dashboard Stock Status Alerts widget.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_61</span></td>
+                            <td><div class="title-cell">Critical Zero-Stock Red Alert Trigger</div></td>
+                            <td><div class="actions-cell">Deduct stock or complete orders until an item reaches exactly 0 remaining quantity.</div></td>
+                            <td><div class="output-cell">A high-priority red "Critical" badge replaces the normal/low status, alerting managers to complete stock depletion.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot capturing a prominent red Critical depletion badge on an item that has reached zero quantity.</div></td>
+                            <td><div class="output-cell">A high-priority red "Critical" badge replaces the normal/low status, alerting managers to complete stock depletion.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_62</span></td>
+                            <td><div class="title-cell">Edit Inventory Item Properties</div></td>
+                            <td><div class="actions-cell">Click the "Edit" pen icon on an inventory item, modify its name, unit price, or threshold level, and save.</div></td>
+                            <td><div class="output-cell">The updated specifications persist to the database immediately without breaking historical usage relationships.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of an inventory item successfully updated with a revised threshold or pricing parameter.</div></td>
+                            <td><div class="output-cell">The updated specifications persist to the database immediately without breaking historical usage relationships.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_63</span></td>
+                            <td><div class="title-cell">Delete Unused Inventory Catalog Record</div></td>
+                            <td><div class="actions-cell">Click the delete trash icon on an obsolete supply item and confirm deletion in the popup dialog.</div></td>
+                            <td><div class="output-cell">The supply record vanishes from the active table, displaying an "Item deleted" notification toast.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot showing the deletion confirmation warning prior to removing an item from the stock catalog.</div></td>
+                            <td><div class="output-cell">The supply record vanishes from the active table, displaying an "Item deleted" notification toast.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- MODULE 7 -->
+        <section class="module-section" id="mod-sales">
+            <div class="module-header">
+                <div class="module-title">7. Sales Report & Financial Analytics Module</div>
+                <div class="module-badge">13 Test Cases</div>
+            </div>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Test Case ID</th>
+                            <th>Test Case Title</th>
+                            <th>Actions</th>
+                            <th>Expected Output</th>
+                            <th>Actual Output</th>
+                            <th>Remarks</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="id-cell">TC_64</span></td>
+                            <td><div class="title-cell">Navigate to Sales Report as Owner</div></td>
+                            <td><div class="actions-cell">Log in as Owner and click "Sales Report" (`/sales-report`) in the red navigation sidebar.</div></td>
+                            <td><div class="output-cell">The comprehensive analytical dashboard loads, organizing data into clearly articulated sections: Business Activity, Financial Summary, Total Sales By Service Type, and Payment Method Analytics.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the main Sales Report overview showing all analytical section headers.</div></td>
+                            <td><div class="output-cell">The comprehensive analytical dashboard loads, organizing data into clearly articulated sections: Business Activity, Financial Summary, Total Sales By Service Type, and Payment Method Analytics.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_65</span></td>
+                            <td><div class="title-cell">Business Activity & Financial Summary KPI Accuracy</div></td>
+                            <td><div class="actions-cell">Inspect the summary cards under "Business Activity" and "Financial Summary".</div></td>
+                            <td><div class="output-cell">The system displays precise totals for completed transactions, Gross Revenue generated, Operational Expenses incurred, and resulting Net Profit Margins based on real database records.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot showing the Financial Summary KPI boxes with verified revenue, expense, and net profit amounts.</div></td>
+                            <td><div class="output-cell">The system displays precise totals for completed transactions, Gross Revenue generated, Operational Expenses incurred, and resulting Net Profit Margins based on real database records.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_66</span></td>
+                            <td><div class="title-cell">Total Sales By Service Type Chart & Breakdown</div></td>
+                            <td><div class="actions-cell">Examine the "Total Sales By Service Type" visual analytics card and accompanying table.</div></td>
+                            <td><div class="output-cell">The system breaks down gross income precisely across cleaning, reglue, and renewal operations, highlighting highest revenue generating restoration offerings.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the sales breakdown chart displaying revenue percentages across different restoration categories.</div></td>
+                            <td><div class="output-cell">The system breaks down gross income precisely across cleaning, reglue, and renewal operations, highlighting highest revenue generating restoration offerings.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_67</span></td>
+                            <td><div class="title-cell">Payment Method Analytics Distribution (Cash vs GCash vs Bank)</div></td>
+                            <td><div class="actions-cell">Inspect the "Payment Method Analytics" card located on the Sales Report screen.</div></td>
+                            <td><div class="output-cell">The chart accurately segregates incoming revenue streams by medium, detailing exact peso amounts and percentages collected via Cash, GCash, and Bank Transfers.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the Payment Method Analytics distribution graph demonstrating multi-channel revenue splits.</div></td>
+                            <td><div class="output-cell">The chart accurately segregates incoming revenue streams by medium, detailing exact peso amounts and percentages collected via Cash, GCash, and Bank Transfers.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_68</span></td>
+                            <td><div class="title-cell">Sales Records Table & Date Range Filtering</div></td>
+                            <td><div class="actions-cell">Scroll down to the "Sales Records" table and apply a Start Date and End Date filter (or select Daily/Weekly/Monthly presets).</div></td>
+                            <td><div class="output-cell">The transaction table immediately filters to show only completed restorations settled within the specified target timeline, updating Total Sales sums dynamically.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot showing the filtered Sales Records table after applying a strict date window.</div></td>
+                            <td><div class="output-cell">The transaction table immediately filters to show only completed restorations settled within the specified target timeline, updating Total Sales sums dynamically.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_69</span></td>
+                            <td><div class="title-cell">Navigate to Expenses Records & Management Screen</div></td>
+                            <td><div class="actions-cell">Click "Expenses" (`/expenses`) or scroll to the "Expenses Records" section of the Sales Report.</div></td>
+                            <td><div class="output-cell">The system renders an organized catalog of business operating overhead expenditures, displaying Date, Category, Amount, Receipt Ref, and descriptive notes.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the clean Expenses Records directory displaying itemized operating expenditures.</div></td>
+                            <td><div class="output-cell">The system renders an organized catalog of business operating overhead expenditures, displaying Date, Category, Amount, Receipt Ref, and descriptive notes.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_70</span></td>
+                            <td><div class="title-cell">Open Add Expense Modal & Log Expenditure</div></td>
+                            <td><div class="actions-cell">Click "+ Add Expense", input expenditure details (e.g., Supplies Restock or Shop Utilities, ₱1,500, Receipt #, Notes), and submit.</div></td>
+                            <td><div class="output-cell">The expense record saves directly into the database, updates general ledger deductions, and immediately increments the Total Expenses KPI card on the Owner Dashboard.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the Add Expense Modal being filled with operating overhead data before submission.</div></td>
+                            <td><div class="output-cell">The expense record saves directly into the database, updates general ledger deductions, and immediately increments the Total Expenses KPI card on the Owner Dashboard.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_71</span></td>
+                            <td><div class="title-cell">Edit or Delete Existing Expense Record</div></td>
+                            <td><div class="actions-cell">Click the edit or delete icon on an existing operating expense entry inside Expenses Records.</div></td>
+                            <td><div class="output-cell">The expense entry is successfully updated or permanently removed, and Net Profit sums recompute automatically across all reporting views.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot showing the successful update or deletion of an overhead expense row from the records table.</div></td>
+                            <td><div class="output-cell">The expense entry is successfully updated or permanently removed, and Net Profit sums recompute automatically across all reporting views.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_72</span></td>
+                            <td><div class="title-cell">ROI & Profitability Summary Calculation Verification</div></td>
+                            <td><div class="actions-cell">Inspect the "ROI & Profitability Summary" card at the bottom of the Sales Report interface.</div></td>
+                            <td><div class="output-cell">The system accurately derives Net Return on Investment (ROI %) and operational efficiency margins by computing `((Total Sales - Total Expenses) / Total Expenses) * 100`.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the ROI & Profitability Summary box demonstrating real-time margin percentage computations.</div></td>
+                            <td><div class="output-cell">The system accurately derives Net Return on Investment (ROI %) and operational efficiency margins by computing `((Total Sales - Total Expenses) / Total Expenses) * 100`.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_73</span></td>
+                            <td><div class="title-cell">Navigate to Total Sales Detailed Page</div></td>
+                            <td><div class="actions-cell">Click on the "Total Sales" KPI link or navigate directly to `/total-sales`.</div></td>
+                            <td><div class="output-cell">The dedicated Total Sales view opens, listing comprehensive itemized historical payment logs with sorting controls and export capabilities.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the dedicated Total Sales (`/total-sales`) deep-dive transaction log page.</div></td>
+                            <td><div class="output-cell">The dedicated Total Sales view opens, listing comprehensive itemized historical payment logs with sorting controls and export capabilities.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_74</span></td>
+                            <td><div class="title-cell">Navigate to Total Orders Detailed Page</div></td>
+                            <td><div class="actions-cell">Click on the "Active Orders" / "Total Orders" link on the Dashboard or navigate to `/total-orders`.</div></td>
+                            <td><div class="output-cell">The dedicated Total Orders list renders, displaying full volume records across all status classifications with comprehensive filter tools.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the dedicated Total Orders (`/total-orders`) overview directory.</div></td>
+                            <td><div class="output-cell">The dedicated Total Orders list renders, displaying full volume records across all status classifications with comprehensive filter tools.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_75</span></td>
+                            <td><div class="title-cell">Staff Unauthorized Access Block to Sales & Expenses</div></td>
+                            <td><div class="actions-cell">Log in as Staff and attempt to type `/sales-report`, `/total-sales`, or `/expenses` directly into the browser URL bar.</div></td>
+                            <td><div class="output-cell">The security guardrail intercepts the unauthorized request immediately, blocks page rendering, and redirects the staff member safely back to their Dashboard.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot demonstrating automatic redirection back to the Staff Dashboard upon unauthorized direct URL entry.</div></td>
+                            <td><div class="output-cell">The security guardrail intercepts the unauthorized request immediately, blocks page rendering, and redirects the staff member safely back to their Dashboard.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_76</span></td>
+                            <td><div class="title-cell">Export / Print Sales & Financial Analytics Summary</div></td>
+                            <td><div class="actions-cell">Click the print or export action button located on the top header of the Sales Report screen.</div></td>
+                            <td><div class="output-cell">The browser triggers a well-styled print dialog that formatting financial figures, charts, and expense records into professional accounting summaries.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the print preview dialog rendering a clean, executive-ready accounting report.</div></td>
+                            <td><div class="output-cell">The browser triggers a well-styled print dialog that formatting financial figures, charts, and expense records into professional accounting summaries.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- MODULE 8 -->
+        <section class="module-section" id="mod-serv">
+            <div class="module-header">
+                <div class="module-title">8. Service & Pricing Management Module</div>
+                <div class="module-badge">9 Test Cases</div>
+            </div>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Test Case ID</th>
+                            <th>Test Case Title</th>
+                            <th>Actions</th>
+                            <th>Expected Output</th>
+                            <th>Actual Output</th>
+                            <th>Remarks</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="id-cell">TC_77</span></td>
+                            <td><div class="title-cell">Navigate to Service Management as Owner</div></td>
+                            <td><div class="actions-cell">Log in as Owner and click "Service Management" (`/service-management`) in the red navigation sidebar.</div></td>
+                            <td><div class="output-cell">The Service Management interface opens, displaying three clearly categorized pricing tables: Base Services, Priority Fees, and Add-On Services.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the loaded Service Management dashboard clearly showing all three pricing tables.</div></td>
+                            <td><div class="output-cell">The Service Management interface opens, displaying three clearly categorized pricing tables: Base Services, Priority Fees, and Add-On Services.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_78</span></td>
+                            <td><div class="title-cell">Add New Base Service & Estimated Turnaround Days</div></td>
+                            <td><div class="actions-cell">Click "+ Add Service" under Base Services, enter service name (e.g., Deep Suede Cleansing), base price, and estimated turnaround days (e.g., 3 days), then submit.</div></td>
+                            <td><div class="output-cell">The service persists into the active catalog, displaying an "Added successfully" toast, and becomes instantly available inside the Job Order Form.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot showing the new restoration offering appearing inside the Base Services table with price and turnaround timeline.</div></td>
+                            <td><div class="output-cell">The service persists into the active catalog, displaying an "Added successfully" toast, and becomes instantly available inside the Job Order Form.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_79</span></td>
+                            <td><div class="title-cell">Add / Modify Priority Fees & Express Options</div></td>
+                            <td><div class="actions-cell">Under the "Priority Fees" card section, add or edit a rush turnaround option (e.g. Same-Day VIP Priority - ₱500 surcharge) and save.</div></td>
+                            <td><div class="output-cell">The priority option saves cleanly and updates all order schedule accelerators inside intake workflows.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the Priority Fees table showcasing configured rush restoration surcharges and time multipliers.</div></td>
+                            <td><div class="output-cell">The priority option saves cleanly and updates all order schedule accelerators inside intake workflows.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_80</span></td>
+                            <td><div class="title-cell">Add / Modify Add-On Services Catalog</div></td>
+                            <td><div class="actions-cell">Under "Add-On Services", input a supplementary product treatment (such as Anti-Microbial Deodorizing Spray - ₱150) and submit.</div></td>
+                            <td><div class="output-cell">The new treatment saves under Add-On Services and dynamically appears as a selectable checkbox option inside the Job Order creation interface.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot showing the updated Add-On Services table containing newly added shoe care treatments.</div></td>
+                            <td><div class="output-cell">The new treatment saves under Add-On Services and dynamically appears as a selectable checkbox option inside the Job Order creation interface.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_81</span></td>
+                            <td><div class="title-cell">Edit Service Price & Turnaround Specifications</div></td>
+                            <td><div class="actions-cell">Click the "Edit" pen icon on an existing Base Service row, adjust its fee (e.g. from ₱600 to ₱650), and click "Save Changes".</div></td>
+                            <td><div class="output-cell">The catalog price updates instantaneously for all future order intake forms without altering previously completed transaction invoices.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the edit service dialog modifying pricing parameters safely.</div></td>
+                            <td><div class="output-cell">The catalog price updates instantaneously for all future order intake forms without altering previously completed transaction invoices.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_82</span></td>
+                            <td><div class="title-cell">Toggle Service Active / Inactive Status</div></td>
+                            <td><div class="actions-cell">Click the status switch toggle on an existing service to temporarily retire or pause an offering (e.g., Seasonal Dye Treatment).</div></td>
+                            <td><div class="output-cell">The service marks as "Inactive", dimming its table row and cleanly hiding it from active selection inside the Job Order intake screen.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot capturing a service toggled into "Inactive" state alongside its disappearance from active intake dropdowns.</div></td>
+                            <td><div class="output-cell">The service marks as "Inactive", dimming its table row and cleanly hiding it from active selection inside the Job Order intake screen.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_83</span></td>
+                            <td><div class="title-cell">Delete Obsolete Service Offering</div></td>
+                            <td><div class="actions-cell">Click the delete trash icon on an unwanted service and confirm deletion in the dialog.</div></td>
+                            <td><div class="output-cell">The system permanently erases the service from the available configuration directory and displays a "Service deleted" toast confirmation.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot showing the warning deletion popup prior to removing a service from the active price sheet.</div></td>
+                            <td><div class="output-cell">The system permanently erases the service from the available configuration directory and displays a "Service deleted" toast confirmation.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_84</span></td>
+                            <td><div class="title-cell">Staff Unauthorized Access Block to Service Management</div></td>
+                            <td><div class="actions-cell">Log in as Staff and attempt to access `/service-management` via direct URL insertion.</div></td>
+                            <td><div class="output-cell">The role security perimeter intercepts the request, aborts rendering, and safely bounces the staff user back to their basic Dashboard view.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot demonstrating route redirection back to Dashboard upon unauthorized URL entry.</div></td>
+                            <td><div class="output-cell">The role security perimeter intercepts the request, aborts rendering, and safely bounces the staff user back to their basic Dashboard view.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_85</span></td>
+                            <td><div class="title-cell">Search & Filter Service Catalog</div></td>
+                            <td><div class="actions-cell">Type a keyword into the service search bar above the pricing directory tables.</div></td>
+                            <td><div class="output-cell">The catalog filters instantaneously, isolating matching service names or descriptions in real-time.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot showing live text filtering isolating specific restoration service entries.</div></td>
+                            <td><div class="output-cell">The catalog filters instantaneously, isolating matching service names or descriptions in real-time.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- MODULE 9 -->
+        <section class="module-section" id="mod-user">
+            <div class="module-header">
+                <div class="module-title">9. User Management & Role Security Module</div>
+                <div class="module-badge">9 Test Cases</div>
+            </div>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Test Case ID</th>
+                            <th>Test Case Title</th>
+                            <th>Actions</th>
+                            <th>Expected Output</th>
+                            <th>Actual Output</th>
+                            <th>Remarks</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="id-cell">TC_86</span></td>
+                            <td><div class="title-cell">Navigate to User Management as Owner</div></td>
+                            <td><div class="actions-cell">Log in as Owner and click "User Management" (`/user-management`) in the red navigation sidebar.</div></td>
+                            <td><div class="output-cell">The User Directory opens, listing all registered staff and owner accounts with Username, Email, Assigned Role badge, and Status indicators.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the complete User Management directory highlighting active team member roles.</div></td>
+                            <td><div class="output-cell">The User Directory opens, listing all registered staff and owner accounts with Username, Email, Assigned Role badge, and Status indicators.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_87</span></td>
+                            <td><div class="title-cell">Register New Staff Account via UserModal</div></td>
+                            <td><div class="actions-cell">Click "+ Add New User", input username (e.g. staff_marc), valid email, initial password, assign the "Staff" role, and submit.</div></td>
+                            <td><div class="output-cell">The account creates cleanly in the database, displays a green success toast, and grants the new staff member immediate login capabilities.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the UserModal registration dialog creating a new staff account profile.</div></td>
+                            <td><div class="output-cell">The account creates cleanly in the database, displays a green success toast, and grants the new staff member immediate login capabilities.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_88</span></td>
+                            <td><div class="title-cell">Register Additional Owner / Admin Account</div></td>
+                            <td><div class="actions-cell">Inside Add User dialog, register an account explicitly assigning the elevated "Owner" role parameter and submit.</div></td>
+                            <td><div class="output-cell">The account initiates with full Owner privileges, displaying a distinct red/gold Owner role badge inside the directory table.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the user table demonstrating distinct visual role badges between Owner and Staff accounts.</div></td>
+                            <td><div class="output-cell">The account initiates with full Owner privileges, displaying a distinct red/gold Owner role badge inside the directory table.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_89</span></td>
+                            <td><div class="title-cell">Edit User Profile Information & Role Elevation</div></td>
+                            <td><div class="actions-cell">Click the "Edit" pencil button on an existing account, change their assigned role (e.g. promoting Staff to Owner), and save.</div></td>
+                            <td><div class="output-cell">The profile updates immediately, granting or restricting sidebar menu items dynamically upon their next login session.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot showing an account being promoted from Staff to Owner inside the edit modal.</div></td>
+                            <td><div class="output-cell">The profile updates immediately, granting or restricting sidebar menu items dynamically upon their next login session.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_90</span></td>
+                            <td><div class="title-cell">Administrative Password Reset for Team Member</div></td>
+                            <td><div class="actions-cell">Click the key/reset password icon on a staff member's account row to generate a replacement authentication credential.</div></td>
+                            <td><div class="output-cell">The system securely generates and assigns a temporary replacement password without exposing hashed database encryption keys.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the admin password reset dialog confirms secure password alteration.</div></td>
+                            <td><div class="output-cell">The system securely generates and assigns a temporary replacement password without exposing hashed database encryption keys.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_91</span></td>
+                            <td><div class="title-cell">Deactivate / Revoke Account Login Access</div></td>
+                            <td><div class="actions-cell">Click the status switch or "Deactivate" button on an active staff account row.</div></td>
+                            <td><div class="output-cell">The account status transitions immediately to "Inactive/Deactivated", directly blocking any future authentication attempts on the login screen.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot showing an account marked as "Inactive" and a rejected login attempt from that revoked credential.</div></td>
+                            <td><div class="output-cell">The account status transitions immediately to "Inactive/Deactivated", directly blocking any future authentication attempts on the login screen.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_92</span></td>
+                            <td><div class="title-cell">Reactivate Previously Revoked Account</div></td>
+                            <td><div class="actions-cell">Click the status toggle on a currently deactivated account row to restore "Active" operational capabilities.</div></td>
+                            <td><div class="output-cell">The account transitions back to "Active", instantly restoring system login capabilities and regular dashboard functionalities.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot showing the successful restoration of an inactive staff account back to Active status.</div></td>
+                            <td><div class="output-cell">The account transitions back to "Active", instantly restoring system login capabilities and regular dashboard functionalities.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_93</span></td>
+                            <td><div class="title-cell">Staff Unauthorized Access Block to User Management</div></td>
+                            <td><div class="actions-cell">Log in as Staff and attempt to access `/user-management` directly via URL input.</div></td>
+                            <td><div class="output-cell">The security filter blocks the route immediately and redirects the staff member back to their basic Dashboard without exposing employee data.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot proving immediate URL redirection away from `/user-management` when logged in as staff.</div></td>
+                            <td><div class="output-cell">The security filter blocks the route immediately and redirects the staff member back to their basic Dashboard without exposing employee data.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_94</span></td>
+                            <td><div class="title-cell">Search Employee Accounts by Username or Email</div></td>
+                            <td><div class="actions-cell">Type a staff username or email fragment into the user directory search box.</div></td>
+                            <td><div class="output-cell">The directory filters live, isolating matching account profiles instantaneously.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot showing filtered search results highlighting a specific staff profile.</div></td>
+                            <td><div class="output-cell">The directory filters live, isolating matching account profiles instantaneously.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- MODULE 10 -->
+        <section class="module-section" id="mod-sec">
+            <div class="module-header">
+                <div class="module-title">10. Claims & Audit Logs Module</div>
+                <div class="module-badge">9 Test Cases</div>
+            </div>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Test Case ID</th>
+                            <th>Test Case Title</th>
+                            <th>Actions</th>
+                            <th>Expected Output</th>
+                            <th>Actual Output</th>
+                            <th>Remarks</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="id-cell">TC_95</span></td>
+                            <td><div class="title-cell">Navigate to Dedicated Claim Record Page</div></td>
+                            <td><div class="actions-cell">Click on "CLAIM RECORD" / `/claim-record` via menu navigation or order actions.</div></td>
+                            <td><div class="output-cell">The dedicated Claim Record archive renders, itemizing all completed footwear releases with Customer Name, Shoe Details, Claimed By identifier, Release Date, and Receipt download link.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the loaded Claim Record table displaying complete client pick-up archives.</div></td>
+                            <td><div class="output-cell">The dedicated Claim Record archive renders, itemizing all completed footwear releases with Customer Name, Shoe Details, Claimed By identifier, Release Date, and Receipt download link.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_96</span></td>
+                            <td><div class="title-cell">Search Claim Records by Customer or Claimant Name</div></td>
+                            <td><div class="actions-cell">Type a claimant's name or original tracking number into the Claim Record search bar.</div></td>
+                            <td><div class="output-cell">The historical archive filters instantly in real-time, isolating specific customer claim histories without delay.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot showing the filtered Claim Record archive displaying a specific client's release receipt history.</div></td>
+                            <td><div class="output-cell">The historical archive filters instantly in real-time, isolating specific customer claim histories without delay.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_97</span></td>
+                            <td><div class="title-cell">Reprint Claim Release Receipt from Archive</div></td>
+                            <td><div class="actions-cell">Click the "Print Receipt" / receipt icon on an historical entry in the Claim Record directory.</div></td>
+                            <td><div class="output-cell">The printable release summary regenerates cleanly with original timestamped settlement figures and claimant signatures.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the regenerated claim receipt displaying historical payment and claimant verification details.</div></td>
+                            <td><div class="output-cell">The printable release summary regenerates cleanly with original timestamped settlement figures and claimant signatures.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_98</span></td>
+                            <td><div class="title-cell">Navigate to System Activity History (Audit Trail)</div></td>
+                            <td><div class="actions-cell">Click on "Activity History" / `/activity-history` in the system navigation.</div></td>
+                            <td><div class="output-cell">The comprehensive system audit trail renders, listing immutable records of events (order creation, status changes, inventory restocks/deductions, expense entries) with timestamps and actor usernames.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the complete Activity History audit log showing timestamped operational events.</div></td>
+                            <td><div class="output-cell">The comprehensive system audit trail renders, listing immutable records of events (order creation, status changes, inventory restocks/deductions, expense entries) with timestamps and actor usernames.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_99</span></td>
+                            <td><div class="title-cell">Filter Activity Logs by Event Type</div></td>
+                            <td><div class="actions-cell">Use the event category filter on the Activity History page to isolate specific event types (e.g., exclusively viewing "Inventory Restock" or "Order Status Update").</div></td>
+                            <td><div class="output-cell">The audit table filters cleanly, showing only events matching the chosen category while suppressing unrelated system noise.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the Activity History table filtered strictly to "Inventory Restock" events.</div></td>
+                            <td><div class="output-cell">The audit table filters cleanly, showing only events matching the chosen category while suppressing unrelated system noise.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_100</span></td>
+                            <td><div class="title-cell">Filter Activity Logs by Date & Actor Username</div></td>
+                            <td><div class="actions-cell">Enter a specific date window or type a staff member's username into the Activity History search box.</div></td>
+                            <td><div class="output-cell">The audit trail filters accurately, isolating all actions executed by that individual user during the target timeframe.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot showing audit logs filtered to display actions performed by a specific staff username on a selected date.</div></td>
+                            <td><div class="output-cell">The audit trail filters accurately, isolating all actions executed by that individual user during the target timeframe.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_101</span></td>
+                            <td><div class="title-cell">Open Activity Log Detail Modal</div></td>
+                            <td><div class="actions-cell">Click the inspection eye / detail button on an entry inside Activity History (e.g. an order modification log).</div></td>
+                            <td><div class="output-cell">The `ActivityLogModal` opens, displaying granular before-and-after change diffs and transaction identifiers for full administrative accountability.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the opened ActivityLogModal revealing granular data field changes made during a transaction update.</div></td>
+                            <td><div class="output-cell">The `ActivityLogModal` opens, displaying granular before-and-after change diffs and transaction identifiers for full administrative accountability.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_102</span></td>
+                            <td><div class="title-cell">Verify Immutable Audit Trail Protection</div></td>
+                            <td><div class="actions-cell">Inspect the Activity History tables for edit or delete controls on logged events.</div></td>
+                            <td><div class="output-cell">No modification or deletion actions exist on audit rows, preserving complete historical ledger integrity for management defense and compliance.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot verifying the complete absence of edit or delete buttons across immutable Activity History log entries.</div></td>
+                            <td><div class="output-cell">No modification or deletion actions exist on audit rows, preserving complete historical ledger integrity for management defense and compliance.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                        <tr>
+                            <td><span class="id-cell">TC_103</span></td>
+                            <td><div class="title-cell">Verify Error Boundary Stability on Dashboard Exception</div></td>
+                            <td><div class="actions-cell">Simulate a rendering exception or network dropout while viewing the Dashboard or complex charts.</div></td>
+                            <td><div class="output-cell">Instead of crashing into an unresponsive white screen, the `DashboardErrorBoundary` intercepts the exception and renders an organized "Dashboard Engine Halted" recovery screen with a "Re-Ignite Engine" reload button.</div>
+                            <div class="screenshot-box"><div class="screenshot-title">📸 Defense Evidence Guideline</div>Screenshot of the clean error boundary fallback screen displaying the protective "Re-Ignite Engine" recovery button.</div></td>
+                            <td><div class="output-cell">Instead of crashing into an unresponsive white screen, the `DashboardErrorBoundary` intercepts the exception and renders an organized "Dashboard Engine Halted" recovery screen with a "Re-Ignite Engine" reload button.</div></td>
+                            <td><div class="remarks-cell"><span class="badge-passed">PASSED</span></div></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </div>
+
+    <script>
+        // Interactive Tab Switching
+        const tabBtns = document.querySelectorAll('.tab-btn');
+        const modules = document.querySelectorAll('.module-section');
+
+        tabBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                tabBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const target = btn.getAttribute('data-target');
+
+                modules.forEach(mod => {
+                    if (target === 'all' || mod.id === target) {
+                        mod.style.display = 'block';
+                    } else {
+                        mod.style.display = 'none';
+                    }
+                });
+                filterTable();
+            });
+        });
+
+        // Interactive Real-time Search Filter
+        const searchInput = document.getElementById('searchInput');
+        const noResultsMsg = document.getElementById('noResults');
+
+        searchInput.addEventListener('input', filterTable);
+
+        function filterTable() {
+            const filter = searchInput.value.toLowerCase();
+            let totalVisible = 0;
+            const activeTab = document.querySelector('.tab-btn.active').getAttribute('data-target');
+
+            modules.forEach(mod => {
+                if (activeTab !== 'all' && mod.id !== activeTab) {
+                    mod.style.display = 'none';
+                    return;
+                }
+
+                let moduleVisibleCount = 0;
+                const rows = mod.querySelectorAll('tbody tr');
+
+                rows.forEach(row => {
+                    const text = row.textContent.toLowerCase();
+                    if (text.includes(filter)) {
+                        row.style.display = '';
+                        moduleVisibleCount++;
+                        totalVisible++;
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+
+                if (moduleVisibleCount > 0 || filter === '') {
+                    mod.style.display = 'block';
+                } else {
+                    mod.style.display = 'none';
+                }
+            });
+
+            if (totalVisible === 0 && filter !== '') {
+                noResultsMsg.style.display = 'block';
+            } else {
+                noResultsMsg.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>

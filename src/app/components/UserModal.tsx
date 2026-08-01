@@ -22,6 +22,7 @@ export default function UserModal({ isOpen, onClose, user, onSave }: UserModalPr
     const [active, setActive] = useState(true);
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+    const [passwordError, setPasswordError] = useState('');
 
     useEffect(() => {
         if (user) {
@@ -37,10 +38,20 @@ export default function UserModal({ isOpen, onClose, user, onSave }: UserModalPr
             setActive(true);
             setPassword('');
         }
+        setPasswordError('');
     }, [user, isOpen]); // Reset when checking new vs edit
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        setPasswordError('');
+
+        if (!user || password) {
+            if (password.length < 8 || !/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/\d/.test(password)) {
+                setPasswordError("Password must be at least 8 chars, 1 uppercase, 1 lowercase, and 1 number.");
+                return;
+            }
+        }
+
         onSave({
             username,
             email,
@@ -109,6 +120,13 @@ export default function UserModal({ isOpen, onClose, user, onSave }: UserModalPr
                                     {showPassword ? <EyeOff className="h-4 w-4 text-gray-400" /> : <Eye className="h-4 w-4 text-gray-400" />}
                                 </Button>
                             </div>
+                            {passwordError ? (
+                                <p className="text-xs text-red-500 font-bold mt-1">{passwordError}</p>
+                            ) : (
+                                <p className="text-[10px] text-gray-500 mt-1 font-medium leading-tight">
+                                    Must be at least 8 characters long, containing uppercase, lowercase, and a number.
+                                </p>
+                            )}
                         </div>
                     )}
 

@@ -1027,6 +1027,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                             <Label htmlFor="customerName" className={LABEL_STYLE}>Customer Name</Label>
                             <ClearableInput
                                 id="customerName"
+                                autoComplete="off"
                                 value={customerName}
                                 onChange={(e: any) => {
                                     setCustomerName(e.target.value);

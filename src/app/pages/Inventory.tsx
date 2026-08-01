@@ -591,7 +591,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                 </CardContent>
             </Card>
             <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-                <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
+                <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle className="text-[12px] font-black uppercase tracking-widest text-center">
                             {editingItem ? 'Edit Inventory Item' : 'New Inventory Item'}
@@ -604,7 +604,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                 className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs" 
                                 placeholder="e.g. Standard Shoe Cleaner" 
                                 value={formData.name}
-                                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                                onChange={(e) => setFormData((prev: any) => ({ ...prev, name: e.target.value }))}
                             />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
@@ -624,14 +624,14 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                         className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs" 
                                         placeholder="New Category"
                                         value={formData.category}
-                                        onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
+                                        onChange={(e) => setFormData((prev: any) => ({ ...prev, category: e.target.value }))}
                                         autoFocus
                                     />
                                 ) : (
                                     <select 
                                         className="w-full h-9 rounded-lg border border-red-100 bg-white px-3 text-xs focus:ring-2 focus:ring-red-500"
                                         value={formData.category}
-                                        onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
+                                        onChange={(e) => setFormData((prev: any) => ({ ...prev, category: e.target.value }))}
                                     >
                                         <option value="">(NONE / CLEAR)</option>
                                         <option value="Chemical">CHEMICAL</option>
@@ -660,14 +660,14 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                         className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs" 
                                         placeholder="New Package Type"
                                         value={formData.packageUnit}
-                                        onChange={(e) => setFormData(prev => ({ ...prev, packageUnit: e.target.value }))}
+                                        onChange={(e) => setFormData((prev: any) => ({ ...prev, packageUnit: e.target.value }))}
                                         autoFocus
                                     />
                                 ) : (
                                     <select 
                                         className="w-full h-9 rounded-lg border border-red-100 bg-white px-3 text-xs focus:ring-2 focus:ring-red-500"
                                         value={formData.packageUnit}
-                                        onChange={(e) => setFormData(prev => ({ ...prev, packageUnit: e.target.value }))}
+                                        onChange={(e) => setFormData((prev: any) => ({ ...prev, packageUnit: e.target.value }))}
                                     >
                                         <option value="">(NONE / CLEAR)</option>
                                         <option value="Can">CAN</option>
@@ -703,7 +703,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                         const val = e.target.value;
                                         const pkgQty = val === '' ? 0 : Math.max(0, parseFloat(val) || 0);
                                         const calcStock = Number((pkgQty * (formData.packageSize || 0)).toFixed(2));
-                                        setFormData(prev => ({ ...prev, packageQty: pkgQty, stock: calcStock }));
+                                        setFormData((prev: any) => ({ ...prev, packageQty: pkgQty, stock: calcStock }));
                                     }}
                                 />
                             </div>
@@ -714,7 +714,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                     </label>
                                     <select
                                         value={formData.unit || 'mL'}
-                                        onChange={(e) => setFormData(prev => ({ ...prev, unit: e.target.value }))}
+                                        onChange={(e) => setFormData((prev: any) => ({ ...prev, unit: e.target.value }))}
                                         className="text-[9px] font-black text-red-600 uppercase bg-transparent border-none p-0 focus:outline-none cursor-pointer hover:underline"
                                     >
                                         <option value="mL">mL</option>
@@ -736,7 +736,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                         const val = e.target.value;
                                         const pkgSize = val === '' ? 0 : Math.max(0, parseFloat(val) || 0);
                                         const calcStock = Number(((formData.packageQty || 0) * pkgSize).toFixed(2));
-                                        setFormData(prev => ({ ...prev, packageSize: pkgSize, stock: calcStock }));
+                                        setFormData((prev: any) => ({ ...prev, packageSize: pkgSize, stock: calcStock }));
                                     }}
                                 />
                             </div>
@@ -764,7 +764,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                     value={formData.price || ''}
                                     onChange={(e) => {
                                         const val = e.target.value;
-                                        setFormData(prev => ({ ...prev, price: val === '' ? 0 : Math.max(0, parseFloat(val) || 0) }));
+                                        setFormData((prev: any) => ({ ...prev, price: val === '' ? 0 : Math.max(0, parseFloat(val) || 0) }));
                                     }}
                                 />
                             </div>
@@ -784,7 +784,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                 value={formData.lowStockThreshold || ''}
                                 onChange={(e) => {
                                     const val = e.target.value;
-                                    setFormData(prev => ({ ...prev, lowStockThreshold: val === '' ? 0 : Math.max(0, parseFloat(val) || 0) }));
+                                    setFormData((prev: any) => ({ ...prev, lowStockThreshold: val === '' ? 0 : Math.max(0, parseFloat(val) || 0) }));
                                 }}
                             />
                         </div>
@@ -798,7 +798,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                         id="autoDeductCheckbox" 
                                         className="h-4 w-4 rounded border-red-300 text-red-600 focus:ring-red-500 cursor-pointer"
                                         checked={formData.autoDeduct}
-                                        onChange={(e) => setFormData(prev => ({ ...prev, autoDeduct: e.target.checked }))}
+                                        onChange={(e) => setFormData((prev: any) => ({ ...prev, autoDeduct: e.target.checked }))}
                                     />
                                     <label htmlFor="autoDeductCheckbox" className="text-[10px] font-black uppercase text-red-900 cursor-pointer select-none font-bold">
                                         Automatically deduct during job order
@@ -814,7 +814,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                             <select 
                                                 className="w-full h-8 rounded-lg border border-red-100 bg-white px-2 text-xs focus:ring-2 focus:ring-red-500"
                                                 value={formData.autoDeductTrigger}
-                                                onChange={(e) => setFormData(prev => ({ ...prev, autoDeductTrigger: e.target.value }))}
+                                                onChange={(e) => setFormData((prev: any) => ({ ...prev, autoDeductTrigger: e.target.value }))}
                                             >
                                                 <option value="on-going">On-Going</option>
                                                 <option value="for-release">For Release</option>
@@ -830,9 +830,9 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                                         checked={formData.triggerService === 'All'}
                                                         onChange={(e) => {
                                                             if (e.target.checked) {
-                                                                setFormData(prev => ({ ...prev, triggerService: 'All' }));
+                                                                setFormData((prev: any) => ({ ...prev, triggerService: 'All' }));
                                                             } else {
-                                                                setFormData(prev => ({ ...prev, triggerService: '' }));
+                                                                setFormData((prev: any) => ({ ...prev, triggerService: '' }));
                                                             }
                                                         }}
                                                     />
@@ -861,7 +861,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                                                     const sortedNext = services
                                                                         .filter((s: any) => next.includes(s.name))
                                                                         .map((s: any) => s.name);
-                                                                    setFormData(prev => ({ ...prev, triggerService: sortedNext.join(', ') }));
+                                                                    setFormData((prev: any) => ({ ...prev, triggerService: sortedNext.join(', ') }));
                                                                 }}
                                                             />
                                                             <span>{svc.name}</span>
@@ -882,7 +882,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                                 value={formData.consumptionQty || ''}
                                                 onChange={(e) => {
                                                     const val = e.target.value;
-                                                    setFormData(prev => ({ ...prev, consumptionQty: val === '' ? 0 : parseFloat(val) }));
+                                                    setFormData((prev: any) => ({ ...prev, consumptionQty: val === '' ? 0 : parseFloat(val) }));
                                                 }}
                                             />
                                         </div>
@@ -892,7 +892,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                                 className="h-8 border-red-100 focus:border-red-500 rounded-lg text-xs" 
                                                 placeholder="e.g. mL" 
                                                 value={formData.consumptionUnit || ''}
-                                                onChange={(e) => setFormData(prev => ({ ...prev, consumptionUnit: e.target.value }))}
+                                                onChange={(e) => setFormData((prev: any) => ({ ...prev, consumptionUnit: e.target.value }))}
                                             />
                                         </div>
                                     </div>
@@ -904,7 +904,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                             <div className="flex items-center justify-end gap-2 bg-gray-50/50 px-3 py-1.5 rounded-full border border-gray-100">
                                 <Switch 
                                     checked={formData.isActive}
-                                    onCheckedChange={(checked) => setFormData(prev => ({ ...prev, isActive: checked }))}
+                                    onCheckedChange={(checked) => setFormData((prev: any) => ({ ...prev, isActive: checked }))}
                                     className="data-[state=checked]:bg-emerald-500"
                                 />
                                 <span className={`text-[10px] font-black uppercase w-14 text-right ${formData.isActive ? 'text-emerald-600' : 'text-gray-400'}`}>

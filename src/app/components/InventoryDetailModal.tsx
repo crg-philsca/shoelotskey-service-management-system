@@ -46,7 +46,7 @@ export default function InventoryDetailModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md bg-white p-0 gap-0 overflow-hidden rounded-2xl max-h-[85vh] flex flex-col border-none shadow-2xl">
+      <DialogContent className="max-w-3xl bg-white p-0 gap-0 overflow-hidden rounded-2xl max-h-[85vh] flex flex-col border-none shadow-2xl">
         {/* Header Bar with Copyable Inventory ID */}
         <DialogHeader className="p-4 border-b border-gray-100 bg-white flex flex-row items-center justify-between">
           <div className="w-8" /> {/* Spacer for centered symmetry */}
@@ -249,8 +249,7 @@ export default function InventoryDetailModal({
         <div className="p-4 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between gap-3">
           {onEdit && (
             <Button
-              variant="outline"
-              className="flex-1 border-amber-400/80 text-amber-700 hover:bg-amber-50 font-bold text-xs py-2 h-10 rounded-xl flex items-center justify-center gap-2 transition-colors"
+              className="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs py-2 h-10 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-md"
               onClick={() => {
                 onOpenChange(false);
                 onEdit(item);
@@ -261,7 +260,8 @@ export default function InventoryDetailModal({
             </Button>
           )}
           <Button
-            className="flex-1 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs py-2 h-10 rounded-xl transition-colors shadow-md"
+            variant="outline"
+            className="flex-1 border-slate-200 text-slate-700 hover:bg-slate-100 font-bold text-xs py-2 h-10 rounded-xl transition-colors"
             onClick={() => onOpenChange(false)}
           >
             Close
