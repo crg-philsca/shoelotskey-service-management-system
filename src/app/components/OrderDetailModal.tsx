@@ -764,7 +764,7 @@ export default function OrderDetailModal({
                 })()}</span>
                 <span className="text-slate-600">Release Date</span>
                 <span className="font-bold text-slate-900">: {(() => {
-                  try { return dateFnsFormat(new Date(order.estimatedReleaseDate || (order as any).releaseDate || Date.now()), 'MMMM d, yyyy'); }
+                  try { return dateFnsFormat(new Date((order as any).estimatedReleaseDate || (order as any).releaseDate || Date.now()), 'MMMM d, yyyy'); }
                   catch { return '-'; }
                 })()}</span>
                 {isClaimed && (

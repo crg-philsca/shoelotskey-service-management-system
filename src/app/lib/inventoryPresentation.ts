@@ -14,6 +14,7 @@ export interface InventoryPresentation {
     isPackaged: boolean;
     stockStatus: 'Critical' | 'Low Stock' | 'In Stock';
     statusLabel: string;
+    reorderRecommendation?: string;
     dropdownLabel: string;               // Clean string for select options: e.g., "4000 mL (11 cans, 340 mL remaining)"
     availableText: string;               // Alias for dropdownLabel
 }

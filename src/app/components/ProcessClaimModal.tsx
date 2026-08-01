@@ -5,7 +5,7 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { JobOrder, PaymentMethod, InventoryUsed } from "@/app/types";
-import { CheckCircle2, User, ShieldAlert, Wrench, ShoppingBag, Plus, Minus, Trash2, Printer } from "lucide-react";
+import { CheckCircle2, User, ShieldAlert, Wrench, ShoppingBag, Trash2, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { formatReferenceNo } from "@/app/lib/utils";
 import { useInventory } from "@/app/context/InventoryContext";

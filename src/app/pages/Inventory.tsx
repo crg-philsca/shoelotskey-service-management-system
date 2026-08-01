@@ -211,7 +211,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
  
     const handleEditItem = (item: InventoryItem) => {
         setEditingItem(item);
-        const pkgSize = Number(item.package_size || item.packageSize || 0);
+        const pkgSize = Number(item.package_size || (item as any).packageSize || 0);
         const stockVal = Number(item.stock || 0);
         const calcPkgQty = pkgSize > 0 ? Number((stockVal / pkgSize).toFixed(2)) : (stockVal || 0);
 
@@ -230,7 +230,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
             consumptionQty: item.consumption_qty || 0,
             consumptionUnit: item.consumption_unit || (item.unit || 'mL'),
             packageSize: pkgSize,
-            packageUnit: item.package_unit || item.packageUnit || 'Can',
+            packageUnit: item.package_unit || (item as any).packageUnit || 'Can',
             packageQty: calcPkgQty,
             lowStockThreshold: item.low_stock_threshold || 0
         });
@@ -688,7 +688,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                         <option value="Tub">TUB</option>
                                         <option value="Pcs">PCS</option>
                                         <option value="Pairs">PAIRS</option>
-                                        {inventoryData.map(item => item.package_unit).filter((v, i, a) => v && !['Can', 'Bottle', 'Jug', 'Gallon', 'Sachet', 'Box', 'Tube', 'Tub', 'Pcs', 'Pairs'].includes(v) && a.indexOf(v) === i).map(unit => (
+                                        {inventoryData.map(item => item.package_unit || '').filter((v, i, a) => v && !['Can', 'Bottle', 'Jug', 'Gallon', 'Sachet', 'Box', 'Tube', 'Tub', 'Pcs', 'Pairs'].includes(v) && a.indexOf(v) === i).map((unit: string) => (
                                             <option key={unit} value={unit}>{unit.toUpperCase()}</option>
                                         ))}
                                     </select>
