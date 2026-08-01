@@ -1014,8 +1014,8 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
     return (
         <form onSubmit={handleSubmit} className="space-y-3">
             {/* Customer Information Section */}
-            <Card className="border-red-100/50 shadow-sm bg-white overflow-hidden rounded-2xl">
-                <CardHeader className={`${CARD_HEADER_STYLE} !py-2`}>
+            <Card className="border-red-100/50 shadow-sm bg-white overflow-visible relative z-30 rounded-2xl">
+                <CardHeader className={`${CARD_HEADER_STYLE} !py-2 rounded-t-2xl`}>
                     <div className="flex items-center gap-3 translate-y-[1px]">
                         <User className="text-red-600 fill-red-600" size={18} />
                         <CardTitle className={`${CARD_TITLE_STYLE} text-slate-900`}>CUSTOMER DETAILS</CardTitle>

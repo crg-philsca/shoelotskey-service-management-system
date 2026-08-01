@@ -74,6 +74,12 @@ export default function OrderDetailModal({
   const isClaimed = order.status === 'claimed';
   const isForRelease = order.status === 'for-release' || isClaimed;
 
+  const safeInventoryUsed: any[] = Array.isArray(order?.inventoryUsed)
+    ? order.inventoryUsed
+    : (typeof order?.inventoryUsed === 'string'
+      ? (() => { try { const p = JSON.parse(order.inventoryUsed); return Array.isArray(p) ? p : []; } catch { return []; } })()
+      : []);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md bg-white p-0 gap-0 overflow-hidden rounded-2xl max-h-[85vh] flex flex-col border-none shadow-2xl">
@@ -595,7 +601,7 @@ export default function OrderDetailModal({
           </div>
 
           {/* Card 7: Logged Materials & Stock Status (Shown only if supplies logged) */}
-          {order.inventoryUsed && order.inventoryUsed.length > 0 && (
+          {safeInventoryUsed && safeInventoryUsed.length > 0 && (
             <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-100 space-y-3">
               <div className="flex items-center justify-between border-b border-emerald-200/60 pb-2">
                 <div className="flex items-center gap-2">
@@ -611,7 +617,7 @@ export default function OrderDetailModal({
                 )}
               </div>
               <div className="space-y-2">
-                {order.inventoryUsed.map((used: any, idx: number) => (
+                {safeInventoryUsed.map((used: any, idx: number) => (
                   <div
                     key={idx}
                     className="flex justify-between items-center text-xs font-medium text-slate-700"
@@ -729,7 +735,7 @@ export default function OrderDetailModal({
 
             {/* Additional Products Section (If customer bought products) */}
             {(() => {
-              const retailItems = (order.inventoryUsed || []).filter((i: any) => i.isRetail || (i.price && i.price > 0));
+              const retailItems = safeInventoryUsed.filter((i: any) => i.isRetail || (i.price && i.price > 0));
               const extraProducts = (order as any).purchasedProducts || (retailItems.length > 0 ? retailItems : []);
               if (extraProducts.length === 0) return null;
               return (
@@ -790,7 +796,7 @@ export default function OrderDetailModal({
                 <span className="font-bold text-slate-900">: ₱{(baseTotal + addOnsTotal + calculatedRushFee).toFixed(2)}</span>
                 
                 {(() => {
-                  const retailItems = (order.inventoryUsed || []).filter((i: any) => i.isRetail || (i.price && i.price > 0));
+                  const retailItems = safeInventoryUsed.filter((i: any) => i.isRetail || (i.price && i.price > 0));
                   const extraProducts = (order as any).purchasedProducts || (retailItems.length > 0 ? retailItems : []);
                   const addlTotal = extraProducts.reduce((acc: number, item: any) => acc + ((item.quantity || 1) * (item.price || 0)), 0);
                   return (

@@ -171,6 +171,20 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
             return new Date(dateStr);
         };
 
+        const safeArray = (val: any): any[] => {
+            if (!val) return [];
+            if (Array.isArray(val)) return val;
+            if (typeof val === 'string') {
+                try {
+                    const p = JSON.parse(val);
+                    if (Array.isArray(p)) return p;
+                } catch {
+                    return [];
+                }
+            }
+            return [];
+        };
+
         return {
             id: bo.order_id.toString(),
             orderNumber: bo.order_number,
@@ -241,7 +255,7 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                         wornOut:        condNames.includes('wornout'),
                         others: bi.item_notes || ''
                     },
-                    inventoryUsed: bi.inventory_used || [],
+                    inventoryUsed: safeArray(bi.inventory_used),
                     // category is a nested 3NF object: { category_id, category_name }
                     baseService: bi.services?.filter((s: any) =>
                         (s.category?.category_name || s.category) === 'base'
@@ -288,7 +302,7 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
             processedBy: bo.processor?.username || 'System',
             claimedBy: bo.claimed_by || bo.claimedBy || (mapBackendStatus(bo.status?.status_name) === 'claimed' ? (bo.customer?.full_name || bo.customer_name) : undefined),
             releasedBy: bo.released_by || bo.releasedBy || (mapBackendStatus(bo.status?.status_name) === 'claimed' ? (bo.status_logs?.find((sl: any) => mapBackendStatus(sl.status?.status_name) === 'claimed')?.user?.username || bo.processor?.username || 'owner') : undefined),
-            inventoryUsed: bo.inventory_used || [],
+            inventoryUsed: safeArray(bo.inventory_used),
 
             statusHistory: bo.status_logs?.map((sl: any) => ({
                 status: mapBackendStatus(sl.status?.status_name),

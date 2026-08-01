@@ -360,24 +360,24 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
 
                 <CardContent className="pt-0">
                     <div className="overflow-x-auto">
-                        <Table>
+                        <Table className="w-full table-auto">
                             <TableHeader>
                                 <TableRow className="bg-[#fef5f3]">
-                                    <TableHead className="font-black text-gray-600 uppercase text-xs">Order #</TableHead>
-                                    <TableHead className="font-black text-gray-600 uppercase text-xs">Customer Name</TableHead>
-                                    <TableHead className="font-black text-gray-600 uppercase text-xs">Service Type</TableHead>
-                                    <TableHead className="font-black text-gray-600 uppercase text-xs">Order Date</TableHead>
-                                    <TableHead className="font-black text-gray-600 uppercase text-xs">Payment Method</TableHead>
-                                    <TableHead className="font-black text-gray-600 uppercase text-xs">Payment Status</TableHead>
-                                    <TableHead className="font-black text-gray-600 uppercase text-xs text-right">Amount Paid</TableHead>
-                                    <TableHead className="font-black text-gray-600 uppercase text-xs text-right">Balance</TableHead>
-                                    <TableHead className="font-black text-gray-600 uppercase text-[11px] text-center tracking-wider">Actions</TableHead>
+                                    <TableHead className="font-black text-gray-600 uppercase text-xs w-[135px] whitespace-nowrap">Order #</TableHead>
+                                    <TableHead className="font-black text-gray-600 uppercase text-xs w-[150px] whitespace-nowrap">Customer Name</TableHead>
+                                    <TableHead className="font-black text-gray-600 uppercase text-xs w-[200px]">Service Type</TableHead>
+                                    <TableHead className="font-black text-gray-600 uppercase text-xs w-[115px] whitespace-nowrap">Order Date</TableHead>
+                                    <TableHead className="font-black text-gray-600 uppercase text-xs w-[115px] whitespace-nowrap">Payment Method</TableHead>
+                                    <TableHead className="font-black text-gray-600 uppercase text-xs w-[120px] whitespace-nowrap">Payment Status</TableHead>
+                                    <TableHead className="font-black text-gray-600 uppercase text-xs text-right w-[100px] whitespace-nowrap">Amount Paid</TableHead>
+                                    <TableHead className="font-black text-gray-600 uppercase text-xs text-right w-[95px] whitespace-nowrap">Balance</TableHead>
+                                    <TableHead className="font-black text-gray-600 uppercase text-[11px] text-center tracking-wider w-[80px] whitespace-nowrap">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {paginatedOrders.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={8} className="text-center text-gray-400 py-12">
+                                        <TableCell colSpan={9} className="text-center text-gray-400 py-12">
                                             <div className="flex flex-col items-center gap-2">
                                                 <TrendingUp className="h-10 w-10 text-gray-300" />
                                                 <p className="font-semibold">No sales transactions found.</p>
@@ -395,53 +395,68 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                                         else if (pStatus === 'downpayment') badgeClass = 'bg-red-100 text-red-700';
                                         else if (pStatus === 'unpaid') badgeClass = 'bg-gray-200 text-gray-800';
 
+                                        const servicesList = (Array.isArray(order.baseService)
+                                            ? order.baseService
+                                            : String(order.baseService || '').split(',')
+                                        )
+                                            .map((s) => s.trim().replace(' (with basic cleaning)', ''))
+                                            .filter(Boolean);
+
                                         return (
                                             <TableRow key={order.id} className="hover:bg-gray-50">
-                                                <TableCell className="font-semibold text-gray-800">{order.orderNumber || order.id}</TableCell>
-                                                <TableCell className="text-sm text-gray-700">{order.customerName}</TableCell>
-                                                <TableCell className="text-sm text-gray-700">
-                                                    {Array.isArray(order.baseService)
-                                                        ? order.baseService.map((s) => s.replace(' (with basic cleaning)', '')).join(', ')
-                                                        : String(order.baseService).replace(' (with basic cleaning)', '')}
+                                                <TableCell className="font-semibold text-gray-800 whitespace-nowrap text-xs sm:text-sm">{order.orderNumber || order.id}</TableCell>
+                                                <TableCell className="text-sm text-gray-700 font-medium max-w-[150px] truncate" title={order.customerName}>{order.customerName}</TableCell>
+                                                <TableCell className="text-xs sm:text-sm text-gray-700 max-w-[200px] py-2.5">
+                                                    <div className="flex flex-col gap-1">
+                                                        {servicesList.length > 0 ? (
+                                                            servicesList.map((srv, idx) => (
+                                                                <span key={idx} className="block leading-tight font-medium bg-gray-50/80 px-2 py-0.5 rounded border border-gray-100 text-slate-700 w-fit">
+                                                                    {srv}
+                                                                </span>
+                                                            ))
+                                                        ) : (
+                                                            <span className="text-gray-400 italic">None</span>
+                                                        )}
+                                                    </div>
                                                 </TableCell>
-                                                <TableCell className="text-sm text-gray-700">
+                                                <TableCell className="text-xs sm:text-sm text-gray-700 whitespace-nowrap">
                                                     {formatNumericDateTime(orderDate)}
                                                 </TableCell>
-                                                <TableCell className="text-sm font-semibold text-gray-800 uppercase">
+                                                <TableCell className="text-xs sm:text-sm font-semibold text-gray-800 uppercase whitespace-nowrap">
                                                     {order.paymentMethod?.toUpperCase()}
                                                 </TableCell>
-                                                <TableCell className="text-sm">
-                                                    <span className={`px-2 py-0.5 rounded-md text-xs font-semibold uppercase ${badgeClass}`}>
+                                                <TableCell className="text-sm whitespace-nowrap">
+                                                    <span className={`px-2 py-0.5 rounded-md text-[11px] font-bold uppercase tracking-wider ${badgeClass}`}>
                                                         {pStatus === 'fully-paid' ? 'Fully Paid' : pStatus === 'downpayment' ? 'Downpayment' : pStatus.charAt(0).toUpperCase() + pStatus.slice(1)}
                                                     </span>
                                                 </TableCell>
-                                                <TableCell className="text-right font-bold text-sm text-gray-900">
-                                                    ₱{(order.amountReceived || 0).toLocaleString()}
+                                                <TableCell className="text-right font-extrabold text-sm text-gray-900 whitespace-nowrap">
+                                                    ₱{(order.amountReceived || 0).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}
                                                 </TableCell>
-                                                <TableCell className="text-right font-semibold text-sm text-gray-700">
-                                                    ₱{Math.max(remainingBalance, 0).toLocaleString()}
+                                                <TableCell className="text-right font-bold text-sm text-gray-700 whitespace-nowrap">
+                                                    ₱{Math.max(remainingBalance, 0).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}
                                                 </TableCell>
-                                                <TableCell className="text-center">
-                                                    <div className="flex items-center justify-center gap-2">
+                                                <TableCell className="text-center whitespace-nowrap">
+                                                    <div className="flex items-center justify-center gap-1.5">
                                                         <Button 
                                                             variant="ghost" 
-                                                            className="h-8 w-8 p-0 rounded-lg border border-amber-500 text-amber-600 hover:bg-amber-50 transition-colors"
+                                                            className="h-7 w-7 p-0 rounded-lg border border-amber-500/80 text-amber-600 hover:bg-amber-50 transition-colors"
                                                             onClick={() => {
                                                                 setSelectedOrder(order);
                                                                 setIsEditing(true);
                                                             }}
                                                             title="Edit Order"
                                                         >
-                                                            <Pencil size={14} strokeWidth={2.5} />
+                                                            <Pencil size={13} strokeWidth={2.5} />
                                                         </Button>
                                                         {user.role?.toLowerCase() === 'owner' && (
                                                             <Button 
                                                                 variant="ghost" 
-                                                                className="h-8 w-8 p-0 rounded-lg border border-red-500 text-red-600 hover:bg-red-50 transition-colors"
+                                                                className="h-7 w-7 p-0 rounded-lg border border-red-500/80 text-red-600 hover:bg-red-50 transition-colors"
                                                                 onClick={() => setOrderToDelete(order)}
                                                                 title="Delete Order"
                                                             >
-                                                                <Trash2 size={14} strokeWidth={2.5} />
+                                                                <Trash2 size={13} strokeWidth={2.5} />
                                                             </Button>
                                                         )}
                                                     </div>
