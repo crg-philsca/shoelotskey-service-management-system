@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/ca
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { Input } from '@/app/components/ui/input';
+import { Package, PlusCircle, PackagePlus, Search, Filter, AlertTriangle, ArrowUpRight, ChevronLeft, ChevronRight, Edit, Trash2, Printer } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import RestockModal from '@/app/components/RestockModal';
 import InventoryDetailModal from '@/app/components/InventoryDetailModal';

@@ -688,7 +688,7 @@ export default function OrderDetailModal({
 
             {/* Order Summary Section */}
             <div className="space-y-1">
-              <h3 className="font-bold text-slate-900 uppercase tracking-wider font-sans text-xs">ORDER SUMMARY</h3>
+              <h3 className="font-bold text-slate-900 uppercase tracking-wider font-sans text-xs">JOB ORDER SUMMARY</h3>
               <div className="grid grid-cols-[130px_1fr] gap-2 pt-1">
                 <span className="text-slate-600">Order No.</span>
                 <span className="font-bold text-slate-900">: {order.orderNumber}</span>
@@ -699,7 +699,7 @@ export default function OrderDetailModal({
 
             {/* Customer Section */}
             <div className="space-y-1 pt-2">
-              <h3 className="font-bold text-slate-900 uppercase tracking-wider font-sans text-xs">Customer</h3>
+              <h3 className="font-bold text-slate-900 uppercase tracking-wider font-sans text-xs">Customer Details</h3>
               <p className="text-gray-400 font-bold tracking-tighter">--------------------------------------------------------</p>
               <div className="grid grid-cols-[130px_1fr] gap-2">
                 <span className="text-slate-600">Name</span>
@@ -760,7 +760,7 @@ export default function OrderDetailModal({
 
             {/* Schedule Section */}
             <div className="space-y-1 pt-2">
-              <h3 className="font-bold text-slate-900 uppercase tracking-wider font-sans text-xs">Schedule</h3>
+              <h3 className="font-bold text-slate-900 uppercase tracking-wider font-sans text-xs">Schedule Details</h3>
               <p className="text-gray-400 font-bold tracking-tighter">--------------------------------------------------------</p>
               <div className="grid grid-cols-[130px_1fr] gap-2">
                 <span className="text-slate-600">Order Date</span>
@@ -852,12 +852,12 @@ export default function OrderDetailModal({
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-gray-100 no-print">
-            <Button variant="outline" onClick={() => setShowPrintSummary(false)} className="rounded-xl font-bold">
+          <div className="flex items-center justify-center gap-3 sm:gap-4 pt-5 border-t border-gray-100 no-print w-full">
+            <Button variant="outline" onClick={() => setShowPrintSummary(false)} className="w-36 sm:w-44 h-11 rounded-2xl font-black text-xs uppercase tracking-widest border-red-100 text-gray-700 hover:bg-red-50/50 transition-all shadow-xs">
               Close
             </Button>
-            <Button onClick={() => window.print()} className="bg-red-600 hover:bg-red-700 text-white font-bold px-6 rounded-xl flex items-center gap-2 shadow-md">
-              <Printer size={16} /> Print Summary
+            <Button onClick={() => window.print()} className="w-44 sm:w-52 h-11 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-widest rounded-2xl flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all">
+              <Printer size={16} strokeWidth={2.5} /> Print Summary
             </Button>
           </div>
         </DialogContent>

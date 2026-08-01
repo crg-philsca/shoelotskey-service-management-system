@@ -8,11 +8,7 @@ import {
   Zap,
   Copy,
   Check,
-  Tag,
-  AlertTriangle,
   Info,
-  CheckCircle2,
-  Sparkles,
   Edit,
 } from 'lucide-react';
 import { toast } from 'sonner';
