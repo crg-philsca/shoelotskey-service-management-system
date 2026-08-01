@@ -2002,6 +2002,21 @@ def health_check(db: Session = Depends(get_db)):
         "db_type": DB_TYPE
     }
 
+@app.get("/api/verify-reset-token")
+async def verify_reset_token(token: str, db: Session = Depends(get_db)):
+    """Check if a reset token is valid and active before displaying the password form."""
+    if not token or not token.strip():
+        raise HTTPException(status_code=400, detail="Missing reset token.")
+    user = db.query(User).filter(User.reset_token == token.strip()).first()
+    if not user:
+        raise HTTPException(status_code=400, detail="This password reset link is invalid or has already been used.")
+    if user.reset_token_expiry and user.reset_token_expiry < datetime.utcnow():
+        user.reset_token = None
+        user.reset_token_expiry = None
+        db.commit()
+        raise HTTPException(status_code=400, detail="This password reset link has expired. Please request a new one.")
+    return {"valid": True, "username": user.username}
+
 @app.post("/api/reset-password")
 async def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db), http_request: Request = None):
     """Verifies the token and updates the password header."""

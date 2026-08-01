@@ -1,11 +1,11 @@
-import { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader } from '@/app/components/ui/card';
 import { toast } from 'sonner';
-import { Lock, Eye, EyeOff, CheckCircle } from 'lucide-react';
+import { Lock, Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react';
 
 const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))
   ? `http://${window.location.hostname}:8000/api`
@@ -17,12 +17,36 @@ export default function ResetPassword() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   const token = searchParams.get('token'); // Get token from URL params
-
   const [loading, setLoading] = useState(false);
+  const [checkingToken, setCheckingToken] = useState(true);
+  const [tokenError, setTokenError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!token) {
+      setTokenError("No reset token found in the URL. This recovery link is invalid.");
+      setCheckingToken(false);
+      return;
+    }
+    const checkToken = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/verify-reset-token?token=${encodeURIComponent(token)}`);
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({ detail: "This password reset link is invalid or has already been used." }));
+          setTokenError(errData.detail || "This password reset link is invalid or has already been used.");
+        } else {
+          setTokenError(null);
+        }
+      } catch (e) {
+        console.warn("Could not reach backend to verify token:", e);
+      } finally {
+        setCheckingToken(false);
+      }
+    };
+    checkToken();
+  }, [token]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,7 +114,33 @@ export default function ResetPassword() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {submitted ? (
+            {checkingToken ? (
+              <div className="text-center text-gray-600 font-medium py-8">
+                Verifying password reset link...
+              </div>
+            ) : tokenError ? (
+              <div className="text-center py-4">
+                <AlertCircle className="h-16 w-16 text-red-600 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Link Expired or Already Used</h3>
+                <p className="text-sm text-gray-600 mb-6 px-2">{tokenError}</p>
+                <div className="space-y-2">
+                  <Button
+                    type="button"
+                    onClick={() => { window.location.href = '/forgot-password'; }}
+                    className="w-full bg-red-600 hover:bg-red-700 cursor-pointer text-sm font-medium"
+                  >
+                    Request New Reset Link
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => { window.location.href = '/'; }}
+                    className="w-full text-sm text-black hover:text-red-600 hover:underline transition-colors font-normal cursor-pointer py-2"
+                  >
+                    Back to Login
+                  </button>
+                </div>
+              </div>
+            ) : submitted ? (
               <div className="text-center text-green-700 font-medium mt-1 mb-4">
                 <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-6" />
                 Password reset successful! Redirecting to login...

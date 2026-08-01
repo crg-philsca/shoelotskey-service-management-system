@@ -10,6 +10,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
 from pathlib import Path
+from passlib.hash import bcrypt
 import urllib.parse
 
 # Load variables from .env located in the parent backend/ folder
@@ -103,7 +104,6 @@ def ensure_sqlite_schema_and_defaults(target_engine):
     try:
         from models import Base, User, Role
         from sqlalchemy import inspect as sql_inspect, text
-        import bcrypt
         
         # 1. Create any missing tables in SQLite
         Base.metadata.create_all(bind=target_engine)

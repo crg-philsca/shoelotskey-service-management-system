@@ -6,6 +6,6 @@
     "backend/db",
     "venv/Lib/site-packages"
   ],
-  "reportMissingImports": "warning",
-  "reportMissingModuleSource": "warning"
+  "reportMissingImports": "none",
+  "reportMissingModuleSource": "none"
 }

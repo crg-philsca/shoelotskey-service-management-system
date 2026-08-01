@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
@@ -14,7 +13,6 @@ const API_BASE = (typeof window !== 'undefined' && (window.location.hostname ===
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
-  const navigate = useNavigate();
 
   const [loading, setLoading] = useState(false);
 
