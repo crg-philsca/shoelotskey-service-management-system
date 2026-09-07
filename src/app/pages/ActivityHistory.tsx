@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Filter, ArrowLeft, ChevronLeft, ChevronRight, ClipboardCheck, Eye, Clock, User as UserIcon, ShieldAlert, Globe, ShieldCheck } from 'lucide-react';
+import { Search, Filter, ArrowLeft, ChevronLeft, ChevronRight, ClipboardCheck, Eye, ShieldAlert, ShoppingCart, Package, Key, Printer, Tag, Users, Activity } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Badge } from '@/app/components/ui/badge';
@@ -181,21 +181,76 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
         return activity.table || 'System';
     };
 
-    const getActionBadge = (action: string) => {
-        const act = action.toUpperCase();
+    const getBusinessActionTitle = (activity: ActivityLog) => {
+        const action = activity.action.toUpperCase();
+        const actionRaw = (activity.actionRaw || '').toUpperCase();
+        const type = (activity.type || '').toLowerCase();
+        
+        // Priority 1: Explicit DELETE actions
+        if (action.includes('DELETE') || actionRaw.includes('DELETE') || action.includes('DEACTIVATE')) {
+            if (type === 'inventory' || activity.table === 'Inventory' || activity.table === 'inventory') return 'Inventory Deleted';
+            if (type === 'service' || activity.table === 'Services' || activity.table === 'services') return 'Service Deleted';
+            if (type === 'order' || activity.table === 'Orders' || activity.table === 'Job Orders') return 'Job Order Deleted';
+            if (type === 'system' || activity.table === 'Users' || activity.table === 'users') return 'User Deleted';
+            return 'Record Deleted';
+        }
+
+        if (action.includes('FAILED') || actionRaw.includes('FAILED')) return 'Failed Login';
+        if (action.includes('TIMEOUT') || actionRaw.includes('TIMEOUT')) return 'Session Timeout';
+        if (action.includes('LOGIN')) return 'User Logged In';
+        if (action.includes('LOGOUT')) return 'User Logged Out';
+        
+        if (action.includes('RESTOCK') || activity.details.toLowerCase().includes('restock')) return 'Inventory Restocked';
+        
+        if (action.includes('PRINT') || type === 'reports') return 'Report Generated';
+        if (type === 'inventory' && (action.includes('DEDUCT') || action.includes('UPDATE'))) return 'Inventory Updated';
+        if (type === 'inventory' && action.includes('CREATE')) return 'Inventory Added';
+        if (type === 'order' || activity.table === 'Orders' || activity.table === 'Job Orders') {
+            if (action.includes('CREATE')) return 'New Job Order';
+            if (activity.newValues?.status === 'claimed') return 'Order Claimed';
+            if (activity.newValues?.status === 'for-release') return 'Order Ready For Release';
+            return 'Job Order Updated';
+        }
+        if (type === 'service' || activity.table === 'Services') {
+            if (action.includes('CREATE')) return 'Service Created';
+            return 'Service Updated';
+        }
+        if (type === 'system' || activity.table === 'Users') {
+            if (action.includes('CREATE')) return 'User Created';
+            return 'User Updated';
+        }
+
+        return activity.action;
+    };
+
+    const getActionIcon = (title: string) => {
+        const t = title.toUpperCase();
+        if (t.includes('JOB ORDER') || t.includes('CLAIMED') || t.includes('RELEASE')) return <ShoppingCart className="w-3.5 h-3.5" />;
+        if (t.includes('INVENTORY') || t.includes('RESTOCK')) return <Package className="w-3.5 h-3.5" />;
+        if (t.includes('LOGIN') || t.includes('LOGOUT') || t.includes('PASSWORD')) return <Key className="w-3.5 h-3.5" />;
+        if (t.includes('SERVICE')) return <Tag className="w-3.5 h-3.5" />;
+        if (t.includes('REPORT')) return <Printer className="w-3.5 h-3.5" />;
+        if (t.includes('USER')) return <Users className="w-3.5 h-3.5" />;
+        return <Activity className="w-3.5 h-3.5" />;
+    };
+
+    const getActionBadge = (activity: ActivityLog) => {
+        const actStr = getBusinessActionTitle(activity);
+        const actUpper = actStr.toUpperCase();
         let colorClass = "bg-gray-100 text-gray-700 border-gray-200";
-        if (act.includes('CREATE') || act === 'LOGIN' || act === 'RESTORE' || act === 'APPROVE') {
+        if (actUpper.includes('NEW') || actUpper.includes('CREATED') || actUpper.includes('ADDED') || actUpper.includes('LOGGED IN')) {
             colorClass = "bg-emerald-50 text-emerald-700 border-emerald-200";
-        } else if (act.includes('UPDATE') || act === 'PRINT') {
+        } else if (actUpper.includes('UPDATE') || actUpper.includes('RESTOCK') || actUpper.includes('GENERATED') || actUpper.includes('EDIT')) {
             colorClass = "bg-amber-50 text-amber-700 border-amber-200";
-        } else if (act.includes('DELETE') || act === 'LOGOUT' || act === 'LOGIN_FAILED' || act === 'CANCEL') {
+        } else if (actUpper.includes('DELETE') || actUpper.includes('OUT') || actUpper.includes('FAILED') || actUpper.includes('CANCEL')) {
             colorClass = "bg-rose-50 text-rose-700 border-rose-200";
-        } else if (act.includes('PASSWORD') || act === 'PASSWORD_RESET') {
+        } else if (actUpper.includes('PASSWORD') || actUpper.includes('CLAIMED') || actUpper.includes('RELEASE')) {
             colorClass = "bg-purple-50 text-purple-700 border-purple-200";
         }
         return (
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-black uppercase border tracking-wide ${colorClass}`}>
-                {action}
+            <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-black uppercase border tracking-wide ${colorClass}`}>
+                {getActionIcon(actStr)}
+                {actStr}
             </span>
         );
     };
@@ -223,13 +278,17 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
         );
     }
 
+    // Deduplicate activities to handle potential React Strict Mode double-logs
+    // (Removed at user request: Audit trails should be append-only in the UI)
+    
     // Filtering logic
     const filteredActivities = activities.filter(activity => {
         // Search Filter across username, full name, action, module, table, record id, details, role
         const searchStr = searchTerm.toLowerCase().trim();
         const mod = getModuleBadge(activity).toLowerCase();
         const role = (activity.role || (activity.user.toLowerCase() === 'owner' ? 'owner' : 'staff')).toLowerCase();
-        const recId = String(activity.recordId || activity.id || '').toLowerCase();
+        const recId = String(activity.recordId || '').toLowerCase();
+        const auditId = String(activity.id || '').toLowerCase();
 
         const matchesSearch = !searchStr || (
             activity.user.toLowerCase().includes(searchStr) ||
@@ -238,7 +297,8 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             activity.details.toLowerCase().includes(searchStr) ||
             mod.includes(searchStr) ||
             role.includes(searchStr) ||
-            recId.includes(searchStr)
+            recId.includes(searchStr) ||
+            auditId.includes(searchStr)
         );
 
         // User Filter
@@ -286,140 +346,465 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
         setIsLogModalOpen(true);
     };
 
-    const renderFormattedDiff = (log: ActivityLog) => {
-        const oldVals = log.oldValues;
-        const newVals = log.newValues;
+    const renderBusinessLayout = (log: ActivityLog) => {
+        const oldVals = log.oldValues || {};
+        const newVals = log.newValues || {};
+        const actionStr = getBusinessActionTitle(log).toUpperCase();
+        const module = getModuleBadge(log).toUpperCase();
+        
+        const ignoredKeys = new Set(['id', 'order_id', 'item_id', 'user_id', 'customer_id', 'created_at', 'updated_at', 'history', 'items', 'inventory_used', 'inventoryused', '_id', 'token', 'password', 'ordernumber', 'order_number', 'updater_id', 'updaterid', 'inventoryapplied', 'inventory_applied', 'last_modified', 'is_retail', 'isretail', 'sync_version', 'modifier', 'record_id']);
 
-        if (!oldVals && !newVals) {
-            return (
-                <div className="bg-gray-50 p-4 rounded-xl border border-dashed border-gray-200 text-center">
-                    <span className="text-[11px] font-bold text-gray-500 italic">No field modifications recorded for this event</span>
-                </div>
-            );
-        }
+        const mapBusinessLabel = (key: string) => {
+            const lowerKey = key.toLowerCase();
+            if (lowerKey === 'updater_id' || lowerKey === 'updaterid') return 'Updated By';
+            if (lowerKey === 'base_price') return 'Service Price';
+            if (lowerKey === 'is_active' || lowerKey === 'status') return 'Status';
+            if (lowerKey === 'grand_total' || lowerKey === 'grandtotal') return 'Grand Total';
+            if (lowerKey === 'low_stock_threshold' || lowerKey === 'lowstockthreshold') return 'Low Stock Threshold';
+            if (lowerKey === 'customer_name' || lowerKey === 'customername') return 'Customer Name';
+            if (lowerKey === 'contact_number' || lowerKey === 'contactnumber') return 'Contact Number';
+            if (lowerKey === 'delivery_address' || lowerKey === 'deliveryaddress') return 'Delivery Address';
+            return key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ');
+        };
 
-        // Handle CREATE (New record)
-        if (!oldVals && newVals && typeof newVals === 'object') {
+        const formatCurrency = (val: any) => {
+            if (typeof val === 'number') return `₱${val.toFixed(2)}`;
+            if (typeof val === 'string' && !isNaN(parseFloat(val))) return `₱${parseFloat(val).toFixed(2)}`;
+            return val;
+        };
+
+        const mapBusinessValue = (key: string, val: any) => {
+            if (val === true || val === 'true') return 'Yes';
+            if (val === false || val === 'false') return 'No';
+            if (val === null || val === undefined || val === '' || val === 'Empty') return '— Not Set';
+            if (typeof val === 'string' && val.toLowerCase() === 'empty') return '— Not Set';
+            
+            const lowerKey = key.toLowerCase();
+            if (lowerKey.includes('price') || lowerKey.includes('total') || lowerKey.includes('amount') || lowerKey.includes('cost')) {
+                return formatCurrency(val);
+            }
+            return String(val);
+        };
+
+        const renderFieldList = (data: any, title: string) => {
+            const keys = Object.keys(data).filter(k => !ignoredKeys.has(k.toLowerCase().replace(/[_-\s]/g, '')));
+            if (keys.length === 0) return null;
             return (
-                <div className="space-y-2 pt-2 border-t border-gray-100">
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
-                        Data Created (Before vs After)
-                    </span>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div className="bg-rose-50/50 p-3.5 rounded-xl border border-rose-100 flex items-center justify-center">
-                            <span className="text-xs font-black italic text-rose-500 uppercase tracking-wider">None (New Record)</span>
-                        </div>
-                        <div className="bg-emerald-50/60 p-3.5 rounded-xl border border-emerald-100 space-y-1.5">
-                            <span className="text-[10px] font-black text-emerald-700 uppercase tracking-wider block border-b border-emerald-200 pb-1 mb-1">
-                                Created Record Values
-                            </span>
-                            {Object.entries(newVals).map(([k, v]) => (
-                                <div key={k} className="flex items-center justify-between text-[11px]">
-                                    <span className="font-extrabold text-emerald-900 uppercase text-[10px]">{k}:</span>
-                                    <span className="font-mono font-bold text-emerald-950 bg-white px-1.5 py-0.5 rounded border border-emerald-100">{String(v ?? 'N/A')}</span>
-                                </div>
-                            ))}
-                        </div>
+                <div className="space-y-2.5">
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">{title}</span>
+                    <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm space-y-2.5">
+                        {keys.map(k => (
+                            <div key={k} className="flex flex-col gap-0.5">
+                                <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">{mapBusinessLabel(k)}</span>
+                                <span className="font-black text-gray-900 text-[13px]">{mapBusinessValue(k, data[k])}</span>
+                            </div>
+                        ))}
                     </div>
                 </div>
             );
-        }
+        };
 
-        // Handle UPDATE (Both exist)
-        if (oldVals && newVals && typeof oldVals === 'object' && typeof newVals === 'object') {
-            const normMap: { [key: string]: { label: string; oldVal?: any; newVal?: any } } = {};
-            const ignoredKeys = new Set(['id', 'order_id', 'item_id', 'user_id', 'customer_id', 'created_at', 'updated_at', 'history', 'items', 'inventory_used', '_id', 'token', 'password']);
+        const renderDiffList = () => {
+            const normMap: { [key: string]: { label: string; oldVal?: any; newVal?: any; missingInOld: boolean } } = {};
 
             Object.keys(oldVals).forEach(k => {
                 const norm = k.toLowerCase().replace(/[_-\s]/g, '');
                 if (!ignoredKeys.has(norm) && !ignoredKeys.has(k)) {
-                    normMap[norm] = { label: k, oldVal: oldVals[k] };
+                    normMap[norm] = { label: k, oldVal: oldVals[k], missingInOld: false };
                 }
             });
 
             Object.keys(newVals).forEach(k => {
                 const norm = k.toLowerCase().replace(/[_-\s]/g, '');
                 if (!ignoredKeys.has(norm) && !ignoredKeys.has(k)) {
-                    if (!normMap[norm]) normMap[norm] = { label: k };
+                    if (!normMap[norm]) {
+                        normMap[norm] = { label: k, missingInOld: true };
+                    }
                     normMap[norm].newVal = newVals[k];
                     normMap[norm].label = k;
                 }
             });
 
             const changedItems = Object.values(normMap).filter(item => {
-                if ((item.oldVal === undefined || item.oldVal === null || item.oldVal === '') && 
-                    (item.newVal === undefined || item.newVal === null || item.newVal === '')) {
-                    return false;
-                }
-                return JSON.stringify(item.oldVal) !== JSON.stringify(item.newVal);
+                if (item.missingInOld) return false;
+                
+                const normalizeValue = (v: any) => {
+                    if (v === undefined || v === null || v === '' || v === ' ') return null;
+                    if (typeof v === 'string') return v.trim();
+                    if (typeof v === 'number') return String(v);
+                    if (typeof v === 'boolean') return String(v);
+                    return v;
+                };
+
+                const normOld = normalizeValue(item.oldVal);
+                const normNew = normalizeValue(item.newVal);
+
+                if (normOld === null && normNew === null) return false;
+                return JSON.stringify(normOld) !== JSON.stringify(normNew);
             });
 
             if (changedItems.length === 0) {
                 return (
-                    <div className="bg-gray-50 p-4 rounded-xl border border-dashed border-gray-200 text-center">
-                        <span className="text-[11px] font-bold text-gray-500 italic">No specific property diff found (Timestamp or background metadata update)</span>
+                    <div className="bg-gray-50 p-3 rounded-xl border border-dashed border-gray-200 text-center mt-3">
+                        <span className="text-[11px] font-bold text-gray-500 italic">No user-visible business changes were made.</span>
                     </div>
                 );
             }
 
+            const sections = {
+                'Order Information': ['status', 'priorityLevel', 'predictedCompletionDate', 'transactionDate', 'inventoryApplied'],
+                'Shoe Information': ['brand', 'shoeModel', 'shoeMaterial', 'shoeSize', 'color', 'condition', 'quantity'],
+                'Service Information': ['baseService', 'addOns'],
+                'Customer Information': ['customerName', 'contactNumber'],
+                'Delivery Information': ['shippingPreference', 'deliveryAddress', 'deliveryCourier', 'releaseTime', 'province', 'city', 'barangay', 'zipCode'],
+                'Payment Information': ['grandTotal', 'amountReceived', 'balance', 'paymentMethod', 'paymentStatus', 'referenceNo', 'depositAmount']
+            };
+
+            const groupedChanges: { [key: string]: typeof changedItems } = {
+                'Order Information': [],
+                'Shoe Information': [],
+                'Service Information': [],
+                'Customer Information': [],
+                'Delivery Information': [],
+                'Payment Information': [],
+                'Other Changes': []
+            };
+
+            changedItems.forEach(item => {
+                let placed = false;
+                for (const [section, keys] of Object.entries(sections)) {
+                    if (keys.includes(item.label)) {
+                        groupedChanges[section].push(item);
+                        placed = true;
+                        break;
+                    }
+                }
+                if (!placed) groupedChanges['Other Changes'].push(item);
+            });
+
             return (
-                <div className="space-y-2 pt-2 border-t border-gray-100">
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
-                        Changed Fields (Before vs After)
-                    </span>
-                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
-                        {changedItems.map(({ label, oldVal, newVal }) => (
-                            <div key={label} className="flex flex-col sm:flex-row sm:items-center justify-between py-1.5 border-b border-slate-200/60 last:border-0 gap-2">
-                                <span className="font-extrabold text-slate-700 uppercase text-xs tracking-wide">{label.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ')}</span>
-                                <div className="flex items-center gap-2 text-xs">
-                                    <span className="line-through font-mono font-bold bg-rose-100 text-rose-800 px-2 py-0.5 rounded border border-rose-200">
-                                        {String(oldVal ?? 'Empty')}
-                                    </span>
-                                    <span className="text-gray-400 font-black">➔</span>
-                                    <span className="font-mono font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded border border-emerald-200">
-                                        {String(newVal ?? 'Empty')}
-                                    </span>
+                <div className="space-y-4 mt-3">
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Business Changes</span>
+                    
+                    {Object.entries(groupedChanges).map(([sectionTitle, items]) => {
+                        if (items.length === 0) return null;
+                        return (
+                            <div key={sectionTitle} className="space-y-2 mb-4">
+                                <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 pb-1 block w-full">{sectionTitle}</span>
+                                <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm space-y-3">
+                                    {items.map(({ label, oldVal, newVal }) => (
+                                        <div key={label} className="flex flex-col gap-1 pb-2.5 border-b border-gray-100 last:border-0 last:pb-0">
+                                            <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">{mapBusinessLabel(label)}</span>
+                                            <div className="flex flex-col gap-0.5 mt-0.5">
+                                                <span className="text-[13px] font-black text-rose-700/80 line-through decoration-rose-300 decoration-2">
+                                                    {mapBusinessValue(label, oldVal)}
+                                                </span>
+                                                <div className="flex items-center gap-2 text-[13px] font-black text-gray-900">
+                                                    <span className="text-gray-300">↳</span>
+                                                    <span className="text-emerald-700">{mapBusinessValue(label, newVal)}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
-                        ))}
+                        );
+                    })}
+                </div>
+            );
+        };
+
+        // Event Specific Summaries
+        let eventSummary = null;
+        if (module === 'JOB ORDERS' && Object.keys(oldVals).length > 0 && Object.keys(newVals).length > 0 && newVals.status && oldVals.status !== newVals.status) {
+            eventSummary = (
+                <div className="mb-4 space-y-1.5">
+                    <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Status Changed</span>
+                    <div className="flex items-center gap-2 text-[14px] font-black text-blue-700 bg-blue-50 p-2.5 rounded-xl border border-blue-100 shadow-sm">
+                        <span className="text-gray-500 line-through decoration-gray-400 decoration-1 text-[13px]">{mapBusinessValue('status', oldVals.status)}</span>
+                        <span className="text-gray-400">→</span>
+                        <span>{mapBusinessValue('status', newVals.status)}</span>
+                    </div>
+                </div>
+            );
+        } else if (module === 'INVENTORY' && actionStr.includes('RESTOCK')) {
+            const added = newVals.stock_added || newVals.quantity || log.details.match(/added (\d+)/i)?.[1] || 0;
+            const itemName = newVals.item_name || newVals.name || log.details.match(/Restocked\s*(.*?)\s*:/)?.[1] || 'Inventory Item';
+            eventSummary = (
+                <div className="mb-4 space-y-1.5">
+                    <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Restocked: {itemName}</span>
+                    <div className="flex items-center gap-3 bg-emerald-50 p-2.5 rounded-xl border border-emerald-100 shadow-sm">
+                        <span className="text-[14px] font-black text-emerald-700">+{added}</span>
+                        <div className="flex items-center gap-2 text-[12px] font-bold text-gray-600 border-l border-emerald-200 pl-3">
+                            <span className="line-through text-gray-400">{mapBusinessValue('stock', oldVals.stock || oldVals.stock_quantity || 0)}</span>
+                            <span className="text-gray-400">→</span>
+                            <span className="text-gray-800">{mapBusinessValue('stock', newVals.stock || newVals.stock_quantity || 0)}</span>
+                        </div>
+                    </div>
+                </div>
+            );
+        } else if (module === 'INVENTORY' && (actionStr.includes('CONSUME') || log.details.toLowerCase().includes('deduct'))) {
+            const used = newVals.quantity_used || log.details.match(/deducted (\d+)/i)?.[1] || 0;
+            const itemName = newVals.item_name || newVals.name || log.details.match(/from\s*(.*?)(\.|$)/i)?.[1] || 'Inventory Item';
+            eventSummary = (
+                <div className="mb-4 space-y-1.5">
+                    <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Material Consumed: {itemName}</span>
+                    <div className="flex items-center gap-3 bg-amber-50 p-2.5 rounded-xl border border-amber-100 shadow-sm">
+                        <span className="text-[14px] font-black text-amber-700">−{used}</span>
+                        <div className="flex items-center gap-2 text-[12px] font-bold text-gray-600 border-l border-amber-200 pl-3">
+                            <span className="line-through text-gray-400">{mapBusinessValue('stock', oldVals.stock || oldVals.stock_quantity || 0)}</span>
+                            <span className="text-gray-400">→</span>
+                            <span className="text-gray-800">{mapBusinessValue('stock', newVals.stock || newVals.stock_quantity || 0)}</span>
+                        </div>
+                    </div>
+                </div>
+            );
+        } else if (module === 'SERVICES' && Object.keys(oldVals).length > 0 && Object.keys(newVals).length > 0 && ((newVals.base_price && oldVals.base_price !== newVals.base_price) || (newVals.price && oldVals.price !== newVals.price))) {
+            const oldP = oldVals.base_price || oldVals.price;
+            const newP = newVals.base_price || newVals.price;
+            eventSummary = (
+                <div className="mb-4 space-y-1.5">
+                    <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Price Updated</span>
+                    <div className="flex items-center gap-3 text-[14px] font-black text-emerald-700 bg-emerald-50 p-2.5 rounded-xl border border-emerald-100 shadow-sm">
+                        <span className="text-gray-500 line-through decoration-gray-400 decoration-1 text-[13px]">{formatCurrency(oldP)}</span>
+                        <span className="text-gray-400">→</span>
+                        <span>{formatCurrency(newP)}</span>
+                    </div>
+                </div>
+            );
+        } else if ((module === 'USERS' || module === 'USER MANAGEMENT') && actionStr.includes('CREATE')) {
+            eventSummary = (
+                <div className="mb-4 space-y-1.5">
+                    <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Created Account</span>
+                    <div className="flex flex-col gap-0.5 bg-purple-50 p-2.5 rounded-xl border border-purple-100 shadow-sm">
+                        <span className="text-[13px] font-black text-gray-900">Username: {newVals.username || newVals.user || log.recordId}</span>
+                        <span className="text-[12px] font-bold text-gray-600">Role: {newVals.role || 'Staff'}</span>
+                    </div>
+                </div>
+            );
+        } else if (module === 'REPORTS' || actionStr.includes('REPORT') || actionStr.includes('GENERATED')) {
+            const reportName = log.details.replace(/Printed\s*/i, '').replace(/Generated\s*/i, '') || 'System Report';
+            eventSummary = (
+                <div className="mb-4 space-y-1.5">
+                    <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Report Generated</span>
+                    <div className="flex items-center gap-2 text-[14px] font-black text-purple-700 bg-purple-50 p-2.5 rounded-xl border border-purple-100 shadow-sm">
+                        <span>{reportName}</span>
                     </div>
                 </div>
             );
         }
 
-        // Handle DELETE or fallback
-        return (
-            <div className="space-y-2 pt-2 border-t border-gray-100">
-                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
-                    Data Changes (Before vs After)
-                </span>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div className="bg-rose-50/60 p-3 rounded-xl border border-rose-100">
-                        <span className="text-[10px] font-black text-rose-700 uppercase tracking-wider block mb-1">
-                            Previous Values (Old State)
-                        </span>
-                        {oldVals ? (
-                            <pre className="text-[10px] font-mono text-rose-900 bg-white p-2 rounded border border-rose-100 overflow-x-auto whitespace-pre-wrap">
-                                {typeof oldVals === 'object' ? JSON.stringify(oldVals, null, 2) : String(oldVals)}
-                            </pre>
-                        ) : (
-                            <span className="text-[11px] italic text-rose-400">None</span>
-                        )}
+        // Layout Router
+        if (module === 'AUTHENTICATION') {
+            if (actionStr.includes('FAILED')) {
+                return (
+                    <div className="space-y-2.5 mt-2">
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Failed Login Attempt</span>
+                        <div className="bg-red-50 p-3 rounded-xl border border-red-200 shadow-sm space-y-2">
+                            <div className="flex flex-col gap-0.5">
+                                <span className="font-extrabold text-red-500 uppercase text-[9px] tracking-widest">Username</span>
+                                <span className="font-black text-red-900 text-[13px]">{newVals.username_attempted || log.user}</span>
+                            </div>
+                            <div className="flex flex-col gap-0.5 mt-2">
+                                <span className="font-extrabold text-red-500 uppercase text-[9px] tracking-widest">Status</span>
+                                <span className="font-black text-[13px] text-red-700">Failed</span>
+                            </div>
+                            <div className="flex flex-col gap-0.5 mt-2">
+                                <span className="font-extrabold text-red-500 uppercase text-[9px] tracking-widest">Reason</span>
+                                <span className="font-black text-red-700 text-[13px]">{newVals.reason === 'wrong_password' ? 'Incorrect Password' : newVals.reason === 'account_locked' ? 'Account Locked' : newVals.reason === 'account_deactivated' ? 'Account Deactivated' : newVals.reason === 'account_not_found' ? 'Account Not Found' : 'Incorrect Credentials'}</span>
+                            </div>
+                            {newVals.failed_attempts !== undefined && (
+                                <div className="flex flex-col gap-0.5 mt-2">
+                                    <span className="font-extrabold text-red-500 uppercase text-[9px] tracking-widest">Failed Attempts</span>
+                                    <span className="font-black text-red-900 text-[13px]">{newVals.failed_attempts} of 3</span>
+                                </div>
+                            )}
+                            <div className="flex flex-col gap-0.5 mt-2 pt-2 border-t border-red-200">
+                                <span className="font-extrabold text-red-500 uppercase text-[9px] tracking-widest">Result</span>
+                                <span className="font-black text-[13px] text-red-900">{newVals.reason === 'account_locked' ? 'Account Locked' : newVals.reason === 'account_deactivated' ? 'Access Blocked' : 'Account still active'}</span>
+                            </div>
+                        </div>
                     </div>
-                    <div className="bg-emerald-50/60 p-3 rounded-xl border border-emerald-100">
-                        <span className="text-[10px] font-black text-emerald-700 uppercase tracking-wider block mb-1">
-                            Updated Values (New State)
-                        </span>
-                        {newVals ? (
-                            <pre className="text-[10px] font-mono text-emerald-900 bg-white p-2 rounded border border-emerald-100 overflow-x-auto whitespace-pre-wrap">
-                                {typeof newVals === 'object' ? JSON.stringify(newVals, null, 2) : String(newVals)}
-                            </pre>
-                        ) : (
-                            <span className="text-[11px] italic text-emerald-600 font-black">None (Record Deleted)</span>
-                        )}
+                );
+            }
+
+            if (actionStr.includes('TIMEOUT')) {
+                return (
+                    <div className="space-y-2.5 mt-2">
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Session Expired</span>
+                        <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 shadow-sm space-y-2">
+                            <div className="flex flex-col gap-0.5">
+                                <span className="font-extrabold text-amber-600 uppercase text-[9px] tracking-widest">User</span>
+                                <span className="font-black text-amber-900 text-[13px]">{log.user}</span>
+                            </div>
+                            <div className="flex flex-col gap-0.5 mt-2">
+                                <span className="font-extrabold text-amber-600 uppercase text-[9px] tracking-widest">Reason</span>
+                                <span className="font-black text-[13px] text-amber-700">Session timed out due to inactivity.</span>
+                            </div>
+                            <div className="flex flex-col gap-0.5 mt-2 pt-2 border-t border-amber-200">
+                                <span className="font-extrabold text-amber-600 uppercase text-[9px] tracking-widest">Action Required</span>
+                                <span className="font-black text-[13px] text-amber-900">Please log in again.</span>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="space-y-2.5 mt-2">
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Session Details</span>
+                    <div className="bg-white p-3 rounded-xl border border-emerald-100 shadow-sm space-y-2">
+                        <div className="flex flex-col gap-0.5">
+                            <span className="font-extrabold text-emerald-600 uppercase text-[9px] tracking-widest">Username</span>
+                            <span className="font-black text-gray-900 text-[13px]">{log.user}</span>
+                        </div>
+                        <div className="flex flex-col gap-0.5 mt-2">
+                            <span className="font-extrabold text-emerald-600 uppercase text-[9px] tracking-widest">Status</span>
+                            <span className="font-black text-[13px] text-emerald-600">Successful {actionStr.includes('LOGOUT') ? 'Logout' : 'Login'}</span>
+                        </div>
                     </div>
                 </div>
-            </div>
+            );
+        }
+
+        if (module === 'INVENTORY' && actionStr.includes('RESTOCK')) {
+            const added = newVals.stock_added || newVals.quantity || log.details.match(/added (\d+)/i)?.[1];
+            const itemName = newVals.item_name || newVals.name || log.details.match(/Restocked\s*(.*?)\s*:/)?.[1] || 'Inventory Item';
+            return (
+                <div className="space-y-2.5 mt-2">
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Restock Details</span>
+                    <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm space-y-3">
+                        <div className="flex flex-col gap-0.5">
+                            <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Item Restocked</span>
+                            <span className="font-black text-gray-900 text-[13px]">{itemName}</span>
+                        </div>
+                        <div className="bg-emerald-50 p-2.5 rounded-lg border border-emerald-100 flex items-center justify-between mt-2">
+                            <span className="font-extrabold text-emerald-800 text-[11px] uppercase tracking-wider">Stock Added</span>
+                            <span className="font-black text-emerald-700 text-base">+{added || 'N/A'}</span>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        if (module === 'REPORTS' || actionStr.includes('REPORT')) {
+            return (
+                <div className="space-y-2.5 mt-2">
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Report Details</span>
+                    <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm space-y-2">
+                        <div className="flex flex-col gap-0.5">
+                            <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Generated Report</span>
+                            <span className="font-black text-gray-900 text-[13px]">{log.details.replace(/Printed\s*/i, '').replace(/Generated\s*/i, '') || 'System Report'}</span>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        if ((module === 'JOB ORDERS' || log.table === 'orders') && (actionStr.includes('NEW') || actionStr.includes('CREATE'))) {
+            const customerName = newVals.customer_name || newVals.customerName || newVals.customer || '—';
+            const contactNum = newVals.contact_number || newVals.contactNumber || '—';
+            const orderNo = newVals.order_number || newVals.orderNumber || log.recordId || '—';
+            const totalAmt = newVals.grand_total || newVals.grandTotal || 0;
+            const downpay = newVals.downpayment || 0;
+            const bal = newVals.balance !== undefined ? newVals.balance : (totalAmt - downpay);
+            const payStatus = newVals.payment_status || newVals.paymentStatus || (bal <= 0 ? 'Fully Paid' : 'Downpayment');
+            const prio = newVals.priority_level || newVals.priority || 'Regular';
+            const releaseDt = newVals.promised_release_date || newVals.promisedReleaseDate || newVals.expected_at || '—';
+
+            return (
+                <div className="space-y-4 mt-2">
+                    <div className="space-y-2.5">
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Complete Order Specifications</span>
+                        <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm space-y-2.5">
+                            <div className="grid grid-cols-2 gap-2">
+                                <div className="flex flex-col gap-0.5">
+                                    <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Order Number</span>
+                                    <span className="font-black text-gray-900 text-[13px]">{orderNo}</span>
+                                </div>
+                                <div className="flex flex-col gap-0.5">
+                                    <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Priority</span>
+                                    <span className="font-black text-amber-600 uppercase text-[12px]">{prio}</span>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100">
+                                <div className="flex flex-col gap-0.5">
+                                    <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Customer</span>
+                                    <span className="font-black text-gray-900 text-[13px]">{customerName}</span>
+                                </div>
+                                <div className="flex flex-col gap-0.5">
+                                    <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Contact Number</span>
+                                    <span className="font-black text-gray-700 text-[12px]">{contactNum}</span>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2 pt-2 border-t border-gray-100">
+                                <div className="flex flex-col gap-0.5">
+                                    <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Grand Total</span>
+                                    <span className="font-black text-emerald-600 text-[13px]">{formatCurrency(totalAmt)}</span>
+                                </div>
+                                <div className="flex flex-col gap-0.5">
+                                    <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Downpayment</span>
+                                    <span className="font-bold text-gray-700 text-[12px]">{formatCurrency(downpay)}</span>
+                                </div>
+                                <div className="flex flex-col gap-0.5">
+                                    <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Balance</span>
+                                    <span className={`font-black text-[12px] ${bal > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{formatCurrency(bal)}</span>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100">
+                                <div className="flex flex-col gap-0.5">
+                                    <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Payment Status</span>
+                                    <span className="font-black text-gray-800 text-[12px] uppercase">{payStatus}</span>
+                                </div>
+                                <div className="flex flex-col gap-0.5">
+                                    <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Promised Release</span>
+                                    <span className="font-black text-blue-700 text-[12px]">{releaseDt}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {(newVals.shoes || newVals.services || newVals.items_count) && (
+                        <div className="space-y-2.5">
+                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Footwear & Service Details</span>
+                            <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm space-y-2.5">
+                                {newVals.shoes && (
+                                    <div className="flex flex-col gap-0.5">
+                                        <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Shoe Items ({newVals.shoes_count || 1} Pair)</span>
+                                        <span className="font-medium text-gray-800 text-[12px] leading-relaxed bg-gray-50 p-2 rounded-lg border border-gray-100">{newVals.shoes}</span>
+                                    </div>
+                                )}
+                                {newVals.services && (
+                                    <div className="flex flex-col gap-0.5">
+                                        <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Services Applied</span>
+                                        <span className="font-black text-red-700 text-[12px]">{newVals.services}</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        let mainContent = null;
+        if (actionStr.includes('CREATE') || actionStr.includes('NEW') || actionStr.includes('ADDED') || (log.action && log.action.toUpperCase() === 'CREATE')) {
+            mainContent = renderFieldList(newVals, 'Created Record Details');
+        } else if (actionStr.includes('DELETE') || (log.action && log.action.toUpperCase() === 'DELETE')) {
+            mainContent = renderFieldList(oldVals, 'Deleted Record Details');
+        } else if (Object.keys(oldVals).length > 0 && Object.keys(newVals).length > 0) {
+            mainContent = renderDiffList();
+        } else if (Object.keys(newVals).length > 0) {
+            mainContent = renderFieldList(newVals, 'Updated Values');
+        }
+
+        if (!eventSummary && !mainContent) return null;
+
+        return (
+            <>
+                {eventSummary}
+                {mainContent}
+            </>
         );
     };
 
@@ -550,7 +935,7 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                                                     </div>
                                                 </td>
                                                 <td className="px-4 py-3.5 text-left">
-                                                    {getActionBadge(activity.action)}
+                                                    {getActionBadge(activity)}
                                                 </td>
                                                 <td className="px-4 py-3.5 text-center">
                                                     <Badge variant="outline" className={
@@ -610,25 +995,39 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                             </Button>
 
                             <div className="flex items-center gap-1.5">
-                                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                                    const pageNum = i + 1;
-                                    const isActive = currentPage === pageNum;
+                                {(() => {
+                                    let start = Math.max(1, currentPage - 2);
+                                    let end = Math.min(totalPages, start + 4);
+                                    if (end - start < 4) {
+                                        start = Math.max(1, end - 4);
+                                    }
+                                    const pages = [];
+                                    for (let i = start; i <= end; i++) pages.push(i);
+                                    
                                     return (
-                                        <Button
-                                            key={pageNum}
-                                            variant={isActive ? 'default' : 'outline'}
-                                            size="sm"
-                                            onClick={() => handlePageChange(pageNum)}
-                                            className={`h-9 w-9 min-w-[36px] p-0 text-[11px] font-black rounded-xl transition-all ${isActive
-                                                ? 'bg-red-600 hover:bg-red-700 text-white border-red-600 shadow-md shadow-red-100'
-                                                : 'bg-white border-gray-200 text-gray-700 hover:bg-red-50 hover:text-red-600 hover:border-red-600'
-                                                }`}
-                                        >
-                                            {pageNum}
-                                        </Button>
+                                        <>
+                                            {start > 1 && <span className="text-gray-400 px-1 font-black">...</span>}
+                                            {pages.map(pageNum => {
+                                                const isActive = currentPage === pageNum;
+                                                return (
+                                                    <Button
+                                                        key={pageNum}
+                                                        variant={isActive ? 'default' : 'outline'}
+                                                        size="sm"
+                                                        onClick={() => handlePageChange(pageNum)}
+                                                        className={`h-9 w-9 min-w-[36px] p-0 text-[11px] font-black rounded-xl transition-all ${isActive
+                                                            ? 'bg-red-600 hover:bg-red-700 text-white border-red-600 shadow-md shadow-red-100'
+                                                            : 'bg-white border-gray-200 text-gray-700 hover:bg-red-50 hover:text-red-600 hover:border-red-600'
+                                                            }`}
+                                                    >
+                                                        {pageNum}
+                                                    </Button>
+                                                );
+                                            })}
+                                            {end < totalPages && <span className="text-gray-400 px-1 font-black">...</span>}
+                                        </>
                                     );
-                                })}
-                                {totalPages > 5 && <span className="text-gray-400 px-1 font-black">...</span>}
+                                })()}
                             </div>
 
                             <Button
@@ -743,86 +1142,90 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
 
             {/* Audit Log Detail Modal */}
             <Dialog open={isLogModalOpen} onOpenChange={setIsLogModalOpen}>
-                <DialogContent className="max-w-[620px] bg-white rounded-[1.5rem] border-none shadow-2xl p-0 overflow-hidden">
-                    <div className="bg-red-600 px-6 py-4 flex items-center">
-                        <div className="flex items-center gap-2 text-white">
-                            <ShieldCheck size={22} className="stroke-[2.5]" />
-                            <h2 className="text-white text-sm font-black uppercase tracking-wider m-0">
-                                Audit Record #{selectedLog?.id || ''}
+                <DialogContent className="max-w-[500px] bg-white rounded-[2rem] border-none shadow-2xl p-0 overflow-hidden">
+                    {/* Header - RED STORED THEME */}
+                    <div className="bg-[#D92D20] px-6 py-5 flex items-center justify-between">
+                        <div className="flex items-center gap-3 text-white">
+                            <div className="p-1.5 bg-white/20 rounded-xl border border-white/20">
+                                {getActionIcon(selectedLog ? getBusinessActionTitle(selectedLog) : '')}
+                            </div>
+                            <h2 className="text-white text-[15px] font-black uppercase tracking-widest m-0 leading-none">
+                                {selectedLog ? getBusinessActionTitle(selectedLog) : 'Audit Record'}
                             </h2>
                         </div>
                     </div>
 
                     {selectedLog && (
-                        <div className="p-6 space-y-5 max-h-[80vh] overflow-y-auto custom-scrollbar">
-                            {/* Key Audit Attributes Grid */}
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-gray-50/80 p-4 rounded-xl border border-gray-200/80">
-                                <div className="space-y-1">
-                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                                        <UserIcon size={12} className="text-red-600" /> Performed By
-                                    </span>
-                                    <span className="text-xs font-black text-gray-900 uppercase block truncate">
-                                        {selectedLog.user}
-                                    </span>
-                                </div>
-                                <div className="space-y-1">
-                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                                        <ShieldCheck size={12} className="text-emerald-600" /> Role
-                                    </span>
-                                    <span className="text-xs font-black text-gray-900 uppercase block">
-                                        {selectedLog.role || (selectedLog.user.toLowerCase() === 'owner' ? 'owner' : 'staff')}
-                                    </span>
-                                </div>
-                                <div className="space-y-1">
-                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                                        <Clock size={12} className="text-blue-600" /> Timestamp
-                                    </span>
-                                    <span className="text-xs font-bold text-gray-900 block">
-                                        {selectedLog.timestamp}
-                                    </span>
-                                </div>
-                                <div className="space-y-1">
-                                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                                        <Globe size={12} className="text-purple-600" /> IP Address
-                                    </span>
-                                    <span className="text-xs font-mono font-bold text-gray-800 block truncate">
-                                        {selectedLog.ip_address || 'Local Session'}
-                                    </span>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-3 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
-                                <div className="space-y-1">
-                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Module</span>
-                                    <span className="text-xs font-black text-slate-800 uppercase block">{getModuleBadge(selectedLog)}</span>
-                                </div>
-                                <div className="space-y-1">
-                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Target Table</span>
-                                    <span className="text-xs font-black text-slate-800 uppercase block">{selectedLog.table || getModuleBadge(selectedLog)}</span>
-                                </div>
-                                <div className="space-y-1">
-                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Record ID</span>
-                                    <span className="text-xs font-mono font-black text-red-600 block">
-                                        {(selectedLog.table?.toLowerCase() === 'authentication' || selectedLog.table?.toLowerCase() === 'system' || getModuleBadge(selectedLog).toLowerCase() === 'authentication' || getModuleBadge(selectedLog).toLowerCase() === 'system') ? 'N/A (System Event)' : (selectedLog.recordId ? `#${selectedLog.recordId}` : (selectedLog.details.match(/ID:?\s*([A-Za-z0-9-]+)/i)?.[1] ? `#${selectedLog.details.match(/ID:?\s*([A-Za-z0-9-]+)/i)![1]}` : 'N/A'))}
-                                    </span>
-                                </div>
-                            </div>
-
-                            {/* Action Description */}
-                            <div className="space-y-1.5">
-                                <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest block ml-1">
-                                    Human-Readable Description
-                                </span>
-                                <div className="bg-white p-4 rounded-xl border-2 border-gray-200 text-xs font-extrabold text-gray-800 leading-relaxed shadow-xs flex items-start gap-2.5">
-                                    <div className="shrink-0 mt-0.5">
-                                        {getActionBadge(selectedLog.action)}
+                        <div className="p-5 space-y-5 max-h-[75vh] overflow-y-auto custom-scrollbar">
+                            {/* Summary Banner */}
+                            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-3">
+                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block border-b border-slate-200 pb-2">Activity Summary</span>
+                                <div className="grid grid-cols-2 gap-4 mt-1">
+                                    <div className="flex flex-col gap-1">
+                                        <span className="font-extrabold text-slate-400 uppercase text-[9px] tracking-widest">Performed By</span>
+                                        <span className="text-[13px] font-bold text-slate-800 leading-tight">
+                                            <span className="text-red-600 font-black">{selectedLog.user}</span> <span className="text-slate-500 font-medium">({selectedLog.role || (selectedLog.user.toLowerCase() === 'owner' ? 'Owner' : 'Staff')})</span>
+                                        </span>
                                     </div>
-                                    <span className="py-0.5">{selectedLog.details}</span>
+                                    <div className="flex flex-col gap-1">
+                                        <span className="font-extrabold text-slate-400 uppercase text-[9px] tracking-widest">Date & Time</span>
+                                        <span className="text-[13px] font-bold text-slate-800 leading-tight">
+                                            {selectedLog.timestamp}
+                                        </span>
+                                    </div>
+                                    <div className="flex flex-col gap-1 mt-2 border-t border-slate-100 pt-3">
+                                        <span className="font-extrabold text-slate-400 uppercase text-[9px] tracking-widest">Action</span>
+                                        <span className="text-[13px] font-black text-slate-800 leading-tight">
+                                            {getBusinessActionTitle(selectedLog)}
+                                        </span>
+                                    </div>
+                                    <div className="flex flex-col gap-1 mt-2 border-t border-slate-100 pt-3">
+                                        <span className="font-extrabold text-slate-400 uppercase text-[9px] tracking-widest">Affected Record</span>
+                                        <span className="text-[13px] font-black text-slate-800 leading-tight">
+                                            {selectedLog.oldValues?.order_number || selectedLog.newValues?.order_number || selectedLog.oldValues?.orderNumber || selectedLog.newValues?.orderNumber || selectedLog.recordId || selectedLog.id || 'N/A'}
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
 
-                            {/* Before vs After Diff Section */}
-                            {renderFormattedDiff(selectedLog)}
+                            {/* Changes Section */}
+                            {renderBusinessLayout(selectedLog)}
+
+                            {/* Technical Information Collapsible */}
+                            <div className="pt-2">
+                                <details className="group [&_summary::-webkit-details-marker]:hidden bg-gray-50 rounded-xl border border-gray-100">
+                                    <summary className="flex items-center gap-2 px-4 py-3 cursor-pointer text-[10px] font-black text-gray-500 uppercase tracking-widest hover:text-gray-700 transition-colors">
+                                        <span className="transition group-open:rotate-90">
+                                            <ChevronRight className="w-3.5 h-3.5" />
+                                        </span>
+                                        Technical Information (For IT Auditors)
+                                    </summary>
+                                    <div className="px-4 pb-4 pt-1 space-y-2 border-t border-gray-100">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[9px] font-extrabold text-gray-400 uppercase">Target Table</span>
+                                            <span className="text-[10px] font-bold text-gray-800">{selectedLog.table || 'System'}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[9px] font-extrabold text-gray-400 uppercase">Reference ID</span>
+                                            <span className="text-[10px] font-bold text-gray-800">{selectedLog.recordId || selectedLog.id || 'N/A'}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[9px] font-extrabold text-gray-400 uppercase">Audit ID</span>
+                                            <span className="text-[10px] font-bold text-gray-800">{selectedLog.id}</span>
+                                        </div>
+                                        {selectedLog.details && 
+                                         !selectedLog.details.includes('Updated item') && 
+                                         !selectedLog.details.includes('Restocked') && 
+                                         !selectedLog.details.includes('Logged in successfully') &&
+                                         !selectedLog.details.includes('Logged out successfully') && (
+                                            <div className="pt-2 border-t border-gray-200/50 mt-2">
+                                                <span className="text-[9px] font-extrabold text-gray-400 uppercase block mb-1">Raw Trace</span>
+                                                <span className="text-[10px] font-medium text-gray-600 block leading-tight">{selectedLog.details}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </details>
+                            </div>
                         </div>
                     )}
                 </DialogContent>

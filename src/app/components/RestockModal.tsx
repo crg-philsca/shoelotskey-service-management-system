@@ -7,10 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/app/components/ui/switch';
 import { useInventory } from '@/app/context/InventoryContext';
 import { useExpenses } from '@/app/context/ExpenseContext';
-import { useActivities } from '@/app/context/ActivityContext';
-import { PackagePlus, CheckCircle2 } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { getInventoryPresentation } from '@/app/lib/inventoryPresentation';
 
 interface RestockModalProps {
     open: boolean;
@@ -18,10 +16,9 @@ interface RestockModalProps {
     user?: { username?: string };
 }
 
-export default function RestockModal({ open, onOpenChange, user }: RestockModalProps) {
-    const { inventoryData, updateItem } = useInventory();
+export default function RestockModal({ open, onOpenChange }: RestockModalProps) {
+    const { inventoryData, updateStock } = useInventory();
     const { addExpense } = useExpenses();
-    const { addActivity } = useActivities();
 
     const [selectedItemId, setSelectedItemId] = useState<string>('');
     const [quantity, setQuantity] = useState<string>('1');
@@ -45,7 +42,7 @@ export default function RestockModal({ open, onOpenChange, user }: RestockModalP
     }, [open, inventoryData]);
 
     const selectedItem = inventoryData.find(i => String(i.id) === selectedItemId);
-    const pres = selectedItem ? getInventoryPresentation(selectedItem) : null;
+
 
     // Determine package unit & conversion rate
     const hasPackage = selectedItem && Number((selectedItem as any).package_size || (selectedItem as any).packageSize) > 0;
@@ -76,9 +73,8 @@ export default function RestockModal({ open, onOpenChange, user }: RestockModalP
         // 1. Update Inventory stock
         const oldStock = Number(selectedItem.stock || 0);
         const newStock = oldStock + totalUnitsAdded;
-        const updatedItem = { ...selectedItem, stock: newStock };
-        
-        updateItem(updatedItem);
+        // 1. Update Inventory stock using adjustStock endpoint (negative quantity for restock)
+        updateStock(selectedItem.id, -totalUnitsAdded);
 
         // 2. Log Expense if enabled
         if (recordExpense && effectiveCost > 0) {
@@ -92,44 +88,29 @@ export default function RestockModal({ open, onOpenChange, user }: RestockModalP
             });
         }
 
-        // 3. Log Activity
-        addActivity({
-            user: user?.username || 'Owner',
-            action: 'Restock Inventory',
-            table: 'Inventory',
-            recordId: selectedItem.id,
-            oldValues: { stock: oldStock },
-            newValues: { stock: newStock, restockContainers: qtyNum, totalCost: effectiveCost },
-            module: 'Inventory',
-            details: `Restocked ${qtyNum} ${packageUnit} of ${selectedItem.name} (+${totalUnitsAdded} ${selectedItem.unit}) for ₱${effectiveCost.toFixed(2)}`,
-            type: 'inventory' as any
-        });
-
-        toast.success(`Successfully restocked ${selectedItem.name} (+${qtyNum} ${packageUnit})`);
+        toast.success(`${selectedItem.name} restocked successfully. +${totalUnitsAdded.toLocaleString()} ${selectedItem.unit} added. Current stock: ${newStock.toLocaleString()} ${selectedItem.unit}.`);
         onOpenChange(false);
     };
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[520px] p-6 rounded-2xl border-0 shadow-2xl bg-white">
-                <DialogHeader className="border-b border-gray-100 pb-4">
+            <DialogContent className="sm:max-w-[520px] p-0 rounded-2xl border-0 shadow-2xl bg-white overflow-hidden flex flex-col max-h-[85vh]">
+                <DialogHeader className="border-b border-gray-100 p-6 pb-4 shrink-0">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-red-50 border border-red-100 flex items-center justify-center text-red-600 shadow-sm">
-                            <PackagePlus className="w-5 h-5" />
-                        </div>
-                        <div>
-                            <DialogTitle className="text-lg font-black tracking-wider text-gray-900 uppercase">
+                        <div className="w-full text-center">
+                            <DialogTitle className="text-xl font-bold uppercase text-red-600 text-center">
                                 Restock Whole Product
                             </DialogTitle>
-                            <p className="text-xs text-gray-500 font-medium">
-                                Purchase and add whole containers (Jugs, Tubs, Cans) directly to inventory stock
+                            <p className="text-xs text-gray-500 font-medium text-center mt-1">
+                                Purchase and add whole containers directly to inventory stock
                             </p>
                         </div>
                     </div>
                 </DialogHeader>
 
-                <form onSubmit={handleSubmit} className="space-y-4 pt-2">
-                    {/* Select Item */}
+                <form onSubmit={handleSubmit} className="flex flex-col overflow-hidden min-h-0">
+                    <div className="overflow-y-auto p-6 pt-2 space-y-4 custom-scrollbar">
+                        {/* Select Item */}
                     <div>
                         <Label className="text-[11px] font-black uppercase tracking-widest text-slate-700">
                             Select Inventory Item
@@ -140,11 +121,10 @@ export default function RestockModal({ open, onOpenChange, user }: RestockModalP
                             </SelectTrigger>
                             <SelectContent className="max-h-60 rounded-xl border border-gray-100 shadow-xl">
                                 {inventoryData.map(item => {
-                                    const itemPres = getInventoryPresentation(item);
+
                                     return (
                                         <SelectItem key={item.id} value={String(item.id)} className="font-semibold text-xs py-2">
                                             <span className="font-bold text-gray-900">{item.name}</span>
-                                            <span className="ml-2 text-gray-400 font-medium">({itemPres.containersLabel || `${item.stock} ${item.unit}`}) - ₱{item.price || 0}</span>
                                         </SelectItem>
                                     );
                                 })}
@@ -154,17 +134,22 @@ export default function RestockModal({ open, onOpenChange, user }: RestockModalP
 
                     {/* Current Status Box */}
                     {selectedItem && (
-                        <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-3 flex items-center justify-between">
+                        <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-3 grid grid-cols-2 gap-4">
                             <div>
-                                <span className="text-[10px] font-black uppercase text-slate-500 block">Current Stock</span>
-                                <span className="text-sm font-black text-slate-900">{selectedItem.stock} {selectedItem.unit}</span>
-                                {pres?.containersLabel && (
-                                    <span className="text-xs font-extrabold text-indigo-600 ml-2">({pres.containersLabel})</span>
-                                )}
+                                <span className="text-[10px] font-black uppercase text-slate-500 block mb-0.5">Current Stock</span>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm font-black text-slate-900">{selectedItem.stock} {selectedItem.unit}</span>
+                                    {Number(selectedItem.stock) < 1000 && (
+                                        <span className="text-[9px] font-black uppercase tracking-wider bg-red-100 text-red-700 px-1.5 py-0.5 rounded shadow-sm border border-red-200">
+                                            Low Stock
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                             <div className="text-right">
-                                <span className="text-[10px] font-black uppercase text-slate-500 block">Package Price</span>
-                                <span className="text-sm font-black text-emerald-700">₱{unitPrice.toFixed(2)} / {packageUnit}</span>
+                                <span className="text-[10px] font-black uppercase text-slate-500 block mb-0.5">Package Details</span>
+                                <span className="text-xs font-black text-emerald-700">{packageUnit} • {packageSize} {selectedItem.unit}</span>
+                                <p className="text-[9px] text-gray-400 font-bold mt-0.5">₱{unitPrice.toFixed(2)} per pkg</p>
                             </div>
                         </div>
                     )}
@@ -173,7 +158,7 @@ export default function RestockModal({ open, onOpenChange, user }: RestockModalP
                         {/* Quantity in whole containers */}
                         <div>
                             <Label className="text-[11px] font-black uppercase tracking-widest text-slate-700 block">
-                                Quantity ({packageUnit}s)
+                                Packages to Purchase
                             </Label>
                             <Input
                                 type="number"
@@ -185,18 +170,12 @@ export default function RestockModal({ open, onOpenChange, user }: RestockModalP
                                 placeholder="e.g. 1, 2, 5"
                                 required
                             />
-                            {selectedItem && Number(quantity) > 0 && (
-                                <p className="text-[10px] font-extrabold text-emerald-600 mt-1">
-                                    ✓ Adds +{totalUnitsAdded.toLocaleString()} {selectedItem.unit} to stock
-                                </p>
-                            )}
                         </div>
 
                         {/* Total Restock Cost */}
                         <div>
                             <Label className="text-[11px] font-black uppercase tracking-widest text-slate-700 block flex items-center justify-between">
-                                <span>Total Cost (₱)</span>
-                                <span className="text-[9px] text-gray-400 normal-case font-medium">(Editable)</span>
+                                <span>Purchase Cost (₱)</span>
                             </Label>
                             <div className="relative mt-1.5">
                                 <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-black text-sm">₱</span>
@@ -213,6 +192,17 @@ export default function RestockModal({ open, onOpenChange, user }: RestockModalP
                         </div>
                     </div>
 
+                    {/* Stock Math Preview */}
+                    {selectedItem && Number(quantity) > 0 && (
+                        <div className="bg-indigo-50/60 border border-indigo-100 rounded-lg p-2.5 flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-wider text-indigo-800">
+                            <span>Current: {selectedItem.stock} {selectedItem.unit}</span>
+                            <span className="text-indigo-400">+</span>
+                            <span>Restock: {totalUnitsAdded.toLocaleString()} {selectedItem.unit}</span>
+                            <span className="text-indigo-400">=</span>
+                            <span className="text-indigo-900 bg-indigo-200 px-2 py-0.5 rounded shadow-sm">New Stock: {(Number(selectedItem.stock) + totalUnitsAdded).toLocaleString()} {selectedItem.unit}</span>
+                        </div>
+                    )}
+
                     {/* Restock Date & Notes */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
@@ -228,7 +218,7 @@ export default function RestockModal({ open, onOpenChange, user }: RestockModalP
                         </div>
                         <div>
                             <Label className="text-[11px] font-black uppercase tracking-widest text-slate-700 block">
-                                Receipt / Supplier Note
+                                Reference Number (Optional)
                             </Label>
                             <Input
                                 type="text"
@@ -247,7 +237,7 @@ export default function RestockModal({ open, onOpenChange, user }: RestockModalP
                                 Record in Expenses
                             </span>
                             <span className="text-[11px] font-medium text-red-800/80 block mt-0.5">
-                                Automatically log this ₱{effectiveCost.toFixed(2)} purchase to financial overheads
+                                Record this purchase as an expense. This restock will automatically create an expense transaction worth ₱{effectiveCost.toFixed(2)}.
                             </span>
                         </div>
                         <Switch
@@ -257,21 +247,22 @@ export default function RestockModal({ open, onOpenChange, user }: RestockModalP
                         />
                     </div>
 
-                    <DialogFooter className="pt-4 border-t border-gray-100 flex flex-row gap-3 sm:justify-center sm:space-x-0 w-full">
+                    </div>
+                    <DialogFooter className="p-6 pt-4 border-t border-gray-100 bg-white shrink-0 flex flex-row gap-3 sm:justify-end sm:space-x-0 w-full">
                         <Button
                             type="button"
                             variant="outline"
                             onClick={() => onOpenChange(false)}
-                            className="flex-1 h-11 bg-gray-100 border-gray-200 text-gray-700 rounded-xl font-black text-xs uppercase hover:bg-gray-200 tracking-wider flex items-center justify-center"
+                            className="flex-1 h-9 border-gray-200 text-gray-700 rounded-lg font-black text-xs uppercase hover:bg-gray-200 tracking-widest flex items-center justify-center transition-all"
                         >
                             Cancel
                         </Button>
                         <Button
                             type="submit"
-                            className="flex-1 h-11 rounded-xl font-black text-xs text-white uppercase bg-red-600 hover:bg-red-700 shadow-lg shadow-red-600/25 transition-all tracking-wider flex items-center justify-center gap-2"
+                            className="flex-1 h-9 rounded-lg font-black text-xs text-white uppercase bg-red-600 hover:bg-red-700 shadow-lg shadow-red-600/25 transition-all tracking-widest flex items-center justify-center gap-2"
                         >
-                            <CheckCircle2 className="w-4 h-4" />
-                            <span>Confirm Restock</span>
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Confirm</span>
                         </Button>
                     </DialogFooter>
                 </form>

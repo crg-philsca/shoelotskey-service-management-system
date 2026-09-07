@@ -4,7 +4,7 @@ import {
   Archive, Plus, Download, Search, Trash2, Edit2, Eye,
   ChevronLeft, ChevronRight, BarChart2, Cpu, X, Check, AlertTriangle,
   TrendingUp, Users, Package, Clock, DollarSign, Star, Loader2, RefreshCw,
-  FileText, Zap, Target, Activity
+  FileText, Zap, Target, Activity, Upload, CheckCircle2, AlertCircle
 } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
@@ -23,6 +23,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
 } from '@/app/components/ui/dropdown-menu';
 import { MoreVertical, ChevronDown } from 'lucide-react';
+import HistoricalValidationQueue from './HistoricalValidationQueue';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -40,11 +41,12 @@ interface ShoeItem {
 interface HistoricalRecord {
   historical_order_id: number; order_id: string;
   customer_name: string; contact_number: string; branch: string;
-  date_received: string; expected_release_date: string;
+  date_received: string; original_estimated_release_date: string;
   claimed_date: string | null; completion_days: number | null;
   total_pairs: number; grand_total: number; downpayment: number; balance: number;
   priority: string; sync_status: string; status: string;
   items: (ShoeItem & { historical_item_id?: number })[];
+  image?: { image_filename: string; image_path: string; ocr_status: string } | null;
 }
 
 const API_BASE = (typeof window !== 'undefined' && (
@@ -124,7 +126,7 @@ function HistoricalOrderForm({
   const [contactNumber, setContactNumber] = useState(existingRecord?.contact_number ?? '');
   const [branch, setBranch] = useState(existingRecord?.branch ?? 'Villamor');
   const [dateReceived, setDateReceived] = useState(existingRecord?.date_received?.slice(0,10) ?? '');
-  const [expectedRelease, setExpectedRelease] = useState(existingRecord?.expected_release_date?.slice(0,10) ?? '');
+  const [expectedRelease, setExpectedRelease] = useState(existingRecord?.original_estimated_release_date?.slice(0,10) ?? '');
   const [claimedDate, setClaimedDate] = useState(existingRecord?.claimed_date?.slice(0,10) ?? '');
   const [grandTotal, setGrandTotal] = useState(String(existingRecord?.grand_total ?? ''));
   const [downpayment, setDownpayment] = useState(String(existingRecord?.downpayment ?? '0'));
@@ -189,7 +191,7 @@ function HistoricalOrderForm({
         contact_number: contactNumber,
         branch,
         date_received: dateReceived,
-        expected_release_date: expectedRelease,
+        original_estimated_release_date: expectedRelease,
         claimed_date: claimedDate || null,
         grand_total: parseFloat(grandTotal) || 0,
         downpayment: parseFloat(downpayment) || 0,
@@ -555,6 +557,9 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
   const [loading, setLoading] = useState(true);
   const [viewRecord, setViewRecord] = useState<HistoricalRecord | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<HistoricalRecord | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{ inserted: number; skipped: number; errors: any[] } | null>(null);
+
   const limit = 10;
 
   const fetchRecords = useCallback(async () => {
@@ -603,14 +608,45 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
     } catch { toast.error('Export failed.'); }
   }
 
+
+
   const totalPages = Math.ceil(total / limit) || 1;
+
+  async function handleBulkImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const text = await file.text();
+      const json = JSON.parse(text);
+      const arr = Array.isArray(json) ? json : [json];
+      const res = await fetch(`${API_BASE}/historical/bulk-import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` },
+        body: JSON.stringify(arr),
+      });
+      const result = await res.json();
+      setImportResult(result);
+      if (result.inserted > 0) {
+        toast.success(`Imported ${result.inserted} record${result.inserted !== 1 ? 's' : ''} successfully.`);
+        fetchRecords();
+      }
+      if (result.skipped > 0) toast.warning(`${result.skipped} record${result.skipped !== 1 ? 's' : ''} skipped.`);
+    } catch (err: any) {
+      toast.error(`Import failed: ${err.message}`);
+    } finally {
+      setImporting(false);
+      e.target.value = '';
+    }
+  }
 
   return (
     <>
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between w-full gap-2 mb-4">
         <div className="flex items-center gap-2 flex-1">
-          <Button onClick={() => window.location.href = '/job-order-form'}
+          <Button onClick={() => window.location.href = '/service-management'}
             className="h-9 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white text-[11px] font-black uppercase tracking-widest shadow-md flex items-center gap-1.5 shrink-0">
             <ChevronLeft className="h-4 w-4" /> BACK
           </Button>
@@ -641,6 +677,13 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
             className="h-9 w-9 p-0 rounded-xl border-gray-200 hover:border-emerald-500 hover:text-emerald-700 flex items-center justify-center shrink-0">
             <Download className="h-4 w-4" />
           </Button>
+          {/* Bulk JSON Import */}
+          <label title="Import JSON from AI extraction" className="cursor-pointer">
+            <input type="file" accept=".json" className="hidden" onChange={handleBulkImport} />
+            <div className={`h-9 w-9 flex items-center justify-center rounded-xl border border-gray-200 hover:border-blue-500 hover:text-blue-700 transition-colors ${importing ? 'opacity-50 cursor-not-allowed' : ''}`}>
+              {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            </div>
+          </label>
           <Button onClick={() => { setEditRecord(null); setShowForm(true); }}
             className="bg-red-600 hover:bg-red-700 text-white h-9 px-4 rounded-xl font-black uppercase text-[11px] tracking-widest flex items-center gap-1.5 shadow-md shrink-0">
             <Plus className="h-4 w-4" /><span className="hidden sm:inline">New Historical Record</span>
@@ -648,23 +691,33 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
         </div>
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[800px]">
+          {importResult && (
+            <div className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg border mb-2 ${
+              importResult.skipped > 0 ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+            }`}>
+              {importResult.skipped > 0 ? <AlertCircle className="h-3.5 w-3.5 shrink-0" /> : <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />}
+              <span className="font-bold">{importResult.inserted} imported, {importResult.skipped} skipped.</span>
+              {importResult.errors.length > 0 && <span className="text-[10px] text-gray-500 ml-1">{importResult.errors[0]?.error}</span>}
+              <button onClick={() => setImportResult(null)} className="ml-auto"><X className="h-3 w-3" /></button>
+            </div>
+          )}
+          {/* Table */}
+          <div className="overflow-x-auto">
+        <table className="w-full min-w-[900px]">
           <thead>
             <tr className="bg-red-50">
-              {['Order ID','Customer','Received','Expected Release','Claimed','Days','Branch','Grand Total','Sync','Status','Actions'].map(h => (
+              {['Order ID','Customer','Priority','Shoes','Services','Received','Expected Release','Claimed','Days','Grand Total','Sync','Actions'].map(h => (
                 <th key={h} className="px-3 py-3 text-[10px] font-black uppercase text-gray-500 text-center">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {loading ? (
-              <tr><td colSpan={11} className="py-20 text-center">
+              <tr><td colSpan={12} className="py-20 text-center">
                 <Loader2 className="h-8 w-8 animate-spin text-red-500 mx-auto" />
               </td></tr>
             ) : records.length === 0 ? (
-              <tr><td colSpan={11} className="py-20 text-center">
+              <tr><td colSpan={12} className="py-20 text-center">
                 <Archive className="h-12 w-12 text-gray-200 mx-auto mb-3" />
                 <p className="text-sm font-black text-gray-400 uppercase tracking-widest">No historical records found</p>
               </td></tr>
@@ -673,17 +726,31 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
                 onClick={() => setViewRecord(r)}>
                 <td className="px-3 py-3 text-xs font-bold text-red-700 text-center font-mono">{r.order_id}</td>
                 <td className="px-3 py-3 text-xs text-center">{r.customer_name}</td>
+                <td className="px-3 py-3 text-center">
+                  <span className={`inline-flex px-2 py-0.5 rounded-full text-[9px] font-black uppercase border ${
+                    r.priority === 'rush' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-gray-50 text-gray-600 border-gray-200'
+                  }`}>{r.priority || 'Regular'}</span>
+                </td>
+                <td className="px-3 py-3 text-xs text-center text-gray-700">
+                  {r.items?.length > 0 ? r.items.slice(0,2).map((it, i) => (
+                    <div key={i} className="text-[10px] leading-tight">{it.brand} {it.model}</div>
+                  )) : <span className="text-gray-300">—</span>}
+                  {r.items?.length > 2 && <div className="text-[9px] text-gray-400">+{r.items.length - 2} more</div>}
+                </td>
+                <td className="px-3 py-3 text-xs text-center">
+                  {r.items?.flatMap(it => it.services).slice(0,3).map((s, i) => (
+                    <span key={i} className="inline-block mr-0.5 mb-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded bg-red-50 text-red-700">{s.service_name}</span>
+                  ))}
+                  {r.items?.flatMap(it => it.services).length > 3 && <span className="text-[9px] text-gray-400">+more</span>}
+                  {!r.items?.flatMap(it => it.services).length && <span className="text-gray-300">—</span>}
+                </td>
                 <td className="px-3 py-3 text-xs text-center">{fmtDate(r.date_received)}</td>
-                <td className="px-3 py-3 text-xs text-center">{fmtDate(r.expected_release_date)}</td>
+                <td className="px-3 py-3 text-xs text-center">{fmtDate(r.original_estimated_release_date)}</td>
                 <td className="px-3 py-3 text-xs text-center">{fmtDate(r.claimed_date)}</td>
                 <td className="px-3 py-3 text-xs text-center font-bold">{r.completion_days ?? '—'}</td>
-                <td className="px-3 py-3 text-xs text-center">{r.branch || '—'}</td>
                 <td className="px-3 py-3 text-xs text-center font-bold">{fmtPeso(r.grand_total)}</td>
                 <td className="px-3 py-3 text-center" onClick={e => e.stopPropagation()}>
                   {syncBadge(r.sync_status)}
-                </td>
-                <td className="px-3 py-3 text-center">
-                  <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-black uppercase border bg-emerald-50 text-emerald-700 border-emerald-200">Completed</span>
                 </td>
                 <td className="px-3 py-3 text-center" onClick={e => e.stopPropagation()}>
                   <DropdownMenu>
@@ -761,7 +828,7 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
                   ['Branch', viewRecord.branch || '—'],
                   ['Priority', viewRecord.priority],
                   ['Date Received', fmtDate(viewRecord.date_received)],
-                  ['Expected Release', fmtDate(viewRecord.expected_release_date)],
+                  ['Expected Release', fmtDate(viewRecord.original_estimated_release_date)],
                   ['Claimed Date', fmtDate(viewRecord.claimed_date)],
                   ['Completion Days', viewRecord.completion_days !== null ? `${viewRecord.completion_days} days` : '—'],
                   ['Grand Total', fmtPeso(viewRecord.grand_total)],
@@ -812,9 +879,9 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
             <p className="text-sm text-gray-600">
               Delete historical record <strong>{deleteTarget.order_id}</strong>? This action cannot be undone.
             </p>
-            <div className="flex justify-end gap-2 mt-4">
-              <Button variant="outline" onClick={() => setDeleteTarget(null)} className="rounded-xl">Cancel</Button>
-              <Button onClick={handleDelete} className="bg-red-600 hover:bg-red-700 text-white rounded-xl font-black uppercase text-xs">
+            <div className="flex items-center justify-center gap-3 mt-4 pt-4 border-t border-gray-100 w-full">
+              <Button variant="outline" onClick={() => setDeleteTarget(null)} className="flex-1 h-11 rounded-xl font-bold text-xs uppercase tracking-wider text-gray-600 hover:bg-gray-100 justify-center">Cancel</Button>
+              <Button onClick={handleDelete} className="flex-1 h-11 bg-red-600 hover:bg-red-700 text-white rounded-xl font-black uppercase text-xs tracking-wider shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-1.5">
                 <Trash2 className="h-4 w-4 mr-1" />Delete
               </Button>
             </div>
@@ -1083,7 +1150,9 @@ function AnalyticsTab({ user }: { user: HistoricalRecordsProps['user'] }) {
 
 function MachineLearningTab({ user }: { user: HistoricalRecordsProps['user'] }) {
   const [modelInfo, setModelInfo] = useState<any>(null);
+  const [liveStats, setLiveStats] = useState<any>(null);
   const [predictions, setPredictions] = useState<any[]>([]);
+  const [importHistory, setImportHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [training, setTraining] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -1092,12 +1161,16 @@ function MachineLearningTab({ user }: { user: HistoricalRecordsProps['user'] }) 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [infoRes, predsRes] = await Promise.all([
+      const [infoRes, statsRes, predsRes, historyRes] = await Promise.all([
         fetch(`${API_BASE}/historical/model-info`, { headers: { Authorization: `Bearer ${user.token}` } }),
+        fetch(`${API_BASE}/historical/stats`),
         fetch(`${API_BASE}/historical/predictions`, { headers: { Authorization: `Bearer ${user.token}` } }),
+        fetch(`${API_BASE}/etl/import-history`, { headers: { Authorization: `Bearer ${user.token}` } }),
       ]);
       if (infoRes.ok) setModelInfo(await infoRes.json());
+      if (statsRes.ok) setLiveStats(await statsRes.json());
       if (predsRes.ok) setPredictions(await predsRes.json());
+      if (historyRes.ok) setImportHistory(await historyRes.json());
     } catch (e: any) { toast.error(e.message); }
     finally { setLoading(false); }
   }, [user.token]);
@@ -1178,12 +1251,22 @@ function MachineLearningTab({ user }: { user: HistoricalRecordsProps['user'] }) 
           </CardHeader>
           <CardContent className="px-4 pb-4 space-y-2">
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500 font-medium">Dataset Size</span>
-              <span className="font-black text-blue-700">{info.records_available ?? 0} Records</span>
+              <span className="text-gray-500 font-medium">Total Historical Records</span>
+              <span className="font-black text-blue-700">{liveStats?.total ?? info.records_available ?? 0} Records</span>
             </div>
             <div className="flex justify-between text-sm">
+              <span className="text-gray-500 font-medium">Ready for Training</span>
+              <span className="font-black text-emerald-700">{liveStats?.validated ?? info.records_available ?? 0} Validated</span>
+            </div>
+            {liveStats?.missing_fields > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-amber-600 font-medium">Missing Critical Fields</span>
+                <span className="font-black text-amber-600">{liveStats.missing_fields} Records</span>
+              </div>
+            )}
+            <div className="flex justify-between text-sm">
               <span className="text-gray-500 font-medium">Features</span>
-              <span className="font-black text-gray-700">12</span>
+              <span className="font-black text-gray-700">12+</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-500 font-medium">Target Variable</span>
@@ -1197,7 +1280,7 @@ function MachineLearningTab({ user }: { user: HistoricalRecordsProps['user'] }) 
                   </div>
                   <div>
                     <p className="text-xs font-bold text-gray-800">historical_dataset.csv</p>
-                    <p className="text-[10px] text-gray-500">{info.records_available ?? 0} Records · Last Export: {new Date().toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'})}</p>
+                    <p className="text-[10px] text-gray-500">{liveStats?.total ?? 0} Records · Click to export</p>
                   </div>
                 </div>
                 <Button onClick={handleExport} disabled={exporting} size="sm" variant="outline" className="h-8 rounded-lg hover:bg-blue-50 hover:text-blue-700">
@@ -1258,6 +1341,94 @@ function MachineLearningTab({ user }: { user: HistoricalRecordsProps['user'] }) 
         </CardContent>
       </Card>
 
+      {/* Import History */}
+      <Card className="border border-gray-100 shadow-sm">
+        <CardHeader className="pb-2 pt-4 px-4">
+          <CardTitle className="text-xs font-black uppercase tracking-widest text-gray-500 flex items-center gap-2">
+            <RefreshCw className="h-3.5 w-3.5 text-blue-500" />ETL Import History
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 pb-4">
+          {importHistory.length === 0 ? (
+            <p className="text-center text-xs text-gray-400 py-8 font-bold uppercase tracking-widest">No imports yet. Click Import Dataset in the Records tab to get started.</p>
+          ) : (
+            <div className="space-y-3">
+              {/* Latest import highlight card */}
+              {(() => {
+                const latest = importHistory[0];
+                const statusColor = latest.status === 'completed' ? 'emerald' : latest.status === 'running' ? 'blue' : 'red';
+                const duration = latest.duration_seconds != null ? `${latest.duration_seconds.toFixed(1)}s` : '—';
+                return (
+                  <div className={`p-4 rounded-xl border bg-${statusColor}-50 border-${statusColor}-200`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-1 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-${statusColor}-100 text-${statusColor}-700 border border-${statusColor}-200`}>
+                            {latest.status === 'completed' ? '✅ Completed' : latest.status === 'running' ? '🔄 Running' : '❌ Failed'}
+                          </span>
+                          <span className="text-[10px] text-gray-400 font-mono">{latest.filename}</span>
+                        </div>
+                        <p className="text-[10px] text-gray-500 font-medium">
+                          By <strong>{latest.imported_by}</strong> · {latest.import_started ? new Date(latest.import_started).toLocaleString('en-PH') : '—'}
+                        </p>
+                      </div>
+                      <span className="text-[10px] font-bold text-gray-400 shrink-0">{duration}</span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-2 mt-3">
+                      {[
+                        { label: 'Records Read', value: latest.records_read ?? 0, color: 'text-gray-700' },
+                        { label: 'Imported', value: latest.records_imported ?? 0, color: 'text-emerald-700' },
+                        { label: 'Duplicates', value: latest.duplicates_removed ?? 0, color: 'text-amber-600' },
+                        { label: 'Invalid', value: latest.invalid_records ?? 0, color: 'text-red-600' },
+                      ].map(stat => (
+                        <div key={stat.label} className="text-center">
+                          <p className={`text-lg font-black ${stat.color}`}>{stat.value}</p>
+                          <p className="text-[9px] font-bold uppercase text-gray-400">{stat.label}</p>
+                        </div>
+                      ))}
+                    </div>
+                    {latest.error_message && (
+                      <p className="mt-2 text-[10px] text-red-600 font-medium bg-red-50 border border-red-100 rounded p-2 break-all">{latest.error_message}</p>
+                    )}
+                  </div>
+                );
+              })()}
+              {/* Previous imports table */}
+              {importHistory.length > 1 && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead><tr className="text-[9px] font-black uppercase text-gray-400 border-b">
+                      <th className="py-1 text-left">File</th>
+                      <th className="py-1 text-center">Imported</th>
+                      <th className="py-1 text-center">Dupes</th>
+                      <th className="py-1 text-center">Invalid</th>
+                      <th className="py-1 text-center">Duration</th>
+                      <th className="py-1 text-center">By</th>
+                      <th className="py-1 text-right">Date</th>
+                      <th className="py-1 text-right">Status</th>
+                    </tr></thead>
+                    <tbody>{importHistory.slice(1).map((h: any) => (
+                      <tr key={h.import_id} className="border-b border-gray-50">
+                        <td className="py-1.5 font-mono text-gray-500 max-w-[120px] truncate">{h.filename}</td>
+                        <td className="py-1.5 text-center font-black text-emerald-700">{h.records_imported ?? 0}</td>
+                        <td className="py-1.5 text-center font-bold text-amber-600">{h.duplicates_removed ?? 0}</td>
+                        <td className="py-1.5 text-center font-bold text-red-600">{h.invalid_records ?? 0}</td>
+                        <td className="py-1.5 text-center text-gray-500">{h.duration_seconds != null ? `${h.duration_seconds.toFixed(1)}s` : '—'}</td>
+                        <td className="py-1.5 text-center text-gray-500">{h.imported_by}</td>
+                        <td className="py-1.5 text-right text-gray-400">{h.import_started ? new Date(h.import_started).toLocaleDateString('en-PH') : '—'}</td>
+                        <td className="py-1.5 text-right">
+                          <span className={`font-black text-[10px] uppercase ${ h.status === 'completed' ? 'text-emerald-600' : h.status === 'running' ? 'text-blue-600' : 'text-red-600'}`}>{h.status}</span>
+                        </td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Prediction History */}
       <Card className="border border-gray-100 shadow-sm">
         <CardHeader className="pb-2 pt-4 px-4">
@@ -1302,9 +1473,54 @@ function MachineLearningTab({ user }: { user: HistoricalRecordsProps['user'] }) 
   );
 }
 
+// ─── ARCHIVES TAB ─────────────────────────────────────────────────────────────
+
+function ArchivesTab() {
+  const archives = [
+    { month: 'August', year: '2025', file: '/historical_data/source/Digital%20Job%20Order%20Forms/August/CamScanner%208-2-26%2015.00.pdf' },
+    { month: 'September', year: '2025', file: '/historical_data/source/Digital%20Job%20Order%20Forms/September/CamScanner%208-2-26%2015.45.pdf' },
+    { month: 'October', year: '2025', file: '/historical_data/source/Digital%20Job%20Order%20Forms/October/CamScanner%208-2-26%2016.20.pdf' },
+    { month: 'November', year: '2025', file: '/historical_data/source/Digital%20Job%20Order%20Forms/November/CamScanner%208-2-26%2016.56.pdf' },
+    { month: 'December', year: '2025', file: '/historical_data/source/Digital%20Job%20Order%20Forms/December/Compressed%20CamScanner%208-3-26%2015.38.pdf' },
+    { month: 'January', year: '2026', file: '/historical_data/source/Digital%20Job%20Order%20Forms/January/Compressed%20CamScanner%208-3-26%2016.36.pdf' }
+  ];
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <Card className="border-gray-100 shadow-sm rounded-2xl overflow-hidden">
+        <CardHeader className="bg-gray-50/50 border-b border-gray-100 pb-4">
+          <CardTitle className="text-sm font-black uppercase tracking-widest text-gray-700 flex items-center gap-2">
+            <FileText className="h-4 w-4 text-red-600" />
+            Monthly Report Archives
+          </CardTitle>
+          <p className="text-xs text-gray-500 mt-1">View the original scanned PDF batch reports for historical months.</p>
+        </CardHeader>
+        <CardContent className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {archives.map((archive) => (
+              <div 
+                key={archive.month} 
+                className="group border border-gray-200 rounded-xl p-4 flex flex-col items-center justify-center gap-3 hover:border-red-300 hover:bg-red-50 transition-all cursor-pointer"
+                onClick={() => window.open(`http://localhost:8000${archive.file}`, '_blank')}
+              >
+                <FileText className="h-10 w-10 text-gray-400 group-hover:text-red-500 transition-colors" />
+                <span className="text-sm font-bold text-gray-700 group-hover:text-red-700">{archive.month} {archive.year}</span>
+                <div className="flex items-center gap-1 mt-1 text-gray-400 group-hover:text-red-500">
+                  <span className="text-[10px] uppercase font-black tracking-widest">Open PDF</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-external-link"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 
-type Tab = 'records' | 'analytics' | 'ml';
+type Tab = 'records' | 'analytics' | 'ml' | 'ocr' | 'archives';
 
 export default function HistoricalRecords({ user, onSetHeaderActionRight }: HistoricalRecordsProps) {
   const [activeTab, setActiveTab] = useState<Tab>('records');
@@ -1322,7 +1538,9 @@ export default function HistoricalRecords({ user, onSetHeaderActionRight }: Hist
   const tabs: { key: Tab; label: string; icon: React.ElementType; ownerOnly?: boolean }[] = [
     { key: 'records',   label: 'Records',          icon: Archive },
     { key: 'analytics', label: 'Analytics',        icon: BarChart2, ownerOnly: true },
-    { key: 'ml',        label: 'Machine Learning', icon: Cpu, ownerOnly: true },
+    { key: 'ml',        label: 'ML Training',      icon: Cpu, ownerOnly: true },
+    { key: 'ocr',       label: 'OCR Validation',   icon: Zap },
+    { key: 'archives',  label: 'Archives',         icon: FileText },
   ];
 
   return (
@@ -1368,6 +1586,8 @@ export default function HistoricalRecords({ user, onSetHeaderActionRight }: Hist
           {activeTab === 'records'   && <RecordsTab user={user} showForm={showForm} setShowForm={setShowForm} editRecord={editRecord} setEditRecord={setEditRecord} />}
           {activeTab === 'analytics' && isOwner && <AnalyticsTab user={user} />}
           {activeTab === 'ml'        && isOwner && <MachineLearningTab user={user} />}
+          {activeTab === 'ocr'       && <div className="animate-in fade-in duration-500"><HistoricalValidationQueue /></div>}
+          {activeTab === 'archives'  && <ArchivesTab />}
         </div>
       </div>
     </div>

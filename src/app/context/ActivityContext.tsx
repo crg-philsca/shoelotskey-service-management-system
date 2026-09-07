@@ -10,6 +10,7 @@ export interface ActivityLog {
     ip_address?: string;
     user_agent?: string;
     action: string;
+    actionRaw?: string;
     table?: string;
     recordId?: number | string;
     details: string;

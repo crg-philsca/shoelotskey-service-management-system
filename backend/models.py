@@ -148,6 +148,9 @@ class Expense(Base):
     user = relationship("User", back_populates="expenses")
 
 # ==========================================
+
+
+# ==========================================
 # 4. ORDERS (Central Fact Table / ML Source)
 # ==========================================
 
@@ -160,6 +163,7 @@ class Order(Base):
     status_id = Column(Integer, ForeignKey("status.status_id"), nullable=False)
     priority_id = Column(Integer, ForeignKey("priority_levels.priority_id"), nullable=False)
     grand_total = Column(DECIMAL(10, 2), nullable=False)
+    rush_reduction_days = Column(Integer, nullable=True)
     
     expected_at = Column(DateTime, nullable=False)
     released_at = Column(DateTime, nullable=True)
@@ -246,6 +250,8 @@ class Item(Base):
     brand = Column(String(50), index=True)
     material = Column(String(50))
     shoe_model = Column(String(50))
+    shoe_size = Column(String(20), nullable=True)
+    color = Column(String(50), nullable=True)
     quantity = Column(Integer, default=1)
     item_notes = Column(Text, nullable=True)
     inventory_used = Column(JSON, nullable=True)
@@ -333,11 +339,11 @@ class Inventory(Base):
             self.package_size if (self.package_size and self.package_size > 0.0) else 1.0
         )
         if self.stock_quantity <= 0.0:
-            self.status = "Critical"
+            self.status = "Critical"  # type: ignore[assignment]
         elif self.stock_quantity <= threshold:
-            self.status = "Low Stock"
+            self.status = "Low Stock"  # type: ignore[assignment]
         else:
-            self.status = "In Stock"
+            self.status = "In Stock"  # type: ignore[assignment]
 
     created_at = Column(TIMESTAMP, default=datetime.now)
     updated_at = Column(TIMESTAMP, default=datetime.now, onupdate=datetime.now)
@@ -364,6 +370,29 @@ class InventoryLog(Base):
 #    Used for: Data Analytics + ML Training
 # ==========================================
 
+class HistoricalImage(Base):
+    """
+    Metadata for the original scanned receipts/forms.
+    """
+    __tablename__ = "historical_images"
+    historical_image_id = Column(Integer, primary_key=True, autoincrement=True)
+    historical_order_id = Column(Integer, ForeignKey("historical_orders.historical_order_id", ondelete="SET NULL"), nullable=True)
+    
+    image_filename = Column(String(255), nullable=False)
+    image_path = Column(String(500), nullable=False)
+    image_hash = Column(String(64), nullable=True, index=True) # for duplicate detection
+    
+    ocr_confidence = Column(Float, nullable=True)
+    ocr_status = Column(String(50), default="Pending") # Pending, Validated, Corrected, Rejected
+    ocr_version = Column(String(50), nullable=True)
+    
+    uploaded_at = Column(TIMESTAMP, default=datetime.now)
+    processed_at = Column(TIMESTAMP, nullable=True)
+    
+    # Relationship
+    order = relationship("HistoricalOrder", back_populates="image", uselist=False)
+
+
 class HistoricalOrder(Base):
     """
     Archived completed job orders encoded from old paper receipts.
@@ -381,7 +410,7 @@ class HistoricalOrder(Base):
 
     branch        = Column(String(100), nullable=True)   # Free-text branch name
     date_received = Column(DateTime, nullable=False)
-    expected_release_date = Column(DateTime, nullable=False)
+    original_estimated_release_date = Column(DateTime, nullable=True)
     claimed_date  = Column(DateTime, nullable=True)
 
     # ML Feature: automatically calculated on save
@@ -394,9 +423,14 @@ class HistoricalOrder(Base):
 
     # Snapshot strings (not FKs — preserves historical integrity even if live data changes)
     priority     = Column(String(30), default="regular")
+    payment_method = Column(String(50), nullable=True)
 
     # Offline sync tracking
     sync_status  = Column(String(20), default="pending")  # 'pending', 'synced', 'failed'
+    
+    # OCR Validation Tracking
+    ocr_status = Column(String(50), default="Validated") # Legacy records are validated by default
+    audit_trail = Column(JSON, nullable=True) # Stores manual corrections made during review
 
     created_at   = Column(TIMESTAMP, default=datetime.now)
     updated_at   = Column(TIMESTAMP, default=datetime.now, onupdate=datetime.now)
@@ -407,6 +441,7 @@ class HistoricalOrder(Base):
                             cascade="all, delete-orphan")
     predictions = relationship("HistoricalPrediction", back_populates="order",
                                cascade="all, delete-orphan")
+    image = relationship("HistoricalImage", back_populates="order", uselist=False)
 
 
 class HistoricalItem(Base):
@@ -428,6 +463,15 @@ class HistoricalItem(Base):
     material = Column(String(50), nullable=True)
     priority = Column(String(30), nullable=True)
     remarks  = Column(Text, nullable=True)
+    item_price = Column(DECIMAL(10, 2), nullable=True)
+
+    # Condition Booleans for ML features
+    scratches       = Column(Boolean, nullable=True)
+    yellowing       = Column(Boolean, nullable=True)
+    sole_separation = Column(Boolean, nullable=True)
+    deep_stains     = Column(Boolean, nullable=True)
+    rips_holes      = Column(Boolean, nullable=True)
+    worn_out        = Column(Boolean, nullable=True)
 
     order    = relationship("HistoricalOrder", back_populates="items")
     services = relationship("HistoricalItemService", back_populates="item",
@@ -477,3 +521,23 @@ class HistoricalPrediction(Base):
 
     order = relationship("HistoricalOrder", back_populates="predictions")
 
+
+class EtlImportHistory(Base):
+    """
+    Audit trail for OCR historical import pipeline runs.
+    Written by historical_ocr_import.py after each successful or failed import pipeline run.
+    """
+    __tablename__ = "etl_import_history"
+
+    import_id           = Column(Integer, primary_key=True, autoincrement=True)
+    filename            = Column(String(255), nullable=True)           # Original file name
+    records_read        = Column(Integer, default=0)                   # Total records parsed
+    records_imported    = Column(Integer, default=0)                   # Records inserted into DB
+    duplicates_removed  = Column(Integer, default=0)                   # Duplicates skipped
+    invalid_records     = Column(Integer, default=0)                   # Records that failed validation
+    import_started      = Column(TIMESTAMP, nullable=False, default=datetime.now)
+    import_finished     = Column(TIMESTAMP, nullable=True)
+    duration_seconds    = Column(Float, nullable=True)                 # Wall-clock run time
+    imported_by         = Column(String(100), nullable=True)           # Username who triggered it
+    status              = Column(String(20), default="running")        # 'completed' | 'failed' | 'running'
+    error_message       = Column(Text, nullable=True)                  # Populated on failure

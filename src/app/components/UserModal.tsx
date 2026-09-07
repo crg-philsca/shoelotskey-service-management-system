@@ -13,9 +13,10 @@ interface UserModalProps {
     onClose: () => void;
     user: User | null;
     onSave: (userData: Partial<User> & { password?: string }) => void;
+    serverError?: string;
 }
 
-export default function UserModal({ isOpen, onClose, user, onSave }: UserModalProps) {
+export default function UserModal({ isOpen, onClose, user, onSave, serverError }: UserModalProps) {
     const [username, setUsername] = useState('');
     const [email, setEmail] = useState('');
     const [role, setRole] = useState<'owner' | 'staff'>('staff');
@@ -66,12 +67,17 @@ export default function UserModal({ isOpen, onClose, user, onSave }: UserModalPr
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="max-w-md">
                 <DialogHeader>
-                    <DialogTitle className="text-[12px] font-black uppercase tracking-widest text-center">
+                    <DialogTitle className="text-xl font-bold uppercase text-red-600 text-center">
                         {user ? 'Edit User' : 'New User'}
                     </DialogTitle>
                 </DialogHeader>
 
                 <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+                    {serverError && (
+                        <div className="p-2 bg-red-50 border border-red-200 rounded-md">
+                            <p className="text-xs text-red-600 font-bold text-center">{serverError}</p>
+                        </div>
+                    )}
                     <div className="space-y-2">
                         <Label htmlFor="username" className="text-xs font-bold uppercase tracking-widest text-gray-500">Username</Label>
                         <Input

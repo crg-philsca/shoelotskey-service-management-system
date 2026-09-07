@@ -6,7 +6,7 @@ Pooling is optimized for multi-user access (10 base connections + 20 overflow).
 """
 
 import os
-from sqlalchemy import create_engine, text, inspect as sql_inspect # type: ignore # pyre-ignore
+from sqlalchemy import create_engine, text, inspect as sql_inspect, or_ # type: ignore # pyre-ignore
 from sqlalchemy.orm import sessionmaker # type: ignore # pyre-ignore
 from dotenv import load_dotenv # type: ignore # pyre-ignore
 from pathlib import Path
@@ -62,20 +62,17 @@ try:
         except Exception as sock_err:
             raise RuntimeError(f"Network offline or server unreachable in 3.5s ({sock_err}). Switching directly to offline fallback.")
 
+        from sqlalchemy.pool import NullPool
         primary_engine = create_engine(
             PG_URL, 
             connect_args={
-                "connect_timeout": 10,
+                "connect_timeout": 5,
                 "keepalives": 1,
                 "keepalives_idle": 30,
                 "keepalives_interval": 10,
                 "keepalives_count": 5
             }, 
-            pool_size=2,          # Optimal base size to prevent pool starvation
-            max_overflow=4,       # Max 6 connections total per Uvicorn worker during traffic peaks
-            pool_timeout=20,      # Give AWS RDS connection establishment sufficient buffer
-            pool_pre_ping=True,   # Heartbeat check before checking out connections
-            pool_recycle=60       # Recycle connections every 60s to avoid RDS silently terminating idle sockets
+            poolclass=NullPool
         )
         with primary_engine.connect() as conn:
             conn.execute(text("SELECT 1"))
@@ -93,7 +90,7 @@ except Exception as e:
 if engine is None:
     DATABASE_URL = LOCAL_SQLITE
     is_sqlite = True
-    connect_args = {"check_same_thread": False}
+    connect_args = {"check_same_thread": False, "timeout": 30}
     engine = create_engine(DATABASE_URL, connect_args=connect_args)
     print("[DATABASE] SUCCESS: Linked to Local SQLite (Offline)")
 
@@ -107,6 +104,11 @@ def ensure_sqlite_schema_and_defaults(target_engine):
     try:
         from models import Base, User, Role # type: ignore # pyre-ignore # pyrefly: ignore # pyrefly-ignore
         
+        # 0. Enable WAL mode for high concurrency
+        with target_engine.begin() as conn:
+            conn.execute(text("PRAGMA journal_mode=WAL;"))
+            conn.execute(text("PRAGMA synchronous=NORMAL;"))
+
         # 1. Create any missing tables in SQLite
         Base.metadata.create_all(bind=target_engine)
         
@@ -132,14 +134,30 @@ def ensure_sqlite_schema_and_defaults(target_engine):
                 ldb.add(Role(role_name="owner"))
                 ldb.add(Role(role_name="staff"))
                 ldb.commit()
-            if ldb.query(User).count() == 0:
-                role_owner = ldb.query(Role).filter(Role.role_name == "owner").first()
-                role_staff = ldb.query(Role).filter(Role.role_name == "staff").first()
-                if role_owner:
+            role_owner = ldb.query(Role).filter(Role.role_name == "owner").first()
+            role_staff = ldb.query(Role).filter(Role.role_name == "staff").first()
+            
+            # Unlock all accounts in SQLite
+            for u in ldb.query(User).all():
+                u.failed_login_attempts = 0
+                u.locked_until = None
+                u.is_active = True
+                
+            if role_owner:
+                owner_u = ldb.query(User).filter(or_(User.username == "owner", User.email == "owner@shoelotskey.com")).first()
+                if not owner_u:
                     ldb.add(User(username="owner", email="owner@shoelotskey.com", password_hash=_hash_pw("owner123"), role_id=role_owner.role_id, is_active=True))
-                if role_staff:
+                    
+                kylane_u = ldb.query(User).filter(or_(User.username == "kylane", User.email == "kylane@shoelotskey.com")).first()
+                if not kylane_u:
+                    ldb.add(User(username="kylane", email="kylane@shoelotskey.com", password_hash=_hash_pw("owner123"), role_id=role_owner.role_id, is_active=True))
+                    
+            if role_staff:
+                staff_u = ldb.query(User).filter(or_(User.username == "staff", User.email == "staff@shoelotskey.com")).first()
+                if not staff_u:
                     ldb.add(User(username="staff", email="staff@shoelotskey.com", password_hash=_hash_pw("staff123"), role_id=role_staff.role_id, is_active=True))
-                ldb.commit()
+                    
+            ldb.commit()
     except Exception as e:
         print(f"[OFFLINE SCHEMA WARNING] Non-fatal check: {e}")
         try:
@@ -155,9 +173,9 @@ def switch_to_offline_sqlite():
     global engine, is_sqlite, SessionLocal, DATABASE_URL
     if not is_sqlite:
         print("[HYBRID FAILOVER] Switching active runtime engine to Local SQLite (shoelotskey.db).")
-        DATABASE_URL = LOCAL_SQLITE
         is_sqlite = True
-        connect_args = {"check_same_thread": False}
+        DATABASE_URL = LOCAL_SQLITE
+        connect_args = {"check_same_thread": False, "timeout": 30}
         engine = create_engine(DATABASE_URL, connect_args=connect_args)
         ensure_sqlite_schema_and_defaults(engine)
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -176,11 +194,15 @@ def get_db():
             # Lightweight health check before processing request
             db.execute(text("SELECT 1"))
         except Exception as e:
-            print(f"[HYBRID AUTO-SWITCH] Postgres unreachable during request ({str(e)[:80]}...). Switching to offline SQLite.")
+            print(f"[HYBRID AUTO-SWITCH] Postgres unreachable during request. Switching to offline SQLite.")
             db.close()
             new_session_maker = switch_to_offline_sqlite()
             db = new_session_maker()
     try:
         yield db
     finally:
-        db.close()
+        try:
+            db.close()
+        except Exception as e:
+            # Handle cases where the server closes the connection during the session rollback
+            print(f"[DB SESSION CLEANUP] Ignored error closing session: {e}")

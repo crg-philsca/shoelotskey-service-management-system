@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/ca
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { Input } from '@/app/components/ui/input';
-import { PlusCircle, Edit, Trash, Search, Filter, ChevronLeft, ChevronRight, History as HistoryIcon, Activity } from 'lucide-react';
+import { PlusCircle, Edit, Trash, Search, Filter, ChevronLeft, ChevronRight, History as HistoryIcon, Activity, AlertTriangle } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import React from 'react';
@@ -64,6 +64,8 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
     const [loading, setLoading] = useState(users.length === 0);
     const [userModalOpen, setUserModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<User | null>(null);
+    const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
+    const [serverError, setServerError] = useState<string>('');
     const { addActivity } = useActivities();
     const currentUser = JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}').username;
 
@@ -137,6 +139,7 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
               className="w-10 h-10 sm:w-40 flex items-center justify-center rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-[11px] font-black uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 tracking-widest"
               onClick={() => {
                 setEditingUser(null);
+                setServerError('');
                 setUserModalOpen(true);
               }}
             >
@@ -193,7 +196,9 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
             toast.success('User updated successfully');
           } else {
             const err = await response.json().catch(() => ({}));
-            toast.error(`Update failed: ${formatError(err.detail, 'Unknown error')}`);
+            const errorMsg = formatError(err.detail, 'Unknown error');
+            setServerError(errorMsg);
+            toast.error(`Update failed: ${errorMsg}`);
             return; // keep modal open if error
           }
         } else {
@@ -223,48 +228,58 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
             toast.success('User created successfully');
           } else {
             const err = await response.json().catch(() => ({}));
-            toast.error(`Creation failed: ${formatError(err.detail, 'Unknown error')}`);
+            const errorMsg = formatError(err.detail, 'Unknown error');
+            setServerError(errorMsg);
+            toast.error(`Creation failed: ${errorMsg}`);
             return; // keep modal open if error
           }
         }
         setUserModalOpen(false);
+        setServerError('');
       } catch (error) {
         console.error('Error saving user:', error);
         toast.error('Network error saving user.');
       }
     };
 
-    const handleDeleteUser = async (id: string) => {
-      if (confirm('Are you sure you want to delete this user?')) {
-        try {
-          const uToDelete = users.find(u => u.id === id);
-          const response = await fetch(`${API_BASE}/users/${id}`, {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${user.token}` }
-          });
+    const handleDeleteUser = (id: string) => {
+      const uToDelete = users.find(u => u.id === id);
+      if (uToDelete) {
+        setDeleteTarget(uToDelete);
+      }
+    };
 
-          if (response.ok) {
-            await fetchUsers();
-            addActivity({
-              user: currentUser,
-              action: 'Delete User',
-              details: `Deleted user account ${uToDelete?.username || id}`,
-              type: 'system'
-            });
-            toast.success('User deleted successfully');
-          } else {
-            const err = await response.json().catch(() => ({}));
-            toast.error(`Deletion failed: ${formatError(err.detail, 'Unknown error')}`);
-          }
-        } catch (error) {
-          console.error('Error deleting user:', error);
-          toast.error('Network error deleting user.');
+    const confirmDeleteUser = async () => {
+      if (!deleteTarget) return;
+      try {
+        const response = await fetch(`${API_BASE}/users/${deleteTarget.id}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${user.token}` }
+        });
+
+        if (response.ok) {
+          await fetchUsers();
+          addActivity({
+            user: currentUser,
+            action: 'Delete User',
+            details: `Deleted user account ${deleteTarget.username || deleteTarget.id}`,
+            type: 'system'
+          });
+          toast.success('User deleted successfully');
+          setDeleteTarget(null);
+        } else {
+          const err = await response.json().catch(() => ({}));
+          toast.error(`Deletion failed: ${formatError(err.detail, 'Unknown error')}`);
         }
+      } catch (error) {
+        console.error('Error deleting user:', error);
+        toast.error('Network error deleting user.');
       }
     };
 
     const handleEditClick = (user: User) => {
       setEditingUser(user);
+      setServerError('');
       setUserModalOpen(true);
     };
 
@@ -494,10 +509,40 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
         </CardContent>
         <UserModal
           isOpen={userModalOpen}
-          onClose={() => setUserModalOpen(false)}
+          onClose={() => {
+            setUserModalOpen(false);
+            setServerError('');
+          }}
           user={editingUser}
           onSave={handleSaveUser}
+          serverError={serverError}
         />
+
+        {/* CUSTOM PROFESSIONAL CONFIRMATION MODAL */}
+        {deleteTarget && (
+          <Dialog open onOpenChange={() => setDeleteTarget(null)}>
+            <DialogContent className="max-w-sm rounded-2xl p-6 shadow-2xl border-0 bg-white">
+              <DialogHeader>
+                <DialogTitle className="font-black uppercase text-sm flex items-center gap-2 text-red-700 tracking-wider">
+                  <AlertTriangle className="h-5 w-5 text-red-600 animate-pulse" />
+                  Confirm Account Deletion
+                </DialogTitle>
+              </DialogHeader>
+              <p className="text-sm text-gray-700 leading-relaxed py-2">
+                Are you sure you want to permanently delete the user account <strong className="text-red-700 font-bold">"{deleteTarget.username}"</strong> ({deleteTarget.role})? This action will instantly revoke access and cannot be undone.
+              </p>
+              <div className="flex items-center justify-center gap-3 mt-4 pt-4 border-t border-gray-100 w-full">
+                <Button variant="outline" onClick={() => setDeleteTarget(null)} className="flex-1 h-11 rounded-xl font-bold text-xs uppercase tracking-wider text-gray-600 hover:bg-gray-100 justify-center">
+                  Cancel
+                </Button>
+                <Button onClick={confirmDeleteUser} className="flex-1 h-11 bg-red-600 hover:bg-red-700 text-white rounded-xl font-black uppercase text-xs tracking-wider shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-1.5">
+                  <Trash className="h-4 w-4" />
+                  Confirm Delete
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
       </Card>
     );
   }

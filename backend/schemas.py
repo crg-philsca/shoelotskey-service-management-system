@@ -160,6 +160,8 @@ class ItemSchema(BaseModel):
     brand: Optional[str] = None
     shoe_model: Optional[str] = None
     material: Optional[str] = None
+    shoe_size: Optional[str] = None
+    color: Optional[str] = None
     quantity: int = 1
     item_notes: Optional[str] = None
     inventory_used: Optional[Any] = None
@@ -206,6 +208,7 @@ class OrderSchema(BaseModel):
     status_id: int
     priority_id: int
     grand_total: Decimal
+    rush_reduction_days: Optional[int] = None
     
     expected_at: datetime
     released_at: Optional[datetime] = None
@@ -343,3 +346,84 @@ class InventoryLogSchema(BaseModel):
     created_at: datetime
     class Config:
         from_attributes = True
+
+# ==========================================
+# 8. HISTORICAL RECORDS MODULE
+# ==========================================
+
+class HistoricalItemServiceSchema(BaseModel):
+    id: Optional[int] = None
+    historical_item_id: Optional[int] = None
+    service_name: str
+    service_type: str = "base"
+    price: Decimal = 0.0
+    class Config:
+        from_attributes = True
+
+class HistoricalItemSchema(BaseModel):
+    historical_item_id: Optional[int] = None
+    historical_order_id: Optional[int] = None
+    brand: Optional[str] = None
+    model: Optional[str] = None
+    color: Optional[str] = None
+    size: Optional[str] = None
+    material: Optional[str] = None
+    priority: Optional[str] = None
+    remarks: Optional[str] = None
+    services: List[HistoricalItemServiceSchema] = []
+    class Config:
+        from_attributes = True
+
+class HistoricalPredictionSchema(BaseModel):
+    prediction_id: Optional[int] = None
+    historical_order_id: Optional[int] = None
+    predicted_completion_days: int
+    predicted_release_date: datetime
+    actual_completion_days: Optional[int] = None
+    prediction_error: Optional[float] = None
+    prediction_date: Optional[datetime] = None
+    algorithm: str = "Random Forest Regressor"
+    model_version: Optional[str] = None
+    input_snapshot: Optional[Any] = None
+    class Config:
+        from_attributes = True
+
+class HistoricalOrderSchema(BaseModel):
+    historical_order_id: Optional[int] = None
+    order_id: str
+    customer_id: int
+    branch: Optional[str] = None
+    date_received: datetime
+    original_estimated_release_date: Optional[datetime] = None
+    claimed_date: Optional[datetime] = None
+    completion_days: Optional[int] = None
+    total_pairs: int = 1
+    grand_total: Decimal
+    downpayment: Decimal = 0.0
+    balance: Decimal = 0.0
+    priority: str = "regular"
+    sync_status: str = "pending"
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    
+    items: List[HistoricalItemSchema] = []
+    predictions: List[HistoricalPredictionSchema] = []
+    
+    class Config:
+        from_attributes = True
+
+class HistoricalOrderCreateSchema(BaseModel):
+    order_id: str
+    customer_name: str
+    contact_number: str
+    branch: Optional[str] = "Villamor"
+    date_received: datetime
+    original_estimated_release_date: Optional[datetime] = None
+    claimed_date: Optional[datetime] = None
+    total_pairs: int = 1
+    grand_total: Decimal
+    downpayment: Decimal = 0.0
+    balance: Decimal = 0.0
+    priority: str = "regular"
+    items: List[HistoricalItemSchema] = []
+

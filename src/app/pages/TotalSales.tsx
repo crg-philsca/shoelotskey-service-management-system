@@ -30,7 +30,7 @@ import { toast } from 'sonner';
 
 type TotalSalesProps = {
     onSetHeaderActionRight?: (action: ReactNode | null) => void;
-    user: { token: string; role?: string };
+    user: { token: string; role: 'owner' | 'staff'; username: string };
 };
 
 function FormattedDateInput({ value, onChange, className, id }: { value: string; onChange: (val: string) => void; className?: string; id?: string }) {
@@ -135,7 +135,7 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
 
     const navigate = useNavigate();
     const location = useLocation();
-    const { orders, updateOrder, deleteOrder } = useOrders();
+    const { orders, deleteOrder, updateOrder } = useOrders();
 
     const [selectedOrder, setSelectedOrder] = useState<JobOrder | null>(null);
     const [viewingOrder, setViewingOrder] = useState<JobOrder | null>(null);
@@ -148,6 +148,8 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
     const [searchQuery, setSearchQuery] = useState('');
     const [filterService, setFilterService] = useState<string>('all');
     const [filterPriority, setFilterPriority] = useState<string>('all');
+    const [filterPaymentStatus, setFilterPaymentStatus] = useState<string>('all');
+    const [filterPaymentMethod, setFilterPaymentMethod] = useState<string>('all');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -237,6 +239,14 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
             filtered = filtered.filter((order) => order.priorityLevel === filterPriority);
         }
 
+        if (filterPaymentStatus !== 'all') {
+            filtered = filtered.filter((order) => order.paymentStatus === filterPaymentStatus);
+        }
+
+        if (filterPaymentMethod !== 'all') {
+            filtered = filtered.filter((order) => order.paymentMethod?.toLowerCase() === filterPaymentMethod);
+        }
+
         if (startDate) {
             const start = new Date(startDate);
             filtered = filtered.filter((order) => new Date(order.transactionDate || order.createdAt) >= start);
@@ -277,7 +287,7 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
         });
 
         return filtered;
-    }, [salesOrders, filterService, filterPriority, startDate, endDate, searchQuery]);
+    }, [salesOrders, filterService, filterPriority, filterPaymentStatus, filterPaymentMethod, startDate, endDate, searchQuery]);
 
     const totalSales = filteredOrders.reduce((sum: number, order: JobOrder) => sum + Math.min(order.grandTotal || 0, order.amountReceived || 0), 0);
     const totalPages = Math.ceil(filteredOrders.length / itemsPerPage) || 1;
@@ -385,7 +395,7 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
 
                             <Button
                                 variant="outline"
-                                className={`h-10 w-10 p-0 rounded-xl transition-colors flex-shrink-0 ${filterService !== 'all' || filterPriority !== 'all' || startDate || endDate
+                                className={`h-10 w-10 p-0 rounded-xl transition-colors flex-shrink-0 ${filterService !== 'all' || filterPriority !== 'all' || filterPaymentStatus !== 'all' || filterPaymentMethod !== 'all' || startDate || endDate
                                     ? 'border-red-600 text-red-600 bg-red-50 hover:bg-red-100'
                                     : 'border-gray-200 text-gray-500 hover:border-red-600 hover:text-red-600 hover:bg-red-50'
                                     }`}
@@ -606,6 +616,35 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                         </div>
 
                         <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">Payment Status</label>
+                            <Select value={filterPaymentStatus} onValueChange={setFilterPaymentStatus}>
+                                <SelectTrigger className="h-9 text-xs border-gray-100 bg-gray-50/50">
+                                    <SelectValue placeholder="All Status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all" className="text-xs focus:bg-red-50 focus:text-red-700">All Status</SelectItem>
+                                    <SelectItem value="fully-paid" className="text-xs hover:bg-red-50 focus:bg-red-50 focus:text-red-700">Fully Paid</SelectItem>
+                                    <SelectItem value="downpayment" className="text-xs hover:bg-red-50 focus:bg-red-50 focus:text-red-700">Downpayment</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">Payment Method</label>
+                            <Select value={filterPaymentMethod} onValueChange={setFilterPaymentMethod}>
+                                <SelectTrigger className="h-9 text-xs border-gray-100 bg-gray-50/50">
+                                    <SelectValue placeholder="All Methods" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all" className="text-xs focus:bg-red-50 focus:text-red-700">All Methods</SelectItem>
+                                    <SelectItem value="cash" className="text-xs hover:bg-red-50 focus:bg-red-50 focus:text-red-700">Cash</SelectItem>
+                                    <SelectItem value="gcash" className="text-xs hover:bg-red-50 focus:bg-red-50 focus:text-red-700">GCash</SelectItem>
+                                    <SelectItem value="maya" className="text-xs hover:bg-red-50 focus:bg-red-50 focus:text-red-700">Maya</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-2">
                             <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">Start Date</label>
                             <FormattedDateInput
                                 value={startDate}
@@ -631,6 +670,8 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                             onClick={() => {
                                 setFilterService('all');
                                 setFilterPriority('all');
+                                setFilterPaymentStatus('all');
+                                setFilterPaymentMethod('all');
                                 setStartDate('');
                                 setEndDate('');
                                 setCurrentPage(1);
@@ -654,11 +695,11 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                         if (!open) setSelectedOrder(null);
                     }}
                     order={selectedOrder}
-                    onSave={(id, updates) => {
-                        updateOrder(id, updates, "Owner");
-                        setSelectedOrder((prev: any) => prev ? { ...prev, ...updates } : null);
-                        setIsEditing(false);
-                        toast.success('Order updated successfully');
+                    user={user}
+                    onSave={(id, updates) => { 
+                        updateOrder(id, updates); 
+                        setSelectedOrder((prev: any) => prev ? { ...prev, ...updates } : null); 
+                        setIsEditing(false); 
                     }}
                 />
             )}

@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { Check, ChevronsUpDown, X } from "lucide-react"
+import { Checkbox } from "./checkbox"
 
 import { cn } from "./utils"
 import {
@@ -23,6 +24,7 @@ interface CreatableComboboxProps {
     onChange: (value: string) => void
     placeholder?: string
     searchPlaceholder?: string
+    multiple?: boolean
 }
 
 export function CreatableCombobox({
@@ -30,6 +32,7 @@ export function CreatableCombobox({
     value,
     onChange,
     placeholder = "Select...",
+    multiple = false,
 }: CreatableComboboxProps) {
     const [open, setOpen] = React.useState(false)
     const [searchValue, setSearchValue] = React.useState("")
@@ -44,7 +47,8 @@ export function CreatableCombobox({
     }
 
     // Check if the current value is one of the standard options
-    const isFixedValue = options.some(opt => opt.toLowerCase() === value.toLowerCase());
+    const selectedOptions = multiple ? value.split(',').map(s => s.trim()).filter(Boolean) : [];
+    const isFixedValue = multiple ? false : options.some(opt => opt.toLowerCase() === value.toLowerCase());
 
     const inputRef = React.useRef<HTMLInputElement>(null)
 
@@ -70,7 +74,7 @@ export function CreatableCombobox({
                             readOnly={isFixedValue && !open && value !== 'Other'}
                             onChange={(e) => {
                                 setSearchValue(e.target.value)
-                                onChange(e.target.value)
+                                if (!multiple) onChange(e.target.value)
                                 if (!open) setOpen(true)
                             }}
                             onFocus={() => {
@@ -79,7 +83,7 @@ export function CreatableCombobox({
                             onPointerDown={() => {
                                 if (!open) setOpen(true)
                             }}
-                            placeholder={value === "" && !searchValue ? "Type for custom" : placeholder}
+                            placeholder={placeholder}
                             className={cn(
                                 "w-full flex h-9 rounded-md border border-gray-200 bg-white px-3 py-1 text-xs shadow-sm transition-colors placeholder:text-gray-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-100 focus-visible:border-red-100 disabled:cursor-not-allowed disabled:opacity-50 pr-8",
                                 isFixedValue && !open ? "cursor-default" : "cursor-text"
@@ -130,8 +134,15 @@ export function CreatableCombobox({
                                 <div
                                     className="cursor-pointer hover:bg-accent hover:text-accent-foreground rounded-sm px-2 py-1.5 select-none font-medium flex items-center justify-between"
                                     onClick={() => {
-                                        onChange(searchValue)
-                                        setOpen(false)
+                                        if (multiple) {
+                                            if (!selectedOptions.some(s => s.toLowerCase() === searchValue.toLowerCase())) {
+                                                const newValues = [...selectedOptions, searchValue];
+                                                onChange(newValues.join(', '));
+                                            }
+                                        } else {
+                                            onChange(searchValue)
+                                            setOpen(false)
+                                        }
                                         setSearchValue("")
                                     }}
                                 >
@@ -150,24 +161,39 @@ export function CreatableCombobox({
                                     key={option}
                                     value={option}
                                     onSelect={() => {
-                                        onChange(option)
-                                        setOpen(false)
-                                        setSearchValue("")
+                                        if (multiple) {
+                                            let newValues;
+                                            if (selectedOptions.some(s => s.toLowerCase() === option.toLowerCase())) {
+                                                newValues = selectedOptions.filter(s => s.toLowerCase() !== option.toLowerCase());
+                                            } else {
+                                                newValues = [...selectedOptions, option];
+                                            }
+                                            onChange(newValues.join(', '));
+                                        } else {
+                                            onChange(option)
+                                            setOpen(false)
+                                            setSearchValue("")
+                                        }
                                     }}
                                     className="text-xs"
                                 >
                                     <div className="flex items-center justify-between w-full">
                                         <div className="flex items-center">
-                                            <Check
-                                                className={cn(
-                                                    "mr-2 h-3 w-3",
-                                                    normalizedValue === option.toLowerCase() ? "opacity-100" : "opacity-0"
-                                                )}
-                                            />
+                                            {multiple && (
+                                                <Checkbox 
+                                                    checked={selectedOptions.some(s => s.toLowerCase() === option.toLowerCase())} 
+                                                    className="mr-3" 
+                                                    tabIndex={-1}
+                                                    style={{ pointerEvents: 'none' }}
+                                                />
+                                            )}
                                             <span className={cn(option === 'Other' && "font-semibold text-red-600")}>
                                                 {option}
                                             </span>
                                         </div>
+                                        {!multiple && normalizedValue === option.toLowerCase() && (
+                                            <Check className="h-3 w-3 opacity-100" />
+                                        )}
                                     </div>
                                 </CommandItem>
                             ))}

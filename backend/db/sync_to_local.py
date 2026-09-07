@@ -69,7 +69,7 @@ def sync_data():
 
     try:
         # 2. Establish connections (PG engine is reused from shared singleton; SQLite uses NullPool to avoid leftover transaction locks)
-        sqlite_engine = create_engine(sqlite_url, connect_args={"check_same_thread": False}, poolclass=NullPool)
+        sqlite_engine = create_engine(sqlite_url, connect_args={"check_same_thread": False, "timeout": 30}, poolclass=NullPool)
 
         # First connection handshake using shared engine connection
         try:

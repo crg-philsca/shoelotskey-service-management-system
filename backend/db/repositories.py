@@ -14,7 +14,7 @@ class InventoryRepository:
         self.db = db
 
     def get_all(self) -> list[Inventory]:
-        return self.db.query(Inventory).all()
+        return self.db.query(Inventory).filter(Inventory.is_active == True).all()
 
     def get_by_id(self, item_id: int) -> Inventory | None:
         return self.db.query(Inventory).filter(Inventory.item_id == item_id).first()

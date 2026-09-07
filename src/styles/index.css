@@ -178,4 +178,61 @@ input[type="date"]::-webkit-datetime-edit-year-field {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
+
+  /* [RECEIPT / SUMMARY PRINT ISOLATION]
+     When printing a Job Order Summary or Claim Record, hide all browser dashboard backgrounds,
+     modal backdrops, and overlays so it prints strictly as a crisp thermal receipt summary! */
+  body:has(#print-job-summary) *,
+  body:has(#print-receipt-content) * {
+    visibility: hidden !important;
+  }
+
+  body:has(#print-job-summary) #print-job-summary,
+  body:has(#print-job-summary) #print-job-summary *,
+  body:has(#print-receipt-content) #print-receipt-content,
+  body:has(#print-receipt-content) #print-receipt-content * {
+    visibility: visible !important;
+  }
+
+  body:has(#print-job-summary) #print-job-summary,
+  body:has(#print-receipt-content) #print-receipt-content {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    right: 0 !important;
+    margin: 0 auto !important;
+    width: 380px !important; /* Standard 80mm thermal receipt width */
+    max-width: 100% !important;
+    padding: 20px 10px !important;
+    background: white !important;
+    color: black !important;
+    box-shadow: none !important;
+    border: none !important;
+    overflow: visible !important;
+  }
+}
+
+/* [WALKING STRIDE — natural gait arc: push-off → swing → heel-strike → land] */
+@keyframes shoeWalk {
+  /* Flat on ground, at rest */
+  0%   { transform: translateY(0px)   translateX(0px)  rotate(0deg);   }
+  /* Toe push-off: toe dips, heel lifts, shoe angles down at toe */
+  10%  { transform: translateY(-5px)  translateX(-4px) rotate(10deg);  }
+  /* Rising swing: shoe lifts and starts leveling as it arcs forward */
+  28%  { transform: translateY(-20px) translateX(2px)  rotate(3deg);   }
+  /* Peak of arc: shoe fully airborne, almost level */
+  45%  { transform: translateY(-26px) translateX(8px)  rotate(-1deg);  }
+  /* Descent: shoe coming down, toe angles up for heel-strike */
+  60%  { transform: translateY(-14px) translateX(12px) rotate(-9deg);  }
+  /* Heel-strike: heel hits ground, toe still elevated */
+  74%  { transform: translateY(-3px)  translateX(8px)  rotate(-6deg);  }
+  /* Foot goes flat: full contact, weight transferred */
+  86%  { transform: translateY(0px)   translateX(4px)  rotate(0deg);   }
+  /* Glide smoothly back to start position */
+  100% { transform: translateY(0px)   translateX(0px)  rotate(0deg);   }
+}
+
+.animate-shoe-walk {
+  animation: shoeWalk 2s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+  transform-origin: 48% 88%;
 }

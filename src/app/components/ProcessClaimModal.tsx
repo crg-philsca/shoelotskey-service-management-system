@@ -484,49 +484,54 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
                                                             <p className="text-[9px] font-bold text-gray-400 uppercase">{mat.unit}</p>
                                                         </div>
                                                         <div className="flex items-center gap-1.5">
-                                                            <button 
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    const n = Math.max(0, parseFloat((mat.quantity - 1).toFixed(2)));
-                                                                    setMatInputs(im => ({ ...im, [mat.itemId]: String(n) }));
-                                                                    setRecordedMaterials(pv => pv.map(m => m.itemId === mat.itemId ? { ...m, quantity: n } : m));
-                                                                }}
-                                                                className="w-6 h-6 rounded bg-white border border-gray-200 text-gray-500 hover:text-red-500 flex items-center justify-center font-black text-xs"
-                                                            >
-                                                                -
-                                                            </button>
-                                                            <input
-                                                                type="text"
-                                                                inputMode="decimal"
-                                                                value={matInputs[mat.itemId] ?? String(mat.quantity)}
-                                                                onChange={(e) => {
-                                                                    const raw = e.target.value;
-                                                                    if (raw === '' || /^[0-9]*\.?[0-9]*$/.test(raw)) {
-                                                                        setMatInputs(im => ({ ...im, [mat.itemId]: raw }));
-                                                                        const v = parseFloat(raw);
-                                                                        if (!isNaN(v)) {
-                                                                            setRecordedMaterials(pv => pv.map(m => m.itemId === mat.itemId ? { ...m, quantity: v } : m));
+                                                            <div className="flex items-center gap-1">
+                                                                <input
+                                                                    type="text"
+                                                                    inputMode="decimal"
+                                                                    value={matInputs[mat.itemId] ?? String(mat.quantity)}
+                                                                    onChange={(e) => {
+                                                                        const raw = e.target.value;
+                                                                        if (raw === '' || /^[0-9]*\.?[0-9]*$/.test(raw)) {
+                                                                            setMatInputs(im => ({ ...im, [mat.itemId]: raw }));
+                                                                            const v = parseFloat(raw);
+                                                                            if (!isNaN(v)) {
+                                                                                setRecordedMaterials(pv => pv.map(m => m.itemId === mat.itemId ? { ...m, quantity: v } : m));
+                                                                            }
                                                                         }
-                                                                    }
-                                                                }}
-                                                                onBlur={() => {
-                                                                    const v = parseFloat(matInputs[mat.itemId] ?? '') || 0;
-                                                                    setMatInputs(im => ({ ...im, [mat.itemId]: String(v) }));
-                                                                    setRecordedMaterials(pv => pv.map(m => m.itemId === mat.itemId ? { ...m, quantity: v } : m));
-                                                                }}
-                                                                className="w-12 text-center text-xs font-black bg-white border border-gray-200 rounded py-0.5"
-                                                            />
-                                                            <button 
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    const n = parseFloat((mat.quantity + 1).toFixed(2));
-                                                                    setMatInputs(im => ({ ...im, [mat.itemId]: String(n) }));
-                                                                    setRecordedMaterials(pv => pv.map(m => m.itemId === mat.itemId ? { ...m, quantity: n } : m));
-                                                                }}
-                                                                className="w-6 h-6 rounded bg-white border border-gray-200 text-gray-500 hover:text-emerald-600 flex items-center justify-center font-black text-xs"
-                                                            >
-                                                                +
-                                                            </button>
+                                                                    }}
+                                                                    onBlur={() => {
+                                                                        const v = parseFloat(matInputs[mat.itemId] ?? '') || 0;
+                                                                        setMatInputs(im => ({ ...im, [mat.itemId]: String(v) }));
+                                                                        setRecordedMaterials(pv => pv.map(m => m.itemId === mat.itemId ? { ...m, quantity: v } : m));
+                                                                    }}
+                                                                    className="w-16 text-center text-xs font-black bg-white border border-gray-200 rounded py-0.5 shadow-sm"
+                                                                />
+                                                                <span className="text-[10px] font-bold text-gray-500 uppercase">{mat.unit}</span>
+                                                            </div>
+                                                            <div className="flex items-center gap-0.5 ml-2">
+                                                                <button 
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        const n = Math.max(0, parseFloat((mat.quantity - 1).toFixed(2)));
+                                                                        setMatInputs(im => ({ ...im, [mat.itemId]: String(n) }));
+                                                                        setRecordedMaterials(pv => pv.map(m => m.itemId === mat.itemId ? { ...m, quantity: n } : m));
+                                                                    }}
+                                                                    className="w-6 h-6 rounded bg-white border border-gray-200 text-gray-500 hover:text-red-500 flex items-center justify-center font-black text-xs"
+                                                                >
+                                                                    -
+                                                                </button>
+                                                                <button 
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        const n = parseFloat((mat.quantity + 1).toFixed(2));
+                                                                        setMatInputs(im => ({ ...im, [mat.itemId]: String(n) }));
+                                                                        setRecordedMaterials(pv => pv.map(m => m.itemId === mat.itemId ? { ...m, quantity: n } : m));
+                                                                    }}
+                                                                    className="w-6 h-6 rounded bg-white border border-gray-200 text-gray-500 hover:text-emerald-600 flex items-center justify-center font-black text-xs"
+                                                                >
+                                                                    +
+                                                                </button>
+                                                            </div>
                                                             <button
                                                                 type="button"
                                                                 onClick={() => setRecordedMaterials(pv => pv.filter(m => m.itemId !== mat.itemId))}
@@ -820,8 +825,8 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
                             <h3 className="text-sm font-black uppercase tracking-widest text-gray-900">Shoelotskey</h3>
                             <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Shoe Restoration & Care Services</p>
                             <div className="pt-2">
-                                <span className="inline-block bg-emerald-100 text-emerald-800 font-black text-[10px] uppercase tracking-widest px-3 py-0.5 rounded-full">
-                                    Official Receipt
+                                <span className="inline-block bg-slate-900 text-white font-black text-[10px] uppercase tracking-widest px-3 py-1 rounded-full">
+                                    JOB ORDER CLAIM SUMMARY
                                 </span>
                             </div>
                         </div>
@@ -923,26 +928,30 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
                             </div>
                         </div>
 
-                        {/* Footer Message */}
-                        <div className="text-center pt-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider space-y-1">
-                            <p>Thank you for trusting Shoelotskey!</p>
-                            <p className="text-[9px]">Processed By: {claimedOrderSummary?.processedBy}</p>
+                        {/* Footer Message & Regulatory Disclaimer */}
+                        <div className="text-center pt-2 text-[10px] font-bold text-gray-500 uppercase tracking-wider space-y-1.5 border-t border-dashed border-gray-200">
+                            <p className="text-[9px] text-gray-500 font-sans italic leading-tight normal-case">
+                                This document is generated for reference purposes only.<br />
+                                It is not a BIR Official Receipt or Sales Invoice.
+                            </p>
+                            <p className="pt-1 text-gray-600 font-black">*** Thank you for trusting Shoelotskey! ***</p>
+                            <p className="text-[9px] text-gray-400">Processed By: {claimedOrderSummary?.processedBy}</p>
                         </div>
                     </div>
 
                     {/* Action Buttons (Excluded from print) */}
-                    <div className="flex items-center gap-2 pt-4 border-t border-gray-100 print:hidden">
+                    <div className="flex items-center gap-3 pt-4 border-t border-gray-100 print:hidden">
                         <Button
                             variant="outline"
                             onClick={() => window.print()}
-                            className="flex-1 h-11 rounded-xl text-xs font-bold text-gray-700 border-gray-200 hover:bg-gray-50"
+                            className="flex-1 h-11 rounded-xl text-xs font-black uppercase tracking-widest text-gray-700 border-gray-200 hover:bg-gray-50 flex items-center justify-center gap-2"
                         >
-                            <Printer size={16} className="mr-2" />
-                            Print Receipt
+                            <Printer size={16} />
+                            Print Summary
                         </Button>
                         <Button
                             onClick={() => { setShowReceipt(false); onOpenChange(false); }}
-                            className="flex-1 h-11 rounded-xl text-xs font-black uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-100"
+                            className="flex-1 h-11 rounded-xl text-xs font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-100 justify-center"
                         >
                             Done & Close
                         </Button>

@@ -118,7 +118,7 @@ from models import (
     Payment, Delivery, ServiceCategory, PriorityLevel, Condition,
     ItemConditionMapping, ShippingPreference, PaymentMethod, PaymentStatus,
     Inventory, InventoryLog,
-    HistoricalOrder, HistoricalItem, HistoricalItemService, HistoricalPrediction
+    HistoricalOrder, HistoricalItem, HistoricalItemService, HistoricalPrediction, HistoricalImage
 )
 from db.repositories import InventoryRepository
 from schemas import (
@@ -128,8 +128,8 @@ from schemas import (
     InventorySchema, InventoryUpdateSchema, InventoryLogSchema
 )
 from db.database import engine, get_db, SessionLocal, DATABASE_URL, is_sqlite, conn_error, LOCAL_SQLITE_PATH, LOCAL_SQLITE
-from ml_engine import predictor
-from historical_ml_engine import historical_ml_engine
+from ml.ml_engine import predictor
+from ml.historical_ml_engine import historical_ml_engine
 from auth_utils import get_current_user, require_role, create_access_token, sanitize_error
 
 # ------------------------------------------
@@ -372,9 +372,12 @@ async def global_exception_handler(request: Request, exc: Exception):
         }
     )
 
-# Mount Brand Assets
+# Mount Brand Assets & Historical Documents
 app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="brand_assets")
 
+hist_dir = os.path.join(os.path.dirname(__file__), "historical_data")
+os.makedirs(hist_dir, exist_ok=True)
+app.mount("/historical_data", StaticFiles(directory=hist_dir), name="historical_data")
 # Configure CORS for React compatibility (OWASP A05: Security Misconfiguration Hardening)
 origins = [
     "http://localhost:5173",
@@ -432,6 +435,9 @@ def startup_sequence():
             conn.execute(text("SELECT 1"))
         print(f"[DATABASE] SUCCESS: Connected to Online PostgreSQL")
     except Exception as e:
+        if ENV == "Production":
+            print(f"[DATABASE FATAL ERROR] Cloud Postgres unreachable in Production ({str(e)[:80]}...). Halting startup to prevent downgrade attack.")
+            raise RuntimeError("Database connection failed in Production environment.")
         print(f"[DATABASE OFFLINE AUTO-SWITCH] Cloud Postgres unreachable ({str(e)[:80]}...). Switching directly to Local SQLite.")
         if hasattr(db_mod, "switch_to_offline_sqlite"):
             db_mod.switch_to_offline_sqlite()
@@ -905,6 +911,19 @@ def seed_lookups(db: Session):
                     item_copy["category_id"] = cat_map.get(cat_name, cat_map.get("base"))
                     db.add(Service(**item_copy))
                     print(f"  -> Added missing service: {item['service_name']}")
+            
+            # ── Clean up duplicate Color Renewal services ──
+            cr_services = db.query(Service).filter(Service.service_name == "Color Renewal").all()
+            if len(cr_services) > 1:
+                print(">>> Cleaning up duplicate Color Renewal services...")
+                # Keep the one with base_price 800 or 500, remove the rest (like 0)
+                kept = False
+                for cr in sorted(cr_services, key=lambda x: x.base_price, reverse=True):
+                    if not kept:
+                        kept = True
+                        cr.is_active = True # ensure the kept one is active
+                    else:
+                        db.delete(cr)
             db.commit()
     except Exception as lock_err:
         db.rollback()
@@ -1762,17 +1781,14 @@ def login(request: LoginRequest, db: Session = Depends(get_db), http_request: Re
                 detail=f"Account locked. Try again in {int(remaining)} minutes."
             )
 
-        # 2. VALIDATE PASSWORD (Bcrypt with Plaintext Migration)
+        # 2. VALIDATE PASSWORD (Bcrypt with Plaintext Migration Disabled)
         pw_match = False
         try:
             pw_match = bcrypt.verify(request.password, db_user.password_hash)
-        except:
-            # Legacy Plaintext Fallback & Migration
-            if db_user.password_hash == request.password:
-                pw_match = True
-                # Migrate to hash automatically
-                db_user.password_hash = bcrypt.hash(request.password)
-                db.commit()
+        except Exception:
+            # If the stored hash is invalid (e.g., legacy plaintext), we DO NOT
+            # migrate it automatically as it introduces a pass-the-hash vulnerability.
+            pass
 
         if pw_match:
             # SUCCESS: Reset attempts and unlock
@@ -2279,9 +2295,9 @@ def read_orders(db: Session = Depends(get_db), current_user: User = Depends(get_
         joinedload(Order.customer),
         joinedload(Order.status),
         joinedload(Order.priority),
-        joinedload(Order.processor),
+        joinedload(Order.processor).joinedload(User.role),
         joinedload(Order.status_logs).joinedload(StatusLog.status),
-        joinedload(Order.status_logs).joinedload(StatusLog.user),
+        joinedload(Order.status_logs).joinedload(StatusLog.user).joinedload(User.role),
         joinedload(Order.payments).joinedload(Payment.method),
         joinedload(Order.payments).joinedload(Payment.p_status),
         joinedload(Order.delivery).joinedload(Delivery.preference),
@@ -2436,9 +2452,11 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
         for item_data in items_list:
             db_item = Item(
                 order_id=db_order.order_id, 
-                brand=item_data.get("brand", "Unknown"), 
-                shoe_model=item_data.get("shoeModel", "Unknown"),
-                material=item_data.get("shoeMaterial", "Unknown"),
+                brand=item_data.get("brand") or order_data.get("brand") or "Unknown", 
+                shoe_model=item_data.get("shoeModel") or order_data.get("shoeModel") or "Unknown",
+                material=item_data.get("shoeMaterial") or order_data.get("shoeMaterial") or "Unknown",
+                shoe_size=str(item_data.get("shoeSize") or item_data.get("size") or order_data.get("shoeSize") or order_data.get("size") or ""),
+                color=str(item_data.get("color") or order_data.get("color") or ""),
                 quantity=item_data.get("quantity", 1),
                 item_notes=item_data.get("condition", {}).get("others") if isinstance(item_data.get("condition"), dict) else None
             )
@@ -2530,6 +2548,71 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
+def build_order_snapshot(db_order) -> dict:
+    """Serializes the complete business object for audit logging (snapshot)."""
+    if not db_order: return {}
+    snapshot = {
+        "orderNumber": db_order.order_number,
+        "status": db_order.status.status_name if getattr(db_order, "status", None) else "new-order",
+        "priorityLevel": db_order.priority.priority_name if getattr(db_order, "priority", None) else "normal",
+        "grandTotal": float(db_order.grand_total) if getattr(db_order, "grand_total", None) else 0.0,
+        "transactionDate": db_order.created_at.isoformat() if getattr(db_order, "created_at", None) else None,
+        "predictedCompletionDate": db_order.expected_at.isoformat() if getattr(db_order, "expected_at", None) else None,
+        "inventoryApplied": getattr(db_order, "inventory_applied", False),
+        "inventoryUsed": getattr(db_order, "inventory_used", []),
+    }
+    if getattr(db_order, "customer", None):
+        snapshot["customerName"] = db_order.customer.customer_name
+        snapshot["contactNumber"] = db_order.customer.contact_number
+    if getattr(db_order, "payments", None) and len(db_order.payments) > 0:
+        pay = db_order.payments[0]
+        snapshot["paymentMethod"] = pay.method.method_name if getattr(pay, "method", None) else "cash"
+        snapshot["paymentStatus"] = pay.status.status_name if getattr(pay, "status", None) else "pending"
+        snapshot["amountReceived"] = float(pay.amount_received) if getattr(pay, "amount_received", None) else 0.0
+        snapshot["balance"] = float(pay.balance) if getattr(pay, "balance", None) else 0.0
+        snapshot["referenceNo"] = pay.reference_no
+        snapshot["depositAmount"] = float(pay.deposit_amount) if getattr(pay, "deposit_amount", None) else 0.0
+    if getattr(db_order, "delivery", None):
+        snapshot["shippingPreference"] = db_order.delivery.preference.pref_name if getattr(db_order.delivery, "preference", None) else "pickup"
+        snapshot["deliveryAddress"] = db_order.delivery.delivery_address
+        snapshot["deliveryCourier"] = db_order.delivery.delivery_courier
+        snapshot["releaseTime"] = db_order.delivery.release_time
+        snapshot["province"] = db_order.delivery.province
+        snapshot["city"] = db_order.delivery.city
+        snapshot["barangay"] = db_order.delivery.barangay
+        snapshot["zipCode"] = db_order.delivery.zip_code
+    if getattr(db_order, "items", None) and len(db_order.items) > 0:
+        item = db_order.items[0]
+        snapshot["brand"] = item.brand
+        snapshot["shoeModel"] = item.shoe_model
+        snapshot["shoeMaterial"] = item.material
+        snapshot["shoeSize"] = item.shoe_size
+        snapshot["color"] = item.color
+        snapshot["quantity"] = item.quantity
+        c_dict = {}
+        if getattr(item, "conditions", None):
+            for c in item.conditions:
+                n = c.condition_name.lower().replace(" ", "").replace("/", "")
+                if "scratch" in n: c_dict["scratches"] = True
+                elif "yellow" in n: c_dict["yellowing"] = True
+                elif "rip" in n or "hole" in n: c_dict["ripsHoles"] = True
+                elif "stain" in n: c_dict["deepStains"] = True
+                elif "separat" in n: c_dict["soleSeparation"] = True
+                elif "worn" in n: c_dict["wornOut"] = True
+        if getattr(item, "item_notes", None): c_dict["others"] = item.item_notes
+        snapshot["condition"] = c_dict
+        services = []
+        addons = []
+        if getattr(item, "services", None):
+            for s_map in item.services:
+                s_name = getattr(s_map, "service_name", "")
+                if any(x in s_name.lower() for x in ["cleaning", "reglue", "repaint", "unyellowing"]): services.append(s_name)
+                else: addons.append(s_name)
+        snapshot["baseService"] = services
+        snapshot["addOns"] = addons
+    return snapshot
+
+
 @app.put("/api/orders/{order_id}", response_model=OrderSchema)
 def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
@@ -2541,11 +2624,7 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
     if not db_order:
         raise HTTPException(status_code=404, detail="System Error: Order record missing.")
     
-    old_order_snapshot = {
-        "order_number": db_order.order_number,
-        "status": db_order.status.status_name if db_order.status else "unknown",
-        "grand_total": float(db_order.grand_total) if db_order.grand_total is not None else 0.0,
-    }
+    old_order_snapshot = build_order_snapshot(db_order)
     
     # 1. Status Lifecycle & Analytics Logging
     if "status" in updates:
@@ -2752,42 +2831,49 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
             if frontend_field in updates:
                 setattr(db_order.delivery, db_col, updates[frontend_field])
 
-    # 5. Handle Item-level Inventory Updates (Dynamic Stock Reconciliation)
+    # 5. Handle Item-level Updates (Brand, Model, Material, Color, Size, Inventory)
     if "items" in updates:
         for item_update in updates["items"]:
-            # Safe ID conversion to prevent server crash during offline sync
             u_id_raw = item_update.get("id")
-            if u_id_raw and str(u_id_raw).isdigit() and "inventoryUsed" in item_update:
+            if u_id_raw and str(u_id_raw).isdigit():
                 item_id = int(u_id_raw)
-                new_usage = item_update["inventoryUsed"]
-                
                 db_item = db.query(Item).filter(Item.item_id == item_id).first()
                 if db_item:
-                    old_usage = db_item.inventory_used or []
-                    
-                    # Reconciliation: Add back old, subtract new
-                    if isinstance(old_usage, list):
-                        for u in old_usage:
-                            i_id = u.get("itemId") or u.get("id")
-                            i_amt = float(u.get("amount") or 0)
-                            if i_id:
-                                inv_item = db.query(Inventory).filter(Inventory.item_id == i_id).first()
-                                if inv_item:
-                                    inv_item.stock_quantity += i_amt
-                                    recalculate_inventory_status(inv_item)
-                    
-                    if isinstance(new_usage, list):
-                        for u in new_usage:
-                            i_id = u.get("itemId") or u.get("id")
-                            i_amt = float(u.get("amount") or 0)
-                            if i_id and i_amt > 0:
-                                inv_item = db.query(Inventory).filter(Inventory.item_id == i_id).first()
-                                if inv_item:
-                                    inv_item.stock_quantity = max(0.0, inv_item.stock_quantity - i_amt)
-                                    recalculate_inventory_status(inv_item)
-                                    db.add(InventoryLog(item_id=i_id, change_amount=-i_amt, action_type='manual_edit', order_id=db_order.order_id, user_id=current_user.user_id))
-                    
-                    db_item.inventory_used = new_usage
+                    if "brand" in item_update: db_item.brand = item_update["brand"]
+                    if "shoeModel" in item_update: db_item.shoe_model = item_update["shoeModel"]
+                    if "shoeMaterial" in item_update: db_item.material = item_update["shoeMaterial"]
+                    if "color" in item_update: db_item.color = item_update["color"]
+                    if "shoeSize" in item_update or "size" in item_update:
+                        db_item.shoe_size = str(item_update.get("shoeSize") or item_update.get("size") or "")
+                    if "quantity" in item_update: db_item.quantity = item_update["quantity"]
+
+                    if "inventoryUsed" in item_update:
+                        new_usage = item_update["inventoryUsed"]
+                        old_usage = db_item.inventory_used or []
+                        
+                        # Reconciliation: Add back old, subtract new
+                        if isinstance(old_usage, list):
+                            for u in old_usage:
+                                i_id = u.get("itemId") or u.get("id")
+                                i_amt = float(u.get("amount") or 0)
+                                if i_id:
+                                    inv_item = db.query(Inventory).filter(Inventory.item_id == i_id).first()
+                                    if inv_item:
+                                        inv_item.stock_quantity += i_amt
+                                        recalculate_inventory_status(inv_item)
+                        
+                        if isinstance(new_usage, list):
+                            for u in new_usage:
+                                i_id = u.get("itemId") or u.get("id")
+                                i_amt = float(u.get("amount") or 0)
+                                if i_id and i_amt > 0:
+                                    inv_item = db.query(Inventory).filter(Inventory.item_id == i_id).first()
+                                    if inv_item:
+                                        inv_item.stock_quantity = max(0.0, inv_item.stock_quantity - i_amt)
+                                        recalculate_inventory_status(inv_item)
+                                        db.add(InventoryLog(item_id=i_id, change_amount=-i_amt, action_type='manual_edit', order_id=db_order.order_id, user_id=current_user.user_id))
+                        
+                        db_item.inventory_used = new_usage
 
     # 5. Handle Inventory Persistence & Dynamic Stock Adjustment
     if "inventoryUsed" in updates: 
@@ -2916,7 +3002,7 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
             db=db, action="UPDATE", table_name="orders",
             record_id=order_id, user=current_user,
             old_values=old_order_snapshot,
-            new_values={"status": db_order.status.status_name if db_order.status else "unknown", "grand_total": float(db_order.grand_total) if db_order.grand_total is not None else 0.0, **{k: v for k, v in updates.items() if k not in ("items", "inventoryUsed") and not isinstance(v, (list, dict))}},
+            new_values=build_order_snapshot(db_order),
             module="Job Orders",
         )
         return db_order
@@ -2931,7 +3017,7 @@ def delete_order(order_id: int, db: Session = Depends(get_db), current_user: Use
     db_order = db.query(Order).filter(Order.order_id == order_id).first()
     if not db_order:
         raise HTTPException(status_code=404, detail="Order not found")
-    deleted_snapshot = {"order_number": db_order.order_number, "grand_total": float(db_order.grand_total), "status": db_order.status}
+    deleted_snapshot = build_order_snapshot(db_order)
     
     # Explicit cascade handling for database schemas without ON DELETE CASCADE
     try:
@@ -3749,6 +3835,10 @@ async def list_historical_orders(
     total = query.count()
     orders = (
         query
+        .options(
+            joinedload(HistoricalOrder.customer),
+            joinedload(HistoricalOrder.items).joinedload(HistoricalItem.services)
+        )
         .order_by(HistoricalOrder.date_received.desc())
         .offset((page - 1) * limit)
         .limit(limit)
@@ -3764,7 +3854,7 @@ async def list_historical_orders(
             "contact_number": o.customer.contact_number if o.customer else "",
             "branch": o.branch,
             "date_received": o.date_received.isoformat() if o.date_received else None,
-            "expected_release_date": o.expected_release_date.isoformat() if o.expected_release_date else None,
+            "original_estimated_release_date": o.original_estimated_release_date.isoformat() if o.original_estimated_release_date else None,
             "claimed_date": o.claimed_date.isoformat() if o.claimed_date else None,
             "completion_days": o.completion_days,
             "total_pairs": o.total_pairs,
@@ -3835,14 +3925,12 @@ async def create_historical_order(
             return None
 
     date_received = _parse(payload.get("date_received"))
-    expected_release_date = _parse(payload.get("expected_release_date"))
+    original_estimated_release_date = _parse(payload.get("original_estimated_release_date"))
     claimed_date = _parse(payload.get("claimed_date"))
 
     if not date_received:
         raise HTTPException(status_code=422, detail="date_received is required.")
-    if not expected_release_date:
-        raise HTTPException(status_code=422, detail="expected_release_date is required.")
-    if expected_release_date < date_received:
+    if original_estimated_release_date and original_estimated_release_date < date_received:
         raise HTTPException(status_code=422, detail="Expected release date cannot be earlier than date received.")
     if claimed_date and claimed_date < date_received:
         raise HTTPException(status_code=422, detail="Claimed date cannot be earlier than date received.")
@@ -3862,7 +3950,7 @@ async def create_historical_order(
         customer_id=customer.customer_id,
         branch=payload.get("branch"),
         date_received=date_received,
-        expected_release_date=expected_release_date,
+        original_estimated_release_date=original_estimated_release_date,
         claimed_date=claimed_date,
         completion_days=completion_days,
         total_pairs=total_pairs,
@@ -3870,6 +3958,7 @@ async def create_historical_order(
         downpayment=downpayment,
         balance=balance,
         priority=payload.get("priority", "regular"),
+        payment_method=payload.get("payment_method"),
         sync_status="pending",
     )
     db.add(order)
@@ -3928,8 +4017,8 @@ async def update_historical_order(
 
     if "date_received" in payload:
         order.date_received = _parse(payload["date_received"]) or order.date_received
-    if "expected_release_date" in payload:
-        order.expected_release_date = _parse(payload["expected_release_date"]) or order.expected_release_date
+    if "original_estimated_release_date" in payload:
+        order.original_estimated_release_date = _parse(payload["original_estimated_release_date"]) or order.original_estimated_release_date
     if "claimed_date" in payload:
         order.claimed_date = _parse(payload["claimed_date"])
     if order.claimed_date and order.date_received:
@@ -3938,6 +4027,8 @@ async def update_historical_order(
         order.branch = payload["branch"]
     if "priority" in payload:
         order.priority = payload["priority"]
+    if "payment_method" in payload:
+        order.payment_method = payload["payment_method"]
     if "grand_total" in payload:
         order.grand_total = float(payload["grand_total"])
     if "downpayment" in payload:
@@ -3991,6 +4082,337 @@ async def delete_historical_order(
     db.delete(order)
     db.commit()
     return {"status": "deleted", "historical_order_id": historical_order_id}
+
+
+# ------------------------------------------------------------------
+# GET /api/historical/stats — Live record counts for ML Training + Records tabs
+# ------------------------------------------------------------------
+@app.get("/api/historical/stats")
+async def get_historical_stats(
+    db: Session = Depends(get_db),
+):
+    total = db.query(HistoricalOrder).count()
+    validated = db.query(HistoricalOrder).filter(
+        HistoricalOrder.claimed_date.isnot(None),
+        HistoricalOrder.completion_days.isnot(None),
+    ).count()
+    missing_fields = db.query(HistoricalOrder).filter(
+        (HistoricalOrder.completion_days == None) |
+        (HistoricalOrder.claimed_date == None)
+    ).count()
+    pending_ocr = db.query(HistoricalImage).filter(HistoricalImage.ocr_status == "Pending").count()
+    return {
+        "total": total,
+        "validated": validated,
+        "missing_fields": missing_fields,
+        "pending_ocr": pending_ocr,
+        "ready_for_training": validated,
+    }
+
+
+# ------------------------------------------------------------------
+# GET /api/temp/debug_image
+# ------------------------------------------------------------------
+@app.get("/api/temp/debug_image")
+async def debug_image(db: Session = Depends(get_db)):
+    try:
+        db.execute(text("ALTER TABLE historical_orders ADD COLUMN payment_method VARCHAR(50);"))
+        db.commit()
+        return {"status": "success", "message": "payment_method added"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+# ------------------------------------------------------------------
+# GET /api/historical/image/{image_filename} — Dynamically fetch image from any subfolder
+# ------------------------------------------------------------------
+@app.get("/api/historical/image/{image_filename}")
+async def get_historical_image(image_filename: str):
+    hist_dir = os.path.join(os.path.dirname(__file__), "historical_data")
+    
+    clean_filename = image_filename.strip().lower()
+    
+    # 1. Check pilot_batch first (fastest)
+    pilot_dir = os.path.join(hist_dir, "pilot_batch")
+    if os.path.exists(pilot_dir):
+        for f in os.listdir(pilot_dir):
+            if f.lower() == clean_filename:
+                return FileResponse(os.path.join(pilot_dir, f))
+        
+    # 2. Search recursively in source directory (for missing cloud sync files)
+    source_dir = os.path.join(hist_dir, "source")
+    if os.path.exists(source_dir):
+        for root, dirs, files in os.walk(source_dir):
+            for f in files:
+                if f.lower() == clean_filename:
+                    return FileResponse(os.path.join(root, f))
+                
+    raise HTTPException(status_code=404, detail="Image not found in any local folder")
+
+
+# ------------------------------------------------------------------
+# GET /api/historical/processing/queue — Validation queue (OCR pending + missing ML fields)
+# ------------------------------------------------------------------
+@app.get("/api/historical/processing/queue")
+async def get_historical_validation_queue(
+    db: Session = Depends(get_db),
+    limit: int = 20,
+):
+    results = []
+    # Source A: OCR-pending images
+    images = db.query(HistoricalImage).filter(HistoricalImage.ocr_status == "Pending").limit(limit).all()
+    for img in images:
+        order = img.order
+        if order:
+            results.append(_build_hist_queue_item(img, order, "ocr_pending"))
+    # Source B: Orders with missing ML-critical fields
+    incomplete = db.query(HistoricalOrder).filter(
+        (HistoricalOrder.completion_days == None) |
+        (HistoricalOrder.claimed_date == None) |
+        (HistoricalOrder.priority == None)
+    ).limit(limit).all()
+    seen = {r["order"]["historical_order_id"] for r in results if r.get("order")}
+    for order in incomplete:
+        if order.historical_order_id in seen:
+            continue
+        results.append(_build_hist_queue_item(order.image, order, "incomplete_fields"))
+    return results
+
+
+def _build_hist_queue_item(img, order, source: str):
+    missing = []
+    if not order.completion_days: missing.append("completion_days")
+    if not order.claimed_date: missing.append("claimed_date")
+    if not order.priority: missing.append("priority")
+    items_data = []
+    for i in (order.items or []):
+        if not i.brand: missing.append(f"pair_{i.historical_item_id}_brand")
+        if not i.model: missing.append(f"pair_{i.historical_item_id}_model")
+        KNOWN_ADDONS = {'mret', 'mr', 'mres', 'minor retouch', 'minor reglue', 'minor restoration', 'retouch', 'reglue'}
+        base_s = []
+        addon_s = []
+        for s in (i.services or []):
+            s_name = s.service_name.strip()
+            s_name_lower = s_name.lower()
+            s_type = 'addon' if any(a in s_name_lower for a in KNOWN_ADDONS) else s.service_type
+            val = s_name if float(s.price) == 0 else f"{s_name} (₱{float(s.price):.2f})"
+            if s_type == 'addon':
+                addon_s.append(val)
+            else:
+                base_s.append(val)
+        
+        conditions_list = []
+        if getattr(i, 'scratches', False): conditions_list.append("Scratches")
+        if getattr(i, 'yellowing', False): conditions_list.append("Yellowing")
+        if getattr(i, 'sole_separation', False): conditions_list.append("Sole Separation")
+        if getattr(i, 'deep_stains', False): conditions_list.append("Deep Stains")
+        if getattr(i, 'rips_holes', False): conditions_list.append("Rips/Holes")
+        if getattr(i, 'worn_out', False): conditions_list.append("Worn Out")
+        
+        model_val = i.model or ""
+        color_val = i.color or ""
+        mat_val = getattr(i, 'material', "") or ""
+        
+        # Rule 1: Suede duplicated in both model and material -> remove from material
+        if model_val and mat_val and model_val.strip().lower() == mat_val.strip().lower():
+            mat_val = ""
+            
+        # Rule 2: Color mistakenly put in Model (e.g., "White/Blue")
+        color_keywords = {'white', 'black', 'blue', 'red', 'green', 'yellow', 'brown', 'pink', 'purple', 'orange', 'grey', 'gray', 'silver', 'gold', 'multi', 'navy', 'cream'}
+        words_in_model = [w.strip() for w in model_val.lower().replace('/', ' ').split() if w.strip()]
+        if words_in_model and all(w in color_keywords for w in words_in_model):
+            if not color_val:
+                color_val = model_val
+            model_val = ""
+            
+        items_data.append({
+            "model": model_val, "brand": i.brand, "color": color_val, "size": i.size,
+            "material": mat_val if mat_val else None,
+            "base_services": base_s,
+            "addon_services": addon_s,
+            "conditions": conditions_list,
+            "item_price": float(i.item_price) if getattr(i, 'item_price', None) is not None else None
+        })
+    return {
+        "historical_image_id": img.historical_image_id if img else None,
+        "image_filename": img.image_filename if img else None,
+        "image_path": img.image_path if img else None,
+        "ocr_confidence": img.ocr_confidence if img else 1.0,
+        "source": source,
+        "missing_fields": missing,
+        "order": {
+            "historical_order_id": order.historical_order_id,
+            "order_id": order.order_id,
+            "customer": {"name": order.customer.customer_name if order.customer else None, "contact": order.customer.contact_number if order.customer else None},
+            "date_received": str(order.date_received) if order.date_received else None,
+            "original_estimated_release_date": str(order.original_estimated_release_date) if order.original_estimated_release_date else None,
+            "claimed_date": str(order.claimed_date) if order.claimed_date else None,
+            "completion_days": order.completion_days,
+            "priority": order.priority,
+            "payment_method": order.payment_method,
+            "branch": order.branch,
+            "grand_total": float(order.grand_total) if order.grand_total else 0,
+            "items": items_data,
+        },
+    }
+
+
+# ------------------------------------------------------------------
+# POST /api/historical/processing/validate-order/{id} — Correct a record with missing fields
+# ------------------------------------------------------------------
+@app.post("/api/historical/processing/validate-order/{historical_order_id}")
+async def validate_hist_order_fields(
+    historical_order_id: int,
+    payload: Dict[str, Any] = Body(...),
+    db: Session = Depends(get_db),
+):
+    from datetime import date as date_type
+    order = db.query(HistoricalOrder).filter(HistoricalOrder.historical_order_id == historical_order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    corrections = payload.get("corrections", {})
+    if "items" in corrections:
+        items_data = corrections.pop("items")
+        if order.items:
+            for idx, item_payload in enumerate(items_data):
+                if idx < len(order.items):
+                    item = order.items[idx]
+                    if "brand" in item_payload: item.brand = item_payload["brand"]
+                    if "model" in item_payload: item.model = item_payload["model"]
+                    if "color" in item_payload: item.color = item_payload["color"]
+                    if "size" in item_payload: item.size = item_payload["size"]
+                    
+                    if "base_services" in item_payload or "addon_services" in item_payload:
+                        db.query(HistoricalItemService).filter(HistoricalItemService.historical_item_id == item.historical_item_id).delete()
+                        
+                        def _add_svcs(svc_val, s_type):
+                            if not svc_val: return
+                            s_list = [s.strip() for s in svc_val.split(',')] if isinstance(svc_val, str) else svc_val
+                            for s_name in s_list:
+                                if not s_name.strip(): continue
+                                clean_name = s_name.split(' (')[0] if ' (' in s_name else s_name
+                                db.add(HistoricalItemService(
+                                    historical_item_id=item.historical_item_id,
+                                    service_name=clean_name.strip(),
+                                    service_type=s_type,
+                                    price=0.0
+                                ))
+                        
+                        _add_svcs(item_payload.get("base_services"), 'base')
+                        _add_svcs(item_payload.get("addon_services"), 'addon')
+
+    for field, value in corrections.items():
+        if hasattr(order, field):
+            setattr(order, field, value)
+    # Recalculate completion_days if dates present
+    if order.date_received and order.claimed_date:
+        try:
+            dr = order.date_received if isinstance(order.date_received, date_type) else datetime.fromisoformat(str(order.date_received)).date()
+            cd = order.claimed_date if isinstance(order.claimed_date, date_type) else datetime.fromisoformat(str(order.claimed_date)).date()
+            order.completion_days = (cd - dr).days
+        except Exception:
+            pass
+    order.sync_status = "synced"
+    db.commit()
+    return {"status": "success", "historical_order_id": historical_order_id}
+
+
+# ------------------------------------------------------------------
+# POST /api/historical/bulk-import — Bulk JSON import from AI extraction
+# ------------------------------------------------------------------
+@app.post("/api/historical/bulk-import")
+async def bulk_import_historical(
+    payload: List[Dict[str, Any]] = Body(...),
+    db: Session = Depends(get_db),
+):
+    from datetime import date as date_type
+    BUSINESS_START = date_type(2025, 8, 15)
+    BUSINESS_END = date_type(2026, 1, 31)
+    inserted, skipped, errors = 0, 0, []
+
+    def _parse_date(val):
+        if not val: return None
+        if isinstance(val, date_type): return val
+        try: return datetime.fromisoformat(str(val).strip()).date()
+        except: return None
+
+    for idx, record in enumerate(payload):
+        try:
+            order_date = _parse_date(record.get("date_received") or record.get("order_date"))
+            expected_release = _parse_date(record.get("original_estimated_release_date"))
+            claimed = _parse_date(record.get("claimed_date"))
+            completed = _parse_date(record.get("completed_date") or record.get("actual_completion_date"))
+
+            if order_date and (order_date < BUSINESS_START or order_date > BUSINESS_END):
+                errors.append({"index": idx, "order_id": record.get("order_id"), "error": f"Date {order_date} outside valid range."})
+                skipped += 1; continue
+
+            claimed_date_source = "actual"
+
+            completion_days = None
+            if claimed and order_date:
+                completion_days = (claimed - order_date).days
+            if completion_days is not None and completion_days < 0:
+                errors.append({"index": idx, "order_id": record.get("order_id"), "error": "Negative completion days."})
+                completion_days = None
+
+            order_id = str(record.get("order_id") or "")
+            if order_id and db.query(HistoricalOrder).filter(HistoricalOrder.order_id == order_id).first():
+                errors.append({"index": idx, "order_id": order_id, "error": "Duplicate order_id."})
+                skipped += 1; continue
+
+            new_order = HistoricalOrder(
+                order_id=order_id or f"IMPORT-{datetime.now().strftime('%Y%m%d%H%M%S')}-{idx}",
+                branch=record.get("branch", "Villamor"),
+                date_received=order_date,
+                original_estimated_release_date=expected_release,
+                claimed_date=claimed,
+                completion_days=completion_days,
+                grand_total=float(record.get("grand_total") or record.get("total") or 0),
+                downpayment=float(record.get("downpayment") or record.get("amount_paid") or 0),
+                total_pairs=int(record.get("total_pairs") or record.get("number_of_pairs") or 1),
+                priority=str(record.get("priority") or "regular").lower(),
+                payment_method=record.get("payment_method"),
+                sync_status="pending",
+                status="completed",
+                audit_trail=[{"timestamp": str(datetime.now()), "action": "bulk_import", "claimed_date_source": claimed_date_source}],
+            )
+            db.add(new_order); db.flush()
+
+            cust = record.get("customer") or {}
+            if isinstance(cust, str): cust = {"name": cust}
+            cust_name = cust.get("name") or record.get("customer_name", "")
+            if cust_name:
+                db.add(HistoricalCustomer(
+                    historical_order_id=new_order.historical_order_id,
+                    name=cust_name,
+                    contact_number=cust.get("contact") or cust.get("contact_number") or record.get("contact_number", ""),
+                ))
+
+            for shoe in (record.get("shoes") or record.get("items") or record.get("pairs") or []):
+                if isinstance(shoe, str): continue
+                item = HistoricalItem(
+                    historical_order_id=new_order.historical_order_id,
+                    brand=shoe.get("brand", ""), model=shoe.get("model", ""),
+                    color=shoe.get("color", ""), size=str(shoe.get("size", "")),
+                    material=shoe.get("material") or shoe.get("shoe_type", ""),
+                    priority=str(shoe.get("priority") or record.get("priority") or "regular").lower(),
+                    remarks=shoe.get("remarks", ""),
+                )
+                db.add(item); db.flush()
+                for svc in (shoe.get("services") or []):
+                    db.add(HistoricalItemService(
+                        historical_item_id=item.historical_item_id,
+                        service_name=svc if isinstance(svc, str) else svc.get("service_name", ""),
+                        service_type="base" if isinstance(svc, str) else svc.get("service_type", "base"),
+                        price=0 if isinstance(svc, str) else float(svc.get("price", 0)),
+                    ))
+            inserted += 1
+        except Exception as e:
+            errors.append({"index": idx, "order_id": record.get("order_id"), "error": str(e)})
+            skipped += 1
+
+    db.commit()
+    return {"status": "success", "inserted": inserted, "skipped": skipped, "errors": errors}
 
 
 # ------------------------------------------------------------------

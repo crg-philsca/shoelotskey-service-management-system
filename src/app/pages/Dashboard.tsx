@@ -460,14 +460,14 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
 
     if (profitRange === 'Daily') {
       const hours = Array.from({ length: 24 }, (_, i) => i);
-      return hours
-        .map(hour => {
+      const dailyData = hours.map(hour => {
           const periodStart = new Date(now);
           periodStart.setHours(hour, 0, 0, 0);
           const periodEnd = new Date(now);
           periodEnd.setHours(hour + 1, 0, 0, 0);
 
           return {
+            hourIndex: hour,
             period: `${hour}:00`,
             newOrders: source.filter(order => {
               if (!order?.createdAt) return false;
@@ -480,8 +480,15 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
               return releaseTime >= periodStart && releaseTime < periodEnd;
             }).length,
           };
-        })
-        .filter((_, i) => i >= 8 && i <= 21);
+        });
+
+      // Default to 9:00 AM (9) to 9:00 PM (21), but dynamically expand if transactions exist outside these hours.
+      const startHour = Math.min(9, dailyData.reduce((min, d) => (d.newOrders > 0 || d.releasedOrders > 0) ? Math.min(min, d.hourIndex) : min, 9));
+      const endHour = Math.max(21, dailyData.reduce((max, d) => (d.newOrders > 0 || d.releasedOrders > 0) ? Math.max(max, d.hourIndex) : max, 21));
+
+      return dailyData
+        .filter(data => data.hourIndex >= startHour && data.hourIndex <= endHour)
+        .map(({ hourIndex, ...rest }) => rest);
     }
 
     if (profitRange === 'Weekly') {
@@ -616,8 +623,8 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
   }
 
   return (
-    <div className="dashboard-root-container min-h-screen bg-gray-50/30">
-      <div className="space-y-6 animate-in fade-in duration-700 p-4 sm:p-6 lg:p-8">
+    <div className="dashboard-root-container">
+      <div className="space-y-6 animate-in fade-in duration-700">
         <div className="space-y-4">
           {refreshing && (
             <div className="flex items-center gap-2 px-1 mb-2">
@@ -966,26 +973,27 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                     return (
                       <>
                         <div className="overflow-x-auto -mx-4 px-4 overflow-y-hidden no-scrollbar">
-                          <table className="w-full min-w-[700px]">
-                            <thead className="bg-red-50">
+                          <table className="w-full text-sm min-w-[700px]">
+                            <thead className="bg-red-50/50 border-b border-red-100">
                               <tr>
-                                <th className="px-3 py-3 text-center text-[10px] md:text-xs font-bold text-gray-600 uppercase">Order #</th>
-                                <th className="px-3 py-3 text-center text-[10px] md:text-xs font-bold text-gray-600 uppercase">Customer Name</th>
-                                <th className="px-3 py-3 text-center text-[10px] md:text-xs font-bold text-gray-600 uppercase">Service Type</th>
-                                <th className="px-3 py-3 text-center text-[10px] md:text-xs font-bold text-gray-600 uppercase">Total Qty</th>
-                                <th className="px-3 py-3 text-center text-[10px] md:text-xs font-bold text-gray-600 uppercase">Order Date</th>
-                                <th className="px-3 py-3 text-center text-[10px] md:text-xs font-bold text-gray-600 uppercase">Release Date</th>
-                                <th className="px-3 py-3 text-center text-[10px] md:text-xs font-bold text-gray-600 uppercase">Priority Level</th>
-                                {selectedStatus === 'claimed' && <th className="px-3 py-3 text-center text-[10px] md:text-xs font-bold text-gray-600 uppercase hidden md:table-cell">Claimed Date</th>}
-                                {selectedStatus === 'claimed' && <th className="px-3 py-3 text-center text-[10px] md:text-xs font-bold text-gray-600 uppercase hidden md:table-cell">Claimed By</th>}
-                                <th className="px-3 py-3 text-center text-[10px] md:text-xs font-bold text-gray-600 uppercase hidden md:table-cell">Processed By</th>
-                                <th className="px-3 py-3 text-center text-[10px] md:text-xs font-bold text-gray-600 uppercase">Actions</th>
+                                <th className="h-10 px-4 text-left font-black text-gray-700 uppercase tracking-widest text-[11px]">Order #</th>
+                                <th className="h-10 px-4 text-left font-black text-gray-700 uppercase tracking-widest text-[11px]">Customer</th>
+                                <th className="h-10 px-4 text-left font-black text-gray-700 uppercase tracking-widest text-[11px]">Services</th>
+                                <th className="h-10 px-4 text-left font-black text-gray-700 uppercase tracking-widest text-[11px]">QTY</th>
+                                <th className="h-10 px-4 text-center font-black text-gray-700 uppercase tracking-widest text-[11px]">Order Date</th>
+                                <th className="h-10 px-4 text-center font-black text-gray-700 uppercase tracking-widest text-[11px]">
+                                  {selectedStatus === 'for-release' ? 'Release Date' : selectedStatus === 'claimed' ? 'Claimed Date' : 'Predicted Date'}
+                                </th>
+                                <th className="h-10 px-4 text-left font-black text-gray-700 uppercase tracking-widest text-[11px]">Priority</th>
+                                <th className="h-10 px-4 text-left font-black text-gray-700 uppercase tracking-widest text-[11px]">Payment</th>
+                                <th className="h-10 px-4 text-right font-black text-gray-700 uppercase tracking-widest text-[11px] hidden md:table-cell">Total</th>
+                                <th className="h-10 px-4 text-center font-black text-gray-700 uppercase tracking-widest text-[11px]">Actions</th>
                               </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-200">
+                            <tbody className="divide-y divide-gray-100">
                               {paginatedOrders.length === 0 ? (
                                 <tr>
-                                  <td colSpan={selectedStatus === 'claimed' ? 11 : 9} className="px-6 py-20 text-center">
+                                  <td colSpan={10} className="px-6 py-20 text-center">
                                     <div className="flex flex-col items-center justify-center space-y-3 opacity-40">
                                       <ClipboardCheck size={48} className="text-gray-300" />
                                       <p className="text-sm font-black text-gray-400 uppercase tracking-[0.2em]">
@@ -1007,40 +1015,55 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                 paginatedOrders.map((order) => (
                                   <tr
                                     key={order.id}
-                                    className="hover:bg-gray-50 cursor-pointer transition-colors"
+                                    className="border-b border-gray-100 hover:bg-gray-50/80 transition-all cursor-pointer"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       if (order) setSelectedOrder({...order});
                                       setIsEditing(false);
                                     }}
                                   >
-                                    <td className="px-3 py-3 text-xs font-medium text-center whitespace-nowrap">{order.orderNumber}</td>
-                                    <td className="px-3 py-3 text-xs text-center">
-                                      <div className="inline-block text-left w-full max-w-[150px]">
-                                        {order.customerName || '-'}
-                                      </div>
+                                    <td className="p-4 text-xs font-medium whitespace-nowrap">{order.orderNumber}</td>
+                                    <td className="p-4 pr-8">
+                                      <div className="text-xs font-bold text-gray-900 leading-tight max-w-[160px] text-wrap break-words">{order.customerName || '-'}</div>
+                                      <div className="text-xs text-gray-500 mt-1 whitespace-nowrap">{order.contactNumber || ''}</div>
                                     </td>
-                                    <td className="px-3 py-3 text-xs text-center">
+                                    <td className="p-4 text-xs text-gray-600">
                                       {Array.isArray(order.baseService)
-                                        ? order.baseService.map(s => String(s || '').replace(' (with basic cleaning)', '')).join(', ')
-                                        : String(order.baseService || '-').replace(' (with basic cleaning)', '')}
+                                        ? order.baseService.map((s, i) => (
+                                          <div key={i}>{String(s || '').replace(' (with basic cleaning)', '')}{i < order.baseService.length - 1 ? ',' : ''}</div>
+                                        ))
+                                        : <div>{String(order.baseService || '-').replace(' (with basic cleaning)', '')}</div>}
                                     </td>
-                                    <td className="px-3 py-3 text-xs text-center text-gray-700">{order.quantity || 1} {(order.quantity || 1) === 1 ? 'Pair' : 'Pairs'}</td>
-                                    <td className="px-3 py-3 text-xs text-center">
+                                    <td className="p-4 text-xs font-medium text-gray-700">{order.quantity || 1} PR</td>
+                                    <td className="p-4 text-center text-sm font-medium text-gray-700 whitespace-nowrap">
                                       {(() => {
                                         const d = new Date(order.createdAt);
                                         return isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy');
                                       })()}
                                     </td>
-                                    <td className="px-3 py-3 text-xs text-center">
-                                       {(() => {
-                                         if (!order.predictedCompletionDate) return '-';
-                                         const d = new Date(order.predictedCompletionDate);
-                                         return isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy');
-                                       })()}
+                                    <td className="p-4 text-center text-sm font-medium text-gray-700 whitespace-nowrap">
+                                        {(() => {
+                                          if (selectedStatus === 'claimed') {
+                                            const claimDate = order.actualCompletionDate || ((order as any).statusHistory?.find((s: any) => s.status === 'claimed')?.timestamp);
+                                            if (!claimDate) return '-';
+                                            const d = new Date(claimDate);
+                                            const formattedDate = isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy');
+                                            return (
+                                              <div className="flex flex-col">
+                                                <span>{formattedDate}</span>
+                                                <span className="text-[10px] text-gray-400 font-medium tracking-wider mt-0.5 whitespace-nowrap truncate max-w-[120px]" title={order.claimedBy || order.customerName || '-'}>
+                                                  by {order.claimedBy || order.customerName || '-'}
+                                                </span>
+                                              </div>
+                                            );
+                                          }
+                                          if (!order.predictedCompletionDate) return '-';
+                                          const d = new Date(order.predictedCompletionDate);
+                                          return isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy');
+                                        })()}
                                     </td>
-                                    <td className="px-3 py-3 text-xs text-center">
-                                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase border whitespace-nowrap
+                                    <td className="p-4">
+                                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase border whitespace-nowrap
                                              ${order.priorityLevel === 'rush' ? 'bg-red-50 text-red-700 border-red-100' :
                                           order.priorityLevel === 'premium' ? 'bg-amber-50 text-amber-700 border-amber-100' :
                                             'bg-emerald-50 text-emerald-700 border-emerald-100'
@@ -1048,25 +1071,39 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                         {order.priorityLevel}
                                       </span>
                                     </td>
-                                     {selectedStatus === 'claimed' && (
-                                       <td className="px-3 py-3 text-xs text-center hidden md:table-cell">
-                                         {(() => {
-                                           const claimDate = order.actualCompletionDate || ((order as any).statusHistory?.find((s: any) => s.status === 'claimed')?.timestamp);
-                                           if (!claimDate) return '-';
-                                           const d = new Date(claimDate);
-                                           return isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy');
-                                         })()}
-                                       </td>
-                                     )}
-                                    {selectedStatus === 'claimed' && <td className="px-3 py-3 text-xs text-center hidden md:table-cell">{order.claimedBy || order.customerName || '-'}</td>}
-                                    <td className="px-3 py-3 text-center text-xs hidden md:table-cell">{order.processedBy || '-'}</td>
-                                    <td className="px-3 py-3 text-xs text-center" onClick={(e) => e.stopPropagation()}>
+                                    <td className="p-4">
+                                      <div className="flex flex-col">
+                                        <span className={`text-xs font-bold tracking-wider whitespace-nowrap ${order.paymentStatus === 'fully-paid' ? 'text-green-600' :
+                                            order.paymentStatus === 'downpayment' ? 'text-yellow-600' : 'text-red-600'
+                                            }`}>
+                                            {order.paymentStatus === 'fully-paid' ? 'FULLY PAID' : order.paymentStatus === 'downpayment' ? 'DOWNPAYMENT' : order.paymentStatus ? order.paymentStatus.toUpperCase() : '-'}
+                                        </span>
+                                        {order.paymentMethod && (
+                                            <>
+                                                <span className="text-[9px] text-gray-400 font-medium uppercase tracking-wider mt-0.5 whitespace-nowrap">
+                                                  {order.paymentMethod}
+                                                </span>
+                                                {order.paymentStatus === 'downpayment' && (
+                                                  <span className="text-[10px] text-red-500 font-medium tracking-wider mt-0.5 whitespace-nowrap">
+                                                    BAL: {'\u20B1'}{(order.grandTotal - (order.amountReceived || 0)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                                  </span>
+                                                )}
+                                            </>
+                                        )}
+                                      </div>
+                                    </td>
+                                    <td className="p-4 text-right hidden md:table-cell">
+                                      <div className="flex flex-col items-end">
+                                        <span className="font-medium text-gray-900">{'\u20B1'}{(order.grandTotal || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                      </div>
+                                    </td>
+                                    <td className="p-4 text-right" onClick={(e) => e.stopPropagation()}>
                                       <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
-                                          <button className="inline-flex items-center gap-0.5 h-7 px-1 text-xs border border-red-600 text-red-600 rounded bg-red-50 hover:bg-red-100 transition-colors">
-                                            <MoreVertical className="h-3.5 w-3.5" />
-                                            <ChevronDown className="h-3.5 w-3.5" />
-                                          </button>
+                                          <Button variant="outline" className="h-7 px-2 border-red-200 text-red-700 bg-red-50 hover:bg-red-100 font-black text-xs gap-1 rounded-md">
+                                            <MoreVertical className="h-3.5 w-3.5 text-red-500" />
+                                            <ChevronDown className="h-3 w-3 opacity-50" />
+                                          </Button>
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end" className="w-56 p-2 space-y-1">
                                           {order.status === 'new-order' && (
@@ -1247,8 +1284,23 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
           />
 
           {/* Other Modals */}
-          <EditOrderModal order={selectedOrder} open={!!selectedOrder && isEditing} onOpenChange={(open) => !open && setIsEditing(false)} onSave={(id, updates) => { updateOrder(id, updates); setSelectedOrder((prev: any) => prev ? { ...prev, ...updates } : null); setIsEditing(false); }} />
-          <StockUpdateModal order={selectedOrder} open={!!selectedOrder && isUpdatingStock} onOpenChange={(open) => !open && setIsUpdatingStock(false)} onSave={(id, updates) => { updateOrder(id, updates); setSelectedOrder((prev: any) => prev ? { ...prev, ...updates } : null); setIsUpdatingStock(false); }} />
+          <EditOrderModal order={selectedOrder} open={!!selectedOrder && isEditing} onOpenChange={(open) => !open && setIsEditing(false)} onSave={(id, updates) => { updateOrder(id, updates); setSelectedOrder((prev: any) => prev ? { ...prev, ...updates } : null); setIsEditing(false); }} user={user} />
+          <StockUpdateModal
+            order={selectedOrder}
+            open={!!selectedOrder && isUpdatingStock}
+            onOpenChange={(open) => !open && setIsUpdatingStock(false)}
+            onSilentSave={(id, updates) => {
+              // Background sync — does NOT close the modal
+              updateOrder(id, updates);
+              setSelectedOrder((prev: any) => prev ? { ...prev, ...updates } : null);
+            }}
+            onSave={(id, updates) => {
+              // Final save — closes the modal
+              updateOrder(id, updates);
+              setSelectedOrder((prev: any) => prev ? { ...prev, ...updates } : null);
+              setIsUpdatingStock(false);
+            }}
+          />
           <ProcessClaimModal order={processClaimOrder} open={!!processClaimOrder} onOpenChange={(open) => !open && setProcessClaimOrder(null)} onConfirm={(id, data) => { updateOrder(id, data, user.username); }} user={user} />
 
           {!selectedStatus && (
@@ -1329,58 +1381,79 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
 
                 {/* Low Stock Alerts */}
                 <Card className="border-none shadow-md bg-white">
-                  <CardHeader className="flex flex-row items-center justify-between pb-2 border-b border-gray-50 mb-4 py-4 px-6">
+                  <CardHeader className="flex flex-row items-center justify-between border-b border-gray-100 pt-4 !pb-3 px-6">
                     <CardTitle className="text-sm font-black uppercase text-gray-800 flex items-center gap-2">
-                       <Package size={18} className="text-red-500" /> Stock Status Alerts
+                       <Package size={16} className="text-red-500" /> Stock Status Alerts
                     </CardTitle>
                     <Badge className="bg-red-50 text-red-600 border-red-100 uppercase text-[9px] font-black shadow-sm">{lowStockItems.length} Warnings</Badge>
                   </CardHeader>
-                  <CardContent className="space-y-4 px-6 pb-6">
+                  <CardContent className="px-4 pb-4 pt-2">
                     {lowStockItems.length === 0 ? (
-                      <div className="py-12 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-                         <ClipboardCheck className="mx-auto mb-2 text-emerald-400" size={32} />
+                      <div className="py-8 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                         <ClipboardCheck className="mx-auto mb-2 text-emerald-400" size={28} />
                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">All stock levels normal</p>
                       </div>
                     ) : (
-                      lowStockItems.slice(0, 5).map((item, idx) => (
-                        <div key={idx} className="flex items-center justify-between p-4 rounded-2xl bg-white border border-gray-100 shadow-sm transition-all hover:border-red-200 hover:shadow-md group">
-                          <div className="flex items-center gap-4">
-                            <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-transform group-hover:scale-110 ${item.status === 'Critical' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}>
-                              <AlertTriangle size={24} />
-                            </div>
-                            <div>
-                              <p className="text-xs font-black text-gray-800 uppercase leading-none mb-1.5">{item.name}</p>
+                      <div className={`flex flex-col gap-2 ${lowStockItems.length > 2 ? 'max-h-[168px] overflow-y-auto pr-1 custom-scrollbar' : ''}`}>
+                      {lowStockItems.map((item, idx) => {
+                        const pres = getInventoryPresentation(item);
+                        const isCritical = Number(item.stock || 0) <= 0;
+                        const barColor = isCritical ? 'bg-red-500' : pres.percentageRemaining > 50 ? 'bg-emerald-400' : 'bg-amber-400';
+                        const textColor = isCritical ? 'text-red-600' : 'text-amber-600';
+
+                        return (
+                          <div key={idx} className="flex flex-col gap-2 px-3 py-3 rounded-xl bg-white border border-gray-100 shadow-sm hover:border-red-200 transition-all">
+                            {/* Name + badge + % remaining */}
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5">
+                                <AlertTriangle size={13} className={isCritical ? 'text-red-500' : 'text-amber-500'} />
+                                <span className="text-xs font-black text-gray-800 uppercase tracking-wide leading-none">{item.name}</span>
+                              </div>
                               <div className="flex items-center gap-2">
-                                <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest bg-gray-100 px-1.5 py-0.5 rounded">{item.category}</span>
-                                {(() => {
-                                  const displayStock = `${item.stock} ${item.unit}`;
-                                  return (
-                                    <span className="text-[9px] font-bold text-gray-400 italic">Qty: {displayStock}</span>
-                                  );
-                                })()}
+                                {pres.isPackaged && (
+                                  <span className={`text-[11px] font-black ${textColor}`}>
+                                    {pres.percentageRemaining}% remaining
+                                  </span>
+                                )}
+                                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded tracking-wider ${isCritical ? 'bg-red-600 text-white' : 'bg-amber-500 text-white'}`}>
+                                  {isCritical ? 'No Stock' : 'Low Stock'}
+                                </span>
                               </div>
                             </div>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-sm font-black text-gray-900 mb-1">
-                              {(() => {
-                                const pres = getInventoryPresentation(item);
-                                return pres.isPackaged 
-                                  ? `${pres.currentQuantityLabel} (${pres.containersLabel})` 
-                                  : pres.currentQuantityLabel;
-                              })()}
-                            </p>
-                            {(() => {
-                              const isCritical = Number(item.stock || 0) <= 0;
-                              return (
-                                <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full shadow-sm ${isCritical ? 'bg-red-600 text-white' : 'bg-amber-500 text-white'}`}>
-                                  {isCritical ? 'Critical' : 'Low Stock'}
+
+                            {/* Stock + Package inline */}
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Current Stock</span>
+                                <span className="text-sm font-bold text-gray-900">{pres.currentQuantityLabel}</span>
+                              </div>
+                              {pres.isPackaged && (
+                                <div className="flex flex-col gap-0.5 text-right">
+                                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Package</span>
+                                  <span className="text-xs font-bold text-gray-600">1 {pres.packageLabel}</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Progress bar */}
+                            <div className="space-y-0.5">
+                              <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full transition-all ${barColor}`}
+                                  style={{ width: `${Math.min(pres.isPackaged ? pres.progressBarValue : 0, 100)}%` }}
+                                />
+                              </div>
+                              {!pres.isPackaged && (
+                                <span className={`text-[9px] font-bold ${textColor}`}>
+                                  {pres.currentQuantityLabel}
                                 </span>
-                              );
-                            })()}
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      ))
+                        );
+                      })
+                      }
+                      </div>
                     )}
                   </CardContent>
                 </Card>

@@ -24,6 +24,9 @@ const hashPassword = async (password: string): Promise<string> => {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 };
 
+// Offline cache login — populated after a successful online session.
+
+
 export default function Login({ onLogin }: LoginProps) {
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
@@ -37,12 +40,22 @@ export default function Login({ onLogin }: LoginProps) {
     if (msg) {
       sessionStorage.removeItem('logout_message');
       const parts = msg.split('|');
+      toast.dismiss();
       if (parts[0] === 'success') {
-        setTimeout(() => toast.success(parts[1] || 'Logged out successfully!', { duration: 6500 }), 100);
+        setTimeout(() => {
+          toast.dismiss();
+          toast.success(parts[1] || 'Logged out successfully!', { duration: 4000 });
+        }, 50);
       } else if (parts[0] === 'error') {
-        setTimeout(() => toast.error(parts[1] || 'Your session has been closed.', { duration: 7000 }), 100);
+        setTimeout(() => {
+          toast.dismiss();
+          toast.error(parts[1] || 'Your session has been closed.', { duration: 5000 });
+        }, 50);
       } else {
-        setTimeout(() => toast.error(msg, { duration: 7000 }), 100);
+        setTimeout(() => {
+          toast.dismiss();
+          toast.error(msg, { duration: 5000 });
+        }, 50);
       }
     }
   }, []);
@@ -55,18 +68,19 @@ export default function Login({ onLogin }: LoginProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // DEBUG: Log start of attempt for programmer visibility
-    console.log('[AUTH_DEBUG] Login attempt initiated:', { username, timestamp: new Date().toISOString() });
     setIsLoading(true);
 
     // Helper to attempt offline login from cache
     const tryOfflineLogin = async () => {
+      const user = username.trim().toLowerCase();
+
+      // 1. Try the localStorage cache (populated after a successful online login)
       const offlineAuth = localStorage.getItem('shoelotskey_offline_auth');
       if (offlineAuth) {
         try {
           const parsed = JSON.parse(offlineAuth);
           const passwordHash = await hashPassword(password);
-          if (parsed.username.toLowerCase() === username.trim().toLowerCase() && parsed._key === passwordHash) {
+          if (parsed.username.toLowerCase() === user && parsed._key === passwordHash) {
             toast.success(`Offline login successful! Operating from local cache.`);
             onLogin(parsed.user_id, parsed.username, parsed.role, parsed.access_token || '', rememberMe);
             return true;
@@ -75,8 +89,10 @@ export default function Login({ onLogin }: LoginProps) {
           console.warn('[AUTH_OFFLINE] Error reading offline cache:', e);
         }
       }
+
       return false;
     };
+
 
     try {
       // 1. INPUT VALIDATION (Local Responsibility)
@@ -89,9 +105,8 @@ export default function Login({ onLogin }: LoginProps) {
       }
 
       // 2. BACKEND COMMUNICATION WITH TIMEOUT RESILIENCE
-      console.log('[AUTH_DEBUG] Sending credentials to backend...');
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout
       
       const response = await fetch(`${API_BASE}/login`, {
         method: 'POST',
@@ -102,13 +117,11 @@ export default function Login({ onLogin }: LoginProps) {
       clearTimeout(timeoutId);
 
       // 3. RESPONSE HANDLING
-      console.log('[AUTH_DEBUG] Backend responded with status:', response.status);
-
       if (response.ok) {
         // SUCCESS: Parse user session data
         const data = await response.json();
-        console.log('[AUTH_DEBUG] Auth Success. Payload:', data);
 
+        toast.dismiss();
         toast.success(`Welcome back, ${data.username}!`);
         
         // Always securely cache hashed credentials for offline fallback & network loss during shifts

@@ -34,6 +34,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [isRestockOpen, setIsRestockOpen] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState<InventoryItem | null>(null);
     
     // Filter State
     const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -164,29 +165,9 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
         if (editingItem) {
             const updated = { ...editingItem, ...saveItemPayload };
             updateItem(updated);
-            addActivity({
-                type: 'inventory',
-                module: 'Inventory',
-                table: 'Inventory',
-                recordId: editingItem.id,
-                oldValues: editingItem,
-                newValues: updated,
-                user: 'Owner',
-                action: 'Update Inventory',
-                details: `Updated details for ${formData.name}`
-            });
             toast.success(`Successfully updated ${formData.name}`);
         } else {
             addItem(saveItemPayload);
-            addActivity({
-                type: 'inventory',
-                module: 'Inventory',
-                table: 'Inventory',
-                newValues: saveItemPayload,
-                user: 'Owner',
-                action: 'Create Inventory',
-                details: `Added new item: ${formData.name}`
-            });
             toast.success(`Successfully added ${formData.name}`);
         }
         setEditingItem(null);
@@ -195,19 +176,16 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
  
     const handleDeleteItem = (id: number) => {
         const item = inventoryData.find((d) => d.id === id);
-        if (confirm(`Are you sure you want to delete ${item?.name}?`)) {
-            deleteItem(id);
-            addActivity({
-                type: 'inventory',
-                module: 'Inventory',
-                table: 'Inventory',
-                recordId: id,
-                oldValues: item,
-                user: 'Owner',
-                action: 'Delete Inventory',
-                details: `Removed ${item?.name} from inventory`
-            });
-            toast.success(`Successfully removed ${item?.name}`);
+        if (item) {
+            setDeleteTarget(item);
+        }
+    };
+
+    const confirmDeleteItem = () => {
+        if (deleteTarget) {
+            deleteItem(deleteTarget.id);
+            toast.success(`Successfully removed ${deleteTarget.name}`);
+            setDeleteTarget(null);
         }
     };
  
@@ -249,7 +227,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
         const threshold = (item.low_stock_threshold && item.low_stock_threshold > 0)
             ? item.low_stock_threshold
             : ((item.package_size && item.package_size > 0) ? item.package_size : 1);
-        const status = qty <= 0 ? 'Critical' : (qty <= threshold ? 'Low Stock' : 'In Stock');
+        const status = qty <= 0 ? 'No Stock' : (qty <= threshold ? 'Low Stock' : 'In Stock');
 
         const matchesSearch = 
             name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -275,7 +253,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
     };
 
     const categories = Array.from(new Set(inventoryData.map(item => item.category))) as string[];
-    const statuses = ['In Stock', 'Low Stock', 'Critical'];
+    const statuses = ['In Stock', 'Low Stock', 'No Stock'];
 
     return (
         <div className="space-y-6 animate-in fade-in duration-700">
@@ -453,7 +431,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                             <thead className="bg-red-50 border-y border-red-100">
                                 <tr>
                                     <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-800 uppercase tracking-widest">Item Name</th>
-                                    <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-800 uppercase tracking-widest">Category</th>
+                                    <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-800 uppercase tracking-widest">Package</th>
                                     <th className="px-6 py-4 text-right text-[11px] font-bold text-slate-800 uppercase tracking-widest">Unit Price</th>
                                     <th className="px-6 py-4 text-right text-[11px] font-bold text-slate-800 uppercase tracking-widest">Stock Level</th>
                                     <th className="px-6 py-4 text-center text-[11px] font-bold text-slate-800 uppercase tracking-widest">Stock Status</th>
@@ -472,13 +450,58 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                             <p className="text-sm font-bold text-gray-900 leading-none">{item.name}</p>
                                             <p className="text-[10px] text-gray-400 mt-1 uppercase font-semibold">ID: INV-{item.id.toString().padStart(4, '0')}</p>
                                         </td>
-                                        <td className="px-6 py-4 text-xs font-bold text-gray-600 uppercase">{item.category}</td>
+                                        <td className="px-6 py-4">
+                                            {(() => {
+                                                const pres = getInventoryPresentation(item);
+                                                return pres.isPackaged ? (
+                                                    <div className="flex flex-col gap-0.5">
+                                                        <span className="text-xs font-bold text-gray-800">{pres.packageLabel.split(' (')[0]}</span>
+                                                        <span className="text-[10px] text-gray-400 font-semibold">{item.package_size?.toLocaleString()} {item.unit}</span>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-xs font-bold text-gray-600 uppercase">{item.category}</span>
+                                                );
+                                            })()}
+                                        </td>
                                         <td className="px-6 py-4 text-right font-black text-xs text-gray-900">₱{(item.price || 0).toLocaleString()}</td>
                                         <td className="px-6 py-4 text-right">
-                                            <div className="flex items-center justify-end gap-1.5">
-                                                <span className="text-sm font-black text-gray-900">{(item.stock || 0).toLocaleString()}</span>
-                                                <span className="text-[10px] font-extrabold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded uppercase">{item.unit || ''}</span>
-                                            </div>
+                                            {(() => {
+                                                const pres = getInventoryPresentation(item);
+                                                const isLow = pres.stockStatus === 'Low Stock';
+                                                const isCrit = pres.stockStatus === 'No Stock';
+                                                const equivalentColor = isCrit
+                                                    ? 'text-red-600'
+                                                    : isLow
+                                                    ? 'text-amber-600'
+                                                    : pres.percentageRemaining > 75
+                                                    ? 'text-emerald-600'
+                                                    : 'text-gray-500';
+                                                const barColor = isCrit ? 'bg-red-500' : isLow ? 'bg-amber-400' : 'bg-emerald-400';
+                                                return (
+                                                    <div className="flex flex-col items-end gap-1.5">
+                                                        {/* Primary: raw stock */}
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="text-sm font-black text-gray-900">{(item.stock || 0).toLocaleString()}</span>
+                                                            <span className="text-[10px] font-extrabold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded uppercase">{item.unit || ''}</span>
+                                                        </div>
+                                                        {pres.isPackaged && (
+                                                            <>
+                                                                {/* Equivalent line */}
+                                                                <span className={`text-[10px] font-bold leading-tight text-right ${equivalentColor}`}>
+                                                                    {pres.equivalentLabel}
+                                                                </span>
+                                                                {/* Mini progress bar */}
+                                                                <div className="w-24 bg-gray-100 rounded-full h-1 overflow-hidden">
+                                                                    <div
+                                                                        className={`h-full rounded-full ${barColor}`}
+                                                                        style={{ width: `${Math.min(pres.progressBarValue, 100)}%` }}
+                                                                    />
+                                                                </div>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })()}
                                         </td>
                                         <td className="px-6 py-4 text-center">
                                             {(() => {
@@ -488,7 +511,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                                     <Badge className={`
                                                         ${status === 'In Stock' ? 'bg-blue-50 text-blue-700 border-blue-100' : ''}
                                                         ${status === 'Low Stock' ? 'bg-amber-50 text-amber-700 border-amber-100' : ''}
-                                                        ${status === 'Critical' ? 'bg-red-50 text-red-700 border-red-100' : ''}
+                                                        ${status === 'No Stock' ? 'bg-red-50 text-red-700 border-red-100' : ''}
                                                         text-[10px] font-black uppercase
                                                     `} title={pres.reorderRecommendation}>
                                                         {status}
@@ -588,12 +611,16 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                             </Button>
                         </div>
                     </div>
+                    <div className="hidden print:block mt-8 text-center border-t border-gray-200 pt-4">
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.3em]">End of Automated Report</p>
+                        <p className="text-[9px] text-gray-300 mt-1">Generated by Shoelotskey SMS v2.0 • {new Date().toLocaleString('en-PH')}</p>
+                    </div>
                 </CardContent>
             </Card>
             <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
                 <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
-                        <DialogTitle className="text-[12px] font-black uppercase tracking-widest text-center">
+                        <DialogTitle className="text-xl font-bold uppercase text-red-600 text-center">
                             {editingItem ? 'Edit Inventory Item' : 'New Inventory Item'}
                         </DialogTitle>
                     </DialogHeader>
@@ -687,110 +714,204 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                 )}
                             </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase text-gray-400">
-                                    Number of Packages {formData.packageUnit ? `(${formData.packageUnit}s)` : ''}
-                                </label>
-                                <Input 
-                                    className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs" 
-                                    type="number" 
-                                    step="any"
-                                    min="0"
-                                    placeholder="e.g. 12" 
-                                    value={formData.packageQty || ''}
-                                    onChange={(e) => {
-                                        const val = e.target.value;
-                                        const pkgQty = val === '' ? 0 : Math.max(0, parseFloat(val) || 0);
-                                        const calcStock = Number((pkgQty * (formData.packageSize || 0)).toFixed(2));
-                                        setFormData((prev: any) => ({ ...prev, packageQty: pkgQty, stock: calcStock }));
-                                    }}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <div className="flex items-center justify-between">
+                        {editingItem ? (
+                            <>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase text-gray-400">Current Stock</label>
+                                        <div className="h-9 rounded-lg border border-gray-200 bg-gray-50 px-3 text-xs flex items-center justify-between font-bold text-gray-700 select-none">
+                                            <span>{(Number(formData.stock) || 0).toLocaleString()}</span>
+                                            <span className="text-[10px] text-gray-400 uppercase font-black">{formData.unit || 'mL'}</span>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-[10px] font-black uppercase text-gray-400">
+                                                Package Size ({formData.unit || 'mL'})
+                                            </label>
+                                            <select
+                                                value={formData.unit || 'mL'}
+                                                onChange={(e) => setFormData((prev: any) => ({ ...prev, unit: e.target.value }))}
+                                                className="text-[9px] font-black text-red-600 uppercase bg-transparent border-none p-0 focus:outline-none cursor-pointer hover:underline"
+                                            >
+                                                <option value="mL">mL</option>
+                                                <option value="g">g</option>
+                                                <option value="L">L</option>
+                                                <option value="fl oz">fl oz</option>
+                                                <option value="pcs">pcs</option>
+                                                <option value="pairs">pairs</option>
+                                            </select>
+                                        </div>
+                                        <Input 
+                                            className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs" 
+                                            type="number" 
+                                            step="any"
+                                            min="0"
+                                            placeholder="e.g. 360" 
+                                            value={formData.packageSize || ''}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                const pkgSize = val === '' ? 0 : Math.max(0, parseFloat(val) || 0);
+                                                setFormData((prev: any) => ({ ...prev, packageSize: pkgSize }));
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase text-gray-400">
+                                            Equivalent Remaining
+                                        </label>
+                                        <div className="h-9 rounded-lg border border-gray-200 bg-gray-50 px-3 text-xs flex items-center font-bold text-gray-700 select-none">
+                                            {formData.packageSize ? getInventoryPresentation(formData).compactLabel : 'N/A'}
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase text-gray-400">Unit Price (₱)</label>
+                                        <Input 
+                                            className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs" 
+                                            type="number" 
+                                            step="any"
+                                            min="0"
+                                            placeholder="0.00" 
+                                            value={formData.price || ''}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                setFormData((prev: any) => ({ ...prev, price: val === '' ? 0 : Math.max(0, parseFloat(val) || 0) }));
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase text-gray-400">
+                                            Initial Packages ({formData.packageUnit ? `${formData.packageUnit}s` : ''})
+                                        </label>
+                                        <Input 
+                                            className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs" 
+                                            type="number" 
+                                            step="any"
+                                            min="0"
+                                            placeholder="e.g. 12" 
+                                            value={formData.packageQty || ''}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                const pkgQty = val === '' ? 0 : Math.max(0, parseFloat(val) || 0);
+                                                const calcStock = Number((pkgQty * (formData.packageSize || 0)).toFixed(2));
+                                                setFormData((prev: any) => ({ ...prev, packageQty: pkgQty, stock: calcStock }));
+                                            }}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-[10px] font-black uppercase text-gray-400">
+                                                Volume per Package ({formData.unit || 'mL'})
+                                            </label>
+                                            <select
+                                                value={formData.unit || 'mL'}
+                                                onChange={(e) => setFormData((prev: any) => ({ ...prev, unit: e.target.value }))}
+                                                className="text-[9px] font-black text-red-600 uppercase bg-transparent border-none p-0 focus:outline-none cursor-pointer hover:underline"
+                                            >
+                                                <option value="mL">mL</option>
+                                                <option value="g">g</option>
+                                                <option value="L">L</option>
+                                                <option value="fl oz">fl oz</option>
+                                                <option value="pcs">pcs</option>
+                                                <option value="pairs">pairs</option>
+                                            </select>
+                                        </div>
+                                        <Input 
+                                            className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs" 
+                                            type="number" 
+                                            step="any"
+                                            min="0"
+                                            placeholder="e.g. 360" 
+                                            value={formData.packageSize || ''}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                const pkgSize = val === '' ? 0 : Math.max(0, parseFloat(val) || 0);
+                                                const calcStock = Number(((formData.packageQty || 0) * pkgSize).toFixed(2));
+                                                setFormData((prev: any) => ({ ...prev, packageSize: pkgSize, stock: calcStock }));
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Calculated Stock & Price */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase text-gray-400">
+                                            Total Stock (Calculated)
+                                        </label>
+                                        <div className="h-9 rounded-lg border border-gray-200 bg-gray-50 px-3 text-xs flex items-center justify-between font-bold text-gray-700 select-none">
+                                            <span>{(Number(formData.stock) || 0).toLocaleString()}</span>
+                                            <span className="text-[10px] text-gray-400 uppercase font-black">{formData.unit || 'mL'}</span>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase text-gray-400">Unit Price (₱)</label>
+                                        <Input 
+                                            className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs" 
+                                            type="number" 
+                                            step="any"
+                                            min="0"
+                                            placeholder="0.00" 
+                                            value={formData.price || ''}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                setFormData((prev: any) => ({ ...prev, price: val === '' ? 0 : Math.max(0, parseFloat(val) || 0) }));
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                            </>
+                        )}
+
+                        {/* Stock Management & Behavior */}
+                        <div className="space-y-3 pt-2">
+                            <h4 className="text-[10px] font-black uppercase text-gray-900 tracking-widest border-b border-gray-100 pb-1">Stock Management</h4>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
                                     <label className="text-[10px] font-black uppercase text-gray-400">
-                                        Volume per Package ({formData.unit || 'mL'})
+                                        Low Stock Threshold
                                     </label>
-                                    <select
-                                        value={formData.unit || 'mL'}
-                                        onChange={(e) => setFormData((prev: any) => ({ ...prev, unit: e.target.value }))}
-                                        className="text-[9px] font-black text-red-600 uppercase bg-transparent border-none p-0 focus:outline-none cursor-pointer hover:underline"
-                                    >
-                                        <option value="mL">mL</option>
-                                        <option value="g">g</option>
-                                        <option value="L">L</option>
-                                        <option value="fl oz">fl oz</option>
-                                        <option value="pcs">pcs</option>
-                                        <option value="pairs">pairs</option>
-                                    </select>
+                                    <div className="relative">
+                                        <Input 
+                                            className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs pr-10" 
+                                            type="number" 
+                                            step="any"
+                                            min="0"
+                                            placeholder="e.g. 1000"
+                                            value={formData.lowStockThreshold || ''}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                setFormData((prev: any) => ({ ...prev, lowStockThreshold: val === '' ? 0 : Math.max(0, parseFloat(val) || 0) }));
+                                            }}
+                                        />
+                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-gray-400 uppercase">{formData.unit || 'mL'}</span>
+                                    </div>
                                 </div>
-                                <Input 
-                                    className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs" 
-                                    type="number" 
-                                    step="any"
-                                    min="0"
-                                    placeholder="e.g. 360" 
-                                    value={formData.packageSize || ''}
-                                    onChange={(e) => {
-                                        const val = e.target.value;
-                                        const pkgSize = val === '' ? 0 : Math.max(0, parseFloat(val) || 0);
-                                        const calcStock = Number(((formData.packageQty || 0) * pkgSize).toFixed(2));
-                                        setFormData((prev: any) => ({ ...prev, packageSize: pkgSize, stock: calcStock }));
-                                    }}
-                                />
+                                {editingItem && (
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase text-gray-400">Current Status</label>
+                                        <div className="h-9 flex items-center">
+                                            {Number(formData.stock) <= Number(formData.lowStockThreshold) ? (
+                                                <span className="text-[10px] font-black uppercase tracking-wider bg-red-100 text-red-700 px-2 py-1 rounded shadow-sm border border-red-200">🔴 Low Stock</span>
+                                            ) : (
+                                                <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-700 px-2 py-1 rounded shadow-sm border border-emerald-200">🟢 In Stock</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
-                        </div>
-
-                        {/* Calculated Stock & Price */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase text-gray-400">
-                                    Total Stock (Calculated)
-                                </label>
-                                <div className="h-9 rounded-lg border border-gray-200 bg-gray-50 px-3 text-xs flex items-center justify-between font-bold text-gray-700 select-none">
-                                    <span>{(Number(formData.stock) || 0).toLocaleString()}</span>
-                                    <span className="text-[10px] text-gray-400 uppercase font-black">{formData.unit || 'mL'}</span>
-                                </div>
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-black uppercase text-gray-400">Unit Price (₱)</label>
-                                <Input 
-                                    className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs" 
-                                    type="number" 
-                                    step="any"
-                                    min="0"
-                                    placeholder="0.00" 
-                                    value={formData.price || ''}
-                                    onChange={(e) => {
-                                        const val = e.target.value;
-                                        setFormData((prev: any) => ({ ...prev, price: val === '' ? 0 : Math.max(0, parseFloat(val) || 0) }));
-                                    }}
-                                />
-                            </div>
-                        </div>
-
-                        {/* Low Stock Alert */}
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase text-gray-400">
-                                Low Stock Alert Level {formData.unit ? `(${formData.unit})` : ''}
-                            </label>
-                            <Input 
-                                className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs" 
-                                type="number" 
-                                step="any"
-                                min="0"
-                                placeholder={`Alert when total stock drops to this level (e.g. 1000 ${formData.unit || 'mL'})`}
-                                value={formData.lowStockThreshold || ''}
-                                onChange={(e) => {
-                                    const val = e.target.value;
-                                    setFormData((prev: any) => ({ ...prev, lowStockThreshold: val === '' ? 0 : Math.max(0, parseFloat(val) || 0) }));
-                                }}
-                            />
                         </div>
 
                         {/* Collapsible/Expandable Consumption Settings */}
-                        <div className="border border-red-100/60 rounded-xl p-3 bg-red-50/20 space-y-3">
+                        <div className="border border-red-100/60 rounded-xl p-3 bg-red-50/20 space-y-3 mt-4">
+                            <h4 className="text-[10px] font-black uppercase text-red-900 tracking-widest border-b border-red-100 pb-1.5 mb-2">Inventory Behavior</h4>
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                     <input 
@@ -913,9 +1034,9 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                             </div>
                         </div>
                     </div>
-                    <div className="flex justify-center gap-3 mt-5">
-                        <Button variant="outline" className="w-40 h-10 text-xs font-black uppercase tracking-widest border-red-100 hover:bg-red-50" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-                        <Button className="w-40 h-10 text-xs font-black uppercase tracking-widest bg-red-600 hover:bg-red-700 text-white" onClick={handleSaveItem}>
+                    <div className="flex gap-3 mt-5 pt-4 border-t border-gray-100">
+                        <Button variant="outline" className="flex-1 h-9 text-xs font-black uppercase tracking-widest border-gray-200 text-gray-700 hover:bg-gray-100" onClick={() => setIsModalOpen(false)}>Cancel</Button>
+                        <Button className="flex-1 h-9 text-xs font-black uppercase tracking-widest bg-red-600 hover:bg-red-700 text-white" onClick={handleSaveItem}>
                             {editingItem ? 'Update' : 'Save'}
                         </Button>
                     </div>
@@ -935,6 +1056,32 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                     handleEditItem(item);
                 }}
             />
+
+            {/* CUSTOM PROFESSIONAL CONFIRMATION MODAL */}
+            {deleteTarget && (
+                <Dialog open onOpenChange={() => setDeleteTarget(null)}>
+                    <DialogContent className="max-w-sm rounded-2xl p-6 shadow-2xl border-0 bg-white">
+                        <DialogHeader>
+                            <DialogTitle className="font-black uppercase text-sm flex items-center gap-2 text-red-700 tracking-wider">
+                                <AlertTriangle className="h-5 w-5 text-red-600 animate-pulse" />
+                                Confirm Inventory Deletion
+                            </DialogTitle>
+                        </DialogHeader>
+                        <p className="text-sm text-gray-700 leading-relaxed py-2">
+                            Are you sure you want to permanently remove <strong className="text-red-700 font-bold">"{deleteTarget.name}"</strong> from physical inventory stock? This action cannot be undone.
+                        </p>
+                        <div className="flex items-center justify-center gap-3 mt-4 pt-4 border-t border-gray-100 w-full">
+                            <Button variant="outline" onClick={() => setDeleteTarget(null)} className="flex-1 h-11 rounded-xl font-bold text-xs uppercase tracking-wider text-gray-600 hover:bg-gray-100 justify-center">
+                                Cancel
+                            </Button>
+                            <Button onClick={confirmDeleteItem} className="flex-1 h-11 bg-red-600 hover:bg-red-700 text-white rounded-xl font-black uppercase text-xs tracking-wider shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-1.5">
+                                <Trash2 className="h-4 w-4" />
+                                Confirm Delete
+                            </Button>
+                        </div>
+                    </DialogContent>
+                </Dialog>
+            )}
         </div>
     );
 }

@@ -396,7 +396,7 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
                           <div className="min-w-0">
                             <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-none mb-0.5">Payment Status</p>
                             <p className={`text-[9px] font-black uppercase tracking-tight ${job.paymentStatus === 'fully-paid' ? 'text-green-600' : 'text-red-500'}`}>
-                              {job.paymentStatus === 'fully-paid' ? 'Fully Paid' : job.paymentStatus === 'downpayment' ? 'Downpayment' : job.paymentStatus.charAt(0).toUpperCase() + job.paymentStatus.slice(1)}
+                              {job.paymentStatus === 'fully-paid' ? 'Fully Paid' : job.paymentStatus === 'downpayment' ? 'Downpayment' : (job.paymentStatus ? job.paymentStatus.charAt(0).toUpperCase() + job.paymentStatus.slice(1) : '-')}
                             </p>
                           </div>
                         </div>

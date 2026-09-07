@@ -7,19 +7,17 @@ import { Package, Plus, Minus, Trash2, CheckCircle2, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import type { JobOrder, InventoryUsed } from '@/app/types';
 import { getInventoryPresentation } from '@/app/lib/inventoryPresentation';
-import { useActivities } from '@/app/context/ActivityContext';
-
 interface StockUpdateModalProps {
     order: JobOrder | null;
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSave: (orderId: string, updates: Partial<JobOrder>) => void;
+    onSilentSave?: (orderId: string, updates: Partial<JobOrder>) => void;
     user?: { username: string; role?: string };
 }
 
-export default function StockUpdateModal({ order, open, onOpenChange, onSave, user }: StockUpdateModalProps) {
+export default function StockUpdateModal({ order, open, onOpenChange, onSave, onSilentSave, user }: StockUpdateModalProps) {
     const { inventoryData, updateStock } = useInventory();
-    const { addActivity } = useActivities();
     const [inventoryUsed, setInventoryUsed] = useState<InventoryUsed[]>([]);
     const [originalUsed, setOriginalUsed] = useState<InventoryUsed[]>([]);
     const [selectedItem, setSelectedItem] = useState<string>('');
@@ -29,8 +27,9 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave, us
 
     useEffect(() => {
         if (order && open) {
-            // [STABILITY] Ensure we have a valid array even if the DB returns a string or object
-            let rawUsed = order.inventoryUsed || [];
+            // [STABILITY] Ensure we have a valid array even if the DB returns a string or object.
+            // Support older schema 'materialsUsed'
+            let rawUsed = order.inventoryUsed || (order as any).materialsUsed || [];
             if (typeof rawUsed === 'string') {
                 try { rawUsed = JSON.parse(rawUsed); } catch (e) { rawUsed = []; }
             }
@@ -80,8 +79,9 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave, us
                 });
                 if (suggested.length > 0) {
                     parsedArray = suggested;
-                    // Immediately sync suggested items to order without deducting stock
-                    onSave(order.id, { inventoryUsed: suggested, inventoryApplied: false });
+                    // Silently sync suggested items to order without closing the modal
+                    const syncFn = onSilentSave || onSave;
+                    syncFn(order.id, { inventoryUsed: suggested, inventoryApplied: false });
                 }
             }
 
@@ -95,10 +95,11 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave, us
         }
     }, [order, open, inventoryData]);
 
-    // [REQUIREMENT 1] Helper to sync changes immediately without deducting inventory when order is on-going/unclaimed
+    // [REQUIREMENT 1] Helper to sync changes immediately without deducting inventory
     const saveImmediately = (newList: InventoryUsed[]) => {
         if (!order || isApplied) return;
-        onSave(order.id, { inventoryUsed: newList, inventoryApplied: false });
+        const syncFn = onSilentSave || onSave;
+        syncFn(order.id, { inventoryUsed: newList, inventoryApplied: false });
     };
 
     const handleAddItem = (itemId: string) => {
@@ -240,24 +241,7 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave, us
                 
                 const delta = newQty - oldQty;
                 if (delta !== 0) {
-                    const invItem = inventoryData.find(i => i.id === itemId);
-                    const oldStock = invItem ? invItem.stock : 0;
-                    const newStock = Math.max(0, oldStock - delta);
-                    const unit = invItem?.unit || newItem?.unit || 'mL';
-                    const staff = user?.username || "Staff";
-
                     updateStock(itemId, delta, orderIdVal);
-
-                    addActivity({
-                        type: 'inventory',
-                        module: 'Inventory',
-                        table: 'Inventory',
-                        recordId: itemId,
-                        user: staff,
-                        role: user?.role || 'Staff',
-                        action: `${invItem?.name || 'Item'}: ${oldStock} → ${newStock} ${unit} (Updated by ${staff})`,
-                        details: `${invItem?.name || 'Item'}: ${oldStock} → ${newStock} ${unit} (Updated by ${staff}) during usage update for Order #${order.orderNumber}`
-                    });
                 }
             });
 
@@ -266,7 +250,7 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave, us
         } else {
             // [REQUIREMENT 1 & 4] Do NOT deduct inventory yet! Save temporary material list for automatic deduction upon claiming.
             onSave(order.id, { inventoryUsed: stampedUsed, inventoryApplied: false });
-            toast.success('Material usage saved! Stock will be deducted automatically upon order claiming.');
+            toast.success('Material consumption saved! Stock will be deducted automatically upon order claiming.');
         }
         onOpenChange(false);
     };
@@ -471,19 +455,15 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave, us
                     </div>
                 </div>
 
-                <DialogFooter className="shrink-0 bg-gray-50 p-5 border-t border-gray-100 flex gap-3 sm:justify-center">
-                    <Button 
-                        variant="ghost" 
-                        onClick={() => onOpenChange(false)} 
-                        className="flex-1 h-11 rounded-xl text-[11px] font-black uppercase tracking-widest text-gray-500 bg-white border border-gray-200 hover:bg-gray-100"
-                    >
+                <DialogFooter className="shrink-0 p-5 bg-gray-50 border-t border-gray-100 mt-auto">
+                    <Button variant="outline" onClick={() => onOpenChange(false)} className="rounded-xl h-12 font-bold text-gray-600 border-gray-200 hover:bg-gray-100 hover:text-gray-900 transition-colors px-6">
                         Cancel
                     </Button>
                     <Button 
                         onClick={handleSaveAndClose}
-                        className="flex-1 h-11 rounded-xl text-[11px] font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-100 active:scale-95 transition-all"
+                        className="rounded-xl h-12 font-black text-white bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-200 transition-all px-8 border-b-4 border-emerald-800 hover:border-emerald-700 active:border-b-0 active:translate-y-1"
                     >
-                        {isApplied ? 'Save & Adjust Stock' : 'Save Usage Record'}
+                        Save Material Consumption
                     </Button>
                 </DialogFooter>
             </DialogContent>

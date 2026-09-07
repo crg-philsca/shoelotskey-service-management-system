@@ -251,7 +251,7 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                                     <th className="h-10 px-4 text-left font-medium text-gray-500">Order #</th>
                                     <th className="h-10 px-4 text-left font-medium text-gray-500">Customer</th>
                                     <th className="h-10 px-4 text-left font-medium text-gray-500">Service</th>
-                                    <th className="h-10 px-4 text-left font-medium text-gray-500">Total Qty</th>
+                                    <th className="h-10 px-4 text-left font-medium text-gray-500">QTY</th>
                                     <th className="h-10 px-4 text-left font-medium text-gray-500">Status</th>
                                     <th className="h-10 px-4 text-left font-medium text-gray-500">Priority</th>
                                     <th className="h-10 px-4 text-left font-medium text-gray-500">Payment</th>
@@ -304,13 +304,19 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                                                     onCheckedChange={(checked) => handleSelectOrder(order.id, checked as boolean)}
                                                 />
                                             </td>
-                                            <td className="p-4 font-medium whitespace-nowrap">{order.orderNumber}</td>
+                                            <td className="p-4 text-xs font-medium whitespace-nowrap">{order.orderNumber}</td>
                                             <td className="p-4">
-                                                <div className="font-medium text-gray-900">{order.customerName}</div>
-                                                <div className="text-xs text-gray-500">{order.contactNumber}</div>
+                                                <div className="font-medium text-gray-900 line-clamp-2 leading-tight min-w-[120px] max-w-[180px] text-wrap">{order.customerName}</div>
+                                                <div className="text-xs text-gray-500 mt-1 whitespace-nowrap">{order.contactNumber}</div>
                                             </td>
-                                            <td className="p-4 text-gray-600">{Array.isArray(order.baseService) ? order.baseService.join(', ') : order.baseService}</td>
-                                            <td className="p-4 font-bold text-gray-700">{order.quantity || 1} {(order.quantity || 1) === 1 ? 'Pair' : 'Pairs'}</td>
+                                            <td className="p-4 text-xs text-gray-600">
+                                                {Array.isArray(order.baseService)
+                                                    ? order.baseService.map((s: string, i: number) => (
+                                                        <div key={i}>{String(s || '').replace(' (with basic cleaning)', '')}{i < order.baseService.length - 1 ? ',' : ''}</div>
+                                                    ))
+                                                    : <div>{String(order.baseService || '-').replace(' (with basic cleaning)', '')}</div>}
+                                            </td>
+                                            <td className="p-4 text-xs font-medium text-gray-700">{order.quantity || 1} PR</td>
                                             <td className="p-4">
                                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase border whitespace-nowrap
                                                     ${order.status === 'new-order' ? 'bg-purple-50 text-purple-700 border-purple-100' :
@@ -322,7 +328,7 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                                                 </span>
                                             </td>
                                             <td className="p-4">
-                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase border whitespace-nowrap
+                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase border whitespace-nowrap
                                                     ${order.priorityLevel === 'rush' ? 'bg-red-50 text-red-700 border-red-100' :
                                                         'bg-slate-50 text-slate-700 border-slate-200'
                                                     }`}>
@@ -330,11 +336,25 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                                                 </span>
                                             </td>
                                             <td className="p-4">
-                                                <span className={`text-xs font-bold ${order.paymentStatus === 'fully-paid' ? 'text-green-600' :
-                                                    order.paymentStatus === 'downpayment' ? 'text-yellow-600' : 'text-red-600'
-                                                    }`}>
-                                                    {order.paymentStatus === 'fully-paid' ? 'Fully Paid' : order.paymentStatus === 'downpayment' ? 'Downpayment' : order.paymentStatus.charAt(0).toUpperCase() + order.paymentStatus.slice(1)}
-                                                </span>
+                                                <div className="flex flex-col">
+                                                    <span className={`text-xs font-bold tracking-wider whitespace-nowrap ${order.paymentStatus === 'fully-paid' ? 'text-green-600' :
+                                                        order.paymentStatus === 'downpayment' ? 'text-yellow-600' : 'text-red-600'
+                                                        }`}>
+                                                        {order.paymentStatus === 'fully-paid' ? 'FULLY PAID' : order.paymentStatus === 'downpayment' ? 'DOWNPAYMENT' : order.paymentStatus ? order.paymentStatus.toUpperCase() : '-'}
+                                                    </span>
+                                                    {order.paymentMethod && (
+                                                        <>
+                                                            <span className="text-[9px] text-gray-400 font-medium uppercase tracking-wider mt-0.5 whitespace-nowrap">
+                                                                {order.paymentMethod}
+                                                            </span>
+                                                            {order.paymentStatus === 'downpayment' && (
+                                                                <span className="text-[10px] text-red-500 font-medium tracking-wider mt-0.5 whitespace-nowrap">
+                                                                    BAL: {'\u20B1'}{(order.grandTotal - (order.amountReceived || 0)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                                                </span>
+                                                            )}
+                                                        </>
+                                                    )}
+                                                </div>
                                             </td>
                                             <td className="p-4 text-right" onClick={e => e.stopPropagation()}>
                                                 <DropdownMenu>
@@ -518,11 +538,11 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                         if (!open) setSelectedOrder(null);
                     }}
                     order={selectedOrder}
-                    onSave={(id, updates) => {
-                        updateOrder(id, updates, user.username);
-                        setSelectedOrder((prev: any) => prev ? { ...prev, ...updates } : null);
-                        setIsEditing(false);
-                        toast.success('Order updated successfully');
+                    user={user}
+                    onSave={(id, updates) => { 
+                        updateOrder(id, updates); 
+                        setSelectedOrder((prev: any) => prev ? { ...prev, ...updates } : null); 
+                        setIsEditing(false); 
                     }}
                 />
             )}

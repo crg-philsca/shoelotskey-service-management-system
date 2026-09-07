@@ -29,6 +29,15 @@ const SHOE_MATERIALS = [
     'Other', 'Leather', 'Synthetic', 'Canvas', 'Mesh', 'Rubber', 'Textile', 'Suede', 'Knit', 'Patent Leather', 'Denim', 'Nubuck'
 ];
 
+const SHOE_COLORS = [
+    'Black', 'White', 'Red', 'Blue', 'Green', 'Yellow', 'Brown', 'Grey', 'Navy', 'Beige', 'Pink', 'Purple', 'Orange', 'Other'
+];
+
+const SHOE_SIZES = [
+    '5', '5.5', '6', '6.5', '7', '7.5', '8', '8.5', '9', '9.5', '10', '10.5', '11', '12', '13',
+    '35', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46'
+];
+
 const BRAND_MODELS: Record<string, string[]> = {
     'Nike': ['Air Force 1', 'Dunk Low', 'Air Max 90', 'Air Max 97', 'Cortez', 'Blazer', 'Pegasus', 'Other'],
     'Jordan': ['Air Jordan 1', 'Air Jordan 3', 'Air Jordan 4', 'Air Jordan 11', 'Other'],
@@ -117,6 +126,9 @@ interface ShoeEntry {
     shoeModel: string;
     otherMaterial?: string;
     otherModel?: string;
+    color?: string;
+    otherColor?: string;
+    shoeSize?: string;
     quantity: number;
     condition: {
         scratches: boolean;
@@ -132,11 +144,7 @@ interface ShoeEntry {
     inventoryUsed: { itemId: number; amount: number }[];
 }
 
-interface JobOrderFormProps {
-    user?: { username: string; role: string };
-    onSuccess?: () => void;
-    onCancel?: () => void;
-}
+
 
 const LABEL_STYLE = "text-[11px] font-bold text-gray-500 mb-1 block uppercase tracking-tight";
 const INPUT_STYLE = "bg-white border-gray-100 h-9 text-xs focus:ring-red-50 focus:border-red-100 transition-all shadow-sm";
@@ -299,7 +307,15 @@ function FormattedTimeInput({ value, onChange, className, id }: { value: string;
     );
 }
 
-export default function JobOrderFormComponent({ user, onSuccess, onCancel }: JobOrderFormProps) {
+export interface JobOrderFormProps {
+    user?: { username: string; role: 'owner' | 'staff', token?: string };
+    onSuccess?: () => void;
+    onCancel?: () => void;
+    initialOrder?: any;
+    mode?: 'create' | 'edit';
+}
+
+export default function JobOrderFormComponent({ user, onSuccess, onCancel, initialOrder, mode = 'create' }: JobOrderFormProps) {
     const { addOrder, orders } = useOrders();
     const { services } = useServices();
     const { inventoryData } = useInventory();
@@ -344,6 +360,8 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
         brand: '',
         shoeMaterial: '',
         shoeModel: '',
+        shoeSize: '',
+        color: '',
         quantity: 1,
         condition: {
             scratches: false,
@@ -389,6 +407,98 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
     const [manualReleaseDate, setManualReleaseDate] = useState('');
     const [releaseTime, setReleaseTime] = useState('');
 
+    useEffect(() => {
+        if (initialOrder) {
+            setCustomerName(initialOrder.customerName || '');
+            setContactNumber(initialOrder.contactNumber || '');
+            setShippingPreference(initialOrder.shippingPreference || 'pickup');
+            // Assuming deliveryAddress is a string for now, if it's supposed to be parsed, we handle it
+            if (initialOrder.deliveryAddress && typeof initialOrder.deliveryAddress === 'string') {
+                const parts = initialOrder.deliveryAddress.split(', ');
+                if (parts.length >= 4) {
+                    setDeliveryAddress({
+                        houseNo: '',
+                        street: parts[0] || '',
+                        barangay: parts[1] || '',
+                        city: parts[2] || '',
+                        province: parts[3] || '',
+                        zipCode: parts[4] || ''
+                    });
+                } else {
+                    // simple fallback
+                    setDeliveryAddress({ houseNo: '', street: initialOrder.deliveryAddress, province: '', city: '', barangay: '', zipCode: '' });
+                }
+            }
+            if (initialOrder.deliveryCourier) {
+                setDeliveryCourier(initialOrder.deliveryCourier);
+            }
+            if (initialOrder.province) {
+                setDeliveryAddress(prev => ({ ...prev, province: initialOrder.province || '' }));
+            }
+            if (initialOrder.city) {
+                setDeliveryAddress(prev => ({ ...prev, city: initialOrder.city || '' }));
+            }
+            if (initialOrder.barangay) {
+                setDeliveryAddress(prev => ({ ...prev, barangay: initialOrder.barangay || '' }));
+            }
+            if (initialOrder.zipCode) {
+                setDeliveryAddress(prev => ({ ...prev, zipCode: initialOrder.zipCode || '' }));
+            }
+            
+            setPaymentMethod(initialOrder.paymentMethod || 'cash');
+            setPaymentStatus(initialOrder.paymentStatus || 'pending');
+            if (initialOrder.amountReceived) {
+                setAmountReceived(initialOrder.amountReceived.toString());
+            }
+            if (initialOrder.referenceNo) {
+                setReferenceNo(initialOrder.referenceNo);
+            }
+            if (initialOrder.items && initialOrder.items.length > 0) {
+                setShoes(initialOrder.items.map((item: any) => ({
+                    id: item.id || Date.now().toString(),
+                    brand: item.brand || '',
+                    shoeModel: item.shoeModel || '',
+                    shoeMaterial: item.shoeMaterial || '',
+                    shoeSize: item.shoeSize || '',
+                    color: item.color || '',
+                    quantity: item.quantity || 1,
+                    condition: item.condition || {
+                        scratches: false, ripsHoles: false, wornOut: false, soleSeparation: false, yellowing: false, deepStains: false, others: ''
+                    },
+                    baseService: item.baseService || [],
+                    addOns: item.addOns || [],
+                    inventoryUsed: []
+                })));
+            } else {
+                setShoes([{
+                    id: Date.now().toString(),
+                    brand: initialOrder.brand || '',
+                    shoeModel: initialOrder.shoeModel || '',
+                    shoeMaterial: initialOrder.shoeMaterial || '',
+                    shoeSize: initialOrder.shoeSize || '',
+                    color: initialOrder.color || '',
+                    quantity: initialOrder.quantity || 1,
+                    condition: initialOrder.condition || {
+                        scratches: false, ripsHoles: false, wornOut: false, soleSeparation: false, yellowing: false, deepStains: false, others: ''
+                    },
+                    baseService: initialOrder.baseService || [],
+                    addOns: initialOrder.addOns || [],
+                    inventoryUsed: []
+                }]);
+            }
+            if (initialOrder.createdAt) {
+                 const dt = new Date(initialOrder.createdAt);
+                 setOrderDate(dateFnsFormat(dt, 'yyyy-MM-dd'));
+                 setOrderTime(dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
+            }
+            if (initialOrder.predictedCompletionDate) {
+                 const dt = new Date(initialOrder.predictedCompletionDate);
+                 setManualReleaseDate(dateFnsFormat(dt, 'yyyy-MM-dd'));
+                 setReleaseTime(dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
+            }
+        }
+    }, [initialOrder]);
+
     const handleResetForm = () => {
         // Reset Customer Info
         setCustomerName('');
@@ -412,6 +522,8 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
             brand: '',
             shoeMaterial: '',
             shoeModel: '',
+            shoeSize: '',
+            color: '',
             quantity: 1,
             condition: {
                 scratches: false,
@@ -766,14 +878,11 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
 
         const hasMissingShoeDetails = shoes.some(shoe => {
             const b = shoe.brand === 'Other' ? shoe.otherBrand : shoe.brand;
-            const m = shoe.shoeModel === 'Other' ? shoe.otherModel : shoe.shoeModel;
-            const mat = shoe.shoeMaterial === 'Other' ? shoe.otherMaterial : shoe.shoeMaterial;
-            const noCondition = !shoe.condition || (!shoe.condition.scratches && !shoe.condition.ripsHoles && !shoe.condition.wornOut && !shoe.condition.soleSeparation && !shoe.condition.yellowing && !shoe.condition.deepStains && !shoe.condition.others.trim());
             const noService = !shoe.baseService || shoe.baseService.length === 0;
-            return !b || !b.trim() || !m || !m.trim() || !mat || !mat.trim() || noCondition || noService;
+            return !b || !b.trim() || noService;
         });
         if (hasMissingShoeDetails) {
-            toast.error('All shoe details (Brand, Model, Material, Condition, and Base Service) must be filled out for every item.');
+            toast.error('Brand and Base Service must be filled out for every item.');
             return;
         }
 
@@ -839,24 +948,54 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
             contactNumber: finalContactNumber,
             // Fallback fields (using first shoe data)
             brand: shoes[0].brand === 'Other' ? (shoes[0].otherBrand || 'Other') : (shoes[0].brand || 'Other'),
+            shoeModel: shoes[0].shoeModel === 'Other' ? (shoes[0].otherModel || 'Other') : (shoes[0].shoeModel || 'Other'),
             shoeMaterial: shoes[0].shoeMaterial === 'Other' ? (shoes[0].otherMaterial || 'Other') : (shoes[0].shoeMaterial || 'Other'),
+            shoeSize: shoes[0].shoeSize || '',
+            color: shoes[0].color === 'Other' ? (shoes[0].otherColor || 'Other') : (shoes[0].color || ''),
             baseService: shoes[0].baseService,
+            historicalBasePrices: (shoes[0].baseService || []).map(serviceName => {
+                const service = baseServices.find(s => s.name === serviceName);
+                return { name: serviceName, price: service ? service.price : 0 };
+            }),
+            historicalAddOnPrices: (shoes[0].addOns || []).map((addon: any) => {
+                const addonName = typeof addon === 'string' ? addon : addon.name;
+                const service = addOnServices.find(s => s.name === addonName);
+                return { name: addonName, price: service ? service.price : 0 };
+            }),
             quantity: shoes.reduce((acc, s) => acc + s.quantity, 0),
 
             // Nested items for breakdown view
-            items: shoes.map((shoe, idx) => ({
-                id: `${Date.now()}-${idx}`,
-                brand: shoe.brand === 'Other' ? (shoe.otherBrand || 'Other') : (shoe.brand || 'Other'),
-                shoeModel: shoe.shoeModel === 'Other' ? (shoe.otherModel || 'Other') : (shoe.shoeModel || 'Other'),
-                shoeMaterial: shoe.shoeMaterial === 'Other' ? (shoe.otherMaterial || 'Other') : (shoe.shoeMaterial || 'Other'),
-                quantity: shoe.quantity,
-                condition: shoe.condition,
-                baseService: shoe.baseService,
-                addOns: shoe.addOns,
-                inventoryUsed: shoe.inventoryUsed
-            })),
+            items: shoes.map((shoe, idx) => {
+                const historicalBasePrices = (shoe.baseService || []).map(serviceName => {
+                    const service = baseServices.find(s => s.name === serviceName);
+                    return { name: serviceName, price: service ? service.price : 0 };
+                });
+
+                const historicalAddOnPrices = (shoe.addOns || []).map((addon: any) => {
+                    const addonName = typeof addon === 'string' ? addon : addon.name;
+                    const service = addOnServices.find(s => s.name === addonName);
+                    return { name: addonName, price: service ? service.price : 0 };
+                });
+
+                return {
+                    id: `${Date.now()}-${idx}`,
+                    brand: shoe.brand === 'Other' ? (shoe.otherBrand || 'Other') : (shoe.brand || 'Other'),
+                    shoeModel: shoe.shoeModel === 'Other' ? (shoe.otherModel || 'Other') : (shoe.shoeModel || 'Other'),
+                    shoeMaterial: shoe.shoeMaterial === 'Other' ? (shoe.otherMaterial || 'Other') : (shoe.shoeMaterial || 'Other'),
+                    shoeSize: shoe.shoeSize,
+                    color: shoe.color === 'Other' ? (shoe.otherColor || 'Other') : shoe.color,
+                    quantity: shoe.quantity,
+                    condition: shoe.condition,
+                    baseService: shoe.baseService,
+                    addOns: shoe.addOns,
+                    historicalBasePrices,
+                    historicalAddOnPrices,
+                    inventoryUsed: shoe.inventoryUsed
+                };
+            }),
 
             priorityLevel,
+            rushReductionDays: priorityLevel === 'rush' ? basicCleaningRushReduction : undefined,
             baseServiceFee: totals.baseTotal,
             addOnsTotal: totals.addOnsTotal,
             grandTotal: totals.grandTotal,
@@ -908,13 +1047,43 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
 
         addOrder(newOrder);
 
+        const shoeSummaryStr = shoes.map((s, idx) => {
+            const bServices = (Array.isArray(s.baseService) ? s.baseService : []).join(', ');
+            const addOns = (Array.isArray(s.addOns) ? s.addOns : []).map((a: any) => typeof a === 'string' ? a : (a.name || '')).filter(Boolean).join(', ');
+            const allSvcs = [bServices, addOns].filter(Boolean).join(' + ');
+            return `Pair ${idx + 1}: ${s.brand || 'Shoe'} ${s.shoeModel || ''} (${s.shoeMaterial || 'Material'}) [Services: ${allSvcs || 'None'}]`;
+        }).join(' | ');
+
+        const allServicesList = Array.from(new Set(
+            shoes.flatMap(s => [
+                ...(Array.isArray(s.baseService) ? s.baseService : []),
+                ...(Array.isArray(s.addOns) ? s.addOns : []).map((a: any) => typeof a === 'string' ? a : a.name).filter(Boolean)
+            ])
+        )).join(', ');
+
         addActivity({
             user: user?.username || 'Current User',
             action: 'New Order',
-            details: `Created new job order #${newOrder.orderNumber} with ${shoes.length} shoes for ${finalCustomerName}`,
-            type: 'order'
+            details: `Created new job order #${newOrder.orderNumber} for ${finalCustomerName} (${shoes.length} pair${shoes.length > 1 ? 's' : ''}). Total: ₱${newOrder.grandTotal.toFixed(2)}`,
+            type: 'order',
+            table: 'orders',
+            recordId: newOrder.orderNumber,
+            newValues: {
+                order_number: newOrder.orderNumber,
+                customer_name: finalCustomerName,
+                contact_number: finalContactNumber,
+                grand_total: newOrder.grandTotal,
+                downpayment: newOrder.downpayment,
+                balance: newOrder.balance,
+                payment_status: newOrder.paymentStatus,
+                priority_level: priorityLevel,
+                promised_release_date: newOrder.predictedCompletionDate ? new Date(newOrder.predictedCompletionDate).toLocaleDateString() : 'N/A',
+                shipping_preference: shippingPreference,
+                shoes_count: shoes.length,
+                shoes: shoeSummaryStr,
+                services: allServicesList || 'Basic Cleaning'
+            }
         });
-
 
         toast.success('Order created successfully!');
 
@@ -1013,6 +1182,25 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
 
     return (
         <form onSubmit={handleSubmit} className="space-y-3">
+
+            
+            {mode === 'edit' && (
+                <div className="flex items-center justify-between mb-4 mt-2">
+                    <h2 className="text-xl font-black text-gray-800 uppercase tracking-tight flex items-center gap-2">
+                        Edit Order Detail
+                    </h2>
+                    <div className="flex items-center gap-3">
+                        <Button type="button" variant="outline" onClick={() => {
+                            if(onCancel) onCancel();
+                        }} className="h-9 px-4 text-xs font-black uppercase tracking-widest text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 transition-colors rounded-xl shadow-sm">
+                            <RotateCcw className="w-3.5 h-3.5 mr-2" />
+                            Revert Changes
+                        </Button>
+                    </div>
+                </div>
+            )}
+
+
             {/* Customer Information Section */}
             <Card className="border-red-100/50 shadow-sm bg-white overflow-visible relative z-30 rounded-2xl">
                 <CardHeader className={`${CARD_HEADER_STYLE} !py-2 rounded-t-2xl`}>
@@ -1027,7 +1215,8 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                             <Label htmlFor="customerName" className={LABEL_STYLE}>Customer Name</Label>
                             <ClearableInput
                                 id="customerName"
-                                autoComplete="off"
+                                autoComplete="new-password"
+                                spellCheck={false}
                                 value={customerName}
                                 onChange={(e: any) => {
                                     setCustomerName(e.target.value);
@@ -1251,7 +1440,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                             options={SHOE_BRANDS}
                                                             value={shoe.brand}
                                                             onChange={(val) => updateShoe(shoe.id, { brand: val })}
-                                                            placeholder="Select Brand"
+                                                            placeholder="Type for custom"
                                                             searchPlaceholder="Search brand..."
                                                         />
                                                         {shoe.brand === 'Other' && (
@@ -1290,7 +1479,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                                 }
                                                                 updateShoe(shoe.id, updates);
                                                             }}
-                                                            placeholder={shoe.brand ? `Select ${shoe.brand} Model` : "Search all Models..."}
+                                                            placeholder="Type for custom"
                                                             searchPlaceholder="Type model name (e.g. Air Force 1)"
                                                         />
                                                         {shoe.shoeModel === 'Other' && (
@@ -1308,7 +1497,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                             options={SHOE_MATERIALS}
                                                             value={shoe.shoeMaterial}
                                                             onChange={(val) => updateShoe(shoe.id, { shoeMaterial: val })}
-                                                            placeholder="Select Material"
+                                                            placeholder="Type for custom"
                                                             searchPlaceholder="Search material..."
                                                         />
                                                         {shoe.shoeMaterial === 'Other' && (
@@ -1321,18 +1510,37 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                         )}
                                                     </div>
                                                 </div>
-                                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                                                    <div className="col-span-1">
-                                                        <Label className={LABEL_STYLE}>Quantity</Label>
-                                                        <Input
-                                                            type="number"
-                                                            min="1"
-                                                            value={shoe.quantity}
-                                                            onChange={(e) => updateShoe(shoe.id, { quantity: parseInt(e.target.value) || 1 })}
-                                                            className={`${INPUT_STYLE} text-center font-normal px-1`}
+                                                <div className="flex flex-col md:flex-row gap-3 w-full">
+                                                    <div style={{ flex: 24 }}>
+                                                        <Label className={LABEL_STYLE}>Size</Label>
+                                                        <CreatableCombobox
+                                                            options={SHOE_SIZES}
+                                                            value={shoe.shoeSize || ''}
+                                                            onChange={(val) => updateShoe(shoe.id, { shoeSize: val })}
+                                                            placeholder="Type for custom"
+                                                            searchPlaceholder="Type a size..."
                                                         />
                                                     </div>
-                                                    <div className={`col-span-1 ${priorityLevel === 'rush' && (Array.isArray(shoe.baseService) ? shoe.baseService : []).includes('Basic Cleaning') ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
+                                                    <div style={{ flex: 28 }}>
+                                                        <Label className={LABEL_STYLE}>Color</Label>
+                                                        <CreatableCombobox
+                                                            options={SHOE_COLORS}
+                                                            value={shoe.color || ''}
+                                                            onChange={(val) => updateShoe(shoe.id, { color: val })}
+                                                            placeholder="Select Color"
+                                                            searchPlaceholder="Type color (e.g. White, Black)"
+                                                            multiple={true}
+                                                        />
+                                                        {shoe.color === 'Other' && (
+                                                            <Input
+                                                                className={`${INPUT_STYLE} mt-1`}
+                                                                placeholder="Please specify color"
+                                                                value={shoe.otherColor || ''}
+                                                                onChange={(e) => updateShoe(shoe.id, { otherColor: e.target.value })}
+                                                            />
+                                                        )}
+                                                    </div>
+                                                    <div style={{ flex: priorityLevel === 'rush' && (Array.isArray(shoe.baseService) ? shoe.baseService : []).includes('Basic Cleaning') ? 26 : 48 }}>
                                                         <Label className={LABEL_STYLE}>Priority Level</Label>
                                                         <div className="relative group/select">
                                                             <Select value={priorityLevel} onValueChange={(val: any) => setPriorityLevel(val)}>
@@ -1358,20 +1566,24 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                         </div>
                                                     </div>
                                                     {priorityLevel === 'rush' && (Array.isArray(shoe.baseService) ? shoe.baseService : []).includes('Basic Cleaning') && (
-                                                        <div className="col-span-1 lg:col-span-1">
-                                                            <Label className={LABEL_STYLE} title="Days Reduced">Days Reduced</Label>
-                                                            <Input
-                                                                type="text"
-                                                                inputMode="numeric"
-                                                                pattern="[0-9]*"
-                                                                value={basicCleaningRushReduction}
-                                                                onChange={(e: any) => {
-                                                                    const val = e.target.value.replace(/\D/g, '');
-                                                                    const cleanVal = val.replace(/^0+/, '') || '0';
-                                                                    setBasicCleaningRushReduction(cleanVal);
-                                                                }}
-                                                                className={`${INPUT_STYLE} !text-left font-bold px-3`}
-                                                            />
+                                                        <div style={{ flex: 22 }}>
+                                                            <Label className={`${LABEL_STYLE} whitespace-nowrap`} title="Reduced By">Reduced By</Label>
+                                                            <div className="relative flex items-center">
+                                                                <Input
+                                                                    type="text"
+                                                                    placeholder=""
+                                                                    inputMode="numeric"
+                                                                    pattern="[0-9]*"
+                                                                    value={basicCleaningRushReduction}
+                                                                    onChange={(e: any) => {
+                                                                        const val = e.target.value.replace(/\D/g, '');
+                                                                        const cleanVal = val.replace(/^0+/, '');
+                                                                        setBasicCleaningRushReduction(cleanVal);
+                                                                    }}
+                                                                    className={`${INPUT_STYLE} !text-left font-bold pl-3 pr-10`}
+                                                                />
+                                                                <span className="absolute right-3 text-[11px] text-gray-400 font-bold pointer-events-none">days</span>
+                                                            </div>
                                                         </div>
                                                     )}
                                                 </div>
@@ -1479,12 +1691,12 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                     {/* Base Services */}
                                                     <div className="space-y-3">
                                                         <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Base Services</Label>
-                                                        <div className="max-h-[108px] overflow-y-auto pr-1 custom-scrollbar">
-                                                            <div className="grid grid-cols-2 gap-2">
+                                                        <div className="w-full">
+                                                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                                                 {baseServices.map(service => {
                                                                     const isChecked = (Array.isArray(shoe.baseService) ? shoe.baseService : []).includes(service.name);
                                                                     return (
-                                                                        <label key={service.id} className={`flex items-center space-x-2 p-3 rounded-lg border transition-all cursor-pointer shadow-sm ${isChecked ? 'border-red-100 bg-red-50/10' : 'bg-white border-gray-100 hover:border-red-100'}`}>
+                                                                        <label key={service.id} className={`flex items-center space-x-2 p-2.5 rounded-lg border transition-all cursor-pointer shadow-sm ${isChecked ? 'border-red-100 bg-red-50/10' : 'bg-white border-gray-100 hover:border-red-100'}`}>
                                                                             <Checkbox
                                                                                 type="button"
                                                                                 id={`shoe-${shoe.id}-service-${service.id}`}
@@ -1941,8 +2153,24 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                                                                 inputMode="numeric"
                                                                 value={amountReceived}
                                                                 onChange={(e: any) => {
-                                                                    setAmountReceived(e.target.value);
+                                                                    let val = e.target.value;
+                                                                    if (val === '0.00565') val = '565'; // user's specific bug case just in case
+                                                                    // strip leading zeros if it looks like they appended to 0.00
+                                                                    if (val.startsWith('0.00') && val.length > 4) {
+                                                                        val = val.substring(4);
+                                                                    }
+                                                                    setAmountReceived(val);
                                                                     setIsAmountReceivedTyped(true);
+                                                                }}
+                                                                onFocus={(e: any) => {
+                                                                    if (e.target.value === '0.00' || e.target.value === '0') {
+                                                                        setAmountReceived('');
+                                                                    }
+                                                                }}
+                                                                onBlur={(e: any) => {
+                                                                    if (e.target.value === '') {
+                                                                        setAmountReceived('0.00');
+                                                                    }
                                                                 }}
                                                                 placeholder="0.00"
                                                                 className="bg-white border-gray-100/50 h-10 rounded-xl text-xs pl-7 font-black text-gray-700 shadow-sm"
@@ -2039,7 +2267,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel }: Job
                             type="submit"
                             className="w-full sm:flex-1 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-widest h-10 shadow-lg shadow-red-200 transition-all rounded-lg"
                         >
-                            Submit
+                            {mode === 'create' ? 'Submit' : 'Save Changes'}
                         </Button>
                     </div>
                 </CardContent>

@@ -4,6 +4,8 @@
   "extraPaths": [
     "backend",
     "backend/db",
+    "backend/scripts",
+    "backend/ml",
     "venv/Lib/site-packages"
   ],
   "exclude": [

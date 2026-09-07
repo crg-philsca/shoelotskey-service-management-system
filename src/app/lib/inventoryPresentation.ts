@@ -4,31 +4,48 @@
  */
 
 export interface InventoryPresentation {
-    currentQuantityLabel: string;        // e.g., "1000 mL"
-    containersLabel: string;             // e.g., "≈ 1 Jug (25%)" or "≈ 2 Jugs"
-    containersSubLabel?: string;         // e.g., "1 Full + 25%"
-    daysRemainingLabel?: string;         // e.g., "≈ 0.5 day remaining" or "≈ 4 days remaining"
+    currentQuantityLabel: string;        // e.g., "1,000 mL"
+    containersLabel: string;             // e.g., "2 Full Jugs + 3,000 mL"
+    containersSubLabel?: string;         // secondary label
+    equivalentLabel: string;             // e.g., "2 Full Jugs + 3,000 mL" or "20% of one Jug"
+    packageLabel: string;                // e.g., "Jug (4,000 mL)" – for dashboard / table
+    daysRemainingLabel?: string;
     daysRemaining: number | null;
     totalContainers: number;
     percentageInCurrentPackage: number;
     isPackaged: boolean;
-    stockStatus: 'Critical' | 'Low Stock' | 'In Stock';
+    stockStatus: 'No Stock' | 'Low Stock' | 'In Stock';
     statusLabel: string;
     reorderRecommendation?: string;
-    dropdownLabel: string;               // Clean string for select options: e.g., "4000 mL (11 cans, 340 mL remaining)"
-    availableText: string;               // Alias for dropdownLabel
+    dropdownLabel: string;
+    availableText: string;
+    fullPackages: number;
+    remainingVolume: number;
+    percentageRemaining: number;
+    progressBarValue: number;
+    compactLabel: string;
 }
 
 /**
- * Helper to pluralize package unit names cleanly (Jug -> Jugs, Can -> Cans, Tub -> Tubs, Box -> Boxes)
+ * Helper to pluralize package unit names cleanly (Jug -> Jugs, Can -> Cans, Box -> Boxes)
  */
 function formatUnitName(unit: string, count: number): string {
     const clean = unit.trim();
-    if (count <= 1) return clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
+    if (!clean) return '';
+    const capitalized = clean.charAt(0).toUpperCase() + clean.slice(1);
+    if (count <= 1) return capitalized;
     const lower = clean.toLowerCase();
-    if (lower.endsWith('s')) return clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
-    if (lower.endsWith('box')) return clean.charAt(0).toUpperCase() + clean.slice(1, -3).toLowerCase() + 'Boxes';
-    return clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase() + 's';
+    if (lower.endsWith('s')) return capitalized;
+    if (lower.endsWith('x')) return capitalized.slice(0, -1) + 'xes';
+    if (lower.endsWith('box')) return capitalized.slice(0, -3) + 'Boxes';
+    return capitalized + 's';
+}
+
+/** Lowercase version for use mid-sentence ("of one Jug") */
+function formatUnitNameLower(unit: string, count: number): string {
+    const result = formatUnitName(unit, count);
+    if (!result) return '';
+    return result.charAt(0).toLowerCase() + result.slice(1);
 }
 
 /**
@@ -46,42 +63,67 @@ export function getInventoryPresentation(item: any): InventoryPresentation {
     const isPackaged = packageSize > 0 && packageUnit !== '';
     const currentQuantityLabel = `${stock.toLocaleString()} ${unit}`;
 
-    // 1. Calculate Physical Containers & Percentage Breakdown
-    let totalContainers = 0;
-    let percentageInCurrentPackage = 100;
+    let fullPackages = 0;
+    let remainingVolume = 0;
+    let percentageRemaining = 0;
+    let progressBarValue = 0;
     let containersLabel = '';
     let containersSubLabel: string | undefined = undefined;
+    let compactLabel = '';
+    let equivalentLabel = '';
+    let packageLabel = '';
 
     if (isPackaged) {
+        const unitSingular = formatUnitName(packageUnit, 1);
+        const unitSingularLower = formatUnitNameLower(packageUnit, 1);
+
+        // e.g. "Jug (4,000 mL)"
+        packageLabel = `${unitSingular} (${packageSize.toLocaleString()} ${unit})`;
+
         if (stock <= 0) {
-            totalContainers = 0;
-            percentageInCurrentPackage = 0;
-            containersLabel = `0 ${formatUnitName(packageUnit, 0).toLowerCase()}`;
+            containersLabel = `0 ${formatUnitNameLower(packageUnit, 0)}`;
+            compactLabel = `0% of one ${unitSingularLower}`;
+            equivalentLabel = compactLabel;
         } else {
-            // Any leftover liquid/powder is inside a real, physical container
-            totalContainers = Math.ceil(stock / packageSize);
-            const fullContainers = Math.floor(stock / packageSize);
-            const remainder = Math.round(Number((stock - (fullContainers * packageSize)).toFixed(4)));
-            
-            if (remainder === 0) {
-                percentageInCurrentPackage = 100;
-                containersLabel = `${fullContainers} ${formatUnitName(packageUnit, fullContainers).toLowerCase()}`;
-            } else {
-                percentageInCurrentPackage = Math.round((remainder / packageSize) * 100);
-                if (fullContainers === 0) {
-                    containersLabel = `${remainder} ${unit} remaining`;
+            fullPackages = Math.floor(stock / packageSize);
+            remainingVolume = Math.round(stock % packageSize);
+            percentageRemaining = Math.round((remainingVolume / packageSize) * 100);
+            // progressBarValue: cap at 100, but for >1 package show as % of one package filled
+            progressBarValue = Math.min(Math.max((stock % packageSize === 0 && fullPackages > 0)
+                ? 100
+                : (remainingVolume / packageSize) * 100, 0), 100);
+
+            if (fullPackages > 0) {
+                const pluralUnit = formatUnitName(packageUnit, fullPackages);
+                if (remainingVolume > 0) {
+                    containersLabel = `${fullPackages} Full ${pluralUnit} + ${remainingVolume.toLocaleString()} ${unit}`;
+                    containersSubLabel = `${percentageRemaining}% of next ${unitSingularLower}`;
+                    compactLabel = containersLabel;
+                    equivalentLabel = containersLabel;
                 } else {
-                    containersLabel = `${fullContainers} ${formatUnitName(packageUnit, fullContainers).toLowerCase()}, ${remainder} ${unit} remaining`;
-                    containersSubLabel = `${remainder} ${unit} left`;
+                    containersLabel = `${fullPackages} Full ${pluralUnit}`;
+                    compactLabel = containersLabel;
+                    equivalentLabel = containersLabel;
                 }
+            } else {
+                // Less than one full package
+                containersLabel = `${percentageRemaining}% of one ${unitSingularLower} remaining`;
+                compactLabel = containersLabel;
+                equivalentLabel = containersLabel;
             }
         }
     } else {
-        // Unpackaged items (e.g., standard supplies measured only by count)
         containersLabel = currentQuantityLabel;
+        compactLabel = currentQuantityLabel;
+        equivalentLabel = currentQuantityLabel;
+        packageLabel = '';
     }
 
-    // 2. Calculate Estimated Days Remaining
+    const totalContainers = isPackaged && packageSize > 0 ? Math.ceil(stock / packageSize) : 0;
+    const percentageInCurrentPackage = isPackaged && packageSize > 0
+        ? (stock % packageSize === 0 && stock > 0 ? 100 : Math.round(((stock % packageSize) / packageSize) * 100))
+        : 100;
+
     let daysRemaining: number | null = null;
     let daysRemainingLabel: string | undefined = undefined;
 
@@ -91,7 +133,6 @@ export function getInventoryPresentation(item: any): InventoryPresentation {
             daysRemainingLabel = '0 days remaining (Depleted)';
         } else {
             const rawDays = stock / consumption;
-            // Round to sensible decimal display (e.g., 0.5 or integer)
             const formattedDays = Number(rawDays.toFixed(rawDays < 1 ? 1 : (rawDays % 1 === 0 ? 0 : 1)));
             daysRemaining = formattedDays;
             const dayText = formattedDays <= 1 ? 'day' : 'days';
@@ -99,26 +140,24 @@ export function getInventoryPresentation(item: any): InventoryPresentation {
         }
     }
 
-    // 3. Stock Status & Reorder Recommendation
-    let stockStatus: 'Critical' | 'Low Stock' | 'In Stock';
+    let stockStatus: 'No Stock' | 'Low Stock' | 'In Stock';
     let statusLabel: string;
     let reorderRecommendation: string;
 
     if (stock <= 0) {
-        stockStatus = 'Critical';
-        statusLabel = 'CRITICAL / OUT OF STOCK';
+        stockStatus = 'No Stock';
+        statusLabel = 'NO STOCK';
         reorderRecommendation = 'URGENT: Reorder immediately (Stock depleted)';
-    } else if (stock <= threshold) {
+    } else if (threshold > 0 && stock <= threshold) {
         stockStatus = 'Low Stock';
         statusLabel = 'LOW STOCK';
-        reorderRecommendation = `Reorder recommended (At or below low stock threshold of ${threshold} ${unit})`;
+        reorderRecommendation = `Reorder recommended (At or below threshold of ${threshold.toLocaleString()} ${unit})`;
     } else {
         stockStatus = 'In Stock';
         statusLabel = 'IN STOCK';
         reorderRecommendation = 'Stock levels sufficient';
     }
 
-    // 4. Dropdown Label & Available Text
     let dropdownLabel = currentQuantityLabel;
     if (isPackaged) {
         dropdownLabel = `${currentQuantityLabel} (${containersLabel})`;
@@ -129,6 +168,8 @@ export function getInventoryPresentation(item: any): InventoryPresentation {
         currentQuantityLabel,
         containersLabel,
         containersSubLabel,
+        equivalentLabel,
+        packageLabel,
         daysRemainingLabel,
         daysRemaining,
         totalContainers,
@@ -138,6 +179,11 @@ export function getInventoryPresentation(item: any): InventoryPresentation {
         statusLabel,
         reorderRecommendation,
         dropdownLabel,
-        availableText
+        availableText,
+        fullPackages,
+        remainingVolume,
+        percentageRemaining,
+        progressBarValue,
+        compactLabel
     };
 }

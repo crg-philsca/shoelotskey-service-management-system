@@ -1,0 +1,35 @@
+{
+    "Total Historical Orders": 13,
+    "Total Revenue": 17172.0,
+    "Average Completion Days": 7.69,
+    "Median Completion Days": 7,
+    "Average Order Value": 1320.92,
+    "Average Pairs per Order": 3.46,
+    "Most Requested Service": "Basic Cleaning",
+    "Most Common Shoe Brand": "Nike",
+    "Rush Orders": 2,
+    "Service Distribution": {
+        "Basic Cleaning": 40,
+        "Full Reglue": 4,
+        "Minor Reglue": 3,
+        "Unyellowing": 5,
+        "Rush Service": 5,
+        "Minor Restoration": 1
+    },
+    "Monthly Revenue": {
+        "2025-08": 15472.0,
+        "2025-10": 1700.0
+    },
+    "Monthly Transactions": {
+        "2025-08": 12,
+        "2025-10": 1
+    },
+    "Revenue by Service": {
+        "Basic Cleaning": 12346.17,
+        "Full Reglue": 1211.67,
+        "Minor Reglue": 923.12,
+        "Unyellowing": 1189.73,
+        "Rush Service": 1157.56,
+        "Minor Restoration": 343.75
+    }
+}

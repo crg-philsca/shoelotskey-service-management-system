@@ -10,12 +10,24 @@ export interface ShoeEntry {
     brand?: string;
     shoeModel?: string;
     shoeMaterial?: string;
+    shoeSize?: string;
     description: string;
     quantity: number;
     condition?: any;
     baseService: string[];
     addOns: any[];
     inventoryUsed: any[];
+    color?: string;
+    /**
+     * Immutable pricing snapshot captured when the service was added to this shoe.
+     * Used for historical financial integrity to prevent old prices from changing.
+     */
+    historicalBasePrices?: { name: string; price: number }[];
+    /**
+     * Immutable pricing snapshot captured when the add-on was added to this shoe.
+     * Used for historical financial integrity to prevent old prices from changing.
+     */
+    historicalAddOnPrices?: { name: string; price: number }[];
 }
 
 export interface InventoryUsed {
@@ -28,6 +40,7 @@ export interface InventoryUsed {
   date?: string;
   time?: string;
   isRetail?: boolean;
+  variant?: string;
 }
 
 export interface InventoryItem {
@@ -58,6 +71,8 @@ export interface BaseJobOrderData {
   brand: string;
   shoeModel: string;
   shoeMaterial: string;
+  shoeSize?: string;
+  color?: string;
   quantity: number;
   condition: {
     scratches: boolean;
@@ -72,7 +87,18 @@ export interface BaseJobOrderData {
   // Services
   baseService: string[];
   addOns: { name: string; quantity: number }[];
+  /**
+   * Immutable pricing snapshot captured when the service was added to this shoe.
+   * Used for historical financial integrity to prevent old prices from changing.
+   */
+  historicalBasePrices?: { name: string; price: number }[];
+  /**
+   * Immutable pricing snapshot captured when the add-on was added to this shoe.
+   * Used for historical financial integrity to prevent old prices from changing.
+   */
+  historicalAddOnPrices?: { name: string; price: number }[];
   priorityLevel: Priority;
+  rushReductionDays?: number;
 
   // Pricing
   baseServiceFee: number;
@@ -89,8 +115,8 @@ export interface BaseJobOrderData {
   zipCode?: string;
 
   // Payment
-  paymentMethod: PaymentMethod;
-  paymentStatus: PaymentStatus;
+  paymentMethod?: PaymentMethod;
+  paymentStatus?: PaymentStatus;
   amountReceived?: number;
   change?: number;
   balance?: number;
@@ -110,6 +136,8 @@ export interface ShoeItem {
   brand: string;
   shoeModel: string;
   shoeMaterial: string;
+  shoeSize?: string;
+  color?: string;
   quantity: number;
   condition: {
     scratches: boolean;
@@ -122,6 +150,16 @@ export interface ShoeItem {
   };
   baseService: string[];
   addOns: { name: string; quantity: number }[];
+  /**
+   * Immutable pricing snapshot captured when the service was added to this shoe.
+   * Used for historical financial integrity to prevent old prices from changing.
+   */
+  historicalBasePrices?: { name: string; price: number }[];
+  /**
+   * Immutable pricing snapshot captured when the add-on was added to this shoe.
+   * Used for historical financial integrity to prevent old prices from changing.
+   */
+  historicalAddOnPrices?: { name: string; price: number }[];
 }
 
 export interface JobOrder extends BaseJobOrderData {

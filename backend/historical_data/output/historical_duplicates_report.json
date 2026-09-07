@@ -1,0 +1,72 @@
+[
+    {
+        "customer_name": "RODERICK DEL ROSARIO",
+        "contact_no": "+1 778 378 8617",
+        "branch": "Villamor",
+        "date_received": "2025-11-14",
+        "claimed_date": "2025-12-09",
+        "completion_days": 25,
+        "grand_total": 1300.0,
+        "downpayment": 0,
+        "balance": 1300.0,
+        "total_pairs": 1,
+        "items": [
+            {
+                "brand": "Other",
+                "model": "",
+                "services": [
+                    "Basic Cleaning"
+                ]
+            }
+        ],
+        "_raw_dict": {
+            "customer_name": "Roderick Del Rosario",
+            "contact_no": "+1 778 378 8617",
+            "date_received": "11/14/2025",
+            "branch": "Villamor",
+            "grand_total": 1300.0,
+            "payment_status": "Not yet paid (Fully paid & claimed 12/9/25)",
+            "claimed_date": "12/9/25",
+            "items": [
+                {
+                    "description": ""
+                }
+            ]
+        }
+    },
+    {
+        "customer_name": "GUILLERMO BARLIS JR.",
+        "contact_no": "09911699136",
+        "branch": "Villamor",
+        "date_received": "2025-11-29",
+        "claimed_date": "2025-01-04",
+        "completion_days": 0,
+        "grand_total": 725.0,
+        "downpayment": 0,
+        "balance": 725.0,
+        "total_pairs": 1,
+        "items": [
+            {
+                "brand": "Other",
+                "model": "Under Armour Blue US 9",
+                "services": [
+                    "Basic Cleaning"
+                ]
+            }
+        ],
+        "_raw_dict": {
+            "customer_name": "Guillermo Barlis Jr.",
+            "contact_no": "09911699136",
+            "date_received": "11/29/2025",
+            "branch": "Villamor",
+            "grand_total": 725.0,
+            "payment_status": "Downpayment (DP) 300 Cash, Balance (Bal) 425 (Claimed 01/04/26)",
+            "claimed_date": "01/04/26",
+            "items": [
+                {
+                    "description": "Under Armour Blue US 9"
+                }
+            ]
+        }
+    }
+]

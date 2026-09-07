@@ -11,7 +11,7 @@ import { ServiceProvider } from '@/app/context/ServiceContext';
 import { ActivityProvider } from '@/app/context/ActivityContext';
 import { InventoryProvider } from '@/app/context/InventoryContext';
 import ActivityLogModal from '@/app/components/ActivityLogModal';
-
+import ErrorPage, { ErrorType } from '@/app/pages/ErrorPage';
 // Lazy-loaded pages for code splitting
 const Dashboard = lazy(() => import('@/app/pages/Dashboard'));
 const JobOrderForm = lazy(() => import('@/app/pages/JobOrderForm'));
@@ -28,6 +28,8 @@ const TotalSales = lazy(() => import('@/app/pages/TotalSales'));
 const TotalOrders = lazy(() => import('@/app/pages/TotalOrders'));
 const Expenses = lazy(() => import('@/app/pages/Expenses'));
 const HistoricalRecords = lazy(() => import('@/app/pages/HistoricalRecords'));
+const NotFound = lazy(() => import('@/app/pages/NotFound'));
+
 
 // Loading fallback component
 const PageLoader = () => (
@@ -45,7 +47,7 @@ const ProtectedRoute = ({ children, allowedRoles, user }: { children: React.Reac
   if (!user) return <Navigate to="/login" replace />;
   if (!allowedRoles.includes(user.role)) {
     console.warn(`[SECURITY] Attempt to access ${window.location.pathname} by role ${user.role} (Forbidden)`);
-    return <Navigate to="/dashboard" replace />;
+    return <ErrorPage type="403" />;
   }
   return <>{children}</>;
 };
@@ -60,6 +62,15 @@ const ProtectedRoute = ({ children, allowedRoles, user }: { children: React.Reac
  * - Wraps application in Context Providers for 3NF Data (Orders, Services, Expenses, Activities)
  */
 export default function App() {
+  const [sysError, setSysError] = useState<ErrorType | null>(null);
+
+  // Listen for global system errors dispatched from fetch interceptor
+  useEffect(() => {
+    const handleSysError = (e: any) => setSysError(e.detail);
+    window.addEventListener('SHOELOTSKEY_SYS_ERROR', handleSysError);
+    return () => window.removeEventListener('SHOELOTSKEY_SYS_ERROR', handleSysError);
+  }, []);
+
   const [user, setUser] = useState<{ id?: number; username: string; email?: string; role: 'owner' | 'staff', token: string } | null>(() => {
     // Check both localStorage (Remember Me checked) and sessionStorage (Remember Me unchecked)
     const saved = localStorage.getItem('user') || sessionStorage.getItem('user');
@@ -88,6 +99,15 @@ export default function App() {
 
   const handleLogout = (customMessage?: any) => {
     const currentToken = user?.token;
+
+    // If it's a session timeout/invalid token, show the session error page instead of immediately redirecting to login
+    if (typeof customMessage === 'string' && (customMessage.includes('expired') || customMessage.includes('invalid'))) {
+      setSysError('session');
+      localStorage.removeItem('user');
+      sessionStorage.removeItem('user');
+      setUser(null);
+      return;
+    }
     
     // 1. Set storage items before triggering state transitions to prevent missing toast messages
     if (customMessage && typeof customMessage === 'string') {
@@ -178,6 +198,23 @@ export default function App() {
     };
   }, [user]);
 
+  if (sysError) {
+    return (
+      <BrowserRouter>
+        <ErrorPage 
+          type={sysError} 
+          onRetry={() => {
+            if (sysError === 'session') {
+              window.location.href = '/login';
+            } else {
+              window.location.reload();
+            }
+          }} 
+        />
+      </BrowserRouter>
+    );
+  }
+
   if (!user) {
     return (
       <BrowserRouter>
@@ -185,9 +222,11 @@ export default function App() {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/login" element={<Login onLogin={handleLogin} />} />
+          <Route path="/dashboard" element={<Navigate to="/login" replace />} />
+          <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
-        <Toaster position="top-center" />
+        <Toaster position="top-center" richColors />
       </BrowserRouter>
     );
   }
@@ -206,6 +245,8 @@ export default function App() {
                   <Suspense fallback={<PageLoader />}>
                   <Routes>
                     <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                    <Route path="/login" element={<Navigate to="/dashboard" replace />} />
+
                     <Route
                       path="/dashboard"
                       element={<ProtectedRoute allowedRoles={allRoles} user={user}><Dashboard user={user} onSetHeaderActionRight={setHeaderActionRight} /></ProtectedRoute>}
@@ -219,6 +260,7 @@ export default function App() {
                     <Route path="/total-orders" element={<ProtectedRoute allowedRoles={allRoles} user={user}><TotalOrders user={user} onSetHeaderActionRight={setHeaderActionRight} /></ProtectedRoute>} />
                     <Route path="/expenses" element={<ProtectedRoute allowedRoles={allRoles} user={user}><Expenses user={user} onSetHeaderActionRight={setHeaderActionRight} /></ProtectedRoute>} />
                     <Route path="/job-order-form/historical-records" element={<ProtectedRoute allowedRoles={allRoles} user={user}><HistoricalRecords user={user} onSetHeaderActionRight={setHeaderActionRight} /></ProtectedRoute>} />
+
                     <Route 
                       path="/inventory" 
                       element={<ProtectedRoute allowedRoles={allRoles} user={user}><Inventory user={user} onSetHeaderActionRight={setHeaderActionRight} /></ProtectedRoute>} 
@@ -247,7 +289,8 @@ export default function App() {
                         </ProtectedRoute>
                       } 
                     />
-                    <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                    <Route path="/404" element={<NotFound />} />
+                    <Route path="*" element={<NotFound />} />
                   </Routes>
                 </Suspense>
                 </Layout>
@@ -257,7 +300,7 @@ export default function App() {
         </OrderProvider>
       <ActivityLogModal isOpen={isActivityModalOpen} onClose={() => setIsActivityModalOpen(false)} />
       </ActivityProvider>
-      <Toaster className="dashboard-toaster" />
+      <Toaster position="top-center" richColors className="dashboard-toaster" />
     </BrowserRouter>
   );
 }

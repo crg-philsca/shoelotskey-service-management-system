@@ -139,6 +139,8 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
     const [searchQuery, setSearchQuery] = useState('');
     const [filterService, setFilterService] = useState<string>('all');
     const [filterPriority, setFilterPriority] = useState<string>('all');
+    const [filterPaymentStatus, setFilterPaymentStatus] = useState<string>('all');
+    const [filterOrderStatus, setFilterOrderStatus] = useState<string>('all');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -226,6 +228,18 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
             filtered = filtered.filter((order) => order.priorityLevel === filterPriority);
         }
 
+        if (filterPaymentStatus !== 'all') {
+            filtered = filtered.filter((order) => order.paymentStatus === filterPaymentStatus);
+        }
+
+        if (filterOrderStatus !== 'all') {
+            if (filterOrderStatus === 'active') {
+                filtered = filtered.filter((order) => order.status !== 'claimed' && (order.status as string)?.toLowerCase() !== 'cancelled');
+            } else {
+                filtered = filtered.filter((order) => order.status === filterOrderStatus);
+            }
+        }
+
         if (startDate) {
             const start = new Date(startDate);
             filtered = filtered.filter((order) => {
@@ -275,7 +289,7 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
         });
 
         return filtered;
-    }, [orders, profitRange, filterService, filterPriority, startDate, endDate, searchQuery]);
+    }, [orders, profitRange, filterService, filterPriority, filterPaymentStatus, filterOrderStatus, startDate, endDate, searchQuery]);
 
     const totalPages = Math.ceil(filteredOrders.length / itemsPerPage) || 1;
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -381,7 +395,7 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
 
                             <Button
                                 variant="outline"
-                                className={`h-10 w-10 p-0 rounded-xl transition-colors flex-shrink-0 ${filterService !== 'all' || filterPriority !== 'all' || startDate || endDate
+                                className={`h-10 w-10 p-0 rounded-xl transition-colors flex-shrink-0 ${filterService !== 'all' || filterPriority !== 'all' || filterPaymentStatus !== 'all' || filterOrderStatus !== 'all' || startDate || endDate
                                     ? 'border-red-600 text-red-600 bg-red-50 hover:bg-red-100'
                                     : 'border-gray-200 text-gray-500 hover:border-red-600 hover:text-red-600 hover:bg-red-50'
                                     }`}
@@ -551,6 +565,39 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                         </div>
 
                         <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">Payment Status</label>
+                            <Select value={filterPaymentStatus} onValueChange={setFilterPaymentStatus}>
+                                <SelectTrigger className="h-9 text-xs border-gray-100 bg-gray-50/50">
+                                    <SelectValue placeholder="All Payment Status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all" className="text-xs focus:bg-red-50 focus:text-red-700">All Payment Status</SelectItem>
+                                    <SelectItem value="fully-paid" className="text-xs hover:bg-red-50 focus:bg-red-50 focus:text-red-700">Fully Paid</SelectItem>
+                                    <SelectItem value="downpayment" className="text-xs hover:bg-red-50 focus:bg-red-50 focus:text-red-700">Downpayment</SelectItem>
+                                    <SelectItem value="unpaid" className="text-xs hover:bg-red-50 focus:bg-red-50 focus:text-red-700">Unpaid</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">Order Status</label>
+                            <Select value={filterOrderStatus} onValueChange={setFilterOrderStatus}>
+                                <SelectTrigger className="h-9 text-xs border-gray-100 bg-gray-50/50">
+                                    <SelectValue placeholder="All Order Status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all" className="text-xs focus:bg-red-50 focus:text-red-700">All Order Status</SelectItem>
+                                    <SelectItem value="active" className="text-xs hover:bg-red-50 focus:bg-red-50 focus:text-red-700">Active Orders</SelectItem>
+                                    <SelectItem value="new-order" className="text-xs hover:bg-red-50 focus:bg-red-50 focus:text-red-700">New Order</SelectItem>
+                                    <SelectItem value="on-going" className="text-xs hover:bg-red-50 focus:bg-red-50 focus:text-red-700">On-going</SelectItem>
+                                    <SelectItem value="for-release" className="text-xs hover:bg-red-50 focus:bg-red-50 focus:text-red-700">For Release</SelectItem>
+                                    <SelectItem value="claimed" className="text-xs hover:bg-red-50 focus:bg-red-50 focus:text-red-700">Claimed</SelectItem>
+                                    <SelectItem value="cancelled" className="text-xs hover:bg-red-50 focus:bg-red-50 focus:text-red-700">Cancelled</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-2">
                             <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">Start Date</label>
                             <FormattedDateInput
                                 value={startDate}
@@ -576,6 +623,8 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                             onClick={() => {
                                 setFilterService('all');
                                 setFilterPriority('all');
+                                setFilterPaymentStatus('all');
+                                setFilterOrderStatus('all');
                                 setStartDate('');
                                 setEndDate('');
                                 setCurrentPage(1);

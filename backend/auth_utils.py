@@ -15,11 +15,7 @@ SECRET_KEY = os.getenv("JWT_SECRET")
 ENV = "Production" if os.getenv("PORT") or os.getenv("ENV") == "Production" else "Localhost"
 
 if not SECRET_KEY:
-    if ENV == "Production":
-        raise RuntimeError("CRITICAL: JWT_SECRET environment variable is required in production!")
-    else:
-        # Development fallback
-        SECRET_KEY = "super-secret-shoelotskey-2026-key-ags-aviatech"
+    raise RuntimeError("CRITICAL: JWT_SECRET environment variable is required!")
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 480 # 8-hour shift default
@@ -52,6 +48,29 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Security(securi
         if username is None:
             raise HTTPException(status_code=401, detail="Invalid session - Missing user ID")
     except jwt.ExpiredSignatureError:
+        try:
+            payload_unverified = jwt.decode(token, options={"verify_signature": False})
+            username = payload_unverified.get("sub")
+            if username:
+                target = str(username).strip().lower()
+                user = db.query(User).filter(or_(func.lower(User.username) == target, func.lower(User.email) == target)).first()
+                if user:
+                    from main import log_audit
+                    from models import AuditLog
+                    from datetime import datetime, timedelta, timezone
+                    
+                    # Prevent duplicate timeout logs within 60 seconds
+                    time_threshold = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=60)
+                    recent_timeout = db.query(AuditLog).filter(
+                        AuditLog.username == user.username,
+                        AuditLog.action_type == "SESSION_TIMEOUT",
+                        AuditLog.created_at >= time_threshold
+                    ).first()
+                    
+                    if not recent_timeout:
+                        log_audit(db=db, action="SESSION_TIMEOUT", table_name="auth", record_id=user.user_id, user=user, module="Authentication", new_values={"status": "session_expired"})
+        except Exception:
+            pass
         raise HTTPException(status_code=401, detail="Session expired - Please log in again")
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Could not validate credentials")

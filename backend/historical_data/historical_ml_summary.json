@@ -1,0 +1,10 @@
+{
+    "records": 383,
+    "usable_records": 45,
+    "duplicates_removed": 2,
+    "invalid_records": 336,
+    "features": 17,
+    "target": "completion_days",
+    "model": "Random Forest Regressor",
+    "ready_for_training": true
+}

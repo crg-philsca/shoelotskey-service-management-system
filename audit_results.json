@@ -1,0 +1,366 @@
+{
+  "postgres": {
+    "historical_orders": [
+      {
+        "name": "historical_order_id",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "order_id",
+        "type": "VARCHAR(50)",
+        "nullable": false
+      },
+      {
+        "name": "customer_id",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "branch",
+        "type": "VARCHAR(100)",
+        "nullable": true
+      },
+      {
+        "name": "date_received",
+        "type": "TIMESTAMP",
+        "nullable": false
+      },
+      {
+        "name": "original_estimated_release_date",
+        "type": "TIMESTAMP",
+        "nullable": true
+      },
+      {
+        "name": "claimed_date",
+        "type": "TIMESTAMP",
+        "nullable": true
+      },
+      {
+        "name": "completion_days",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "total_pairs",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "grand_total",
+        "type": "NUMERIC(10, 2)",
+        "nullable": false
+      },
+      {
+        "name": "downpayment",
+        "type": "NUMERIC(10, 2)",
+        "nullable": true
+      },
+      {
+        "name": "balance",
+        "type": "NUMERIC(10, 2)",
+        "nullable": true
+      },
+      {
+        "name": "priority",
+        "type": "VARCHAR(30)",
+        "nullable": true
+      },
+      {
+        "name": "sync_status",
+        "type": "VARCHAR(20)",
+        "nullable": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP",
+        "nullable": true
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMP",
+        "nullable": true
+      },
+      {
+        "name": "ocr_status",
+        "type": "VARCHAR(50)",
+        "nullable": true
+      },
+      {
+        "name": "audit_trail",
+        "type": "JSON",
+        "nullable": true
+      },
+      {
+        "name": "payment_method",
+        "type": "VARCHAR(50)",
+        "nullable": true
+      }
+    ],
+    "historical_items": [
+      {
+        "name": "historical_item_id",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "historical_order_id",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "brand",
+        "type": "VARCHAR(50)",
+        "nullable": true
+      },
+      {
+        "name": "model",
+        "type": "VARCHAR(50)",
+        "nullable": true
+      },
+      {
+        "name": "color",
+        "type": "VARCHAR(50)",
+        "nullable": true
+      },
+      {
+        "name": "size",
+        "type": "VARCHAR(20)",
+        "nullable": true
+      },
+      {
+        "name": "material",
+        "type": "VARCHAR(50)",
+        "nullable": true
+      },
+      {
+        "name": "priority",
+        "type": "VARCHAR(30)",
+        "nullable": true
+      },
+      {
+        "name": "remarks",
+        "type": "TEXT",
+        "nullable": true
+      },
+      {
+        "name": "scratches",
+        "type": "BOOLEAN",
+        "nullable": true
+      },
+      {
+        "name": "yellowing",
+        "type": "BOOLEAN",
+        "nullable": true
+      },
+      {
+        "name": "sole_separation",
+        "type": "BOOLEAN",
+        "nullable": true
+      },
+      {
+        "name": "deep_stains",
+        "type": "BOOLEAN",
+        "nullable": true
+      },
+      {
+        "name": "rips_holes",
+        "type": "BOOLEAN",
+        "nullable": true
+      },
+      {
+        "name": "worn_out",
+        "type": "BOOLEAN",
+        "nullable": true
+      },
+      {
+        "name": "item_price",
+        "type": "NUMERIC(10, 2)",
+        "nullable": true
+      }
+    ],
+    "error": null
+  },
+  "sqlite": {
+    "historical_orders": [
+      {
+        "name": "historical_order_id",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "order_id",
+        "type": "VARCHAR(50)",
+        "nullable": false
+      },
+      {
+        "name": "customer_id",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "branch",
+        "type": "VARCHAR(100)",
+        "nullable": true
+      },
+      {
+        "name": "date_received",
+        "type": "DATETIME",
+        "nullable": false
+      },
+      {
+        "name": "original_estimated_release_date",
+        "type": "DATETIME",
+        "nullable": true
+      },
+      {
+        "name": "claimed_date",
+        "type": "DATETIME",
+        "nullable": true
+      },
+      {
+        "name": "completion_days",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "total_pairs",
+        "type": "INTEGER",
+        "nullable": true
+      },
+      {
+        "name": "grand_total",
+        "type": "DECIMAL(10, 2)",
+        "nullable": false
+      },
+      {
+        "name": "downpayment",
+        "type": "DECIMAL(10, 2)",
+        "nullable": true
+      },
+      {
+        "name": "balance",
+        "type": "DECIMAL(10, 2)",
+        "nullable": true
+      },
+      {
+        "name": "priority",
+        "type": "VARCHAR(30)",
+        "nullable": true
+      },
+      {
+        "name": "payment_method",
+        "type": "VARCHAR(50)",
+        "nullable": true
+      },
+      {
+        "name": "sync_status",
+        "type": "VARCHAR(20)",
+        "nullable": true
+      },
+      {
+        "name": "ocr_status",
+        "type": "VARCHAR(50)",
+        "nullable": true
+      },
+      {
+        "name": "audit_trail",
+        "type": "JSON",
+        "nullable": true
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP",
+        "nullable": true
+      },
+      {
+        "name": "updated_at",
+        "type": "TIMESTAMP",
+        "nullable": true
+      }
+    ],
+    "historical_items": [
+      {
+        "name": "historical_item_id",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "historical_order_id",
+        "type": "INTEGER",
+        "nullable": false
+      },
+      {
+        "name": "brand",
+        "type": "VARCHAR(50)",
+        "nullable": true
+      },
+      {
+        "name": "model",
+        "type": "VARCHAR(50)",
+        "nullable": true
+      },
+      {
+        "name": "color",
+        "type": "VARCHAR(50)",
+        "nullable": true
+      },
+      {
+        "name": "size",
+        "type": "VARCHAR(20)",
+        "nullable": true
+      },
+      {
+        "name": "material",
+        "type": "VARCHAR(50)",
+        "nullable": true
+      },
+      {
+        "name": "priority",
+        "type": "VARCHAR(30)",
+        "nullable": true
+      },
+      {
+        "name": "remarks",
+        "type": "TEXT",
+        "nullable": true
+      },
+      {
+        "name": "scratches",
+        "type": "BOOLEAN",
+        "nullable": true
+      },
+      {
+        "name": "yellowing",
+        "type": "BOOLEAN",
+        "nullable": true
+      },
+      {
+        "name": "sole_separation",
+        "type": "BOOLEAN",
+        "nullable": true
+      },
+      {
+        "name": "deep_stains",
+        "type": "BOOLEAN",
+        "nullable": true
+      },
+      {
+        "name": "rips_holes",
+        "type": "BOOLEAN",
+        "nullable": true
+      },
+      {
+        "name": "worn_out",
+        "type": "BOOLEAN",
+        "nullable": true
+      },
+      {
+        "name": "item_price",
+        "type": "DECIMAL(10, 2)",
+        "nullable": true
+      }
+    ],
+    "error": null
+  }
+}

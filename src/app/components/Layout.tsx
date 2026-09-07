@@ -44,6 +44,7 @@ export default function Layout({ children, user, onLogout, headerAction, headerA
   const pageTitles: Record<string, string> = {
     '/dashboard': 'Dashboard',
     '/job-order-form': 'Job Order Form',
+    '/job-orders': 'Job Orders',
     '/release-calendar': 'Release Calendar',
     '/sales-report': 'Sales Report',
     '/service-management': 'Service Management',
@@ -51,9 +52,10 @@ export default function Layout({ children, user, onLogout, headerAction, headerA
     '/total-sales': 'Total Sales',
     '/total-orders': 'Total Orders',
     '/expenses': 'Expenses',
-    '/claim-record': 'CLAIM RECORD',
+    '/claim-record': 'Claim Record',
     '/activity-history': 'Activity History',
     '/inventory': 'Inventory Management',
+    '/job-order-form/historical-records': 'Historical Records',
   };
 
   const menuItems = user.role === 'owner' ? ownerMenuItems : staffMenuItems;
@@ -188,7 +190,7 @@ export default function Layout({ children, user, onLogout, headerAction, headerA
               </div>
             )}
             <h2 className="text-base md:text-2xl font-bold text-red-600 uppercase truncate">
-              {pageTitles[location.pathname] || 'Dashboard'}
+              {pageTitles[location.pathname] || 'PAGE NOT FOUND'}
             </h2>
           </div>
 

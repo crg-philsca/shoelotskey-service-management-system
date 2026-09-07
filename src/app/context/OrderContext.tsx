@@ -4,9 +4,11 @@ import { mockJobOrders } from '@/app/lib/mockData';
 import { useActivities } from './ActivityContext';
 
 // Backend API Base URL
-const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '5173' || window.location.hostname.startsWith('192.')))
+const API_BASE = import.meta.env.VITE_API_URL || (
+    (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '5173' || window.location.hostname.startsWith('192.')))
     ? `${window.location.protocol}//${window.location.hostname}:8000/api`
-    : '/api';
+    : '/api'
+);
 
 // Resilience Check: Verifies if the backend is actually reachable
 const checkBackend = async (token: string) => {
@@ -165,8 +167,10 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
 
         const parseUTC = (dateStr: any): Date => {
             if (!dateStr) return new Date();
-            if (typeof dateStr === 'string' && !dateStr.endsWith('Z') && !dateStr.includes('+') && !/-\d{2}:\d{2}$/.test(dateStr)) {
-                return new Date(dateStr + 'Z');
+            if (typeof dateStr === 'string') {
+                // Replace space with T for valid local parsing (e.g. "2026-08-11 23:00:40" -> "2026-08-11T23:00:40")
+                const normalizedStr = dateStr.replace(' ', 'T');
+                return new Date(normalizedStr);
             }
             return new Date(dateStr);
         };
@@ -245,6 +249,8 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                     brand: bi.brand || 'Other',
                     shoeModel: bi.shoe_model || 'Other',
                     shoeMaterial: bi.material || 'Other',
+                    shoeSize: bi.shoe_size || bi.shoeSize || bi.size || '',
+                    color: bi.color || '',
                     quantity: bi.quantity || 1,
                     condition: {
                         scratches:      condNames.includes('scratches'),
@@ -268,8 +274,10 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
 
             // Fallback fields
             brand: bo.items?.map((i: any) => i.brand).filter(Boolean).join(', ') || 'Unknown',
-            shoeModel: firstItem.shoe_model || 'Unknown',
-            shoeMaterial: bo.items?.map((i: any) => i.material).filter(Boolean).join(', ') || 'Unknown',
+            shoeModel: firstItem.shoe_model || firstItem.shoeModel || 'Unknown',
+            shoeMaterial: bo.items?.map((i: any) => i.material || i.shoeMaterial).filter(Boolean).join(', ') || 'Unknown',
+            shoeSize: firstItem.shoe_size || firstItem.shoeSize || firstItem.size || '',
+            color: firstItem.color || '',
             quantity: bo.items?.reduce((acc: number, item: any) => acc + (item.quantity || 1), 0) || 1,
             // Fallback root-level condition (uses first item, same fix)
             condition: bo.items?.[0] ? (() => {
@@ -364,9 +372,14 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
             'Claimed': 'claimed',
         };
         // [FIX] Only fall back to 'new-order' if the statusName itself is empty/null.
-        // If DB returns an unexpected value, keep it as-is to avoid silent downgrade.
         if (!statusName) return 'new-order';
-        return map[statusName] ?? map[statusName.toLowerCase()] ?? 'new-order';
+        
+        const normalized = map[statusName] ?? map[statusName.toLowerCase()];
+        if (!normalized) {
+            console.error(`[OrderContext] Critical data integrity issue: Unknown backend status '${statusName}'. Falling back to 'new-order' for UI stability. Please check backend schema.`);
+            return 'new-order';
+        }
+        return normalized;
     };
 
     /**
@@ -542,18 +555,7 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                     syncNotificationShown.current = false;
                 }
                 
-                // Alert user if strictly using local backup database
-                const healthRes = await fetch(`${API_BASE}/health-check`).catch(() => null);
-                if (healthRes && healthRes.ok) {
-                    const healthData = await healthRes.json();
-                    if (healthData.database.includes('SQLite')) {
-                        const { toast } = await import('sonner');
-                        toast.info("Connectivity Note", {
-                            description: "The system is currently writing to the local backup database. Remote sync will occur once the cloud connection is stabilized.",
-                            duration: 8000
-                        });
-                    }
-                }
+                // Sync process complete
             } catch (err) {
                 console.error("Failed to process sync queue", err);
             }
@@ -676,17 +678,57 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                 throw new Error('Unsynced temporary ID');
             }
 
-            // Log Activity
-            if (updates.status) {
-                addActivity({
-                    user: statusUser || user.username || 'System',
-                    action: 'Status Change',
-                    details: `Order ID ${id} status state changed from "${oldStatus}" to "${newStatus}"`,
-                    type: 'order',
-                    oldValues: { status: oldStatus },
-                    newValues: { status: newStatus }
-                });
+            // Log Activity with complete change details
+            const oldDiff: Record<string, any> = {};
+            const newDiff: Record<string, any> = {};
+            const changesList: string[] = [];
+
+            if (updates.status && targetOrder?.status !== updates.status) {
+                oldDiff['status'] = oldStatus;
+                newDiff['status'] = newStatus;
+                changesList.push(`Status: "${oldStatus}" → "${newStatus}"`);
             }
+            if (updates.customerName && targetOrder?.customerName !== updates.customerName) {
+                oldDiff['customer'] = targetOrder?.customerName || 'N/A';
+                newDiff['customer'] = updates.customerName;
+                changesList.push(`Customer: "${targetOrder?.customerName}" → "${updates.customerName}"`);
+            }
+            if (updates.predictedCompletionDate && targetOrder?.predictedCompletionDate !== updates.predictedCompletionDate) {
+                const oldDateStr = targetOrder?.predictedCompletionDate ? new Date(targetOrder.predictedCompletionDate).toLocaleDateString() : 'N/A';
+                const newDateStr = new Date(updates.predictedCompletionDate).toLocaleDateString();
+                oldDiff['promised_release_date'] = oldDateStr;
+                newDiff['promised_release_date'] = newDateStr;
+                changesList.push(`Release Date: ${oldDateStr} → ${newDateStr}`);
+            }
+            if (updates.priorityLevel && targetOrder?.priorityLevel !== updates.priorityLevel) {
+                oldDiff['priority'] = targetOrder?.priorityLevel || 'regular';
+                newDiff['priority'] = updates.priorityLevel;
+                changesList.push(`Priority: ${targetOrder?.priorityLevel} → ${updates.priorityLevel}`);
+            }
+            if (updates.grandTotal !== undefined && targetOrder?.grandTotal !== updates.grandTotal) {
+                oldDiff['grand_total'] = targetOrder?.grandTotal || 0;
+                newDiff['grand_total'] = updates.grandTotal;
+                changesList.push(`Total: ₱${(targetOrder?.grandTotal || 0).toFixed(2)} → ₱${updates.grandTotal.toFixed(2)}`);
+            }
+            if (updates.paymentStatus && targetOrder?.paymentStatus !== updates.paymentStatus) {
+                oldDiff['payment_status'] = targetOrder?.paymentStatus || 'Pending';
+                newDiff['payment_status'] = updates.paymentStatus;
+                changesList.push(`Payment Status: ${targetOrder?.paymentStatus} → ${updates.paymentStatus}`);
+            }
+
+            const diffSummary = changesList.length > 0 ? changesList.join(' | ') : `Updated order specifications for #${targetOrder?.orderNumber || id}`;
+            const actionLabel = updates.status && oldStatus !== newStatus ? 'Status Change' : 'Update Order';
+
+            addActivity({
+                user: statusUser || user.username || 'System',
+                action: actionLabel,
+                details: `Order #${targetOrder?.orderNumber || id}: ${diffSummary}`,
+                type: 'order',
+                table: 'orders',
+                recordId: id,
+                oldValues: Object.keys(oldDiff).length > 0 ? oldDiff : { status: oldStatus },
+                newValues: Object.keys(newDiff).length > 0 ? newDiff : { status: newStatus }
+            });
         } catch (err: any) {
             console.error('[DEBUG] OrderProvider: Update failed or sync pending.', err);
             if (err?.message && err.message.startsWith('HTTP_')) {

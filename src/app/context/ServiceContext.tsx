@@ -153,6 +153,10 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
     }, [user.token]);
 
     const addService = (service: Service) => {
+        const tempId = service.id && service.id !== 'new' ? service.id : Math.random().toString();
+        const optimisticService: Service = { ...service, id: tempId, sortOrder: service.sortOrder || services.length + 1 };
+        setServices((prev) => [...prev, optimisticService]);
+
         const payload = {
             service_name: service.name,
             base_price: service.price,
@@ -160,7 +164,8 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
             is_active: service.active,
             description: service.description || null,
             duration_days: service.durationDays || 0,
-            service_code: service.code || null
+            service_code: service.code || null,
+            sort_order: optimisticService.sortOrder
         };
 
         fetch(`${API_BASE}/services`, {
@@ -179,31 +184,33 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
                 return res.json();
             })
             .then(data => {
-                const newSvc: Service = {
+                const verifiedSvc: Service = {
                     id: data.service_id.toString(),
                     name: data.service_name,
                     price: parseFloat(data.base_price),
-                    category: data.category,
+                    category: typeof data.category === 'object' ? data.category?.category_name : (data.category || service.category),
                     active: data.is_active,
                     description: data.description || '',
                     durationDays: data.duration_days || 0,
-                    code: data.service_code || ''
+                    code: data.service_code || '',
+                    sortOrder: data.sort_order || optimisticService.sortOrder
                 };
-                setServices((prev) => [...prev, newSvc]);
+                setServices((prev) => prev.map(s => s.id === tempId ? verifiedSvc : s));
             })
             .catch(err => {
                 console.error("Service sync failed:", err);
                 if (err.message && err.message.startsWith('HTTP_')) {
                     import('sonner').then(({ toast }) => toast.error('Action denied (400/401/403).'));
+                    setServices((prev) => prev.filter(s => s.id !== tempId));
                     return;
                 }
-                const newSvc: Service = { ...service, id: Math.random().toString() };
-                setServices((prev) => [...prev, newSvc]); // Fallback locally
                 queueServiceSync({ type: 'POST', payload });
             });
     };
 
     const updateService = (id: string, updates: Partial<Service>) => {
+        setServices((prev) => prev.map((s) => s.id === id ? { ...s, ...updates } : s));
+
         const payload: any = {};
         if (updates.name !== undefined) payload.service_name = updates.name;
         if (updates.price !== undefined) payload.base_price = updates.price;
@@ -212,6 +219,7 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
         if (updates.description !== undefined) payload.description = updates.description;
         if (updates.durationDays !== undefined) payload.duration_days = updates.durationDays;
         if (updates.code !== undefined) payload.service_code = updates.code;
+        if (updates.sortOrder !== undefined) payload.sort_order = updates.sortOrder;
 
         fetch(`${API_BASE}/services/${id}`, {
             method: 'PUT',
@@ -233,11 +241,12 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
                     ...service,
                     name: data.service_name,
                     price: parseFloat(data.base_price),
-                    category: data.category,
+                    category: typeof data.category === 'object' ? data.category?.category_name : (data.category || service.category),
                     active: data.is_active,
                     description: data.description || '',
                     durationDays: data.duration_days || 0,
-                    code: data.service_code || ''
+                    code: data.service_code || '',
+                    sortOrder: data.sort_order ?? service.sortOrder
                 } : service));
             })
             .catch(err => {
@@ -246,7 +255,6 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
                     import('sonner').then(({ toast }) => toast.error('Update denied (400/401/403).'));
                     return;
                 }
-                setServices((prev) => prev.map((service) => service.id === id ? { ...service, ...updates } : service)); // Fallback
                 queueServiceSync({ type: 'PUT', id, payload });
             });
     };

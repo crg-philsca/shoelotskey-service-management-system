@@ -131,11 +131,11 @@ export const ShoeItem: React.FC<ShoeItemProps> = ({ shoe, index, updateShoe, rem
                                     <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
                                         <ShoppingBag size={12} className="text-red-500" /> Base Service Selection
                                     </Label>
-                                    <div className="grid grid-cols-2 gap-2">
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                         {baseServices.map((service) => {
                                             const isChecked = (Array.isArray(shoe.baseService) ? shoe.baseService : []).includes(service.name);
                                             return (
-                                                <label key={service.id} className={`flex items-center space-x-2 p-3 rounded-lg border transition-all cursor-pointer shadow-sm ${isChecked ? 'border-red-100 bg-red-50/10' : 'bg-white border-gray-100 hover:border-red-100'}`}>
+                                                <label key={service.id} className={`flex items-center space-x-2 p-2.5 rounded-lg border transition-all cursor-pointer shadow-sm ${isChecked ? 'border-red-100 bg-red-50/10' : 'bg-white border-gray-100 hover:border-red-100'}`}>
                                                     <Checkbox
                                                         checked={isChecked}
                                                         onCheckedChange={(checked) => {

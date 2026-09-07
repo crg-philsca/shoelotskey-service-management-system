@@ -114,6 +114,12 @@ export default function OrderDetailModal({
         <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 text-slate-800 scrollbar-thin">
           {/* Card 1: Order Status & Process Overview */}
           <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-100 space-y-3">
+            <div className="flex items-center gap-2 mb-1">
+              <Package size={15} className="text-red-500" />
+              <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                Order Overview
+              </h4>
+            </div>
             <div className="grid grid-cols-2 gap-4 items-center pb-3 border-b border-slate-200/60">
               <div>
                 <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block">
@@ -188,11 +194,11 @@ export default function OrderDetailModal({
                 </Label>
                 <p className="text-sm font-bold text-slate-800">{order.customerName || '-'}</p>
               </div>
-              <div>
+              <div className="text-right">
                 <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block">
                   Contact Number
                 </Label>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center justify-end gap-1.5">
                   <Phone size={12} className="text-slate-400 shrink-0" />
                   <p className="text-sm font-bold text-slate-800">{order.contactNumber || '-'}</p>
                 </div>
@@ -209,8 +215,8 @@ export default function OrderDetailModal({
               </h4>
             </div>
 
-            {/* Order Date & Predicted Release Date (Matching Calendar Icon & Font/Time Format) */}
-            <div className="grid grid-cols-2 gap-4">
+            {/* Order Date, Expected Date, & Release Date */}
+            <div className={`grid gap-4 ${isForRelease ? 'grid-cols-3' : 'grid-cols-2'}`}>
               <div>
                 <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block">
                   Order Date
@@ -223,11 +229,11 @@ export default function OrderDetailModal({
                 </div>
               </div>
 
-              <div>
-                <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block">
-                  Predicted Release Date
+              <div className={isForRelease ? 'text-center' : 'text-right'}>
+                <Label className={`text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block ${isForRelease ? '' : 'text-right'}`}>
+                  Predicted Date
                 </Label>
-                <div className="flex items-center gap-1.5">
+                <div className={`flex items-center gap-1.5 ${isForRelease ? 'justify-center' : 'justify-end'}`}>
                   <CalendarIcon size={12} className="text-slate-400 shrink-0" />
                   <p className="text-xs font-mono font-semibold text-slate-800">
                     {order.predictedCompletionDate
@@ -236,26 +242,25 @@ export default function OrderDetailModal({
                   </p>
                 </div>
               </div>
-            </div>
 
-            {/* Actual Release Date (Shown ONLY if status is For Release or Claimed) */}
-            {isForRelease && (
-              <div className="pt-3 border-t border-slate-200/60">
-                <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block">
-                  Actual Release Date
-                </Label>
-                <div className="flex items-center gap-1.5">
-                  <CheckCircle2 size={12} className="text-orange-600 shrink-0" />
-                  <p className="text-xs font-mono font-bold text-orange-700">
-                    {order.actualReleaseDate
-                      ? formatDate(order.actualReleaseDate)
-                      : (order as any).statusHistory?.find((s: any) => s.status === 'for-release')
-                      ? formatDate((order as any).statusHistory.find((s: any) => s.status === 'for-release').timestamp)
-                      : formatDate(order.updatedAt)}
-                  </p>
+              {isForRelease && (
+                <div className="text-right">
+                  <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block text-right">
+                    Release Date
+                  </Label>
+                  <div className="flex items-center justify-end gap-1.5">
+                    <CheckCircle2 size={12} className="text-orange-600 shrink-0" />
+                    <p className="text-xs font-mono font-bold text-orange-700">
+                      {order.actualReleaseDate
+                        ? formatDate(order.actualReleaseDate)
+                        : (order as any).statusHistory?.find((s: any) => s.status === 'for-release')
+                        ? formatDate((order as any).statusHistory.find((s: any) => s.status === 'for-release').timestamp)
+                        : formatDate(order.updatedAt)}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Claimed Date, Claimed By, & Released By (Shown STRICTLY ONLY if status is Claimed) */}
             {isClaimed && (
@@ -319,7 +324,7 @@ export default function OrderDetailModal({
                   </p>
                 </div>
                 {order.deliveryCourier && (
-                  <div>
+                  <div className="text-right">
                     <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block">
                       Courier
                     </Label>
@@ -386,7 +391,7 @@ export default function OrderDetailModal({
                   </div>
 
                   {/* Shoe Specifications */}
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                     <div>
                       <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block">
                         Brand
@@ -401,10 +406,22 @@ export default function OrderDetailModal({
                     </div>
                     <div>
                       <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block">
-                        Material & Qty
+                        Material
+                      </Label>
+                      <p className="text-sm font-bold text-slate-800">{item.shoeMaterial || '-'}</p>
+                    </div>
+                    <div>
+                      <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block">
+                        Size
+                      </Label>
+                      <p className="text-sm font-bold text-slate-800">{item.shoeSize || item.size || '-'}</p>
+                    </div>
+                    <div>
+                      <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block">
+                        Color
                       </Label>
                       <p className="text-sm font-bold text-slate-800">
-                        {item.shoeMaterial || '-'} ({item.quantity || 1} {(item.quantity || 1) === 1 ? 'Pair' : 'Pairs'})
+                        {Array.isArray(item.color) ? item.color.join(', ') : item.color || '-'}
                       </p>
                     </div>
                   </div>
@@ -469,12 +486,12 @@ export default function OrderDetailModal({
                         </p>
                       </div>
 
-                      <div>
+                      <div className="text-right">
                         <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block">
                           Add-ons Applied
                         </Label>
                         {addOnsList.length > 0 ? (
-                          <div className="flex flex-wrap gap-1.5 pt-0.5">
+                          <div className="flex flex-wrap justify-end gap-1.5 pt-0.5">
                             {addOnsList.map((addon: any, idx: number) => {
                               const addonName =
                                 typeof addon === 'string'
@@ -535,8 +552,8 @@ export default function OrderDetailModal({
               </span>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
+            <div className={`grid gap-4 ${['gcash', 'maya'].includes(order.paymentMethod?.toLowerCase() || '') && order.referenceNo ? 'grid-cols-3' : 'grid-cols-2'}`}>
+              <div className="text-left">
                 <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block">
                   Method
                 </Label>
@@ -545,19 +562,8 @@ export default function OrderDetailModal({
                 </p>
               </div>
 
-              {['gcash', 'maya'].includes(order.paymentMethod?.toLowerCase() || '') && order.referenceNo && (
-                <div>
-                  <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block">
-                    Reference Number
-                  </Label>
-                  <p className="text-xs font-mono font-bold text-slate-800 tracking-tight">
-                    {order.referenceNo}
-                  </p>
-                </div>
-              )}
-
-              <div>
-                <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block">
+              <div className={['gcash', 'maya'].includes(order.paymentMethod?.toLowerCase() || '') && order.referenceNo ? 'text-center' : 'text-right'}>
+                <Label className={`text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block ${['gcash', 'maya'].includes(order.paymentMethod?.toLowerCase() || '') && order.referenceNo ? 'text-center' : 'text-right'}`}>
                   Amount Received
                 </Label>
                 <p className="text-sm font-bold text-slate-800">
@@ -568,8 +574,19 @@ export default function OrderDetailModal({
                 </p>
               </div>
 
+              {['gcash', 'maya'].includes(order.paymentMethod?.toLowerCase() || '') && order.referenceNo && (
+                <div className="text-right">
+                  <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block text-right">
+                    Reference Number
+                  </Label>
+                  <p className="text-xs font-mono font-bold text-slate-800 tracking-tight">
+                    {order.referenceNo}
+                  </p>
+                </div>
+              )}
+
               {order.change !== undefined && order.change > 0 && (
-                <div>
+                <div className="text-left col-span-full">
                   <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block">
                     Customer Change
                   </Label>
@@ -582,7 +599,7 @@ export default function OrderDetailModal({
                 </div>
               )}
 
-              <div className="pt-3 border-t border-slate-200/60 col-span-2 flex justify-between items-center">
+              <div className="pt-3 border-t border-slate-200/60 col-span-full flex justify-between items-center">
                 <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
                   Remaining Balance
                 </Label>
@@ -601,7 +618,7 @@ export default function OrderDetailModal({
           </div>
 
           {/* Card 7: Logged Materials & Stock Status (Shown only if supplies logged) */}
-          {safeInventoryUsed && safeInventoryUsed.length > 0 && (
+          {safeInventoryUsed && safeInventoryUsed.filter((u: any) => u.quantity > 0).length > 0 && (
             <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-100 space-y-3">
               <div className="flex items-center justify-between border-b border-emerald-200/60 pb-2">
                 <div className="flex items-center gap-2">
@@ -617,7 +634,7 @@ export default function OrderDetailModal({
                 )}
               </div>
               <div className="space-y-2">
-                {safeInventoryUsed.map((used: any, idx: number) => (
+                {safeInventoryUsed.filter((u: any) => u.quantity > 0).map((used: any, idx: number) => (
                   <div
                     key={idx}
                     className="flex justify-between items-center text-xs font-medium text-slate-700"
@@ -672,84 +689,88 @@ export default function OrderDetailModal({
 
       {/* Printable Job Order Summary Modal */}
       <Dialog open={showPrintSummary} onOpenChange={setShowPrintSummary}>
-        <DialogContent className="max-w-[500px] bg-white p-6 sm:p-8 rounded-3xl border-none shadow-2xl overflow-y-auto max-h-[90vh]">
-          <div id="print-job-summary" className="space-y-4 font-mono text-xs text-slate-800 print:p-0 print:m-0 print:shadow-none print:border-none print:w-full">
+        <DialogContent className="max-w-[450px] bg-white p-6 sm:p-8 rounded-3xl border-none shadow-2xl overflow-y-auto max-h-[90vh]">
+          <div id="print-job-summary" className="space-y-3 font-mono text-xs text-slate-800 print:p-0 print:m-0 print:shadow-none print:border-none print:w-full">
             {/* Logo and Header */}
-            <div className="text-center space-y-1.5 pb-2">
+            <div className="text-center space-y-1 pb-1">
               <div className="flex justify-center mb-2">
                 <img src="/logo.png" alt="Shoelotskey Logo" className="h-14 w-14 object-contain mx-auto" />
               </div>
-              <p className="text-gray-400 font-bold tracking-tighter">--------------------------------------------------------</p>
+              <div className="border-b border-dashed border-gray-300 my-2"></div>
               <h2 className="text-base font-black uppercase tracking-widest text-slate-900 font-sans">SHOELOTSKEY</h2>
-              <p className="text-xs font-semibold text-slate-700 font-sans">Shoe Cleaning & Restoration Services</p>
-              <p className="text-[11px] text-slate-500 font-sans">Villamor, Pasay City</p>
-              <p className="text-gray-400 font-bold tracking-tighter">--------------------------------------------------------</p>
+              <p className="text-[11px] font-bold text-slate-700 font-sans uppercase">Shoe Cleaning & Restoration Services</p>
+              <p className="text-[10px] text-slate-500 font-sans">Villamor, Pasay City</p>
+              <div className="pt-2 pb-1">
+                <span className="inline-block bg-slate-900 text-white font-black text-[11px] uppercase tracking-widest px-4 py-1 rounded">
+                  JOB ORDER SUMMARY
+                </span>
+              </div>
+              <div className="border-b border-dashed border-gray-300 my-2"></div>
             </div>
 
             {/* Order Summary Section */}
-            <div className="space-y-1">
-              <h3 className="font-bold text-slate-900 uppercase tracking-wider font-sans text-xs">JOB ORDER SUMMARY</h3>
-              <div className="grid grid-cols-[130px_1fr] gap-2 pt-1">
-                <span className="text-slate-600">Order No.</span>
-                <span className="font-bold text-slate-900">: {order.orderNumber}</span>
-                <span className="text-slate-600">Status</span>
-                <span className="font-bold capitalize text-slate-900">: {order.status?.replace('-', ' ')}</span>
+            <div className="space-y-1 pt-1">
+              <div className="grid grid-cols-[110px_1fr] gap-1 text-[11px]">
+                <span className="text-slate-500 font-bold uppercase">Order No.</span>
+                <span className="font-black text-slate-900">: {order.orderNumber}</span>
+                <span className="text-slate-500 font-bold uppercase">Status</span>
+                <span className="font-bold uppercase text-slate-900">: {order.status?.replace('-', ' ')}</span>
               </div>
             </div>
 
             {/* Customer Section */}
-            <div className="space-y-1 pt-2">
-              <h3 className="font-bold text-slate-900 uppercase tracking-wider font-sans text-xs">Customer Details</h3>
-              <p className="text-gray-400 font-bold tracking-tighter">--------------------------------------------------------</p>
-              <div className="grid grid-cols-[130px_1fr] gap-2">
-                <span className="text-slate-600">Name</span>
+            <div className="space-y-1 pt-1">
+              <div className="border-b border-dashed border-gray-300 my-2"></div>
+              <h3 className="font-black text-slate-400 uppercase tracking-widest text-[10px]">Customer Details</h3>
+              <div className="grid grid-cols-[110px_1fr] gap-1 text-[11px]">
+                <span className="text-slate-500 font-bold">Name</span>
                 <span className="font-bold text-slate-900">: {order.customerName || '-'}</span>
-                <span className="text-slate-600">Contact Number</span>
+                <span className="text-slate-500 font-bold">Contact No.</span>
                 <span className="font-bold text-slate-900">: {order.contactNumber || '-'}</span>
               </div>
             </div>
 
             {/* Service Details Section */}
-            <div className="space-y-2 pt-2">
-              <h3 className="font-bold text-slate-900 uppercase tracking-wider font-sans text-xs">Service Details</h3>
-              <p className="text-gray-400 font-bold tracking-tighter">--------------------------------------------------------</p>
-              <div className="space-y-1">
-                <span className="font-bold text-slate-800 block">Services:</span>
+            <div className="space-y-1.5 pt-1">
+              <div className="border-b border-dashed border-gray-300 my-2"></div>
+              <h3 className="font-black text-slate-400 uppercase tracking-widest text-[10px]">Service Details</h3>
+              <div className="space-y-1 text-[11px]">
+                <span className="font-bold text-slate-800 block">Services Applied:</span>
                 {Array.from(new Set(itemsToDisplay.flatMap((it: any) => 
                   Array.isArray(it.baseService) ? it.baseService : [it.baseService || 'General Service']
                 ))).filter(Boolean).map((srv: string, idx: number) => (
-                  <p key={idx} className="text-slate-700 pl-2">• {srv}</p>
+                  <p key={idx} className="text-slate-800 pl-2 font-semibold">• {srv}</p>
                 ))}
               </div>
-              <div className="space-y-1 pt-1">
+              <div className="space-y-1 pt-1 text-[11px]">
                 <span className="font-bold text-slate-800 block">Shoe Information:</span>
                 {itemsToDisplay.map((it: any, idx: number) => (
-                  <div key={idx} className="pl-2 space-y-0.5 pb-1">
-                    <p className="text-slate-900 font-semibold">• {it.brand} {it.shoeModel}</p>
-                    <p className="text-slate-600">• {it.shoeMaterial || 'Material N/A'}</p>
-                    <p className="text-slate-600">• {it.quantity || 1} Pair{(it.quantity || 1) > 1 ? 's' : ''}</p>
+                  <div key={idx} className="pl-2 space-y-0.5 pb-1 border-l-2 border-slate-200 my-1">
+                    <p className="text-slate-900 font-bold">• {it.brand} {it.shoeModel}</p>
+                    <p className="text-slate-600 text-[10px]">  Material: {it.shoeMaterial || 'N/A'}</p>
+                    <p className="text-slate-600 text-[10px]">  Qty: {it.quantity || 1} Pair{(it.quantity || 1) > 1 ? 's' : ''}</p>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Additional Products Section (If customer bought products) */}
+            {/* Additional Products Section */}
             {(() => {
               const retailItems = safeInventoryUsed.filter((i: any) => i.isRetail || (i.price && i.price > 0));
               const extraProducts = (order as any).purchasedProducts || (retailItems.length > 0 ? retailItems : []);
               if (extraProducts.length === 0) return null;
               return (
-                <div className="space-y-1.5 pt-2">
-                  <h3 className="font-bold text-slate-900 uppercase tracking-wider font-sans text-xs">Additional Products</h3>
-                  <p className="text-gray-400 font-bold tracking-tighter">--------------------------------------------------------</p>
-                  <div className="space-y-1">
+                <div className="space-y-1.5 pt-1">
+                  <div className="border-b border-dashed border-gray-300 my-2"></div>
+                  <h3 className="font-black text-slate-400 uppercase tracking-widest text-[10px]">Additional Products</h3>
+                  <div className="space-y-1 text-[11px]">
                     {extraProducts.map((prod: any, idx: number) => {
                       const qty = prod.quantity || 1;
                       const price = prod.price || 0;
                       return (
                         <div key={idx} className="flex justify-between items-center text-slate-800">
-                          <span>• {prod.name} ×{qty} <span className="text-gray-300 font-mono">.............</span></span>
-                          <span className="font-bold">₱{(qty * price).toFixed(2)}</span>
+                          <span className="font-semibold">• {prod.name} ×{qty}</span>
+                          <span className="font-bold text-slate-900">₱{(qty * price).toFixed(2)}</span>
                         </div>
                       );
                     })}
@@ -759,23 +780,23 @@ export default function OrderDetailModal({
             })()}
 
             {/* Schedule Section */}
-            <div className="space-y-1 pt-2">
-              <h3 className="font-bold text-slate-900 uppercase tracking-wider font-sans text-xs">Schedule Details</h3>
-              <p className="text-gray-400 font-bold tracking-tighter">--------------------------------------------------------</p>
-              <div className="grid grid-cols-[130px_1fr] gap-2">
-                <span className="text-slate-600">Order Date</span>
+            <div className="space-y-1 pt-1">
+              <div className="border-b border-dashed border-gray-300 my-2"></div>
+              <h3 className="font-black text-slate-400 uppercase tracking-widest text-[10px]">Schedule Details</h3>
+              <div className="grid grid-cols-[110px_1fr] gap-1 text-[11px]">
+                <span className="text-slate-500 font-bold">Order Date</span>
                 <span className="font-bold text-slate-900">: {(() => {
                   try { return dateFnsFormat(new Date(order.createdAt || (order as any).orderDate || Date.now()), 'MMMM d, yyyy'); }
                   catch { return '-'; }
                 })()}</span>
-                <span className="text-slate-600">Release Date</span>
+                <span className="text-slate-500 font-bold">Release Date</span>
                 <span className="font-bold text-slate-900">: {(() => {
                   try { return dateFnsFormat(new Date((order as any).estimatedReleaseDate || (order as any).releaseDate || Date.now()), 'MMMM d, yyyy'); }
                   catch { return '-'; }
                 })()}</span>
                 {isClaimed && (
                   <>
-                    <span className="text-slate-600">Claim Date</span>
+                    <span className="text-slate-500 font-bold">Claim Date</span>
                     <span className="font-bold text-slate-900">: {(() => {
                       try {
                         const claimHist = order.statusHistory?.find((h: any) => h.status === 'claimed');
@@ -787,52 +808,71 @@ export default function OrderDetailModal({
               </div>
             </div>
 
-            {/* Payment Summary Section */}
-            <div className="space-y-1 pt-2">
-              <h3 className="font-bold text-slate-900 uppercase tracking-wider font-sans text-xs">Payment Summary</h3>
-              <p className="text-gray-400 font-bold tracking-tighter">--------------------------------------------------------</p>
-              <div className="grid grid-cols-[130px_1fr] gap-1.5">
-                <span className="text-slate-600">Service Total</span>
-                <span className="font-bold text-slate-900">: ₱{(baseTotal + addOnsTotal + calculatedRushFee).toFixed(2)}</span>
+            {/* Payment Summary Section (Receipt Formatted) */}
+            <div className="space-y-1 pt-1">
+              <div className="border-b border-dashed border-gray-300 my-2"></div>
+              <h3 className="font-black text-slate-400 uppercase tracking-widest text-[10px]">Payment Summary</h3>
+              <div className="bg-slate-50/80 print:bg-transparent p-3 print:p-0 rounded-xl space-y-1.5 text-[11px]">
+                <div className="flex justify-between items-center text-slate-600">
+                  <span>Service Total</span>
+                  <span className="font-bold text-slate-900">₱{(baseTotal + addOnsTotal + calculatedRushFee).toFixed(2)}</span>
+                </div>
                 
                 {(() => {
                   const retailItems = safeInventoryUsed.filter((i: any) => i.isRetail || (i.price && i.price > 0));
                   const extraProducts = (order as any).purchasedProducts || (retailItems.length > 0 ? retailItems : []);
                   const addlTotal = extraProducts.reduce((acc: number, item: any) => acc + ((item.quantity || 1) * (item.price || 0)), 0);
+                  if (addlTotal === 0) return null;
                   return (
-                    <>
-                      <span className="text-slate-600">Additional Items</span>
-                      <span className="font-bold text-slate-900">: ₱{addlTotal.toFixed(2)}</span>
-                    </>
+                    <div className="flex justify-between items-center text-slate-600">
+                      <span>Additional Items</span>
+                      <span className="font-bold text-slate-900">₱{addlTotal.toFixed(2)}</span>
+                    </div>
                   );
                 })()}
 
-                <span className="text-slate-600">Discount/Refund</span>
-                <span className="font-bold text-slate-900">: ₱{((order as any).discountAmount || (order as any).refundAmount || 0).toFixed(2)}</span>
+                {(((order as any).discountAmount || (order as any).refundAmount || 0) > 0) && (
+                  <div className="flex justify-between items-center text-rose-600 font-semibold">
+                    <span>Discount/Refund</span>
+                    <span>-₱{((order as any).discountAmount || (order as any).refundAmount || 0).toFixed(2)}</span>
+                  </div>
+                )}
                 
-                <span className="text-slate-600">Total Amount</span>
-                <span className="font-bold text-slate-900">: ₱{(order.grandTotal || 0).toFixed(2)}</span>
+                <div className="border-b border-dashed border-gray-300 my-1"></div>
+                <div className="flex justify-between items-center text-sm font-black text-slate-900">
+                  <span>TOTAL AMOUNT</span>
+                  <span>₱{(order.grandTotal || 0).toFixed(2)}</span>
+                </div>
+                <div className="border-b border-dashed border-gray-300 my-1"></div>
                 
-                <span className="text-slate-600">Deposit</span>
-                <span className="font-bold text-slate-900">: ₱{(order.paymentStatus === 'downpayment' ? (order.amountReceived || (order.grandTotal || 0) / 2) : (order.amountReceived || 0)).toFixed(2)}</span>
+                <div className="flex justify-between items-center text-slate-600">
+                  <span>Deposit Paid</span>
+                  <span className="font-bold text-slate-900">₱{(order.paymentStatus === 'downpayment' ? (order.amountReceived || (order.grandTotal || 0) / 2) : (order.amountReceived || 0)).toFixed(2)}</span>
+                </div>
                 
-                <span className="text-slate-600">Balance Paid</span>
-                <span className="font-bold text-slate-900">: ₱{isClaimed ? Math.max(0, (order.grandTotal || 0) - (order.amountReceived || 0)).toFixed(2) : '0.00'}</span>
+                <div className="flex justify-between items-center text-slate-600">
+                  <span>Balance Due</span>
+                  <span className="font-bold text-slate-900">₱{isClaimed ? '0.00' : Math.max(0, (order.grandTotal || 0) - (order.amountReceived || (order.paymentStatus === 'downpayment' ? (order.grandTotal || 0) / 2 : 0))).toFixed(2)}</span>
+                </div>
                 
-                <span className="text-slate-600">Payment Status</span>
-                <span className="font-bold capitalize text-slate-900">: {isClaimed ? 'Fully Paid' : (order.paymentStatus?.replace('-', ' ') || 'Pending')}</span>
+                <div className="flex justify-between items-center pt-1 border-t border-slate-200/60 print:border-dashed">
+                  <span className="font-bold text-slate-700 uppercase">Payment Status</span>
+                  <span className="font-black uppercase tracking-wider text-slate-900 bg-slate-200 print:bg-transparent px-2 py-0.5 rounded text-[10px]">
+                    {isClaimed ? 'FULLY PAID' : (order.paymentStatus?.replace('-', ' ') || 'PENDING')}
+                  </span>
+                </div>
               </div>
             </div>
 
             {/* Claimed By Section */}
             {isClaimed && (
-              <div className="space-y-1 pt-2">
-                <h3 className="font-bold text-slate-900 uppercase tracking-wider font-sans text-xs">Claimed By</h3>
-                <p className="text-gray-400 font-bold tracking-tighter">--------------------------------------------------------</p>
-                <div className="grid grid-cols-[130px_1fr] gap-1.5">
-                  <span className="text-slate-600">Customer</span>
+              <div className="space-y-1 pt-1">
+                <div className="border-b border-dashed border-gray-300 my-2"></div>
+                <h3 className="font-black text-slate-400 uppercase tracking-widest text-[10px]">Claim Detail</h3>
+                <div className="grid grid-cols-[110px_1fr] gap-1 text-[11px]">
+                  <span className="text-slate-500 font-bold">Customer</span>
                   <span className="font-bold text-slate-900">: {order.claimedBy || order.customerName || '-'}</span>
-                  <span className="text-slate-600">Released By</span>
+                  <span className="text-slate-500 font-bold">Released By</span>
                   <span className="font-bold text-slate-900">: {(() => {
                     const claimHist = order.statusHistory?.find((h: any) => h.status === 'claimed');
                     return claimHist?.user || 'Staff';
@@ -841,22 +881,25 @@ export default function OrderDetailModal({
               </div>
             )}
 
-            {/* Disclaimer Footer */}
-            <div className="text-center pt-4 space-y-1">
-              <p className="text-gray-400 font-bold tracking-tighter">--------------------------------------------------------</p>
-              <p className="text-[11px] text-slate-500 font-sans italic leading-tight">
-                This document is generated for reference purposes only.<br />
+            {/* Disclaimer Footer (Disguising as Summary) */}
+            <div className="text-center pt-3 space-y-1.5">
+              <div className="border-b border-dashed border-gray-300 my-2"></div>
+              <p className="text-[10px] text-slate-500 font-sans italic leading-relaxed px-4">
+                This document is generated for reference and service tracking purposes only.<br />
                 It is not a BIR Official Receipt or Sales Invoice.
               </p>
-              <p className="text-gray-400 font-bold tracking-tighter">--------------------------------------------------------</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest pt-1">
+                *** THANK YOU FOR TRUSTING SHOELOTSKEY ***
+              </p>
+              <div className="border-b border-dashed border-gray-300 my-2"></div>
             </div>
           </div>
 
-          <div className="flex items-center justify-center gap-3 sm:gap-4 pt-5 border-t border-gray-100 no-print w-full">
-            <Button variant="outline" onClick={() => setShowPrintSummary(false)} className="w-36 sm:w-44 h-11 rounded-2xl font-black text-xs uppercase tracking-widest border-red-100 text-gray-700 hover:bg-red-50/50 transition-all shadow-xs">
+          <div className="flex items-center justify-center gap-3 pt-4 border-t border-gray-100 no-print w-full">
+            <Button variant="outline" onClick={() => setShowPrintSummary(false)} className="flex-1 h-11 rounded-2xl font-bold text-xs uppercase tracking-widest border-slate-200 text-gray-700 hover:bg-slate-100 transition-all justify-center">
               Close
             </Button>
-            <Button onClick={() => window.print()} className="w-44 sm:w-52 h-11 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-widest rounded-2xl flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all">
+            <Button onClick={() => window.print()} className="flex-1 h-11 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-widest rounded-2xl flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all">
               <Printer size={16} strokeWidth={2.5} /> Print Summary
             </Button>
           </div>

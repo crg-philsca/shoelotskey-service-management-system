@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
-import { PlusCircle, Edit, Trash, GripVertical } from 'lucide-react';
+import { PlusCircle, Edit, Trash, GripVertical, AlertTriangle, Archive } from 'lucide-react';
 import { Reorder } from 'motion/react';
 import ServiceModal from '@/app/components/ServiceModal';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 
 import { Service } from '@/app/types';
 import { useServices } from '@/app/context/ServiceContext';
@@ -19,6 +20,7 @@ export default function ServiceManagement({ onSetHeaderActionRight, user }: Serv
   const { services, addService, updateService, deleteService, reorderServices } = useServices();
   const [serviceModalOpen, setServiceModalOpen] = useState(false);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Service | null>(null);
   const navigate = useNavigate();
 
   // HIGH PERFORMANCE: Keep local copies for reordering to ensure zero-lag dragging
@@ -48,16 +50,25 @@ export default function ServiceManagement({ onSetHeaderActionRight, user }: Serv
     if (onSetHeaderActionRight && user.role?.toLowerCase() === 'owner') {
       onSetHeaderActionRight(
         <div className="flex items-center gap-2">
-        <Button 
-            className="w-10 h-10 sm:w-40 flex items-center justify-center rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-[11px] font-black uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 tracking-widest"
-            onClick={() => {
-              setSelectedService(null);
-              setServiceModalOpen(true);
-            }}
-        >
-            <PlusCircle className="h-4 w-4 sm:mr-2 shrink-0" />
-            <span className="hidden sm:inline">New Service</span>
-        </Button>
+            {/* Historical Records button */}
+            <Button 
+                className="w-10 h-10 flex items-center justify-center rounded-md bg-slate-700 text-white shadow-md transition hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-500"
+                onClick={() => navigate('/job-order-form/historical-records')}
+                title="Historical Records"
+            >
+                <Archive className="h-4 w-4" />
+            </Button>
+            {/* New Service button */}
+            <Button 
+                className="w-10 h-10 sm:w-40 flex items-center justify-center rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-[11px] font-black uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 tracking-widest"
+                onClick={() => {
+                  setSelectedService(null);
+                  setServiceModalOpen(true);
+                }}
+            >
+                <PlusCircle className="h-4 w-4 sm:mr-2 shrink-0" />
+                <span className="hidden sm:inline">New Service</span>
+            </Button>
         </div>
       );
     }
@@ -78,9 +89,14 @@ export default function ServiceManagement({ onSetHeaderActionRight, user }: Serv
     setServiceModalOpen(true);
   };
 
-  const handleDeleteService = (id: string) => {
-    if (confirm('Are you sure you want to delete this service?')) {
-      deleteService(id);
+  const handleDeleteService = (service: Service) => {
+    setDeleteTarget(service);
+  };
+
+  const confirmDeleteService = () => {
+    if (deleteTarget) {
+      deleteService(deleteTarget.id);
+      setDeleteTarget(null);
     }
   };
 
@@ -131,7 +147,7 @@ export default function ServiceManagement({ onSetHeaderActionRight, user }: Serv
                             <Button variant="ghost" size="sm" onClick={() => handleEditService(service)} className="h-7 w-7 p-0 text-amber-600 border border-amber-600 hover:bg-amber-50 rounded-md">
                               <Edit size={12} />
                             </Button>
-                            <Button variant="ghost" size="sm" onClick={() => handleDeleteService(service.id)} className="h-7 w-7 p-0 text-red-600 border border-red-600 hover:bg-red-50 rounded-md">
+                            <Button variant="ghost" size="sm" onClick={() => handleDeleteService(service)} className="h-7 w-7 p-0 text-red-600 border border-red-600 hover:bg-red-50 rounded-md">
                               <Trash size={12} />
                             </Button>
                           </div>
@@ -175,7 +191,7 @@ export default function ServiceManagement({ onSetHeaderActionRight, user }: Serv
                             <Button variant="ghost" size="sm" onClick={() => handleEditService(service)} className="h-7 w-7 p-0 text-amber-600 border border-amber-600 hover:bg-amber-50 rounded-md">
                               <Edit size={12} />
                             </Button>
-                            <Button variant="ghost" size="sm" onClick={() => handleDeleteService(service.id)} className="h-7 w-7 p-0 text-red-600 border border-red-600 hover:bg-red-50 rounded-md">
+                            <Button variant="ghost" size="sm" onClick={() => handleDeleteService(service)} className="h-7 w-7 p-0 text-red-600 border border-red-600 hover:bg-red-50 rounded-md">
                               <Trash size={12} />
                             </Button>
                           </div>
@@ -222,7 +238,7 @@ export default function ServiceManagement({ onSetHeaderActionRight, user }: Serv
                           <Button variant="ghost" size="sm" onClick={() => handleEditService(service)} className="h-7 w-7 p-0 text-amber-600 border border-amber-600 hover:bg-amber-50 rounded-md">
                             <Edit size={12} />
                           </Button>
-                          <Button variant="ghost" size="sm" onClick={() => handleDeleteService(service.id)} className="h-7 w-7 p-0 text-red-600 border border-red-600 hover:bg-red-50 rounded-md">
+                          <Button variant="ghost" size="sm" onClick={() => handleDeleteService(service)} className="h-7 w-7 p-0 text-red-600 border border-red-600 hover:bg-red-50 rounded-md">
                             <Trash size={12} />
                           </Button>
                         </div>
@@ -245,6 +261,31 @@ export default function ServiceManagement({ onSetHeaderActionRight, user }: Serv
         service={selectedService}
         onSave={handleSaveService}
       />
+
+      {deleteTarget && (
+        <Dialog open onOpenChange={() => setDeleteTarget(null)}>
+          <DialogContent className="max-w-sm rounded-2xl p-6 shadow-2xl border-0 bg-white">
+            <DialogHeader>
+              <DialogTitle className="font-black uppercase text-sm flex items-center gap-2 text-red-700 tracking-wider">
+                <AlertTriangle className="h-5 w-5 text-red-600 animate-pulse" />
+                Confirm Service Deletion
+              </DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-gray-700 leading-relaxed py-2">
+              Are you sure you want to completely remove <strong className="text-red-700 font-bold">"{deleteTarget.name}"</strong> from the active service catalog? This administrative action cannot be undone.
+            </p>
+            <div className="flex items-center justify-center gap-3 mt-4 pt-4 border-t border-gray-100 w-full">
+              <Button variant="outline" onClick={() => setDeleteTarget(null)} className="flex-1 h-11 rounded-xl font-bold text-xs uppercase tracking-wider text-gray-600 hover:bg-gray-100 justify-center">
+                Cancel
+              </Button>
+              <Button onClick={confirmDeleteService} className="flex-1 h-11 bg-red-600 hover:bg-red-700 text-white rounded-xl font-black uppercase text-xs tracking-wider shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-1.5">
+                <Trash className="h-4 w-4" />
+                Confirm Delete
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div >
   );
 }

@@ -1,32 +1,37 @@
-
-import { useState, useEffect, useRef } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/app/components/ui/dialog';
-import { Button } from '@/app/components/ui/button';
-import { Input } from '@/app/components/ui/input';
+import { useState, useEffect } from 'react';
+import { Dialog, DialogContent } from '@/app/components/ui/dialog';
 import { Label } from '@/app/components/ui/label';
+import { Input } from '@/app/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
+import { Button } from '@/app/components/ui/button';
 import { Checkbox } from '@/app/components/ui/checkbox';
-import { useServices } from '@/app/context/ServiceContext';
-import { useInventory } from '@/app/context/InventoryContext';
-import type { JobOrder, JobStatus, PaymentStatus, PaymentMethod, InventoryUsed } from '@/app/types';
-import { Package, Plus, Minus, Trash2, Calendar as CalendarIcon } from 'lucide-react';
+import { Textarea } from '@/app/components/ui/textarea';
+import { ChevronDown, ChevronUp, Plus, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 
-interface EditOrderModalProps {
-    order: JobOrder | null;
-    open: boolean;
-    onOpenChange: (open: boolean) => void;
-    onSave?: (orderId: string, updates: Partial<JobOrder>) => void;
-}
+import type { JobOrder, ShoeEntry } from '@/app/types';
+import { useServices } from '../context/ServiceContext';
+import { useOrderCalculations } from '../hooks/useOrderCalculations';
+import { CreatableCombobox } from './ui/creatable-combobox';
 
+// Dropdown options
 const SHOE_BRANDS = [
-    'Nike', 'Adidas', 'Asics', 'Puma', 'New Balance', 'Converse', 'Vans', 'Reebok', 'Jordan',
+    'Other', 'Nike', 'Adidas', 'Asics', 'Puma', 'New Balance', 'Converse', 'Vans', 'Reebok', 'Jordan',
     'Under Armour', 'Timberland', 'Dr. Martens', 'Salomon', 'Merrell', 'Skechers', 'Mizuno',
-    'Brooks', 'Saucony', 'Hoka', 'On Cloud', 'Other'
+    'Brooks', 'Saucony', 'Hoka', 'On Cloud'
 ];
 
 const SHOE_MATERIALS = [
-    'Leather', 'Synthetic', 'Canvas', 'Mesh', 'Rubber', 'Textile', 'Suede', 'Knit', 'Patent Leather', 'Denim', 'Nubuck', 'Other'
+    'Other', 'Leather', 'Synthetic', 'Canvas', 'Mesh', 'Rubber', 'Textile', 'Suede', 'Knit', 'Patent Leather', 'Denim', 'Nubuck'
+];
+
+const SHOE_COLORS = [
+    'Black', 'White', 'Red', 'Blue', 'Green', 'Yellow', 'Brown', 'Grey', 'Navy', 'Beige', 'Pink', 'Purple', 'Orange', 'Other'
+];
+
+const SHOE_SIZES = [
+    '5', '5.5', '6', '6.5', '7', '7.5', '8', '8.5', '9', '9.5', '10', '10.5', '11', '12', '13',
+    '35', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46'
 ];
 
 const BRAND_MODELS: Record<string, string[]> = {
@@ -52,17 +57,33 @@ const BRAND_MODELS: Record<string, string[]> = {
     'On Cloud': ['Cloudmonster', 'Cloudnova', 'Cloudstratus', 'Cloud 5', 'Other']
 };
 
-const DEFAULT_MODELS = [
-    'Sneakers', 'Running Shoes', 'Basketball', 'Leather Shoes', 'Boots', 'Sandals', 'Formal', 'Slip-on', 'Other'
-];
+const ALL_MODELS = Object.values(BRAND_MODELS).flat().filter(m => m !== 'Other');
+const MODEL_TO_BRAND: Record<string, string> = {};
+Object.entries(BRAND_MODELS).forEach(([brand, models]) => {
+    models.forEach(model => {
+        if (model !== 'Other' && !MODEL_TO_BRAND[model]) {
+            MODEL_TO_BRAND[model] = brand;
+        }
+    });
+});
 
-const MODEL_MATERIALS: Record<string, string> = {
+const MODEL_MATERIALS: Record<string, string>  = {
     'Air Force 1': 'Leather',
     'Dunk Low': 'Leather',
+    'Air Max 90': 'Mesh',
+    'Air Max 97': 'Mesh',
+    'Cortez': 'Leather',
+    'Blazer': 'Leather',
     'Air Jordan 1': 'Leather',
+    'Air Jordan 3': 'Leather',
+    'Air Jordan 4': 'Leather',
+    'Air Jordan 11': 'Patent Leather',
     'Superstar': 'Leather',
     'Stan Smith': 'Leather',
     'Samba': 'Leather',
+    'Ultraboost': 'Knit',
+    'Yeezy Boost 350': 'Knit',
+    'Gazelle': 'Suede',
     'Club C 85': 'Leather',
     'Classic Leather': 'Leather',
     '6-Inch Premium Boot': 'Nubuck',
@@ -72,434 +93,383 @@ const MODEL_MATERIALS: Record<string, string> = {
     'Chuck 70': 'Canvas',
     'Old Skool': 'Suede',
     'Slip-On': 'Canvas',
-    'Authentic': 'Canvas'
+    'Authentic': 'Canvas',
+    'Sk8-Hi': 'Canvas',
+    'Era': 'Canvas',
+    '550': 'Leather',
+    '990': 'Suede',
+    '2002R': 'Suede',
+    '574': 'Suede',
+    'Gel-Lyte III': 'Suede',
+    'Suede': 'Suede',
+    'XT-6': 'Synthetic'
 };
 
-const DELIVERY_COURIERS = [
-    'Lalamove', 'JRS', 'LBC', 'Grab', 'Other'
-];
-
-function FormattedDateInput({ value, onChange, className, id }: { value: string; onChange: (val: string) => void; className?: string; id?: string }) {
-    const hiddenDateRef = useRef<HTMLInputElement>(null);
-
-    const toDisplay = (iso: string) => {
-        if (!iso) return '';
-        const parts = iso.split('-');
-        if (parts.length === 3) {
-            return `${parts[1]}/${parts[2]}/${parts[0]}`;
-        }
-        return iso;
-    };
-
-    const [localVal, setLocalVal] = useState(toDisplay(value));
-
-    useEffect(() => {
-        setLocalVal(toDisplay(value));
-    }, [value]);
-
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        let inputVal = e.target.value;
-        let digits = inputVal.replace(/[^0-9]/g, '');
-        if (digits.length > 8) digits = digits.substring(0, 8);
-
-        let formatted = digits;
-        if (digits.length > 2) {
-            formatted = digits.substring(0, 2) + '/' + digits.substring(2);
-        }
-        if (digits.length > 4) {
-            formatted = digits.substring(0, 2) + '/' + digits.substring(2, 4) + '/' + digits.substring(4);
-        }
-
-        setLocalVal(formatted);
-
-        if (digits.length === 8) {
-            const mm = digits.substring(0, 2);
-            const dd = digits.substring(2, 4);
-            const yyyy = digits.substring(4, 8);
-            const iso = `${yyyy}-${mm}-${dd}`;
-            const dateObj = new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd));
-            if (!isNaN(dateObj.getTime())) {
-                onChange(iso);
-            }
-        }
-    };
-
-    const handlePickerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const isoVal = e.target.value;
-        if (isoVal) {
-            setLocalVal(toDisplay(isoVal));
-            onChange(isoVal);
-        }
-    };
-
-    const openPicker = () => {
-        if (hiddenDateRef.current) {
-            if (typeof hiddenDateRef.current.showPicker === 'function') {
-                hiddenDateRef.current.showPicker();
-            } else {
-                hiddenDateRef.current.click();
-            }
-        }
-    };
-
-    return (
-        <div className="relative w-full flex items-center">
-            <Input
-                id={id}
-                type="text"
-                placeholder="MM/DD/YYYY"
-                value={localVal}
-                onChange={handleChange}
-                className={`${className || ''} pr-8 text-left`}
-            />
-            <button
-                type="button"
-                onClick={openPicker}
-                title="Select date"
-                className="absolute right-2.5 text-gray-400 hover:text-red-600 transition-colors cursor-pointer p-0.5"
-            >
-                <CalendarIcon size={14} />
-            </button>
-            <input
-                ref={hiddenDateRef}
-                type="date"
-                value={value || ''}
-                onChange={handlePickerChange}
-                className="sr-only absolute pointer-events-none opacity-0"
-                tabIndex={-1}
-            />
-        </div>
-    );
+interface EditOrderModalProps {
+    order: JobOrder | null;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    onSave?: (id: string, updates: Partial<JobOrder>) => void;
+    user?: { username: string; role: 'owner' | 'staff' };
 }
 
+const SECTION_TITLE = "text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2";
+const INPUT_STYLE = "bg-white border-gray-100 h-9 text-xs focus:ring-red-50 focus:border-red-100 transition-all shadow-sm rounded-xl";
+const LABEL_STYLE = "text-[10px] font-bold text-gray-500 uppercase tracking-tight mb-1 block";
+
 export default function EditOrderModal({ order, open, onOpenChange, onSave }: EditOrderModalProps) {
-    const [formData, setFormData] = useState<JobOrder | null>(null);
+    const { services } = useServices();
+
+    const [status, setStatus] = useState(order?.status || 'new-order');
+    const [customerName, setCustomerName] = useState('');
+    const [contactNumber, setContactNumber] = useState('');
+    const [shippingPreference, setShippingPreference] = useState('pickup');
+    const [paymentStatus, setPaymentStatus] = useState('pending');
+    const [paymentMethod, setPaymentMethod] = useState('cash');
+    const [amountReceived, setAmountReceived] = useState('0');
+    const [referenceNo, setReferenceNo] = useState('');
+    const [priorityLevel, setPriorityLevel] = useState(order?.priorityLevel || 'regular');
     
-    // [STABILITY] Helper to ensure list types for database-returned JSON which might be objects or strings
-    const ensureList = (data: any): any[] => {
-        if (!data) return [];
-        if (Array.isArray(data)) return data;
-        if (typeof data === 'string') {
-            try { const parsed = JSON.parse(data); return Array.isArray(parsed) ? parsed : Object.values(parsed); } 
-            catch { return []; }
-        }
-        if (typeof data === 'object') return Object.values(data);
-        return [];
-    };
+    // Delivery address fields
+    const [deliveryAddress, setDeliveryAddress] = useState(order?.deliveryAddress || '');
+    const [province, setProvince] = useState(order?.province || '');
+    const [city, setCity] = useState(order?.city || '');
+    const [barangay, setBarangay] = useState(order?.barangay || '');
+    const [zipCode, setZipCode] = useState(order?.zipCode || '');
+    
+    // Internal state for shoes
+    const [shoes, setShoes] = useState<ShoeEntry[]>([]);
+    
+    // State for collapsible cards
+    const [expandedShoeId, setExpandedShoeId] = useState<string | null>(null);
 
     useEffect(() => {
-        if (order) {
-            const initialCondition = (order.items && order.items[0]?.condition)
-                ? { ...order.items[0].condition }
-                : (order.condition || {
-                    scratches: false,
-                    yellowing: false,
-                    ripsHoles: false,
-                    deepStains: false,
-                    soleSeparation: false,
-                    wornOut: false,
-                    others: ''
-                });
-
-            setFormData({
-                ...order,
-                condition: initialCondition,
-                items: ensureList(order.items),
-                baseService: ensureList(order.baseService),
-                addOns: ensureList(order.addOns),
-                inventoryUsed: ensureList((order as any).inventoryUsed)
-            });
-        }
-    }, [order]);
-
-    const formatReferenceNo = (value: string, method?: string) => {
-        const targetMethod = method || formData?.paymentMethod;
-        if (targetMethod === 'gcash') {
-            const digits = value.replace(/\D/g, '').slice(0, 13);
-            let formatted = '';
-            for (let i = 0; i < digits.length; i++) {
-                formatted += digits[i];
-                if ((i === 3 || i === 6 || i === 9) && i !== digits.length - 1) {
-                    formatted += '-';
+        if (order && open) {
+            setStatus(order.status);
+            setCustomerName(order.customerName);
+            setContactNumber(order.contactNumber);
+            setShippingPreference(order.shippingPreference);
+            setPaymentStatus(order.paymentStatus || 'pending');
+            setPaymentMethod(order.paymentMethod || 'cash');
+            setAmountReceived((order.amountReceived || 0).toFixed(2));
+            setReferenceNo(order.referenceNo || '');
+            setPriorityLevel(order.priorityLevel || 'regular');
+            
+            setDeliveryAddress(order.deliveryAddress || '');
+            setProvince(order.province || '');
+            setCity(order.city || '');
+            setBarangay(order.barangay || '');
+            setZipCode(order.zipCode || '');
+            
+            if (order.items && order.items.length > 0) {
+                const mappedShoes: ShoeEntry[] = order.items.map((item, idx) => ({
+                    id: parseInt(item.id.split('-').pop() || String(idx), 10) || Date.now() + idx,
+                    brand: item.brand,
+                    shoeModel: item.shoeModel,
+                    shoeMaterial: item.shoeMaterial,
+                    shoeSize: item.shoeSize || '',
+                    color: Array.isArray(item.color) ? item.color.join(', ') : (item.color || ''),
+                    quantity: item.quantity,
+                    condition: item.condition || {
+                        scratches: false,
+                        ripsHoles: false,
+                        wornOut: false,
+                        soleSeparation: false,
+                        yellowing: false,
+                        deepStains: false,
+                        others: ''
+                    },
+                    baseService: item.baseService || [],
+                    addOns: item.addOns || [],
+                    historicalBasePrices: item.historicalBasePrices || [],
+                    historicalAddOnPrices: item.historicalAddOnPrices || [],
+                    inventoryUsed: [],
+                    description: '',
+                    shoeName: `${item.brand} ${item.shoeModel}`
+                }));
+                setShoes(mappedShoes);
+                if (mappedShoes.length > 0) {
+                    setExpandedShoeId(mappedShoes[0].id.toString());
                 }
+            } else if (order.brand && order.baseService) {
+                setShoes([{
+                    id: Date.now(),
+                    brand: order.brand,
+                    shoeModel: order.shoeModel,
+                    shoeMaterial: order.shoeMaterial,
+                    shoeSize: order.shoeSize || '',
+                    color: order.color || '',
+                    quantity: order.quantity || 1,
+                    condition: order.condition || {
+                        scratches: false,
+                        ripsHoles: false,
+                        wornOut: false,
+                        soleSeparation: false,
+                        yellowing: false,
+                        deepStains: false,
+                        others: ''
+                    },
+                    baseService: order.baseService || [],
+                    addOns: order.addOns || [],
+                    historicalBasePrices: order.historicalBasePrices || [],
+                    historicalAddOnPrices: order.historicalAddOnPrices || [],
+                    inventoryUsed: [],
+                    description: '',
+                    shoeName: `${order.brand} ${order.shoeModel}`
+                }]);
+                setExpandedShoeId(Date.now().toString());
             }
-            return formatted;
         }
-        if (targetMethod === 'maya') {
-            const chars = value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 12);
-            let formatted = '';
-            for (let i = 0; i < chars.length; i++) {
-                formatted += chars[i];
-                if ((i === 3 || i === 7) && i !== chars.length - 1) {
-                    formatted += '-';
-                }
+    }, [order, open]);
+
+    const calculations = useOrderCalculations({
+        shoes,
+        services,
+        priorityLevel: priorityLevel as any,
+        amountReceived,
+        paymentStatus,
+        basicCleaningRushReduction: order?.rushReductionDays || 9
+    });
+
+    const formatPeso = (val: number) => `₱${val.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+    const formatDate = (date: any) => {
+        if (!date) return '-';
+        return new Date(date).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+    };
+
+    const formatContactNumber = (value: string) => {
+        const digitsOnly = value.replace(/\D/g, '').slice(0, 11);
+        let formatted = '';
+        for (let i = 0; i < digitsOnly.length; i++) {
+            formatted += digitsOnly[i];
+            if ((i === 3 || i === 6) && i !== digitsOnly.length - 1) {
+                formatted += '-';
             }
-            return formatted;
+        }
+        return formatted;
+    };
+    
+    const formatReferenceNo = (value: string) => {
+        const clean = value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+        if (paymentMethod === 'gcash') {
+            if (clean.length > 13) return clean.slice(0, 13).replace(/(.{4})(.{3})(.{3})(.{3})/, '$1-$2-$3-$4');
+            const match = clean.match(/^(.{0,4})(.{0,3})(.{0,3})(.{0,3})$/);
+            if (match) {
+                return [match[1], match[2], match[3], match[4]].filter(Boolean).join('-');
+            }
+        } else if (paymentMethod === 'maya') {
+            if (clean.length > 12) return clean.slice(0, 12).replace(/(.{4})(.{4})(.{4})/, '$1-$2-$3');
+            const match = clean.match(/^(.{0,4})(.{0,4})(.{0,4})$/);
+            if (match) {
+                return [match[1], match[2], match[3]].filter(Boolean).join('-');
+            }
         }
         return value;
     };
 
-    const { services } = useServices();
-    const { inventoryData, updateStock } = useInventory();
-    const [selectedInventoryItem, setSelectedInventoryItem] = useState<string>('');
-    
-    if (!formData) return null;
-
-    const baseServices = services.filter(s => s.category === 'base' && s.active);
-    const addOnServices = services.filter(s => s.category === 'addon' && s.active);
-
-    const recalculateTotals = (data: JobOrder) => {
-        let basePrice = 0;
-        const qty = Number(data?.quantity || 1);
-        const baseServicesArr = Array.isArray(data?.baseService) ? data.baseService : [];
-
-        baseServicesArr.forEach(serviceName => {
-            const baseServiceObj = (baseServices || []).find(s => s?.name === serviceName);
-            if (baseServiceObj) basePrice += (Number(baseServiceObj.price || 0) * qty);
-        });
-
-        let addonsPrice = 0;
-        (data?.addOns || []).forEach(addon => {
-            const addonObj = (addOnServices || []).find(s => s?.name === addon?.name);
-            if (addonObj) addonsPrice += (Number(addonObj.price || 0) * (Number(addon?.quantity || 1)) * qty);
-        });
-
-        let priorityFee = 0;
-        if (data?.priorityLevel === 'rush') {
-            priorityFee = baseServicesArr.includes('Basic Cleaning') ? 150 : 0;
-        } else if (data?.priorityLevel === 'premium') {
-            priorityFee = baseServicesArr.some(s => String(s || '').includes('Color Renewal')) ? 1000 : 0;
+    const handleSave = () => {
+        if (!onSave || !order) return;
+        
+        const finalName = customerName.trim();
+        if (!finalName) {
+            toast.error('Customer name is required');
+            return;
         }
-
-        const rushFeeTotal = priorityFee * qty;
-        const total = basePrice + addonsPrice + rushFeeTotal;
-
-        return {
-            baseServiceFee: basePrice,
-            addOnsTotal: addonsPrice,
-            grandTotal: total
-        };
-    };
-
-    const updateFormData = (updates: any) => {
-        if (!formData) return;
-        const base = { ...formData, ...updates };
-
-        let syncItems = [...(base.items || [])];
-        const itemTemplate = {
-            brand: base.brand,
-            shoeMaterial: base.shoeMaterial,
-            shoeModel: base.shoeModel,
-            quantity: base.quantity,
-            condition: base.condition,
-            baseService: Array.isArray(base.baseService) ? base.baseService : [],
-            addOns: base.addOns || []
-        };
-
-        if (syncItems.length === 0 && base.id) {
-            syncItems = [{ id: `${Date.now()}-0`, ...itemTemplate }];
-        } else if (syncItems.length > 0) {
-            syncItems[0] = { ...syncItems[0], ...itemTemplate };
-        }
-
-        const totals = recalculateTotals({ ...base, items: syncItems });
-        setFormData({ ...base, ...totals, items: syncItems });
-    };
-
-    const handleAddOnToggle = (addonName: string, checked: boolean) => {
-        let newAddons = [...formData.addOns];
-        if (checked) {
-            if (!newAddons.some(a => a.name === addonName)) {
-                newAddons.push({ name: addonName, quantity: 1 });
-            }
-        } else {
-            newAddons = newAddons.filter(a => a.name !== addonName);
-        }
-        updateFormData({ addOns: newAddons });
-    };
-
-    const handleAddOnQuantityChange = (addonName: string, quantity: number) => {
-        const newAddons = formData.addOns.map(a =>
-            a.name === addonName ? { ...a, quantity } : a
-        );
-        const updated = { ...formData, addOns: newAddons };
-        const totals = recalculateTotals(updated);
-        setFormData({ ...updated, ...totals });
-    };
-
-
-
-    const handleDeductStock = () => {
-        const used = ensureList(formData?.inventoryUsed);
-        if (!formData || !used.length || formData.inventoryApplied) return;
-
-        const dbId = parseInt(formData.id);
-        used.forEach(item => {
-            updateStock(item.itemId, item.quantity, isNaN(dbId) ? undefined : dbId);
-        });
-
-        setFormData({ ...formData, inventoryApplied: true });
-        toast.success(`Updated stock levels for ${used.length} items.`);
-    };
-
-    const handleAddInventory = (itemId: string) => {
-        const item = inventoryData.find(i => i.id.toString() === itemId);
-        if (!item) return;
-
-        const currentUsed = formData.inventoryUsed || [];
-        if (currentUsed.some(i => i.itemId === item.id)) {
-            toast.error('Item already added');
+        
+        if (['gcash', 'maya'].includes(paymentMethod) && !referenceNo) {
+            toast.error('Reference number is required for e-payments');
             return;
         }
 
-        const updatedUsed: InventoryUsed[] = [
-            ...currentUsed,
-            { itemId: item.id, name: item.name, quantity: 1, unit: item.unit }
-        ];
-        setFormData({ ...formData, inventoryUsed: updatedUsed });
-        setSelectedInventoryItem('');
+        const updates: Partial<JobOrder> = {
+            customerName: finalName,
+            contactNumber: contactNumber.trim(),
+            shippingPreference: shippingPreference as any,
+            deliveryAddress: shippingPreference === 'delivery' ? deliveryAddress : undefined,
+            province: shippingPreference === 'delivery' ? province : undefined,
+            city: shippingPreference === 'delivery' ? city : undefined,
+            barangay: shippingPreference === 'delivery' ? barangay : undefined,
+            zipCode: shippingPreference === 'delivery' ? zipCode : undefined,
+            paymentStatus: paymentStatus as any,
+            paymentMethod: paymentMethod as any,
+            amountReceived: parseFloat(amountReceived) || 0,
+            referenceNo: ['gcash', 'maya'].includes(paymentMethod) ? referenceNo : undefined,
+            priorityLevel: priorityLevel as any,
+            
+            items: shoes.map(shoe => {
+                const historicalBasePrices = (shoe.baseService || []).map(serviceName => {
+                    const existing = shoe.historicalBasePrices?.find(h => h.name === serviceName);
+                    if (existing) return existing;
+                    const service = calculations.baseServices.find(s => s.name === serviceName);
+                    return { name: serviceName, price: service ? service.price : 0 };
+                });
+
+                const historicalAddOnPrices = (shoe.addOns || []).map((addon: any) => {
+                    const addonName = typeof addon === 'string' ? addon : addon.name;
+                    const existing = shoe.historicalAddOnPrices?.find(h => h.name === addonName);
+                    if (existing) return existing;
+                    const service = calculations.addOnServices.find(s => s.name === addonName);
+                    return { name: addonName, price: service ? service.price : 0 };
+                });
+
+                return {
+                    id: `${order.id}-${shoe.id}`,
+                    brand: shoe.brand || '',
+                    shoeModel: shoe.shoeModel || '',
+                    shoeMaterial: shoe.shoeMaterial || '',
+                    shoeSize: shoe.shoeSize || '',
+                    color: shoe.color || '',
+                    quantity: shoe.quantity || 1,
+                    condition: shoe.condition,
+                    baseService: shoe.baseService,
+                    addOns: shoe.addOns,
+                    historicalBasePrices,
+                    historicalAddOnPrices
+                };
+            }),
+            
+            baseServiceFee: calculations.totals.baseTotal,
+            addOnsTotal: calculations.totals.addOnsTotal,
+            grandTotal: calculations.totals.grandTotal,
+            balance: calculations.totals.remainingBalance,
+            change: calculations.totals.change
+        };
+        
+        if (updates.items && updates.items.length > 0) {
+            updates.brand = updates.items[0].brand;
+            updates.shoeModel = updates.items[0].shoeModel;
+            updates.shoeMaterial = updates.items[0].shoeMaterial;
+            updates.shoeSize = updates.items[0].shoeSize;
+            updates.color = updates.items[0].color;
+            updates.baseService = updates.items[0].baseService;
+            updates.addOns = updates.items[0].addOns;
+            updates.historicalBasePrices = updates.items[0].historicalBasePrices;
+            updates.historicalAddOnPrices = updates.items[0].historicalAddOnPrices;
+            updates.quantity = shoes.reduce((acc, s) => acc + (s.quantity || 1), 0);
+        }
+
+        onSave(order.id, updates);
+        toast.success('Order details updated');
+        onOpenChange(false);
     };
 
-    const handleUpdateInventoryQty = (itemId: number, delta: number) => {
-        const updatedUsed = ensureList(formData.inventoryUsed).map(i => 
-            i.itemId === itemId ? { ...i, quantity: Math.max(0, parseFloat((i.quantity + delta).toFixed(2))) } : i
-        );
-        setFormData({ ...formData, inventoryUsed: updatedUsed });
+    const updateShoe = (shoeId: number | string, updates: Partial<ShoeEntry>) => {
+        setShoes(shoes.map(s => s.id === shoeId ? { ...s, ...updates } : s));
     };
 
-    const handleRemoveInventory = (itemId: number) => {
-        const updatedUsed = ensureList(formData.inventoryUsed).filter(i => i.itemId !== itemId);
-        setFormData({ ...formData, inventoryUsed: updatedUsed });
+    const removeShoe = (shoeId: number | string) => {
+        if (shoes.length > 1) {
+            setShoes(shoes.filter(s => s.id !== shoeId));
+        } else {
+            toast.error("An order must have at least one shoe.");
+        }
+    };
+    
+    const addShoe = () => {
+        const newId = Date.now();
+        setShoes([...shoes, {
+            id: newId,
+            shoeName: '',
+            brand: '',
+            shoeModel: '',
+            shoeMaterial: '',
+            shoeSize: '',
+            color: '',
+            quantity: 1,
+            condition: {
+                scratches: false,
+                ripsHoles: false,
+                wornOut: false,
+                soleSeparation: false,
+                yellowing: false,
+                deepStains: false,
+                others: ''
+            },
+            baseService: [],
+            addOns: [],
+            inventoryUsed: [],
+            description: ''
+        }]);
+        setExpandedShoeId(newId.toString());
     };
 
-
-    const INPUT_STYLE = "w-full bg-white border-gray-200 h-10 text-sm focus:ring-red-50 focus:border-red-100 transition-all shadow-sm rounded-xl px-3";
-    const LABEL_STYLE = "text-xs font-bold text-gray-600 mb-1.5 block uppercase tracking-wide";
-
-    if (!formData) return null;
+    if (!order) return null;
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-md bg-white p-0 flex flex-col h-auto max-h-[90vh] rounded-2xl overflow-hidden border-none shadow-2xl">
-                <DialogHeader className="px-6 py-4 border-b border-gray-100 bg-white flex flex-col gap-2 flex-shrink-0">
-                    <div className="flex flex-row items-center justify-center gap-3 w-full">
-                        <DialogTitle className="text-xl font-bold text-gray-900 tracking-tight">
-                            EDIT ORDER DETAIL
-                        </DialogTitle>
-                        <span className="text-sm font-bold text-gray-400 bg-gray-100 px-3 py-1 rounded-full whitespace-nowrap">
-                            {formData.orderNumber}
-                        </span>
+            <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto bg-[#F8F9FA] p-0 gap-0 rounded-2xl border-none shadow-2xl">
+                
+                {/* Header (Sticky) */}
+                <div className="bg-white px-6 py-4 border-b border-gray-100 flex items-center justify-between sticky top-0 z-10">
+                    <div className="flex items-center gap-3">
+                        <h2 className="text-xl font-bold text-red-600 uppercase tracking-tight">Edit Order Detail</h2>
+                        <div className="bg-slate-100 hover:bg-slate-200 text-slate-900 px-3 py-1 rounded-full text-xs font-mono font-bold transition-all flex items-center gap-1.5 border border-slate-200 group cursor-default">
+                          <span>{order.orderNumber}</span>
+                        </div>
                     </div>
-                </DialogHeader>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => onOpenChange(false)}
+                        className="h-8 w-8 text-gray-400 border border-gray-200 hover:text-red-600 hover:bg-red-50 hover:border-red-100 rounded-full transition-colors flex items-center justify-center flex-shrink-0"
+                    >
+                        <X size={16} />
+                    </Button>
+                </div>
 
-                <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 bg-gray-50/30 pb-10">
-                    {/* Order Info Section */}
-                    <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
+                <div className="p-6 space-y-6">
+                    {/* Top Row: Meta */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-50">
+                        <div>
+                            <Label className={LABEL_STYLE}>Order Status</Label>
+                            <div className="h-9 px-3 py-1.5 rounded-xl text-xs font-bold text-gray-700 bg-gray-50/50 border border-gray-100 cursor-not-allowed flex items-center capitalize">
+                                {status.replace('-', ' ')}
+                            </div>
+                        </div>
+                        <div>
+                            <Label className={LABEL_STYLE}>Processed By</Label>
+                            <div className="h-9 px-3 py-1.5 rounded-xl text-xs font-bold text-gray-700 bg-gray-50/50 border border-gray-100 flex items-center">
+                                {order.processedBy || 'Owner'}
+                            </div>
+                        </div>
+                        <div>
+                            <Label className={LABEL_STYLE}>Order Date</Label>
+                            <div className="h-9 px-3 py-1.5 rounded-xl text-xs font-bold text-gray-700 bg-white border border-gray-100 flex items-center">
+                                {formatDate(order.transactionDate)}
+                            </div>
+                        </div>
+                        <div>
+                            <Label className={LABEL_STYLE}>Predicted Date</Label>
+                            <div className="h-9 px-3 py-1.5 rounded-xl text-xs font-bold text-gray-700 bg-white border border-gray-100 flex items-center">
+                                {formatDate(order.predictedCompletionDate)}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Customer Info */}
+                    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-50">
+                        <h3 className={SECTION_TITLE}><span className="w-1.5 h-1.5 rounded-full bg-red-500"></span> Customer Details</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div>
-                                <Label className={LABEL_STYLE}>Order Status</Label>
-                                <Select
-                                    value={formData.status}
-                                    onValueChange={(val: JobStatus) => updateFormData({
-                                        status: val,
-                                        actualCompletionDate: val === 'claimed' ? new Date() : undefined
-                                    })}
-                                >
-                                    <SelectTrigger className={`h-10 border-gray-200 text-xs focus:ring-red-50 focus:border-red-100 font-bold px-3 rounded-xl transition-all
-                                        ${formData.status === 'new-order' ? 'bg-purple-50 text-purple-700' :
-                                            formData.status === 'on-going' ? 'bg-blue-50 text-blue-700' :
-                                                formData.status === 'for-release' ? 'bg-orange-50 text-orange-700' :
-                                                    'bg-gray-50 text-gray-700'}`}>
+                                <Label className={LABEL_STYLE}>Customer Name</Label>
+                                <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} className={INPUT_STYLE} />
+                            </div>
+                            <div>
+                                <Label className={LABEL_STYLE}>Contact Number</Label>
+                                <Input 
+                                    value={contactNumber} 
+                                    onChange={(e) => setContactNumber(formatContactNumber(e.target.value))} 
+                                    className={INPUT_STYLE} 
+                                    placeholder="09xx-xxx-xxxx"
+                                />
+                            </div>
+                            <div>
+                                <Label className={LABEL_STYLE}>Shipping Preference</Label>
+                                <Select value={shippingPreference} onValueChange={setShippingPreference}>
+                                    <SelectTrigger className={INPUT_STYLE}>
                                         <SelectValue />
                                     </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="new-order">New Order</SelectItem>
-                                        <SelectItem value="on-going">On-Going</SelectItem>
-                                        <SelectItem value="for-release">For Release</SelectItem>
-                                        <SelectItem value="claimed">Claimed</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div>
-                                <Label className={LABEL_STYLE}>Processed By</Label>
-                                <p className="h-10 flex items-center px-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold text-gray-700">
-                                    {formData.processedBy || 'Current User'}
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <Label className={LABEL_STYLE}>Order Date</Label>
-                                <FormattedDateInput
-                                    value={(() => {
-                                        if (!formData?.transactionDate) return '';
-                                        const d = new Date(formData.transactionDate);
-                                        return isNaN(d.getTime()) ? '' : d.toISOString().split('T')[0];
-                                    })()}
-                                    onChange={(val) => updateFormData({ transactionDate: new Date(val).toISOString() })}
-                                    className={INPUT_STYLE}
-                                />
-                            </div>
-                            <div>
-                                <Label className={LABEL_STYLE}>Predicted Release Date</Label>
-                                <FormattedDateInput
-                                    value={(() => {
-                                        if (!formData?.predictedCompletionDate) return '';
-                                        const d = new Date(formData.predictedCompletionDate);
-                                        return isNaN(d.getTime()) ? '' : d.toISOString().split('T')[0];
-                                    })()}
-                                    onChange={(val) => updateFormData({ predictedCompletionDate: new Date(val).toISOString() })}
-                                    className={INPUT_STYLE}
-                                />
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            {['for-release', 'claimed'].includes(formData.status) && (
-                                <div>
-                                    <Label className={LABEL_STYLE}>Release Time</Label>
-                                    <Input
-                                        type="time"
-                                        value={formData.releaseTime || ''}
-                                        onChange={(e) => updateFormData({ releaseTime: e.target.value })}
-                                        className={INPUT_STYLE}
-                                    />
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Customer Section */}
-                    <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-                        <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
-                            Customer Details
-                        </h3>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="col-span-2 sm:col-span-1">
-                                <Label className={LABEL_STYLE}>Customer Name</Label>
-                                <Input
-                                    value={formData.customerName}
-                                    onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
-                                    className={INPUT_STYLE}
-                                />
-                            </div>
-                            <div className="col-span-2 sm:col-span-1">
-                                <Label className={LABEL_STYLE}>Contact Number</Label>
-                                <Input
-                                    value={formData.contactNumber}
-                                    onChange={(e) => updateFormData({ contactNumber: e.target.value })}
-                                    className={INPUT_STYLE}
-                                />
-                            </div>
-                            <div className="col-span-2">
-                                <Label className={LABEL_STYLE}>Shipping Preference</Label>
-                                <Select
-                                    value={formData.shippingPreference}
-                                    onValueChange={(val: any) => updateFormData({ shippingPreference: val })}
-                                >
-                                    <SelectTrigger className={INPUT_STYLE}><SelectValue /></SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="pickup">Pickup</SelectItem>
                                         <SelectItem value="delivery">Delivery</SelectItem>
@@ -507,481 +477,482 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                 </Select>
                             </div>
                         </div>
-
-                        {formData.shippingPreference === 'delivery' && (
-                            <div className="mt-4 space-y-4">
+                        
+                        {shippingPreference === 'delivery' && (
+                            <div className="mt-4 pt-4 border-t border-gray-50 space-y-4">
                                 <div>
-                                    <Label className={LABEL_STYLE}>Delivery Address</Label>
-                                    <Input
-                                        value={formData.deliveryAddress || ''}
-                                        onChange={(e) => updateFormData({ deliveryAddress: e.target.value })}
-                                        className={INPUT_STYLE}
-                                        placeholder="Enter full delivery address"
-                                    />
+                                    <Label className={LABEL_STYLE}>Delivery Address (House/Street)</Label>
+                                    <Input value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} className={INPUT_STYLE} placeholder="House No., Street, Building" />
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className={formData.deliveryCourier === 'Other' ? 'col-span-1' : 'col-span-2'}>
-                                        <Label className={LABEL_STYLE}>Courier</Label>
-                                        <Select
-                                            value={DELIVERY_COURIERS.includes(formData.deliveryCourier || '') ? formData.deliveryCourier : (formData.deliveryCourier ? 'Other' : undefined)}
-                                            onValueChange={(val) => updateFormData({ deliveryCourier: val })}
-                                        >
-                                            <SelectTrigger className={INPUT_STYLE}><SelectValue placeholder="Select Courier" /></SelectTrigger>
-                                            <SelectContent>
-                                                {DELIVERY_COURIERS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                                            </SelectContent>
-                                        </Select>
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                    <div>
+                                        <Label className={LABEL_STYLE}>Barangay</Label>
+                                        <Input value={barangay} onChange={(e) => setBarangay(e.target.value)} className={INPUT_STYLE} />
                                     </div>
-                                    {formData.deliveryCourier === 'Other' && (
-                                        <div className="col-span-1">
-                                            <Label className={LABEL_STYLE}>Specify Courier</Label>
-                                            <Input
-                                                value={formData.deliveryCourier === 'Other' ? '' : formData.deliveryCourier}
-                                                onChange={(e) => updateFormData({ deliveryCourier: e.target.value })}
-                                                className={INPUT_STYLE}
-                                                placeholder="Courier name"
-                                            />
-                                        </div>
-                                    )}
+                                    <div>
+                                        <Label className={LABEL_STYLE}>City/Municipality</Label>
+                                        <Input value={city} onChange={(e) => setCity(e.target.value)} className={INPUT_STYLE} />
+                                    </div>
+                                    <div>
+                                        <Label className={LABEL_STYLE}>Province/Region</Label>
+                                        <Input value={province} onChange={(e) => setProvince(e.target.value)} className={INPUT_STYLE} />
+                                    </div>
+                                    <div>
+                                        <Label className={LABEL_STYLE}>Zip Code</Label>
+                                        <Input value={zipCode} onChange={(e) => setZipCode(e.target.value)} className={INPUT_STYLE} />
+                                    </div>
                                 </div>
                             </div>
                         )}
                     </div>
 
-                    {/* Shoe Details Section */}
-                    <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-                        <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
-                            Shoe Details
-                        </h3>
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                <div>
-                                    <Label className={LABEL_STYLE}>Brand</Label>
-                                    <Select
-                                        value={SHOE_BRANDS.includes(formData.brand || '') ? formData.brand : (formData.brand ? 'Other' : undefined)}
-                                        onValueChange={(val) => updateFormData({ brand: val })}
-                                    >
-                                        <SelectTrigger className={INPUT_STYLE}><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            {SHOE_BRANDS.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                    {(formData.brand === 'Other' || !SHOE_BRANDS.includes(formData.brand || '')) && (
-                                        <Input
-                                            className={`${INPUT_STYLE} mt-2`}
-                                            placeholder="Specify brand..."
-                                            value={SHOE_BRANDS.includes(formData.brand || '') ? '' : formData.brand}
-                                            onChange={(e) => updateFormData({ brand: e.target.value })}
-                                        />
-                                    )}
-                                </div>
-                                <div>
-                                    <Label className={LABEL_STYLE}>Model</Label>
-                                    <Select
-                                        value={(BRAND_MODELS[formData.brand || 'Other'] || DEFAULT_MODELS).includes(formData.shoeModel || '') ? formData.shoeModel : (formData.shoeModel ? 'Other' : undefined)}
-                                        onValueChange={(val) => {
-                                            const updates: Partial<JobOrder> = { shoeModel: val };
-                                            if (MODEL_MATERIALS[val]) {
-                                                updates.shoeMaterial = MODEL_MATERIALS[val];
-                                            }
-                                            updateFormData(updates);
-                                        }}
-                                    >
-                                        <SelectTrigger className={INPUT_STYLE}><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            {(BRAND_MODELS[formData.brand || 'Other'] || DEFAULT_MODELS).map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                    {(formData.shoeModel === 'Other' || !(BRAND_MODELS[formData.brand || 'Other'] || DEFAULT_MODELS).includes(formData.shoeModel || '')) && (
-                                        <Input
-                                            className={`${INPUT_STYLE} mt-2`}
-                                            placeholder="Specify model..."
-                                            value={(BRAND_MODELS[formData.brand || 'Other'] || DEFAULT_MODELS).includes(formData.shoeModel || '') ? '' : formData.shoeModel}
-                                            onChange={(e) => updateFormData({ shoeModel: e.target.value })}
-                                        />
-                                    )}
-                                </div>
-                                <div>
-                                    <Label className={LABEL_STYLE}>Material</Label>
-                                    <Select
-                                        value={SHOE_MATERIALS.includes(formData.shoeMaterial || '') ? formData.shoeMaterial : (formData.shoeMaterial ? 'Other' : undefined)}
-                                        onValueChange={(val) => updateFormData({ shoeMaterial: val })}
-                                    >
-                                        <SelectTrigger className={INPUT_STYLE}><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            {SHOE_MATERIALS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                    {(formData.shoeMaterial === 'Other' || !SHOE_MATERIALS.includes(formData.shoeMaterial || '')) && (
-                                        <Input
-                                            className={`${INPUT_STYLE} mt-2`}
-                                            placeholder="Specify material..."
-                                            value={SHOE_MATERIALS.includes(formData.shoeMaterial || '') ? '' : formData.shoeMaterial}
-                                            onChange={(e) => updateFormData({ shoeMaterial: e.target.value })}
-                                        />
-                                    )}
-                                </div>
-                            </div>
-
-                             <div className="grid grid-cols-2 gap-4">
-                                <div className="col-span-1">
-                                    <Label className={LABEL_STYLE}>Quantity</Label>
-                                    <Input
-                                        type="number"
-                                        min="1"
-                                        value={formData.quantity}
-                                        onChange={(e) => updateFormData({ quantity: parseInt(e.target.value) || 1 })}
-                                        className={INPUT_STYLE}
-                                    />
-                                    <p className="text-[10px] text-gray-400 mt-1 font-medium">Selected: {formData.quantity || 1} {formData.quantity === 1 ? 'Pair' : 'Pairs'}</p>
-                                </div>
-                                <div className="col-span-1">
-                                    <Label className={LABEL_STYLE}>Priority Level</Label>
-                                    <Select
-                                        value={formData.priorityLevel}
-                                        onValueChange={(val: any) => updateFormData({ priorityLevel: val })}
-                                    >
-                                        <SelectTrigger className={INPUT_STYLE}><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="regular">Regular</SelectItem>
-                                            <SelectItem value="rush">Rush</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
-
-                            <div>
-                                <Label className={LABEL_STYLE}>Shoe Condition</Label>
-                                <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
-                                    {[
-                                        { key: 'scratches', label: 'Scratches' },
-                                        { key: 'yellowing', label: 'Yellowing' },
-                                        { key: 'ripsHoles', label: 'Rips/Holes' },
-                                        { key: 'deepStains', label: 'Deep Stains' },
-                                        { key: 'soleSeparation', label: 'Sole Separation' },
-                                        { key: 'wornOut', label: 'Faded/Worn' }
-                                    ].map((condition) => (
-                                        <div
-                                            key={condition.key}
-                                            className={`flex items-center justify-center py-2 px-1 rounded-md border text-[10px] font-bold cursor-pointer transition-all text-center h-11 break-words leading-tight
-                                                ${(formData.condition as any)[condition.key] ? 'bg-red-50 border-red-200 text-red-700' : 'bg-gray-50 border-gray-100 text-gray-500 hover:bg-gray-100'}`}
-                                            onClick={() => {
-                                                const newCondition = { ...formData.condition, [condition.key]: !(formData.condition as any)[condition.key] };
-                                                updateFormData({ condition: newCondition });
-                                            }}
+                    {/* Shoe Items */}
+                    <div>
+                        <div className="space-y-3">
+                            {shoes.map((shoe, index) => {
+                                const isExpanded = expandedShoeId === shoe.id.toString() || shoes.length === 1;
+                                
+                                const allowedAddons = calculations.addOnServices.filter(addon => {
+                                    const baseServicesArr = shoe.baseService || [];
+                                    const basicCleaningAddOns = ['Unyellowing', 'White Paint', 'Minor Restoration', 'Minor Retouch'];
+                                    const reglueAddOns = ['Add Glue Layer', 'Premium Glue', 'Midsole', 'Undersole', 'Midsole Full Reglue', 'Undersole Full Reglue', 'Middlesole Glue', 'Undersole Glue', 'Midsole Glue'];
+                                    if (baseServicesArr.includes('Basic Cleaning') && basicCleaningAddOns.includes(addon.name)) return true;
+                                    if (baseServicesArr.some(s => s.toLowerCase().includes('reglue')) && reglueAddOns.includes(addon.name)) return true;
+                                    const colorAddOns = ['2 Colors', '3 Colors'];
+                                    if (baseServicesArr.some(s => s.includes('Color Renewal')) && colorAddOns.includes(addon.name)) return true;
+                                    return false;
+                                }).map(a => a.name);
+                                
+                                return (
+                                    <div key={shoe.id} className="bg-white rounded-xl shadow-sm border border-gray-50 overflow-hidden">
+                                        {/* Header */}
+                                        <div 
+                                            className="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-gray-50/50 transition-colors border-b border-gray-50"
+                                            onClick={() => setExpandedShoeId(isExpanded && shoes.length > 1 ? null : shoe.id.toString())}
                                         >
-                                            {condition.label}
-                                        </div>
-                                    ))}
-                                </div>
-                                <div className="mt-3">
-                                    <Input
-                                        placeholder="Other conditions..."
-                                        value={formData.condition.others}
-                                        onChange={(e) => updateFormData({ condition: { ...formData.condition, others: e.target.value } })}
-                                        className={INPUT_STYLE}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Services Section */}
-                    <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-                        <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
-                            Services
-                        </h3>
-                        <div className="space-y-6">
-                            <div>
-                                <Label className={LABEL_STYLE}>Primary Service</Label>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
-                                    {baseServices.map(s => {
-                                        const isChecked = (Array.isArray(formData.baseService) ? formData.baseService : []).includes(s.name);
-                                        return (
-                                            <div key={s.id} className={`flex items-start space-x-2 bg-gray-50 p-3 rounded-lg border cursor-pointer transition-all ${isChecked ? 'border-red-200 bg-red-50/30' : 'border-gray-100 hover:bg-white'}`}
-                                                onClick={() => {
-                                                    const current = Array.isArray(formData.baseService) ? formData.baseService : [];
-                                                    const next = isChecked ? current.filter(n => n !== s.name) : [...current, s.name];
-                                                    updateFormData({ baseService: next });
-                                                }}>
-                                                <Checkbox checked={isChecked} onCheckedChange={() => { }} onClick={(e) => e.stopPropagation()} />
-                                                <div className="flex flex-col min-w-0">
-                                                    <span className="text-xs font-bold text-gray-700 leading-tight">{s.name}</span>
-                                                    <span className="text-[10px] text-gray-400 mt-1 font-medium">{'\u20B1'}{s.price}</span>
-                                                </div>
+                                            <div className="flex items-center gap-3">
+                                                {shoes.length > 1 && (isExpanded ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />)}
+                                                <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span> Shoe {index + 1} Details
+                                                </h3>
                                             </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                            <div>
-                                <Label className={LABEL_STYLE}>Add-ons</Label>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
-                                    {addOnServices.map(s => {
-                                        const isChecked = formData.addOns.some(a => a.name === s.name);
-                                        const addonData = formData.addOns.find(a => a.name === s.name);
-                                        return (
-                                            <div key={s.id} className={`flex items-start space-x-2 bg-gray-50 p-3 rounded-lg border cursor-pointer transition-all ${isChecked ? 'border-red-200 bg-red-50/30' : 'border-gray-100 hover:bg-white'}`}
-                                                onClick={() => handleAddOnToggle(s.name, !isChecked)}>
-                                                <Checkbox checked={isChecked} onCheckedChange={() => { }} onClick={(e) => e.stopPropagation()} />
-                                                <div className="flex flex-col flex-1 min-w-0">
-                                                    <span className="text-xs font-bold text-gray-700 leading-tight">{s.name}</span>
-                                                    <div className="flex justify-between items-center mt-1">
-                                                        <span className="text-[10px] text-gray-400 font-medium">{'\u20B1'}{s.price}</span>
-                                                        {isChecked && (
-                                                            <Input
-                                                                type="number"
-                                                                min="1"
-                                                                value={addonData?.quantity || 1}
-                                                                onChange={(e) => handleAddOnQuantityChange(s.name, parseInt(e.target.value) || 1)}
-                                                                className="h-6 w-10 text-[10px] text-center p-0 font-bold text-red-600 bg-white"
-                                                                onClick={(e) => e.stopPropagation()}
+                                            <div className="flex items-center gap-3">
+                                                {shoes.length > 1 && (
+                                                    <Button 
+                                                        type="button" 
+                                                        variant="ghost" 
+                                                        size="icon" 
+                                                        className="h-6 w-6 text-gray-400 hover:text-red-600 hover:bg-red-50"
+                                                        onClick={(e) => { e.stopPropagation(); removeShoe(shoe.id); }}
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Body */}
+                                        {isExpanded && (
+                                            <div className="p-4 space-y-6">
+                                                {/* Identification */}
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                    <div>
+                                                        <Label className={LABEL_STYLE}>Brand</Label>
+                                                        <CreatableCombobox
+                                                            options={SHOE_BRANDS}
+                                                            value={shoe.brand || ''}
+                                                            onChange={(val) => updateShoe(shoe.id, { brand: val })}
+                                                            placeholder="Select brand"
+                                                            searchPlaceholder="Search brand..."
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <Label className={LABEL_STYLE}>Model</Label>
+                                                        <CreatableCombobox
+                                                            options={shoe.brand ? (BRAND_MODELS[shoe.brand] || ['Other']) : ALL_MODELS}
+                                                            value={shoe.shoeModel || ''}
+                                                            onChange={(val) => {
+                                                                if (!shoe.brand && MODEL_TO_BRAND[val]) {
+                                                                    updateShoe(shoe.id, { brand: MODEL_TO_BRAND[val], shoeModel: val, shoeMaterial: MODEL_MATERIALS[val] || shoe.shoeMaterial });
+                                                                    return;
+                                                                }
+                                                                updateShoe(shoe.id, { shoeModel: val, shoeMaterial: MODEL_MATERIALS[val] || shoe.shoeMaterial });
+                                                            }}
+                                                            placeholder="Select model"
+                                                            searchPlaceholder="Search model..."
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <Label className={LABEL_STYLE}>Material</Label>
+                                                        <CreatableCombobox
+                                                            options={SHOE_MATERIALS}
+                                                            value={shoe.shoeMaterial || ''}
+                                                            onChange={(val) => updateShoe(shoe.id, { shoeMaterial: val })}
+                                                            placeholder="Select material"
+                                                            searchPlaceholder="Search material..."
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <Label className={LABEL_STYLE}>Size</Label>
+                                                        <CreatableCombobox
+                                                            options={SHOE_SIZES}
+                                                            value={shoe.shoeSize || ''}
+                                                            onChange={(val) => updateShoe(shoe.id, { shoeSize: val })}
+                                                            placeholder="Select size"
+                                                            searchPlaceholder="Search size..."
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <Label className={LABEL_STYLE}>Color</Label>
+                                                        <CreatableCombobox
+                                                            options={SHOE_COLORS}
+                                                            value={shoe.color || ''}
+                                                            onChange={(val) => updateShoe(shoe.id, { color: val })}
+                                                            placeholder="Select color"
+                                                            searchPlaceholder="Search color..."
+                                                            multiple={true}
+                                                        />
+                                                    </div>
+                                                    {(shoe.baseService || []).includes('Basic Cleaning') && (
+                                                        <div>
+                                                            <Label className={LABEL_STYLE}>Priority</Label>
+                                                            <Select value={priorityLevel} onValueChange={(val: any) => setPriorityLevel(val)}>
+                                                                <SelectTrigger className={INPUT_STYLE}>
+                                                                    <SelectValue />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="regular">Regular</SelectItem>
+                                                                    <SelectItem value="rush">Rush</SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* Condition */}
+                                                <div>
+                                                    <div className="flex items-center gap-2 mb-2">
+                                                        <Label className={LABEL_STYLE + " !mb-0"}>Shoe Condition</Label>
+                                                    </div>
+                                                    <div className="bg-gray-50/50 rounded-xl border border-gray-100 p-3">
+                                                        <div className="flex flex-wrap gap-3">
+                                                            {[
+                                                                { id: 'scratches', label: 'Scratches' },
+                                                                { id: 'yellowing', label: 'Yellowing' },
+                                                                { id: 'ripsHoles', label: 'Rips/Holes' },
+                                                                { id: 'deepStains', label: 'Deep Stains' },
+                                                                { id: 'soleSeparation', label: 'Sole Separation' },
+                                                                { id: 'wornOut', label: 'Faded/Worn' },
+                                                            ].map((cond) => (
+                                                                <label key={cond.id} className={`flex items-center space-x-2 px-3 py-1.5 rounded-full border cursor-pointer transition-colors ${shoe.condition[cond.id as keyof typeof shoe.condition] ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'}`}>
+                                                                    <Checkbox
+                                                                        checked={shoe.condition[cond.id as keyof typeof shoe.condition] as boolean}
+                                                                        onCheckedChange={(checked) =>
+                                                                            updateShoe(shoe.id, {
+                                                                                condition: { ...shoe.condition, [cond.id]: checked as boolean }
+                                                                            })
+                                                                        }
+                                                                        className="h-3 w-3"
+                                                                    />
+                                                                    <span className="text-[10px] font-bold text-gray-600">{cond.label}</span>
+                                                                </label>
+                                                            ))}
+                                                        </div>
+                                                        <div className="mt-3">
+                                                            <Label className={`${LABEL_STYLE} mb-1`}>Notes:</Label>
+                                                            <Textarea
+                                                                placeholder="Other conditions..."
+                                                                value={shoe.condition.others}
+                                                                onChange={(e) =>
+                                                                    updateShoe(shoe.id, {
+                                                                        condition: { ...shoe.condition, others: e.target.value }
+                                                                    })
+                                                                }
+                                                                className="text-xs bg-white border-gray-100 rounded-xl resize-none min-h-[40px]"
                                                             />
-                                                        )}
+                                                        </div>
                                                     </div>
                                                 </div>
+
+                                                {/* Services section inside shoe */}
+                                                <div className="border-t border-gray-100 pt-4">
+                                                    <h3 className={SECTION_TITLE}><span className="w-1.5 h-1.5 rounded-full bg-red-500"></span> Services</h3>
+                                                    <div className="mb-4">
+                                                        <Label className={LABEL_STYLE}>Primary Service</Label>
+                                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                                            {calculations.baseServices.map(s => {
+                                                                const isSelected = shoe.baseService?.includes(s.name);
+                                                                return (
+                                                                    <label 
+                                                                        key={s.name} 
+                                                                        className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${isSelected ? 'border-red-500 bg-white shadow-sm' : 'border-gray-100 hover:border-gray-200 bg-gray-50/30'}`}
+                                                                    >
+                                                                        <Checkbox
+                                                                            checked={isSelected}
+                                                                            onCheckedChange={(checked) => {
+                                                                                let newServices = [...(shoe.baseService || [])];
+                                                                                if (checked) {
+                                                                                    newServices.push(s.name);
+                                                                                } else {
+                                                                                    newServices = newServices.filter(srv => srv !== s.name);
+                                                                                }
+                                                                                
+                                                                                const newAllowedAddons = calculations.addOnServices.filter(addon => {
+                                                                                    const baseServicesArr = newServices;
+                                                                                    const basicCleaningAddOns = ['Unyellowing', 'White Paint', 'Minor Restoration', 'Minor Retouch'];
+                                                                                    const reglueAddOns = ['Add Glue Layer', 'Premium Glue', 'Midsole', 'Undersole', 'Midsole Full Reglue', 'Undersole Full Reglue', 'Middlesole Glue', 'Undersole Glue', 'Midsole Glue'];
+                                                                                    if (baseServicesArr.includes('Basic Cleaning') && basicCleaningAddOns.includes(addon.name)) return true;
+                                                                                    if (baseServicesArr.some(bs => bs.toLowerCase().includes('reglue')) && reglueAddOns.includes(addon.name)) return true;
+                                                                                    const colorAddOns = ['2 Colors', '3 Colors'];
+                                                                                    if (baseServicesArr.some(bs => bs.includes('Color Renewal')) && colorAddOns.includes(addon.name)) return true;
+                                                                                    return false;
+                                                                                }).map(a => a.name);
+                                                                                
+                                                                                let newAddons = [...(shoe.addOns || [])].filter((a: any) => newAllowedAddons.includes(a.name));
+                                                                                updateShoe(shoe.id, { baseService: newServices, addOns: newAddons });
+                                                                            }}
+                                                                            className="mt-0.5"
+                                                                        />
+                                                                        <div className="flex flex-col gap-0.5">
+                                                                            <span className="text-[11px] font-bold text-gray-700 leading-tight">{s.name}</span>
+                                                                            <span className="text-[10px] font-black text-gray-400">₱{s.price}</span>
+                                                                        </div>
+                                                                    </label>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+
+                                                    {shoe.baseService && shoe.baseService.length > 0 && allowedAddons.length > 0 && (
+                                                        <div>
+                                                            <Label className={LABEL_STYLE}>Add-ons</Label>
+                                                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                                                {allowedAddons.map(addonName => {
+                                                                    const addonData = calculations.addOnServices.find(a => a.name === addonName);
+                                                                    if (!addonData) return null;
+                                                                    const isSelected = shoe.addOns?.some((a: any) => a.name === addonName);
+                                                                    
+                                                                    return (
+                                                                        <label 
+                                                                            key={addonName} 
+                                                                            className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${isSelected ? 'border-red-500 bg-white shadow-sm' : 'border-gray-100 hover:border-gray-200 bg-gray-50/30'}`}
+                                                                        >
+                                                                            <Checkbox
+                                                                                checked={isSelected}
+                                                                                onCheckedChange={(checked) => {
+                                                                                    let newAddons = [...(shoe.addOns || [])];
+                                                                                    if (checked) {
+                                                                                        newAddons.push({ name: addonName, quantity: 1 });
+                                                                                    } else {
+                                                                                        newAddons = newAddons.filter((a: any) => a.name !== addonName);
+                                                                                    }
+                                                                                    updateShoe(shoe.id, { addOns: newAddons });
+                                                                                }}
+                                                                                className="mt-0.5"
+                                                                            />
+                                                                            <div className="flex flex-col gap-0.5">
+                                                                                <span className="text-[11px] font-bold text-gray-700 leading-tight">{addonName}</span>
+                                                                                <span className="text-[10px] font-black text-gray-400">₱{addonData.price}</span>
+                                                                            </div>
+                                                                        </label>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                            
+                            <Button 
+                                type="button" 
+                                variant="outline" 
+                                onClick={addShoe}
+                                className="w-full h-10 border-dashed border-gray-200 text-gray-500 hover:text-red-600 hover:bg-red-50 hover:border-red-200 transition-colors bg-transparent rounded-xl text-xs font-black uppercase tracking-widest mt-2"
+                            >
+                                <Plus className="w-3.5 h-3.5 mr-2" /> Add Another Shoe
+                            </Button>
                         </div>
                     </div>
 
-                    {/* Inventory Used Section - Only visible for On-Going or beyond */}
-                    {formData.status !== 'new-order' && (
-                        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                                Inventory Used
-                            </h3>
-                            <Button 
-                                type="button"
-                                size="sm"
-                                disabled={!formData.inventoryUsed?.length || formData.inventoryApplied}
-                                onClick={handleDeductStock}
-                                className={`text-[10px] h-7 rounded-lg font-black uppercase tracking-widest px-3 border border-red-100 transition-all
-                                    ${formData.inventoryApplied 
-                                        ? 'bg-green-50 text-green-600 border-green-100 hover:bg-green-50' 
-                                        : 'bg-red-50 text-red-600 hover:bg-red-100'}`}
-                            >
-                                {formData.inventoryApplied ? 'Stock Updated' : 'Update Stock'}
-                            </Button>
-                        </div>
-                        <div className="space-y-4">
-                            <div className="flex gap-2">
-                                <div className="flex-1">
+                    {/* Payment & Summary */}
+                    <div className="space-y-4">
+                        <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-50 space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="flex flex-col justify-end h-full">
+                                    <Label className={`${LABEL_STYLE} mb-1`}>Payment Status</Label>
                                     <Select 
-                                        value={selectedInventoryItem} 
-                                        onValueChange={setSelectedInventoryItem}
+                                        value={paymentStatus} 
+                                        onValueChange={(value) => {
+                                            setPaymentStatus(value);
+                                            if (value === 'downpayment') {
+                                                setAmountReceived((calculations.totals.grandTotal / 2).toFixed(2));
+                                            } else if (value === 'fully-paid') {
+                                                setAmountReceived(calculations.totals.grandTotal.toFixed(2));
+                                            }
+                                        }}
                                     >
-                                        <SelectTrigger className="h-10 rounded-xl border-gray-200">
-                                            <SelectValue placeholder="Select Supply/Chemical" />
+                                        <SelectTrigger className={INPUT_STYLE}>
+                                            <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {inventoryData.filter(i => i.isActive).map(item => (
-                                                <SelectItem key={item.id} value={item.id.toString()}>
-                                                    {item.name} ({item.stock} {item.unit})
-                                                </SelectItem>
-                                            ))}
+                                            <SelectItem value="fully-paid">Fully Paid</SelectItem>
+                                            <SelectItem value="downpayment">Downpayment</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
-                                <Button 
-                                    type="button" 
-                                    onClick={() => handleAddInventory(selectedInventoryItem)}
-                                    disabled={!selectedInventoryItem}
-                                    className="bg-red-600 hover:bg-red-700 h-10 w-10 p-0 rounded-xl"
-                                >
-                                    <Plus className="h-4 w-4" />
-                                </Button>
-                            </div>
-
-                            <div className="space-y-2">
-                                {ensureList(formData.inventoryUsed).map((item) => (
-                                    <div key={item.itemId} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
-                                        <div className="flex items-center gap-3">
-                                            <div className="h-8 w-8 rounded-lg bg-white flex items-center justify-center text-red-600 shadow-sm border border-gray-100">
-                                                <Package size={16} />
-                                            </div>
-                                            <div>
-                                                <p className="text-xs font-bold text-gray-900">{item.name}</p>
-                                                <p className="text-[10px] text-gray-400 font-medium uppercase">{item.unit}</p>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex items-center gap-1 bg-white rounded-lg border border-gray-100 p-0.5">
-                                                <button 
-                                                    onClick={() => handleUpdateInventoryQty(item.itemId, -1)}
-                                                    className="h-6 w-6 flex items-center justify-center text-gray-400 hover:text-red-600 transition-colors"
-                                                >
-                                                    <Minus size={12} />
-                                                </button>
-                                                <input 
-                                                    type="number"
-                                                    step="any"
-                                                    value={item.quantity}
-                                                    onChange={(e) => {
-                                                        const val = parseFloat(e.target.value) || 0;
-                                                        const updatedUsed = (formData.inventoryUsed || []).map(i => 
-                                                            i.itemId === item.itemId ? { ...i, quantity: val } : i
-                                                        );
-                                                        setFormData({ ...formData, inventoryUsed: updatedUsed });
-                                                    }}
-                                                    className="text-[10px] font-black w-[30px] text-center bg-transparent border-none focus:ring-0 p-0"
-                                                />
-                                                <button 
-                                                    onClick={() => handleUpdateInventoryQty(item.itemId, 1)}
-                                                    className="h-6 w-6 flex items-center justify-center text-gray-400 hover:text-green-600 transition-colors"
-                                                >
-                                                    <Plus size={12} />
-                                                </button>
-                                            </div>
-                                            <button 
-                                                onClick={() => handleRemoveInventory(item.itemId)}
-                                                className="text-gray-300 hover:text-red-500 transition-colors"
-                                            >
-                                                <Trash2 size={14} />
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
-                                {ensureList(formData.inventoryUsed).length === 0 && (
-                                    <p className="text-[10px] text-gray-400 text-center py-2 italic">No items recorded for this order</p>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                    )}
-                    
-                    {/* Financials & Payment */}
-                    <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100 space-y-4">
-                        <div className="space-y-2">
-                            <div className="flex justify-between items-center text-sm">
-                                <span className="text-gray-500 font-medium tracking-tight">Total Quantity</span>
-                                <span className="font-bold">{formData.quantity || 1} {formData.quantity === 1 ? 'Pair' : 'Pairs'}</span>
-                            </div>
-                            <div className="flex justify-between items-center text-sm">
-                                <span className="text-gray-500 font-medium">Base Service Fee</span>
-                                <span className="font-bold">{'\u20B1'}{(formData.baseServiceFee || 0).toFixed(2)}</span>
-                            </div>
-                            <div className="flex justify-between items-center text-sm">
-                                <span className="text-gray-500 font-medium">Add-ons Total</span>
-                                <span className="font-bold">{'\u20B1'}{(formData.addOnsTotal || 0).toFixed(2)}</span>
-                            </div>
-                            <div className="border-t border-gray-200 pt-3 flex justify-between items-center">
-                                <span className="text-sm font-bold text-gray-500 uppercase tracking-wider">Grand Total</span>
-                                <span className="text-2xl font-black text-red-600">{'\u20B1'}{(formData.grandTotal || 0).toFixed(2)}</span>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-200">
-                            <div>
-                                <Label className={LABEL_STYLE}>Payment Status</Label>
-                                <Select value={formData.paymentStatus} onValueChange={(val: PaymentStatus) => setFormData({ ...formData, paymentStatus: val })}>
-                                    <SelectTrigger className="h-10 bg-white border-gray-200 rounded-xl text-xs"><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="downpayment">Downpayment</SelectItem>
-                                        <SelectItem value="fully-paid">Fully Paid</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div>
-                                <Label className={LABEL_STYLE}>Payment Method</Label>
-                                <Select value={formData.paymentMethod} onValueChange={(val: PaymentMethod) => setFormData({ ...formData, paymentMethod: val })}>
-                                    <SelectTrigger className="h-10 bg-white border-gray-200 rounded-xl text-xs"><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="cash">Cash</SelectItem>
-                                        <SelectItem value="gcash">GCash</SelectItem>
-                                        <SelectItem value="maya">Maya</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <Label className={LABEL_STYLE}>Amount Received</Label>
-                                <div className="relative">
-                                    <span className="absolute left-3 top-2.5 text-xs text-gray-400 font-bold">{'\u20B1'}</span>
-                                    <Input
-                                        type="number"
-                                        value={formData.amountReceived || ''}
-                                        onChange={(e) => setFormData({ ...formData, amountReceived: parseFloat(e.target.value) || 0 })}
-                                        className="h-10 bg-white border-gray-200 text-right font-mono pl-6 rounded-xl text-sm"
-                                    />
+                                <div className="flex flex-col justify-end h-full">
+                                    <Label className={`${LABEL_STYLE} mb-1`}>Payment Method</Label>
+                                    <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                                        <SelectTrigger className={INPUT_STYLE}>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="cash">Cash</SelectItem>
+                                            <SelectItem value="gcash">GCash</SelectItem>
+                                            <SelectItem value="maya">Maya</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                             </div>
-                            {formData.paymentStatus === 'fully-paid' ? (
-                                <div>
-                                    <Label className={LABEL_STYLE}>Amount Change</Label>
-                                    <div className="h-10 flex items-center justify-end px-3 bg-green-50 border border-green-100 rounded-xl text-sm font-bold text-green-700">
-                                        ₱{Math.max(0, (formData.amountReceived || 0) - formData.grandTotal).toFixed(2)}
-                                    </div>
-                                </div>
-                            ) : (
-                                <div>
-                                    <Label className={LABEL_STYLE}>Remaining Balance</Label>
-                                    <div className="h-10 flex items-center justify-end px-3 bg-red-50 border border-red-100 rounded-xl text-sm font-bold text-red-700">
-                                        ₱{Math.max(0, formData.grandTotal - (formData.amountReceived || 0)).toFixed(2)}
+                            
+                            {['gcash', 'maya'].includes(paymentMethod) && (
+                                <div className="grid grid-cols-1 gap-4">
+                                    <div className="flex flex-col justify-end h-full">
+                                        <Label className={`${LABEL_STYLE} mb-1`}>Reference Number</Label>
+                                        <Input
+                                            placeholder={paymentMethod === 'gcash' ? "0000-000-000-000" : "0000-0000-0000"}
+                                            value={referenceNo}
+                                            onChange={(e) => setReferenceNo(formatReferenceNo(e.target.value))}
+                                            className={INPUT_STYLE}
+                                        />
                                     </div>
                                 </div>
                             )}
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="flex flex-col justify-end h-full">
+                                    <Label className={`${LABEL_STYLE} mb-1`}>
+                                        {paymentStatus === 'downpayment' ? 'Required Downpayment (50%)' : 'Total Due'}
+                                    </Label>
+                                    <div className="relative shrink-0">
+                                        <span className={`absolute left-3 top-2.5 text-xs font-black ${paymentStatus === 'downpayment' ? 'text-gray-500' : 'text-gray-900'}`}>{'\u20B1'}</span>
+                                        <Input
+                                            readOnly
+                                            type="text"
+                                            className={`${INPUT_STYLE} !text-xs font-bold pl-6 ${paymentStatus === 'downpayment' ? 'bg-gray-100/50 text-gray-500 cursor-not-allowed border-gray-100/50' : 'bg-white text-gray-900 border-gray-100'}`}
+                                            value={formatPeso(paymentStatus === 'downpayment' ? calculations.totals.grandTotal / 2 : calculations.totals.grandTotal).replace('₱', '')}
+                                        />
+                                    </div>
+                                </div>
+                                
+                                <div className="flex flex-col justify-end h-full">
+                                    <Label className={`${LABEL_STYLE} mb-1`}>Amount Received</Label>
+                                    <div className="relative shrink-0">
+                                        <span className="absolute left-3 top-2.5 text-gray-900 text-xs font-black">{'\u20B1'}</span>
+                                        <Input
+                                            type="text"
+                                            inputMode="numeric"
+                                            className={`${INPUT_STYLE} !text-xs font-bold text-gray-900 pl-6 border-gray-100`}
+                                            value={amountReceived}
+                                            onChange={(e: any) => {
+                                                let val = e.target.value.replace(/[^\d.]/g, '');
+                                                const parts = val.split('.');
+                                                if (parts.length > 2) val = parts[0] + '.' + parts.slice(1).join('');
+                                                if (parts.length === 2 && parts[1].length > 2) val = parts[0] + '.' + parts[1].slice(0, 2);
+                                                setAmountReceived(val);
+                                            }}
+                                            onFocus={(e: any) => {
+                                                if (e.target.value === '0.00' || e.target.value === '0') {
+                                                    setAmountReceived('');
+                                                }
+                                            }}
+                                            onBlur={(e: any) => {
+                                                if (e.target.value === '') {
+                                                    setAmountReceived('0.00');
+                                                } else {
+                                                    const num = parseFloat(e.target.value);
+                                                    if (!isNaN(num)) {
+                                                        setAmountReceived(num.toFixed(2));
+                                                    }
+                                                }
+                                            }}
+                                            placeholder="0.00"
+                                        />
+                                    </div>
+                                </div>
+                                
+                                <div className={`flex flex-col justify-end h-full ${paymentStatus !== 'downpayment' ? 'md:col-span-2' : ''}`}>
+                                    <Label className={`${LABEL_STYLE} mb-1`}>Amount Change</Label>
+                                    <div className="relative shrink-0">
+                                        <span className="absolute left-3 top-2.5 text-xs font-black text-green-600">{'\u20B1'}</span>
+                                        <Input
+                                            readOnly
+                                            type="text"
+                                            className={`${INPUT_STYLE} !text-xs font-bold text-green-600 pl-6 bg-green-50/50 border-green-100 cursor-default`}
+                                            value={formatPeso(calculations.totals.change).replace('₱', '')}
+                                        />
+                                    </div>
+                                </div>
+                                
+                                {paymentStatus === 'downpayment' && (
+                                    <div className="flex flex-col justify-end h-full">
+                                        <Label className={`${LABEL_STYLE} mb-1`}>Remaining Balance</Label>
+                                        <div className="relative shrink-0">
+                                            <span className="absolute left-3 top-2.5 text-xs font-black text-red-500">{'\u20B1'}</span>
+                                            <Input
+                                                readOnly
+                                                type="text"
+                                                className={`${INPUT_STYLE} !text-xs font-bold text-red-500 pl-6 bg-red-50/50 border-red-100 cursor-default`}
+                                                value={formatPeso(calculations.totals.remainingBalance).replace('₱', '')}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
-                        {['gcash', 'maya'].includes(formData.paymentMethod) && (
-                            <div>
-                                <Label className={LABEL_STYLE}>Reference Number</Label>
-                                <Input
-                                    value={formData.referenceNo || ''}
-                                    onChange={(e) => setFormData({ ...formData, referenceNo: formatReferenceNo(e.target.value) })}
-                                    className={INPUT_STYLE}
-                                    placeholder={formData.paymentMethod === 'gcash' ? "xxxx-xxx-xxx-xxx" : "xxxx-xxxx-xxxx"}
-                                />
+                        <div className="mt-6 border-t border-gray-100 pt-6 space-y-3">
+                            <div className="flex justify-between items-center text-[13px]">
+                                <span className="text-gray-500 font-medium">Base Service Total</span>
+                                <span className="font-bold text-gray-800">{formatPeso(calculations.totals.baseTotal)}</span>
                             </div>
-                        )}
+                            {calculations.totals.rushFee > 0 && (
+                                <div className="flex justify-between items-center text-[13px]">
+                                    <span className="text-gray-500 font-medium">{shoes.length > 1 ? 'Rush Fee Total' : 'Rush Fee'}</span>
+                                    <span className="font-bold text-gray-800">{formatPeso(calculations.totals.rushFee)}</span>
+                                </div>
+                            )}
+                            <div className="flex justify-between items-center text-[13px]">
+                                <span className="text-gray-500 font-medium">Add-ons Subtotal</span>
+                                <span className="font-bold text-gray-800">{formatPeso(calculations.totals.addOnsTotal)}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-[13px] pt-2 border-t border-gray-100">
+                                <span className="text-gray-500 font-medium">Total Quantity (Per Unit)</span>
+                                <span className="font-bold text-gray-800">{shoes.reduce((sum, s) => sum + (s.quantity || 1), 0)} {shoes.reduce((sum, s) => sum + (s.quantity || 1), 0) === 1 ? 'Pair' : 'Pairs'}</span>
+                            </div>
+                            <div className="pt-3 mt-auto border-t border-solid border-gray-500 flex justify-between items-baseline">
+                                <span className="text-sm font-black text-gray-700 uppercase tracking-tight">Grand Total</span>
+                                <span className="text-2xl font-black text-red-600 leading-none">{formatPeso(calculations.totals.grandTotal)}</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <DialogFooter className="bg-white border-t border-gray-100 py-4 px-6 flex justify-between items-center gap-4">
-                    <Button variant="ghost" onClick={() => onOpenChange(false)} className="bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold h-11 px-8 rounded-xl uppercase tracking-wider text-xs flex-1 transition-all">
-                        Cancel
-                    </Button>
-                    <Button
-                        onClick={() => {
-                            if (formData.paymentMethod === 'gcash') {
-                                const digits = (formData.referenceNo || '').replace(/\D/g, '');
-                                if (digits.length !== 13) {
-                                    toast.error('GCash reference number must be filled out and exactly 13 digits.');
-                                    return;
-                                }
-                            } else if (formData.paymentMethod === 'maya') {
-                                const clean = (formData.referenceNo || '').replace(/[^a-zA-Z0-9]/g, '');
-                                if (clean.length !== 12) {
-                                    toast.error('Maya reference number/ID must be filled out and exactly 12 alphanumeric characters.');
-                                    return;
-                                }
-                            }
-                            const amountRec = formData.amountReceived || 0;
-                            if (formData.status === 'claimed' && (formData.grandTotal - amountRec > 0.01)) {
-                                toast.error(`Cannot claim: Order has an outstanding balance of \u20b1${(formData.grandTotal - amountRec).toFixed(2)}. Please update payment to fully paid.`);
-                                return;
-                            }
-                            const currentBalance = Math.max(0, formData.grandTotal - amountRec);
-                            const updatedFormData = {
-                                ...formData,
-                                balance: currentBalance
-                            };
-                            onSave?.(formData.id, updatedFormData);
-                        }}
-                        className="bg-red-600 hover:bg-red-700 text-white font-bold shadow-lg shadow-red-100 h-11 px-8 rounded-xl uppercase tracking-wider text-xs flex-1 transition-all active:scale-95"
-                    >
-                        Save
-                    </Button>
-                </DialogFooter>
+                {/* Footer */}
+                <div className="p-6 bg-white border-t border-gray-100 sticky bottom-0 z-10 w-full">
+                    <div className="grid grid-cols-2 gap-4 w-full">
+                        <Button variant="outline" className="w-full h-11 rounded-xl font-black tracking-widest text-xs border-gray-300 text-gray-600 hover:bg-gray-50 uppercase shadow-sm" onClick={() => onOpenChange(false)}>
+                            Cancel
+                        </Button>
+                        <Button className="w-full h-11 rounded-xl bg-[#D3544E] hover:bg-[#b9443f] text-white font-black tracking-widest text-xs uppercase shadow-sm" onClick={handleSave}>
+                            Save Changes
+                        </Button>
+                    </div>
+                </div>
             </DialogContent>
         </Dialog>
     );

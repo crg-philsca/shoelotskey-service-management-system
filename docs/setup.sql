@@ -135,6 +135,7 @@ CREATE TABLE IF NOT EXISTS orders (
     status_id INTEGER NOT NULL REFERENCES status(status_id),
     priority_id INTEGER NOT NULL REFERENCES priority_levels(priority_id),
     grand_total DECIMAL(10, 2) NOT NULL,
+    rush_reduction_days INTEGER,
     expected_at TIMESTAMP NOT NULL,
     released_at TIMESTAMP,
     claimed_at TIMESTAMP,
@@ -178,6 +179,8 @@ CREATE TABLE IF NOT EXISTS items (
     brand VARCHAR(50),
     material VARCHAR(50),
     shoe_model VARCHAR(50),
+    shoe_size VARCHAR(20),
+    color VARCHAR(50),
     quantity INTEGER DEFAULT 1,
     item_notes TEXT
 );
