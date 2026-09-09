@@ -1,0 +1,41 @@
+# Keep Heroku slug under 1000 MB. These paths are not required at runtime
+# after vite build + pip install.
+
+# Documentation / audits (not served by the web process)
+docs/
+*.md
+!backend/historical_data/README.md
+COMPREHENSIVE_AUDIT_REPORT.md
+
+# Local / CI only
+backend/tests/
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.cursor/
+.vscode/
+agent-transcripts/
+
+# Frontend sources are built into dist/ during heroku-postbuild;
+# keep package.json/lock for the Node buildpack, but ignore bulky local artifacts.
+node_modules/
+dist-ssr/
+
+# Local SQLite / secrets (also gitignored; belt-and-suspenders)
+backend/.env
+.env
+.env.*
+*.db
+*.db-wal
+*.db-shm
+
+# OCR ETL dumps / reports not needed to serve the SPA or API
+backend/historical_data/output/
+backend/historical_data/archive/
+backend/_tmp_*.py
+
+# Local tooling
+backend/inspect_users.py
+backend/scripts/

@@ -1,0 +1,11 @@
+# Optional LOCAL / workstation OCR extras only.
+# Do NOT install on Heroku — EasyOCR pulls PyTorch + CUDA and exceeds the 1GB slug limit.
+#
+# Usage (local venv):
+#   pip install -r requirements.txt
+#   pip install -r requirements-ocr-local.txt
+#
+# Production OCR path remains Gemini (GEMINI_API_KEY) via historical/ocr_engine.py.
+# local_ocr.py already treats EasyOCR as optional (ImportError → skip).
+
+easyocr>=1.7.0

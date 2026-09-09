@@ -25,6 +25,42 @@ router = APIRouter()
 # Returns records that need human review: OCR-pending images OR records
 # with NULL ML-critical fields (completion_days, brand, service_name)
 
+def _count_review_queue_total(db: Session) -> int:
+    """
+    Exact count of records that belong in the human-review queue.
+    Must stay in sync with get_validation_queue filters (Source A + Source B).
+    """
+    pending_images = (
+        db.query(HistoricalImage.historical_image_id)
+        .join(HistoricalImage.order)
+        .filter(HistoricalImage.ocr_status.in_(pending_filter_values()))
+        .count()
+    )
+    from historical.ocr_status import validated_filter_values
+    pending_order_ids = {
+        row[0]
+        for row in (
+            db.query(HistoricalImage.historical_order_id)
+            .filter(HistoricalImage.ocr_status.in_(pending_filter_values()))
+            .all()
+        )
+        if row[0] is not None
+    }
+    incomplete_q = (
+        db.query(HistoricalOrder.historical_order_id)
+        .filter(
+            HistoricalOrder.ocr_status.in_(validated_filter_values()),
+            (HistoricalOrder.completion_days == None) |
+            (HistoricalOrder.claimed_date == None),
+        )
+    )
+    incomplete_extra = 0
+    for (oid,) in incomplete_q.all():
+        if oid not in pending_order_ids:
+            incomplete_extra += 1
+    return int(pending_images) + int(incomplete_extra)
+
+
 @router.get("/queue")
 def get_validation_queue(
     db: Session = Depends(get_db),
@@ -36,8 +72,12 @@ def get_validation_queue(
     Includes:
       1. Images with ocr_status == 'Pending'
       2. Orders with NULL ML-critical fields (completion_days, brand, etc.)
+
+    Response shape:
+      { "items": [...], "total": <exact pending count>, "returned": <len(items)> }
     """
     results = []
+    total_pending = _count_review_queue_total(db)
 
     # ── Source A: OCR-pending images ──────────────────────────────────────────
     images = (
@@ -60,6 +100,7 @@ def get_validation_queue(
 
     # ── Source B: already-validated records still missing ML fields ───────────
     from historical.ocr_status import validated_filter_values
+    remaining_slots = max(0, limit - len(results))
     incomplete_orders = (
         db.query(HistoricalOrder)
         .filter(
@@ -68,9 +109,9 @@ def get_validation_queue(
             (HistoricalOrder.claimed_date == None),
         )
         .order_by(HistoricalOrder.date_received.asc())
-        .limit(min(limit, 50))
+        .limit(remaining_slots)
         .all()
-    )
+    ) if remaining_slots else []
     existing_ids = {r["order"]["historical_order_id"] for r in results if r.get("order")}
     for order in incomplete_orders:
         if order.historical_order_id in existing_ids:
@@ -81,8 +122,11 @@ def get_validation_queue(
 
     assign_display_order_ids(db, results)
     sort_review_queue(results)
-    return results
-
+    return {
+        "items": results,
+        "total": total_pending,
+        "returned": len(results),
+    }
 
 def latest_raw_ocr(order) -> Dict[str, Any]:
     trail = order.audit_trail or []
@@ -1330,8 +1374,24 @@ def apply_order_corrections(order, corrections, db: Session, assign_canonical_id
     # Keep balance coherent with the final (discounted) grand total when both sides are present.
     final_total = _money_or_none(getattr(order, "grand_total", None))
     down = _money_or_none(getattr(order, "downpayment", None))
-    if final_total is not None and down is not None and corrections.get("balance") in (None, ""):
-        order.balance = round(final_total - down, 2)
+    if final_total is not None:
+        final_total = max(0.0, float(final_total))
+        order.grand_total = final_total
+    if final_total is not None and down is not None:
+        down = max(0.0, float(down))
+        if down > final_total:
+            down = final_total
+            order.downpayment = down
+        if corrections.get("balance") in (None, ""):
+            order.balance = round(max(0.0, final_total - down), 2)
+        else:
+            bal = _money_or_none(getattr(order, "balance", None))
+            if bal is not None and bal < 0:
+                order.balance = 0
+    elif final_total is not None:
+        bal = _money_or_none(getattr(order, "balance", None))
+        if bal is not None and bal < 0:
+            order.balance = 0
 
     # Keep discount metadata on the latest OCR audit entry for queue round-trips.
     discount_amt = _money_or_none(corrections.get("discount"))
@@ -1447,10 +1507,16 @@ def reocr_historical_image(
 ):
     """
     Re-run OCR for a single queue image and merge results into the linked order.
-    Used when ingestion stored an empty stub and the reviewer needs extracted fields back.
+    Interactive path: faster Gemini retries, skip EasyOCR cold-start, supports cancel.
     """
     from pathlib import Path
-    from historical.ocr_engine import extract_from_file, extraction_is_usable
+    from historical.ocr_engine import (
+        OcrCancelled,
+        clear_ocr_cancel,
+        extract_from_file,
+        extraction_is_usable,
+        request_ocr_cancel,
+    )
     from historical_ocr_import import apply_extraction_to_order
 
     img = db.query(HistoricalImage).filter(HistoricalImage.historical_image_id == historical_image_id).first()
@@ -1464,10 +1530,23 @@ def reocr_historical_image(
     if path is None or not path.exists():
         raise HTTPException(status_code=404, detail="Source image file is missing on disk")
 
+    cancel_key = f"reocr-{historical_image_id}"
+    clear_ocr_cancel(cancel_key)
     try:
-        page_results = extract_from_file(path)
+        page_results = extract_from_file(
+            path,
+            interactive=True,
+            cancel_key=cancel_key,
+            local_engine="tesseract",
+        )
+    except OcrCancelled:
+        clear_ocr_cancel(cancel_key)
+        raise HTTPException(status_code=409, detail="OCR cancelled")
     except Exception as exc:
+        clear_ocr_cancel(cancel_key)
         raise HTTPException(status_code=500, detail=f"OCR failed: {exc}") from exc
+    finally:
+        clear_ocr_cancel(cancel_key)
 
     if not page_results:
         raise HTTPException(status_code=500, detail="OCR returned no pages")
@@ -1490,6 +1569,16 @@ def reocr_historical_image(
         "item": rebuilt,
     }
 
+
+@router.post("/reocr/{historical_image_id}/cancel")
+def cancel_reocr_historical_image(
+    historical_image_id: int,
+    current_user: User = Depends(require_role("admin")),
+):
+    """Signal an in-flight interactive Re-OCR job to stop between attempts."""
+    from historical.ocr_engine import request_ocr_cancel
+    request_ocr_cancel(f"reocr-{historical_image_id}")
+    return {"status": "cancelling", "historical_image_id": historical_image_id}
 
 @router.post("/validate-order/{historical_order_id}")
 def validate_order_record(
@@ -1539,11 +1628,13 @@ def get_historical_stats(
     pending_ocr = db.query(HistoricalImage).filter(
         HistoricalImage.ocr_status.in_(pending_filter_values())
     ).count()
+    pending_review = _count_review_queue_total(db)
     return {
         "total": total,
         "validated": validated,
         "missing_fields": missing_fields,
         "pending_ocr": pending_ocr,
+        "pending_review": pending_review,
         "ready_for_training": validated,
     }
 

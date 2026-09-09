@@ -1,9 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   Box, Typography, Paper, Grid, Button, IconButton, 
-  Divider, TextField, Card, CircularProgress, Alert, MenuItem, InputAdornment, Chip, Autocomplete
+  Divider, TextField, Card, CircularProgress, Alert, MenuItem, InputAdornment, Chip, Autocomplete,
 } from '@mui/material';
-import { CheckCircle, Cancel, Edit, ArrowBack, Refresh, Add, DeleteOutline, DocumentScanner } from '@mui/icons-material';
+import Checkbox from '@mui/material/Checkbox';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import ToggleButton from '@mui/material/ToggleButton';
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
+import { CheckCircle, Cancel, Edit, ArrowBack, ArrowForward, Refresh, Add, DeleteOutline, DocumentScanner } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 // P1-10 FIX: this previously hardcoded `http://localhost:8000/api` unconditionally, which
@@ -83,6 +87,8 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
   const [imageUrl, setImageUrl] = useState<string>('');
   const [previewKind, setPreviewKind] = useState<'image' | 'pdf'>('image');
   const [busy, setBusy] = useState(false);
+  const [ocrRunning, setOcrRunning] = useState(false);
+  const ocrAbortRef = useRef<AbortController | null>(null);
   
   const navigate = useNavigate();
 
@@ -103,31 +109,29 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
         headers: authHeaders(),
       });
       if (!response.ok) throw new Error(`Queue request failed (${response.status})`);
-      const data = await response.json();
-      if (!Array.isArray(data)) throw new Error('Queue response was not a list');
+      const payload = await response.json();
+      // Support both new { items, total } and legacy bare-array responses.
+      const data = Array.isArray(payload)
+        ? payload
+        : (Array.isArray(payload?.items) ? payload.items : null);
+      if (!data) throw new Error('Queue response was not a list');
+      const serverTotal = Array.isArray(payload)
+        ? data.length
+        : Number(payload?.total);
       setQueue(data);
       setEditMode(false);
       const restoredIdx = previousId != null
         ? data.findIndex((item: any) => item?.historical_image_id === previousId)
         : -1;
       const nextIdx = restoredIdx >= 0 ? restoredIdx : 0;
-      setCurrentIndex(nextIdx);
+      setCurrentIndex(data.length === 0 ? 0 : Math.min(nextIdx, data.length - 1));
       if (data[nextIdx]?.historical_image_id != null) {
         rememberOcrPosition(data[nextIdx].historical_image_id);
       }
-      setPendingTotal(data.length);
-      try {
-        const statsRes = await fetch(`${API_BASE_URL}/historical/stats`, {
-          headers: authHeaders(),
-        });
-        if (statsRes.ok) {
-          const stats = await statsRes.json();
-          const total = Number(stats.pending_ocr ?? stats.pending_review ?? data.length);
-          if (Number.isFinite(total)) setPendingTotal(total);
-        }
-      } catch {
-        // Stats must never hide a successfully loaded queue.
-      }
+      const totalPending = Number.isFinite(serverTotal) && serverTotal >= 0
+        ? Math.max(serverTotal, data.length)
+        : data.length;
+      setPendingTotal(totalPending);
     } catch (error) {
       console.error("Failed to fetch queue", error);
       setQueue([]);
@@ -138,7 +142,9 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
   };
 
   useEffect(() => {
-    fetchQueue({ keepPosition: true });
+    // Always open at the first pending record. Resume position is only used on Refresh.
+    rememberOcrPosition(null);
+    fetchQueue({ keepPosition: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -146,6 +152,16 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
     const id = queue[currentIndex]?.historical_image_id;
     if (id != null) rememberOcrPosition(id);
   }, [queue, currentIndex]);
+
+  const goToQueueIndex = (nextIdx: number) => {
+    if (queue.length === 0) return;
+    const clamped = Math.max(0, Math.min(nextIdx, queue.length - 1));
+    if (clamped === currentIndex) return;
+    setEditMode(false);
+    setEditedData(null);
+    setCurrentIndex(clamped);
+    rememberOcrPosition(queue[clamped]?.historical_image_id);
+  };
 
   useEffect(() => {
     const filename = queue[currentIndex]?.image_filename;
@@ -673,7 +689,10 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
       const remaining = queue.filter((_, i) => i !== currentIndex);
       setQueue(remaining);
       setEditMode(false);
-      setPendingTotal((total) => (total != null ? Math.max(0, total - 1) : total));
+      setPendingTotal((total) => {
+        const base = total != null ? total : queue.length;
+        return Math.max(0, base - 1);
+      });
       if (remaining.length === 0) {
         rememberOcrPosition(null);
         await fetchQueue({ keepPosition: false });
@@ -690,17 +709,43 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
     }
   };
 
+  const handleCancelReocr = async () => {
+    const currentImg = queue[currentIndex];
+    ocrAbortRef.current?.abort();
+    if (currentImg?.historical_image_id) {
+      try {
+        await fetch(
+          `${API_BASE_URL}/historical/processing/reocr/${currentImg.historical_image_id}/cancel`,
+          { method: 'POST', headers: authHeaders() },
+        );
+      } catch {
+        // UI unlock still happens below
+      }
+    }
+    setOcrRunning(false);
+    setBusy(false);
+    toast.message('OCR run cancelled.');
+  };
+
   const handleReocr = async () => {
     const currentImg = queue[currentIndex];
-    if (!currentImg?.historical_image_id || busy) return;
+    if (!currentImg?.historical_image_id || busy || ocrRunning) return;
+    ocrAbortRef.current?.abort();
+    const controller = new AbortController();
+    ocrAbortRef.current = controller;
     setBusy(true);
+    setOcrRunning(true);
     try {
       const res = await fetch(
         `${API_BASE_URL}/historical/processing/reocr/${currentImg.historical_image_id}`,
-        { method: 'POST', headers: authHeaders() },
+        { method: 'POST', headers: authHeaders(), signal: controller.signal },
       );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        if (res.status === 409 || String(data?.detail || '').toLowerCase().includes('cancel')) {
+          toast.message('OCR run cancelled.');
+          return;
+        }
         const detail = data?.detail;
         const message = Array.isArray(detail)
           ? detail.map((d: any) => d?.msg || JSON.stringify(d)).join('; ')
@@ -718,63 +763,120 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
         toast.message('OCR ran again but still could not read most fields. Keep verifying against the scan.');
       }
     } catch (error: any) {
+      if (error?.name === 'AbortError') {
+        toast.message('OCR run cancelled.');
+        return;
+      }
       console.error('Re-OCR failed', error);
       toast.error(error?.message || 'Re-OCR failed');
     } finally {
+      if (ocrAbortRef.current === controller) ocrAbortRef.current = null;
+      setOcrRunning(false);
       setBusy(false);
     }
   };
 
   const roundMoney = (n: number) => Math.round(n * 100) / 100;
 
+  const toFiniteMoney = (val: any): number | null => {
+    if (val === '' || val === undefined || val === null) return null;
+    const n = Number(val);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  /** Pre-discount base: original if set, else final + discount, else final. */
+  const resolveBaseTotal = (orderLike: any): number | null => {
+    const orig = toFiniteMoney(orderLike?.original_grand_total);
+    if (orig != null && orig > 0) return roundMoney(orig);
+    const disc = toFiniteMoney(orderLike?.discount);
+    const gt = toFiniteMoney(orderLike?.grand_total);
+    if (gt != null && disc != null && disc > 0) return roundMoney(gt + disc);
+    if (gt != null && gt > 0) return roundMoney(gt);
+    if (orig != null && orig >= 0) return roundMoney(orig);
+    return gt != null ? roundMoney(Math.max(0, gt)) : null;
+  };
+
+  const hasActiveDiscountInput = (orderLike: any) => {
+    if (orderLike?.discount_enabled === false) return false;
+    const raw = orderLike?.discount_value;
+    if (raw === '' || raw == null) return false;
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0;
+  };
+
+  /** Balance = max(0, discounted total − downpayment); downpayment cannot exceed total. */
   const syncBalanceFromGrand = (next: any) => {
-    const grand = Number(next.grand_total);
-    const down = Number(next.downpayment);
-    if (Number.isFinite(grand) && Number.isFinite(down)) {
-      next.balance = roundMoney(grand - down);
+    const grandRaw = toFiniteMoney(next.grand_total);
+    if (grandRaw == null) return next;
+    const grand = roundMoney(Math.max(0, grandRaw));
+    next.grand_total = grand;
+
+    if (next.downpayment === '' || next.downpayment == null) {
+      // No deposit entered — leave balance alone unless it went negative.
+      const bal = toFiniteMoney(next.balance);
+      if (bal != null && bal < 0) next.balance = 0;
+      return next;
     }
+    let down = toFiniteMoney(next.downpayment);
+    if (down == null || down < 0) {
+      next.downpayment = '';
+      return next;
+    }
+    down = roundMoney(down);
+    if (down > grand) {
+      down = grand;
+      next.downpayment = down;
+    } else {
+      next.downpayment = down;
+    }
+    next.balance = roundMoney(Math.max(0, grand - down));
     return next;
   };
 
-  /** Apply ₱ or % discount against original; discounted grand_total is the final total. */
+  /** Apply ₱ or % discount against original; discounted grand_total is the final payable. */
   const recomputeFromDiscount = (next: any) => {
     const dtype = String(next.discount_type || 'amount').toLowerCase() === 'percent' ? 'percent' : 'amount';
     next.discount_type = dtype;
-    let original = Number(next.original_grand_total);
-    if (!Number.isFinite(original) || original <= 0) {
-      const fallback = Number(next.grand_total);
-      if (Number.isFinite(fallback) && fallback > 0) {
-        original = fallback;
-        next.original_grand_total = original;
-      }
-    }
+
+    const base = resolveBaseTotal(next);
     const rawInput = next.discount_value;
+
+    // Clearing discount must never wipe the grand total.
     if (rawInput === '' || rawInput == null) {
+      const restored = base != null ? base : toFiniteMoney(next.grand_total);
       next.discount = null;
       next.discount_percent = null;
-      if (Number.isFinite(original) && original > 0) {
-        next.grand_total = original;
-      }
+      next.discount_value = '';
       next.original_grand_total = null;
+      if (restored != null) {
+        next.grand_total = roundMoney(Math.max(0, restored));
+      }
       return syncBalanceFromGrand(next);
     }
+
     const inputNum = Number(rawInput);
-    if (!Number.isFinite(inputNum) || inputNum < 0 || !Number.isFinite(original) || original <= 0) {
+    if (!Number.isFinite(inputNum) || inputNum < 0) {
       return next;
     }
+    // Ignore incomplete typing (e.g. ".") without changing totals.
+    if (base == null || base <= 0) {
+      return next;
+    }
+
+    next.original_grand_total = base;
     let discountAmt = 0;
     let percent: number | null = null;
     if (dtype === 'percent') {
       percent = Math.min(100, inputNum);
       next.discount_percent = percent;
-      discountAmt = roundMoney(original * (percent / 100));
+      discountAmt = roundMoney(base * (percent / 100));
     } else {
-      discountAmt = roundMoney(Math.min(original, inputNum));
-      percent = original > 0 ? roundMoney((discountAmt / original) * 100) : null;
+      discountAmt = roundMoney(Math.min(base, inputNum));
+      percent = base > 0 ? roundMoney((discountAmt / base) * 100) : null;
       next.discount_percent = percent;
     }
     next.discount = discountAmt;
-    next.grand_total = roundMoney(Math.max(0, original - discountAmt));
+    next.grand_total = roundMoney(Math.max(0, base - discountAmt));
     return syncBalanceFromGrand(next);
   };
 
@@ -813,44 +915,108 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
       if (field === 'downpayment') {
         return syncBalanceFromGrand(next);
       }
-      if (field === 'discount_type' || field === 'discount_value') {
-        return recomputeFromDiscount(next);
-      }
-      if (field === 'original_grand_total') {
-        if (value === '' || value == null) {
-          next.discount = null;
-          next.discount_percent = null;
+      if (field === 'discount_enabled') {
+        const enabled = Boolean(value);
+        next.discount_enabled = enabled;
+        if (!enabled) {
+          const base = resolveBaseTotal(prev) ?? toFiniteMoney(prev.grand_total);
           next.discount_value = '';
-          return syncBalanceFromGrand(next);
-        }
-        if (next.discount_value !== '' && next.discount_value != null) {
-          return recomputeFromDiscount(next);
-        }
-        // No discount yet — original edit mirrors the payable total.
-        next.grand_total = value;
-        return syncBalanceFromGrand(next);
-      }
-      if (field === 'grand_total') {
-        // Manual override of discounted/final total.
-        const original = Number(next.original_grand_total);
-        const discounted = Number(value);
-        if (Number.isFinite(original) && Number.isFinite(discounted) && original >= discounted) {
-          const amt = roundMoney(original - discounted);
-          next.discount = amt;
-          next.discount_type = next.discount_type || 'amount';
-          if (String(next.discount_type).toLowerCase() === 'percent') {
-            next.discount_percent = original > 0 ? roundMoney((amt / original) * 100) : null;
-            next.discount_value = next.discount_percent;
-          } else {
-            next.discount_value = amt;
-            next.discount_percent = original > 0 ? roundMoney((amt / original) * 100) : null;
-          }
-        } else if (!Number.isFinite(original) || original <= 0) {
           next.discount = null;
           next.discount_percent = null;
           next.original_grand_total = null;
+          next.discount_type = 'amount';
+          if (base != null) next.grand_total = roundMoney(Math.max(0, base));
+          return syncBalanceFromGrand(next);
+        }
+        // Turning on: treat current payable as pre-discount base until user edits discount.
+        const current = toFiniteMoney(prev.grand_total);
+        if (current != null && toFiniteMoney(prev.original_grand_total) == null) {
+          next.original_grand_total = current;
+        }
+        next.discount_type = next.discount_type || 'amount';
+        return next;
+      }
+      if (field === 'discount_type' || field === 'discount_value') {
+        next.discount_enabled = true;
+        return recomputeFromDiscount(next);
+      }
+      if (field === 'original_grand_total') {
+        // Allow clearing / mid-typing (e.g. delete last digit) without snapping back.
+        if (value === '' || value == null) {
+          next.original_grand_total = '';
+          if (!next.discount_enabled) {
+            next.grand_total = '';
+          }
+          return next;
+        }
+        next.original_grand_total = value;
+        const orig = toFiniteMoney(value);
+        if (orig == null || orig < 0) return next; // incomplete input like "3."
+        next.original_grand_total = roundMoney(orig);
+        if (next.discount_enabled || hasActiveDiscountInput(next)) {
+          return recomputeFromDiscount(next);
+        }
+        next.grand_total = next.original_grand_total;
+        next.discount = null;
+        next.discount_percent = null;
+        return syncBalanceFromGrand(next);
+      }
+      if (field === 'grand_total') {
+        // Allow empty while typing so the last digit can be deleted.
+        if (value === '' || value == null) {
+          next.grand_total = '';
+          if (!next.discount_enabled) {
+            next.original_grand_total = null;
+            next.discount = null;
+            next.discount_percent = null;
+            next.discount_value = '';
+          }
+          return next;
+        }
+        next.grand_total = value;
+        const discounted = toFiniteMoney(value);
+        if (discounted == null || discounted < 0) return next;
+        next.grand_total = roundMoney(discounted);
+
+        if (next.discount_enabled || hasActiveDiscountInput(next)) {
+          // When discount is on, editing "final payable" adjusts discount against original.
+          let original = toFiniteMoney(next.original_grand_total);
+          if (original == null || original <= 0) {
+            original = resolveBaseTotal({ ...next, grand_total: discounted, discount: next.discount });
+          }
+          if (original != null && original >= discounted) {
+            const amt = roundMoney(original - discounted);
+            next.original_grand_total = original;
+            next.discount = amt > 0 ? amt : null;
+            next.discount_type = next.discount_type || 'amount';
+            if (String(next.discount_type).toLowerCase() === 'percent') {
+              next.discount_percent = original > 0 ? roundMoney((amt / original) * 100) : null;
+              next.discount_value = next.discount_percent ?? '';
+            } else {
+              next.discount_value = amt > 0 ? amt : '';
+              next.discount_percent = original > 0 ? roundMoney((amt / original) * 100) : null;
+            }
+          }
+        } else {
+          next.original_grand_total = null;
+          next.discount = null;
+          next.discount_percent = null;
+          next.discount_value = '';
         }
         return syncBalanceFromGrand(next);
+      }
+      if (field === 'balance') {
+        const bal = toFiniteMoney(value);
+        if (value === '' || value == null) {
+          next.balance = '';
+          return next;
+        }
+        if (bal == null || bal < 0) {
+          next.balance = 0;
+          return next;
+        }
+        next.balance = roundMoney(bal);
+        return next;
       }
       return next;
     });
@@ -956,7 +1122,9 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
     let draft: any = {
       ...orderCopy,
       control_no: orderCopy.control_no ?? '',
-      payment_method: orderCopy.payment_method || 'Cash',
+      payment_method: ['Cash', 'GCash', 'Maya'].includes(String(orderCopy.payment_method || ''))
+        ? orderCopy.payment_method
+        : 'Cash',
       rush_fee: rushFee,
       items: (orderCopy.items || []).map((item: any) => {
         const basePrice = explicitGroupPrice(item, 'base');
@@ -999,6 +1167,7 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
       || (Number.isFinite(orig) && Number.isFinite(gt) && orig > gt + 0.009);
     const dtype = String(draft.discount_type || '').toLowerCase() === 'percent' ? 'percent' : 'amount';
     draft.discount_type = hasDisc ? dtype : (draft.discount_type || 'amount');
+    draft.discount_enabled = hasDisc;
     if (hasDisc) {
       if (draft.original_grand_total == null || draft.original_grand_total === '') {
         draft.original_grand_total = Number.isFinite(orig) ? orig : (Number.isFinite(gt) && Number.isFinite(disc) ? roundMoney(gt + disc) : gt);
@@ -1017,7 +1186,9 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
       draft.discount_value = '';
       draft.discount = null;
       draft.discount_percent = null;
+      draft.discount_enabled = false;
     }
+    draft = syncBalanceFromGrand(draft);
     setEditedData(draft);
     setEditMode(true);
   };
@@ -1079,28 +1250,84 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
   }
 
   const currentItem = queue[currentIndex];
+  const reviewTotal = Math.max(pendingTotal ?? 0, queue.length);
+  const reviewCurrent = queue.length === 0 ? 0 : Math.min(currentIndex + 1, queue.length);
+  const canGoPrev = currentIndex > 0;
+  const canGoNext = currentIndex < queue.length - 1;
 
   return (
     <Box sx={{ p: 3, height: 'calc(100vh - 100px)', display: 'flex', flexDirection: 'column' }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2, gap: 2, flexWrap: 'wrap' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
           <IconButton onClick={() => onBack ? onBack() : navigate('/job-order-form/historical-records')}><ArrowBack /></IconButton>
-          <Typography variant="h5">
-            Needs Human Review ({currentIndex + 1} of {queue.length}
-            {pendingTotal !== null && pendingTotal > queue.length ? ` · ${pendingTotal} pending` : ''})
+          <Typography variant="h5" component="div" sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+            Needs Human Review
+            <Box
+              component="span"
+              sx={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 0.5,
+                ml: 0.5,
+                px: 1,
+                py: 0.25,
+                borderRadius: 1,
+                bgcolor: 'grey.100',
+                fontSize: '0.95rem',
+                fontWeight: 700,
+              }}
+            >
+              <IconButton
+                size="small"
+                aria-label="Previous record"
+                disabled={!canGoPrev || busy}
+                onClick={() => goToQueueIndex(currentIndex - 1)}
+              >
+                <ArrowBack fontSize="small" />
+              </IconButton>
+              Record {reviewCurrent} of {reviewTotal}
+              <IconButton
+                size="small"
+                aria-label="Next record"
+                disabled={!canGoNext || busy}
+                onClick={() => goToQueueIndex(currentIndex + 1)}
+              >
+                <ArrowForward fontSize="small" />
+              </IconButton>
+            </Box>
           </Typography>
         </Box>
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center' }}>
+          <Button
+            variant="text"
+            size="small"
+            disabled={busy || queue.length === 0 || currentIndex === 0}
+            onClick={() => goToQueueIndex(0)}
+            title="Jump to the first pending record"
+          >
+            First
+          </Button>
           {currentItem?.historical_image_id && (
-            <Button
-              variant="contained"
-              color="secondary"
-              startIcon={<DocumentScanner />}
-              onClick={handleReocr}
-              disabled={busy}
-            >
-              {busy ? 'Running OCR…' : 'Re-run OCR'}
-            </Button>
+            ocrRunning ? (
+              <Button
+                variant="contained"
+                color="error"
+                startIcon={<Cancel />}
+                onClick={() => { void handleCancelReocr(); }}
+              >
+                Cancel OCR
+              </Button>
+            ) : (
+              <Button
+                variant="contained"
+                color="secondary"
+                startIcon={<DocumentScanner />}
+                onClick={() => { void handleReocr(); }}
+                disabled={busy}
+              >
+                Re-run OCR
+              </Button>
+            )
           )}
           <Button
             variant="outlined"
@@ -1124,16 +1351,29 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
                 <Typography variant="body2" color="textSecondary">{currentItem.image_filename}</Typography>
               </Box>
               {currentItem?.historical_image_id && (
-                <Button
-                  size="small"
-                  variant="contained"
-                  startIcon={<DocumentScanner />}
-                  onClick={handleReocr}
-                  disabled={busy}
-                  sx={{ flexShrink: 0 }}
-                >
-                  {busy ? 'Running…' : 'Re-run OCR'}
-                </Button>
+                ocrRunning ? (
+                  <Button
+                    size="small"
+                    variant="contained"
+                    color="error"
+                    startIcon={<Cancel />}
+                    onClick={() => { void handleCancelReocr(); }}
+                    sx={{ flexShrink: 0 }}
+                  >
+                    Cancel OCR
+                  </Button>
+                ) : (
+                  <Button
+                    size="small"
+                    variant="contained"
+                    startIcon={<DocumentScanner />}
+                    onClick={() => { void handleReocr(); }}
+                    disabled={busy}
+                    sx={{ flexShrink: 0 }}
+                  >
+                    Re-run OCR
+                  </Button>
+                )
               )}
             </Box>
             <Box sx={{ flex: 1, position: 'relative', bgcolor: 'white', border: '1px solid #e0e0e0', borderRadius: 1, overflowY: 'auto' }}>
@@ -1176,15 +1416,26 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
                   sx={{ mb: 2 }}
                   action={
                     currentItem.historical_image_id ? (
-                      <Button
-                        color="inherit"
-                        size="small"
-                        startIcon={<DocumentScanner />}
-                        disabled={busy}
-                        onClick={handleReocr}
-                      >
-                        Re-run OCR
-                      </Button>
+                      ocrRunning ? (
+                        <Button
+                          color="inherit"
+                          size="small"
+                          startIcon={<Cancel />}
+                          onClick={() => { void handleCancelReocr(); }}
+                        >
+                          Cancel OCR
+                        </Button>
+                      ) : (
+                        <Button
+                          color="inherit"
+                          size="small"
+                          startIcon={<DocumentScanner />}
+                          disabled={busy}
+                          onClick={() => { void handleReocr(); }}
+                        >
+                          Re-run OCR
+                        </Button>
+                      )
                     ) : undefined
                   }
                 >
@@ -1257,8 +1508,7 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
                       : (currentItem.order?.control_no || '—')}
                     onChange={(e) => handleEditChange('control_no', e.target.value)}
                     InputProps={{ readOnly: !editMode }}
-                    helperText={editMode ? 'Optional — leave blank if none on the form' : 'Paper form control number (optional)'}
-                    placeholder={editMode ? 'Optional' : undefined}
+                    placeholder={editMode ? 'Optional if blank on form' : undefined}
                     variant={editMode ? "outlined" : "filled"}
                   />
                 </Grid>
@@ -1305,7 +1555,7 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
                       type="number"
                       value={editedData?.rush_fee ?? DEFAULT_RUSH_FEE}
                       onChange={(e) => handleEditChange('rush_fee', e.target.value)}
-                      helperText="Usually ₱100 or ₱150 — added to items with Basic Cleaning and grand total"
+                      title="Usually ₱100 or ₱150 — added once when Basic Cleaning is present"
                       InputProps={{ startAdornment: <InputAdornment position="start">₱</InputAdornment> }}
                       variant="outlined"
                       inputProps={{ min: 0, step: 50 }}
@@ -1320,11 +1570,10 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
                       value={`₱${resolveRushFeeAmount(currentItem.order)}`}
                       InputProps={{ readOnly: true }}
                       variant="filled"
-                      helperText="Per item with Basic Cleaning"
                     />
                   </Grid>
                 )}
-                <Grid size={{ xs: 12, sm: 4 }}>
+                <Grid size={{ xs: 6, sm: 4 }}>
                   {editMode ? (
                     <TextField
                       fullWidth size="small"
@@ -1332,6 +1581,7 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
                       type="number"
                       value={editedData?.completion_days ?? ''}
                       onChange={(e) => handleEditChange('completion_days', e.target.value)}
+                      InputLabelProps={{ shrink: true }}
                       variant="outlined"
                     />
                   ) : (
@@ -1341,6 +1591,7 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
                       label="Total Days"
                       value={currentItem.order?.completion_days ?? '—'}
                       InputProps={{ readOnly: true }}
+                      InputLabelProps={{ shrink: true }}
                       variant="filled"
                     />
                   )}
@@ -1362,14 +1613,14 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
                             );
                           }}
                           InputLabelProps={{ shrink: true }}
-                          helperText="From form DATE & TIME"
+                          title="From form DATE & TIME"
                           variant="outlined"
                         />
                       </Grid>
                       <Grid size={{ xs: 5 }}>
                         <TextField
                           fullWidth size="small"
-                          label="Time (Optional)"
+                          label="Time"
                           type="time"
                           value={timePartOf(editedData?.date_received)}
                           onChange={(e) => {
@@ -1384,7 +1635,7 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
                             );
                           }}
                           InputLabelProps={{ shrink: true }}
-                          helperText="e.g. 1:08 PM → 13:08"
+                          title="Optional · e.g. 1:08 PM → 13:08"
                           variant="outlined"
                         />
                       </Grid>
@@ -1932,96 +2183,129 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
                     )}
 
                     {editMode && (
-                      <Grid container spacing={1}>
-                        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-                          <TextField 
-                            fullWidth size="small" select
-                            label="Payment Method" 
-                            value={editedData?.payment_method || 'Cash'} 
-                            onChange={(e) => handleEditChange('payment_method', e.target.value)}
-                            variant="outlined"
-                          >
-                            <MenuItem value="">Not specified</MenuItem>
-                            <MenuItem value="Cash">Cash</MenuItem>
-                            <MenuItem value="GCash">GCash</MenuItem>
-                            <MenuItem value="Bank Transfer">Bank Transfer</MenuItem>
-                            <MenuItem value="Card">Card</MenuItem>
-                            <MenuItem value="Maya">Maya</MenuItem>
-                            <MenuItem value="Other">Other</MenuItem>
-                          </TextField>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              size="small"
+                              checked={Boolean(editedData?.discount_enabled)}
+                              onChange={(e) => handleEditChange('discount_enabled', e.target.checked)}
+                            />
+                          }
+                          label="Apply discount"
+                          sx={{ m: 0, alignSelf: 'flex-start', '& .MuiFormControlLabel-label': { fontSize: '0.875rem', fontWeight: 600 } }}
+                        />
+                        <Grid container spacing={1.5}>
+                          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+                            <TextField 
+                              fullWidth size="small" select
+                              label="Payment Method" 
+                              value={['Cash', 'GCash', 'Maya'].includes(String(editedData?.payment_method || ''))
+                                ? editedData.payment_method
+                                : 'Cash'} 
+                              onChange={(e) => handleEditChange('payment_method', e.target.value)}
+                              variant="outlined"
+                              InputLabelProps={{ shrink: true }}
+                            >
+                              <MenuItem value="Cash">Cash</MenuItem>
+                              <MenuItem value="GCash">GCash</MenuItem>
+                              <MenuItem value="Maya">Maya</MenuItem>
+                            </TextField>
+                          </Grid>
+                          <Grid size={{ xs: 6, sm: 6, md: 3 }}>
+                            <TextField 
+                              fullWidth size="small"
+                              label={editedData?.discount_enabled ? 'Subtotal' : 'Grand Total'}
+                              value={editedData?.discount_enabled
+                                ? (editedData?.original_grand_total ?? '')
+                                : (editedData?.grand_total ?? '')}
+                              onChange={(e) => handleEditChange(
+                                editedData?.discount_enabled ? 'original_grand_total' : 'grand_total',
+                                e.target.value,
+                              )}
+                              InputProps={{ startAdornment: <InputAdornment position="start">₱</InputAdornment> }}
+                              InputLabelProps={{ shrink: true }}
+                              title={editedData?.discount_enabled ? 'Amount before discount' : 'Order total'}
+                              variant="outlined"
+                            />
+                          </Grid>
+                          {editedData?.discount_enabled && (
+                            <>
+                              <Grid size={{ xs: 6, sm: 6, md: 3 }}>
+                                <TextField 
+                                  fullWidth size="small"
+                                  label="Discount"
+                                  value={editedData?.discount_value ?? ''} 
+                                  onChange={(e) => handleEditChange('discount_value', e.target.value)}
+                                  InputLabelProps={{ shrink: true }}
+                                  InputProps={{
+                                    startAdornment: (
+                                      <InputAdornment position="start">
+                                        {String(editedData?.discount_type || 'amount') === 'percent' ? '%' : '₱'}
+                                      </InputAdornment>
+                                    ),
+                                    endAdornment: (
+                                      <InputAdornment position="end">
+                                        <ToggleButtonGroup
+                                          exclusive
+                                          size="small"
+                                          value={String(editedData?.discount_type || 'amount') === 'percent' ? 'percent' : 'amount'}
+                                          onChange={(_e, val) => {
+                                            if (val) handleEditChange('discount_type', val);
+                                          }}
+                                          aria-label="Discount as amount or percent"
+                                        >
+                                          <ToggleButton value="amount" sx={{ px: 1, py: 0.25, fontSize: '0.75rem' }}>₱</ToggleButton>
+                                          <ToggleButton value="percent" sx={{ px: 1, py: 0.25, fontSize: '0.75rem' }}>%</ToggleButton>
+                                        </ToggleButtonGroup>
+                                      </InputAdornment>
+                                    ),
+                                  }}
+                                  variant="outlined"
+                                />
+                              </Grid>
+                              <Grid size={{ xs: 6, sm: 6, md: 3 }}>
+                                <TextField 
+                                  fullWidth size="small"
+                                  label="Final Total"
+                                  value={editedData?.grand_total ?? ''} 
+                                  InputProps={{
+                                    readOnly: true,
+                                    startAdornment: <InputAdornment position="start">₱</InputAdornment>,
+                                  }}
+                                  InputLabelProps={{ shrink: true }}
+                                  title="Payable after discount"
+                                  variant="filled"
+                                />
+                              </Grid>
+                            </>
+                          )}
+                          <Grid size={{ xs: 6, sm: 6, md: 3 }}>
+                            <TextField 
+                              fullWidth size="small"
+                              label="Downpayment" 
+                              value={editedData?.downpayment ?? ''} 
+                              onChange={(e) => handleEditChange('downpayment', e.target.value)}
+                              InputProps={{ startAdornment: <InputAdornment position="start">₱</InputAdornment> }}
+                              InputLabelProps={{ shrink: true }}
+                              title="Cannot exceed payable"
+                              variant="outlined"
+                            />
+                          </Grid>
+                          <Grid size={{ xs: 6, sm: 6, md: 3 }}>
+                            <TextField 
+                              fullWidth size="small"
+                              label="Balance" 
+                              value={editedData?.balance ?? ''} 
+                              onChange={(e) => handleEditChange('balance', e.target.value)}
+                              InputProps={{ startAdornment: <InputAdornment position="start">₱</InputAdornment> }}
+                              InputLabelProps={{ shrink: true }}
+                              title="Payable − downpayment"
+                              variant="outlined"
+                            />
+                          </Grid>
                         </Grid>
-                        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-                          <TextField 
-                            fullWidth size="small"
-                            label="Grand Total (Original)" 
-                            value={editedData?.original_grand_total ?? editedData?.grand_total ?? ''} 
-                            onChange={(e) => handleEditChange('original_grand_total', e.target.value)}
-                            InputProps={{ startAdornment: <InputAdornment position="start">₱</InputAdornment> }}
-                            variant="outlined"
-                            helperText="Before discount"
-                          />
-                        </Grid>
-                        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-                          <TextField
-                            fullWidth size="small" select
-                            label="Discount Type"
-                            value={editedData?.discount_type || 'amount'}
-                            onChange={(e) => handleEditChange('discount_type', e.target.value)}
-                            variant="outlined"
-                          >
-                            <MenuItem value="amount">Amount (₱)</MenuItem>
-                            <MenuItem value="percent">Percent (%)</MenuItem>
-                          </TextField>
-                        </Grid>
-                        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-                          <TextField 
-                            fullWidth size="small"
-                            label="Discount"
-                            value={editedData?.discount_value ?? ''} 
-                            onChange={(e) => handleEditChange('discount_value', e.target.value)}
-                            InputProps={{
-                              startAdornment: (
-                                <InputAdornment position="start">
-                                  {String(editedData?.discount_type || 'amount') === 'percent' ? '%' : '₱'}
-                                </InputAdornment>
-                              ),
-                            }}
-                            variant="outlined"
-                            helperText="Leave blank if none"
-                          />
-                        </Grid>
-                        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-                          <TextField 
-                            fullWidth size="small"
-                            label="Discounted Grand Total" 
-                            value={editedData?.grand_total || ''} 
-                            onChange={(e) => handleEditChange('grand_total', e.target.value)}
-                            InputProps={{ startAdornment: <InputAdornment position="start">₱</InputAdornment> }}
-                            variant="outlined"
-                            helperText="Final total"
-                          />
-                        </Grid>
-                        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-                          <TextField 
-                            fullWidth size="small"
-                            label="Downpayment" 
-                            value={editedData?.downpayment || ''} 
-                            onChange={(e) => handleEditChange('downpayment', e.target.value)}
-                            InputProps={{ startAdornment: <InputAdornment position="start">₱</InputAdornment> }}
-                            variant="outlined"
-                          />
-                        </Grid>
-                        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-                          <TextField 
-                            fullWidth size="small"
-                            label="Balance" 
-                            value={editedData?.balance || ''} 
-                            onChange={(e) => handleEditChange('balance', e.target.value)}
-                            InputProps={{ startAdornment: <InputAdornment position="start">₱</InputAdornment> }}
-                            variant="outlined"
-                          />
-                        </Grid>
-                      </Grid>
+                      </Box>
                     )}
                   </Box>
                 );

@@ -27,8 +27,11 @@ jinja2>=3.0.0
 python-dotenv
 bcrypt>=4.0.1
 PyJWT>=2.8.0
+# Production OCR primary: Gemini Vision (see backend/historical/ocr_engine.py)
 google-genai>=0.1.0
 pillow>=10.0.0
 pymupdf>=1.24.0
+# Optional thin Tesseract wrapper (requires system tesseract binary if used).
+# EasyOCR/torch/CUDA are intentionally NOT production deps — they blew the
+# Heroku slug to 3.6G. Install locally via requirements-ocr-local.txt if needed.
 pytesseract>=0.3.10
-easyocr>=1.7.0

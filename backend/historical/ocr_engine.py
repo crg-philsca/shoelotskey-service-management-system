@@ -21,6 +21,28 @@ OCR_VERSION = "gemini-vision-v1"
 SUPPORTED_IMAGE_EXT = {".jpeg", ".jpg", ".png"}
 SUPPORTED_EXT = SUPPORTED_IMAGE_EXT | {".pdf"}
 
+# Interactive Re-OCR cancel tokens (job_key → True when cancel requested).
+_ocr_cancel_flags: Dict[str, bool] = {}
+
+
+def request_ocr_cancel(job_key: str) -> None:
+    if job_key:
+        _ocr_cancel_flags[str(job_key)] = True
+
+
+def clear_ocr_cancel(job_key: str) -> None:
+    _ocr_cancel_flags.pop(str(job_key), None)
+
+
+def is_ocr_cancelled(job_key: Optional[str]) -> bool:
+    if not job_key:
+        return False
+    return bool(_ocr_cancel_flags.get(str(job_key)))
+
+
+class OcrCancelled(Exception):
+    """Raised when an interactive OCR job is cancelled by the reviewer."""
+
 EXTRACTION_PROMPT = """You are extracting data from a Shoelotskey shoe service job order form image.
 Return ONLY valid JSON (no markdown) with this exact structure:
 {
@@ -144,16 +166,43 @@ def _parse_json_response(text: str) -> Dict[str, Any]:
     return json.loads(cleaned)
 
 
-def _run_gemini_ocr(image_bytes: bytes, mime_type: str) -> Tuple[Dict[str, Any], float]:
+def _prepare_image_for_ocr(image_bytes: bytes, mime_type: str, *, max_side: int = 1600) -> Tuple[bytes, str]:
+    """Downscale large CamScanner images so Gemini/local OCR stay responsive."""
+    try:
+        from PIL import Image
+        img = Image.open(BytesIO(image_bytes)).convert("RGB")
+        w, h = img.size
+        if max(w, h) > max_side:
+            scale = max_side / float(max(w, h))
+            img = img.resize((max(1, int(w * scale)), max(1, int(h * scale))), Image.Resampling.LANCZOS)
+        buf = BytesIO()
+        img.save(buf, format="JPEG", quality=82, optimize=True)
+        return buf.getvalue(), "image/jpeg"
+    except Exception:
+        return image_bytes, mime_type
+
+
+def _run_gemini_ocr(
+    image_bytes: bytes,
+    mime_type: str,
+    *,
+    interactive: bool = False,
+    cancel_key: Optional[str] = None,
+) -> Tuple[Dict[str, Any], float]:
     from google.genai import types
     import time
     import re
 
     client = _get_client()
     last_err = None
+    models = [_model_name()] if interactive else _fallback_models()
+    max_attempts = 2 if interactive else 4
+    max_sleep = 8 if interactive else 35
 
-    for model in _fallback_models():
-        for attempt in range(4):
+    for model in models:
+        for attempt in range(max_attempts):
+            if is_ocr_cancelled(cancel_key):
+                raise OcrCancelled("OCR cancelled by reviewer")
             try:
                 response = client.models.generate_content(
                     model=model,
@@ -177,17 +226,27 @@ def _run_gemini_ocr(image_bytes: bytes, mime_type: str) -> Tuple[Dict[str, Any],
                 data["_raw_ocr_response"] = raw
                 data["_ocr_model"] = model
                 return data, confidence
+            except OcrCancelled:
+                raise
             except Exception as exc:
                 last_err = exc
                 msg = str(exc).lower()
-                retry_after = 35
+                retry_after = 8 if interactive else 35
                 m = re.search(r"retry in ([0-9.]+)s", msg)
                 if m:
-                    retry_after = max(int(float(m.group(1))) + 1, 10)
+                    retry_after = max(int(float(m.group(1))) + 1, 5)
                 if "503" in msg or "429" in msg or "unavailable" in msg or "quota" in msg or "rate" in msg:
-                    if "quota" in msg and attempt >= 2:
+                    if "quota" in msg and attempt >= (1 if interactive else 2):
                         break  # try next model
-                    time.sleep(min(retry_after, 2 ** attempt * 5))
+                    # Poll cancel while sleeping so Cancel OCR remains responsive.
+                    wait_s = min(retry_after, max_sleep, 2 ** attempt * (3 if interactive else 5))
+                    waited = 0.0
+                    while waited < wait_s:
+                        if is_ocr_cancelled(cancel_key):
+                            raise OcrCancelled("OCR cancelled by reviewer")
+                        step = min(0.5, wait_s - waited)
+                        time.sleep(step)
+                        waited += step
                     continue
                 raise
     raise last_err  # type: ignore[misc]
@@ -251,11 +310,18 @@ def extract_from_bytes(
     use_gemini: bool = True,
     use_local_fallback: bool = True,
     local_engine: str = "auto",
+    interactive: bool = False,
+    cancel_key: Optional[str] = None,
 ) -> Tuple[Dict[str, Any], float, str]:
     """
-    Tiered OCR: Gemini → EasyOCR (PaddleOCR substitute) → Tesseract.
+    Tiered OCR: Gemini (production primary) → optional local EasyOCR → Tesseract.
     Returns (extracted_data, confidence, engine_version).
-    Empty/high-confidence stubs from Gemini fall through to local OCR.
+
+    interactive=True (UI Re-run OCR):
+      - downscales large scans
+      - shorter Gemini retries / single primary model
+      - prefers Tesseract over EasyOCR (EasyOCR first-load is very slow)
+      - honors cancel_key between attempts
     """
     from historical.local_ocr import (
         extract_local_from_bytes,
@@ -263,19 +329,38 @@ def extract_from_bytes(
         mark_gemini_quota_exhausted,
     )
 
+    if is_ocr_cancelled(cancel_key):
+        raise OcrCancelled("OCR cancelled by reviewer")
+
+    if interactive:
+        image_bytes, mime_type = _prepare_image_for_ocr(image_bytes, mime_type)
+        # Skip EasyOCR cold-start (PyTorch) during interactive review.
+        if local_engine == "auto":
+            local_engine = "tesseract"
+
     gemini_stub: Optional[Tuple[Dict[str, Any], float, str]] = None
     if use_gemini and not is_gemini_quota_exhausted():
         try:
-            data, confidence = _run_gemini_ocr(image_bytes, mime_type)
+            data, confidence = _run_gemini_ocr(
+                image_bytes,
+                mime_type,
+                interactive=interactive,
+                cancel_key=cancel_key,
+            )
             engine = data.get("_ocr_model", OCR_VERSION)
             if extraction_is_usable(data):
                 return data, confidence, engine
             # Keep stub only if local fallback is disabled.
             gemini_stub = (data, confidence, engine)
+        except OcrCancelled:
+            raise
         except Exception as exc:
             msg = str(exc).lower()
             if "429" in msg or "quota" in msg or "resource_exhausted" in msg:
                 mark_gemini_quota_exhausted()
+
+    if is_ocr_cancelled(cancel_key):
+        raise OcrCancelled("OCR cancelled by reviewer")
 
     if use_local_fallback:
         data, confidence, engine = extract_local_from_bytes(
@@ -305,6 +390,8 @@ def extract_from_file(
     use_gemini: bool = True,
     use_local_fallback: bool = True,
     local_engine: str = "auto",
+    interactive: bool = False,
+    cancel_key: Optional[str] = None,
 ) -> List[Tuple[str, Dict[str, Any], float, str]]:
     """
     Extract OCR data from a source file.
@@ -313,23 +400,36 @@ def extract_from_file(
     ext = file_path.suffix.lower()
     if ext == ".pdf":
         results = []
-        for page_num, page_bytes in load_pdf_pages(file_path):
+        pages = load_pdf_pages(file_path, dpi=120 if interactive else 150)
+        for page_num, page_bytes in pages:
+            if is_ocr_cancelled(cancel_key):
+                raise OcrCancelled("OCR cancelled by reviewer")
             data, conf, engine = extract_from_bytes(
                 page_bytes, "image/jpeg",
                 use_gemini=use_gemini, use_local_fallback=use_local_fallback,
                 local_engine=local_engine,
+                interactive=interactive,
+                cancel_key=cancel_key,
             )
             label = f"{file_path.name}#page{page_num}"
             results.append((label, data, conf, engine))
+            # Interactive review only needs the first page for job-order forms.
+            if interactive:
+                break
         return results
 
     if ext not in SUPPORTED_IMAGE_EXT:
         raise ValueError(f"Unsupported file type: {ext}")
 
+    if is_ocr_cancelled(cancel_key):
+        raise OcrCancelled("OCR cancelled by reviewer")
+
     data, conf, engine = extract_from_bytes(
         load_image_bytes(file_path), _mime_for_path(file_path),
         use_gemini=use_gemini, use_local_fallback=use_local_fallback,
         local_engine=local_engine,
+        interactive=interactive,
+        cancel_key=cancel_key,
     )
     return [(file_path.name, data, conf, engine)]
 

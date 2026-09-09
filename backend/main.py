@@ -4852,9 +4852,16 @@ async def get_historical_validation_queue(
     from historical.ocr_status import pending_filter_values, validated_filter_values
     from sqlalchemy.orm import defer, joinedload, noload, selectinload
 
-    from api.historical_processing import _build_queue_item, assign_display_order_ids, load_service_price_map, sort_review_queue
+    from api.historical_processing import (
+        _build_queue_item,
+        _count_review_queue_total,
+        assign_display_order_ids,
+        load_service_price_map,
+        sort_review_queue,
+    )
 
     results = []
+    total_pending = _count_review_queue_total(db)
     service_prices = load_service_price_map(db)
     # Source A: pending OCR images, oldest paper date first (archive starts mid-August).
     pending_orders = (
@@ -4884,6 +4891,7 @@ async def get_historical_validation_queue(
             results.append(item)
     # Source B: already-validated records still missing ML fields (not the pending OCR set).
     seen = {r["order"]["historical_order_id"] for r in results if r.get("order")}
+    remaining_slots = max(0, limit - len(results))
     incomplete = (
         db.query(HistoricalOrder)
         .options(
@@ -4901,9 +4909,9 @@ async def get_historical_validation_queue(
             ),
         )
         .order_by(HistoricalOrder.date_received.asc())
-        .limit(min(limit, 50))
+        .limit(remaining_slots)
         .all()
-    )
+    ) if remaining_slots else []
     for order in incomplete:
         if order.historical_order_id in seen:
             continue
@@ -4912,8 +4920,11 @@ async def get_historical_validation_queue(
             results.append(item)
     assign_display_order_ids(db, results)
     sort_review_queue(results)
-    return results
-
+    return {
+        "items": results,
+        "total": total_pending,
+        "returned": len(results),
+    }
 
 def _build_hist_queue_item(img, order, source: str, db=None, reserved=None):
     from api.historical_processing import _build_queue_item
@@ -4958,7 +4969,12 @@ async def reocr_historical_image_route(
     current_user: User = Depends(require_role("admin")),
 ):
     from pathlib import Path
-    from historical.ocr_engine import extract_from_file, extraction_is_usable
+    from historical.ocr_engine import (
+        OcrCancelled,
+        clear_ocr_cancel,
+        extract_from_file,
+        extraction_is_usable,
+    )
     from historical_ocr_import import apply_extraction_to_order
     from api.historical_processing import _build_queue_item
 
@@ -4975,10 +4991,23 @@ async def reocr_historical_image_route(
     if path is None or not path.exists():
         raise HTTPException(status_code=404, detail="Source image file is missing on disk")
 
+    cancel_key = f"reocr-{historical_image_id}"
+    clear_ocr_cancel(cancel_key)
     try:
-        page_results = extract_from_file(path)
+        page_results = extract_from_file(
+            path,
+            interactive=True,
+            cancel_key=cancel_key,
+            local_engine="tesseract",
+        )
+    except OcrCancelled:
+        clear_ocr_cancel(cancel_key)
+        raise HTTPException(status_code=409, detail="OCR cancelled")
     except Exception as exc:
+        clear_ocr_cancel(cancel_key)
         raise HTTPException(status_code=500, detail=f"OCR failed: {exc}") from exc
+    finally:
+        clear_ocr_cancel(cancel_key)
 
     if not page_results:
         raise HTTPException(status_code=500, detail="OCR returned no pages")
@@ -5001,6 +5030,15 @@ async def reocr_historical_image_route(
         "item": rebuilt,
     }
 
+
+@app.post("/api/historical/processing/reocr/{historical_image_id}/cancel")
+async def cancel_reocr_historical_image_route(
+    historical_image_id: int,
+    current_user: User = Depends(require_role("admin")),
+):
+    from historical.ocr_engine import request_ocr_cancel
+    request_ocr_cancel(f"reocr-{historical_image_id}")
+    return {"status": "cancelling", "historical_image_id": historical_image_id}
 
 # ------------------------------------------------------------------
 # POST /api/historical/processing/validate-order/{id} — Correct a record with missing fields

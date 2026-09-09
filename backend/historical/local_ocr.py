@@ -1,6 +1,11 @@
 """
-Local OCR engines: EasyOCR (strong document OCR) and Tesseract (fast fallback).
-PaddleOCR is unavailable on Python 3.14; EasyOCR fills the same tier when installable.
+Optional local OCR engines: EasyOCR and Tesseract.
+
+Production Heroku uses Gemini Vision as the primary engine
+(``historical.ocr_engine``). EasyOCR is NOT a production dependency — it pulls
+PyTorch/CUDA and previously inflated the Heroku slug to ~3.6 GB. Install it only
+locally via ``requirements-ocr-local.txt``. This module already no-ops when the
+import is missing (``easyocr_available()`` / ``tesseract_available()``).
 """
 
 from __future__ import annotations
