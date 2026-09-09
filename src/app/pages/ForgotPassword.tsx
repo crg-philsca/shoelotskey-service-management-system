@@ -6,10 +6,8 @@ import { Label } from '@/app/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader } from '@/app/components/ui/card';
 import { toast } from 'sonner';
 import { Mail, CheckCircle } from 'lucide-react';
-
-const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))
-  ? `http://${window.location.hostname}:8000/api`
-  : '/api';
+// P1-10 FIX: centralized API base resolution (see src/app/lib/apiBase.ts).
+import { API_BASE } from '@/app/lib/apiBase';
 
 export default function ForgotPassword() {
   const navigate = useNavigate();

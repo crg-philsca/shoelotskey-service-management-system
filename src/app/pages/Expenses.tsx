@@ -162,7 +162,7 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
                     <button
                         type="button"
                         aria-label="Select range"
-                        className="w-10 h-10 sm:w-40 flex items-center justify-center sm:justify-between rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-sm font-semibold uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:border-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                        className="w-10 h-10 sm:w-40 flex items-center justify-center sm:justify-between rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-sm font-bold uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:border-white focus:outline-none focus:ring-2 focus:ring-red-500"
                     >
                         <CalendarIcon className="h-4 w-4 sm:mr-1 shrink-0" aria-hidden="true" />
                         <span className="hidden sm:inline truncate mx-1">{profitRange}</span>
@@ -197,11 +197,11 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
                 if (isNaN(dateValue.getTime())) return false;
                 return dateValue.toLocaleDateString('en-CA') === now.toLocaleDateString('en-CA');
             }
-            if (profitRange === 'Weekly') return diffDays < 7;
-            if (profitRange === 'Monthly') return diffDays < 30;
-            if (profitRange === 'Quarterly') return diffDays < 90;
-            if (profitRange === 'Annually') return diffDays < 365;
-            return true;
+            if (profitRange === 'Weekly') return diffDays <= 7.5;
+            if (profitRange === 'Monthly') return diffDays <= 31.5;
+            if (profitRange === 'Quarterly') return diffDays <= 93;
+            if (profitRange === 'Annually') return diffDays <= 367;
+            return false;
         };
 
         let filtered = expenses
@@ -411,7 +411,7 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
                                                     >
                                                         <Pencil size={14} strokeWidth={2.5} />
                                                     </Button>
-                                                    {user.role?.toLowerCase() === 'owner' && (
+                                                    {['owner', 'admin'].includes(user.role?.toLowerCase() || '') && (
                                                         <Button 
                                                             variant="ghost" 
                                                             className="h-8 w-8 p-0 rounded-lg border border-red-500 text-red-600 hover:bg-red-50 transition-colors"

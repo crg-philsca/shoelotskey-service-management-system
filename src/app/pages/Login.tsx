@@ -7,15 +7,12 @@ import { Checkbox } from '@/app/components/ui/checkbox';
 import { toast } from 'sonner';
 import { Eye, EyeOff, User, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+// P1-10 FIX: centralized API base resolution (see src/app/lib/apiBase.ts).
+import { API_BASE } from '@/app/lib/apiBase';
 
 interface LoginProps {
-  onLogin: (id: number, username: string, role: 'owner' | 'staff', token: string, rememberMe?: boolean) => void;
+  onLogin: (id: number, username: string, role: 'owner' | 'staff' | 'admin', token: string, rememberMe?: boolean) => void;
 }
-
-
-const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '5173'))
-  ? `http://${window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname}:8000/api`
-  : '/api';
 
 const hashPassword = async (password: string): Promise<string> => {
   const msgBuffer = new TextEncoder().encode(password);
@@ -106,7 +103,7 @@ export default function Login({ onLogin }: LoginProps) {
 
       // 2. BACKEND COMMUNICATION WITH TIMEOUT RESILIENCE
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
       
       const response = await fetch(`${API_BASE}/login`, {
         method: 'POST',
@@ -137,7 +134,7 @@ export default function Login({ onLogin }: LoginProps) {
         }
 
         // Pass to App-level state management with token (OWASP A01 Compliance)
-        onLogin(data.user_id, data.username, data.role as 'owner' | 'staff', data.access_token, rememberMe);
+        onLogin(data.user_id, data.username, data.role as 'owner' | 'staff' | 'admin', data.access_token, rememberMe);
 
       } else if (response.status >= 500) {
         // BACKEND EXCEPTION OR API GATEWAY FAILURE (500, 502, 503, 504)

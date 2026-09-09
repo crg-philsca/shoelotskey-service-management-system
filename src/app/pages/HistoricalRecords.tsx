@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { toast } from 'sonner';
 import {
   Archive, Plus, Download, Search, Trash2, Edit2, Eye,
   ChevronLeft, ChevronRight, BarChart2, Cpu, X, Check, AlertTriangle,
   TrendingUp, Users, Package, Clock, DollarSign, Star, Loader2, RefreshCw,
-  FileText, Zap, Target, Activity, Upload, CheckCircle2, AlertCircle
+  FileText, Zap, Target, Activity, Upload, CircleCheck, CircleAlert
 } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
@@ -24,18 +24,25 @@ import {
 } from '@/app/components/ui/dropdown-menu';
 import { MoreVertical, ChevronDown } from 'lucide-react';
 import HistoricalValidationQueue from './HistoricalValidationQueue';
+// P1-10 FIX: centralized API base resolution (see src/app/lib/apiBase.ts).
+import { API_BASE } from '@/app/lib/apiBase';
+import { formatOrderId } from '@/app/lib/orderNumber';
+import { calculateOfficialReleaseBreakdown } from '@/app/lib/businessRules';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface HistoricalRecordsProps {
-  user: { username: string; role: 'owner' | 'staff'; token: string };
+  user: { username: string; role: 'owner' | 'staff' | 'admin'; token: string };
   onSetHeaderActionRight?: (node: React.ReactNode) => void;
 }
 
 interface ShoeItem {
   brand: string; model: string; color: string; size: string;
   material: string; priority: string; remarks: string;
-  services: { service_name: string; service_type: string; price: number }[];
+  item_price?: number | null;
+  is_free?: boolean;
+  price_breakdown?: string | null;
+  services: { service_name: string; service_type: string; price: number; display_label?: string }[];
 }
 
 interface HistoricalRecord {
@@ -45,51 +52,216 @@ interface HistoricalRecord {
   claimed_date: string | null; completion_days: number | null;
   total_pairs: number; grand_total: number; downpayment: number; balance: number;
   priority: string; sync_status: string; status: string;
+  payment_method?: string;
   items: (ShoeItem & { historical_item_id?: number })[];
   image?: { image_filename: string; image_path: string; ocr_status: string } | null;
 }
 
-const API_BASE = (typeof window !== 'undefined' && (
-  window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '5173'
-))
-  ? `http://${window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname}:8000/api`
-  : '/api';
 
 const CHART_COLORS = ['#b91c1c','#3b82f6','#10b981','#f59e0b','#8b5cf6','#ec4899','#06b6d4','#84cc16'];
 const BASE_SERVICES = ['Basic Cleaning','Full Reglue','Minor Reglue','Full Restoration','Minor Restoration','Color Renewal','Unyellowing'];
 const ADDON_SERVICES = ['Deep Cleaning','Sole Whitening','Deodorizing','Repainting','Sole Replacement'];
-const PRIORITIES = ['regular','rush','premium'];
+const PRIORITIES = ['regular','rush'];
 const MATERIALS = ['Leather','Suede','Canvas','Mesh','Knit','Synthetic','Nubuck','Rubber','Other'];
 const BRANCHES = ['Villamor'];
+const RUSH_FEE_BASIC_CLEANING = 150;
+const HISTORICAL_CATALOG_PRICES: Record<string, number> = {
+  'Basic Cleaning': 325, BC: 325, BCN: 325,
+  'Full Restoration': 250,
+  'Full Reglue': 250, FR: 250, FRG: 250,
+  'Minor Restoration': 225, MRES: 225, MRS: 225,
+  'Minor Retouch': 125, MRET: 125, MRT: 125,
+  'Minor Reglue': 125, MR: 125, MRG: 125,
+  'Color Renewal': 325, CR: 325, CRN: 325,
+  'Unyellowing': 125, UY: 125, UNY: 125,
+};
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function fmtDate(iso?: string | null) {
-  if (!iso) return '—';
-  try { return new Date(iso).toLocaleDateString('en-PH', { year:'numeric', month:'short', day:'numeric' }); }
-  catch { return iso; }
+function presentField(value?: string | number | null) {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  if (!text || text === '—') return null;
+  if (['.', '-', '–', 'n/a', 'na', 'none', 'null', 'unknown'].includes(text.toLowerCase())) return null;
+  return text;
 }
 
-function fmtPeso(n?: number) {
+function fmtDate(iso?: string | null) {
+  const cleaned = presentField(iso);
+  if (!cleaned) return '—';
+  try { return new Date(cleaned).toLocaleDateString('en-PH', { year:'numeric', month:'short', day:'numeric' }); }
+  catch { return cleaned; }
+}
+
+function addDaysIso(iso: string, days: number) {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+const HISTORICAL_SERVICE_NAMES: Record<string, string> = {
+  BC: 'Basic Cleaning',
+  BCN: 'Basic Cleaning',
+  FR: 'Full Reglue',
+  FRG: 'Full Reglue',
+  MRES: 'Minor Restoration',
+  MRS: 'Minor Restoration',
+  MR: 'Minor Reglue',
+  MRG: 'Minor Reglue',
+  MRET: 'Minor Retouch',
+  MRT: 'Minor Retouch',
+  UY: 'Unyellowing',
+  UNY: 'Unyellowing',
+  CR: 'Color Renewal',
+  CRN: 'Color Renewal',
+};
+
+function canonicalServiceName(name?: string | null) {
+  const stripped = String(name || '')
+    .trim()
+    .replace(/\s*\(\d+(?:\.\d+)?\)\s*$/, '')
+    .replace(/[\s\-]+rush(?:\s*service)?$/i, '')
+    .trim();
+  if (!stripped) return '';
+  const compact = stripped.replace(/[\s\-]+/g, '').toUpperCase().replace(/\d+$/, '');
+  if (HISTORICAL_SERVICE_NAMES[compact]) return HISTORICAL_SERVICE_NAMES[compact];
+  const first = stripped.split(/[\s\-\/+]+/)[0]?.replace(/[^A-Za-z]/g, '').toUpperCase();
+  if (first && HISTORICAL_SERVICE_NAMES[first]) return HISTORICAL_SERVICE_NAMES[first];
+  const byFullName = Object.values(HISTORICAL_SERVICE_NAMES).find((label) => label.toLowerCase() === stripped.toLowerCase());
+  return byFullName || stripped;
+}
+
+function mergeServiceDistribution(rows: { service?: string; count?: number }[] | undefined) {
+  const freq = new Map<string, number>();
+  for (const row of rows || []) {
+    const raw = String(row.service || '').trim();
+    const parts = raw.split(/\s*[+,/]\s*|\s+-\s+/).map((part) => part.trim()).filter(Boolean);
+    const names = parts.length > 1
+      ? parts.map((part) => canonicalServiceName(part) || part)
+      : [canonicalServiceName(raw) || raw || 'Other'];
+    const known = new Set(Object.values(HISTORICAL_SERVICE_NAMES).map((label) => label.toLowerCase()));
+    const expanded = names.length > 1 && names.every((name) => known.has(name.toLowerCase()))
+      ? names
+      : [canonicalServiceName(raw) || raw || 'Other'];
+    for (const name of expanded) {
+      freq.set(name, (freq.get(name) || 0) + Number(row.count || 0));
+    }
+  }
+  return [...freq.entries()]
+    .map(([service, count]) => ({ service, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+function expandHistoricalService(name?: string | null) {
+  return canonicalServiceName(name);
+}
+
+function serviceIsSelected(shoe: ShoeItem, svcName: string) {
+  const chip = canonicalServiceName(svcName);
+  return (shoe.services || []).some((s) => {
+    const stored = canonicalServiceName(s.service_name || s.display_label);
+    return stored.toLowerCase() === chip.toLowerCase();
+  });
+}
+
+function catalogPriceFor(name?: string | null, storedPrice?: number | null, extra?: Record<string, number>) {
+  if (storedPrice != null && Number(storedPrice) > 0) return Number(storedPrice);
+  const canonical = canonicalServiceName(name);
+  const raw = String(name || '').trim();
+  return extra?.[canonical] ?? extra?.[raw] ?? HISTORICAL_CATALOG_PRICES[canonical] ?? HISTORICAL_CATALOG_PRICES[raw] ?? 0;
+}
+
+function shoePriceBreakdown(shoe: ShoeItem, priority: string, extra?: Record<string, number>) {
+  const services = shoe.services || [];
+  const baseLines = services
+    .filter((s) => s.service_type !== 'addon')
+    .map((s) => {
+      const name = canonicalServiceName(s.service_name || s.display_label);
+      return { name, price: catalogPriceFor(s.service_name || s.display_label, s.price, extra) };
+    })
+    .filter((line) => line.name);
+  const addonLines = services
+    .filter((s) => s.service_type === 'addon')
+    .map((s) => {
+      const name = canonicalServiceName(s.service_name || s.display_label);
+      return { name, price: catalogPriceFor(s.service_name || s.display_label, s.price, extra) };
+    })
+    .filter((line) => line.name);
+  const hasBasicCleaning = services.some((s) => canonicalServiceName(s.service_name || s.display_label) === 'Basic Cleaning');
+  const rushFee = priority === 'rush' && hasBasicCleaning ? RUSH_FEE_BASIC_CLEANING : 0;
+  const serviceTotal = baseLines.reduce((sum, line) => sum + line.price, 0);
+  const addonTotal = addonLines.reduce((sum, line) => sum + line.price, 0);
+  return {
+    baseLines,
+    addonLines,
+    serviceTotal,
+    addonTotal,
+    rushFee,
+    itemTotal: serviceTotal + addonTotal + rushFee,
+  };
+}
+
+function normalizeShoe(item: ShoeItem): ShoeItem {
+  const services = (item.services || []).map((s) => {
+    const name = canonicalServiceName(s.service_name || s.display_label);
+    const isBase = BASE_SERVICES.some((svc) => svc.toLowerCase() === name.toLowerCase());
+    return {
+      ...s,
+      service_name: name || s.service_name,
+      service_type: isBase ? 'base' : (s.service_type || 'addon'),
+    };
+  });
+  return {
+    ...item,
+    brand: item.brand || '',
+    model: item.model || '',
+    color: item.color || '',
+    size: item.size || '',
+    material: item.material || '',
+    remarks: item.remarks || '',
+    services,
+  };
+}
+
+function fmtPeso(n?: number | null) {
   return `₱${(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
 }
 
-function syncBadge(s: string) {
-  const map: Record<string, string> = {
-    pending: 'bg-yellow-50 text-yellow-700 border-yellow-200',
-    synced: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    failed: 'bg-red-50 text-red-700 border-red-200',
-  };
-  const iconMap: Record<string, string> = {
-    pending: '🟡 Pending',
-    synced: '🟢 Synced',
-    failed: '🔴 Failed',
-  };
-  return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase border ${map[s] ?? 'bg-gray-50 text-gray-600 border-gray-200'}`}>
-      {iconMap[s] || s}
-    </span>
-  );
+/**
+ * Title-case: capitalizes first letter of each word,
+ * preserves Roman numerals and initials (e.g. "Arnold R. Villamin").
+ */
+function toTitleCase(name?: string | null): string {
+  if (!name) return '';
+  return String(name).trim().replace(/\s+/g, ' ').split(' ').map((word) =>
+    word.split(/([-'])/).map((part) => {
+      if (part === '-' || part === "'") return part;
+      const bare = part.replace(/\.$/, '');
+      if (!bare) return '';
+      return bare.charAt(0).toUpperCase() + bare.slice(1).toLowerCase() +
+        (bare.length === 1 || part.endsWith('.') ? '.' : '');
+    }).join('')
+  ).join(' ');
+}
+
+/**
+ * Display helper for order IDs:
+ * - Canonical ORD-YYYY-MM-DD-NNN → shown as-is
+ * - Short numeric legacy IDs (e.g. "081901") → shown as-is but styled differently
+ * - UNKNOWN / OCR- / HIST- placeholders → shown as "—"
+ */
+function displayOrderId(id?: string | null): { text: string; isCanonical: boolean; isPlaceholder: boolean } {
+  if (!id || !id.trim()) return { text: '—', isCanonical: false, isPlaceholder: true };
+  const trimmed = id.trim();
+  if (/^ORD-\d{4}-\d{2}-\d{2}-\d{3}$/.test(trimmed)) return { text: trimmed, isCanonical: true, isPlaceholder: false };
+  if (/^(UNKNOWN|OCR-|HIST-|IMPORT-|HEALTH-)/i.test(trimmed.toUpperCase()) || ['UNKNOWN','N/A','NULL','NONE'].includes(trimmed.toUpperCase())) {
+    return { text: '—', isCanonical: false, isPlaceholder: true };
+  }
+  return { text: trimmed, isCanonical: false, isPlaceholder: false };
+}
+
+function originalFormFilename(record?: HistoricalRecord | null) {
+  return presentField(record?.image?.image_filename);
 }
 
 // ─── Empty shoe factory ───────────────────────────────────────────────────────
@@ -101,11 +273,7 @@ function emptyShoe(): ShoeItem {
 // ─── Auto Order ID ────────────────────────────────────────────────────────────
 
 function buildOrderId(seq: number) {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth()+1).padStart(2,'0');
-  const day = String(d.getDate()).padStart(2,'0');
-  return `ORD-${y}-${m}-${day}-${String(seq).padStart(3,'0')}`;
+  return formatOrderId(new Date(), seq);
 }
 
 // ─── FORM DIALOG ─────────────────────────────────────────────────────────────
@@ -116,7 +284,7 @@ function HistoricalOrderForm({
   token: string;
   existingRecord?: HistoricalRecord | null;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: () => void | Promise<void>;
   recordCount: number;
 }) {
   const isEdit = !!existingRecord;
@@ -130,16 +298,99 @@ function HistoricalOrderForm({
   const [claimedDate, setClaimedDate] = useState(existingRecord?.claimed_date?.slice(0,10) ?? '');
   const [grandTotal, setGrandTotal] = useState(String(existingRecord?.grand_total ?? ''));
   const [downpayment, setDownpayment] = useState(String(existingRecord?.downpayment ?? '0'));
-  const [priority, setPriority] = useState(existingRecord?.priority ?? 'regular');
-  const [shoes, setShoes] = useState<ShoeItem[]>(existingRecord?.items?.length ? existingRecord.items as ShoeItem[] : [emptyShoe()]);
+  const [priority, setPriority] = useState(
+    existingRecord?.priority === 'premium' ? 'regular' : (existingRecord?.priority ?? 'regular')
+  );
+  const [shoes, setShoes] = useState<ShoeItem[]>(
+    existingRecord?.items?.length ? existingRecord.items.map((item) => normalizeShoe(item)) : [emptyShoe()]
+  );
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+  const [catalogPrices, setCatalogPrices] = useState<Record<string, number>>({});
+  const [completionDaysInput, setCompletionDaysInput] = useState(
+    existingRecord?.completion_days != null ? String(existingRecord.completion_days) : ''
+  );
+  const daysManualRef = useRef(false);
 
-  const completionDays = useMemo(() => {
-    if (!dateReceived || !claimedDate) return null;
-    const diff = (new Date(claimedDate).getTime() - new Date(dateReceived).getTime()) / 86400000;
-    return Math.round(diff);
-  }, [dateReceived, claimedDate]);
+  const officialDays = useMemo(() => {
+    const items = shoes.map((shoe) => {
+      const base = (shoe.services || [])
+        .filter((s) => s.service_type !== 'addon')
+        .map((s) => expandHistoricalService(s.service_name))
+        .filter(Boolean);
+      const addOns = (shoe.services || [])
+        .filter((s) => s.service_type === 'addon')
+        .map((s) => ({ name: expandHistoricalService(s.service_name), quantity: 1 }))
+        .filter((s) => s.name);
+      return { baseService: base, addOns };
+    });
+    return calculateOfficialReleaseBreakdown(items, priority).totalDays;
+  }, [shoes, priority]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_BASE}/services`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((list: { service_name?: string; service_code?: string; base_price?: number }[]) => {
+        if (cancelled || !Array.isArray(list)) return;
+        const map: Record<string, number> = {};
+        for (const svc of list) {
+          const price = Number(svc.base_price);
+          if (!price) continue;
+          if (svc.service_name) map[svc.service_name] = price;
+          if (svc.service_code) map[svc.service_code] = price;
+        }
+        setCatalogPrices(map);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [token]);
+
+  useEffect(() => {
+    if (daysManualRef.current) {
+      const days = parseInt(completionDaysInput, 10);
+      if (dateReceived && !Number.isNaN(days) && days >= 0) {
+        const next = addDaysIso(dateReceived, days);
+        setClaimedDate(next);
+      }
+      return;
+    }
+    if (!dateReceived || !officialDays) return;
+    const ready = addDaysIso(dateReceived, officialDays);
+    const claimedSpan = claimedDate
+      ? Math.round((new Date(claimedDate).getTime() - new Date(dateReceived).getTime()) / 86400000)
+      : null;
+    const overlong = claimedSpan != null && claimedSpan > officialDays;
+    if (!expectedRelease || overlong) setExpectedRelease(ready);
+    if (!claimedDate || overlong) {
+      setClaimedDate(ready);
+      setCompletionDaysInput(String(officialDays));
+    } else if (claimedSpan != null && claimedSpan >= 0) {
+      setCompletionDaysInput((prev) => prev || String(claimedSpan));
+    } else {
+      setCompletionDaysInput((prev) => prev || String(officialDays));
+    }
+  }, [dateReceived, officialDays]);
+
+  function handleCompletionDaysChange(value: string) {
+    daysManualRef.current = true;
+    setCompletionDaysInput(value);
+    const days = parseInt(value, 10);
+    if (!dateReceived || Number.isNaN(days) || days < 0) return;
+    const next = addDaysIso(dateReceived, days);
+    const syncExpected = !expectedRelease || expectedRelease === claimedDate;
+    setClaimedDate(next);
+    if (syncExpected) setExpectedRelease(next);
+  }
+
+  function handleClaimedDateChange(value: string) {
+    daysManualRef.current = true;
+    setClaimedDate(value);
+    if (dateReceived && value) {
+      const diff = Math.round((new Date(value).getTime() - new Date(dateReceived).getTime()) / 86400000);
+      if (diff >= 0) setCompletionDaysInput(String(diff));
+    }
+  }
 
   const balance = useMemo(() => {
     const gt = parseFloat(grandTotal) || 0;
@@ -157,10 +408,11 @@ function HistoricalOrderForm({
   function toggleService(shoeIdx: number, svcName: string, type: 'base'|'addon') {
     setShoes(prev => prev.map((s, idx) => {
       if (idx !== shoeIdx) return s;
-      const has = s.services.some(sv => sv.service_name === svcName);
+      const chip = canonicalServiceName(svcName);
+      const has = serviceIsSelected(s, chip);
       const services = has
-        ? s.services.filter(sv => sv.service_name !== svcName)
-        : [...s.services, { service_name: svcName, service_type: type, price: 0 }];
+        ? s.services.filter(sv => canonicalServiceName(sv.service_name || sv.display_label).toLowerCase() !== chip.toLowerCase())
+        : [...s.services, { service_name: chip, service_type: type, price: catalogPriceFor(chip, 0, catalogPrices) }];
       return { ...s, services };
     }));
   }
@@ -175,6 +427,10 @@ function HistoricalOrderForm({
       errs.push('Expected Release Date cannot be earlier than Date Received.');
     if (claimedDate && claimedDate < dateReceived)
       errs.push('Claimed Date cannot be earlier than Date Received.');
+    if (completionDaysInput !== '') {
+      const days = parseInt(completionDaysInput, 10);
+      if (Number.isNaN(days) || days < 0) errs.push('Completion Days must be a valid number.');
+    }
     if (!grandTotal || isNaN(parseFloat(grandTotal)))
       errs.push('Grand Total must be a valid number.');
     setErrors(errs);
@@ -193,15 +449,30 @@ function HistoricalOrderForm({
         date_received: dateReceived,
         original_estimated_release_date: expectedRelease,
         claimed_date: claimedDate || null,
+        completion_days: completionDaysInput === '' ? null : parseInt(completionDaysInput, 10),
         grand_total: parseFloat(grandTotal) || 0,
         downpayment: parseFloat(downpayment) || 0,
         priority,
+        payment_method: existingRecord?.payment_method || 'Cash',
         total_pairs: totalPairs,
-        items: shoes.map(s => ({
-          brand: s.brand, model: s.model, color: s.color,
-          size: s.size, material: s.material, priority: s.priority,
-          remarks: s.remarks, services: s.services,
-        })),
+        items: shoes.map(s => {
+          const breakdown = shoePriceBreakdown(s, priority, catalogPrices);
+          return {
+            brand: s.brand, model: s.model, color: s.color,
+            size: s.size, material: s.material, priority: s.priority || priority,
+            remarks: s.remarks,
+            item_price: s.is_free ? 0 : (
+              typeof s.item_price === 'number' && !Number.isNaN(s.item_price)
+                ? s.item_price
+                : breakdown.itemTotal
+            ),
+            services: s.services.map((sv) => ({
+              service_name: canonicalServiceName(sv.service_name || sv.display_label) || sv.service_name,
+              service_type: sv.service_type || 'base',
+              price: catalogPriceFor(sv.service_name || sv.display_label, sv.price, catalogPrices),
+            })),
+          };
+        }),
       };
       const url = isEdit
         ? `${API_BASE}/historical/orders/${existingRecord!.historical_order_id}`
@@ -214,10 +485,14 @@ function HistoricalOrderForm({
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || 'Save failed.');
+        const detail = err?.detail;
+        const message = Array.isArray(detail)
+          ? detail.map((d: any) => d?.msg || JSON.stringify(d)).join('; ')
+          : (typeof detail === 'string' ? detail : (detail ? JSON.stringify(detail) : 'Save failed.'));
+        throw new Error(message);
       }
       toast.success(isEdit ? 'Historical record updated.' : 'Historical record saved.');
-      onSaved();
+      await onSaved();
       onClose();
     } catch (e: any) {
       toast.error(e.message);
@@ -300,12 +575,21 @@ function HistoricalOrderForm({
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase text-gray-500">Claimed Date</label>
-                <Input type="date" value={claimedDate} onChange={e => setClaimedDate(e.target.value)} className="h-9 text-xs" />
+                <Input type="date" value={claimedDate} onChange={e => handleClaimedDateChange(e.target.value)} className="h-9 text-xs" />
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase text-gray-500">Completion Days</label>
-                <div className="h-9 flex items-center bg-gray-50 border border-gray-200 rounded-md px-3 text-xs font-bold text-gray-600">
-                  {completionDays !== null ? `${completionDays} days` : '—'}
+                <div className="relative">
+                  <Input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={completionDaysInput}
+                    onChange={e => handleCompletionDaysChange(e.target.value)}
+                    placeholder="0"
+                    className="h-9 text-xs pr-12"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold uppercase text-gray-400">days</span>
                 </div>
               </div>
             </div>
@@ -316,10 +600,9 @@ function HistoricalOrderForm({
             <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3 border-b pb-1">Priority Level</h3>
             <div className="flex gap-2">
               {PRIORITIES.map(p => (
-                <button key={p} onClick={() => setPriority(p)}
+                <button key={p} type="button" onClick={() => setPriority(p)}
                   className={`px-4 py-2 rounded-lg text-xs font-black uppercase border transition-all ${priority === p
                     ? p === 'rush' ? 'bg-red-600 text-white border-red-600'
-                      : p === 'premium' ? 'bg-amber-500 text-white border-amber-500'
                       : 'bg-emerald-600 text-white border-emerald-600'
                     : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'}`}>
                   {p}
@@ -372,7 +655,7 @@ function HistoricalOrderForm({
                     </div>
                     <div className="space-y-1">
                       <label className="text-[9px] font-bold uppercase text-gray-400">Material</label>
-                      <Select value={shoe.material} onValueChange={v => updateShoe(i,'material',v)}>
+                      <Select value={shoe.material || undefined} onValueChange={v => updateShoe(i,'material',v)}>
                         <SelectTrigger className="h-8 text-xs">
                           <SelectValue placeholder="Material" />
                         </SelectTrigger>
@@ -392,9 +675,9 @@ function HistoricalOrderForm({
                     <p className="text-[9px] font-black uppercase text-gray-400 mb-1.5">Base Service</p>
                     <div className="flex flex-wrap gap-1.5 mb-2">
                       {BASE_SERVICES.map(svc => {
-                        const active = shoe.services.some(s => s.service_name === svc);
+                        const active = serviceIsSelected(shoe, svc);
                         return (
-                          <button key={svc} onClick={() => toggleService(i, svc, 'base')}
+                          <button key={svc} type="button" onClick={() => toggleService(i, svc, 'base')}
                             className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase border transition-all ${active ? 'bg-red-600 text-white border-red-600' : 'bg-white text-gray-500 border-gray-200 hover:border-red-300'}`}>
                             {svc}
                           </button>
@@ -404,15 +687,55 @@ function HistoricalOrderForm({
                     <p className="text-[9px] font-black uppercase text-gray-400 mb-1.5">Add-ons</p>
                     <div className="flex flex-wrap gap-1.5">
                       {ADDON_SERVICES.map(svc => {
-                        const active = shoe.services.some(s => s.service_name === svc);
+                        const active = serviceIsSelected(shoe, svc);
                         return (
-                          <button key={svc} onClick={() => toggleService(i, svc, 'addon')}
+                          <button key={svc} type="button" onClick={() => toggleService(i, svc, 'addon')}
                             className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase border transition-all ${active ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200 hover:border-blue-300'}`}>
                             {svc}
                           </button>
                         );
                       })}
                     </div>
+                    {(() => {
+                      const breakdown = shoePriceBreakdown(shoe, priority, catalogPrices);
+                      return (
+                        <div className="mt-3 bg-white border border-gray-100 rounded-lg p-3 space-y-2">
+                          <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Price Breakdown</p>
+                          <div className="space-y-1">
+                            {breakdown.baseLines.map((line, idx) => (
+                              <div key={`svc-${i}-${idx}`} className="flex justify-between text-[11px]">
+                                <span className="text-gray-500">{line.name}</span>
+                                <span className="font-bold text-gray-800">{fmtPeso(line.price)}</span>
+                              </div>
+                            ))}
+                            <div className="flex justify-between text-[11px] pt-1 border-t border-gray-50">
+                              <span className="text-gray-500 font-medium">Service</span>
+                              <span className="font-bold text-gray-800">{fmtPeso(breakdown.serviceTotal)}</span>
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            {breakdown.addonLines.map((line, idx) => (
+                              <div key={`addon-${i}-${idx}`} className="flex justify-between text-[11px]">
+                                <span className="text-gray-500">{line.name}</span>
+                                <span className="font-bold text-gray-800">{fmtPeso(line.price)}</span>
+                              </div>
+                            ))}
+                            <div className="flex justify-between text-[11px]">
+                              <span className="text-gray-500 font-medium">Add-on</span>
+                              <span className="font-bold text-gray-800">{fmtPeso(breakdown.addonTotal)}</span>
+                            </div>
+                          </div>
+                          <div className="flex justify-between text-[11px]">
+                            <span className="text-gray-500 font-medium">Rush Fee</span>
+                            <span className="font-bold text-gray-800">{fmtPeso(breakdown.rushFee)}</span>
+                          </div>
+                          <div className="flex justify-between items-baseline text-[11px] pt-2 border-t border-gray-100">
+                            <span className="font-black uppercase text-gray-700">Item Total</span>
+                            <span className="font-black text-red-600">{fmtPeso(breakdown.itemTotal)}</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               ))}
@@ -444,11 +767,11 @@ function HistoricalOrderForm({
         </div>
 
         {/* Footer */}
-        <div className="px-6 pb-6 flex justify-end gap-3">
-          <Button variant="outline" onClick={onClose} className="rounded-xl">Cancel</Button>
+        <div className="px-6 pb-6 flex justify-center gap-3">
+          <Button variant="outline" onClick={onClose} className="rounded-xl min-w-[120px]">Cancel</Button>
           <Button onClick={handleSave} disabled={saving}
-            className="bg-red-600 hover:bg-red-700 text-white rounded-xl font-black uppercase tracking-widest px-6">
-            {saving ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Saving...</> : <><Check className="h-4 w-4 mr-2" />Save Record</>}
+            className="bg-red-600 hover:bg-red-700 text-white rounded-xl font-black uppercase tracking-widest px-8 min-w-[120px]">
+            {saving ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Saving...</> : <><Check className="h-4 w-4 mr-2" />Save</>}
           </Button>
         </div>
       </div>
@@ -556,6 +879,11 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
   const [filterSync, setFilterSync] = useState('all');
   const [loading, setLoading] = useState(true);
   const [viewRecord, setViewRecord] = useState<HistoricalRecord | null>(null);
+  const [shoeDetailRecord, setShoeDetailRecord] = useState<HistoricalRecord | null>(null);
+  const [formPreview, setFormPreview] = useState<HistoricalRecord | null>(null);
+  const [formPreviewUrl, setFormPreviewUrl] = useState('');
+  const [formPreviewKind, setFormPreviewKind] = useState<'image' | 'pdf'>('image');
+  const [formPreviewLoading, setFormPreviewLoading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<HistoricalRecord | null>(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ inserted: number; skipped: number; errors: any[] } | null>(null);
@@ -565,7 +893,7 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
   const fetchRecords = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+      const params = new URLSearchParams({ page: String(page), limit: String(limit), finalized_only: 'true' });
       if (search) params.set('search', search);
       if (filterPriority !== 'all') params.set('priority', filterPriority);
       if (filterSync !== 'all') params.set('sync_status', filterSync);
@@ -581,6 +909,51 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
   }, [page, search, filterPriority, filterSync, user.token]);
 
   useEffect(() => { fetchRecords(); }, [fetchRecords]);
+
+  useEffect(() => {
+    const filename = originalFormFilename(formPreview);
+    if (!filename || !user.token) {
+      setFormPreviewUrl('');
+      setFormPreviewLoading(false);
+      return;
+    }
+    let objectUrl = '';
+    let cancelled = false;
+    setFormPreviewLoading(true);
+    setFormPreviewUrl('');
+    (async () => {
+      try {
+        const res = await fetch(
+          `${API_BASE}/historical/image/${encodeURIComponent(filename)}`,
+          { headers: { Authorization: `Bearer ${user.token}` } },
+        );
+        if (!res.ok) throw new Error('Original form could not be loaded.');
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        objectUrl = url;
+        const type = (res.headers.get('content-type') || blob.type || '').toLowerCase();
+        setFormPreviewKind(
+          type.includes('pdf') || filename.toLowerCase().endsWith('.pdf') ? 'pdf' : 'image'
+        );
+        setFormPreviewUrl(url);
+      } catch {
+        if (!cancelled) {
+          setFormPreviewUrl('');
+          toast.error('Original form could not be loaded.');
+        }
+      } finally {
+        if (!cancelled) setFormPreviewLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [formPreview, user.token]);
 
   async function handleDelete() {
     if (!deleteTarget) return;
@@ -695,7 +1068,7 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
             <div className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg border mb-2 ${
               importResult.skipped > 0 ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800'
             }`}>
-              {importResult.skipped > 0 ? <AlertCircle className="h-3.5 w-3.5 shrink-0" /> : <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />}
+              {importResult.skipped > 0 ? <CircleAlert className="h-3.5 w-3.5 shrink-0" /> : <CircleCheck className="h-3.5 w-3.5 shrink-0" />}
               <span className="font-bold">{importResult.inserted} imported, {importResult.skipped} skipped.</span>
               {importResult.errors.length > 0 && <span className="text-[10px] text-gray-500 ml-1">{importResult.errors[0]?.error}</span>}
               <button onClick={() => setImportResult(null)} className="ml-auto"><X className="h-3 w-3" /></button>
@@ -706,7 +1079,7 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
         <table className="w-full min-w-[900px]">
           <thead>
             <tr className="bg-red-50">
-              {['Order ID','Customer','Priority','Shoes','Services','Received','Expected Release','Claimed','Days','Grand Total','Sync','Actions'].map(h => (
+              {['Order ID','Customer','Priority','Shoes','Services','Order Date','Expected Date','Claimed Date','Total Days','Grand Total','View','Actions'].map(h => (
                 <th key={h} className="px-3 py-3 text-[10px] font-black uppercase text-gray-500 text-center">{h}</th>
               ))}
             </tr>
@@ -721,11 +1094,24 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
                 <Archive className="h-12 w-12 text-gray-200 mx-auto mb-3" />
                 <p className="text-sm font-black text-gray-400 uppercase tracking-widest">No historical records found</p>
               </td></tr>
-            ) : records.map(r => (
+            ) : records.map(r => {
+              const orderId = displayOrderId(r.order_id);
+              return (
               <tr key={r.historical_order_id} className="hover:bg-gray-50 cursor-pointer transition-colors"
                 onClick={() => setViewRecord(r)}>
-                <td className="px-3 py-3 text-xs font-bold text-red-700 text-center font-mono">{r.order_id}</td>
-                <td className="px-3 py-3 text-xs text-center">{r.customer_name}</td>
+                <td className="px-3 py-3 text-xs font-bold text-center font-mono">
+                  {orderId.isPlaceholder ? (
+                    <span className="text-gray-300">—</span>
+                  ) : orderId.isCanonical ? (
+                    <span className="text-red-700">{orderId.text}</span>
+                  ) : (
+                    <span className="text-orange-600" title="Legacy ID — not yet in ORD-YYYY-MM-DD-NNN format">{orderId.text}</span>
+                  )}
+                </td>
+                <td className="px-3 py-3 text-center">
+                  <div className="text-xs font-medium text-gray-900 leading-tight">{toTitleCase(presentField(r.customer_name)) || '—'}</div>
+                  <div className="text-[10px] text-gray-500 mt-0.5">{presentField(r.contact_number) || '—'}</div>
+                </td>
                 <td className="px-3 py-3 text-center">
                   <span className={`inline-flex px-2 py-0.5 rounded-full text-[9px] font-black uppercase border ${
                     r.priority === 'rush' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-gray-50 text-gray-600 border-gray-200'
@@ -739,7 +1125,7 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
                 </td>
                 <td className="px-3 py-3 text-xs text-center">
                   {r.items?.flatMap(it => it.services).slice(0,3).map((s, i) => (
-                    <span key={i} className="inline-block mr-0.5 mb-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded bg-red-50 text-red-700">{s.service_name}</span>
+                    <span key={i} className="inline-block mr-0.5 mb-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded bg-red-50 text-red-700">{s.display_label || s.service_name}</span>
                   ))}
                   {r.items?.flatMap(it => it.services).length > 3 && <span className="text-[9px] text-gray-400">+more</span>}
                   {!r.items?.flatMap(it => it.services).length && <span className="text-gray-300">—</span>}
@@ -750,7 +1136,20 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
                 <td className="px-3 py-3 text-xs text-center font-bold">{r.completion_days ?? '—'}</td>
                 <td className="px-3 py-3 text-xs text-center font-bold">{fmtPeso(r.grand_total)}</td>
                 <td className="px-3 py-3 text-center" onClick={e => e.stopPropagation()}>
-                  {syncBadge(r.sync_status)}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!originalFormFilename(r)) {
+                        toast.error('No scanned form photo is linked to this record.');
+                        return;
+                      }
+                      setFormPreview(r);
+                    }}
+                    className="inline-flex items-center gap-1 h-7 px-2 text-[10px] font-black uppercase border border-red-600 text-red-600 rounded bg-red-50 hover:bg-red-100 transition-colors"
+                    title="View original scanned form"
+                  >
+                    <Eye className="h-3.5 w-3.5" />View
+                  </button>
                 </td>
                 <td className="px-3 py-3 text-center" onClick={e => e.stopPropagation()}>
                   <DropdownMenu>
@@ -760,9 +1159,23 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-44 p-1.5 space-y-0.5">
+                      <DropdownMenuItem onClick={() => {
+                        if (!originalFormFilename(r)) {
+                          toast.error('No scanned form photo is linked to this record.');
+                          return;
+                        }
+                        setFormPreview(r);
+                      }}
+                        className="text-xs font-bold flex items-center gap-2 rounded-md px-2 py-1.5 text-gray-700">
+                        <FileText className="h-3.5 w-3.5" />View Form Photo
+                      </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => setViewRecord(r)}
                         className="text-xs font-bold flex items-center gap-2 rounded-md px-2 py-1.5 text-gray-700">
                         <Eye className="h-3.5 w-3.5" />View Details
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setShoeDetailRecord(r)}
+                        className="text-xs font-bold flex items-center gap-2 rounded-md px-2 py-1.5 text-gray-700">
+                        <Package className="h-3.5 w-3.5" />Shoe Details
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => { setEditRecord(r); setShowForm(true); }}
                         className="text-xs font-bold flex items-center gap-2 rounded-md px-2 py-1.5 text-yellow-700 bg-yellow-50 hover:bg-yellow-100">
@@ -776,7 +1189,8 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
                   </DropdownMenu>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -806,9 +1220,14 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
 
       {/* Form Dialog */}
       {showForm && (
-        <HistoricalOrderForm token={user.token} existingRecord={editRecord}
+        <HistoricalOrderForm
+          key={editRecord?.historical_order_id ?? 'new-historical'}
+          token={user.token}
+          existingRecord={editRecord}
           onClose={() => { setShowForm(false); setEditRecord(null); }}
-          onSaved={fetchRecords} recordCount={total} />
+          onSaved={fetchRecords}
+          recordCount={total}
+        />
       )}
 
       {/* View Dialog */}
@@ -823,43 +1242,177 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
             <div className="space-y-4 text-sm">
               <div className="grid grid-cols-2 gap-2 text-xs">
                 {[
-                  ['Customer', viewRecord.customer_name],
-                  ['Contact', viewRecord.contact_number || '—'],
-                  ['Branch', viewRecord.branch || '—'],
+                  ['Customer', toTitleCase(viewRecord.customer_name)],
+                  ['Contact', viewRecord.contact_number],
+                  ['Branch', viewRecord.branch],
                   ['Priority', viewRecord.priority],
-                  ['Date Received', fmtDate(viewRecord.date_received)],
-                  ['Expected Release', fmtDate(viewRecord.original_estimated_release_date)],
+                  ['Order Date', fmtDate(viewRecord.date_received)],
+                  ['Expected Date', fmtDate(viewRecord.original_estimated_release_date)],
                   ['Claimed Date', fmtDate(viewRecord.claimed_date)],
-                  ['Completion Days', viewRecord.completion_days !== null ? `${viewRecord.completion_days} days` : '—'],
+                  ['Total Days', viewRecord.completion_days !== null && viewRecord.completion_days !== undefined ? `${viewRecord.completion_days} days` : null],
                   ['Grand Total', fmtPeso(viewRecord.grand_total)],
-                  ['Downpayment', fmtPeso(viewRecord.downpayment)],
-                  ['Balance', fmtPeso(viewRecord.balance)],
+                  ['Downpayment', viewRecord.downpayment ? fmtPeso(viewRecord.downpayment) : null],
+                  ['Balance', viewRecord.balance ? fmtPeso(viewRecord.balance) : null],
+                  ['Payment Method', viewRecord.payment_method],
                   ['Sync Status', viewRecord.sync_status],
-                ].map(([k,v]) => (
+                ].filter(([, v]) => v !== null && v !== undefined && String(v).trim() !== '' && String(v) !== '—').map(([k,v]) => (
                   <div key={k} className="bg-gray-50 rounded-lg p-2">
                     <p className="text-[9px] font-black uppercase text-gray-400">{k}</p>
-                    <p className="font-bold text-gray-800 capitalize">{v}</p>
+                    <p className="font-bold text-gray-800">{v}</p>
                   </div>
                 ))}
               </div>
               {viewRecord.items.length > 0 && (
                 <div>
                   <p className="text-[10px] font-black uppercase text-gray-400 mb-2">Shoe Details</p>
-                  {viewRecord.items.map((item, i) => (
+                  {viewRecord.items.map((item, i) => {
+                    const meta = [
+                      presentField(item.color) ? `Color: ${item.color}` : null,
+                      presentField(item.size) ? `Size: ${item.size}` : null,
+                      presentField(item.material) ? `Material: ${item.material}` : null,
+                    ].filter(Boolean);
+                    const services = item.services || [];
+                    return (
                     <div key={i} className="border border-gray-100 rounded-xl p-3 mb-2 bg-gray-50">
-                      <p className="text-xs font-black text-gray-700 mb-1">Shoe {i+1}: {item.brand} {item.model}</p>
-                      <p className="text-[10px] text-gray-500">Color: {item.color} · Size: {item.size} · Material: {item.material}</p>
-                      {item.services.length > 0 && (
+                      <p className="text-xs font-black text-gray-700 mb-1">Shoe {i+1}: {[item.brand, item.model].filter(Boolean).join(' ')}</p>
+                      {meta.length > 0 && (
+                        <p className="text-[10px] text-gray-500">{meta.join(' · ')}</p>
+                      )}
+                      {services.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-2">
-                          {item.services.map(s => (
-                            <span key={s.service_name} className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-red-50 text-red-700 border border-red-100">
-                              {s.service_name}
+                          {services.map((s, sIdx) => (
+                            <span key={`${s.service_name}-${sIdx}`} className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-red-50 text-red-700 border border-red-100">
+                              {s.display_label || s.service_name}
                             </span>
                           ))}
                         </div>
                       )}
+                      {item.is_free ? (
+                        <p className="text-[10px] font-bold text-gray-700 mt-2">Total Price: FREE</p>
+                      ) : item.price_breakdown ? (
+                        <p className="text-[10px] font-bold text-gray-700 mt-2">
+                          {item.price_breakdown} Total Price: {fmtPeso(item.item_price)}
+                        </p>
+                      ) : item.item_price ? (
+                        <p className="text-[10px] font-bold text-gray-700 mt-2">Total Price: {fmtPeso(item.item_price)}</p>
+                      ) : null}
                     </div>
-                  ))}
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Shoe Details Dialog */}
+      {shoeDetailRecord && (
+        <Dialog open onOpenChange={() => setShoeDetailRecord(null)}>
+          <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="font-black uppercase text-sm tracking-widest flex items-center gap-2">
+                <Package className="h-4 w-4 text-red-600" />
+                Shoe Details · {shoeDetailRecord.order_id}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="text-xs text-gray-500 mb-3 font-medium">
+              {toTitleCase(shoeDetailRecord.customer_name)}
+              {shoeDetailRecord.contact_number ? ` · ${shoeDetailRecord.contact_number}` : ''}
+            </div>
+            {shoeDetailRecord.items.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-8">No shoe details recorded.</p>
+            ) : (
+              <div className="space-y-3">
+                {shoeDetailRecord.items.map((item, i) => {
+                  const meta = [
+                    presentField(item.color) ? `Color: ${item.color}` : null,
+                    presentField(item.size) ? `Size: ${item.size}` : null,
+                    presentField(item.material) ? `Material: ${item.material}` : null,
+                  ].filter(Boolean);
+                  const services = item.services || [];
+                  return (
+                    <div key={i} className="border border-gray-100 rounded-xl p-3 bg-gray-50">
+                      <p className="text-sm font-black text-gray-800 mb-1">
+                        Shoe {i + 1}: {[item.brand, item.model].filter(Boolean).join(' ') || '—'}
+                      </p>
+                      {meta.length > 0 && (
+                        <p className="text-[10px] text-gray-500 mb-2">{meta.join(' · ')}</p>
+                      )}
+                      {item.remarks && (
+                        <p className="text-[10px] text-gray-400 italic mb-2">Remarks: {item.remarks}</p>
+                      )}
+                      {services.length > 0 ? (
+                        <div className="flex flex-wrap gap-1 mb-2">
+                          {services.map((s, sIdx) => (
+                            <span key={`${s.service_name}-${sIdx}`} className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-red-50 text-red-700 border border-red-100">
+                              {s.display_label || s.service_name}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[10px] text-gray-300 mb-2">No services recorded</p>
+                      )}
+                      {item.is_free ? (
+                        <p className="text-[10px] font-bold text-emerald-600">Total Price: FREE</p>
+                      ) : item.price_breakdown ? (
+                        <p className="text-[10px] font-bold text-gray-700">
+                          {item.price_breakdown} &mdash; Total: {fmtPeso(item.item_price)}
+                        </p>
+                      ) : item.item_price ? (
+                        <p className="text-[10px] font-bold text-gray-700">Total Price: {fmtPeso(item.item_price)}</p>
+                      ) : (
+                        <p className="text-[10px] text-gray-300">Price not recorded</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Original Form Viewer */}
+      {formPreview && (
+        <Dialog open onOpenChange={() => { setFormPreview(null); setFormPreviewUrl(''); setFormPreviewLoading(false); }}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="font-black uppercase text-sm tracking-widest flex items-center gap-2">
+                <FileText className="h-4 w-4 text-red-600" />
+                Original Form · {formPreview.order_id}
+              </DialogTitle>
+            </DialogHeader>
+            <p className="text-[11px] text-gray-500 -mt-2 mb-2 truncate">
+              {originalFormFilename(formPreview)}
+            </p>
+            <div className="flex-1 min-h-[420px] bg-gray-50 border border-gray-100 rounded-xl overflow-auto">
+              {formPreviewLoading ? (
+                <div className="h-[420px] flex items-center justify-center">
+                  <Loader2 className="h-8 w-8 animate-spin text-red-500" />
+                </div>
+              ) : formPreviewUrl ? (
+                formPreviewKind === 'pdf' ? (
+                  <iframe
+                    src={formPreviewUrl}
+                    title={`Original form ${formPreview.order_id}`}
+                    className="w-full h-[70vh] min-h-[420px] border-0 bg-white"
+                  />
+                ) : (
+                  <img
+                    src={formPreviewUrl}
+                    alt={`Original form for ${formPreview.order_id}`}
+                    className="w-full object-contain object-top"
+                  />
+                )
+              ) : (
+                <div className="h-[420px] flex flex-col items-center justify-center text-center px-6">
+                  <Archive className="h-10 w-10 text-gray-200 mb-2" />
+                  <p className="text-sm font-bold text-gray-500">
+                    {originalFormFilename(formPreview)
+                      ? 'Original form could not be loaded.'
+                      : 'No scanned form photo is linked to this record.'}
+                  </p>
                 </div>
               )}
             </div>
@@ -924,6 +1477,11 @@ function AnalyticsTab({ user }: { user: HistoricalRecordsProps['user'] }) {
 
   useEffect(() => { fetchAnalytics(); }, [fetchAnalytics]);
 
+  const serviceDistribution = useMemo(
+    () => mergeServiceDistribution(data?.service_distribution),
+    [data?.service_distribution],
+  );
+
   if (loading) return (
     <div className="flex items-center justify-center py-20">
       <Loader2 className="h-10 w-10 animate-spin text-red-500" />
@@ -938,7 +1496,7 @@ function AnalyticsTab({ user }: { user: HistoricalRecordsProps['user'] }) {
     { label: 'Average Completion Time', value: `${ov.avg_completion_time ?? 0} days`, icon: Clock, color: 'from-blue-50 to-blue-100', text: 'text-blue-700', iconColor: 'text-blue-400' },
     { label: 'Total Pairs', value: ov.total_pairs ?? 0, icon: Package, color: 'from-amber-50 to-amber-100', text: 'text-amber-700', iconColor: 'text-amber-400' },
     { label: 'Total Customers', value: ov.total_customers ?? 0, icon: Users, color: 'from-rose-50 to-rose-100', text: 'text-rose-700', iconColor: 'text-rose-400' },
-    { label: 'Most Requested Service', value: ov.most_requested_service ?? 'N/A', icon: Star, color: 'from-indigo-50 to-indigo-100', text: 'text-indigo-700', iconColor: 'text-indigo-400' },
+    { label: 'Most Requested Service', value: serviceDistribution[0]?.service || ov.most_requested_service || 'N/A', icon: Star, color: 'from-indigo-50 to-indigo-100', text: 'text-indigo-700', iconColor: 'text-indigo-400' },
   ];
 
   return (
@@ -989,10 +1547,10 @@ function AnalyticsTab({ user }: { user: HistoricalRecordsProps['user'] }) {
             </CardTitle>
           </CardHeader>
           <CardContent className="px-4 pb-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-2">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mt-2">
               <div>
                 <p className="text-[9px] font-black uppercase text-gray-400 mb-1">Model</p>
-                <p className="text-sm font-bold text-gray-800">Random Forest</p>
+                <p className="text-sm font-bold text-gray-800">Random Forest Regression</p>
               </div>
               <div>
                 <p className="text-[9px] font-black uppercase text-gray-400 mb-1">Training Records</p>
@@ -1005,12 +1563,21 @@ function AnalyticsTab({ user }: { user: HistoricalRecordsProps['user'] }) {
                 </p>
               </div>
               <div>
-                <p className="text-[9px] font-black uppercase text-gray-400 mb-1">Prediction Accuracy</p>
+                <p className="text-[9px] font-black uppercase text-gray-400 mb-1">Test R²</p>
                 <p className="text-sm font-black text-emerald-600">
-                  {modelInfo.r2_score ? `${(modelInfo.r2_score * 100).toFixed(1)}%` : '—'}
+                  {modelInfo.r2_score != null ? Number(modelInfo.r2_score).toFixed(3) : '—'}
+                </p>
+              </div>
+              <div>
+                <p className="text-[9px] font-black uppercase text-gray-400 mb-1">Test MAE (days)</p>
+                <p className="text-sm font-bold text-gray-800">
+                  {modelInfo.mae != null ? Number(modelInfo.mae).toFixed(1) : '—'}
                 </p>
               </div>
             </div>
+            <p className="text-[10px] text-gray-500 mt-3 leading-snug">
+              Target: order-to-claim turnaround days (claimed − received). R² is a fit score (not “accuracy %”). Official release dates still come from Shoelotskey business rules.
+            </p>
           </CardContent>
         </Card>
       )}
@@ -1067,8 +1634,8 @@ function AnalyticsTab({ user }: { user: HistoricalRecordsProps['user'] }) {
           <CardContent className="pt-2 px-2">
             <ResponsiveContainer width="100%" height={200}>
               <PieChart>
-                <Pie data={data?.service_distribution ?? []} dataKey="count" nameKey="service" outerRadius={80} label={({ service }) => service}>
-                  {(data?.service_distribution ?? []).map((_:any, i:number) => (
+                <Pie data={serviceDistribution} dataKey="count" nameKey="service" outerRadius={80} label={({ service }) => service}>
+                  {serviceDistribution.map((_:any, i:number) => (
                     <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                   ))}
                 </Pie>
@@ -1109,7 +1676,7 @@ function AnalyticsTab({ user }: { user: HistoricalRecordsProps['user'] }) {
               <thead><tr className="text-[9px] font-black uppercase text-gray-400 border-b">
                 <th className="py-1 text-left">Service</th><th className="py-1 text-right">Count</th>
               </tr></thead>
-              <tbody>{(data?.service_distribution ?? []).map((s:any) => (
+              <tbody>{serviceDistribution.map((s:any) => (
                 <tr key={s.service} className="border-b border-gray-50">
                   <td className="py-1.5 font-medium">{s.service}</td>
                   <td className="py-1.5 text-right font-black text-red-700">{s.count}</td>
@@ -1163,7 +1730,7 @@ function MachineLearningTab({ user }: { user: HistoricalRecordsProps['user'] }) 
     try {
       const [infoRes, statsRes, predsRes, historyRes] = await Promise.all([
         fetch(`${API_BASE}/historical/model-info`, { headers: { Authorization: `Bearer ${user.token}` } }),
-        fetch(`${API_BASE}/historical/stats`),
+        fetch(`${API_BASE}/historical/stats`, { headers: { Authorization: `Bearer ${user.token}` } }),
         fetch(`${API_BASE}/historical/predictions`, { headers: { Authorization: `Bearer ${user.token}` } }),
         fetch(`${API_BASE}/etl/import-history`, { headers: { Authorization: `Bearer ${user.token}` } }),
       ]);
@@ -1219,6 +1786,9 @@ function MachineLearningTab({ user }: { user: HistoricalRecordsProps['user'] }) 
   );
 
   const info = modelInfo ?? {};
+  const exportCount = liveStats?.export_record_count ?? liveStats?.ml_eligible ?? liveStats?.ready_for_training ?? info.records_available ?? 0;
+  const totalCount = liveStats?.total ?? info.records_available ?? exportCount;
+  const validatedCount = liveStats?.validated ?? info.records_available ?? exportCount;
 
   return (
     <div className="space-y-6">
@@ -1252,11 +1822,11 @@ function MachineLearningTab({ user }: { user: HistoricalRecordsProps['user'] }) 
           <CardContent className="px-4 pb-4 space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-gray-500 font-medium">Total Historical Records</span>
-              <span className="font-black text-blue-700">{liveStats?.total ?? info.records_available ?? 0} Records</span>
+              <span className="font-black text-blue-700">{totalCount} Records</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-500 font-medium">Ready for Training</span>
-              <span className="font-black text-emerald-700">{liveStats?.validated ?? info.records_available ?? 0} Validated</span>
+              <span className="font-black text-emerald-700">{validatedCount} Validated · {exportCount} ML-Eligible</span>
             </div>
             {liveStats?.missing_fields > 0 && (
               <div className="flex justify-between text-sm">
@@ -1266,7 +1836,7 @@ function MachineLearningTab({ user }: { user: HistoricalRecordsProps['user'] }) 
             )}
             <div className="flex justify-between text-sm">
               <span className="text-gray-500 font-medium">Features</span>
-              <span className="font-black text-gray-700">12+</span>
+              <span className="font-black text-gray-700">18</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-500 font-medium">Target Variable</span>
@@ -1280,7 +1850,7 @@ function MachineLearningTab({ user }: { user: HistoricalRecordsProps['user'] }) 
                   </div>
                   <div>
                     <p className="text-xs font-bold text-gray-800">historical_dataset.csv</p>
-                    <p className="text-[10px] text-gray-500">{liveStats?.total ?? 0} Records · Click to export</p>
+                    <p className="text-[10px] text-gray-500">{exportCount} Records · Click to export</p>
                   </div>
                 </div>
                 <Button onClick={handleExport} disabled={exporting} size="sm" variant="outline" className="h-8 rounded-lg hover:bg-blue-50 hover:text-blue-700">
@@ -1301,7 +1871,7 @@ function MachineLearningTab({ user }: { user: HistoricalRecordsProps['user'] }) 
           <CardContent className="px-4 pb-4 space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-gray-500 font-medium">Algorithm</span>
-              <span className="font-black text-gray-700">Random Forest Regressor</span>
+              <span className="font-black text-gray-700">Random Forest Regression</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-500 font-medium">Model Status</span>
@@ -1332,7 +1902,9 @@ function MachineLearningTab({ user }: { user: HistoricalRecordsProps['user'] }) 
           <div className="flex flex-wrap gap-1.5">
             {['Total Pairs','Basic Cleaning Qty','Full Reglue Qty','Minor Reglue Qty','Full Restoration Qty',
               'Minor Restoration Qty','Color Renewal Qty','Unyellowing Qty','Priority (Encoded)',
-              'Grand Total','Day of Week Received','Month Received'].map(f => (
+              'Grand Total','Day of Week Received','Month Received',
+              'Scratches Count','Yellowing Count','Sole Separation Count','Deep Stains Count',
+              'Rips/Holes Count','Worn Out Count'].map(f => (
               <span key={f} className="px-2.5 py-1 bg-purple-50 text-purple-700 border border-purple-100 rounded-md text-[10px] font-bold uppercase">
                 {f}
               </span>
@@ -1475,15 +2047,44 @@ function MachineLearningTab({ user }: { user: HistoricalRecordsProps['user'] }) 
 
 // ─── ARCHIVES TAB ─────────────────────────────────────────────────────────────
 
-function ArchivesTab() {
-  const archives = [
-    { month: 'August', year: '2025', file: '/historical_data/source/Digital%20Job%20Order%20Forms/August/CamScanner%208-2-26%2015.00.pdf' },
-    { month: 'September', year: '2025', file: '/historical_data/source/Digital%20Job%20Order%20Forms/September/CamScanner%208-2-26%2015.45.pdf' },
-    { month: 'October', year: '2025', file: '/historical_data/source/Digital%20Job%20Order%20Forms/October/CamScanner%208-2-26%2016.20.pdf' },
-    { month: 'November', year: '2025', file: '/historical_data/source/Digital%20Job%20Order%20Forms/November/CamScanner%208-2-26%2016.56.pdf' },
-    { month: 'December', year: '2025', file: '/historical_data/source/Digital%20Job%20Order%20Forms/December/Compressed%20CamScanner%208-3-26%2015.38.pdf' },
-    { month: 'January', year: '2026', file: '/historical_data/source/Digital%20Job%20Order%20Forms/January/Compressed%20CamScanner%208-3-26%2016.36.pdf' }
-  ];
+function ArchivesTab({ user }: { user: HistoricalRecordsProps['user'] }) {
+  const [archives, setArchives] = useState<{ month: string; year: string; filename: string; url: string; pdf_count?: number }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`${API_BASE}/historical/archives`, {
+          headers: { Authorization: `Bearer ${user.token}` },
+        });
+        if (!res.ok) throw new Error('Failed to load archives.');
+        const data = await res.json();
+        setArchives(data.archives ?? []);
+      } catch (e: any) {
+        setError(e.message || 'Could not load archives.');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [user.token]);
+
+  const openArchive = async (url: string) => {
+    const filename = url.split('/').filter(Boolean).pop() || '';
+    try {
+      const res = await fetch(`${API_BASE}/historical/image/${encodeURIComponent(filename)}`, {
+        headers: { Authorization: `Bearer ${user.token}` },
+      });
+      if (!res.ok) throw new Error('Could not open archive.');
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      window.open(objectUrl, '_blank', 'noopener,noreferrer');
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    } catch (e: any) {
+      setError(e.message || 'Could not open archive.');
+    }
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -1493,25 +2094,36 @@ function ArchivesTab() {
             <FileText className="h-4 w-4 text-red-600" />
             Monthly Report Archives
           </CardTitle>
-          <p className="text-xs text-gray-500 mt-1">View the original scanned PDF batch reports for historical months.</p>
+          <p className="text-xs text-gray-500 mt-1">Original scanned PDF batch reports discovered from the historical source folder.</p>
         </CardHeader>
         <CardContent className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {archives.map((archive) => (
-              <div 
-                key={archive.month} 
-                className="group border border-gray-200 rounded-xl p-4 flex flex-col items-center justify-center gap-3 hover:border-red-300 hover:bg-red-50 transition-all cursor-pointer"
-                onClick={() => window.open(`http://localhost:8000${archive.file}`, '_blank')}
-              >
-                <FileText className="h-10 w-10 text-gray-400 group-hover:text-red-500 transition-colors" />
-                <span className="text-sm font-bold text-gray-700 group-hover:text-red-700">{archive.month} {archive.year}</span>
-                <div className="flex items-center gap-1 mt-1 text-gray-400 group-hover:text-red-500">
-                  <span className="text-[10px] uppercase font-black tracking-widest">Open PDF</span>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-external-link"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
-                </div>
-              </div>
-            ))}
-          </div>
+          {loading ? (
+            <div className="flex justify-center py-16">
+              <Loader2 className="h-8 w-8 animate-spin text-red-500" />
+            </div>
+          ) : error ? (
+            <div className="text-center py-12 text-sm text-red-600 font-medium">{error}</div>
+          ) : archives.length === 0 ? (
+            <div className="text-center py-12 text-sm text-gray-500">No PDF archives found in the source directory.</div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {archives.map((archive) => (
+                <button
+                  key={`${archive.month}-${archive.filename}`}
+                  type="button"
+                  className="group border border-gray-200 rounded-xl p-4 flex flex-col items-center justify-center gap-3 hover:border-red-300 hover:bg-red-50 transition-all text-left"
+                  onClick={() => openArchive(archive.url)}
+                >
+                  <FileText className="h-10 w-10 text-gray-400 group-hover:text-red-500 transition-colors" />
+                  <span className="text-sm font-bold text-gray-700 group-hover:text-red-700">{archive.month} {archive.year}</span>
+                  <span className="text-[10px] text-gray-400 truncate max-w-full px-2">{archive.filename}</span>
+                  <div className="flex items-center gap-1 text-gray-400 group-hover:text-red-500">
+                    <span className="text-[10px] uppercase font-black tracking-widest">Open PDF</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
@@ -1526,7 +2138,7 @@ export default function HistoricalRecords({ user, onSetHeaderActionRight }: Hist
   const [activeTab, setActiveTab] = useState<Tab>('records');
   const [showForm, setShowForm] = useState(false);
   const [editRecord, setEditRecord] = useState<HistoricalRecord | null>(null);
-  const isOwner = user.role === 'owner';
+  const isOwner = ['owner', 'admin'].includes(user.role?.toLowerCase() || '');
 
   useEffect(() => {
     if (onSetHeaderActionRight) {
@@ -1563,22 +2175,24 @@ export default function HistoricalRecords({ user, onSetHeaderActionRight }: Hist
           </div>
         </div>
 
-        {/* Tab navigation */}
-        <div className="flex justify-center gap-4 border-b border-gray-200 pb-0">
+        {/* Tab navigation — horizontal scroll on narrow screens; no vertical scrollbar */}
+        <div className="overflow-x-auto overflow-y-hidden pb-0 -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-thin">
+          <div className="flex justify-start sm:justify-center gap-2 sm:gap-4 border-b border-gray-200 min-w-max sm:min-w-0">
           {tabs.filter(t => !t.ownerOnly || isOwner).map(t => (
             <button
               key={t.key}
               onClick={() => setActiveTab(t.key)}
-              className={`flex items-center justify-center gap-2 px-8 py-3 w-48 text-[11px] font-black uppercase tracking-widest transition-all border-b-2 -mb-px ${
+              className={`inline-flex items-center justify-center gap-2 px-4 sm:px-6 py-3 min-w-[7.5rem] text-[11px] font-black uppercase tracking-widest whitespace-nowrap transition-all border-b-2 -mb-px shrink-0 ${
                 activeTab === t.key
                   ? 'text-red-700 border-red-600 bg-red-50/50'
                   : 'text-gray-400 border-transparent hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              <t.icon className="h-3.5 w-3.5" />
+              <t.icon className="h-3.5 w-3.5 shrink-0" />
               {t.label}
             </button>
           ))}
+          </div>
         </div>
 
         {/* Tab content */}
@@ -1586,8 +2200,8 @@ export default function HistoricalRecords({ user, onSetHeaderActionRight }: Hist
           {activeTab === 'records'   && <RecordsTab user={user} showForm={showForm} setShowForm={setShowForm} editRecord={editRecord} setEditRecord={setEditRecord} />}
           {activeTab === 'analytics' && isOwner && <AnalyticsTab user={user} />}
           {activeTab === 'ml'        && isOwner && <MachineLearningTab user={user} />}
-          {activeTab === 'ocr'       && <div className="animate-in fade-in duration-500"><HistoricalValidationQueue /></div>}
-          {activeTab === 'archives'  && <ArchivesTab />}
+          {activeTab === 'ocr'       && <div className="animate-in fade-in duration-500"><HistoricalValidationQueue user={user} onBack={() => setActiveTab('records')} /></div>}
+          {activeTab === 'archives'  && <ArchivesTab user={user} />}
         </div>
       </div>
     </div>

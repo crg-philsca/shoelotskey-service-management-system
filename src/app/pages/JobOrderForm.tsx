@@ -5,7 +5,7 @@ import { Button } from '@/app/components/ui/button';
 import { ClipboardList } from 'lucide-react';
 
 interface JobOrderFormProps {
-    user: { username: string; role: 'owner' | 'staff'; token: string };
+    user: { username: string; role: 'owner' | 'staff' | 'admin'; token: string };
     onSetHeaderActionRight: (node: React.ReactNode) => void;
 }
 
@@ -23,11 +23,11 @@ export default function JobOrderForm({ user, onSetHeaderActionRight }: JobOrderF
         <div className="flex items-center gap-2">
             {/* Status Table button */}
             <Button 
-                className="w-10 h-10 sm:w-40 flex items-center justify-center rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-[11px] font-black uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 tracking-widest"
+                className="w-10 h-10 sm:w-40 flex items-center justify-center rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-sm font-bold uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500"
                 onClick={() => navigate('/dashboard', { state: { status: 'new-order' } })}
             >
                 <ClipboardList className="h-4 w-4 sm:mr-2 shrink-0" />
-                <span className="hidden sm:inline">Status Table</span>
+                <span className="hidden sm:inline font-bold">Status Table</span>
             </Button>
         </div>
             );

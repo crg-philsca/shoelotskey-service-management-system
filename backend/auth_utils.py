@@ -12,7 +12,15 @@ from database import get_db
 # --- OWASP A02: UNUSED SECRETS HARDENING ---
 # Ensure JWT_SECRET is loaded from environment. Require it in production.
 SECRET_KEY = os.getenv("JWT_SECRET")
-ENV = "Production" if os.getenv("PORT") or os.getenv("ENV") == "Production" else "Localhost"
+ENV = (
+    "Production"
+    if (
+        bool(os.getenv("PORT"))
+        or bool(os.getenv("DYNO"))
+        or str(os.getenv("ENV", "")).strip().lower() in ("production", "prod")
+    )
+    else "Localhost"
+)
 
 if not SECRET_KEY:
     raise RuntimeError("CRITICAL: JWT_SECRET environment variable is required!")
@@ -86,8 +94,15 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Security(securi
         if not user and str(username).isdigit():
             user = db.query(User).filter(User.user_id == int(username)).first()
     except Exception as query_err:
-        print(f"[AUTH OFFLINE RESILIENCE] get_current_user DB query failed ({query_err}). Auto-switching to offline SQLite...")
         import db.database as db_mod
+        # P0-5 (CRIT-5): Production PostgreSQL outages must fail safely — never
+        # silently authenticate against a local SQLite file (which can be seeded
+        # with default/weak owner-level credentials) while serving the live
+        # production API.
+        if db_mod.IS_PRODUCTION_ENV:
+            print(f"[AUTH] PostgreSQL query failed in Production ({query_err}). Rejecting request (P0-5 — no SQLite failover in Production).")
+            raise HTTPException(status_code=503, detail="Database service temporarily unavailable. Please try again shortly.")
+        print(f"[AUTH OFFLINE RESILIENCE] get_current_user DB query failed ({query_err}). Auto-switching to offline SQLite...")
         try:
             db.close()
         except:
@@ -119,9 +134,24 @@ def require_role(role_name):
     """
     def role_checker(current_user: User = Depends(get_current_user)):
         roles = [role_name] if isinstance(role_name, str) else list(role_name)
-        if current_user.role.role_name not in roles and current_user.role.role_name != 'owner':
-            print(f"[SECURITY] Unauthorized access attempt by {current_user.username} (Role: {current_user.role.role_name}) to {role_name}-only resource.")
+        user_role = current_user.role.role_name
+
+        if user_role == 'admin':
+            return current_user
+
+        if 'admin' in roles and len(roles) == 1:
+            if user_role != 'admin':
+                print(f"[SECURITY] Unauthorized access attempt by {current_user.username} (Role: {user_role}) to admin-only resource.")
+                raise HTTPException(status_code=403, detail="Unauthorized - Admin access required")
+            return current_user
+
+        if user_role == 'owner' and 'admin' not in roles:
+            return current_user
+
+        if user_role not in roles:
+            print(f"[SECURITY] Unauthorized access attempt by {current_user.username} (Role: {user_role}) to {roles}-only resource.")
             raise HTTPException(status_code=403, detail="Unauthorized - Elevated permissions required")
+            
         return current_user
     return role_checker
 
@@ -131,3 +161,66 @@ def sanitize_error(message: str) -> str:
     if "SQLAlchemy" in message or "database" in message.lower():
         return "A database operation error occurred. Contact administrator."
     return message
+
+
+LOCAL_VITE_ORIGIN = "http://localhost:5173"
+LOCAL_AUTH_SPA_PATHS = {"login", "forgot-password", "reset-password"}
+
+
+def _is_loopback_hostname(hostname: Optional[str]) -> bool:
+    return (hostname or "").split("/")[0].split(":")[0].lower() in {"localhost", "127.0.0.1"}
+
+
+def _loopback_vite_origin(url: str) -> Optional[str]:
+    """Accept local Vite origins (5173, 5174, …). Never treat :8000 as the UI."""
+    from urllib.parse import urlparse
+
+    parsed = urlparse((url or "").strip())
+    if parsed.scheme not in ("http", "https") or not _is_loopback_hostname(parsed.hostname):
+        return None
+    if parsed.port == 8000 or not parsed.netloc:
+        return None
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def frontend_base_for_reset_link(host: str, origin: str = "", referer: str = "") -> str:
+    """
+    Password-reset emails must open the live UI, not the API process.
+
+    Local Vite (5173+) posts to the API on :8000. Using the API Host header
+    would send users to the stale FastAPI `dist/` build. Prefer the browser
+    Origin (or Referer) when it is loopback Vite. Production keeps the public Host.
+    """
+    host = (host or "").strip()
+    host_name = host.split(":")[0]
+
+    if _is_loopback_hostname(host_name):
+        for candidate in (origin, referer):
+            vite_origin = _loopback_vite_origin(candidate)
+            if vite_origin:
+                return vite_origin
+        env = (os.getenv("FRONTEND_URL") or LOCAL_VITE_ORIGIN).rstrip("/")
+        return env
+
+    protocol = "https" if "herokuapp.com" in host or ".app" in host else "http"
+    if host:
+        return f"{protocol}://{host}"
+    return (os.getenv("PUBLIC_APP_URL") or "https://shoelotskey-villamor-pasay.app").rstrip("/")
+
+
+def local_vite_auth_redirect(host: str, path: str, query: str = "") -> Optional[str]:
+    """Send local :8000 auth pages to Vite so reset links do not open stale dist UI."""
+    host = (host or "").strip()
+    host_name, _, port = host.partition(":")
+    if not _is_loopback_hostname(host_name) or port != "8000":
+        return None
+    page = (path or "").split("/", 1)[0].split("?", 1)[0]
+    if page not in LOCAL_AUTH_SPA_PATHS:
+        return None
+    origin = (os.getenv("FRONTEND_URL") or LOCAL_VITE_ORIGIN).rstrip("/")
+    if host_name.lower() == "127.0.0.1":
+        origin = origin.replace("://localhost", "://127.0.0.1")
+    dest = f"{origin}/{page}"
+    if query:
+        dest = f"{dest}?{query}"
+    return dest

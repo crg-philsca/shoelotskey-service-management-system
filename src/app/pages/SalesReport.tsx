@@ -1,12 +1,7 @@
-import { format as dateFnsFormat } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
-import { useServices } from '@/app/context/ServiceContext';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { useState, useMemo, useEffect } from 'react';
-
 import { TrendingUp, ShoppingBag, Filter, Calendar, TrendingDown, ChevronDown, Wallet, CircleAlert, Printer } from 'lucide-react';
-
-
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -14,13 +9,20 @@ import { useExpenses } from '@/app/context/ExpenseContext';
 import { useOrders } from '@/app/context/OrderContext';
 import { useActivities } from '@/app/context/ActivityContext';
 import type { JobOrder } from '@/app/types';
+import {
+  collectedSales,
+  isDateInRange,
+  isSalesEligible,
+  orderEventDate,
+  paymentMethodAnalytics,
+  salesByCanonicalService,
+  type ReportRange,
+} from '@/app/lib/salesAnalytics';
 
 interface SalesReportProps {
   onSetHeaderActionRight?: (action: React.ReactNode | null) => void;
   user: { token: string };
 }
-
-
 
 export default function SalesReport({ onSetHeaderActionRight, user }: SalesReportProps) {
   const navigate = useNavigate();
@@ -35,58 +37,38 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
 
   const { orders: allOrders, loading } = useOrders();
   const { expenses } = useExpenses();
-  const { services } = useServices();
   const { addActivity } = useActivities();
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('all');
   const [printMode, setPrintMode] = useState<'all' | 'Sales' | 'Expenses' | 'ROI'>('all');
-  const [dateRange, setDateRange] = useState<'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Annually'>(() => {
+  const [dateRange, setDateRange] = useState<ReportRange>(() => {
     return (location.state as any)?.dateRange || 'Daily';
   });
-
-  // 1. GLOBAL DATE FILTERING (Accrual Reference Point)
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
   const now = new Date();
 
-  const filteredOrdersByDate = useMemo<JobOrder[]>(() => {
-    const todayStr = dateFnsFormat(now, 'yyyy-MM-dd');
-    return (allOrders || []).filter((order: JobOrder) => {
-      const date = order?.transactionDate ? new Date(order.transactionDate as any) : new Date(order?.createdAt as any);
-      if (isNaN(date.getTime())) return false;
-      
-      const orderDateStr = dateFnsFormat(date, 'yyyy-MM-dd');
-      const diffHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
+  const reportPeriodLabel = useMemo(() => {
+    if (dateRange === 'Custom' && customStartDate && customEndDate) {
+      return `${customStartDate} – ${customEndDate}`;
+    }
+    return dateRange;
+  }, [dateRange, customStartDate, customEndDate]);
 
-      if (dateRange === 'Daily') {
-        return orderDateStr === todayStr;
-      }
-      
-      const diffDays = diffHours / 24;
-      if (dateRange === 'Weekly') return diffDays <= 7.5;
-      if (dateRange === 'Monthly') return diffDays <= 31.5;
-      if (dateRange === 'Quarterly') return diffDays <= 93;
-      if (dateRange === 'Annually') return diffDays <= 367;
-      return true;
+  // 1. GLOBAL DATE FILTERING (Accrual Reference Point)
+  const filteredOrdersByDate = useMemo<JobOrder[]>(() => {
+    const now = new Date();
+    return (allOrders || []).filter((order: JobOrder) => {
+      return isDateInRange(orderEventDate(order), dateRange, now, customStartDate, customEndDate);
     });
-  }, [dateRange, allOrders, now]);
+  }, [dateRange, allOrders, customStartDate, customEndDate]);
 
   const filteredExpensesByDate = useMemo<any[]>(() => {
-    const todayStr = dateFnsFormat(now, 'yyyy-MM-dd');
+    const now = new Date();
     return expenses.filter((exp: any) => {
       const date = new Date(exp.date);
-      if (isNaN(date.getTime())) return false;
-      const expDateStr = dateFnsFormat(date, 'yyyy-MM-dd');
-
-      if (dateRange === 'Daily') {
-        return expDateStr === todayStr;
-      }
-      
-      const diffDays = (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24);
-      if (dateRange === 'Weekly') return diffDays <= 7.1;
-      if (dateRange === 'Monthly') return diffDays <= 31.1;
-      if (dateRange === 'Quarterly') return diffDays <= 91.1;
-      if (dateRange === 'Annually') return diffDays <= 366.1;
-      return true;
+      return isDateInRange(date, dateRange, now, customStartDate, customEndDate);
     });
-  }, [dateRange, expenses, now]);
+  }, [dateRange, expenses, customStartDate, customEndDate]);
 
   // 2. DATA SEGMENTATION
   // Total Revenue (Total billable amount)
@@ -108,79 +90,83 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
 
   // Total Sales & Analytics Data (Includes Fully Paid and Downpayment Orders)
   const totalSalesData = useMemo(() => {
-    return filteredOrdersByDate.filter((order: JobOrder) => 
-      (order.status as string)?.toLowerCase() !== 'cancelled' && 
-      (order.paymentStatus === 'fully-paid' || order.paymentStatus === 'downpayment')
-    );
+    return filteredOrdersByDate.filter((order: JobOrder) => isSalesEligible(order));
   }, [filteredOrdersByDate]);
 
   // 3. CHART & METRIC DATA
   // Payment Method Analytics (Based on filtered date)
   const paymentMethodStats = useMemo(() => {
-    const counts: Record<string, { count: number; amount: number }> = {
-      cash: { count: 0, amount: 0 },
-      gcash: { count: 0, amount: 0 },
-      maya: { count: 0, amount: 0 },
-    };
-
-    totalSalesData.forEach((order: JobOrder) => {
-      const method = order.paymentMethod?.toLowerCase() || 'cash';
-      if (counts[method]) {
-        counts[method].count += 1;
-        counts[method].amount += Math.min(order.grandTotal || 0, order.amountReceived || 0);
-      }
-    });
-
-    const allStats = [
-      { name: 'Cash', value: counts.cash.count, amount: counts.cash.amount, color: '#9333ea' },
-      { name: 'GCash', value: counts.gcash.count, amount: counts.gcash.amount, color: '#2563eb' },
-      { name: 'Maya', value: counts.maya.count, amount: counts.maya.amount, color: '#16a34a' },
-    ];
+    const allStats = paymentMethodAnalytics(totalSalesData);
     if (selectedPaymentMethod && selectedPaymentMethod !== 'all') {
       return allStats.filter(p => p.name.toLowerCase() === selectedPaymentMethod.toLowerCase());
     }
     return allStats;
   }, [totalSalesData, selectedPaymentMethod]);
 
-  // Total Sales Amount (Controlled by Payment Filter)
+  // P1-15 FIX: this headline "{dateRange} Sales" figure previously derived from
+  // `paymentMethodStats`, which is itself filtered by the Payment Method Analytics
+  // pie-chart dropdown (`selectedPaymentMethod`). That dropdown is meant only to
+  // narrow the pie-chart breakdown below — but because the headline card reused the
+  // same filtered array, selecting e.g. "Cash" silently shrank the headline "Sales"
+  // total too, making it disagree with both (a) the unfiltered Total Sales drill-down
+  // page this card links to, and (b) the Dashboard's own Total Sales card for the same
+  // date range. Compute it directly from the always-unfiltered `totalSalesData` so the
+  // headline consistently reflects the true period total regardless of the pie-chart
+  // filter selection (cash-basis, same `Math.min(grandTotal, amountReceived)` definition
+  // used by Dashboard.tsx and TotalSales.tsx).
   const totalSalesAmount = useMemo(() => {
-    return paymentMethodStats.reduce((sum: number, item) => sum + item.amount, 0);
-  }, [paymentMethodStats]);
+    return totalSalesData.reduce((sum: number, order: JobOrder) => sum + collectedSales(order), 0);
+  }, [totalSalesData]);
 
   // Total Orders: All filtered orders
   const totalOrdersCount = filteredOrdersByDate.length;
 
-  // Total Expenses
+  const orderCollectedSales = (order: JobOrder) => collectedSales(order);
+
+  // Total Expenses (same period window as sales)
   const totalExpensesAmount = filteredExpensesByDate.reduce((sum: number, exp: any) => sum + Number(exp.amount || 0), 0);
 
-  // Profit (Accrual Basis)
-  const profit = totalRevenue - totalExpensesAmount;
+  // Net profit uses collected sales so the Sales, Expenses, and Profit figures reconcile.
+  const profit = totalSalesAmount - totalExpensesAmount;
 
-  // Sales by Service Type (Total Sales)
-  const serviceVolume = useMemo(() => {
-    return services
-      .filter(s => s.category === 'base' && s.active)
-      .map((service) => {
-        const cleanName = service.name.replace(' (with basic cleaning)', '').trim();
-        let fillColor = '#dc2626'; // Default red
-        const lowerName = cleanName.toLowerCase();
+  // ROI = (Net Profit ÷ Recorded Expenses) × 100.
+  // Missing or very thin expense logs make that ratio meaningless (e.g. 1608%).
+  const roiSummary = useMemo(() => {
+    const sales = Number(totalSalesAmount) || 0;
+    const expenses = Number(totalExpensesAmount) || 0;
+    const net = Number(profit) || 0;
+    if (!(expenses > 0) || !Number.isFinite(expenses) || !Number.isFinite(net)) {
+      return {
+        display: 'N/A',
+        applicable: false,
+        note: 'No expenses recorded for this period. ROI cannot be calculated.',
+      };
+    }
+    const expenseShare = sales > 0 ? expenses / sales : 1;
+    if (sales > 0 && expenseShare < 0.1) {
+      return {
+        display: 'N/A',
+        applicable: false,
+        note: 'Recorded expenses are too limited versus sales to compute a reliable ROI.',
+      };
+    }
+    const percent = (net / expenses) * 100;
+    if (!Number.isFinite(percent)) {
+      return {
+        display: 'N/A',
+        applicable: false,
+        note: 'ROI cannot be calculated for this period.',
+      };
+    }
+    return {
+      display: `${percent.toFixed(1)}%`,
+      applicable: true,
+      note: 'ROI = (Net Profit ÷ Recorded Expenses) × 100.',
+    };
+  }, [totalSalesAmount, totalExpensesAmount, profit]);
 
-        if (lowerName.includes('basic cleaning')) fillColor = '#0d948880'; 
-        else if (lowerName.includes('minor reglue')) fillColor = '#6366f180'; 
-        else if (lowerName.includes('full reglue')) fillColor = '#c026d380'; 
-        else if (lowerName.includes('color renewal')) fillColor = '#f59e0b80'; 
-        else if (lowerName.includes('deep cleaning')) fillColor = '#0891b280';
-
-        return {
-          name: cleanName,
-          amount: totalSalesData
-            .filter(j => (j.baseService as string[]).includes(service.name))
-            .reduce((sum, j) => sum + Math.min(j.grandTotal || 0, j.amountReceived || 0), 0),
-          fill: fillColor
-        };
-      })
-      .sort((a, b) => b.amount - a.amount);
-  }, [totalSalesData, services]);
+  // Sales by Service Type — collected cash only, allocated so bars cannot exceed period sales.
+  const serviceVolume = useMemo(() => salesByCanonicalService(totalSalesData), [totalSalesData]);
 
   // 4. PRINT & EXPORT LOGIC
   const handleExport = (type: 'Sales' | 'Expenses' | 'ROI') => {
@@ -190,31 +176,39 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
       user: JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}').username,
       action: 'PRINT',
       table: 'Sales Report',
-      details: `Printed ${type} Report for period: ${dateRange}`
+      details: `Printed ${type} Report for period: ${reportPeriodLabel}`
     });
     setPrintMode(type);
-    // Give React a tick to update the DOM with print-only hidden classes
     setTimeout(() => {
       window.print();
       setPrintMode('all');
     }, 100);
   };
 
-
-
-
   useEffect(() => {
     if (onSetHeaderActionRight) {
       onSetHeaderActionRight(
         <div className="flex items-center gap-2">
+          {dateRange === 'Custom' && (
+            <div className="hidden lg:flex items-center gap-1">
+              <input type="date" aria-label="Custom start date" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} className="h-10 rounded-md border border-gray-300 px-2 text-xs" />
+              <span className="text-xs text-gray-500">–</span>
+              <input type="date" aria-label="Custom end date" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)} className="h-10 rounded-md border border-gray-300 px-2 text-xs" />
+              <button
+                type="button"
+                className="h-10 px-2 text-sm font-bold uppercase text-red-700 border border-red-200 rounded-md bg-white hover:bg-red-50 hover:text-red-700"
+                onClick={() => { setCustomStartDate(''); setCustomEndDate(''); setDateRange('Daily'); }}
+              >
+                Clear
+              </button>
+            </div>
+          )}
 
-
-          {/* Printables Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="w-10 h-10 flex items-center justify-center rounded-md border border-slate-700 bg-slate-700 text-white shadow-md transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500"
+                className="w-10 h-10 flex items-center justify-center rounded-md border border-red-200 bg-white text-red-600 shadow-sm transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500"
                 title="Print Report"
               >
                 <Printer className="h-4 w-4" />
@@ -224,7 +218,6 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
               <div className="px-4 py-2 border-b border-gray-100 bg-gray-50/50">
                 <p className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Print Options</p>
               </div>
-              
               <DropdownMenuItem onClick={() => handleExport('Sales')} className="uppercase px-4 py-3 text-[11px] font-bold text-slate-700 cursor-pointer hover:bg-slate-50 focus:bg-slate-50">
                 <div className="flex items-center gap-2">
                   <TrendingUp className="h-4 w-4 text-green-600 border-b-0" />
@@ -254,20 +247,19 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
               <button
                 type="button"
                 aria-label="Select range"
-                className="w-10 h-10 sm:w-40 flex items-center justify-center sm:justify-between rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-[11px] font-black uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:border-white focus:outline-none focus:ring-2 focus:ring-red-500 tracking-widest"
+                className="w-10 h-10 sm:w-40 flex items-center justify-center sm:justify-between rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-sm font-bold uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:border-white focus:outline-none focus:ring-2 focus:ring-red-500"
               >
                 <Calendar className="h-4 w-4 sm:mr-1 shrink-0" aria-hidden="true" />
                 <span className="hidden sm:inline truncate mx-1 flex-1 text-center">{dateRange}</span>
                 <ChevronDown className="hidden sm:block h-4 w-4 text-white shrink-0" aria-hidden="true" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-40 p-0 rounded-xl border border-red-600 bg-white shadow-lg overflow-hidden">
-              {/* [OWASP A03] Security Mapping: Verified static list prevent injection */}
-              {['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Annually'].map((range) => (
+            <DropdownMenuContent align="end" className="w-40 min-w-40 p-0 rounded-xl border border-red-600 bg-white shadow-lg overflow-hidden">
+              {['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Annually', 'Custom'].map((range) => (
                 <DropdownMenuItem
                   key={range}
                   onClick={() => setDateRange(range as typeof dateRange)}
-                  className={`uppercase px-4 py-2 text-[11px] font-black tracking-widest cursor-pointer ${dateRange === range ? 'bg-red-600 text-white focus:bg-red-600 focus:text-white' : 'bg-white text-red-700 hover:bg-red-100 hover:text-red-700 focus:bg-red-100 focus:text-red-700'}`}
+                  className={`uppercase px-4 py-2 text-sm font-semibold cursor-pointer ${dateRange === range ? 'bg-red-600 text-white focus:bg-red-600 focus:text-white' : 'bg-white text-red-700 hover:bg-red-100 hover:text-red-700 focus:bg-red-100 focus:text-red-700'}`}
                 >
                   {range}
                 </DropdownMenuItem>
@@ -278,7 +270,7 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
       );
     }
     return () => onSetHeaderActionRight?.(null);
-  }, [onSetHeaderActionRight, dateRange]);
+  }, [onSetHeaderActionRight, dateRange, customStartDate, customEndDate]);
 
   if (loading) {
     return (
@@ -291,6 +283,25 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
   return (
     <>
     <div className="space-y-8 pb-10 animate-in fade-in duration-700 print:hidden">
+      {dateRange === 'Custom' && (
+        <div className="flex flex-wrap items-end justify-center gap-2 rounded-xl border border-red-100 bg-red-50/60 p-3 lg:hidden">
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Start date</span>
+            <input type="date" aria-label="Custom start date" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} className="h-10 rounded-md border border-gray-300 bg-white px-2 text-xs" />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">End date</span>
+            <input type="date" aria-label="Custom end date" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)} className="h-10 rounded-md border border-gray-300 bg-white px-2 text-xs" />
+          </label>
+          <button
+            type="button"
+            className="h-10 px-3 text-sm font-bold uppercase text-red-700 border border-red-200 rounded-md bg-white hover:bg-red-50 hover:text-red-700"
+            onClick={() => { setCustomStartDate(''); setCustomEndDate(''); setDateRange('Daily'); }}
+          >
+            Clear
+          </button>
+        </div>
+      )}
       {/* 1. TOP SUMMARY CARDS - Business Activity Section */}
       <Card className="border-none shadow-none mb-2">
         <CardHeader className="pt-5 pb-0 mb-0">
@@ -430,19 +441,19 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
             {/* Legend below chart in 2 columns */}
             <div className="grid grid-cols-2 gap-x-4 gap-y-2 mt-4 justify-items-start max-w-lg mx-auto ml-[80px]">
               <div className="flex items-center gap-2 text-[10px] font-bold text-gray-600 uppercase tracking-widest">
-                <div className="w-3 h-3 rounded-full" style={{ background: '#0d948880' }}></div>
+                <div className="w-3 h-3 rounded-full" style={{ background: '#A2C2B9' }}></div>
                 <span>BASIC CLEANING</span>
               </div>
               <div className="flex items-center gap-2 text-[10px] font-bold text-gray-600 uppercase tracking-widest">
-                <div className="w-3 h-3 rounded-full" style={{ background: '#c026d380' }}></div>
-                <span>FULL REGLUE</span>
-              </div>
-              <div className="flex items-center gap-2 text-[10px] font-bold text-gray-600 uppercase tracking-widest">
-                <div className="w-3 h-3 rounded-full" style={{ background: '#6366f180' }}></div>
+                <div className="w-3 h-3 rounded-full" style={{ background: '#93C5FD' }}></div>
                 <span>MINOR REGLUE</span>
               </div>
               <div className="flex items-center gap-2 text-[10px] font-bold text-gray-600 uppercase tracking-widest">
-                <div className="w-3 h-3 rounded-full" style={{ background: '#f59e0b80' }}></div>
+                <div className="w-3 h-3 rounded-full" style={{ background: '#D69BE5' }}></div>
+                <span>FULL REGLUE</span>
+              </div>
+              <div className="flex items-center gap-2 text-[10px] font-bold text-gray-600 uppercase tracking-widest">
+                <div className="w-3 h-3 rounded-full" style={{ background: '#F5CD93' }}></div>
                 <span>COLOR RENEWAL</span>
               </div>
             </div>
@@ -535,7 +546,7 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
                 {printMode === 'Sales' ? 'SALES' : printMode === 'Expenses' ? 'EXPENSES' : 'FINANCIAL PERFORMANCE'} REPORT
               </h2>
               <p className="text-sm font-bold text-gray-400">{now.toLocaleDateString()} {now.toLocaleTimeString()}</p>
-              <p className="text-[10px] font-black text-red-600 uppercase tracking-[0.2em] mt-1">{dateRange} SUMMARY</p>
+              <p className="text-[10px] font-black text-red-600 uppercase tracking-[0.2em] mt-1">Report Period: {reportPeriodLabel}</p>
             </div>
           </div>
 
@@ -554,12 +565,16 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
               </tr>
             </thead>
             <tbody>
-              {filteredOrdersByDate.map((order: JobOrder) => (
+              {totalSalesData.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-3 py-4 text-center text-[10px] font-bold uppercase text-gray-400 border border-gray-200">No sales records for this period</td>
+                </tr>
+              ) : totalSalesData.map((order: JobOrder) => (
                 <tr key={order.id}>
                   <td className="px-3 py-2 text-[10px] border border-gray-200">{new Date(order.transactionDate || order.createdAt).toLocaleDateString()}</td>
                   <td className="px-3 py-2 text-[10px] font-bold border border-gray-200">{order.orderNumber}</td>
                   <td className="px-3 py-2 text-[10px] border border-gray-200">{order.customerName}</td>
-                  <td className="px-3 py-2 text-[10px] font-black text-right border border-gray-200">₱{(order.grandTotal || 0).toLocaleString()}</td>
+                  <td className="px-3 py-2 text-[10px] font-black text-right border border-gray-200">₱{orderCollectedSales(order).toLocaleString()}</td>
                   <td className="px-3 py-2 text-[10px] text-center border border-gray-200 font-bold uppercase">{order.paymentMethod}</td>
                   <td className="px-3 py-2 text-[10px] text-center border border-gray-200 font-bold uppercase">{order.paymentStatus}</td>
                 </tr>
@@ -568,7 +583,7 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
             <tfoot>
               <tr className="bg-red-50">
                 <td colSpan={3} className="px-3 py-2 text-[11px] font-black uppercase text-red-600 text-right">Total Sales</td>
-                <td className="px-3 py-2 text-[11px] font-black text-right text-red-600 border border-red-100">₱{totalRevenue.toLocaleString()}</td>
+                <td className="px-3 py-2 text-[11px] font-black text-right text-red-600 border border-red-100">₱{totalSalesAmount.toLocaleString()}</td>
                 <td colSpan={2} className="bg-white"></td>
               </tr>
             </tfoot>
@@ -582,16 +597,20 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
             <thead>
               <tr className="bg-gray-100">
                 <th className="px-3 py-2 text-left text-[10px] font-black uppercase text-gray-600 border border-gray-200">Date</th>
-                <th className="px-3 py-2 text-left text-[10px] font-black uppercase text-gray-600 border border-gray-200">Description</th>
+                <th className="px-3 py-2 text-left text-[10px] font-black uppercase text-gray-600 border border-gray-200">Notes</th>
                 <th className="px-3 py-2 text-left text-[10px] font-black uppercase text-gray-600 border border-gray-200">Category</th>
                 <th className="px-3 py-2 text-right text-[10px] font-black uppercase text-gray-600 border border-gray-200">Amount</th>
               </tr>
             </thead>
             <tbody>
-              {filteredExpensesByDate.map((exp: any, idx: number) => (
+              {filteredExpensesByDate.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-3 py-4 text-center text-[10px] font-bold uppercase text-gray-400 border border-gray-200">No expense records for this period</td>
+                </tr>
+              ) : filteredExpensesByDate.map((exp: any, idx: number) => (
                 <tr key={idx}>
                   <td className="px-3 py-2 text-[10px] border border-gray-200">{new Date(exp.date).toLocaleDateString()}</td>
-                  <td className="px-3 py-2 text-[10px] border border-gray-200">{exp.description}</td>
+                  <td className="px-3 py-2 text-[10px] border border-gray-200">{exp.notes || exp.description || ''}</td>
                   <td className="px-3 py-2 text-[10px] border border-gray-200 font-bold uppercase">{exp.category}</td>
                   <td className="px-3 py-2 text-[10px] font-black text-right border border-gray-200 text-red-600">₱{Number(exp.amount || 0).toLocaleString()}</td>
                 </tr>
@@ -612,8 +631,8 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
           <div className="grid grid-cols-2 gap-4 border-2 border-gray-200 p-6 rounded-xl">
             <div className="space-y-4">
               <div className="flex justify-between border-b border-gray-100 pb-2">
-                <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Total Sales Revenue</span>
-                <span className="text-[12px] font-black text-gray-900">₱{totalRevenue.toLocaleString()}</span>
+                <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Total Sales</span>
+                <span className="text-[12px] font-black text-gray-900">₱{totalSalesAmount.toLocaleString()}</span>
               </div>
               <div className="flex justify-between border-b border-gray-100 pb-2">
                 <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Total Operating Expenses</span>
@@ -628,9 +647,10 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
             </div>
             <div className="flex flex-col items-center justify-center bg-gray-50 rounded-lg p-4">
               <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Return on Investment (ROI)</span>
-              <span className={`text-4xl font-black ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {totalExpensesAmount > 0 ? ((profit / totalExpensesAmount) * 100).toFixed(1) : '---'}%
+              <span className={`text-4xl font-black ${!roiSummary.applicable ? 'text-gray-400' : profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {roiSummary.display}
               </span>
+              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider text-center mt-2 leading-relaxed">{roiSummary.note}</p>
             </div>
           </div>
         </section>

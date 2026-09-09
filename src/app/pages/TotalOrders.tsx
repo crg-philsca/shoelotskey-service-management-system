@@ -23,6 +23,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useServices } from '@/app/context/ServiceContext';
 import OrderDetailModal from '@/app/components/OrderDetailModal';
 import type { JobOrder } from '@/app/types';
+import { isDateInRange, orderEventDate, type ReportRange } from '@/app/lib/salesAnalytics';
 
 type TotalOrdersProps = {
     onSetHeaderActionRight?: (action: ReactNode | null) => void;
@@ -133,7 +134,7 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
     const location = useLocation();
     const { orders } = useOrders();
 
-    const [profitRange, setProfitRange] = useState<'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Annually'>(() => {
+    const [profitRange, setProfitRange] = useState<ReportRange>(() => {
         return (location.state as any)?.dateRange || 'Daily';
     });
     const [searchQuery, setSearchQuery] = useState('');
@@ -172,7 +173,7 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                     <button
                         type="button"
                         aria-label="Select range"
-                        className="w-10 h-10 sm:w-40 flex items-center justify-center sm:justify-between rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-sm font-semibold uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:border-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                        className="w-10 h-10 sm:w-40 flex items-center justify-center sm:justify-between rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-sm font-bold uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:border-white focus:outline-none focus:ring-2 focus:ring-red-500"
                     >
                         <CalendarIcon className="h-4 w-4 sm:mr-1 shrink-0" aria-hidden="true" />
                         <span className="hidden sm:inline truncate mx-1">{profitRange}</span>
@@ -201,20 +202,9 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
 
     const filteredOrders = useMemo(() => {
         const now = new Date();
-        const isWithinRange = (createdAt: Date) => {
-            if (isNaN(createdAt.getTime())) return false;
-            const diffDays = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
-            if (profitRange === 'Daily') {
-                return createdAt.toLocaleDateString('en-CA') === now.toLocaleDateString('en-CA');
-            }
-            if (profitRange === 'Weekly') return diffDays < 7;
-            if (profitRange === 'Monthly') return diffDays < 30;
-            if (profitRange === 'Quarterly') return diffDays < 90;
-            if (profitRange === 'Annually') return diffDays < 365;
-            return true;
-        };
-
-        let filtered = (orders || []).filter((order: JobOrder) => order && isWithinRange(new Date(order.createdAt || 0)));
+        let filtered = (orders || []).filter((order: JobOrder) =>
+            order && isDateInRange(orderEventDate(order), profitRange, now)
+        );
 
         if (filterService !== 'all') {
             filtered = filtered.filter((order) => {

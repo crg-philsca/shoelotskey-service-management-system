@@ -6,10 +6,8 @@ import { Label } from '@/app/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader } from '@/app/components/ui/card';
 import { toast } from 'sonner';
 import { Lock, Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react';
-
-const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))
-  ? `http://${window.location.hostname}:8000/api`
-  : '/api';
+// P1-10 FIX: centralized API base resolution (see src/app/lib/apiBase.ts).
+import { API_BASE } from '@/app/lib/apiBase';
 
 const formatError = (detail: any, fallback: string): string => {
   if (!detail) return fallback;
@@ -71,8 +69,8 @@ export default function ResetPassword() {
       return;
     }
 
-    if (password.length < 6) {
-      toast.error('Password must be at least 6 characters long');
+    if (password.length < 4) {
+      toast.error('Password must be at least 4 characters long');
       return;
     }
 

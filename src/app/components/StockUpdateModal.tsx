@@ -455,15 +455,19 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave, on
                     </div>
                 </div>
 
-                <DialogFooter className="shrink-0 p-5 bg-gray-50 border-t border-gray-100 mt-auto">
-                    <Button variant="outline" onClick={() => onOpenChange(false)} className="rounded-xl h-12 font-bold text-gray-600 border-gray-200 hover:bg-gray-100 hover:text-gray-900 transition-colors px-6">
+                <DialogFooter className="shrink-0 p-5 bg-gray-50 border-t border-gray-100 mt-auto flex flex-row items-center justify-center gap-3 sm:justify-center">
+                    <Button
+                        variant="outline"
+                        onClick={() => onOpenChange(false)}
+                        className="rounded-xl h-12 min-w-[140px] flex-1 max-w-[220px] font-bold text-gray-600 border-gray-200 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+                    >
                         Cancel
                     </Button>
                     <Button 
                         onClick={handleSaveAndClose}
-                        className="rounded-xl h-12 font-black text-white bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-200 transition-all px-8 border-b-4 border-emerald-800 hover:border-emerald-700 active:border-b-0 active:translate-y-1"
+                        className="rounded-xl h-12 min-w-[140px] flex-1 max-w-[220px] font-black text-white bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-200 transition-all border-b-4 border-emerald-800 hover:border-emerald-700 active:border-b-0 active:translate-y-1"
                     >
-                        Save Material Consumption
+                        Save
                     </Button>
                 </DialogFooter>
             </DialogContent>

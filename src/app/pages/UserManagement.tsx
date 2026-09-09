@@ -24,9 +24,8 @@ import UserModal from '@/app/components/UserModal';
 import { User } from '@/app/types';
 import { toast } from 'sonner';
 import { useActivities } from '@/app/context/ActivityContext';
-const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))
-  ? 'http://localhost:8000/api'
-  : '/api';
+// P1-10 FIX: centralized API base resolution (see src/app/lib/apiBase.ts).
+import { API_BASE } from '@/app/lib/apiBase';
 
 const formatError = (errOrDetail: any, fallback: string = 'Operation failed'): string => {
   if (!errOrDetail) return fallback;
@@ -71,7 +70,9 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
 
     // Fetch users from API
     const fetchUsers = async () => {
-      setLoading(true);
+      if (users.length === 0) {
+        setLoading(true);
+      }
       try {
         const response = await fetch(`${API_BASE}/users`, {
           headers: { 'Authorization': `Bearer ${user.token}` }
@@ -107,7 +108,7 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
     // Filter users based on search and filters
     const filteredUsers = useMemo(() => {
       return users.filter(user => {
-        const matchesSearch = user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        const matchesSearch = (user.username || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
           (user.email || '').toLowerCase().includes(searchQuery.toLowerCase());
         const matchesRole = roleFilter === 'all' || user.role === roleFilter;
         const matchesStatus = statusFilter === 'all' || (statusFilter === 'active' ? user.active : !user.active);
@@ -127,16 +128,15 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
         onSetHeaderActionRight(
           <div className="flex items-center gap-2">
             <Button
-              variant="outline"
-              className="w-10 h-10 sm:w-40 flex items-center justify-center rounded-md border border-red-200 bg-white px-2 sm:px-3 py-2 text-[11px] font-black uppercase text-red-600 shadow-none transition hover:bg-red-50 hover:border-red-300 focus:outline-none focus:ring-2 focus:ring-red-500 tracking-widest"
+              className="w-10 h-10 sm:w-40 flex items-center justify-center rounded-md border border-red-200 bg-white px-2 sm:px-3 py-2 text-sm font-bold uppercase text-red-600 shadow-sm transition hover:bg-red-50 hover:text-red-600 hover:border-red-300 focus:outline-none focus:ring-2 focus:ring-red-500"
               title="View system activity logs"
               onClick={() => navigate('/activity-history')}
             >
               <HistoryIcon className="h-4 w-4 sm:mr-2 shrink-0 text-red-600" />
-              <span className="hidden sm:inline">View History</span>
+              <span className="hidden sm:inline font-bold text-red-600">View History</span>
             </Button>
             <Button
-              className="w-10 h-10 sm:w-40 flex items-center justify-center rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-[11px] font-black uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 tracking-widest"
+              className="w-10 h-10 sm:w-40 flex items-center justify-center rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-sm font-bold uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500"
               onClick={() => {
                 setEditingUser(null);
                 setServerError('');
@@ -144,7 +144,7 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
               }}
             >
               <PlusCircle className="sm:mr-2 h-4 w-4 shrink-0" />
-              <span className="hidden sm:inline">New User</span>
+              <span className="hidden sm:inline font-bold">New User</span>
             </Button>
           </div>
         );
@@ -191,7 +191,9 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
               user: currentUser,
               action: 'Update User',
               details: `Updated details for ${userData.username}. Changes: ${diffString}`,
-              type: 'system'
+              type: 'system',
+              recordId: editingUser.id,
+              newValues: { username: userData.username, email: userData.email, details: `Updated details for ${userData.username}. Changes: ${diffString}` }
             });
             toast.success('User updated successfully');
           } else {
@@ -218,12 +220,15 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
           });
 
           if (response.ok) {
+            const created = await response.json().catch(() => ({} as any));
             await fetchUsers();
             addActivity({
               user: currentUser,
               action: 'Create User',
               details: `Created new account for ${userData.username}`,
-              type: 'system'
+              type: 'system',
+              recordId: created.user_id,
+              newValues: { username: userData.username, email: userData.email, role: userData.role, details: `Created new account for ${userData.username}` }
             });
             toast.success('User created successfully');
           } else {
@@ -259,13 +264,21 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
 
         if (response.ok) {
           await fetchUsers();
+          // P1-12 FIX: the backend soft-deactivates (instead of hard-deleting) any user
+          // with historical transaction records (orders, expenses, status/inventory logs)
+          // to preserve audit-trail identity, but still returns HTTP 200 either way.
+          // Previously the UI always claimed "User deleted successfully" even when the
+          // account was actually just deactivated — surface the backend's real message
+          // so Owners understand which outcome occurred.
+          const data = await response.json().catch(() => ({} as any));
+          const wasDeactivated = !!data?.message?.toLowerCase().includes('deactivat');
           addActivity({
             user: currentUser,
-            action: 'Delete User',
-            details: `Deleted user account ${deleteTarget.username || deleteTarget.id}`,
+            action: wasDeactivated ? 'Deactivate User' : 'Delete User',
+            details: data?.message || `Deleted user account ${deleteTarget.username || deleteTarget.id}`,
             type: 'system'
           });
-          toast.success('User deleted successfully');
+          toast.success(data?.message || 'User deleted successfully');
           setDeleteTarget(null);
         } else {
           const err = await response.json().catch(() => ({}));
@@ -345,6 +358,7 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
                     <SelectContent>
                       <SelectItem value="all">All Roles</SelectItem>
                       <SelectItem value="owner">Owner</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
                       <SelectItem value="staff">Staff</SelectItem>
                     </SelectContent>
                   </Select>

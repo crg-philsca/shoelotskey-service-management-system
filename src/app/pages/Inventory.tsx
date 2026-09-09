@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/ca
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { Input } from '@/app/components/ui/input';
-import { Package, PlusCircle, PackagePlus, Search, Filter, AlertTriangle, ArrowUpRight, ChevronLeft, ChevronRight, Edit, Trash2, Printer } from 'lucide-react';
+import { Package, PlusCircle, PackagePlus, Search, Filter, AlertTriangle, ArrowUpRight, ChevronLeft, ChevronRight, Edit, Trash2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import RestockModal from '@/app/components/RestockModal';
 import InventoryDetailModal from '@/app/components/InventoryDetailModal';
@@ -15,7 +15,6 @@ import {
     DialogTrigger
 } from '@/app/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
-import { useActivities } from '@/app/context/ActivityContext';
 import { toast } from 'sonner';
 import { useInventory } from '@/app/context/InventoryContext';
 import { useServices } from '@/app/context/ServiceContext';
@@ -27,7 +26,6 @@ interface InventoryProps {
 }
 
 export default function Inventory({ onSetHeaderActionRight, user }: InventoryProps) {
-    const { addActivity } = useActivities();
     const { inventoryData, addItem, updateItem, deleteItem } = useInventory();
     const { services } = useServices();
     const [searchQuery, setSearchQuery] = useState('');
@@ -52,6 +50,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
     const [isCustomUnit, setIsCustomUnit] = useState(false);
     const [formData, setFormData] = useState({
         name: '',
+        inventory_number: '',
         category: 'Chemicals',
         stock: 0,
         unit: 'mL',
@@ -65,7 +64,9 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
         packageSize: 0,
         packageUnit: 'Can',
         packageQty: 0,
-        lowStockThreshold: 0
+        lowStockThreshold: 0,
+        isRetail: false,
+        retailPrice: 0
     });
 
     useEffect(() => {
@@ -75,47 +76,59 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
     }, [user.token]);
 
     useEffect(() => {
-        if (onSetHeaderActionRight && user.role?.toLowerCase() === 'owner') {
+        if (onSetHeaderActionRight) {
             onSetHeaderActionRight(
                 <div className="flex items-center gap-2">
-                    <Button 
-                        className="w-10 h-10 sm:w-36 flex items-center justify-center rounded-md border border-red-200 bg-white px-2 sm:px-3 py-2 hover:bg-red-50 text-[11px] font-black uppercase text-red-600 shadow-sm transition focus:outline-none focus:ring-2 focus:ring-red-500 tracking-widest"
-                        onClick={() => setIsRestockOpen(true)}
-                        title="Restock Whole Product"
-                    >
-                        <PackagePlus className="h-4 w-4 sm:mr-1.5 shrink-0 text-red-600" />
-                        <span className="hidden sm:inline">Restock</span>
-                    </Button>
-                    <Button 
-                        className="w-10 h-10 sm:w-36 flex items-center justify-center rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-[11px] font-black uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 tracking-widest"
-                        onClick={() => {
-                            setEditingItem(null);
-                            setFormData({ 
-                                name: '', 
-                                category: 'Chemicals', 
-                                stock: 0, 
-                                unit: 'mL', 
-                                price: 0, 
-                                isActive: true,
-                                autoDeduct: false,
-                                autoDeductTrigger: 'on-going',
-                                triggerService: 'All',
-                                consumptionQty: 0,
-                                consumptionUnit: '',
-                                packageSize: 0,
-                                packageUnit: 'Can',
-                                packageQty: 0,
-                                lowStockThreshold: 0
-                            });
-                            setIsCustomCategory(false);
-                            setIsCustomUnit(false);
-                            setIsModalOpen(true);
-                        }}
-                        title="Add New Item"
-                    >
-                        <PlusCircle className="h-4 w-4 sm:mr-1.5 shrink-0" />
-                        <span className="hidden sm:inline">New Item</span>
-                    </Button>
+                    {/* P1-5 FIX: POST /api/inventory/adjust (used by RestockModal) requires
+                        Depends(require_role("owner")) on the backend. Previously this button
+                        was shown to Staff unconditionally, letting them fill out a restock and
+                        only discover it was rejected after submitting. Gate visibility to match
+                        backend RBAC, same as the "New Item"/Delete controls below. */}
+                    {['owner', 'admin', 'staff'].includes(user.role?.toLowerCase() || '') && (
+                        <Button 
+                            className="w-10 h-10 sm:w-36 flex items-center justify-center rounded-md border border-red-200 bg-white px-2 sm:px-3 py-2 hover:bg-red-50 hover:text-red-600 text-sm font-bold uppercase text-red-600 shadow-sm transition focus:outline-none focus:ring-2 focus:ring-red-500"
+                            onClick={() => setIsRestockOpen(true)}
+                            title="Restock Whole Product"
+                        >
+                            <PackagePlus className="h-4 w-4 sm:mr-1.5 shrink-0 text-red-600" />
+                            <span className="hidden sm:inline font-bold text-red-600">Restock</span>
+                        </Button>
+                    )}
+                    {['owner', 'admin', 'staff'].includes(user.role?.toLowerCase() || '') && (
+                        <Button 
+                            className="w-10 h-10 sm:w-36 flex items-center justify-center rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-sm font-bold uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500"
+                            onClick={() => {
+                                setEditingItem(null);
+                                setFormData({ 
+                                    name: '', 
+                                    inventory_number: '',
+                                    category: 'Chemicals', 
+                                    stock: 0, 
+                                    unit: 'mL', 
+                                    price: 0, 
+                                    isActive: true,
+                                    autoDeduct: false,
+                                    autoDeductTrigger: 'on-going',
+                                    triggerService: 'All',
+                                    consumptionQty: 0,
+                                    consumptionUnit: '',
+                                    packageSize: 0,
+                                    packageUnit: 'Can',
+                                    packageQty: 0,
+                                    lowStockThreshold: 0,
+                                    isRetail: false,
+                                    retailPrice: 0
+                                });
+                                setIsCustomCategory(false);
+                                setIsCustomUnit(false);
+                                setIsModalOpen(true);
+                            }}
+                            title="Add New Item"
+                        >
+                            <PlusCircle className="h-4 w-4 sm:mr-1.5 shrink-0" />
+                            <span className="hidden sm:inline font-bold">New Item</span>
+                        </Button>
+                    )}
                 </div>
             );
         }
@@ -131,7 +144,8 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
         }
         const pkgQty = Number(formData.packageQty || 0);
         const pkgSize = Number(formData.packageSize || 0);
-        if (pkgQty <= 0) {
+        
+        if (!editingItem && pkgQty <= 0) {
             toast.error('Package Quantity must be greater than zero.');
             return;
         }
@@ -139,16 +153,20 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
             toast.error('Volume per Package must be greater than zero.');
             return;
         }
-        const calculatedStock = Number((pkgQty * pkgSize).toFixed(2));
-        if (calculatedStock < 0) {
+
+        const saveStock = editingItem ? Number(formData.stock || 0) : Number((pkgQty * pkgSize).toFixed(2));
+        
+        if (saveStock < 0) {
             toast.error('Stock quantity cannot be negative.');
             return;
         }
 
         const saveItemPayload = {
+            id: editingItem ? editingItem.id : Date.now(),
+            inventory_number: formData.inventory_number || undefined,
             name: formData.name,
             category: formData.category,
-            stock: calculatedStock,
+            stock: saveStock,
             unit: formData.unit || 'mL',
             price: Number(formData.price || 0),
             isActive: formData.isActive,
@@ -159,7 +177,9 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
             consumption_unit: formData.consumptionUnit || (formData.unit || 'mL'),
             package_size: pkgSize,
             package_unit: formData.packageUnit || 'Can',
-            low_stock_threshold: Number(formData.lowStockThreshold || 0)
+            low_stock_threshold: Number(formData.lowStockThreshold || 0),
+            is_retail: formData.isRetail,
+            retail_price: formData.isRetail ? Number(formData.retailPrice || 0) : 0
         };
  
         if (editingItem) {
@@ -197,6 +217,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
 
         setFormData({
             name: item.name,
+            inventory_number: item.inventory_number || '',
             category: item.category,
             stock: stockVal,
             unit: item.unit || 'mL',
@@ -212,7 +233,9 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
             packageSize: pkgSize,
             packageUnit: item.package_unit || (item as any).packageUnit || 'Can',
             packageQty: calcPkgQty,
-            lowStockThreshold: item.low_stock_threshold || 0
+            lowStockThreshold: item.low_stock_threshold || 0,
+            isRetail: item.is_retail || false,
+            retailPrice: item.retail_price || 0
         });
         setIsCustomCategory(false);
         setIsCustomUnit(false);
@@ -222,25 +245,34 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
     const filteredInventory = inventoryData.filter((item: InventoryItem) => {
         const name = item.name || '';
         const category = item.category || '';
-        const qty = Number(item.stock || 0);
-        // [FIX] Use per-item threshold for accurate status
-        const threshold = (item.low_stock_threshold && item.low_stock_threshold > 0)
-            ? item.low_stock_threshold
-            : ((item.package_size && item.package_size > 0) ? item.package_size : 1);
-        const status = qty <= 0 ? 'No Stock' : (qty <= threshold ? 'Low Stock' : 'In Stock');
-
+        const inventoryNum = item.inventory_number || `INV-${item.id.toString().padStart(4, '0')}`;
+        
         const matchesSearch = 
             name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            category.toLowerCase().includes(searchQuery.toLowerCase());
+            category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            inventoryNum.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            item.id.toString().includes(searchQuery);
         
-        const matchesCategory = categoryFilter === 'all' || category === categoryFilter;
-        const matchesStatus = statusFilter === 'all' || status === statusFilter;
+        const categoryStr = (category || '').toLowerCase();
+        const filterStr = categoryFilter.toLowerCase();
+        const matchesCategory = categoryFilter === 'all' || categoryStr === filterStr;
+
+        const matchesStatus = statusFilter === 'all' || statusFilter === getInventoryPresentation(item).stockStatus;
         const matchesActive = activeFilter === 'all' || 
             (activeFilter === 'active' && item.isActive) || 
             (activeFilter === 'inactive' && !item.isActive);
         
         return matchesSearch && matchesCategory && matchesStatus && matchesActive;
     });
+
+    const uniqueCategories = new Map<string, string>();
+    ['Chemical', 'Supplies', 'Tools', 'Equipment'].forEach(c => uniqueCategories.set(c.toLowerCase(), c));
+    inventoryData.forEach((item: InventoryItem) => {
+        if (item.category && !uniqueCategories.has(item.category.toLowerCase())) {
+            uniqueCategories.set(item.category.toLowerCase(), item.category);
+        }
+    });
+    const categories = Array.from(uniqueCategories.values());
 
     const totalPages = Math.ceil(filteredInventory.length / itemsPerPage) || 1;
     const paginatedInventory = filteredInventory.slice(
@@ -252,7 +284,6 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
         setCurrentPage(page);
     };
 
-    const categories = Array.from(new Set(inventoryData.map(item => item.category))) as string[];
     const statuses = ['In Stock', 'Low Stock', 'No Stock'];
 
     return (
@@ -406,24 +437,6 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                 </div>
                             </DialogContent>
                         </Dialog>
-                        <Button 
-                            variant="outline" 
-                            className="h-10 w-10 p-0 rounded-xl border-gray-100 text-gray-500 hover:border-red-600 hover:text-red-600 hover:bg-red-50 no-print"
-                            onClick={() => {
-                                addActivity({
-                                    type: 'inventory',
-                                    module: 'Inventory',
-                                    user: JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}').username,
-                                    action: 'PRINT',
-                                    table: 'Inventory',
-                                    details: 'Printed Stock Inventory list and alert levels'
-                                });
-                                window.print();
-                            }}
-                            title="Print Stock Inventory"
-                        >
-                            <Printer size={18} />
-                        </Button>
                     </div>
 
                     <div className="overflow-x-auto -mx-6">
@@ -431,6 +444,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                             <thead className="bg-red-50 border-y border-red-100">
                                 <tr>
                                     <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-800 uppercase tracking-widest">Item Name</th>
+                                    <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-800 uppercase tracking-widest">Category</th>
                                     <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-800 uppercase tracking-widest">Package</th>
                                     <th className="px-6 py-4 text-right text-[11px] font-bold text-slate-800 uppercase tracking-widest">Unit Price</th>
                                     <th className="px-6 py-4 text-right text-[11px] font-bold text-slate-800 uppercase tracking-widest">Stock Level</th>
@@ -448,7 +462,10 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                     >
                                         <td className="px-6 py-4">
                                             <p className="text-sm font-bold text-gray-900 leading-none">{item.name}</p>
-                                            <p className="text-[10px] text-gray-400 mt-1 uppercase font-semibold">ID: INV-{item.id.toString().padStart(4, '0')}</p>
+                                            <p className="text-[10px] text-gray-400 mt-1 uppercase font-semibold">Inventory No.: {item.inventory_number || `INV-${item.id.toString().padStart(4, '0')}`}</p>
+                                        </td>
+                                        <td className="px-6 py-4 text-xs font-bold text-gray-600 uppercase">
+                                            {item.category}
                                         </td>
                                         <td className="px-6 py-4">
                                             {(() => {
@@ -459,7 +476,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                                         <span className="text-[10px] text-gray-400 font-semibold">{item.package_size?.toLocaleString()} {item.unit}</span>
                                                     </div>
                                                 ) : (
-                                                    <span className="text-xs font-bold text-gray-600 uppercase">{item.category}</span>
+                                                    <span className="text-xs font-bold text-gray-400 italic">Bulk</span>
                                                 );
                                             })()}
                                         </td>
@@ -474,9 +491,9 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                                     : isLow
                                                     ? 'text-amber-600'
                                                     : pres.percentageRemaining > 75
-                                                    ? 'text-emerald-600'
+                                                    ? 'text-blue-600'
                                                     : 'text-gray-500';
-                                                const barColor = isCrit ? 'bg-red-500' : isLow ? 'bg-amber-400' : 'bg-emerald-400';
+                                                const barColor = isCrit ? 'bg-red-500' : isLow ? 'bg-amber-400' : 'bg-blue-500';
                                                 return (
                                                     <div className="flex flex-col items-end gap-1.5">
                                                         {/* Primary: raw stock */}
@@ -531,6 +548,11 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                         </td>
                                         <td className="px-6 py-4 text-center no-print" onClick={(e) => e.stopPropagation()}>
                                             <div className="flex items-center justify-center gap-2">
+                                                {/* P1-5 FIX: PUT /api/inventory/{id} requires Depends(require_role(["owner"]))
+                                                    on the backend. Previously Edit was shown to every role, letting Staff
+                                                    fill out changes and only find out on Update that the save was rejected.
+                                                    Gate visibility to match backend RBAC, same as Delete/New Item/Restock. */}
+                                                {['owner', 'admin', 'staff'].includes(user.role?.toLowerCase() || '') && (
                                                 <Button 
                                                     variant="ghost" 
                                                     className="h-8 w-8 p-0 rounded-lg border border-amber-500 text-amber-600 hover:bg-amber-50 transition-colors"
@@ -541,7 +563,8 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                                 >
                                                     <Edit size={14} strokeWidth={2.5} />
                                                 </Button>
-                                                {user.role?.toLowerCase() === 'owner' && (
+                                                )}
+                                                {['owner', 'admin', 'staff'].includes(user.role?.toLowerCase() || '') && (
                                                     <Button 
                                                         variant="ghost" 
                                                         className="h-8 w-8 p-0 rounded-lg border border-red-500 text-red-600 hover:bg-red-50 transition-colors"
@@ -618,13 +641,14 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                 </CardContent>
             </Card>
             <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-                <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-                    <DialogHeader>
+                <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col gap-0 p-0">
+                    <DialogHeader className="shrink-0 sticky top-0 z-10 bg-white px-6 pt-6 pb-4 border-b border-gray-100 pr-14">
                         <DialogTitle className="text-xl font-bold uppercase text-red-600 text-center">
                             {editingItem ? 'Edit Inventory Item' : 'New Inventory Item'}
                         </DialogTitle>
                     </DialogHeader>
-                    <div className="grid gap-3 py-2">
+                    <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
+                    <div className="grid gap-3 py-1">
                         <div className="space-y-2">
                             <label className="text-[10px] font-black uppercase text-gray-400">Item Name</label>
                             <Input 
@@ -632,6 +656,15 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                 placeholder="e.g. Standard Shoe Cleaner" 
                                 value={formData.name}
                                 onChange={(e) => setFormData((prev: any) => ({ ...prev, name: e.target.value }))}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase text-gray-400">Inventory Number</label>
+                            <Input 
+                                className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs" 
+                                placeholder="e.g. INV-12345 (Leave blank for auto-fallback)" 
+                                value={formData.inventory_number || ''}
+                                onChange={(e) => setFormData((prev: any) => ({ ...prev, inventory_number: e.target.value }))}
                             />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
@@ -719,9 +752,21 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-black uppercase text-gray-400">Current Stock</label>
-                                        <div className="h-9 rounded-lg border border-gray-200 bg-gray-50 px-3 text-xs flex items-center justify-between font-bold text-gray-700 select-none">
-                                            <span>{(Number(formData.stock) || 0).toLocaleString()}</span>
-                                            <span className="text-[10px] text-gray-400 uppercase font-black">{formData.unit || 'mL'}</span>
+                                        <div className="relative">
+                                            <Input
+                                                className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs pr-12 font-bold"
+                                                type="number"
+                                                step="any"
+                                                min="0"
+                                                value={(formData.stock as any) === '' ? '' : formData.stock}
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    setFormData((prev: any) => ({ ...prev, stock: val === '' ? '' : Math.max(0, parseFloat(val) || 0) }));
+                                                }}
+                                            />
+                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 uppercase font-black pointer-events-none">
+                                                {formData.unit || 'mL'}
+                                            </span>
                                         </div>
                                     </div>
                                     <div className="space-y-2">
@@ -912,7 +957,41 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                         {/* Collapsible/Expandable Consumption Settings */}
                         <div className="border border-red-100/60 rounded-xl p-3 bg-red-50/20 space-y-3 mt-4">
                             <h4 className="text-[10px] font-black uppercase text-red-900 tracking-widest border-b border-red-100 pb-1.5 mb-2">Inventory Behavior</h4>
-                            <div className="flex items-center justify-between">
+                            <div className="space-y-4">
+                                <div className="flex flex-col gap-2 border-b border-red-100/50 pb-3">
+                                    <div className="flex items-center gap-2">
+                                        <input 
+                                            type="checkbox" 
+                                            id="isRetailCheckbox" 
+                                            className="h-4 w-4 rounded border-red-300 text-red-600 focus:ring-red-500 cursor-pointer"
+                                            checked={formData.isRetail}
+                                            onChange={(e) => {
+                                                const checked = e.target.checked;
+                                                setFormData((prev: any) => ({ ...prev, isRetail: checked, retailPrice: checked ? prev.retailPrice : 0 }));
+                                            }}
+                                        />
+                                        <label htmlFor="isRetailCheckbox" className="text-[10px] font-black uppercase text-red-900 cursor-pointer select-none font-bold">
+                                            Allow Item for Retail Sale
+                                        </label>
+                                    </div>
+                                    {formData.isRetail && (
+                                        <div className="pl-6 max-w-[200px]">
+                                            <div className="relative">
+                                                <input 
+                                                    type="number" 
+                                                    min="0.01"
+                                                    step="0.01"
+                                                    className="w-full h-8 rounded-lg border border-red-200 bg-white px-3 pl-7 text-xs font-semibold focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none"
+                                                    placeholder="0.00"
+                                                    value={formData.retailPrice || ''}
+                                                    onChange={(e) => setFormData((prev: any) => ({ ...prev, retailPrice: Math.max(0, parseFloat(e.target.value) || 0) }))}
+                                                />
+                                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-gray-400">₱</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                                
                                 <div className="flex items-center gap-2">
                                     <input 
                                         type="checkbox" 
@@ -1034,7 +1113,8 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                             </div>
                         </div>
                     </div>
-                    <div className="flex gap-3 mt-5 pt-4 border-t border-gray-100">
+                    </div>
+                    <div className="shrink-0 sticky bottom-0 z-10 bg-white px-6 pb-6 pt-4 border-t border-gray-100 flex gap-3">
                         <Button variant="outline" className="flex-1 h-9 text-xs font-black uppercase tracking-widest border-gray-200 text-gray-700 hover:bg-gray-100" onClick={() => setIsModalOpen(false)}>Cancel</Button>
                         <Button className="flex-1 h-9 text-xs font-black uppercase tracking-widest bg-red-600 hover:bg-red-700 text-white" onClick={handleSaveItem}>
                             {editingItem ? 'Update' : 'Save'}
@@ -1051,10 +1131,12 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                 onOpenChange={(open) => {
                     if (!open) setSelectedItem(null);
                 }}
-                onEdit={(item) => {
+                /* P1-5 FIX: only offer the Edit action from the detail modal to roles the
+                   backend actually allows to PUT /api/inventory/{id} (owner/admin). */
+                onEdit={['owner', 'admin'].includes(user.role?.toLowerCase() || '') ? (item) => {
                     setSelectedItem(null);
                     handleEditItem(item);
-                }}
+                } : undefined}
             />
 
             {/* CUSTOM PROFESSIONAL CONFIRMATION MODAL */}

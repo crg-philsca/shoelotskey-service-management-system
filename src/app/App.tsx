@@ -12,6 +12,8 @@ import { ActivityProvider } from '@/app/context/ActivityContext';
 import { InventoryProvider } from '@/app/context/InventoryContext';
 import ActivityLogModal from '@/app/components/ActivityLogModal';
 import ErrorPage, { ErrorType } from '@/app/pages/ErrorPage';
+// P1-10 FIX: centralized API base resolution (see src/app/lib/apiBase.ts).
+import { API_BASE } from '@/app/lib/apiBase';
 // Lazy-loaded pages for code splitting
 const Dashboard = lazy(() => import('@/app/pages/Dashboard'));
 const JobOrderForm = lazy(() => import('@/app/pages/JobOrderForm'));
@@ -38,14 +40,14 @@ const PageLoader = () => (
   </div>
 );
 
-const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '5173'))
-  ? `http://${window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname}:8000/api`
-  : '/api';
-
 // --- OWASP A01: BROKEN ACCESS CONTROL (RBAC) ---
 const ProtectedRoute = ({ children, allowedRoles, user }: { children: React.ReactNode, allowedRoles: string[], user: { role: string } | null }) => {
   if (!user) return <Navigate to="/login" replace />;
-  if (!allowedRoles.includes(user.role)) {
+  const role = user.role?.toLowerCase() || '';
+  // Admin (Developer) is a superuser and may access every guarded module,
+  // matching backend require_role() which already bypasses checks for admin.
+  const allowed = role === 'admin' || allowedRoles.some((r) => r.toLowerCase() === role);
+  if (!allowed) {
     console.warn(`[SECURITY] Attempt to access ${window.location.pathname} by role ${user.role} (Forbidden)`);
     return <ErrorPage type="403" />;
   }
@@ -71,7 +73,7 @@ export default function App() {
     return () => window.removeEventListener('SHOELOTSKEY_SYS_ERROR', handleSysError);
   }, []);
 
-  const [user, setUser] = useState<{ id?: number; username: string; email?: string; role: 'owner' | 'staff', token: string } | null>(() => {
+  const [user, setUser] = useState<{ id?: number; username: string; email?: string; role: 'owner' | 'staff' | 'admin', token: string } | null>(() => {
     // Check both localStorage (Remember Me checked) and sessionStorage (Remember Me unchecked)
     const saved = localStorage.getItem('user') || sessionStorage.getItem('user');
     return saved ? JSON.parse(saved) : null;
@@ -85,7 +87,7 @@ export default function App() {
     return () => { delete (window as any).toggleActivityLog; };
   }, []);
 
-  const handleLogin = (id: number, username: string, role: 'owner' | 'staff', token: string, rememberMe: boolean = false) => {
+  const handleLogin = (id: number, username: string, role: 'owner' | 'staff' | 'admin', token: string, rememberMe: boolean = false) => {
     const userData = { id, username, email: `${username}@shoelotskey.com`, role, token };
     setUser(userData);
     if (rememberMe) {
@@ -231,7 +233,7 @@ export default function App() {
     );
   }
 
-  const allRoles = ['owner', 'staff'];
+  const allRoles = ['owner', 'staff', 'admin'];
 
   return (
     <BrowserRouter>
@@ -255,11 +257,16 @@ export default function App() {
                     <Route path="/job-orders" element={<ProtectedRoute allowedRoles={allRoles} user={user}><JobOrders user={user} onSetHeaderActionRight={setHeaderActionRight} /></ProtectedRoute>} />
                     <Route path="/release-calendar" element={<ProtectedRoute allowedRoles={allRoles} user={user}><ReleaseCalendar user={user} onSetHeaderActionRight={setHeaderActionRight} /></ProtectedRoute>} />
                     <Route path="/claim-record" element={<ProtectedRoute allowedRoles={allRoles} user={user}><ClaimRecord user={user} /></ProtectedRoute>} />
-                    <Route path="/activity-history" element={<ProtectedRoute allowedRoles={allRoles} user={user}><ActivityHistory user={user} /></ProtectedRoute>} />
+                    {/* P1-2 FIX: GET /api/activities is require_role("owner")-only in the backend
+                        (admin bypasses every require_role check per auth_utils.py). Staff was
+                        previously allowed to reach this route, load the page shell, and only
+                        then get a backend 403 on the data fetch. Match the frontend guard to the
+                        actual backend RBAC so Staff never sees a page that can't work for them. */}
+                    <Route path="/activity-history" element={<ProtectedRoute allowedRoles={['owner', 'admin']} user={user}><ActivityHistory user={user} /></ProtectedRoute>} />
                     <Route path="/total-sales" element={<ProtectedRoute allowedRoles={allRoles} user={user}><TotalSales user={user} onSetHeaderActionRight={setHeaderActionRight} /></ProtectedRoute>} />
                     <Route path="/total-orders" element={<ProtectedRoute allowedRoles={allRoles} user={user}><TotalOrders user={user} onSetHeaderActionRight={setHeaderActionRight} /></ProtectedRoute>} />
                     <Route path="/expenses" element={<ProtectedRoute allowedRoles={allRoles} user={user}><Expenses user={user} onSetHeaderActionRight={setHeaderActionRight} /></ProtectedRoute>} />
-                    <Route path="/job-order-form/historical-records" element={<ProtectedRoute allowedRoles={allRoles} user={user}><HistoricalRecords user={user} onSetHeaderActionRight={setHeaderActionRight} /></ProtectedRoute>} />
+                    <Route path="/job-order-form/historical-records" element={<ProtectedRoute allowedRoles={['admin']} user={user}><HistoricalRecords user={user} onSetHeaderActionRight={setHeaderActionRight} /></ProtectedRoute>} />
 
                     <Route 
                       path="/inventory" 
@@ -268,7 +275,7 @@ export default function App() {
                     <Route 
                       path="/sales-report" 
                       element={
-                        <ProtectedRoute allowedRoles={['owner']} user={user}>
+                        <ProtectedRoute allowedRoles={['owner', 'admin']} user={user}>
                           <SalesReport user={user} onSetHeaderActionRight={setHeaderActionRight} />
                         </ProtectedRoute>
                       } 
@@ -276,7 +283,7 @@ export default function App() {
                     <Route 
                       path="/service-management" 
                       element={
-                        <ProtectedRoute allowedRoles={['owner']} user={user}>
+                        <ProtectedRoute allowedRoles={['owner', 'admin']} user={user}>
                           <ServiceManagement user={user} onSetHeaderActionRight={setHeaderActionRight} />
                         </ProtectedRoute>
                       } 
@@ -284,7 +291,7 @@ export default function App() {
                     <Route 
                       path="/user-management" 
                       element={
-                        <ProtectedRoute allowedRoles={['owner']} user={user}>
+                        <ProtectedRoute allowedRoles={['owner', 'admin']} user={user}>
                           <UserManagement user={user} onSetHeaderActionRight={setHeaderActionRight} />
                         </ProtectedRoute>
                       } 

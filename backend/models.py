@@ -10,7 +10,7 @@ from sqlalchemy import (
     Column, String, Float, Boolean, JSON, Integer, 
     ForeignKey, Text, DateTime, DECIMAL, Enum, TIMESTAMP, Table, text, func
 )
-from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy.orm import declarative_base, relationship, backref
 from datetime import datetime
 
 # Central base for all ORM classes
@@ -258,6 +258,16 @@ class Item(Base):
     
     order = relationship("Order", back_populates="items")
     services = relationship("Service", secondary="item_service_mapping")
+    # cascade="all, delete-orphan" (bugfix): `item_service_mapping.item_id` is part of
+    # that table's composite primary key, so it can never be set to NULL. Without an
+    # explicit delete cascade here, SQLAlchemy's default relationship-cleanup behavior
+    # on parent-Item deletion is to try to NULL out that FK, which raises
+    # "tried to blank-out primary key column" and turns every deletion of an Order/Item
+    # that has services attached into an HTTP 500 (discovered while verifying P0-6's
+    # order-delete RBAC fix). This makes ORM-level deletes correctly remove the
+    # now-orphaned mapping rows instead, matching the existing DB-level
+    # ON DELETE CASCADE FK already declared on ItemServiceMapping.item_id.
+    service_mappings = relationship("ItemServiceMapping", backref=backref("item_ref", overlaps="services"), overlaps="services", cascade="all, delete-orphan")
     conditions = relationship("Condition", secondary="item_condition_mapping")
 
 # ==========================================
@@ -317,6 +327,7 @@ class Inventory(Base):
     __tablename__ = "inventory"
     item_id = Column(Integer, primary_key=True, autoincrement=True)
     item_name = Column(String(100), nullable=False, unique=True)
+    inventory_number = Column(String(50), nullable=True, unique=True)
     category = Column(String(50), index=True)
     stock_quantity = Column(Float, default=0.0)
     unit = Column(String(20))
@@ -333,6 +344,10 @@ class Inventory(Base):
     package_size = Column(Float, default=0.0)   # e.g. 4000 (mL per bottle)
     package_unit = Column(String(20), default="")  # e.g. "bottle"
     low_stock_threshold = Column(Float, default=0.0)  # Alert threshold in internal units (mL / g)
+    
+    # Retail fields
+    is_retail = Column(Boolean, default=False)
+    retail_price = Column(DECIMAL(10, 2), default=0.0)
 
     def recalculate_status(self):
         threshold = self.low_stock_threshold if (self.low_stock_threshold and self.low_stock_threshold > 0.0) else (
@@ -420,6 +435,8 @@ class HistoricalOrder(Base):
     grand_total  = Column(DECIMAL(10, 2), nullable=False)
     downpayment  = Column(DECIMAL(10, 2), default=0.0)
     balance      = Column(DECIMAL(10, 2), default=0.0)
+    # Paper subtotal before any handwritten discount; grand_total stays the final amount.
+    original_grand_total = Column(DECIMAL(10, 2), nullable=True)
 
     # Snapshot strings (not FKs — preserves historical integrity even if live data changes)
     priority     = Column(String(30), default="regular")
@@ -438,7 +455,8 @@ class HistoricalOrder(Base):
     # Relationships
     customer = relationship("Customer")
     items    = relationship("HistoricalItem", back_populates="order",
-                            cascade="all, delete-orphan")
+                            cascade="all, delete-orphan",
+                            order_by="HistoricalItem.historical_item_id")
     predictions = relationship("HistoricalPrediction", back_populates="order",
                                cascade="all, delete-orphan")
     image = relationship("HistoricalImage", back_populates="order", uselist=False)
@@ -464,6 +482,8 @@ class HistoricalItem(Base):
     priority = Column(String(30), nullable=True)
     remarks  = Column(Text, nullable=True)
     item_price = Column(DECIMAL(10, 2), nullable=True)
+    # Per-item claim date from paper notes (e.g. "claimed 8/19"); order.claimed_date remains overall.
+    claimed_date = Column(DateTime, nullable=True)
 
     # Condition Booleans for ML features
     scratches       = Column(Boolean, nullable=True)

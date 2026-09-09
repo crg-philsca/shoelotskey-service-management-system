@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { format as dateFnsFormat } from 'date-fns';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { Label } from '@/app/components/ui/label';
+import { API_BASE } from '@/app/lib/apiBase';
 import {
   User,
   UserCheck,
@@ -29,6 +30,59 @@ interface OrderDetailModalProps {
   onOpenChange: (open: boolean) => void;
 }
 
+function displayItemSize(item: any, order?: any) {
+  const candidates = [
+    item?.shoeSize,
+    item?.size,
+    item?.shoe_size,
+    order?.shoeSize,
+    order?.size,
+    order?.shoe_size,
+  ];
+  for (const value of candidates) {
+    const text = String(value ?? '').trim();
+    if (text && text !== '-' && text.toLowerCase() !== 'n/a') return text;
+  }
+  return '-';
+}
+
+function displayItemColor(item: any, order?: any) {
+  const candidates = [item?.color, order?.color];
+  for (const raw of candidates) {
+    if (Array.isArray(raw)) {
+      const joined = raw.map((c) => String(c).trim()).filter(Boolean).join(', ');
+      if (joined) return joined;
+      continue;
+    }
+    const text = String(raw ?? '').trim();
+    if (text && text !== '-' && text.toLowerCase() !== 'n/a') return text;
+  }
+  return '-';
+}
+
+function DateValue({ colorClass, children }: { colorClass: string; children: ReactNode }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <CalendarIcon size={12} className={`${colorClass} shrink-0`} />
+      <p className="text-sm font-mono font-bold text-slate-900">{children}</p>
+    </div>
+  );
+}
+
+function releaseTimestamp(order: JobOrder) {
+  if (order.actualReleaseDate) return order.actualReleaseDate;
+  const fromLogs = ((order as any).statusHistory || [])
+    .filter((s: any) => s.status === 'for-release' && s.timestamp)
+    .map((s: any) => new Date(s.timestamp))
+    .filter((d: Date) => !isNaN(d.getTime()))
+    .sort((a: Date, b: Date) => a.getTime() - b.getTime());
+  if (fromLogs[0]) return fromLogs[0];
+  if (order.status === 'for-release' || order.status === 'claimed') {
+    return order.actualCompletionDate || null;
+  }
+  return null;
+}
+
 export default function OrderDetailModal({
   order: propOrder,
   open,
@@ -36,10 +90,59 @@ export default function OrderDetailModal({
 }: OrderDetailModalProps) {
   const [copied, setCopied] = useState(false);
   const [showPrintSummary, setShowPrintSummary] = useState(false);
+  const [estimate, setEstimate] = useState<{
+    business_rule_days?: number;
+    business_rule_date?: string;
+    ml_predicted_days?: number | null;
+    ml_predicted_date?: string | null;
+    ml_status?: string;
+    ml_model?: string;
+    ml_reason?: string | null;
+  } | null>(null);
   const { orders } = useOrders();
 
   // Dynamically retrieve the real-time updated order from OrderContext so edits are reflected immediately
   const order = propOrder ? (orders.find((o) => o.id === propOrder.id) || propOrder) : null;
+
+  useEffect(() => {
+    if (!open || !order) {
+      setEstimate(null);
+      return;
+    }
+    const items = (order.items && order.items.length > 0 ? order.items : [order]).map((item: any) => ({
+      baseService: item.baseService || [],
+      addOns: item.addOns || [],
+      shoeMaterial: item.shoeMaterial,
+      condition: item.condition,
+      quantity: item.quantity || 1,
+    }));
+    const controller = new AbortController();
+    const storedUser = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
+    let authToken = '';
+    try {
+      authToken = storedUser ? (JSON.parse(storedUser)?.token || '') : '';
+    } catch {
+      authToken = '';
+    }
+    fetch(`${API_BASE}/predict`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      },
+      body: JSON.stringify({
+        items,
+        priorityLevel: order.priorityLevel,
+        grandTotal: order.grandTotal,
+        transactionDate: (order.transactionDate || order.createdAt)?.toString?.() || order.transactionDate || order.createdAt,
+      }),
+      signal: controller.signal,
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => { if (data) setEstimate(data); })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [open, order?.id, order?.predictedCompletionDate]);
 
   if (!order) return null;
 
@@ -171,9 +274,12 @@ export default function OrderDetailModal({
                 <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block">
                   Last Updated
                 </Label>
-                <p className="text-xs font-mono font-semibold text-slate-700 truncate">
-                  {order.updatedAt ? formatDate(order.updatedAt) : formatDate(order.createdAt)}
-                </p>
+                <div className="flex items-center justify-end gap-1.5">
+                  <CalendarIcon size={12} className="text-slate-500 shrink-0" />
+                  <p className="text-sm font-mono font-bold text-slate-900 truncate">
+                    {order.updatedAt ? formatDate(order.updatedAt) : formatDate(order.createdAt)}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -215,49 +321,59 @@ export default function OrderDetailModal({
               </h4>
             </div>
 
-            {/* Order Date, Expected Date, & Release Date */}
-            <div className={`grid gap-4 ${isForRelease ? 'grid-cols-3' : 'grid-cols-2'}`}>
+            {/* Order Date, Estimated Date, Predicted Date, Release Date */}
+            <div className={`grid gap-4 ${isForRelease ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 sm:grid-cols-3'}`}>
               <div>
                 <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block">
                   Order Date
                 </Label>
-                <div className="flex items-center gap-1.5">
-                  <CalendarIcon size={12} className="text-slate-400 shrink-0" />
-                  <p className="text-xs font-mono font-semibold text-slate-800">
-                    {formatDate(order.transactionDate || order.createdAt)}
-                  </p>
-                </div>
+                <DateValue colorClass="text-purple-600">
+                  {formatDate(order.transactionDate || order.createdAt)}
+                </DateValue>
               </div>
 
-              <div className={isForRelease ? 'text-center' : 'text-right'}>
-                <Label className={`text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block ${isForRelease ? '' : 'text-right'}`}>
+              <div>
+                <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block">
+                  Estimated Date
+                </Label>
+                <DateValue colorClass="text-emerald-600">
+                  {order.predictedCompletionDate
+                    ? `${formatDate(order.predictedCompletionDate, 'MM/dd/yy')}${order.releaseTime ? ` ${order.releaseTime}` : ''}`
+                    : '-'}
+                </DateValue>
+                {estimate?.business_rule_days != null && (
+                  <p className="text-[10px] text-slate-500 mt-1">BR: {estimate.business_rule_days} days</p>
+                )}
+              </div>
+
+              <div>
+                <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block">
                   Predicted Date
                 </Label>
-                <div className={`flex items-center gap-1.5 ${isForRelease ? 'justify-center' : 'justify-end'}`}>
-                  <CalendarIcon size={12} className="text-slate-400 shrink-0" />
-                  <p className="text-xs font-mono font-semibold text-slate-800">
-                    {order.predictedCompletionDate
-                      ? `${formatDate(order.predictedCompletionDate, 'MM/dd/yy')}${order.releaseTime ? ` ${order.releaseTime}` : ''}`
-                      : '-'}
-                  </p>
-                </div>
+                <DateValue colorClass="text-blue-600">
+                  {estimate?.ml_predicted_date
+                    ? formatDate(estimate.ml_predicted_date, 'MM/dd/yy')
+                    : '-'}
+                </DateValue>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  ML:{' '}
+                  {estimate?.ml_predicted_days != null
+                    ? `${estimate.ml_predicted_days} days`
+                    : 'unavailable'}
+                </p>
               </div>
 
               {isForRelease && (
-                <div className="text-right">
-                  <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block text-right">
+                <div>
+                  <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block">
                     Release Date
                   </Label>
-                  <div className="flex items-center justify-end gap-1.5">
-                    <CheckCircle2 size={12} className="text-orange-600 shrink-0" />
-                    <p className="text-xs font-mono font-bold text-orange-700">
-                      {order.actualReleaseDate
-                        ? formatDate(order.actualReleaseDate)
-                        : (order as any).statusHistory?.find((s: any) => s.status === 'for-release')
-                        ? formatDate((order as any).statusHistory.find((s: any) => s.status === 'for-release').timestamp)
-                        : formatDate(order.updatedAt)}
-                    </p>
-                  </div>
+                  <DateValue colorClass="text-orange-600">
+                    {(() => {
+                      const released = releaseTimestamp(order);
+                      return released ? formatDate(released) : '-';
+                    })()}
+                  </DateValue>
                 </div>
               )}
             </div>
@@ -270,13 +386,13 @@ export default function OrderDetailModal({
                     <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block">
                       Claimed Date
                     </Label>
-                    <p className="text-xs font-mono font-bold text-emerald-800">
+                    <DateValue colorClass="text-slate-500">
                       {order.actualCompletionDate
                         ? formatDate(order.actualCompletionDate)
                         : (order as any).statusHistory?.find((s: any) => s.status === 'claimed')
                         ? formatDate((order as any).statusHistory.find((s: any) => s.status === 'claimed').timestamp)
-                        : formatDate(order.updatedAt)}
-                    </p>
+                        : '-'}
+                    </DateValue>
                   </div>
 
                   <div>
@@ -414,14 +530,14 @@ export default function OrderDetailModal({
                       <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block">
                         Size
                       </Label>
-                      <p className="text-sm font-bold text-slate-800">{item.shoeSize || item.size || '-'}</p>
+                      <p className="text-sm font-bold text-slate-800">{displayItemSize(item, order)}</p>
                     </div>
                     <div>
                       <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block">
                         Color
                       </Label>
                       <p className="text-sm font-bold text-slate-800">
-                        {Array.isArray(item.color) ? item.color.join(', ') : item.color || '-'}
+                        {displayItemColor(item, order)}
                       </p>
                     </div>
                   </div>
@@ -579,7 +695,7 @@ export default function OrderDetailModal({
                   <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block text-right">
                     Reference Number
                   </Label>
-                  <p className="text-xs font-mono font-bold text-slate-800 tracking-tight">
+                  <p className="text-sm font-mono font-bold text-slate-900 tracking-tight">
                     {order.referenceNo}
                   </p>
                 </div>
@@ -715,6 +831,8 @@ export default function OrderDetailModal({
                 <span className="font-black text-slate-900">: {order.orderNumber}</span>
                 <span className="text-slate-500 font-bold uppercase">Status</span>
                 <span className="font-bold uppercase text-slate-900">: {order.status?.replace('-', ' ')}</span>
+                <span className="text-slate-500 font-bold uppercase">Priority</span>
+                <span className="font-bold uppercase text-slate-900">: {order.priorityLevel || 'Regular'}</span>
               </div>
             </div>
 
@@ -735,22 +853,35 @@ export default function OrderDetailModal({
               <div className="border-b border-dashed border-gray-300 my-2"></div>
               <h3 className="font-black text-slate-400 uppercase tracking-widest text-[10px]">Service Details</h3>
               <div className="space-y-1 text-[11px]">
-                <span className="font-bold text-slate-800 block">Services Applied:</span>
-                {Array.from(new Set(itemsToDisplay.flatMap((it: any) => 
-                  Array.isArray(it.baseService) ? it.baseService : [it.baseService || 'General Service']
-                ))).filter(Boolean).map((srv: string, idx: number) => (
-                  <p key={idx} className="text-slate-800 pl-2 font-semibold">• {srv}</p>
-                ))}
+                <span className="font-bold text-slate-800 block">Total Qty: {order.quantity || 1} Pair{(order.quantity || 1) > 1 ? 's' : ''}</span>
               </div>
               <div className="space-y-1 pt-1 text-[11px]">
                 <span className="font-bold text-slate-800 block">Shoe Information:</span>
-                {itemsToDisplay.map((it: any, idx: number) => (
-                  <div key={idx} className="pl-2 space-y-0.5 pb-1 border-l-2 border-slate-200 my-1">
-                    <p className="text-slate-900 font-bold">• {it.brand} {it.shoeModel}</p>
-                    <p className="text-slate-600 text-[10px]">  Material: {it.shoeMaterial || 'N/A'}</p>
-                    <p className="text-slate-600 text-[10px]">  Qty: {it.quantity || 1} Pair{(it.quantity || 1) > 1 ? 's' : ''}</p>
-                  </div>
-                ))}
+                {itemsToDisplay.map((it: any, idx: number) => {
+                  const itemServices = Array.isArray(it.baseService) ? it.baseService.join(', ') : (it.baseService || 'General Service');
+                  const itemAddOnsRaw = it.addOns || it.add_ons;
+                  let itemAddOns = '';
+                  if (Array.isArray(itemAddOnsRaw) && itemAddOnsRaw.length > 0) {
+                      itemAddOns = itemAddOnsRaw.map((a: any) => typeof a === 'string' ? a : (a.name || a.service_name)).join(', ');
+                  } else if (typeof itemAddOnsRaw === 'string' && itemAddOnsRaw) {
+                      try {
+                          const p = JSON.parse(itemAddOnsRaw);
+                          itemAddOns = Array.isArray(p) ? p.map((a: any) => typeof a === 'string' ? a : (a.name || a.service_name)).join(', ') : itemAddOnsRaw;
+                      } catch { itemAddOns = itemAddOnsRaw; }
+                  }
+                  
+                  return (
+                    <div key={idx} className="pl-2 space-y-0.5 pb-2 border-l-2 border-slate-200 my-1">
+                      <p className="text-slate-900 font-bold uppercase tracking-wide text-[10px] text-red-600">Item {idx + 1}</p>
+                      <p className="text-slate-900 font-bold">• {it.brand} {it.shoeModel}</p>
+                      <p className="text-slate-600 text-[10px]">  Material: {it.shoeMaterial || 'N/A'}</p>
+                      <p className="text-slate-600 text-[10px]">  Size: {(() => { const size = displayItemSize(it, order); return size === '-' ? 'N/A' : size; })()}</p>
+                      <p className="text-slate-600 text-[10px]">  Color: {(() => { const color = displayItemColor(it, order); return color === '-' ? 'N/A' : color; })()}</p>
+                      <p className="text-slate-800 text-[10px] pt-0.5 font-medium">  Services: {itemServices}</p>
+                      {itemAddOns && <p className="text-slate-800 text-[10px] font-medium">  Add-ons: {itemAddOns}</p>}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -789,14 +920,38 @@ export default function OrderDetailModal({
                   try { return dateFnsFormat(new Date(order.createdAt || (order as any).orderDate || Date.now()), 'MMMM d, yyyy'); }
                   catch { return '-'; }
                 })()}</span>
-                <span className="text-slate-500 font-bold">Release Date</span>
+                <span className="text-slate-500 font-bold">Estimated Date</span>
                 <span className="font-bold text-slate-900">: {(() => {
-                  try { return dateFnsFormat(new Date((order as any).estimatedReleaseDate || (order as any).releaseDate || Date.now()), 'MMMM d, yyyy'); }
+                  try {
+                    const raw = order.predictedCompletionDate || (order as any).estimatedReleaseDate || (order as any).releaseDate;
+                    return raw ? dateFnsFormat(new Date(raw), 'MMMM d, yyyy') : '-';
+                  }
                   catch { return '-'; }
                 })()}</span>
+                <span className="text-slate-500 font-bold">Predicted Date</span>
+                <span className="font-bold text-slate-900">: {(() => {
+                  try {
+                    return estimate?.ml_status === 'valid' && estimate?.ml_predicted_date
+                      ? dateFnsFormat(new Date(estimate.ml_predicted_date), 'MMMM d, yyyy')
+                      : '-';
+                  }
+                  catch { return '-'; }
+                })()}</span>
+                {isForRelease && (
+                  <>
+                    <span className="text-slate-500 font-bold">Release Date</span>
+                    <span className="font-bold text-slate-900">: {(() => {
+                      try {
+                        const raw = releaseTimestamp(order);
+                        return raw ? dateFnsFormat(new Date(raw), 'MMMM d, yyyy') : '-';
+                      }
+                      catch { return '-'; }
+                    })()}</span>
+                  </>
+                )}
                 {isClaimed && (
                   <>
-                    <span className="text-slate-500 font-bold">Claim Date</span>
+                    <span className="text-slate-500 font-bold">Claimed Date</span>
                     <span className="font-bold text-slate-900">: {(() => {
                       try {
                         const claimHist = order.statusHistory?.find((h: any) => h.status === 'claimed');

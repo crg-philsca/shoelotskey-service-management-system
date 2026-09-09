@@ -73,7 +73,7 @@ function FormattedDateInput({ value, onChange, className, id }: { value: string;
 }
 
 interface JobOrdersProps {
-    user: { username: string; role: 'owner' | 'staff'; token: string };
+    user: { username: string; role: 'owner' | 'staff' | 'admin'; token: string };
     onSetHeaderActionRight: (action: React.ReactNode) => void;
 }
 
@@ -117,13 +117,15 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
         if (filterStatus !== 'all' && order.status !== filterStatus) return false;
 
         // Service
-        if (filterService !== 'all' && !order.baseService.includes(filterService)) return false;
+        if (filterService !== 'all' && !(order.baseService || []).includes(filterService)) return false;
 
         // Search
         if (searchQuery) {
             const query = searchQuery.toLowerCase();
-            if (!order.customerName.toLowerCase().includes(query) &&
-                !order.orderNumber.toLowerCase().includes(query)) return false;
+            const cName = order.customerName || '';
+            const oNum = order.orderNumber || '';
+            if (!cName.toLowerCase().includes(query) &&
+                !oNum.toLowerCase().includes(query)) return false;
         }
 
         // Date Range
@@ -209,12 +211,12 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                             <Input
                                 placeholder="Search by order # or customer..."
                                 value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
+                                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
                                 className="pl-9"
                             />
                         </div>
                         <div className="flex gap-2">
-                            <Select value={filterStatus} onValueChange={setFilterStatus}>
+                            <Select value={filterStatus} onValueChange={(val) => { setFilterStatus(val); setCurrentPage(1); }}>
                                 <SelectTrigger className="w-[180px]">
                                     <SelectValue placeholder="Status" />
                                 </SelectTrigger>
@@ -309,7 +311,7 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                                                 <div className="font-medium text-gray-900 line-clamp-2 leading-tight min-w-[120px] max-w-[180px] text-wrap">{order.customerName}</div>
                                                 <div className="text-xs text-gray-500 mt-1 whitespace-nowrap">{order.contactNumber}</div>
                                             </td>
-                                            <td className="p-4 text-xs text-gray-600">
+                                            <td className="p-4 text-xs font-medium text-gray-700">
                                                 {Array.isArray(order.baseService)
                                                     ? order.baseService.map((s: string, i: number) => (
                                                         <div key={i}>{String(s || '').replace(' (with basic cleaning)', '')}{i < order.baseService.length - 1 ? ',' : ''}</div>
@@ -654,13 +656,14 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                                         className={`flex-1 text-white font-black uppercase text-xs h-10 rounded-xl shadow-lg ${isRefundAllowed ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200' : 'bg-red-600 hover:bg-red-700 shadow-red-200'}`}
                                         onClick={async () => {
                                             if (cancelOrderModal) {
-                                                await deleteOrder(cancelOrderModal.id);
-                                                if (cancelOrderModal.status === 'new-order') {
-                                                    toast.success(`Order #${cancelOrderModal.orderNumber} cancelled. Full refund of ₱${(cancelOrderModal.amountReceived || 0).toLocaleString()} issued since service had not commenced.`);
-                                                } else {
-                                                    toast.error(`Order #${cancelOrderModal.orderNumber} cancelled. No refund issued per policy (service already commenced).`);
-                                                }
+                                                const orderToCancel = cancelOrderModal;
                                                 setCancelOrderModal(null);
+                                                await deleteOrder(orderToCancel.id);
+                                                if (orderToCancel.status === 'new-order') {
+                                                    toast.success(`Order #${orderToCancel.orderNumber} cancelled. Full refund of ₱${(orderToCancel.amountReceived || 0).toLocaleString()} issued since service had not commenced.`);
+                                                } else {
+                                                    toast.error(`Order #${orderToCancel.orderNumber} cancelled. No refund issued per policy (service already commenced).`);
+                                                }
                                             }
                                         }}
                                     >

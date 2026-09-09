@@ -27,10 +27,17 @@ import { useServices } from '@/app/context/ServiceContext';
 import EditOrderModal from '@/app/components/EditOrderModal';
 import OrderDetailModal from '@/app/components/OrderDetailModal';
 import { toast } from 'sonner';
+import {
+    collectedSales,
+    isDateInRange,
+    isSalesEligible,
+    orderEventDate,
+    type ReportRange,
+} from '@/app/lib/salesAnalytics';
 
 type TotalSalesProps = {
     onSetHeaderActionRight?: (action: ReactNode | null) => void;
-    user: { token: string; role: 'owner' | 'staff'; username: string };
+    user: { token: string; role: 'owner' | 'staff' | 'admin'; username: string };
 };
 
 function FormattedDateInput({ value, onChange, className, id }: { value: string; onChange: (val: string) => void; className?: string; id?: string }) {
@@ -142,7 +149,7 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
     const [isEditing, setIsEditing] = useState(false);
     const [orderToDelete, setOrderToDelete] = useState<JobOrder | null>(null);
 
-    const [profitRange, setProfitRange] = useState<'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Annually'>(() => {
+    const [profitRange, setProfitRange] = useState<ReportRange>(() => {
         return (location.state as any)?.dateRange || 'Daily';
     });
     const [searchQuery, setSearchQuery] = useState('');
@@ -180,7 +187,7 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                     <button
                         type="button"
                         aria-label="Select range"
-                        className="w-10 h-10 sm:w-40 flex items-center justify-center sm:justify-between rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-sm font-semibold uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:border-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                        className="w-10 h-10 sm:w-40 flex items-center justify-center sm:justify-between rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-sm font-bold uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:border-white focus:outline-none focus:ring-2 focus:ring-red-500"
                     >
                         <CalendarIcon className="h-4 w-4 sm:mr-1 shrink-0" aria-hidden="true" />
                         <span className="hidden sm:inline truncate mx-1">{profitRange}</span>
@@ -209,23 +216,9 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
 
     const salesOrders = useMemo(() => {
         const now = new Date();
-        const isWithinRange = (createdAt: Date) => {
-            if (isNaN(createdAt.getTime())) return false;
-            const diffDays = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
-            if (profitRange === 'Daily') {
-                return createdAt.toLocaleDateString('en-CA') === now.toLocaleDateString('en-CA');
-            }
-            if (profitRange === 'Weekly') return diffDays < 7;
-            if (profitRange === 'Monthly') return diffDays < 30;
-            if (profitRange === 'Quarterly') return diffDays < 90;
-            if (profitRange === 'Annually') return diffDays < 365;
-            return true;
-        };
-
         return orders
-            .filter((order: JobOrder) => (order.status as string)?.toLowerCase() !== 'cancelled')
-            .filter((order: JobOrder) => order.paymentStatus === 'fully-paid' || order.paymentStatus === 'downpayment')
-            .filter((order: JobOrder) => isWithinRange(new Date(order.transactionDate || order.createdAt)));
+            .filter((order: JobOrder) => isSalesEligible(order))
+            .filter((order: JobOrder) => isDateInRange(orderEventDate(order), profitRange, now));
     }, [orders, profitRange]);
 
     const filteredOrders = useMemo(() => {
@@ -289,7 +282,7 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
         return filtered;
     }, [salesOrders, filterService, filterPriority, filterPaymentStatus, filterPaymentMethod, startDate, endDate, searchQuery]);
 
-    const totalSales = filteredOrders.reduce((sum: number, order: JobOrder) => sum + Math.min(order.grandTotal || 0, order.amountReceived || 0), 0);
+    const totalSales = filteredOrders.reduce((sum: number, order: JobOrder) => sum + collectedSales(order), 0);
     const totalPages = Math.ceil(filteredOrders.length / itemsPerPage) || 1;
     const startIndex = (currentPage - 1) * itemsPerPage;
     const paginatedOrders = filteredOrders.slice(startIndex, startIndex + itemsPerPage);
@@ -301,7 +294,7 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
 
     const paymentBreakdown = filteredOrders.reduce((acc: Record<string, number>, order: JobOrder) => {
         const method = (order.paymentMethod || 'cash').toLowerCase();
-        acc[method] = (acc[method] || 0) + Math.min(order.grandTotal || 0, order.amountReceived || 0);
+        acc[method] = (acc[method] || 0) + collectedSales(order);
         return acc;
     }, {} as Record<string, number>);
 
@@ -500,7 +493,7 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                                                         >
                                                             <Pencil size={13} strokeWidth={2.5} />
                                                         </Button>
-                                                        {user.role?.toLowerCase() === 'owner' && (
+                                                        {['owner', 'admin'].includes(user.role?.toLowerCase() || '') && (
                                                             <Button 
                                                                 variant="ghost" 
                                                                 className="h-7 w-7 p-0 rounded-lg border border-red-500/80 text-red-600 hover:bg-red-50 transition-colors"

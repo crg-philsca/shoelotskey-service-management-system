@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 
 interface LayoutProps {
   children: React.ReactNode;
-  user: { username: string; email?: string; role: 'owner' | 'staff' };
+  user: { username: string; email?: string; role: 'owner' | 'staff' | 'admin' };
   onLogout: () => void;
   headerAction?: React.ReactNode;
   headerActionLeft?: React.ReactNode;
@@ -33,6 +33,9 @@ export default function Layout({ children, user, onLogout, headerAction, headerA
     { path: '/service-management', icon: Wrench, label: 'Service Management', shortLabel: 'Service' },
     { path: '/user-management', icon: Users, label: 'User Management', shortLabel: 'Users' },
   ];
+  const adminMenuItems = [
+    ...ownerMenuItems,
+  ];
 
   const staffMenuItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', shortLabel: 'Dashboard' },
@@ -42,6 +45,8 @@ export default function Layout({ children, user, onLogout, headerAction, headerA
   ];
 
   const pageTitles: Record<string, string> = {
+    '/': 'Dashboard',
+    '/login': 'Dashboard',
     '/dashboard': 'Dashboard',
     '/job-order-form': 'Job Order Form',
     '/job-orders': 'Job Orders',
@@ -58,7 +63,7 @@ export default function Layout({ children, user, onLogout, headerAction, headerA
     '/job-order-form/historical-records': 'Historical Records',
   };
 
-  const menuItems = user.role === 'owner' ? ownerMenuItems : staffMenuItems;
+  const menuItems = user.role === 'admin' ? adminMenuItems : (user.role === 'owner' ? ownerMenuItems : staffMenuItems);
 
   const SidebarContent = ({ collapsed }: { collapsed: boolean }) => (
     <>
@@ -77,7 +82,7 @@ export default function Layout({ children, user, onLogout, headerAction, headerA
           {!collapsed && (
             <div className="text-center space-y-1">
               <h1 className="text-base font-bold leading-tight">Shoelotskey</h1>
-              <p className="text-xs text-red-200">{user.role === 'owner' ? 'Owner' : 'Staff'}</p>
+              <p className="text-xs text-red-200">{user.role === 'admin' ? 'Developer' : (user.role === 'owner' ? 'Owner' : 'Staff')}</p>
             </div>
           )}
         </div>

@@ -23,8 +23,18 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
   const { services } = useServices();
   const { orders, loading } = useOrders();
 
-  // FILTER: Only show orders ready for release
-  const forReleaseOrders = orders.filter((job: JobOrder) => job.status === 'for-release');
+  // UC-46: map active job orders by predicted/manual release date so a newly
+  // created order's promised date is visible before it is marked for-release.
+  const [filterStatus, setFilterStatus] = useState<string>('all-active');
+  const scheduledOrders = useMemo(() => {
+    return orders.filter((job: JobOrder) => {
+      if (job.status === 'claimed') return false;
+      if (filterStatus === 'for-release') return job.status === 'for-release';
+      if (filterStatus === 'new-order') return job.status === 'new-order';
+      if (filterStatus === 'on-going') return job.status === 'on-going';
+      return job.status === 'new-order' || job.status === 'on-going' || job.status === 'for-release';
+    });
+  }, [orders, filterStatus]);
 
   /**
    * MEMO: releaseDates
@@ -32,13 +42,13 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
    * This is used to add "dot indicators" to the calendar component.
    */
   const releaseDates = useMemo(() => {
-    const dates = forReleaseOrders
+    const dates = scheduledOrders
       .map((job: JobOrder) => job.predictedCompletionDate)
       .filter((d: any): d is Date => Boolean(d))
       .sort((a: Date, b: Date) => a.getTime() - b.getTime());
 
     return Array.from(new Map(dates.map((d: Date) => [d.toDateString(), d])).values());
-  }, [forReleaseOrders]);
+  }, [scheduledOrders]);
 
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [month, setMonth] = useState<Date>(new Date());
@@ -74,7 +84,7 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
    * Dynamically filters orders based on the clicked calendar date 
    * and additional UI filters (Priority, Payment, Service Type).
    */
-  const jobsOnDate = forReleaseOrders.filter((job: JobOrder) => {
+  const jobsOnDate = scheduledOrders.filter((job: JobOrder) => {
     if (!date || !job.predictedCompletionDate) return false;
     const matchesDate = isSameDay(job.predictedCompletionDate, date);
     if (!matchesDate) return false;
@@ -117,18 +127,17 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
         <div className="flex items-center gap-2">
           <Button
             onClick={() => navigate('/claim-record')}
-            variant="outline"
-            className="w-10 h-10 sm:w-40 flex items-center justify-center rounded-md border border-red-200 bg-white px-2 sm:px-3 py-2 text-[11px] font-black uppercase text-red-600 shadow-none transition hover:bg-red-50 hover:border-red-300 focus:outline-none focus:ring-2 focus:ring-red-500 tracking-widest"
+            className="w-10 h-10 sm:w-40 flex items-center justify-center rounded-md border border-red-200 bg-white px-2 sm:px-3 py-2 text-sm font-bold uppercase text-red-600 shadow-sm transition hover:bg-red-50 hover:text-red-600 hover:border-red-300 focus:outline-none focus:ring-2 focus:ring-red-500"
           >
             <FileText className="h-4 w-4 sm:mr-2 shrink-0 text-red-600" />
-            <span className="hidden sm:inline">Claim Record</span>
+            <span className="hidden sm:inline font-bold text-red-600">Claim Record</span>
           </Button>
           <Button
             onClick={() => navigate('/dashboard', { state: { status: 'for-release' } })}
-            className="w-10 h-10 sm:w-40 flex items-center justify-center rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-[11px] font-black uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 tracking-widest"
+            className="w-10 h-10 sm:w-40 flex items-center justify-center rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-sm font-bold uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500"
           >
             <ClipboardList className="h-4 w-4 sm:mr-2 shrink-0" />
-            <span className="hidden sm:inline">Release Table</span>
+            <span className="hidden sm:inline font-bold">Release Table</span>
           </Button>
         </div>
       );
@@ -155,7 +164,7 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-400 group-focus-within:text-red-600 transition-colors" />
                   <Input
                     type="text"
-                    placeholder="Search orders"
+                    placeholder="Search name or order #"
                     value={searchTerm}
                     onChange={(e) => {
                       setSearchTerm(e.target.value);
@@ -209,6 +218,21 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
                           </div>
                         </div>
 
+                        <div className="grid gap-2">
+                          <Label htmlFor="order-status" className="text-[10px] font-black uppercase text-gray-500 tracking-wider">Order Status</Label>
+                          <Select value={filterStatus} onValueChange={(val) => { setFilterStatus(val); setCurrentPage(1); }}>
+                            <SelectTrigger id="order-status" className="h-8 text-xs font-medium">
+                              <SelectValue placeholder="Active" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all-active" className="text-xs focus:bg-red-50 focus:text-red-900 cursor-pointer">All Active</SelectItem>
+                              <SelectItem value="new-order" className="text-xs focus:bg-red-50 focus:text-red-900 cursor-pointer">New Order</SelectItem>
+                              <SelectItem value="on-going" className="text-xs focus:bg-red-50 focus:text-red-900 cursor-pointer">On-going</SelectItem>
+                              <SelectItem value="for-release" className="text-xs focus:bg-red-50 focus:text-red-900 cursor-pointer">For Release</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
                         <div className="grid grid-cols-2 gap-4">
                           <div className="grid gap-2">
                             <Label htmlFor="service-type" className="text-[10px] font-black uppercase text-gray-500 tracking-wider">Service Type</Label>
@@ -252,6 +276,7 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
                             setFilterPaymentMethod('all');
                             setFilterPriority('all');
                             setFilterServiceType('all');
+                            setFilterStatus('all-active');
                             setCurrentPage(1);
                           }}
                         >
@@ -306,7 +331,7 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
                     <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Guide</span>
                   </div>
                   <p className="text-[11px] text-gray-500 font-medium leading-relaxed">
-                    Dates marked with a <span className="text-red-600 font-bold">dot</span> signify releases.
+                    Dates marked with a <span className="text-red-600 font-bold">dot</span> have a promised release date (new, on-going, or for-release).
                   </p>
                 </div>
               </div>
@@ -329,7 +354,7 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
               </div>
             </div>
 
-            <div className="flex-1 p-4 pr-4 overflow-y-scroll min-h-[440px] max-h-[440px] flex flex-col scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+            <div className="flex-1 p-4 pr-4 overflow-y-auto min-h-[440px] max-h-[440px] flex flex-col scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
               {loading ? (
                 <div className="h-full flex items-center justify-center py-20">
                   <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-red-600"></div>
@@ -414,10 +439,14 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
                           } else {
                             badgeClass = 'bg-blue-100 text-blue-700 border-blue-200';
                           }
+                          const statusLabel = job.status === 'for-release' ? 'For Release' : job.status === 'on-going' ? 'On-going' : 'New Order';
                           return (
-                            <span className={`px-3 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest border ${badgeClass}`}>
-                              {job.priorityLevel}
-                            </span>
+                            <div className="flex flex-col items-center gap-1">
+                              <span className={`px-3 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest border ${badgeClass}`}>
+                                {job.priorityLevel}
+                              </span>
+                              <span className="text-[8px] font-bold uppercase tracking-widest text-gray-400">{statusLabel}</span>
+                            </div>
                           );
                         })()}
                       </div>

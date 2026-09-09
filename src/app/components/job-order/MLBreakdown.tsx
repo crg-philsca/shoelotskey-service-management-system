@@ -11,7 +11,7 @@ export const MLBreakdown: React.FC<MLBreakdownProps> = ({ baseDays, addOnDays, p
     return (
         <div className="col-span-2 md:col-span-12 bg-blue-50 border border-blue-100/50 rounded-lg p-2 flex items-center justify-between text-[10px] text-blue-800 shadow-sm mt-1">
             <div className="flex items-center gap-2">
-                <span className="font-bold flex items-center gap-1"><span className="text-blue-600 animate-pulse">✨</span> ML Prediction:</span>
+                <span className="font-bold flex items-center gap-1">BR:</span>
                 <span>
                     {baseDays}d Base
                     {addOnDays > 0 ? ` + ${addOnDays}d Add-on` : ''}

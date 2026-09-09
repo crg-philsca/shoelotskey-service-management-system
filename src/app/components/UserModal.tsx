@@ -19,7 +19,7 @@ interface UserModalProps {
 export default function UserModal({ isOpen, onClose, user, onSave, serverError }: UserModalProps) {
     const [username, setUsername] = useState('');
     const [email, setEmail] = useState('');
-    const [role, setRole] = useState<'owner' | 'staff'>('staff');
+    const [role, setRole] = useState<'owner' | 'staff' | 'admin'>('staff');
     const [active, setActive] = useState(true);
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -47,8 +47,8 @@ export default function UserModal({ isOpen, onClose, user, onSave, serverError }
         setPasswordError('');
 
         if (!user || password) {
-            if (password.length < 8 || !/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/\d/.test(password)) {
-                setPasswordError("Password must be at least 8 chars, 1 uppercase, 1 lowercase, and 1 number.");
+            if (password.length < 4 || !/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/\d/.test(password)) {
+                setPasswordError("Password must be at least 4 chars, 1 uppercase, 1 lowercase, and 1 number.");
                 return;
             }
         }
@@ -60,7 +60,6 @@ export default function UserModal({ isOpen, onClose, user, onSave, serverError }
             active,
             ...(password ? { password } : {}) // Only include password if set
         });
-        onClose();
     };
 
     return (
@@ -130,7 +129,7 @@ export default function UserModal({ isOpen, onClose, user, onSave, serverError }
                                 <p className="text-xs text-red-500 font-bold mt-1">{passwordError}</p>
                             ) : (
                                 <p className="text-[10px] text-gray-500 mt-1 font-medium leading-tight">
-                                    Must be at least 8 characters long, containing uppercase, lowercase, and a number.
+                                    Must be at least 4 characters long, containing uppercase, lowercase, and a number.
                                 </p>
                             )}
                         </div>
@@ -138,7 +137,7 @@ export default function UserModal({ isOpen, onClose, user, onSave, serverError }
 
                     <div className="space-y-2">
                         <Label htmlFor="role" className="text-xs font-bold uppercase tracking-widest text-gray-500">Role</Label>
-                        <Select value={role} onValueChange={(value: 'owner' | 'staff') => setRole(value)}>
+                        <Select value={role} onValueChange={(value: 'owner' | 'staff' | 'admin') => setRole(value)}>
                             <SelectTrigger className="font-medium border-red-200 focus:ring-0 focus:border-red-600">
                                 <SelectValue placeholder="Select role" />
                             </SelectTrigger>

@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/app/components/ui/dialog";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { JobOrder, PaymentMethod, InventoryUsed } from "@/app/types";
-import { CheckCircle2, User, ShieldAlert, Wrench, ShoppingBag, Trash2, Printer } from "lucide-react";
+import { CheckCircle2, User, ShieldAlert, Wrench, ShoppingBag, Trash2, Printer, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { formatReferenceNo } from "@/app/lib/utils";
 import { useInventory } from "@/app/context/InventoryContext";
@@ -43,6 +43,17 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
     const { addActivity } = useActivity();
 
     const [claimedBy, setClaimedBy] = useState("");
+    // P1-9 FIX: guards against a double-click/duplicate submission of Confirm Claim causing
+    // inventory to be deducted twice. Previously, `handleConfirm` had no in-flight guard at
+    // all, and only service materials (not retail products purchased at claim time) had any
+    // re-deduction check — and that check read the stale `order.inventoryApplied` prop
+    // captured at modal-open time, which would not have updated yet on a fast double-click.
+    const [isProcessingClaim, setIsProcessingClaim] = useState(false);
+    // Ref mirror of isProcessingClaim: React state updates are async/batched, so two
+    // click events dispatched before the next render both close over `isProcessingClaim`
+    // === false. A ref mutation is synchronous and visible immediately to any subsequent
+    // invocation of the same handler, closing that race window.
+    const isProcessingRef = useRef(false);
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
     const [amountReceived, setAmountReceived] = useState<number>(0);
     const [change, setChange] = useState<number>(0);
@@ -85,6 +96,8 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
             setShowMaterialsSection(false);
             setShowRetailSection(false);
             setShowReceipt(false);
+            setIsProcessingClaim(false);
+            isProcessingRef.current = false;
 
             // Parse recorded materials from order.inventoryUsed
             let rawUsed = order.inventoryUsed || [];
@@ -96,24 +109,29 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
             }
             const parsedArray: InventoryUsed[] = Array.isArray(rawUsed) ? [...rawUsed] : [];
             
-            const serviceMats = parsedArray.filter(i => !i.isRetail);
+            const serviceMats = parsedArray
+                .filter(i => !i.isRetail)
+                .map(i => ({ ...i, quantity: 0 }));
             const retailMats = parsedArray.filter(i => i.isRetail);
             
             setRecordedMaterials(serviceMats);
             setPurchasedProducts(retailMats);
 
             const inputMap: Record<number, string> = {};
-            serviceMats.forEach(i => { inputMap[i.itemId] = String(i.quantity); });
+            serviceMats.forEach(i => { inputMap[i.itemId] = '0'; });
             setMatInputs(inputMap);
         }
     }, [order, open]);
 
-    // Update default price when selecting a retail item
+    // Update default price when selecting a retail-flagged inventory item
     useEffect(() => {
         if (selectedRetailToAdd) {
             const item = inventoryData.find(i => i.id.toString() === selectedRetailToAdd);
             if (item) {
-                setRetailPriceInput(String(item.price || 150));
+                const retailPrice = item.is_retail
+                    ? Number(item.retail_price ?? 0)
+                    : Number(item.price || 0);
+                setRetailPriceInput(String(retailPrice > 0 ? retailPrice : 0));
             }
         }
     }, [selectedRetailToAdd, inventoryData]);
@@ -143,14 +161,12 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
             toast.error("Material already added to service record");
             return;
         }
-        const isPackaged = item.package_size && item.package_size > 0;
-        const defaultQty = isPackaged ? (item.consumption_qty || 10) : 1;
-        const displayUnit = isPackaged ? (item.package_unit || item.unit) : item.unit;
+        const displayUnit = item.consumption_unit || item.unit;
         
         const updated = [...recordedMaterials, {
             itemId: item.id,
             name: item.name,
-            quantity: defaultQty,
+            quantity: 0,
             unit: displayUnit || 'mL',
             staffMember: user?.username || 'Staff',
             date: new Date().toLocaleDateString(),
@@ -158,7 +174,7 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
             isRetail: false
         }];
         setRecordedMaterials(updated);
-        setMatInputs(prev => ({ ...prev, [item.id]: String(defaultQty) }));
+        setMatInputs(prev => ({ ...prev, [item.id]: '0' }));
         setSelectedMaterialToAdd('');
     };
 
@@ -171,10 +187,23 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
         }));
     };
 
-    // Handlers for Additional Retail Products Purchased
+    const handleResetMatQty = (itemId: number) => {
+        setMatInputs(im => ({ ...im, [itemId]: '0' }));
+        setRecordedMaterials(prev => prev.map(m => (
+            m.itemId === itemId
+                ? { ...m, quantity: 0, staffMember: user?.username || m.staffMember || 'Staff' }
+                : m
+        )));
+    };
+
+    // Handlers for Additional Retail Products Purchased (claim-time only)
     const handleAddRetailProduct = () => {
         const item = inventoryData.find(i => i.id.toString() === selectedRetailToAdd);
         if (!item) return;
+        if (!item.is_retail) {
+            toast.error("Only inventory items marked as Retail can be sold at claim.");
+            return;
+        }
         const qty = parseFloat(retailQtyInput) || 1;
         const price = parseFloat(retailPriceInput) || 0;
         if (qty <= 0) {
@@ -209,6 +238,9 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
 
     const handleConfirm = () => {
         if (!order) return;
+        // P1-9 FIX: reject re-entrant calls (e.g. rapid double-click on "Claim & Deduct
+        // Stock") so inventory is never deducted more than once for a single claim action.
+        if (isProcessingClaim || isProcessingRef.current) return;
         if (remainingBalance > 0 && amountReceived < remainingBalance) {
             toast.error("Insufficient amount received to cover the remaining balance due.");
             return;
@@ -236,6 +268,11 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
             }
         }
 
+        // P1-9 FIX: all validation passed — lock out further submissions before any
+        // inventory deduction side-effects run below.
+        isProcessingRef.current = true;
+        setIsProcessingClaim(true);
+
         const timestamp = new Date();
         const currentUser = user?.username || "Staff";
         const currentRole = user?.role || "Staff";
@@ -249,7 +286,7 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
                 const invItem = inventoryData.find(i => i.id === item.itemId);
                 const oldStock = invItem ? invItem.stock : 0;
                 const newStock = Math.max(0, oldStock - item.quantity);
-                const unit = invItem?.unit || item.unit || 'mL';
+                const unit = invItem?.consumption_unit || invItem?.unit || item.unit || 'mL';
 
                 if (!order.inventoryApplied) {
                     updateStock(item.itemId, item.quantity, orderIdVal);
@@ -454,7 +491,7 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
                                                     <SelectValue placeholder="Add material..." />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    {inventoryData.filter(i => i.isActive).map(item => {
+                                                    {inventoryData.filter(i => i.isActive && !i.is_retail).map(item => {
                                                         const pres = getInventoryPresentation(item);
                                                         return (
                                                             <SelectItem key={item.id} value={item.id.toString()} className="text-[11px]">
@@ -534,25 +571,43 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
                                                             </div>
                                                             <button
                                                                 type="button"
-                                                                onClick={() => setRecordedMaterials(pv => pv.filter(m => m.itemId !== mat.itemId))}
+                                                                onClick={() => {
+                                                                    setRecordedMaterials(pv => pv.filter(m => m.itemId !== mat.itemId));
+                                                                    setMatInputs(im => {
+                                                                        const next = { ...im };
+                                                                        delete next[mat.itemId];
+                                                                        return next;
+                                                                    });
+                                                                }}
+                                                                title="Remove material"
                                                                 className="text-gray-400 hover:text-red-500 p-1 ml-1"
                                                             >
                                                                 <Trash2 size={14} />
                                                             </button>
                                                         </div>
                                                     </div>
-                                                    <div className="flex items-center justify-end gap-1 pt-1 border-t border-gray-200/50">
-                                                        <span className="text-[8px] font-extrabold uppercase text-gray-400 mr-1">Quick:</span>
-                                                        {[10, 20, 50, 100].map(val => (
-                                                            <button
-                                                                key={val}
-                                                                type="button"
-                                                                onClick={() => handleQuickAddMat(mat.itemId, val)}
-                                                                className="px-1.5 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded text-[9px] font-black transition-colors"
-                                                            >
-                                                                +{val}
-                                                            </button>
-                                                        ))}
+                                                    <div className="flex items-center justify-between gap-1 pt-1 border-t border-gray-200/50">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleResetMatQty(mat.itemId)}
+                                                            className="px-1.5 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded text-[9px] font-black transition-colors inline-flex items-center gap-1"
+                                                        >
+                                                            <RotateCcw size={10} />
+                                                            Reset
+                                                        </button>
+                                                        <div className="flex items-center gap-1">
+                                                            <span className="text-[8px] font-extrabold uppercase text-gray-400 mr-1">Quick:</span>
+                                                            {[10, 20, 50, 100].map(val => (
+                                                                <button
+                                                                    key={val}
+                                                                    type="button"
+                                                                    onClick={() => handleQuickAddMat(mat.itemId, val)}
+                                                                    className="px-1.5 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded text-[9px] font-black transition-colors"
+                                                                >
+                                                                    +{val}
+                                                                </button>
+                                                            ))}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             ))}
@@ -591,11 +646,16 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
                                                     <SelectValue placeholder="Choose product..." />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    {inventoryData.filter(i => i.isActive && i.stock > 0).map(item => (
+                                                    {inventoryData.filter(i => i.isActive && i.is_retail && i.stock > 0).map(item => (
                                                         <SelectItem key={item.id} value={item.id.toString()} className="text-[11px]">
-                                                            <span className="font-bold">{item.name}</span> <span className="text-gray-400 font-normal">({item.stock} {item.unit} left • ₱{item.price || 0})</span>
+                                                            <span className="font-bold">{item.name}</span> <span className="text-gray-400 font-normal">({item.stock} {item.unit} left • ₱{Number(item.retail_price ?? item.price ?? 0)})</span>
                                                         </SelectItem>
                                                     ))}
+                                                    {inventoryData.filter(i => i.isActive && i.is_retail && i.stock > 0).length === 0 && (
+                                                        <div className="px-3 py-2 text-[10px] font-bold text-gray-400 uppercase">
+                                                            No retail items configured — mark items as Retail in Inventory
+                                                        </div>
+                                                    )}
                                                 </SelectContent>
                                             </Select>
 
@@ -800,17 +860,25 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
                         </div>
                     </div>
 
-                    <DialogFooter className="bg-[#FAFAFA] border-t border-gray-100 p-3 flex flex-row gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)} className="flex-1 h-9 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-xl transition-colors">
+                    <DialogFooter className="bg-[#FAFAFA] border-t border-gray-100 p-3 flex flex-row items-center justify-center gap-3 sm:justify-center">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onOpenChange(false)}
+                            className="flex-1 max-w-[220px] h-10 text-[10px] font-black uppercase tracking-widest text-gray-700 border-gray-300 bg-white hover:bg-gray-100 hover:text-gray-900 rounded-xl transition-colors"
+                        >
                             Cancel
                         </Button>
                         <Button
                             size="sm"
                             onClick={handleConfirm}
-                            disabled={!claimedBy || !isPaymentValid}
-                            className="flex-1 h-9 text-[10px] bg-[#D92D20] hover:bg-[#B42318] text-white font-black uppercase tracking-widest shadow-lg shadow-red-100 rounded-xl transition-all active:scale-95 disabled:opacity-50 disabled:scale-100"
+                            disabled={!claimedBy || !isPaymentValid || isProcessingClaim}
+                            className="flex-1 max-w-[220px] h-10 text-[10px] bg-[#D92D20] hover:bg-[#B42318] text-white font-black uppercase tracking-widest shadow-lg shadow-red-100 rounded-xl transition-all active:scale-95 disabled:opacity-50 disabled:scale-100"
                         >
-                            Claim & Deduct Stock
+                            {/* P1-9 FIX: disable + relabel while processing so a rapid double-click
+                                cannot fire a second deduction before the modal transitions to the
+                                receipt view. */}
+                            {isProcessingClaim ? 'Processing...' : 'Claim'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from decimal import Decimal
@@ -81,8 +81,8 @@ class UserCreateSchema(BaseModel):
     @field_validator('password')
     @classmethod
     def validate_password(cls, v: str) -> str:
-        if len(v) < 8:
-            raise ValueError('Password must be at least 8 characters long.')
+        if len(v) < 4:
+            raise ValueError('Password must be at least 4 characters long.')
         if not re.search(r"[a-z]", v):
             raise ValueError('Password must contain at least one lowercase letter.')
         if not re.search(r"[A-Z]", v):
@@ -103,8 +103,8 @@ class UserUpdateSchema(BaseModel):
     def validate_password(cls, v: Optional[str]) -> Optional[str]:
         if v is None:
             return v
-        if len(v) < 8:
-            raise ValueError('Password must be at least 8 characters long.')
+        if len(v) < 4:
+            raise ValueError('Password must be at least 4 characters long.')
         if not re.search(r"[a-z]", v):
             raise ValueError('Password must contain at least one lowercase letter.')
         if not re.search(r"[A-Z]", v):
@@ -154,6 +154,12 @@ class ExpenseSchema(BaseModel):
 # 4. ORDERS & ITEMS (3NF Nesting)
 # ==========================================
 
+class ItemServiceMappingSchema(BaseModel):
+    service_id: int
+    actual_price: Decimal
+    class Config:
+        from_attributes = True
+
 class ItemSchema(BaseModel):
     item_id: Optional[int] = None
     order_id: Optional[int] = None
@@ -167,6 +173,7 @@ class ItemSchema(BaseModel):
     inventory_used: Optional[Any] = None
     
     services: List[ServiceSchema] = []
+    service_mappings: List[ItemServiceMappingSchema] = []
     conditions: List[ConditionSchema] = []
     class Config:
         from_attributes = True
@@ -278,8 +285,8 @@ class ResetPasswordRequest(BaseModel):
     @field_validator('new_password')
     @classmethod
     def validate_password(cls, v: str) -> str:
-        if len(v) < 8:
-            raise ValueError('Password must be at least 8 characters long.')
+        if len(v) < 4:
+            raise ValueError('Password must be at least 4 characters long.')
         if not re.search(r"[a-z]", v):
             raise ValueError('Password must contain at least one lowercase letter.')
         if not re.search(r"[A-Z]", v):
@@ -295,6 +302,7 @@ class ResetPasswordRequest(BaseModel):
 class InventorySchema(BaseModel):
     item_id: Optional[int] = None
     item_name: str
+    inventory_number: Optional[str] = None
     category: Optional[str] = None
     stock_quantity: float = 0.0
     unit: Optional[str] = None
@@ -311,14 +319,33 @@ class InventorySchema(BaseModel):
     package_size: float = 0.0
     package_unit: str = ""
     low_stock_threshold: float = 0.0  # Alert threshold in internal units
+    is_retail: bool = False
+    retail_price: Decimal = Decimal("0.0")
 
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def set_retail_defaults(cls, data: Any):
+        if hasattr(data, "retail_price") and getattr(data, "retail_price") is None:
+            data.retail_price = Decimal("0.0")
+        elif isinstance(data, dict) and data.get("retail_price") is None:
+            data["retail_price"] = Decimal("0.0")
+            
+        if hasattr(data, "is_retail") and getattr(data, "is_retail") is None:
+            data.is_retail = False
+        elif isinstance(data, dict) and data.get("is_retail") is None:
+            data["is_retail"] = False
+            
+        return data
+
     class Config:
         from_attributes = True
 
 class InventoryUpdateSchema(BaseModel):
     item_name: Optional[str] = None
+    inventory_number: Optional[str] = None
     category: Optional[str] = None
     stock_quantity: Optional[float] = None
     unit: Optional[str] = None
@@ -335,6 +362,8 @@ class InventoryUpdateSchema(BaseModel):
     package_size: Optional[float] = None
     package_unit: Optional[str] = None
     low_stock_threshold: Optional[float] = None
+    is_retail: Optional[bool] = None
+    retail_price: Optional[Decimal] = None
 
 class InventoryLogSchema(BaseModel):
     log_id: Optional[int] = None
@@ -420,6 +449,7 @@ class HistoricalOrderCreateSchema(BaseModel):
     date_received: datetime
     original_estimated_release_date: Optional[datetime] = None
     claimed_date: Optional[datetime] = None
+    completion_days: Optional[int] = None
     total_pairs: int = 1
     grand_total: Decimal
     downpayment: Decimal = 0.0

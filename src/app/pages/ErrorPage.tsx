@@ -9,6 +9,8 @@ import {
   LayoutDashboard,
   LogIn,
 } from 'lucide-react';
+// P1-10 FIX: centralized API/static base resolution (see src/app/lib/apiBase.ts).
+import { STATIC_BASE } from '@/app/lib/apiBase';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -166,7 +168,11 @@ const ErrorPage: React.FC<ErrorPageProps> = ({ type, onRetry, errorDetails }) =>
                 const t = e.target as HTMLImageElement;
                 if (!t.dataset.retried) {
                   t.dataset.retried = 'true';
-                  t.src = 'http://localhost:8000/static/branded_shoe_404.png';
+                  // P1-10 FIX: use the centralized local-dev backend origin instead of a
+                  // bare hardcoded localhost:8000 (harmless in prod either way since it
+                  // already falls through to /logo.png, but keep the resolution logic
+                  // in one place).
+                  t.src = `${STATIC_BASE}/static/branded_shoe_404.png`;
                 } else {
                   t.src = '/logo.png';
                 }

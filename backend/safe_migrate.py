@@ -28,6 +28,16 @@ if PG_URL and (PG_URL.startswith("postgresql://") or PG_URL.startswith("postgres
                 else:
                     print(f"[PostgreSQL] Error adding item_price: {e}")
 
+            print("[PostgreSQL] Adding claimed_date to historical_items if missing...")
+            try:
+                conn.execute(text("ALTER TABLE historical_items ADD COLUMN claimed_date TIMESTAMP NULL;"))
+                print("[PostgreSQL] claimed_date added successfully.")
+            except Exception as e:
+                if "already exists" in str(e).lower() or "duplicate column" in str(e).lower():
+                    print("[PostgreSQL] claimed_date already exists.")
+                else:
+                    print(f"[PostgreSQL] Error adding claimed_date: {e}")
+
             # 1b. Fix expected_release_date -> original_estimated_release_date
             print("[PostgreSQL] Checking historical_orders expected_release_date...")
             try:
@@ -69,6 +79,11 @@ if os.path.exists(sqlite_db_path):
             cursor.execute("ALTER TABLE historical_items ADD COLUMN item_price DECIMAL(10,2) NULL;")
         else:
             print("[SQLite] item_price already exists in historical_items.")
+        if 'claimed_date' not in columns:
+            print("[SQLite] Adding claimed_date to historical_items...")
+            cursor.execute("ALTER TABLE historical_items ADD COLUMN claimed_date DATETIME NULL;")
+        else:
+            print("[SQLite] claimed_date already exists in historical_items.")
             
         # 2b. Rebuild historical_orders to fix expected_release_date NOT NULL
         cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='historical_orders'")

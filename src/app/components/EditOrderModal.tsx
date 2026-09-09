@@ -13,6 +13,7 @@ import type { JobOrder, ShoeEntry } from '@/app/types';
 import { useServices } from '../context/ServiceContext';
 import { useOrderCalculations } from '../hooks/useOrderCalculations';
 import { CreatableCombobox } from './ui/creatable-combobox';
+import { isAddonVisibleForBaseServices, applyColorCountExclusive, syncColorRenewalAddons, isColorCountAddon } from '@/app/lib/serviceCompatibility';
 
 // Dropdown options
 const SHOE_BRANDS = [
@@ -110,7 +111,7 @@ interface EditOrderModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSave?: (id: string, updates: Partial<JobOrder>) => void;
-    user?: { username: string; role: 'owner' | 'staff' };
+    user?: { username: string; role: 'owner' | 'staff' | 'admin' };
 }
 
 const SECTION_TITLE = "text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2";
@@ -142,6 +143,7 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
     
     // State for collapsible cards
     const [expandedShoeId, setExpandedShoeId] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
         if (order && open) {
@@ -267,21 +269,38 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
         return value;
     };
 
-    const handleSave = () => {
-        if (!onSave || !order) return;
+    const handleSave = async () => {
+        if (!onSave || !order || isSubmitting) return;
+        setIsSubmitting(true);
         
-        const finalName = customerName.trim();
-        if (!finalName) {
-            toast.error('Customer name is required');
-            return;
-        }
-        
-        if (['gcash', 'maya'].includes(paymentMethod) && !referenceNo) {
-            toast.error('Reference number is required for e-payments');
-            return;
-        }
+        try {
+            const finalName = customerName.trim();
+            if (!finalName) {
+                toast.error('Customer name is required');
+                setIsSubmitting(false);
+                return;
+            }
+            
+            if (['gcash', 'maya'].includes(paymentMethod) && !referenceNo) {
+                toast.error('Reference number is required for e-payments');
+                setIsSubmitting(false);
+                return;
+            }
 
-        const updates: Partial<JobOrder> = {
+            const hasMissingShoeDetails = shoes.some((shoe) => {
+                const size = (shoe.shoeSize || '').trim();
+                const color = Array.isArray(shoe.color)
+                    ? shoe.color.filter(Boolean).join(', ').trim()
+                    : String(shoe.color || '').trim();
+                return !size || !color;
+            });
+            if (hasMissingShoeDetails) {
+                toast.error('Size and Color must be filled out for every item.');
+                setIsSubmitting(false);
+                return;
+            }
+
+            const updates: Partial<JobOrder> = {
             customerName: finalName,
             contactNumber: contactNumber.trim(),
             shippingPreference: shippingPreference as any,
@@ -313,12 +332,24 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                 });
 
                 return {
-                    id: `${order.id}-${shoe.id}`,
+                    // P1-8 FIX: this previously sent a composite "${order.id}-${shoe.id}"
+                    // string (e.g. "105-42"). The backend's PUT /api/orders/{id} item-update
+                    // loop only applies per-item field changes when `str(id).isdigit()` is
+                    // true (see backend/main.py update_order()) so it can look the row up by
+                    // its real numeric Item.item_id — a composite id with a dash always
+                    // failed that check, silently no-op'ing EVERY shoe's edits (brand, model,
+                    // material, color, size, quantity, inventoryUsed), not just one. `shoe.id`
+                    // is already the correct plain numeric backend item_id for existing items
+                    // (restored via parseInt(...) when this modal loaded the order below), so
+                    // send it as-is instead of re-wrapping it in a composite string.
+                    id: String(shoe.id),
                     brand: shoe.brand || '',
                     shoeModel: shoe.shoeModel || '',
                     shoeMaterial: shoe.shoeMaterial || '',
-                    shoeSize: shoe.shoeSize || '',
-                    color: shoe.color || '',
+                    shoeSize: (shoe.shoeSize || '').trim(),
+                    color: Array.isArray(shoe.color)
+                        ? shoe.color.filter(Boolean).join(', ')
+                        : (shoe.color || ''),
                     quantity: shoe.quantity || 1,
                     condition: shoe.condition,
                     baseService: shoe.baseService,
@@ -348,10 +379,16 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
             updates.quantity = shoes.reduce((acc, s) => acc + (s.quantity || 1), 0);
         }
 
-        onSave(order.id, updates);
+        await onSave(order.id, updates);
         toast.success('Order details updated');
         onOpenChange(false);
-    };
+    } catch (error) {
+        console.error('Error updating order:', error);
+        toast.error('An error occurred while updating the order.');
+    } finally {
+        setIsSubmitting(false);
+    }
+};
 
     const updateShoe = (shoeId: number | string, updates: Partial<ShoeEntry>) => {
         setShoes(shoes.map(s => s.id === shoeId ? { ...s, ...updates } : s));
@@ -440,7 +477,7 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                             </div>
                         </div>
                         <div>
-                            <Label className={LABEL_STYLE}>Predicted Date</Label>
+                            <Label className={LABEL_STYLE}>Estimated Date</Label>
                             <div className="h-9 px-3 py-1.5 rounded-xl text-xs font-bold text-gray-700 bg-white border border-gray-100 flex items-center">
                                 {formatDate(order.predictedCompletionDate)}
                             </div>
@@ -512,15 +549,18 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                             {shoes.map((shoe, index) => {
                                 const isExpanded = expandedShoeId === shoe.id.toString() || shoes.length === 1;
                                 
-                                const allowedAddons = calculations.addOnServices.filter(addon => {
+                                const allowedAddons = calculations.addOnServices.filter(addon => isAddonVisibleForBaseServices(addon.name, shoe.baseService || [])).sort((a, b) => {
                                     const baseServicesArr = shoe.baseService || [];
-                                    const basicCleaningAddOns = ['Unyellowing', 'White Paint', 'Minor Restoration', 'Minor Retouch'];
-                                    const reglueAddOns = ['Add Glue Layer', 'Premium Glue', 'Midsole', 'Undersole', 'Midsole Full Reglue', 'Undersole Full Reglue', 'Middlesole Glue', 'Undersole Glue', 'Midsole Glue'];
-                                    if (baseServicesArr.includes('Basic Cleaning') && basicCleaningAddOns.includes(addon.name)) return true;
-                                    if (baseServicesArr.some(s => s.toLowerCase().includes('reglue')) && reglueAddOns.includes(addon.name)) return true;
-                                    const colorAddOns = ['2 Colors', '3 Colors'];
-                                    if (baseServicesArr.some(s => s.includes('Color Renewal')) && colorAddOns.includes(addon.name)) return true;
-                                    return false;
+                                    const hasColorRenewal = baseServicesArr.some((s: string) => s.includes('Color Renewal'));
+                                    const hasReglue = baseServicesArr.some((s: string) => s.toLowerCase().includes('reglue'));
+                                    
+                                    const getPriority = (addonName: string) => {
+                                        if (hasColorRenewal && (addonName === '2 Colors' || addonName === '3 Colors')) return 2;
+                                        if (hasReglue && (addonName.toLowerCase().includes('midsole') || addonName.toLowerCase().includes('undersole'))) return 1;
+                                        return 0;
+                                    };
+                                    
+                                    return getPriority(b.name) - getPriority(a.name);
                                 }).map(a => a.name);
                                 
                                 return (
@@ -606,7 +646,7 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                                         <Label className={LABEL_STYLE}>Color</Label>
                                                         <CreatableCombobox
                                                             options={SHOE_COLORS}
-                                                            value={shoe.color || ''}
+                                                            value={Array.isArray(shoe.color) ? shoe.color.filter(Boolean).join(', ') : (shoe.color || '')}
                                                             onChange={(val) => updateShoe(shoe.id, { color: val })}
                                                             placeholder="Select color"
                                                             searchPlaceholder="Search color..."
@@ -693,22 +733,21 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                                                                 let newServices = [...(shoe.baseService || [])];
                                                                                 if (checked) {
                                                                                     newServices.push(s.name);
+                                                                                    if (s.name === 'Minor Reglue') {
+                                                                                        newServices = newServices.filter((srv: string) => srv !== 'Full Reglue');
+                                                                                    }
+                                                                                    if (s.name === 'Full Reglue') {
+                                                                                        newServices = newServices.filter((srv: string) => srv !== 'Minor Reglue');
+                                                                                    }
                                                                                 } else {
-                                                                                    newServices = newServices.filter(srv => srv !== s.name);
+                                                                                    newServices = newServices.filter((srv: string) => srv !== s.name);
                                                                                 }
                                                                                 
-                                                                                const newAllowedAddons = calculations.addOnServices.filter(addon => {
-                                                                                    const baseServicesArr = newServices;
-                                                                                    const basicCleaningAddOns = ['Unyellowing', 'White Paint', 'Minor Restoration', 'Minor Retouch'];
-                                                                                    const reglueAddOns = ['Add Glue Layer', 'Premium Glue', 'Midsole', 'Undersole', 'Midsole Full Reglue', 'Undersole Full Reglue', 'Middlesole Glue', 'Undersole Glue', 'Midsole Glue'];
-                                                                                    if (baseServicesArr.includes('Basic Cleaning') && basicCleaningAddOns.includes(addon.name)) return true;
-                                                                                    if (baseServicesArr.some(bs => bs.toLowerCase().includes('reglue')) && reglueAddOns.includes(addon.name)) return true;
-                                                                                    const colorAddOns = ['2 Colors', '3 Colors'];
-                                                                                    if (baseServicesArr.some(bs => bs.includes('Color Renewal')) && colorAddOns.includes(addon.name)) return true;
-                                                                                    return false;
-                                                                                }).map(a => a.name);
+                                                                                const newAllowedAddons = calculations.addOnServices.filter(addon => isAddonVisibleForBaseServices(addon.name, newServices)).map(a => a.name);
                                                                                 
                                                                                 let newAddons = [...(shoe.addOns || [])].filter((a: any) => newAllowedAddons.includes(a.name));
+                                                                                newAddons = syncColorRenewalAddons(newAddons, newServices);
+                                                                                
                                                                                 updateShoe(shoe.id, { baseService: newServices, addOns: newAddons });
                                                                             }}
                                                                             className="mt-0.5"
@@ -741,7 +780,14 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                                                                 checked={isSelected}
                                                                                 onCheckedChange={(checked) => {
                                                                                     let newAddons = [...(shoe.addOns || [])];
-                                                                                    if (checked) {
+                                                                                    if (isColorCountAddon(addonName)) {
+                                                                                        newAddons = applyColorCountExclusive(
+                                                                                            newAddons,
+                                                                                            addonName,
+                                                                                            Boolean(checked),
+                                                                                            shoe.baseService || [],
+                                                                                        );
+                                                                                    } else if (checked) {
                                                                                         newAddons.push({ name: addonName, quantity: 1 });
                                                                                     } else {
                                                                                         newAddons = newAddons.filter((a: any) => a.name !== addonName);

@@ -152,6 +152,47 @@ def sync_data():
                     print(f"  -> [SYNC RECOVERY] Stale connections flushed. Next table will get a fresh connection.")
                     continue
 
+                # Never wipe locally-created accounts. Merge cloud users in;
+                # local-only users (created while offline) must survive restart/sync.
+                if table_name == "users":
+                    from database import upsert_user_in_session
+                    from models import Role
+                    from sqlalchemy.orm import sessionmaker as _sessionmaker
+                    MergeSession = _sessionmaker(bind=sqlite_engine)
+                    with MergeSession() as merge_db:
+                        for row in rows or []:
+                            mapping = dict(row._mapping)
+                            role_name = "staff"
+                            role_id = mapping.get("role_id")
+                            if role_id is not None:
+                                role_row = merge_db.query(Role).filter(Role.role_id == role_id).first()
+                                if role_row:
+                                    role_name = role_row.role_name
+                            upsert_user_in_session(
+                                merge_db,
+                                mapping.get("username"),
+                                mapping.get("email"),
+                                mapping.get("password_hash"),
+                                role_name,
+                                bool(mapping.get("is_active", True)),
+                            )
+                        merge_db.commit()
+                    print(f"  -> MERGED {len(rows or [])} cloud user(s) without deleting local-only accounts.")
+                    continue
+
+                preserved_item_fields = {}
+                if table_name == "items":
+                    try:
+                        preserved_item_fields = {
+                            int(row[0]): (row[1], row[2])
+                            for row in sqlite_conn.execute(
+                                text("SELECT item_id, shoe_size, color FROM items")
+                            ).fetchall()
+                            if (row[1] and str(row[1]).strip()) or (row[2] and str(row[2]).strip())
+                        }
+                    except Exception:
+                        preserved_item_fields = {}
+
                 # Delete existing local records
                 sqlite_conn.execute(text(f"DELETE FROM {table_name};"))
                 
@@ -168,6 +209,27 @@ def sync_data():
                     # Insert the filtered records into SQLite
                     sqlite_conn.execute(sqlite_table.insert(), insert_data)
                     print(f"  -> SUCCESS: Copied {len(rows)} records.")
+                    if table_name == "items" and preserved_item_fields:
+                        restored = 0
+                        for item_id, (size, color) in preserved_item_fields.items():
+                            result = sqlite_conn.execute(
+                                text(
+                                    """
+                                    UPDATE items
+                                    SET shoe_size = CASE
+                                        WHEN shoe_size IS NULL OR trim(shoe_size) = '' THEN :size
+                                        ELSE shoe_size END,
+                                        color = CASE
+                                        WHEN color IS NULL OR trim(color) = '' THEN :color
+                                        ELSE color END
+                                    WHERE item_id = :item_id
+                                    """
+                                ),
+                                {"size": size or "", "color": color or "", "item_id": item_id},
+                            )
+                            restored += result.rowcount or 0
+                        if restored:
+                            print(f"  -> PRESERVED local size/color on {restored} item(s) that cloud left blank.")
                 else:
                     print("  -> NOTE: Table is empty.")
 

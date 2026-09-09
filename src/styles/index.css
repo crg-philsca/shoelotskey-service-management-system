@@ -132,12 +132,22 @@ input[type="date"]::-webkit-datetime-edit-year-field {
 }
 
 @media print {
+  /* Hide Chrome/Edge default URL, date, and title in the page margin. */
+  @page {
+    margin: 0;
+  }
+
   /* Hide sidebar and top header */
   .lg\:flex.flex-col.bg-red-700, 
   header.bg-white.border-b,
   button,
   .no-print {
     display: none !important;
+  }
+
+  #report-download-target {
+    padding: 14mm 16mm 16mm 16mm !important;
+    margin-top: 0 !important;
   }
   
   /* Ensure the main content container fills the page */

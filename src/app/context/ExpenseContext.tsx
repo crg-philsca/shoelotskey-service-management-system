@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { Expense } from '@/app/lib/mockData';
 import { useActivities } from './ActivityContext';
+// P1-10 FIX: centralized API base resolution (see src/app/lib/apiBase.ts).
+import { API_BASE } from '@/app/lib/apiBase';
 
 interface ExpenseContextType {
     expenses: Expense[];
@@ -10,10 +12,6 @@ interface ExpenseContextType {
 }
 
 const ExpenseContext = createContext<ExpenseContextType | undefined>(undefined);
-
-const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '5173'))
-    ? `http://${window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname}:8000/api`
-    : '/api';
 
 export function ExpenseProvider({ children, user }: { children: ReactNode, user: { token: string } }) {
     const { addActivity } = useActivities();

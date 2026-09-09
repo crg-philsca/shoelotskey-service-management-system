@@ -10,6 +10,7 @@ import { formatPeso } from '@/app/lib/utils';
 import { useServices } from '@/app/context/ServiceContext';
 import { useInventory } from '@/app/context/InventoryContext';
 import { getInventoryPresentation } from '@/app/lib/inventoryPresentation';
+import { isAddonVisibleForBaseServices, applyColorCountExclusive, syncColorRenewalAddons, isColorCountAddon } from '@/app/lib/serviceCompatibility';
 
 interface ShoeItemProps {
     shoe: any;
@@ -144,6 +145,13 @@ export const ShoeItem: React.FC<ShoeItemProps> = ({ shoe, index, updateShoe, rem
                                                                 ? [...currentServices, service.name]
                                                                 : currentServices.filter((s: string) => s !== service.name);
 
+                                                            if (checked && service.name === 'Minor Reglue') {
+                                                                newServices = newServices.filter((s: string) => s !== 'Full Reglue');
+                                                            }
+                                                            if (checked && service.name === 'Full Reglue') {
+                                                                newServices = newServices.filter((s: string) => s !== 'Minor Reglue');
+                                                            }
+
                                                             const requiresCleaning = ['Minor Reglue', 'Full Reglue', 'Color Renewal'];
                                                             if (checked && requiresCleaning.includes(service.name)) {
                                                                 if (!newServices.includes('Basic Cleaning')) {
@@ -154,6 +162,9 @@ export const ShoeItem: React.FC<ShoeItemProps> = ({ shoe, index, updateShoe, rem
                                                             if (!checked && service.name === 'Basic Cleaning') {
                                                                 newServices = newServices.filter((s: string) => !requiresCleaning.includes(s));
                                                             }
+
+                                                            let currentAddOns = shoe.addOns ? [...shoe.addOns] : [];
+                                                            currentAddOns = syncColorRenewalAddons(currentAddOns, newServices);
 
                                                             // [DYNAMIC INVENTORY] Auto-suggest chemicals based on service
                                                             let newInventory = [...(shoe.inventoryUsed || [])];
@@ -176,7 +187,8 @@ export const ShoeItem: React.FC<ShoeItemProps> = ({ shoe, index, updateShoe, rem
 
                                                             updateShoe(shoe.id, { 
                                                                 baseService: newServices,
-                                                                inventoryUsed: newInventory 
+                                                                inventoryUsed: newInventory,
+                                                                addOns: currentAddOns
                                                             });
                                                         }}
                                                         className="h-4 w-4 data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600"
@@ -205,15 +217,18 @@ export const ShoeItem: React.FC<ShoeItemProps> = ({ shoe, index, updateShoe, rem
                                         </div>
                                     ) : (
                                         <div className="grid grid-cols-2 gap-2 flex-grow overflow-y-auto max-h-[220px] pr-1 custom-scrollbar">
-                                            {addOnServices.filter(addon => {
+                                            {addOnServices.filter(addon => isAddonVisibleForBaseServices(addon.name, shoe.baseService || [])).sort((a, b) => {
                                                 const baseServicesArr = shoe.baseService || [];
-                                                const basicCleaningAddOns = ['Unyellowing', 'White Paint', 'Minor Restoration', 'Minor Retouch'];
-                                                const reglueAddOns = ['Add Glue Layer', 'Premium Glue', 'Midsole', 'Undersole', 'Midsole Full Reglue', 'Undersole Full Reglue', 'Middlesole Glue', 'Undersole Glue', 'Midsole Glue'];
-                                                if (baseServicesArr.includes('Basic Cleaning') && basicCleaningAddOns.includes(addon.name)) return true;
-                                                if (baseServicesArr.some((s: string) => s.toLowerCase().includes('reglue')) && reglueAddOns.includes(addon.name)) return true;
-                                                const colorAddOns = ['2 Colors', '3 Colors'];
-                                                if (baseServicesArr.some((s: string) => s.includes('Color Renewal')) && colorAddOns.includes(addon.name)) return true;
-                                                return false;
+                                                const hasColorRenewal = baseServicesArr.some((s: string) => s.includes('Color Renewal'));
+                                                const hasReglue = baseServicesArr.some((s: string) => s.toLowerCase().includes('reglue'));
+                                                
+                                                const getPriority = (addonName: string) => {
+                                                    if (hasColorRenewal && (addonName === '2 Colors' || addonName === '3 Colors')) return 2;
+                                                    if (hasReglue && (addonName.toLowerCase().includes('midsole') || addonName.toLowerCase().includes('undersole'))) return 1;
+                                                    return 0;
+                                                };
+                                                
+                                                return getPriority(b.name) - getPriority(a.name);
                                             }).map((addon) => {
                                                 const isChecked = shoe.addOns.some((a: any) => a.name === addon.name);
                                                 const addonItem = shoe.addOns.find((a: any) => a.name === addon.name);
@@ -224,9 +239,19 @@ export const ShoeItem: React.FC<ShoeItemProps> = ({ shoe, index, updateShoe, rem
                                                             <Checkbox
                                                                 checked={isChecked}
                                                                 onCheckedChange={(checked) => {
-                                                                    let newAddOns = checked
-                                                                        ? [...shoe.addOns, { name: addon.name, quantity: 1 }]
-                                                                        : shoe.addOns.filter((a: any) => a.name !== addon.name);
+                                                                    let newAddOns = shoe.addOns || [];
+                                                                    if (isColorCountAddon(addon.name)) {
+                                                                        newAddOns = applyColorCountExclusive(
+                                                                            newAddOns,
+                                                                            addon.name,
+                                                                            Boolean(checked),
+                                                                            shoe.baseService || [],
+                                                                        );
+                                                                    } else {
+                                                                        newAddOns = checked
+                                                                            ? [...newAddOns, { name: addon.name, quantity: 1 }]
+                                                                            : newAddOns.filter((a: any) => a.name !== addon.name);
+                                                                    }
                                                                     updateShoe(shoe.id, { addOns: newAddOns });
                                                                 }}
                                                                 className="h-4 w-4 data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600"

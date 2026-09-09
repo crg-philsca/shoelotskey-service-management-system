@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/app/components/ui/checkbox';
 import { Textarea } from '@/app/components/ui/textarea';
 import { toast } from 'sonner';
-import { Plus, X, User, Hash, ClipboardList, RotateCcw, Calendar as CalendarIcon, Clock } from 'lucide-react';
+import { Plus, X, User, Hash, ClipboardList, RotateCcw, Calendar as CalendarIcon, Clock, Sparkles } from 'lucide-react';
 import { useOrders } from '../context/OrderContext';
 import { useServices } from '../context/ServiceContext';
 import type { ShippingPreference, PaymentMethod, PaymentStatus, Priority } from '@/app/types';
@@ -15,8 +15,48 @@ import { format as dateFnsFormat } from 'date-fns';
 import { CreatableCombobox } from './ui/creatable-combobox';
 import { useActivities } from '@/app/context/ActivityContext';
 import { useInventory } from '../context/InventoryContext';
-import { trainPredictionModel } from '@/app/lib/mlPredictor';
 import { getInventoryPresentation } from '@/app/lib/inventoryPresentation';
+import { API_BASE } from '@/app/lib/apiBase';
+import { isAddonVisibleForBaseServices, applyColorCountExclusive, syncColorRenewalAddons, shoeHasBothColorCounts, isColorCountAddon } from '@/app/lib/serviceCompatibility';
+import { nextOrderId } from '@/app/lib/orderNumber';
+import { calculateOfficialReleaseBreakdown, formatBusinessRuleLabel } from '@/app/lib/businessRules';
+
+function formatMlModelName(name?: string | null): string {
+    if (!name) return 'Random Forest Regression';
+    if (/heuristic|fallback/i.test(name)) return name;
+    if (/random forest/i.test(name)) return 'Random Forest Regression';
+    return name;
+}
+
+function toDateInputValue(isoOrDate: string | Date | null | undefined): string {
+    if (!isoOrDate) return '';
+    if (typeof isoOrDate === 'string') {
+        const match = isoOrDate.match(/^(\d{4}-\d{2}-\d{2})/);
+        if (match) return match[1];
+    }
+    const parsed = typeof isoOrDate === 'string' ? new Date(isoOrDate) : isoOrDate;
+    if (!parsed || isNaN(parsed.getTime())) return '';
+    return dateFnsFormat(parsed, 'yyyy-MM-dd');
+}
+
+type ServerPrediction = {
+    predicted_date?: string;
+    predicted_date_ymd?: string;
+    predicted_days?: number;
+    source?: string;
+    algorithm?: string;
+    model_loaded?: boolean;
+    fallback_reason?: string | null;
+    authoritative?: string;
+    business_rule_days?: number;
+    business_rule_date?: string;
+    ml_predicted_days?: number | null;
+    ml_predicted_date?: string | null;
+    ml_model?: string;
+    ml_status?: string;
+    ml_source?: string;
+    ml_reason?: string | null;
+};
 
 // Dropdown options
 const SHOE_BRANDS = [
@@ -179,7 +219,7 @@ function ClearableInput({ id, value, onChange, placeholder, className, required,
     );
 }
 
-function FormattedDateInput({ value, onChange, className, id }: { value: string; onChange: (val: string) => void; className?: string; id?: string }) {
+function FormattedDateInput({ value, onChange, className, id, iconClassName }: { value: string; onChange: (val: string) => void; className?: string; id?: string; iconClassName?: string }) {
     const hiddenDateRef = useRef<HTMLInputElement>(null);
 
     const toDisplay = (iso: string) => {
@@ -256,7 +296,7 @@ function FormattedDateInput({ value, onChange, className, id }: { value: string;
                 type="button"
                 onClick={openPicker}
                 title="Select date"
-                className="absolute right-2.5 text-gray-400 hover:text-red-600 transition-colors cursor-pointer p-0.5"
+                className={`absolute right-2.5 ${iconClassName || 'text-gray-400'} hover:text-red-600 transition-colors cursor-pointer p-0.5`}
             >
                 <CalendarIcon size={14} />
             </button>
@@ -308,11 +348,17 @@ function FormattedTimeInput({ value, onChange, className, id }: { value: string;
 }
 
 export interface JobOrderFormProps {
-    user?: { username: string; role: 'owner' | 'staff', token?: string };
+    user?: { username: string; role: 'owner' | 'staff' | 'admin', token?: string };
     onSuccess?: () => void;
     onCancel?: () => void;
     initialOrder?: any;
     mode?: 'create' | 'edit';
+}
+
+function shoeColorValue(shoe: { color?: string | string[]; otherColor?: string }) {
+    const raw = shoe.color === 'Other' ? (shoe.otherColor || '') : (shoe.color || '');
+    if (Array.isArray(raw)) return raw.map((c) => String(c).trim()).filter(Boolean).join(', ');
+    return String(raw || '').trim();
 }
 
 export default function JobOrderFormComponent({ user, onSuccess, onCancel, initialOrder, mode = 'create' }: JobOrderFormProps) {
@@ -377,13 +423,6 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
         inventoryUsed: [],
     }]);
 
-    // Train ML predictor with historical data
-    useEffect(() => {
-        if (orders && orders.length > 0) {
-            trainPredictionModel(orders);
-        }
-    }, [orders]);
-
     const [priorityLevel, setPriorityLevel] = useState<Priority>('regular');
     const [basicCleaningRushReduction, setBasicCleaningRushReduction] = useState('9');
     const [deliveryAddress, setDeliveryAddress] = useState({
@@ -406,6 +445,9 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
     const [orderTime, setOrderTime] = useState(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
     const [manualReleaseDate, setManualReleaseDate] = useState('');
     const [releaseTime, setReleaseTime] = useState('');
+    const [serverPrediction, setServerPrediction] = useState<ServerPrediction | null>(null);
+    const [predictionLoading, setPredictionLoading] = useState(false);
+    const [predictionError, setPredictionError] = useState<string | null>(null);
 
     useEffect(() => {
         if (initialOrder) {
@@ -488,12 +530,12 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
             }
             if (initialOrder.createdAt) {
                  const dt = new Date(initialOrder.createdAt);
-                 setOrderDate(dateFnsFormat(dt, 'yyyy-MM-dd'));
+                 setOrderDate(toDateInputValue(initialOrder.createdAt));
                  setOrderTime(dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
             }
             if (initialOrder.predictedCompletionDate) {
                  const dt = new Date(initialOrder.predictedCompletionDate);
-                 setManualReleaseDate(dateFnsFormat(dt, 'yyyy-MM-dd'));
+                 setManualReleaseDate(toDateInputValue(initialOrder.predictedCompletionDate));
                  setReleaseTime(dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
             }
         }
@@ -553,30 +595,15 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
         setReleaseTime('');
     };
     const [generatedOrderNumber, setGeneratedOrderNumber] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
         const today = new Date();
-        const year = today.getFullYear();
-        const month = String(today.getMonth() + 1).padStart(2, '0');
-        const day = String(today.getDate()).padStart(2, '0');
-        const prefix = `ORD-${year}-${month}-${day}-`;
-
-        // Extract numeric sequences, handling potential -A, -B suffixes
         const safeOrders = Array.isArray(orders) ? orders : [];
-        const existingIds = safeOrders
-            .filter(o => o && o.orderNumber && typeof o.orderNumber === 'string' && o.orderNumber.startsWith(prefix))
-            .map(o => {
-                const parts = o.orderNumber.split('-');
-                const seqPart = parts[4] || '';
-                // Only extract the numeric part if it exists
-                const numericMatch = seqPart.match(/\d+/);
-                return numericMatch ? parseInt(numericMatch[0]) : 0;
-            })
-            .filter(n => !isNaN(n) && n > 0);
-
-        const maxSeq = existingIds.length > 0 ? Math.max(...existingIds) : 0;
-        const nextSeq = String(maxSeq + 1).padStart(3, '0');
-        setGeneratedOrderNumber(`${prefix}${nextSeq}`);
+        const existingNumbers = safeOrders
+            .map(o => o && o.orderNumber)
+            .filter((n): n is string => typeof n === 'string');
+        setGeneratedOrderNumber(nextOrderId(today, existingNumbers));
     }, [orders]);
 
     const isRushEligible = useMemo(() => {
@@ -618,116 +645,25 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
 
 
 
-    const parseDuration = (val: string | number | undefined): number => {
-        if (val === undefined) return 0;
-        if (typeof val === 'number') return val;
-        // if string like '7-10', split by - and take the max
-        if (val.includes('-')) {
-            const parts = val.split('-').map(p => parseInt(p.trim(), 10)).filter(n => !isNaN(n));
-            return parts.length > 0 ? Math.max(...parts) : 0;
-        }
-        const parsed = parseInt(val, 10);
-        return isNaN(parsed) ? 0 : parsed;
-    };
-
-    const mlBreakdown = useMemo(() => {
-        let baseDays = 0;
-        let addOnDays = 0;
-        let priorityDays = 0;
-
-        // Gather all services across all shoes
-        let hasBasicCleaning = false;
-        let hasMinorReglue = false;
-        let hasFullReglue = false;
-        let hasColorRenewal = false;
-        let hasUnyellowing = false;
-        let hasMinorRestoration = false;
-        let hasMinorRetouch = false;
-
-        shoes.forEach(shoe => {
-            const baseServicesArr = shoe.baseService || [];
-            const addOnsArr = shoe.addOns || [];
-
-            if (baseServicesArr.includes('Basic Cleaning')) hasBasicCleaning = true;
-            if (baseServicesArr.includes('Minor Reglue')) hasMinorReglue = true;
-            if (baseServicesArr.includes('Full Reglue')) hasFullReglue = true;
-            if (baseServicesArr.includes('Color Renewal')) hasColorRenewal = true;
-
-            addOnsArr.forEach((a: any) => {
-                const name = typeof a === 'string' ? a : (a.name || '');
-                if (name === 'Unyellowing') hasUnyellowing = true;
-                if (name === 'Minor Restoration') hasMinorRestoration = true;
-                if (name === 'Minor Retouch') hasMinorRetouch = true;
-            });
+    const catalogDurations = useMemo(() => {
+        const map: Record<string, string | number> = {};
+        [...baseServices, ...addOnServices].forEach((service) => {
+            if (service.name && service.durationDays !== undefined) {
+                map[service.name] = service.durationDays;
+            }
         });
+        return map;
+    }, [baseServices, addOnServices]);
 
-        // Apply rules:
-        let overriddenDays: number | null = null;
-
-        // Basic Cleaning + other services rules
-        if (hasBasicCleaning) {
-            if (hasColorRenewal || hasFullReglue) {
-                overriddenDays = 25;
-            } else if (hasMinorRestoration || hasMinorRetouch) {
-                overriddenDays = 20;
-            } else if (hasUnyellowing) {
-                overriddenDays = 15;
-            } else if (hasMinorReglue) {
-                overriddenDays = 10;
-            }
-        } 
-        // Other services (Full Reglue, Color Renewal) + Unyellowing -> 25 days default
-        else if ((hasFullReglue || hasColorRenewal) && hasUnyellowing) {
-            overriddenDays = 25;
-        }
-
-        if (overriddenDays !== null) {
-            baseDays = overriddenDays;
-            addOnDays = 0;
-            priorityDays = 0;
-        } else {
-            shoes.forEach(shoe => {
-                let servicesArr = shoe.baseService || [];
-
-                // Logic: Basic Cleaning duration is included in Reglue and Color Renewal. 
-                const hasDurationInclusive = servicesArr.some(s =>
-                    s.toLowerCase().includes('reglue') || s.toLowerCase().includes('color renewal')
-                );
-
-                const filteredDurationServices = hasDurationInclusive
-                    ? servicesArr.filter(s => s !== 'Basic Cleaning')
-                    : servicesArr;
-
-                filteredDurationServices.forEach((serviceName: string) => {
-                    const service = baseServices.find(s => s.name === serviceName);
-                    if (service && service.durationDays !== undefined) {
-                        baseDays += parseDuration(service.durationDays);
-                    } else if (serviceName === 'Basic Cleaning') {
-                        baseDays += 10;
-                    } else {
-                        baseDays += 25;
-                    }
-                });
-
-                shoe.addOns.forEach((addon: { name: string; quantity?: number }) => {
-                    const addOnDetail = addOnServices.find(s => s.name === addon.name);
-                    if (addOnDetail && addOnDetail.durationDays !== undefined) {
-                        addOnDays += parseDuration(addOnDetail.durationDays) * (addon.quantity || 1);
-                    }
-                });
-            });
-
-            if (priorityLevel === 'rush') {
-                priorityDays = - (parseInt(basicCleaningRushReduction, 10) || 9);
-            }
-        }
-
-        const safeShoes = Array.isArray(shoes) ? shoes : [];
-        const hasServices = safeShoes.some(shoe => (Array.isArray(shoe.baseService) ? shoe.baseService : []).length > 0 || (Array.isArray(shoe.addOns) ? shoe.addOns : []).length > 0);
-        const totalDays = hasServices ? Math.max(1, baseDays + addOnDays + priorityDays) : 0;
-
-        return { baseDays, addOnDays, priorityDays, totalDays };
-    }, [shoes, baseServices, addOnServices, priorityLevel, basicCleaningRushReduction]);
+    const mlBreakdown = useMemo(
+        () => calculateOfficialReleaseBreakdown(
+            shoes,
+            priorityLevel,
+            parseInt(basicCleaningRushReduction, 10) || 9,
+            catalogDurations,
+        ),
+        [shoes, priorityLevel, basicCleaningRushReduction, catalogDurations],
+    );
     const calculatePredictedDays = () => {
         const hasServices = shoes.some(shoe => (Array.isArray(shoe.baseService) ? shoe.baseService : []).length > 0 || shoe.addOns.length > 0);
         if (!hasServices) return 0;
@@ -816,6 +752,77 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
         }
     }, [paymentStatus, grandTotal, isAmountReceivedTyped]);
 
+    const officialDays = mlBreakdown.totalDays;
+    const officialReleaseYmd = (() => {
+        const val = isNaN(officialDays) ? 0 : officialDays;
+        if (!val) return '';
+        const d = new Date(new Date(orderDate).getTime() + val * 24 * 60 * 60 * 1000);
+        return dateFnsFormat(isNaN(d.getTime()) ? new Date() : d, 'yyyy-MM-dd');
+    })();
+    const serverOfficialYmd = serverPrediction?.authoritative === 'business_rule'
+        ? (serverPrediction.business_rule_date || serverPrediction.predicted_date_ymd || '')
+        : '';
+    const previewReleaseYmd = manualReleaseDate || officialReleaseYmd || serverOfficialYmd;
+
+    useEffect(() => {
+        const hasServices = shoes.some(shoe =>
+            (Array.isArray(shoe.baseService) ? shoe.baseService : []).length > 0
+            || (Array.isArray(shoe.addOns) ? shoe.addOns : []).length > 0
+        );
+        if (!hasServices || manualReleaseDate) {
+            if (!hasServices) setServerPrediction(null);
+            setPredictionError(null);
+            setPredictionLoading(false);
+            return;
+        }
+
+        const controller = new AbortController();
+        const timer = window.setTimeout(async () => {
+            setPredictionLoading(true);
+            setPredictionError(null);
+            try {
+                const createdDate = new Date(`${orderDate}T${orderTime || '00:00'}:00`);
+                const payload = {
+                    items: shoes.map((shoe) => ({
+                        brand: shoe.brand === 'Other' ? (shoe.otherBrand || 'Other') : (shoe.brand || 'Other'),
+                        shoeModel: shoe.shoeModel === 'Other' ? (shoe.otherModel || 'Other') : (shoe.shoeModel || 'Other'),
+                        shoeMaterial: shoe.shoeMaterial === 'Other' ? (shoe.otherMaterial || 'Other') : (shoe.shoeMaterial || 'Other'),
+                        quantity: shoe.quantity,
+                        condition: shoe.condition,
+                        baseService: shoe.baseService,
+                        addOns: shoe.addOns,
+                    })),
+                    priorityLevel,
+                    rushReductionDays: priorityLevel === 'rush' ? parseInt(basicCleaningRushReduction, 10) || 9 : undefined,
+                    grandTotal: totals.grandTotal,
+                    transactionDate: createdDate.toISOString(),
+                };
+                const res = await fetch(`${API_BASE}/predict`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(user?.token ? { Authorization: `Bearer ${user.token}` } : {}),
+                    },
+                    body: JSON.stringify(payload),
+                    signal: controller.signal,
+                });
+                if (!res.ok) throw new Error('Prediction request failed');
+                const data: ServerPrediction = await res.json();
+                setServerPrediction(data);
+            } catch (err: any) {
+                if (err?.name === 'AbortError') return;
+                setPredictionError('Using catalog estimate until the server prediction is available.');
+            } finally {
+                setPredictionLoading(false);
+            }
+        }, 350);
+
+        return () => {
+            window.clearTimeout(timer);
+            controller.abort();
+        };
+    }, [shoes, priorityLevel, orderDate, orderTime, totals.grandTotal, manualReleaseDate, user?.token]);
+
 
     const addShoe = () => {
         setShoes([...shoes, {
@@ -857,32 +864,44 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
      * 2. Calculates predicted completion date using ML parameters (priority).
      * 3. Triggers OrderContext to persist to FastAPI backend.
      */
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (isSubmitting) return;
+        setIsSubmitting(true);
+        try {
+            const finalCustomerName = customerName.trim().replace(/\s+/g, ' ');
+            const finalContactNumber = contactNumber.trim();
 
-        // [REQUIREMENT 11] Auto Trim Spaces: "   John Doe" becomes "John Doe"
-        const finalCustomerName = customerName.trim().replace(/\s+/g, ' ');
-        const finalContactNumber = contactNumber.trim();
+            if (!finalCustomerName) {
+                toast.error('Please enter customer name (required)');
+                setIsSubmitting(false);
+                return;
+            }
+            setCustomerName(finalCustomerName);
 
-        if (!finalCustomerName) {
-            toast.error('Please enter customer name (required)');
-            return;
-        }
-        setCustomerName(finalCustomerName);
-
-        const contactDigits = finalContactNumber ? finalContactNumber.replace(/\D/g, '') : '';
-        if (contactDigits.length !== 11) {
-            toast.error('Contact number must be exactly 11 digits (e.g., 09xx-xxx-xxxx)');
-            return;
-        }
+            const contactDigits = finalContactNumber ? finalContactNumber.replace(/\D/g, '') : '';
+            if (contactDigits.length !== 11) {
+                toast.error('Contact number must be exactly 11 digits (e.g., 09xx-xxx-xxxx)');
+                setIsSubmitting(false);
+                return;
+            }
 
         const hasMissingShoeDetails = shoes.some(shoe => {
             const b = shoe.brand === 'Other' ? shoe.otherBrand : shoe.brand;
             const noService = !shoe.baseService || shoe.baseService.length === 0;
-            return !b || !b.trim() || noService;
+            const size = (shoe.shoeSize || '').trim();
+            const color = shoeColorValue(shoe);
+            return !b || !b.trim() || noService || !size || !color;
         });
         if (hasMissingShoeDetails) {
-            toast.error('Brand and Base Service must be filled out for every item.');
+            toast.error('Brand, Size, Color, and Base Service must be filled out for every item.');
+            setIsSubmitting(false);
+            return;
+        }
+
+        if (shoes.some((shoe) => shoeHasBothColorCounts(shoe.addOns || []))) {
+            toast.error('Color Renewal can use either 2 Colors or 3 Colors, not both.');
+            setIsSubmitting(false);
             return;
         }
 
@@ -890,12 +909,14 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
             const cleanRef = referenceNo ? referenceNo.replace(/\D/g, '') : '';
             if (!cleanRef || cleanRef.length !== 13) {
                 toast.error('GCash reference number must be filled out and exactly 13 digits.');
+                setIsSubmitting(false);
                 return;
             }
         } else if (paymentMethod === 'maya') {
             const cleanRef = referenceNo ? referenceNo.replace(/[^a-zA-Z0-9]/g, '') : '';
             if (!cleanRef || cleanRef.length !== 12) {
                 toast.error('Maya reference number/ID must be filled out and exactly 12 alphanumeric characters.');
+                setIsSubmitting(false);
                 return;
             }
         }
@@ -903,10 +924,12 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
         if (shippingPreference === 'delivery') {
             if (!deliveryAddress.houseNo || !deliveryAddress.street || !deliveryAddress.province || !deliveryAddress.city || !deliveryAddress.barangay || !deliveryAddress.zipCode) {
                 toast.error('Please enter complete delivery address');
+                setIsSubmitting(false);
                 return;
             }
             if (!deliveryCourier) {
                 toast.error('Please select a delivery courier');
+                setIsSubmitting(false);
                 return;
             }
         }
@@ -951,7 +974,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
             shoeModel: shoes[0].shoeModel === 'Other' ? (shoes[0].otherModel || 'Other') : (shoes[0].shoeModel || 'Other'),
             shoeMaterial: shoes[0].shoeMaterial === 'Other' ? (shoes[0].otherMaterial || 'Other') : (shoes[0].shoeMaterial || 'Other'),
             shoeSize: shoes[0].shoeSize || '',
-            color: shoes[0].color === 'Other' ? (shoes[0].otherColor || 'Other') : (shoes[0].color || ''),
+            color: shoeColorValue(shoes[0]),
             baseService: shoes[0].baseService,
             historicalBasePrices: (shoes[0].baseService || []).map(serviceName => {
                 const service = baseServices.find(s => s.name === serviceName);
@@ -983,7 +1006,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                     shoeModel: shoe.shoeModel === 'Other' ? (shoe.otherModel || 'Other') : (shoe.shoeModel || 'Other'),
                     shoeMaterial: shoe.shoeMaterial === 'Other' ? (shoe.otherMaterial || 'Other') : (shoe.shoeMaterial || 'Other'),
                     shoeSize: shoe.shoeSize,
-                    color: shoe.color === 'Other' ? (shoe.otherColor || 'Other') : shoe.color,
+                    color: shoeColorValue(shoe),
                     quantity: shoe.quantity,
                     condition: shoe.condition,
                     baseService: shoe.baseService,
@@ -1018,8 +1041,12 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
             transactionDate: createdDate,
             processedBy: user?.username || 'Current User',
             status: 'new-order',
+            // Official expected_at is computed on the server from Shoelotskey business
+            // rules. mlAutoPredicted tells the backend to ignore any client date and
+            // persist the business-rule date. Random Forest is returned separately and
+            // never becomes expected_at.
+            mlAutoPredicted: !manualReleaseDate,
             predictedCompletionDate: (() => {
-                // LOGIC: Calculate expected delivery date based on priority, OR use manual override
                 if (manualReleaseDate) {
                     const date = new Date(manualReleaseDate);
                     if (releaseTime) {
@@ -1027,6 +1054,11 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                         date.setHours(rHours, rMinutes, 0, 0);
                     }
                     return date;
+                }
+                const authoritativeYmd = officialReleaseYmd || serverOfficialYmd;
+                if (authoritativeYmd) {
+                    const date = new Date(`${authoritativeYmd}T${releaseTime || '00:00'}:00`);
+                    if (!isNaN(date.getTime())) return date;
                 }
                 const daysToAdd = calculatePredictedDays();
                 const date = new Date(createdDate.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
@@ -1045,7 +1077,18 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
             }]
         };
 
-        addOrder(newOrder);
+        // P1-7 FIX: previously this call was not awaited, so the success toast, activity
+        // log, and full form reset below always ran immediately regardless of whether the
+        // backend actually confirmed the order — a definite backend rejection (e.g. a 400/
+        // 500) could still show "Order created successfully!" and wipe the user's form data.
+        // Now we wait for genuine confirmation (saved directly, or durably queued for
+        // offline auto-sync) before treating this as a success; on a hard failure we keep
+        // the form data intact and re-enable Submit so the user can safely retry.
+        const orderConfirmed = await addOrder(newOrder);
+        if (!orderConfirmed) {
+            setIsSubmitting(false);
+            return;
+        }
 
         const shoeSummaryStr = shoes.map((s, idx) => {
             const bServices = (Array.isArray(s.baseService) ? s.baseService : []).join(', ');
@@ -1133,6 +1176,12 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
         setOrderTime(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
         setManualReleaseDate('');
         setReleaseTime('');
+        } catch (error) {
+            console.error('Error submitting form:', error);
+            toast.error('An error occurred while creating the order.');
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const formatReferenceNo = (value: string) => {
@@ -1525,7 +1574,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                         <Label className={LABEL_STYLE}>Color</Label>
                                                         <CreatableCombobox
                                                             options={SHOE_COLORS}
-                                                            value={shoe.color || ''}
+                                                            value={Array.isArray(shoe.color) ? shoe.color.filter(Boolean).join(', ') : (shoe.color || '')}
                                                             onChange={(val) => updateShoe(shoe.id, { color: val })}
                                                             placeholder="Select Color"
                                                             searchPlaceholder="Type color (e.g. White, Black)"
@@ -1720,7 +1769,8 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                                                         newServices = newServices.filter(s => !requiresCleaning.includes(s));
                                                                                     }
 
-                                                                                    updateShoe(shoe.id, { baseService: newServices });
+                                                                                    const nextAddOns = syncColorRenewalAddons(shoe.addOns || [], newServices);
+                                                                                    updateShoe(shoe.id, { baseService: newServices, addOns: nextAddOns });
                                                                                 }}
                                                                                 className="h-4 w-4 data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600"
                                                                             />
@@ -1756,18 +1806,9 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                                 <span className="text-xs font-bold italic text-gray-300 uppercase tracking-widest">Awaiting Base Service</span>
                                                             </div>
                                                         ) : (
-                                                            <div className="max-h-[108px] overflow-y-auto pr-1 custom-scrollbar">
+                                                            <div className="max-h-[160px] overflow-y-auto pr-1 custom-scrollbar">
                                                                 <div className="grid grid-cols-2 gap-2">
-                                                                    {addOnServices.filter(addon => {
-                                                                        const baseServicesArr = shoe.baseService || [];
-                                                                        const basicCleaningAddOns = ['Unyellowing', 'White Paint', 'Minor Restoration', 'Minor Retouch'];
-                                                                        const reglueAddOns = ['Add Glue Layer', 'Premium Glue', 'Midsole', 'Undersole', 'Midsole Full Reglue', 'Undersole Full Reglue', 'Middlesole Glue', 'Undersole Glue', 'Midsole Glue'];
-                                                                        if (baseServicesArr.includes('Basic Cleaning') && basicCleaningAddOns.includes(addon.name)) return true;
-                                                                        if (baseServicesArr.some(s => s.toLowerCase().includes('reglue')) && reglueAddOns.includes(addon.name)) return true;
-                                                                        const colorAddOns = ['2 Colors', '3 Colors'];
-                                                                        if (baseServicesArr.some(s => s.includes('Color Renewal')) && colorAddOns.includes(addon.name)) return true;
-                                                                        return false;
-                                                                    }).sort((a, b) => {
+                                                                    {addOnServices.filter(addon => isAddonVisibleForBaseServices(addon.name, shoe.baseService || [])).sort((a, b) => {
                                                                         const order: Record<string, number> = {
                                                                             'Unyellowing': 1,
                                                                             'Minor Retouch': 2,
@@ -1793,11 +1834,21 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                                                         id={`addon-${shoe.id}-${addon.id}`}
                                                                                         checked={isChecked}
                                                                                         onCheckedChange={(checked) => {
-                                                                                            let newAddOns = checked
-                                                                                                ? [...shoe.addOns, { name: addon.name, quantity: 1 }]
-                                                                                                : shoe.addOns.filter(a => a.name !== addon.name);
-                                                                                            if (addon.name === 'Unyellowing' && !checked) {
-                                                                                                newAddOns = newAddOns.filter(a => a.name !== 'White Paint');
+                                                                                            let newAddOns = shoe.addOns || [];
+                                                                                            if (isColorCountAddon(addon.name)) {
+                                                                                                newAddOns = applyColorCountExclusive(
+                                                                                                    newAddOns,
+                                                                                                    addon.name,
+                                                                                                    Boolean(checked),
+                                                                                                    shoe.baseService || [],
+                                                                                                );
+                                                                                            } else {
+                                                                                                newAddOns = checked
+                                                                                                    ? [...newAddOns, { name: addon.name, quantity: 1 }]
+                                                                                                    : newAddOns.filter(a => a.name !== addon.name);
+                                                                                                if (addon.name === 'Unyellowing' && !checked) {
+                                                                                                    newAddOns = newAddOns.filter(a => a.name !== 'White Paint');
+                                                                                                }
                                                                                             }
                                                                                             updateShoe(shoe.id, { addOns: newAddOns });
                                                                                         }}
@@ -1998,6 +2049,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                     value={orderDate}
                                                     onChange={(val) => setOrderDate(val)}
                                                     className="bg-white border-gray-100/50 h-9 rounded-xl text-xs text-gray-900 shadow-sm px-3 w-full"
+                                                    iconClassName="text-purple-600"
                                                 />
                                             </div>
                                             <div className="space-y-1 col-span-1 md:col-span-3">
@@ -2010,17 +2062,13 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                 />
                                             </div>
                                             <div className="space-y-1 col-span-1 md:col-span-3">
-                                                <Label className={LABEL_STYLE}>Release Date</Label>
+                                                <Label className={LABEL_STYLE}>Estimated Date</Label>
                                                 <FormattedDateInput
                                                     id="releaseDate"
-                                                    value={manualReleaseDate || (() => {
-                                                        const daysToAdd = calculatePredictedDays();
-                                                        const val = isNaN(daysToAdd) ? 7 : daysToAdd;
-                                                        const d = new Date(new Date(orderDate).getTime() + val * 24 * 60 * 60 * 1000);
-                                                        return dateFnsFormat(isNaN(d.getTime()) ? new Date() : d, 'yyyy-MM-dd');
-                                                    })()}
+                                                    value={previewReleaseYmd}
                                                     onChange={(val) => setManualReleaseDate(val)}
                                                     className="bg-white border-gray-100/50 h-9 rounded-xl text-xs text-gray-900 shadow-sm px-3 w-full"
+                                                    iconClassName="text-emerald-600"
                                                 />
                                             </div>
                                             <div className="space-y-1 col-span-1 md:col-span-3">
@@ -2032,19 +2080,44 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                     className="bg-white border-gray-100/50 h-9 rounded-xl text-xs text-gray-900 shadow-sm px-3 w-full"
                                                 />
                                             </div>
-                                            {/* ML Predicted Duration Breakdown */}
-                                            <div className="col-span-2 md:col-span-12 bg-blue-50 border border-blue-100/50 rounded-lg p-2 flex items-center justify-between text-[10px] text-blue-800 shadow-sm mt-1">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="font-bold flex items-center gap-1"><span className="text-blue-600 animate-pulse">✨</span> ML Prediction:</span>
-                                                    <span>
-                                                        {mlBreakdown.baseDays}d Base
-                                                        {mlBreakdown.addOnDays > 0 ? ` + ${mlBreakdown.addOnDays}d Add-on` : ''}
-                                                        {mlBreakdown.priorityDays < 0 ? ` - ${Math.abs(mlBreakdown.priorityDays)}d Rush` : (mlBreakdown.priorityDays > 0 ? ` + ${mlBreakdown.priorityDays}d Priority` : '')}
+                                            <div className="col-span-2 md:col-span-12 space-y-2 mt-1">
+                                                <div className="bg-emerald-50 border border-emerald-100/70 rounded-lg p-2 flex items-center justify-between gap-3 text-[10px] text-emerald-900 shadow-sm">
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                        <ClipboardList size={12} className="text-emerald-600 shrink-0" />
+                                                        <span className="font-bold shrink-0 uppercase tracking-wider">
+                                                            BUSINESS RULES:
+                                                        </span>
+                                                        <span>
+                                                            {manualReleaseDate
+                                                                ? `Manual date ${manualReleaseDate}`
+                                                                : officialDays > 0
+                                                                    ? formatBusinessRuleLabel(mlBreakdown)
+                                                                    : 'Select a service to estimate the release date'}
+                                                        </span>
+                                                    </div>
+                                                    <span className="font-black bg-emerald-100 px-2 py-0.5 rounded text-[10px] uppercase tracking-wider shrink-0">
+                                                        {manualReleaseDate ? 'Manual' : officialDays > 0 ? `TOTAL: ${officialDays} DAYS` : 'TOTAL: —'}
                                                     </span>
                                                 </div>
-                                                <span className="font-black text-blue-900 bg-blue-100 px-2 py-0.5 rounded text-[10px] uppercase tracking-wider">
-                                                    Total: {mlBreakdown.totalDays} Days
-                                                </span>
+                                                <div className="bg-blue-50 border border-blue-100/50 rounded-lg p-2 flex items-center justify-between gap-3 text-[10px] text-blue-800 shadow-sm">
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                        <Sparkles size={12} className="text-amber-500 shrink-0" />
+                                                        <span className="font-bold shrink-0 uppercase tracking-wider">
+                                                            ML PREDICTION:
+                                                        </span>
+                                                        <span>
+                                                            {predictionLoading
+                                                                ? 'Calculating…'
+                                                                : predictionError
+                                                                    || formatMlModelName(serverPrediction?.ml_model)}
+                                                        </span>
+                                                    </div>
+                                                    <span className="font-black text-blue-900 bg-blue-100 px-2 py-0.5 rounded text-[10px] uppercase tracking-wider shrink-0">
+                                                        {serverPrediction?.ml_predicted_days != null
+                                                            ? `TOTAL: ${serverPrediction.ml_predicted_days} DAYS`
+                                                            : 'TOTAL: —'}
+                                                    </span>
+                                                </div>
                                             </div>
                                             {/* Row 2: Order ID, Processed By */}
                                             <div className="space-y-1 col-span-1 md:col-span-4">
@@ -2265,9 +2338,13 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                         </Button>
                         <Button
                             type="submit"
-                            className="w-full sm:flex-1 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-widest h-10 shadow-lg shadow-red-200 transition-all rounded-lg"
+                            disabled={isSubmitting}
+                            className="w-full sm:flex-1 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-widest h-10 shadow-lg shadow-red-200 transition-all rounded-lg disabled:opacity-60 disabled:cursor-not-allowed"
                         >
-                            {mode === 'create' ? 'Submit' : 'Save Changes'}
+                            {/* P1-7 FIX: visually disable + relabel Submit while the request is
+                                in flight, so the user gets clear feedback and cannot fire a
+                                duplicate submission by clicking again before confirmation. */}
+                            {isSubmitting ? 'Submitting...' : (mode === 'create' ? 'Submit' : 'Save Changes')}
                         </Button>
                     </div>
                 </CardContent>

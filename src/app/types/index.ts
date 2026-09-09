@@ -45,6 +45,7 @@ export interface InventoryUsed {
 
 export interface InventoryItem {
   id: number;
+  inventory_number?: string;
   name: string;
   category: string;
   stock: number;
@@ -60,6 +61,8 @@ export interface InventoryItem {
   package_size?: number;
   package_unit?: string;
   low_stock_threshold?: number;
+  is_retail?: boolean;
+  retail_price?: number;
 }
 
 export interface BaseJobOrderData {
@@ -200,7 +203,7 @@ export interface Service {
 export interface User {
   id: string;
   username: string;
-  role: 'owner' | 'staff';
+  role: 'owner' | 'staff' | 'admin';
   email?: string;
   password?: string;
   active: boolean;

@@ -1,8 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+// P1-10 FIX: centralized API base resolution (see src/app/lib/apiBase.ts).
+import { API_BASE } from '@/app/lib/apiBase';
 
 
 export interface InventoryItem {
     id: number;
+    inventory_number?: string;
     name: string;
     category: string;
     stock: number;
@@ -18,6 +21,8 @@ export interface InventoryItem {
     package_size?: number;
     package_unit?: string;
     low_stock_threshold?: number;  // Alert threshold in internal units (mL / g)
+    is_retail?: boolean;
+    retail_price?: number;
 }
 
 interface InventoryContextType {
@@ -30,10 +35,6 @@ interface InventoryContextType {
 }
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
-
-const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '5173' || window.location.hostname.startsWith('192.')))
-    ? `${window.location.protocol}//${window.location.hostname}:8000/api`
-    : '/api';
 
 export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: string } }> = ({ children, user }) => {
     const [inventoryData, setInventoryData] = useState<InventoryItem[]>([]);
@@ -57,6 +58,7 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
             if (Array.isArray(data)) {
                 const mapped = data.map((item: any) => ({
                     id: item.item_id,
+                    inventory_number: item.inventory_number,
                     name: item.item_name,
                     category: item.category,
                     stock: item.stock_quantity,
@@ -71,7 +73,9 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
                     consumption_unit: item.consumption_unit,
                     package_size: item.package_size,
                     package_unit: item.package_unit,
-                    low_stock_threshold: item.low_stock_threshold ?? 0
+                    low_stock_threshold: item.low_stock_threshold ?? 0,
+                    is_retail: item.is_retail || false,
+                    retail_price: parseFloat(item.retail_price || 0)
                 }));
                 setInventoryData(mapped);
                 localStorage.setItem('inventory_cache', JSON.stringify(mapped));
@@ -215,6 +219,10 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
                     'Authorization': `Bearer ${user.token}`
                 },
                 body: JSON.stringify({
+                    // P1-3 FIX: inventory_number was never sent to the backend, so newly
+                    // created items always landed with a null inventory_number regardless
+                    // of what the Add Item form captured.
+                    inventory_number: item.inventory_number || null,
                     item_name: item.name,
                     category: item.category,
                     stock_quantity: item.stock,
@@ -232,7 +240,11 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
                 })
             });
             if (res.status === 400 || res.status === 401 || res.status === 403) {
-                throw new Error(`HTTP_${res.status}`);
+                // P1-3 FIX: surface the backend's actual validation message (e.g. a clear
+                // duplicate Inventory Number error) instead of a generic status-code toast.
+                let detail = 'Action denied.';
+                try { detail = (await res.json())?.detail || detail; } catch { /* ignore */ }
+                throw new Error(`HTTP_${res.status}::${detail}`);
             }
             if (res.ok) {
                 fetchInventory();
@@ -243,7 +255,8 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
             console.error("[CRITICAL] Inventory Add failed:", err);
             if (err?.message && err.message.startsWith('HTTP_')) {
                 setInventoryData(oldData);
-                import('sonner').then(({ toast }) => toast.error('Action denied (400/401/403).'));
+                const detail = err.message.split('::')[1] || 'Action denied (400/401/403).';
+                import('sonner').then(({ toast }) => toast.error(detail));
                 return;
             }
             const saved = localStorage.getItem('inventory_cache');
@@ -264,6 +277,9 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
                     'Authorization': `Bearer ${user.token}`
                 },
                 body: JSON.stringify({
+                    // P1-3 FIX: inventory_number was never sent on update either, so an
+                    // edited Inventory Number never actually persisted to the backend.
+                    inventory_number: updatedItem.inventory_number || null,
                     item_name: updatedItem.name,
                     category: updatedItem.category,
                     stock_quantity: updatedItem.stock,
@@ -282,7 +298,10 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
                 })
             });
             if (res.status === 400 || res.status === 401 || res.status === 403) {
-                throw new Error(`HTTP_${res.status}`);
+                // P1-3 FIX: surface the backend's actual validation message.
+                let detail = 'Update denied.';
+                try { detail = (await res.json())?.detail || detail; } catch { /* ignore */ }
+                throw new Error(`HTTP_${res.status}::${detail}`);
             }
             if (res.ok) {
                 fetchInventory();
@@ -293,7 +312,8 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
             console.error("[CRITICAL] Inventory Update failed:", err);
             if (err?.message && err.message.startsWith('HTTP_')) {
                 setInventoryData(oldData);
-                import('sonner').then(({ toast }) => toast.error('Update denied (400/401/403).'));
+                const detail = err.message.split('::')[1] || 'Update denied (400/401/403).';
+                import('sonner').then(({ toast }) => toast.error(detail));
                 return;
             }
             const saved = localStorage.getItem('inventory_cache');
@@ -318,13 +338,19 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${user.token}` }
             });
-            if (res.status === 400 || res.status === 401 || res.status === 403) {
+            if (!res.ok) {
                 setInventoryData(oldData);
                 localStorage.setItem('inventory_cache', JSON.stringify(oldData));
-                import('sonner').then(({ toast }) => toast.error('Delete denied (400/401/403).'));
+                import('sonner').then(({ toast }) => toast.error('Delete failed. Item was restored.'));
+                return;
             }
+            // Confirm server state so soft-deleted rows stay hidden after sync/refetch.
+            await fetchInventory();
         } catch(e) {
             console.error("Failed to delete from server", e);
+            setInventoryData(oldData);
+            localStorage.setItem('inventory_cache', JSON.stringify(oldData));
+            import('sonner').then(({ toast }) => toast.error('Delete failed (offline/network). Item was restored.'));
         }
     };
 

@@ -1,14 +1,16 @@
 import { createContext, useContext, useState, ReactNode, useEffect, useRef, useMemo } from 'react';
 import { JobOrder } from '@/app/types';
-import { mockJobOrders } from '@/app/lib/mockData';
 import { useActivities } from './ActivityContext';
+// P1-10 FIX: centralized API base resolution (see src/app/lib/apiBase.ts).
+import { API_BASE } from '@/app/lib/apiBase';
 
-// Backend API Base URL
-const API_BASE = import.meta.env.VITE_API_URL || (
-    (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '5173' || window.location.hostname.startsWith('192.')))
-    ? `${window.location.protocol}//${window.location.hostname}:8000/api`
-    : '/api'
-);
+function parseServerDate(dateStr: any): Date {
+    if (!dateStr) return new Date();
+    if (typeof dateStr === 'string') {
+        return new Date(dateStr.replace(' ', 'T'));
+    }
+    return new Date(dateStr);
+}
 
 // Resilience Check: Verifies if the backend is actually reachable
 const checkBackend = async (token: string) => {
@@ -28,7 +30,11 @@ interface OrderContextType {
     loading: boolean;
     refreshing: boolean;
     dbStatus: 'remote' | 'local' | 'unknown';
-    addOrder: (order: JobOrder) => Promise<void>;
+    // P1-7 FIX: now resolves `true` once the order is either genuinely confirmed saved by
+    // the backend OR legitimately queued for offline auto-sync, and `false` on a definite
+    // backend rejection (validation/auth/server error) — see addOrder() below. Callers must
+    // await this before treating the submission as successful.
+    addOrder: (order: JobOrder) => Promise<boolean>;
     updateOrder: (id: string, updates: Partial<JobOrder>, statusUser?: string) => Promise<void>;
     deleteOrder: (id: string) => Promise<void>;
     refreshOrders: () => Promise<void>;
@@ -135,10 +141,11 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
             try {
                 const res = await fetch(`${API_BASE}/health-check`);
                 const data = await res.json();
-                setDbStatus(data.database.includes('PostgreSQL') ? 'remote' : 'local');
+                const dbLabel = String(data.database || '');
+                setDbStatus(dbLabel.includes('PostgreSQL') ? 'remote' : dbLabel.includes('SQLite') ? 'local' : 'unknown');
                 
                 // Auto-trigger cloud sync if we have pending local data and we're back on Remote
-                if (data.has_pending_offline_data && !data.database.includes('SQLite') && user.token) {
+                if (data.has_pending_offline_data && dbLabel.includes('PostgreSQL') && user.token) {
                     console.log("[SYNC] Local orders detected. Attempting migration to Cloud...");
                     fetch(`${API_BASE}/sync-backup-to-cloud`, {
                         method: 'POST',
@@ -229,10 +236,18 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
             transactionDate: parseUTC(bo.created_at),
             predictedCompletionDate: bo.expected_at ? parseUTC(bo.expected_at) : undefined,
             actualReleaseDate: bo.released_at ? parseUTC(bo.released_at) : (() => {
-                const log = bo.status_logs?.find((sl: any) => mapBackendStatus(sl.status?.status_name) === 'for-release');
-                return log ? new Date(log.changed_at) : undefined;
+                const currentStatus = mapBackendStatus(bo.status?.status_name);
+                if (currentStatus !== 'for-release' && currentStatus !== 'claimed') return undefined;
+                const fromLogs = (bo.status_logs || [])
+                    .filter((sl: any) => mapBackendStatus(sl.status?.status_name) === 'for-release' && sl.changed_at)
+                    .map((sl: any) => new Date(sl.changed_at))
+                    .filter((d: Date) => !isNaN(d.getTime()))
+                    .sort((a: Date, b: Date) => a.getTime() - b.getTime());
+                if (fromLogs[0]) return fromLogs[0];
+                return bo.claimed_at ? parseUTC(bo.claimed_at) : undefined;
             })(),
             actualCompletionDate: bo.claimed_at ? parseUTC(bo.claimed_at) : (() => {
+                if (mapBackendStatus(bo.status?.status_name) !== 'claimed') return undefined;
                 const log = bo.status_logs?.find((sl: any) => mapBackendStatus(sl.status?.status_name) === 'claimed');
                 return log ? new Date(log.changed_at) : undefined;
             })(),
@@ -244,13 +259,18 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                 const condNames: string[] = bi.conditions?.map(
                     (c: any) => (c.condition_name || '').toLowerCase().replace(/\s+/g, '').replace(/\//g, '')
                 ) || [];
+                const getHistoricalPrice = (s: any) => {
+                    const mapping = bi.service_mappings?.find((sm: any) => sm.service_id === s.service_id);
+                    return mapping ? mapping.actual_price : s.base_price;
+                };
+
                 return {
                     id: bi.item_id?.toString() || Math.random().toString(),
                     brand: bi.brand || 'Other',
                     shoeModel: bi.shoe_model || 'Other',
                     shoeMaterial: bi.material || 'Other',
                     shoeSize: bi.shoe_size || bi.shoeSize || bi.size || '',
-                    color: bi.color || '',
+                    color: Array.isArray(bi.color) ? bi.color.filter(Boolean).join(', ') : (bi.color || ''),
                     quantity: bi.quantity || 1,
                     condition: {
                         scratches:      condNames.includes('scratches'),
@@ -263,6 +283,12 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                     },
                     inventoryUsed: safeArray(bi.inventory_used),
                     // category is a nested 3NF object: { category_id, category_name }
+                    historicalBasePrices: bi.services?.filter((s: any) =>
+                        (s.category?.category_name || s.category) === 'base'
+                    ).map((s: any) => ({ name: s.service_name, price: getHistoricalPrice(s) })) || [],
+                    historicalAddOnPrices: bi.services?.filter((s: any) =>
+                        (s.category?.category_name || s.category) === 'addon'
+                    ).map((s: any) => ({ name: s.service_name, price: getHistoricalPrice(s) })) || [],
                     baseService: bi.services?.filter((s: any) =>
                         (s.category?.category_name || s.category) === 'base'
                     ).map((s: any) => s.service_name) || [],
@@ -344,8 +370,19 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                 }
             } catch (err) {
                 console.warn("Retaining cached data due to fetch failure", err);
+                // P1-17 FIX: this previously fell back to `mockJobOrders` (fabricated demo
+                // customers/orders from src/app/lib/mockData.ts) whenever the initial fetch
+                // failed with no cached orders yet available (e.g. first load on a fresh
+                // browser/device with a flaky connection). That let entirely fake job orders
+                // silently render as if they were real production records — exactly the
+                // pattern flagged by the audit. If there is no real cached data, show a
+                // genuine empty state instead and surface a clear connectivity error so
+                // staff/owner know data failed to load rather than mistaking it for "no
+                // orders exist yet".
                 if (orders.length === 0) {
-                    setOrders(mockJobOrders);
+                    import('sonner').then(({ toast }) => toast.error(
+                        "Unable to load Job Orders from the server. Check your connection and try again."
+                    ));
                 }
             } finally {
                 setLoading(false);
@@ -568,7 +605,7 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
     }, [user.token]);
     // -------------------------------
 
-    const addOrder = async (order: JobOrder) => {
+    const addOrder = async (order: JobOrder): Promise<boolean> => {
         // OPTIMISTIC UPDATE: Update UI immediately to ensure zero-latency response for the user
         setOrders((prev) => [{ ...order, updatedAt: new Date() }, ...prev]);
 
@@ -580,7 +617,7 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
         try {
             const response = await fetch(`${API_BASE}/orders`, {
                 method: 'POST',
-                headers: { 
+                headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${user.token}`
                 },
@@ -592,19 +629,48 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                 throw new Error(errorData.detail || 'Server Error: Failed to save to database.');
             }
 
-            refreshOrders(); 
+            const saved = await response.json().catch(() => null);
+            if (saved?.expected_at) {
+                const persistedDate = parseServerDate(saved.expected_at);
+                setOrders((prev) => prev.map((o) =>
+                    o.orderNumber === (saved.order_number || order.orderNumber)
+                        ? {
+                            ...o,
+                            id: saved.order_id != null ? String(saved.order_id) : o.id,
+                            predictedCompletionDate: persistedDate,
+                        }
+                        : o
+                ));
+            }
+            refreshOrders();
+            // P1-7 FIX: genuinely confirmed by the backend — safe for the caller to treat
+            // this as a real success (show success toast, reset the form for next entry).
+            return true;
         } catch (err: any) {
             console.error('[CRITICAL] OrderProvider: Sync failed.', err);
-            
+
             // Only queue and show 'offline' if it's a network error
             if (!navigator.onLine || err.message.includes('failed to fetch') || err.name === 'TypeError') {
                 queueSyncTask({ type: 'ADD', payload });
+                // P1-7 FIX: legitimately queued for offline auto-sync (existing, intended
+                // offline-continuity behavior) — treat as a success for UX purposes, since
+                // the order is durably queued and will sync once connectivity returns. The
+                // optimistic order already carries this order's stable, client-generated
+                // orderNumber, so the eventual sync is idempotent (backend-side dedupe by
+                // order_number) even if the queue is retried more than once.
+                return true;
             } else {
                 const { toast } = await import('sonner');
                 toast.error("Execution Error", {
                     description: err.message || "The server rejected this order. Check connection or data integrity.",
                     duration: 5000
                 });
+                // P1-7 FIX: a definite backend rejection (validation/auth/server error, not a
+                // network blip) — roll back the optimistic insert so the failed order does
+                // not linger in the visible list, and tell the caller so it does NOT show a
+                // false "success" toast or clear the user's form data.
+                setOrders((prev) => prev.filter((o) => o.id !== order.id));
+                return false;
             }
         }
     };
@@ -628,8 +694,8 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                 releasedBy: updates.releasedBy || effectiveReleasedBy
             } : {}),
             ...(updates.status === 'on-going' || updates.status === 'new-order' ? {
-                actualReleaseDate: undefined,
-                actualCompletionDate: undefined,
+                actualReleaseDate: null,
+                actualCompletionDate: null,
                 claimedBy: undefined,
                 releasedBy: undefined,
             } : {})
@@ -673,6 +739,15 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                     throw new Error(`HTTP_${response.status}`);
                 }
                 if (!response.ok) throw new Error('API update failed');
+                const saved = await response.json().catch(() => null);
+                if (saved?.expected_at) {
+                    const persistedDate = parseServerDate(saved.expected_at);
+                    setOrders((prev) => prev.map((order) =>
+                        order.id === id
+                            ? { ...order, ...finalUpdates, predictedCompletionDate: persistedDate, updatedAt: new Date() }
+                            : order
+                    ));
+                }
             } else {
                 // If it doesn't have a valid ID yet, it was likely created offline recently
                 throw new Error('Unsynced temporary ID');

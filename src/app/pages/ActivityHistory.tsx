@@ -9,10 +9,8 @@ import { Dialog, DialogContent } from '@/app/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 
 import { useActivities, type ActivityLog } from '@/app/context/ActivityContext';
-
-const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '5173'))
-    ? `http://${window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname}:8000/api`
-    : '/api';
+// P1-10 FIX: centralized API base resolution (see src/app/lib/apiBase.ts).
+import { API_BASE } from '@/app/lib/apiBase';
 
 /**
  * COMPONENT: ActivityHistory
@@ -20,56 +18,14 @@ const API_BASE = (typeof window !== 'undefined' && (window.location.hostname ===
  * DATA SOURCE: ActivityContext (Synced with AuditLog backend table).
  */
 function FormattedDateInput({ value, onChange, className, id }: { value: string; onChange: (val: string) => void; className?: string; id?: string }) {
-    const toDisplay = (iso: string) => {
-        if (!iso) return '';
-        const parts = iso.split('-');
-        if (parts.length === 3) {
-            return `${parts[1]}/${parts[2]}/${parts[0]}`;
-        }
-        return iso;
-    };
-
-    const [localVal, setLocalVal] = useState(toDisplay(value));
-
-    useEffect(() => {
-        setLocalVal(toDisplay(value));
-    }, [value]);
-
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        let inputVal = e.target.value;
-        let digits = inputVal.replace(/[^0-9]/g, '');
-        if (digits.length > 8) digits = digits.substring(0, 8);
-
-        let formatted = digits;
-        if (digits.length > 2) {
-            formatted = digits.substring(0, 2) + '/' + digits.substring(2);
-        }
-        if (digits.length > 4) {
-            formatted = digits.substring(0, 2) + '/' + digits.substring(2, 4) + '/' + digits.substring(4);
-        }
-
-        setLocalVal(formatted);
-
-        if (digits.length === 8) {
-            const mm = digits.substring(0, 2);
-            const dd = digits.substring(2, 4);
-            const yyyy = digits.substring(4, 8);
-            const iso = `${yyyy}-${mm}-${dd}`;
-            const dateObj = new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd));
-            if (!isNaN(dateObj.getTime())) {
-                onChange(iso);
-            }
-        }
-    };
-
     return (
         <Input
             id={id}
-            type="text"
-            placeholder="MM/DD/YYYY"
-            value={localVal}
-            onChange={handleChange}
-            className={className}
+            type="date"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className={`${className} [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-3 [&::-webkit-calendar-picker-indicator]:cursor-pointer relative pr-10`}
+            style={{ textTransform: 'uppercase' }}
         />
     );
 }
@@ -83,7 +39,7 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
     }, [user.token]);
 
     const navigate = useNavigate();
-    const { activities } = useActivities();
+    const { activities, refreshActivities } = useActivities();
     const [searchTerm, setSearchTerm] = useState('');
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [startDate, setStartDate] = useState('');
@@ -95,6 +51,13 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
 
     const [selectedLog, setSelectedLog] = useState<ActivityLog | null>(null);
     const [isLogModalOpen, setIsLogModalOpen] = useState(false);
+
+    // Always reload from server when opening Activity History so deletes/CRUD appear immediately.
+    useEffect(() => {
+        if (user.token) {
+            void refreshActivities();
+        }
+    }, [user.token, refreshActivities]);
 
     // Dynamic user list from backend table
     const [userList, setUserList] = useState<{ username: string; role: string }[]>([
@@ -160,6 +123,7 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
         { label: 'Expenses', value: 'Expenses' },
         { label: 'Reports', value: 'Reports' },
         { label: 'User Management', value: 'User Management' },
+        { label: 'Historical Records', value: 'Historical Records' },
         { label: 'Machine Learning', value: 'Machine Learning' }
     ];
 
@@ -191,10 +155,13 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             if (type === 'inventory' || activity.table === 'Inventory' || activity.table === 'inventory') return 'Inventory Deleted';
             if (type === 'service' || activity.table === 'Services' || activity.table === 'services') return 'Service Deleted';
             if (type === 'order' || activity.table === 'Orders' || activity.table === 'Job Orders') return 'Job Order Deleted';
+            if (type === 'expense' || activity.table === 'Expenses' || activity.table === 'expenses') return 'Expense Deleted';
+            if (activity.module === 'Historical Records' || activity.table === 'Historical Records') return 'Historical Record Deleted';
             if (type === 'system' || activity.table === 'Users' || activity.table === 'users') return 'User Deleted';
             return 'Record Deleted';
         }
 
+        if (action.includes('404') || actionRaw.includes('404')) return 'Page Not Found';
         if (action.includes('FAILED') || actionRaw.includes('FAILED')) return 'Failed Login';
         if (action.includes('TIMEOUT') || actionRaw.includes('TIMEOUT')) return 'Session Timeout';
         if (action.includes('LOGIN')) return 'User Logged In';
@@ -255,8 +222,9 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
         );
     };
 
-    // --- OWASP A01: Broken Access Control (Enforce Owner ONLY) ---
-    if (user.role && user.role !== 'owner') {
+    // --- OWASP A01: Broken Access Control (Owner + Admin/Developer; Staff blocked) ---
+    const canViewActivityHistory = ['owner', 'admin'].includes(user.role?.toLowerCase() || '');
+    if (user.role && !canViewActivityHistory) {
         return (
             <div className="py-8 flex items-center justify-center min-h-[500px] animate-in fade-in duration-500">
                 <Card className="border-2 border-red-200 shadow-xl max-w-md w-full bg-white rounded-2xl overflow-hidden text-center p-8">
@@ -265,7 +233,7 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                     </div>
                     <h2 className="text-lg font-black text-gray-900 uppercase tracking-wider mb-2">403 Unauthorized Access</h2>
                     <p className="text-xs font-medium text-gray-600 leading-relaxed mb-6">
-                        Only the Owner account has security clearance to inspect Activity History and Forensic Audit Logs. Staff accounts are explicitly restricted.
+                        Only Owner and Developer accounts have security clearance to inspect Activity History and Forensic Audit Logs. Staff accounts are explicitly restricted.
                     </p>
                     <Button
                         onClick={() => navigate('/dashboard')}
@@ -283,6 +251,14 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
     
     // Filtering logic
     const filteredActivities = activities.filter(activity => {
+        const actionRaw = String(activity.actionRaw || activity.action || '').toUpperCase();
+        const moduleLabel = getModuleBadge(activity).toUpperCase();
+        // Hide noisy routing 404s unless the user explicitly filters System or searches for them.
+        const isRoutingNoise = actionRaw.includes('404') || moduleLabel === 'ROUTING';
+        if (isRoutingNoise && selectedType !== 'System' && !searchTerm.trim()) {
+            return false;
+        }
+
         // Search Filter across username, full name, action, module, table, record id, details, role
         const searchStr = searchTerm.toLowerCase().trim();
         const mod = getModuleBadge(activity).toLowerCase();
@@ -290,15 +266,34 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
         const recId = String(activity.recordId || '').toLowerCase();
         const auditId = String(activity.id || '').toLowerCase();
 
+        const valueBlob = [
+            activity.oldValues?.username,
+            activity.newValues?.username,
+            activity.oldValues?.email,
+            activity.newValues?.email,
+            activity.oldValues?.details,
+            activity.newValues?.details,
+            activity.oldValues?.order_number,
+            activity.newValues?.order_number,
+            activity.oldValues?.item_name,
+            activity.newValues?.item_name,
+            activity.oldValues?.service_name,
+            activity.newValues?.service_name,
+            activity.oldValues?.customer_name,
+            activity.newValues?.customer_name,
+        ].filter(Boolean).join(' ').toLowerCase();
+
         const matchesSearch = !searchStr || (
-            activity.user.toLowerCase().includes(searchStr) ||
-            activity.action.toLowerCase().includes(searchStr) ||
-            (activity.table && activity.table.toLowerCase().includes(searchStr)) ||
-            activity.details.toLowerCase().includes(searchStr) ||
+            (activity.user || '').toLowerCase().includes(searchStr) ||
+            (activity.action || '').toLowerCase().includes(searchStr) ||
+            (activity.table || '').toLowerCase().includes(searchStr) ||
+            (activity.details || '').toLowerCase().includes(searchStr) ||
+            (activity.timestamp || '').toLowerCase().includes(searchStr) ||
             mod.includes(searchStr) ||
             role.includes(searchStr) ||
             recId.includes(searchStr) ||
-            auditId.includes(searchStr)
+            auditId.includes(searchStr) ||
+            valueBlob.includes(searchStr)
         );
 
         // User Filter
@@ -308,9 +303,7 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
         const activityMod = getModuleBadge(activity).toLowerCase();
         const matchesType = selectedType === 'all' || 
             activityMod === selectedType.toLowerCase() || 
-            activity.type?.toLowerCase() === selectedType.toLowerCase() ||
-            (selectedType === 'User Management' && activity.type === 'system') ||
-            (selectedType === 'Job Orders' && (activity.table === 'Orders' || activity.type === 'order'));
+            activity.type?.toLowerCase() === selectedType.toLowerCase();
 
         // Date Range Filter
         let matchesDate = true;
@@ -347,8 +340,16 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
     };
 
     const renderBusinessLayout = (log: ActivityLog) => {
-        const oldVals = log.oldValues || {};
-        const newVals = log.newValues || {};
+        let oldVals = log.oldValues || {};
+        let newVals = log.newValues || {};
+        
+        if (typeof oldVals === 'string') {
+            try { oldVals = JSON.parse(oldVals); } catch(e) { oldVals = {}; }
+        }
+        if (typeof newVals === 'string') {
+            try { newVals = JSON.parse(newVals); } catch(e) { newVals = {}; }
+        }
+        
         const actionStr = getBusinessActionTitle(log).toUpperCase();
         const module = getModuleBadge(log).toUpperCase();
         
@@ -358,7 +359,11 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             const lowerKey = key.toLowerCase();
             if (lowerKey === 'updater_id' || lowerKey === 'updaterid') return 'Updated By';
             if (lowerKey === 'base_price') return 'Service Price';
-            if (lowerKey === 'is_active' || lowerKey === 'status') return 'Status';
+            if (lowerKey === 'is_active' || lowerKey === 'status' || lowerKey === 'was_active') return 'Status';
+            if (lowerKey === 'soft_delete') return 'Soft Delete';
+            if (lowerKey === 'removal_type') return 'Removal Type';
+            if (lowerKey === 'status_after') return 'Status After';
+            if (lowerKey === 'summary') return 'Summary';
             if (lowerKey === 'grand_total' || lowerKey === 'grandtotal') return 'Grand Total';
             if (lowerKey === 'low_stock_threshold' || lowerKey === 'lowstockthreshold') return 'Low Stock Threshold';
             if (lowerKey === 'customer_name' || lowerKey === 'customername') return 'Customer Name';
@@ -373,15 +378,47 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             return val;
         };
 
-        const mapBusinessValue = (key: string, val: any) => {
+        const mapBusinessValue = (key: string, val: any): string => {
             if (val === true || val === 'true') return 'Yes';
             if (val === false || val === 'false') return 'No';
             if (val === null || val === undefined || val === '' || val === 'Empty') return '— Not Set';
             if (typeof val === 'string' && val.toLowerCase() === 'empty') return '— Not Set';
-            
+
             const lowerKey = key.toLowerCase();
+            if (lowerKey === 'is_active' || lowerKey === 'was_active') {
+                if (val === true || val === 'true' || val === 1) return 'Active';
+                if (val === false || val === 'false' || val === 0) return 'Inactive';
+            }
+            if (lowerKey === 'soft_delete') {
+                return (val === true || val === 'true') ? 'Yes (kept in database)' : 'No';
+            }
+            if (Array.isArray(val)) {
+                if (val.length === 0) return '— None';
+                return val.map((entry) => {
+                    if (entry == null) return '—';
+                    if (typeof entry === 'object') {
+                        return entry.name || entry.item_name || entry.service_name || entry.label || JSON.stringify(entry);
+                    }
+                    return String(entry);
+                }).join(', ');
+            }
+            if (typeof val === 'object') {
+                const preferred =
+                    val.name || val.item_name || val.service_name || val.username ||
+                    val.customer_name || val.order_number || val.label || val.details;
+                if (preferred != null && preferred !== '') return String(preferred);
+                try {
+                    return Object.entries(val)
+                        .filter(([k]) => !['id', 'password', 'token'].includes(String(k).toLowerCase()))
+                        .map(([k, v]) => `${mapBusinessLabel(k)}: ${mapBusinessValue(k, v)}`)
+                        .join(' · ');
+                } catch {
+                    return '—';
+                }
+            }
+            
             if (lowerKey.includes('price') || lowerKey.includes('total') || lowerKey.includes('amount') || lowerKey.includes('cost')) {
-                return formatCurrency(val);
+                return String(formatCurrency(val));
             }
             return String(val);
         };
@@ -687,6 +724,27 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             );
         }
 
+        if (actionStr.includes('DELETE') || actionStr.includes('DEACTIVAT')) {
+            const deletedVals = { ...oldVals };
+            if (newVals?.is_active === false) deletedVals.status_after = 'Inactive (soft delete)';
+            if (newVals?.soft_delete) deletedVals.removal_type = 'Removed from catalog (record kept for history)';
+            if (newVals?.reason) deletedVals.reason = newVals.reason;
+            if (newVals?.details && typeof newVals.details === 'string') deletedVals.summary = newVals.details;
+            const title = newVals?.soft_delete || newVals?.is_active === false || actionStr.includes('DEACTIVAT')
+                ? 'Removed Record Details'
+                : 'Deleted Record Details';
+            return (
+                <div className="space-y-2.5 mt-2">
+                    {log.details && (
+                        <div className="bg-rose-50 p-3 rounded-xl border border-rose-100 text-[12px] font-bold text-rose-800">
+                            {log.details}
+                        </div>
+                    )}
+                    {renderFieldList(deletedVals, title)}
+                </div>
+            );
+        }
+
         if (module === 'REPORTS' || actionStr.includes('REPORT')) {
             return (
                 <div className="space-y-2.5 mt-2">
@@ -843,7 +901,7 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                             </Button>
                             <Input 
                                 id="activitySearch"
-                                placeholder="Search username, role, action, module, table, ID, or details..."
+                                placeholder="Search username, role, action, module, table, date..."
                                 className="pl-9 h-9 text-xs border-gray-100 bg-gray-50/50 font-medium focus-visible:ring-1 focus-visible:ring-red-600 focus-visible:border-red-600 rounded-xl w-full transition-all"
                                 value={searchTerm}
                                 onChange={(e) => {
@@ -1068,7 +1126,7 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                                         <SelectItem value="all" className="font-extrabold text-xs uppercase">ALL USERS (OWNER & STAFF)</SelectItem>
                                         {userList.map(u => (
                                             <SelectItem key={u.username} value={u.username} className="font-bold uppercase text-xs">
-                                                {u.username} ({u.role})
+                                                {u.username}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -1092,16 +1150,16 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                             </div>
                         </div>
 
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Date Range</label>
-                            <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-2 mt-2">
+                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-2 block">Date Range</label>
+                            <div className="grid grid-cols-2 gap-3 mt-2">
                                 <div className="relative">
                                     <FormattedDateInput 
                                         value={startDate} 
                                         onChange={val => { setStartDate(val); setCurrentPage(1); }}
                                         className="h-11 rounded-xl border-gray-200 bg-gray-50/50 font-bold text-gray-800 focus:ring-red-100 text-[12px]"
                                     />
-                                    <span className="absolute -top-2 left-3 px-1.5 bg-white text-[9px] font-black text-gray-500 uppercase border border-gray-200 rounded">Start Date</span>
+                                    <span className="absolute -top-2 left-3 px-1.5 bg-white text-[9px] font-black text-gray-500 uppercase border border-gray-200 rounded z-10">Start Date</span>
                                 </div>
                                 <div className="relative">
                                     <FormattedDateInput 
@@ -1109,7 +1167,7 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                                         onChange={val => { setEndDate(val); setCurrentPage(1); }}
                                         className="h-11 rounded-xl border-gray-200 bg-gray-50/50 font-bold text-gray-800 focus:ring-red-100 text-[12px]"
                                     />
-                                    <span className="absolute -top-2 left-3 px-1.5 bg-white text-[9px] font-black text-gray-500 uppercase border border-gray-200 rounded">End Date</span>
+                                    <span className="absolute -top-2 left-3 px-1.5 bg-white text-[9px] font-black text-gray-500 uppercase border border-gray-200 rounded z-10">End Date</span>
                                 </div>
                             </div>
                         </div>
@@ -1164,7 +1222,7 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                                     <div className="flex flex-col gap-1">
                                         <span className="font-extrabold text-slate-400 uppercase text-[9px] tracking-widest">Performed By</span>
                                         <span className="text-[13px] font-bold text-slate-800 leading-tight">
-                                            <span className="text-red-600 font-black">{selectedLog.user}</span> <span className="text-slate-500 font-medium">({selectedLog.role || (selectedLog.user.toLowerCase() === 'owner' ? 'Owner' : 'Staff')})</span>
+                                            <span className="text-red-600 font-black">{selectedLog.user}</span> <span className="text-slate-500 font-medium">({(selectedLog.role || (selectedLog.user.toLowerCase() === 'owner' ? 'owner' : 'staff')).replace(/^\w/, (c) => c.toUpperCase())})</span>
                                         </span>
                                     </div>
                                     <div className="flex flex-col gap-1">
@@ -1182,7 +1240,7 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                                     <div className="flex flex-col gap-1 mt-2 border-t border-slate-100 pt-3">
                                         <span className="font-extrabold text-slate-400 uppercase text-[9px] tracking-widest">Affected Record</span>
                                         <span className="text-[13px] font-black text-slate-800 leading-tight">
-                                            {selectedLog.oldValues?.order_number || selectedLog.newValues?.order_number || selectedLog.oldValues?.orderNumber || selectedLog.newValues?.orderNumber || selectedLog.recordId || selectedLog.id || 'N/A'}
+                                            {selectedLog.oldValues?.username || selectedLog.newValues?.username || selectedLog.oldValues?.order_number || selectedLog.newValues?.order_number || selectedLog.oldValues?.orderNumber || selectedLog.newValues?.orderNumber || selectedLog.oldValues?.item_name || selectedLog.newValues?.item_name || selectedLog.oldValues?.service_name || selectedLog.newValues?.service_name || (String(selectedLog.newValues?.details || selectedLog.details || '').match(/(?:for|account for)\s+([A-Za-z0-9_.-]+)/i)?.[1]) || selectedLog.recordId || 'N/A'}
                                         </span>
                                     </div>
                                 </div>

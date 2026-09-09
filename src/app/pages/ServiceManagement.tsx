@@ -22,6 +22,7 @@ export default function ServiceManagement({ onSetHeaderActionRight, user }: Serv
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Service | null>(null);
   const navigate = useNavigate();
+  const canManageServices = ['owner', 'admin'].includes(user.role?.toLowerCase() || '');
 
   // HIGH PERFORMANCE: Keep local copies for reordering to ensure zero-lag dragging
   const [localBase, setLocalBase] = useState<Service[]>([]);
@@ -47,33 +48,35 @@ export default function ServiceManagement({ onSetHeaderActionRight, user }: Serv
   }, [user.token]);
 
   useEffect(() => {
-    if (onSetHeaderActionRight && user.role?.toLowerCase() === 'owner') {
+    if (onSetHeaderActionRight && canManageServices) {
       onSetHeaderActionRight(
         <div className="flex items-center gap-2">
             {/* Historical Records button */}
-            <Button 
-                className="w-10 h-10 flex items-center justify-center rounded-md bg-slate-700 text-white shadow-md transition hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-500"
-                onClick={() => navigate('/job-order-form/historical-records')}
-                title="Historical Records"
-            >
-                <Archive className="h-4 w-4" />
-            </Button>
+            {user.role?.toLowerCase() === 'admin' && (
+              <Button 
+                  className="w-10 h-10 flex items-center justify-center rounded-md border border-red-200 bg-white text-red-600 shadow-sm transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  onClick={() => navigate('/job-order-form/historical-records')}
+                  title="Historical Records"
+              >
+                  <Archive className="h-4 w-4" />
+              </Button>
+            )}
             {/* New Service button */}
             <Button 
-                className="w-10 h-10 sm:w-40 flex items-center justify-center rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-[11px] font-black uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 tracking-widest"
+                className="w-10 h-10 sm:w-40 flex items-center justify-center rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-sm font-bold uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500"
                 onClick={() => {
                   setSelectedService(null);
                   setServiceModalOpen(true);
                 }}
             >
                 <PlusCircle className="h-4 w-4 sm:mr-2 shrink-0" />
-                <span className="hidden sm:inline">New Service</span>
+                <span className="hidden sm:inline font-bold">New Service</span>
             </Button>
         </div>
       );
     }
     return () => onSetHeaderActionRight?.(null);
-  }, [onSetHeaderActionRight, navigate, user.role]);
+  }, [onSetHeaderActionRight, navigate, user.role, canManageServices]);
 
   const handleSaveService = (service: Service) => {
     const exists = services.find(s => s.id === service.id);
@@ -142,12 +145,12 @@ export default function ServiceManagement({ onSetHeaderActionRight, user }: Serv
                         <Badge className={`${service.active ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'} text-[9px] font-bold uppercase tracking-wider shadow-none border-none`}>
                           {service.active ? 'Active' : 'Inactive'}
                         </Badge>
-                        {user.role?.toLowerCase() === 'owner' && (
+                        {canManageServices && (
                           <div className="flex items-center gap-1.5" onPointerDown={e => e.stopPropagation()}>
-                            <Button variant="ghost" size="sm" onClick={() => handleEditService(service)} className="h-7 w-7 p-0 text-amber-600 border border-amber-600 hover:bg-amber-50 rounded-md">
+                            <Button variant="ghost" size="sm" onClick={() => handleEditService(service)} title="Edit service" className="h-7 w-7 p-0 text-amber-600 border border-amber-600 hover:bg-amber-50 rounded-md">
                               <Edit size={12} />
                             </Button>
-                            <Button variant="ghost" size="sm" onClick={() => handleDeleteService(service)} className="h-7 w-7 p-0 text-red-600 border border-red-600 hover:bg-red-50 rounded-md">
+                            <Button variant="ghost" size="sm" onClick={() => handleDeleteService(service)} title="Delete service" className="h-7 w-7 p-0 text-red-600 border border-red-600 hover:bg-red-50 rounded-md">
                               <Trash size={12} />
                             </Button>
                           </div>
@@ -186,12 +189,12 @@ export default function ServiceManagement({ onSetHeaderActionRight, user }: Serv
                         <Badge className={`${service.active ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'} text-[9px] font-bold uppercase tracking-wider shadow-none border-none`}>
                           {service.active ? 'Active' : 'Inactive'}
                         </Badge>
-                        {user.role?.toLowerCase() === 'owner' && (
+                        {canManageServices && (
                           <div className="flex items-center gap-1.5" onPointerDown={e => e.stopPropagation()}>
-                            <Button variant="ghost" size="sm" onClick={() => handleEditService(service)} className="h-7 w-7 p-0 text-amber-600 border border-amber-600 hover:bg-amber-50 rounded-md">
+                            <Button variant="ghost" size="sm" onClick={() => handleEditService(service)} title="Edit service" className="h-7 w-7 p-0 text-amber-600 border border-amber-600 hover:bg-amber-50 rounded-md">
                               <Edit size={12} />
                             </Button>
-                            <Button variant="ghost" size="sm" onClick={() => handleDeleteService(service)} className="h-7 w-7 p-0 text-red-600 border border-red-600 hover:bg-red-50 rounded-md">
+                            <Button variant="ghost" size="sm" onClick={() => handleDeleteService(service)} title="Delete service" className="h-7 w-7 p-0 text-red-600 border border-red-600 hover:bg-red-50 rounded-md">
                               <Trash size={12} />
                             </Button>
                           </div>
@@ -233,12 +236,12 @@ export default function ServiceManagement({ onSetHeaderActionRight, user }: Serv
                       <Badge className={`${service.active ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'} text-[9px] font-bold uppercase tracking-wider shadow-none border-none`}>
                         {service.active ? 'Active' : 'Inactive'}
                       </Badge>
-                      {user.role?.toLowerCase() === 'owner' && (
+                      {canManageServices && (
                         <div className="flex items-center gap-1.5" onPointerDown={e => e.stopPropagation()}>
-                          <Button variant="ghost" size="sm" onClick={() => handleEditService(service)} className="h-7 w-7 p-0 text-amber-600 border border-amber-600 hover:bg-amber-50 rounded-md">
+                          <Button variant="ghost" size="sm" onClick={() => handleEditService(service)} title="Edit service" className="h-7 w-7 p-0 text-amber-600 border border-amber-600 hover:bg-amber-50 rounded-md">
                             <Edit size={12} />
                           </Button>
-                          <Button variant="ghost" size="sm" onClick={() => handleDeleteService(service)} className="h-7 w-7 p-0 text-red-600 border border-red-600 hover:bg-red-50 rounded-md">
+                          <Button variant="ghost" size="sm" onClick={() => handleDeleteService(service)} title="Delete service" className="h-7 w-7 p-0 text-red-600 border border-red-600 hover:bg-red-50 rounded-md">
                             <Trash size={12} />
                           </Button>
                         </div>

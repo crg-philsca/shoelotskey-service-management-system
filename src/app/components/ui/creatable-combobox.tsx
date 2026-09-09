@@ -20,7 +20,7 @@ import {
 
 interface CreatableComboboxProps {
     options: string[]
-    value: string
+    value: string | string[]
     onChange: (value: string) => void
     placeholder?: string
     searchPlaceholder?: string
@@ -36,9 +36,12 @@ export function CreatableCombobox({
 }: CreatableComboboxProps) {
     const [open, setOpen] = React.useState(false)
     const [searchValue, setSearchValue] = React.useState("")
+    const valueText = Array.isArray(value)
+        ? value.map((part) => String(part).trim()).filter(Boolean).join(', ')
+        : String(value || '')
 
     // normalize value for comparison
-    const normalizedValue = value?.toLowerCase() || ""
+    const normalizedValue = valueText.toLowerCase()
 
     const handleClear = (e: React.MouseEvent) => {
         e.stopPropagation()
@@ -47,8 +50,8 @@ export function CreatableCombobox({
     }
 
     // Check if the current value is one of the standard options
-    const selectedOptions = multiple ? value.split(',').map(s => s.trim()).filter(Boolean) : [];
-    const isFixedValue = multiple ? false : options.some(opt => opt.toLowerCase() === value.toLowerCase());
+    const selectedOptions = multiple ? valueText.split(',').map(s => s.trim()).filter(Boolean) : [];
+    const isFixedValue = multiple ? false : options.some(opt => opt.toLowerCase() === valueText.toLowerCase());
 
     const inputRef = React.useRef<HTMLInputElement>(null)
 
@@ -70,8 +73,8 @@ export function CreatableCombobox({
                         <input
                             ref={inputRef}
                             type="text"
-                            value={searchValue || value || ""}
-                            readOnly={isFixedValue && !open && value !== 'Other'}
+                            value={searchValue || valueText}
+                            readOnly={isFixedValue && !open && valueText !== 'Other'}
                             onChange={(e) => {
                                 setSearchValue(e.target.value)
                                 if (!multiple) onChange(e.target.value)
@@ -90,7 +93,7 @@ export function CreatableCombobox({
                             )}
                         />
                         <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
-                            {(value || searchValue) && (
+                            {(valueText || searchValue) && (
                                 <button
                                     type="button"
                                     onClick={handleClear}

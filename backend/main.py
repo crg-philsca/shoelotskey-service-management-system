@@ -3,7 +3,7 @@
 from fastapi import FastAPI, Depends, HTTPException, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import text, inspect, func, or_
+from sqlalchemy import text, inspect, func, or_, case
 from typing import List, Dict, Any, Union, Optional
 from datetime import datetime, timedelta
 import os
@@ -89,10 +89,34 @@ def auto_organize_workspace():
     except Exception as e:
         print(f"[WORKSPACE CLEANUP] Auto organize warning: {e}")
 
-auto_organize_workspace()
+# P0-3 (SECURITY/RELIABILITY FIX): auto_organize_workspace() used to run unconditionally
+# on every application boot (including every Heroku dyno restart/deploy), moving,
+# rewriting, and deleting source files on disk. Application startup must be a pure,
+# read-only operation with respect to the repository's file layout — mutating source
+# files as a side effect of importing main.py is unpredictable and unsafe on a
+# production entry point. The function is intentionally left unused/uninvoked rather
+# than deleted, in case a maintainer needs it for a one-off, manually-triggered local
+# cleanup (it is NOT wired into any route or startup hook).
+# auto_organize_workspace()  # DO NOT re-enable on app startup — see P0-3.
+
+def _configure_import_paths():
+    """
+    Read-only replacement for the import-path side effect that
+    auto_organize_workspace() used to bundle together with its destructive file
+    moves. backend/auth_utils.py and a few backend/db/*.py scripts do a bare
+    `from database import ...` (not `from db.database import ...`), which only
+    resolves if backend/db is directly on sys.path. This performs ONLY that path
+    registration — no files are created, moved, rewritten, or deleted.
+    """
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    db_dir = os.path.join(base_dir, "db")
+    if db_dir not in sys.path:
+        sys.path.insert(0, db_dir)
+
+_configure_import_paths()
 
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 import bcrypt as _bcrypt
@@ -127,16 +151,35 @@ from schemas import (
     ItemSchema, PaymentSchema, DeliverySchema, UserCreateSchema, UserUpdateSchema,
     InventorySchema, InventoryUpdateSchema, InventoryLogSchema
 )
-from db.database import engine, get_db, SessionLocal, DATABASE_URL, is_sqlite, conn_error, LOCAL_SQLITE_PATH, LOCAL_SQLITE
-from ml.ml_engine import predictor
+from db.database import (
+    engine, get_db, SessionLocal, DATABASE_URL, is_sqlite, conn_error,
+    LOCAL_SQLITE_PATH, LOCAL_SQLITE, persist_user_to_sqlite_file,
+    checkpoint_sqlite, reconcile_sqlite_users_into_session,
+)
+from ml.ml_engine import predictor, live_order_payload_from_db_order
 from ml.historical_ml_engine import historical_ml_engine
-from auth_utils import get_current_user, require_role, create_access_token, sanitize_error
+from ml.business_rules import color_count_conflict_message
+from auth_utils import (
+    get_current_user,
+    require_role,
+    create_access_token,
+    sanitize_error,
+    frontend_base_for_reset_link,
+    local_vite_auth_redirect,
+)
 
 # ------------------------------------------
 # SYSTEM INITIALIZATION
 # ------------------------------------------
 DB_TYPE = "PostgreSQL" if "postgresql" in DATABASE_URL else "SQLite"
-ENV = "Production" if os.getenv("PORT") else "Localhost"
+# Heroku always injects PORT (and usually DYNO). Local uvicorn should leave PORT unset
+# unless intentionally simulating production. ENV=production|prod is an explicit override.
+_IS_PRODUCTION = (
+    bool(os.getenv("PORT"))
+    or bool(os.getenv("DYNO"))
+    or str(os.getenv("ENV", "")).strip().lower() in ("production", "prod")
+)
+ENV = "Production" if _IS_PRODUCTION else "Localhost"
 
 def parse_local_date(iso_str: Optional[str]) -> datetime:
     if not iso_str:
@@ -155,6 +198,29 @@ def parse_local_date(iso_str: Optional[str]) -> datetime:
 
 def recalculate_inventory_status(item: Inventory):
     item.recalculate_status()
+
+
+def lock_inventory_row(db: Session, inv_id: int):
+    """Row-lock inventory for safe concurrent stock updates (PostgreSQL; best-effort on SQLite)."""
+    return (
+        db.query(Inventory)
+        .filter(Inventory.item_id == inv_id)
+        .with_for_update()
+        .first()
+    )
+
+
+def assert_assignable_role(actor: User, role_name: str) -> str:
+    """Prevent Owner privilege escalation into Admin."""
+    requested = str(role_name or "").strip().lower()
+    actor_role = str(getattr(getattr(actor, "role", None), "role_name", "") or "").strip().lower()
+    if requested not in ("owner", "staff", "admin"):
+        raise HTTPException(status_code=400, detail="Invalid role specified")
+    if requested == "admin" and actor_role != "admin":
+        raise HTTPException(status_code=403, detail="Only an Admin can assign the Admin role")
+    if actor_role == "owner" and requested not in ("owner", "staff"):
+        raise HTTPException(status_code=403, detail="Owner accounts may only assign Owner or Staff roles")
+    return requested
 
 # ==========================================
 # AUDIT TRAIL HELPER
@@ -181,6 +247,9 @@ TABLE_TO_MODULE: dict = {
     "deliveries":          "Job Orders",
     "status_log":          "Job Orders",
     "customers":           "Job Orders",
+    "historical_orders":   "Historical Records",
+    "historical_items":    "Historical Records",
+    "historical_images":   "Historical Records",
 }
 
 def log_audit(
@@ -255,13 +324,25 @@ def log_audit(
 
 print(f"\n[BOOT] Shoelotskey SMS v2.0 - Environment: {ENV} ({DB_TYPE})")
 
-# Initialize FastAPI 
+# Initialize FastAPI — hide interactive OpenAPI surface in Production
 app = FastAPI(
     title="Shoelotskey 3NF & ML SMS",
     description="Backend API for Normalized Service Management",
     version="2.0.0",
-    swagger_ui_parameters={"filter": True}
+    swagger_ui_parameters={"filter": True},
+    docs_url=None if _IS_PRODUCTION else "/docs",
+    redoc_url=None if _IS_PRODUCTION else "/redoc",
+    openapi_url=None if _IS_PRODUCTION else "/openapi.json",
 )
+
+# Defense-in-depth: even if docs routes were somehow mounted, block them in Production.
+if _IS_PRODUCTION:
+    @app.middleware("http")
+    async def _block_public_api_docs(request: Request, call_next):
+        path = (request.url.path or "").rstrip("/") or "/"
+        if path in ("/docs", "/redoc", "/openapi.json") or path.startswith("/docs/") or path.startswith("/redoc/"):
+            return JSONResponse(status_code=404, content={"detail": "Not Found"})
+        return await call_next(request)
 
 # Configure Templates for custom error pages
 # Look in the same directory as main.py for the 'templates' folder
@@ -363,21 +444,28 @@ async def global_exception_handler(request: Request, exc: Exception):
 
     print(f"[SECURITY ALERT] Unhandled Exception at {file_name}:{line_no} -> {raw_msg}")
     
-    return JSONResponse(
-        status_code=500,
-        content={
-            "detail": safe_msg, 
-            "error_id": str(uuid.uuid4())[:8],
-            "debug_info": {"file": file_name, "line": line_no}
-        }
-    )
+    content = {
+        "detail": safe_msg,
+        "error_id": str(uuid.uuid4())[:8],
+    }
+    if not _IS_PRODUCTION:
+        content["debug_info"] = {"file": file_name, "line": line_no}
+    return JSONResponse(status_code=500, content=content)
 
 # Mount Brand Assets & Historical Documents
 app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="brand_assets")
 
+# Scanned job-order forms must not be world-readable. Serve via authenticated
+# /api/historical/image/... only. Optional local debug mount:
+#   EXPOSE_HISTORICAL_STATIC=1  (ignored when PORT/ENV marks Production)
 hist_dir = os.path.join(os.path.dirname(__file__), "historical_data")
 os.makedirs(hist_dir, exist_ok=True)
-app.mount("/historical_data", StaticFiles(directory=hist_dir), name="historical_data")
+_expose_hist_static = os.getenv("EXPOSE_HISTORICAL_STATIC", "").strip().lower() in ("1", "true", "yes")
+if _expose_hist_static and ENV != "Production":
+    app.mount("/historical_data", StaticFiles(directory=hist_dir), name="historical_data")
+    print("[SECURITY] Local historical_data static mount enabled (EXPOSE_HISTORICAL_STATIC)")
+else:
+    print("[SECURITY] historical_data is not publicly mounted — use /api/historical/image/")
 # Configure CORS for React compatibility (OWASP A05: Security Misconfiguration Hardening)
 origins = [
     "http://localhost:5173",
@@ -396,6 +484,7 @@ if env_origin:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -416,27 +505,35 @@ def startup_sequence():
     
     print(f"[BOOT] Target: {str(db_mod.engine.url).split('@')[-1] if db_mod.engine else 'None'}")
     
-    # [USER REQUEST] Ensure local fallback database is ALWAYS ready even if we are online.
-    try:
-        from sqlalchemy import create_engine
-        local_engine = create_engine(LOCAL_SQLITE)
-        if hasattr(db_mod, "ensure_sqlite_schema_and_defaults"):
-            db_mod.ensure_sqlite_schema_and_defaults(local_engine)
-        else:
-            Base.metadata.create_all(bind=local_engine)
-        local_engine.dispose()
-        print("[BOOT] Local Fallback (shoelotskey.db) Structure & Defaults: OK.")
-    except Exception as e:
-        print(f"[BOOT] LOCAL DB SYNC WARNING: {e}")
+    # Ensure local fallback database is ALWAYS ready even if we are online — but ONLY
+    # for Localhost/defense continuity. P0-5: Production must never provision/maintain
+    # a local SQLite file with seeded credentials on the Heroku ephemeral disk.
+    if ENV != "Production":
+        try:
+            from sqlalchemy import create_engine
+            local_engine = create_engine(LOCAL_SQLITE)
+            if hasattr(db_mod, "ensure_sqlite_schema_and_defaults"):
+                db_mod.ensure_sqlite_schema_and_defaults(local_engine)
+            else:
+                Base.metadata.create_all(bind=local_engine)
+            local_engine.dispose()
+            print("[BOOT] Local Fallback (shoelotskey.db) Structure & Defaults: OK.")
+        except Exception as e:
+            print(f"[BOOT] LOCAL DB SYNC WARNING: {e}")
+    else:
+        print("[BOOT] Production environment — skipping local SQLite fallback provisioning (P0-5).")
 
     # 1. Verify primary database connection and fallback to Local SQLite if Cloud Postgres is unreachable
     try:
         with db_mod.engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         print(f"[DATABASE] SUCCESS: Connected to Online PostgreSQL")
+        # P0-5: Clear the outage flag if a transient blip during module import has
+        # since recovered by the time the app-level startup event fires.
+        db_mod.DB_UNAVAILABLE = False
     except Exception as e:
         if ENV == "Production":
-            print(f"[DATABASE FATAL ERROR] Cloud Postgres unreachable in Production ({str(e)[:80]}...). Halting startup to prevent downgrade attack.")
+            print(f"[DATABASE FATAL ERROR] Cloud Postgres unreachable in Production ({str(e)[:80]}...). Halting startup to prevent downgrade attack (P0-5 — no SQLite fallback in Production).")
             raise RuntimeError("Database connection failed in Production environment.")
         print(f"[DATABASE OFFLINE AUTO-SWITCH] Cloud Postgres unreachable ({str(e)[:80]}...). Switching directly to Local SQLite.")
         if hasattr(db_mod, "switch_to_offline_sqlite"):
@@ -474,6 +571,34 @@ def startup_sequence():
                     except: pass
     except Exception as e:
         print(f">>> Migration Warning (users table): {e}")
+
+    # Historical items: per-item claimed dates from paper notes
+    try:
+        if "historical_items" in existing_tables:
+            columns = [c['name'] for c in inspector.get_columns("historical_items")]
+            with engine.begin() as conn:
+                if "claimed_date" not in columns:
+                    print(">>> Migration: Adding claimed_date to historical_items")
+                    try:
+                        conn.execute(text("ALTER TABLE historical_items ADD COLUMN claimed_date TIMESTAMP NULL"))
+                    except Exception:
+                        pass
+    except Exception as e:
+        print(f">>> Migration Warning (historical_items table): {e}")
+
+    # Historical orders: original (pre-discount) paper total
+    try:
+        if "historical_orders" in existing_tables:
+            columns = [c['name'] for c in inspector.get_columns("historical_orders")]
+            with engine.begin() as conn:
+                if "original_grand_total" not in columns:
+                    print(">>> Migration: Adding original_grand_total to historical_orders")
+                    try:
+                        conn.execute(text("ALTER TABLE historical_orders ADD COLUMN original_grand_total NUMERIC(10, 2) NULL"))
+                    except Exception:
+                        pass
+    except Exception as e:
+        print(f">>> Migration Warning (historical_orders original_grand_total): {e}")
 
     # Items Table: Machine Learning Features (Condition Flags)
     try:
@@ -542,14 +667,16 @@ def startup_sequence():
                             ("consumption_unit", "VARCHAR(20) DEFAULT ''"),
                             ("package_size", "DOUBLE PRECISION DEFAULT 0.0" if not is_sqlite_target else "REAL DEFAULT 0.0"),
                             ("package_unit", "VARCHAR(20) DEFAULT ''"),
-                            ("low_stock_threshold", "DOUBLE PRECISION DEFAULT 0.0" if not is_sqlite_target else "REAL DEFAULT 0.0")
+                            ("low_stock_threshold", "DOUBLE PRECISION DEFAULT 0.0" if not is_sqlite_target else "REAL DEFAULT 0.0"),
+                            ("is_retail", "BOOLEAN DEFAULT FALSE"),
+                            ("retail_price", "DOUBLE PRECISION DEFAULT 0.0" if not is_sqlite_target else "REAL DEFAULT 0.0"),
                         ]:
                             if col_name not in target_columns:
                                 try:
                                     conn.execute(text(f"ALTER TABLE inventory ADD COLUMN {col_name} {col_type}"))
                                     print(f">>> Migration: Added {col_name} to inventory in {db_name}")
-                                except Exception:
-                                    pass
+                                except Exception as col_err:
+                                    print(f"[SCHEMA MIGRATION WARNING] Could not add {col_name} on {db_name}: {col_err}")
                 except Exception as mig_err:
                     print(f"[SCHEMA MIGRATION WARNING] Failed to migrate {db_name}: {mig_err}")
     except Exception as e:
@@ -758,6 +885,8 @@ def startup_sequence():
     db = SessionLocal()
     try:
         seed_lookups(db)
+        reconcile_sqlite_users_into_session(db)
+        checkpoint_sqlite()
     finally:
         db.close()
 
@@ -788,13 +917,72 @@ def seed_lookups(db: Session):
     except Exception as norm_err:
         db.rollback()
         print(f">>> Normalization Warning: {norm_err}")
+
+    try:
+        # Older claimed/for-release rows often have released_at cleared (claim used to
+        # wipe it). Restore the first For Release status-log time, then claimed_at.
+        filled_from_log = db.execute(text("""
+            UPDATE orders
+            SET released_at = (
+                SELECT MIN(sl.changed_at)
+                FROM status_log sl
+                JOIN status s ON s.status_id = sl.status_id
+                WHERE sl.order_id = orders.order_id
+                  AND lower(s.status_name) = 'for-release'
+            )
+            WHERE released_at IS NULL
+              AND status_id IN (
+                  SELECT status_id FROM status
+                  WHERE lower(status_name) IN ('for-release', 'claimed')
+              )
+        """))
+        filled_from_claim = db.execute(text("""
+            UPDATE orders
+            SET released_at = claimed_at
+            WHERE released_at IS NULL
+              AND claimed_at IS NOT NULL
+              AND status_id IN (
+                  SELECT status_id FROM status
+                  WHERE lower(status_name) IN ('for-release', 'claimed')
+              )
+        """))
+        db.commit()
+        restored = (filled_from_log.rowcount or 0) + (filled_from_claim.rowcount or 0)
+        if restored:
+            print(f">>> Restored missing released_at on {restored} for-release/claimed order(s).")
+    except Exception as release_backfill_err:
+        db.rollback()
+        print(f">>> Release-date backfill warning: {release_backfill_err}")
     
     # Seed Roles
     if db.query(Role).count() == 0:
         print(">>> Seeding Roles...")
-        roles = [Role(role_name="owner"), Role(role_name="staff")]
+        roles = [Role(role_name="owner"), Role(role_name="staff"), Role(role_name="admin")]
         db.add_all(roles)
         db.commit()
+    else:
+        # Ensure admin role exists dynamically
+        admin_role = db.query(Role).filter(Role.role_name == "admin").first()
+        if not admin_role:
+            db.add(Role(role_name="admin"))
+            db.commit()
+
+    # Seed Admin User
+    import bcrypt
+    admin_u = db.query(User).filter(User.username == "admin").first()
+    if not admin_u:
+        print(">>> Seeding Admin User...")
+        role_admin = db.query(Role).filter(Role.role_name == "admin").first()
+        if role_admin:
+            admin_pw_hash = bcrypt.hashpw(b"@admin123", bcrypt.gensalt()).decode("utf-8")
+            db.add(User(
+                username="admin", 
+                email="charmaineroseangeles@gmail.com", 
+                password_hash=admin_pw_hash, 
+                role_id=role_admin.role_id, 
+                is_active=True
+            ))
+            db.commit()
 
     # Seed Statuses — must match frontend JobStatus exactly
     if db.query(Status).count() == 0:
@@ -1250,6 +1438,7 @@ def seed_lookups(db: Session):
     try:
         import threading
         import time
+        import os
         from db.sync_to_local import sync_data
         
         def auto_sync_loop():
@@ -1265,8 +1454,12 @@ def seed_lookups(db: Session):
                 # Synchronize every 10 minutes (600 seconds)
                 time.sleep(600)
                 
-        threading.Thread(target=auto_sync_loop, daemon=True).start()
-        print("[AUTO-SYNC] Background synchronization engine initialized.")
+        if os.environ.get("DISABLE_AUTO_SYNC", "false").lower() == "true":
+            print("[AUTO-SYNC] Background synchronization disabled via DISABLE_AUTO_SYNC=true.")
+            print("[AUTO-SYNC] Run 'python backend/db/sync_to_local.py' manually if offline fallback data is needed.")
+        else:
+            threading.Thread(target=auto_sync_loop, daemon=True).start()
+            print("[AUTO-SYNC] Background synchronization engine initialized.")
     except Exception as t_err:
         print(f"[AUTO-SYNC] Failed to initialize background thread: {t_err}")
 
@@ -1274,8 +1467,9 @@ def seed_lookups(db: Session):
 
 @app.on_event("shutdown")
 def shutdown_event():
-    """Cleanly dispose database connection pools on Windows server termination or StatReload."""
+    """Flush SQLite WAL then dispose pools so created users survive restart."""
     try:
+        checkpoint_sqlite()
         if engine:
             engine.dispose()
             print("[SHUTDOWN] Cleanly terminated database connection pool.")
@@ -1284,17 +1478,59 @@ def shutdown_event():
 
 @app.get("/api/health-check")
 def health_check_extended(db: Session = Depends(get_db)):
-    """Diagnostic endpoint to verify DB connectivity and dialect."""
-    import os
-    has_offline_data = os.path.exists(LOCAL_SQLITE_PATH) and os.path.getsize(LOCAL_SQLITE_PATH) > 10240 
-    
+    """Lightweight liveness probe. Exposes dialect label only — no filesystem paths."""
+    try:
+        db.execute(text("SELECT 1"))
+        db_ok = True
+    except Exception:
+        db_ok = False
     return {
-        "status": "online",
-        "database": "SQLite (Backup)" if is_sqlite else "PostgreSQL (Remote)",
-        "db_error": conn_error if is_sqlite else None,
-        "backup_file": LOCAL_SQLITE_PATH,
-        "has_pending_offline_data": has_offline_data if not is_sqlite else False,
-        "timestamp": datetime.now()
+        "status": "online" if db_ok else "degraded",
+        "database": "PostgreSQL (Remote)" if not is_sqlite else "SQLite (Local)",
+        "environment": ENV,
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+    }
+
+
+@app.get("/api/health")
+def health_check(db: Session = Depends(get_db), current_user: User = Depends(require_role("owner"))):
+    """Owner-only diagnostic snapshot (counts, build path). Use /api/health-check for uptime probes."""
+    import os
+    from datetime import datetime
+    import traceback
+    
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    index_path = os.path.abspath(os.path.join(base_dir, "..", "dist", "index.html"))
+    build_time = "Unknown"
+    if os.path.exists(index_path):
+        mtime = os.path.getmtime(index_path)
+        build_time = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M:%S')
+
+    counts = {}
+    user_ids = []
+    try:
+        counts["users"] = db.query(User).count()
+        counts["roles"] = db.query(Role).count()
+        counts["statuses"] = db.query(Status).count()
+        counts["priorities"] = db.query(PriorityLevel).count()
+        counts["orders"] = db.query(Order).count()
+        user_ids = [u.user_id for u in db.query(User).limit(5).all()]
+    except Exception as e:
+        counts["error"] = str(e)
+
+    error_str = "Skipped (Disabled to prevent DB pollution)"
+
+    return {
+        "status": "ok", 
+        "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        "environment": ENV, 
+        "version": "2.0.3-diagnostic",
+        "running_from": base_dir,
+        "build_time": build_time,
+        "counts": counts,
+        "sample_user_ids": user_ids,
+        "create_order_diagnostic": error_str,
+        "db_type": DB_TYPE
     }
 
 
@@ -1565,7 +1801,8 @@ def sync_backup_to_cloud(db: Session = Depends(get_db), current_user: User = Dep
                     exists_i.unit = i_unit
                     exists_i.unit_price = i_price
                     exists_i.status = i_status
-                    exists_i.is_active = i_active_bool
+                    # Soft-delete must stick: never reactivate from a stale offline SQLite row.
+                    exists_i.is_active = bool(exists_i.is_active) and i_active_bool
                     exists_i.auto_deduct = i_auto_bool
                     exists_i.auto_deduct_trigger = i_trigger
                     exists_i.trigger_service = i_service
@@ -1644,11 +1881,14 @@ def sync_backup_to_cloud(db: Session = Depends(get_db), current_user: User = Dep
 # 0.6 CAPSTONE STORED PROCEDURE DEMO
 # ==========================================
 @app.post("/api/trigger-analytics-procedure")
-def trigger_daily_sales_procedure(db: Session = Depends(get_db)):
+def trigger_daily_sales_procedure(db: Session = Depends(get_db), current_user: User = Depends(require_role("owner"))):
     """
     Capstone Defense Route: Manually executes the PostgreSQL Stored Procedure 
     instead of waiting for the midnight pg_cron job. Falls back to SQLite emulation 
     if running offline (Hybrid Persistence Bridge).
+
+    SECURITY (OWASP A01 / P0-1): Owner-only. This mutates the daily_analytics_summary
+    cache table and must not be callable by unauthenticated clients.
     """
     if is_sqlite:
         try:
@@ -1755,8 +1995,13 @@ def login(request: LoginRequest, db: Session = Depends(get_db), http_request: Re
                 or_(User.username == request.username, User.email == request.username)
             ).first()
         except Exception as query_err:
-            print(f"[AUTH OFFLINE RESILIENCE] Primary query failed ({query_err}). Auto-switching to offline SQLite...")
             import db.database as db_mod
+            # P0-5: Production must fail safely (503) rather than silently authenticate
+            # against a local SQLite file that may contain seeded/weak credentials.
+            if db_mod.IS_PRODUCTION_ENV:
+                print(f"[AUTH] Login query failed against PostgreSQL in Production ({query_err}). Rejecting (P0-5 — no SQLite failover in Production).")
+                raise HTTPException(status_code=503, detail="Database service temporarily unavailable. Please try again shortly.")
+            print(f"[AUTH OFFLINE RESILIENCE] Primary query failed ({query_err}). Auto-switching to offline SQLite...")
             db.close()
             fallback_session_maker = db_mod.switch_to_offline_sqlite()
             db = fallback_session_maker()
@@ -1773,13 +2018,22 @@ def login(request: LoginRequest, db: Session = Depends(get_db), http_request: Re
             raise HTTPException(status_code=403, detail="Account is deactivated. Please contact an administrator.")
 
         # 1. CHECK LOCK STATUS
-        if db_user.locked_until and db_user.locked_until > datetime.utcnow():
-            remaining = (db_user.locked_until - datetime.utcnow()).total_seconds() / 60
-            print(f"[AUTH] Denied: Account '{request.username}' is locked for {remaining:.1f} more mins.")
-            raise HTTPException(
-                status_code=403, 
-                detail=f"Account locked. Try again in {int(remaining)} minutes."
-            )
+        if db_user.locked_until:
+            if db_user.locked_until > datetime.utcnow():
+                remaining = (db_user.locked_until - datetime.utcnow()).total_seconds() / 60
+                print(f"[AUTH] Denied: Account '{request.username}' is locked for {remaining:.1f} more mins.")
+                raise HTTPException(
+                    status_code=403, 
+                    detail=f"Account locked. Try again in {int(remaining)} minutes."
+                )
+            else:
+                # Lock has expired. Reset attempts to prevent immediate re-locking on next failure.
+                db_user.failed_login_attempts = 0
+                db_user.locked_until = None
+                db.commit()
+
+        if db_user.failed_login_attempts is None:
+            db_user.failed_login_attempts = 0
 
         # 2. VALIDATE PASSWORD (Bcrypt with Plaintext Migration Disabled)
         pw_match = False
@@ -1891,6 +2145,12 @@ def verify_token(current_user: User = Depends(get_current_user)):
 # 2.2 PASSWORD RECOVERY (Mailgun Integration)
 # ==========================================
 
+def _public_email_logo_url() -> str:
+    """Gmail cannot fetch localhost images. Always embed the public site logo."""
+    base = (os.environ.get("PUBLIC_APP_URL") or "https://shoelotskey-villamor-pasay.app").rstrip("/")
+    return f"{base}/login.png"
+
+
 def send_reset_email(user_email, reset_link):
     """Integrates with Mailgun API to send real emails."""
     api_key = os.environ.get('MAILGUN_API_KEY')
@@ -1900,18 +2160,12 @@ def send_reset_email(user_email, reset_link):
         print("[EMAIL ERROR] MAILGUN_API_KEY not found in environment.")
         return 500
 
-    # Extract base URL for the logo
-    # Example reset_link: https://domain.com/reset-password?token=...
-    try:
-        base_url = reset_link.split("/reset-password")[0]
-        logo_url = f"{base_url}/login.png"
-    except:
-        logo_url = "https://shoelotskey-villamor-pasay.herokuapp.com/login.png"
+    logo_url = _public_email_logo_url()
 
     url = f"https://api.mailgun.net/v3/{domain}/messages"
     
     payload = {
-        "from": "Shoelotskey Support <postmaster@www.shoelotskey-villamor-pasay.app>",
+        "from": '"Shoelotskey Support" <postmaster@www.shoelotskey-villamor-pasay.app>',
         "to": [user_email],
         "subject": "Reset Your Shoelotskey Password",
         "html": f"""
@@ -1935,7 +2189,7 @@ def send_reset_email(user_email, reset_link):
     try:
         # Mailgun uses HTTP Basic Auth; Brevo used API key in headers
         response = requests.post(url, auth=("api", api_key), data=payload)
-        print(f"[EMAIL] Reset link sent to {user_email}. Status: {response.status_code}")
+        print(f"[EMAIL] Reset link sent to {user_email}. Status: {response.status_code} Logo: {logo_url}")
         return response.status_code # 200 means success for Mailgun
     except Exception as e:
         print(f"[EMAIL ERROR] Failed to send: {e}")
@@ -1955,12 +2209,12 @@ async def forgot_password(request: Request, body: ForgotPasswordRequest, db: Ses
     user.reset_token_expiry = datetime.utcnow() + timedelta(hours=1)
     db.commit()
 
-    # Dynamic Host Detection
-    requested_host = request.headers.get("host", "shoelotskey-villamor-pasay.herokuapp.com")
-    protocol = "https" if "herokuapp.com" in requested_host or ".app" in requested_host else "http"
-    
-    # Construction: Reset Link
-    reset_link = f"{protocol}://{requested_host}/reset-password?token={token}"
+    frontend_base = frontend_base_for_reset_link(
+        request.headers.get("host", "shoelotskey-villamor-pasay.herokuapp.com"),
+        request.headers.get("origin", ""),
+        request.headers.get("referer", ""),
+    )
+    reset_link = f"{frontend_base}/reset-password?token={token}"
     
     # Debug: Print for logs
     print(f"[AUTH] Generated Reset Link: {reset_link}")
@@ -1984,46 +2238,6 @@ async def forgot_password(request: Request, body: ForgotPasswordRequest, db: Ses
         print(f" LINK: {reset_link}")
         print("*"*60 + "\n")
         return res_fail
-
-@app.get("/api/health")
-def health_check(db: Session = Depends(get_db)):
-    import os
-    from datetime import datetime
-    import traceback
-    
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    index_path = os.path.abspath(os.path.join(base_dir, "..", "dist", "index.html"))
-    build_time = "Unknown"
-    if os.path.exists(index_path):
-        mtime = os.path.getmtime(index_path)
-        build_time = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M:%S')
-
-    counts = {}
-    user_ids = []
-    try:
-        counts["users"] = db.query(User).count()
-        counts["roles"] = db.query(Role).count()
-        counts["statuses"] = db.query(Status).count()
-        counts["priorities"] = db.query(PriorityLevel).count()
-        counts["orders"] = db.query(Order).count()
-        user_ids = [u.user_id for u in db.query(User).limit(5).all()]
-    except Exception as e:
-        counts["error"] = str(e)
-
-    error_str = "Skipped (Disabled to prevent DB pollution)"
-
-    return {
-        "status": "ok", 
-        "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        "environment": ENV, 
-        "version": "2.0.3-diagnostic",
-        "running_from": base_dir,
-        "build_time": build_time,
-        "counts": counts,
-        "sample_user_ids": user_ids,
-        "create_order_diagnostic": error_str,
-        "db_type": DB_TYPE
-    }
 
 @app.get("/api/verify-reset-token")
 async def verify_reset_token(token: str, db: Session = Depends(get_db)):
@@ -2092,39 +2306,87 @@ async def reset_password(request: ResetPasswordRequest, db: Session = Depends(ge
 # ==========================================
 
 @app.post("/api/predict")
-async def get_prediction(order_data: Dict[str, Any], db: Session = Depends(get_db)):
+async def get_prediction(
+    order_data: Dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """
-    ML Endpont: Predicts completion date based on order complexity.
-    Returns: Predicted date and metadata.
+    Dual-result estimate: official Shoelotskey business-rule release date plus
+    an independent Random Forest prediction. The official operational date is
+    always the business-rule result. Authenticated staff only.
     """
-    print(f"[ML] Predicting completion for new draft...")
+    print(f"[ML] Dual estimate for new draft (user={current_user.username})...")
     try:
-        predicted_dt = predictor.predict_completion(db, order_data)
+        estimate = predictor.estimate_order_release(db, order_data)
+        official_dt = estimate["business_rule_date"]
+        ml_dt = estimate.get("ml_predicted_date")
+        ml_status = estimate.get("ml_status") or "unavailable"
         return {
-            "predicted_date": predicted_dt.isoformat(),
-            "predicted_days": int(round((predicted_dt - datetime.now()).total_seconds() / 86400.0)),
+            "authoritative": "business_rule",
+            "business_rule_days": estimate["business_rule_days"],
+            "business_rule_date": official_dt.strftime("%Y-%m-%d"),
+            "ml_predicted_days": estimate.get("ml_predicted_days"),
+            "ml_predicted_date": ml_dt.strftime("%Y-%m-%d") if ml_dt else None,
+            "ml_model": estimate.get("ml_model") or "Random Forest Regression",
+            "ml_status": ml_status,
+            "ml_source": estimate.get("ml_source") or "random_forest",
+            "ml_reason": estimate.get("ml_reason"),
+            # Backward-compatible official fields used by the Job Order Form date input.
+            "predicted_date": official_dt.isoformat(),
+            "predicted_date_ymd": official_dt.strftime("%Y-%m-%d"),
+            "predicted_days": int(estimate["business_rule_days"]),
             "status": "success",
-            "engine": "Shoelotskey SPE v1.0"
+            "engine": "Shoelotskey SPE v1.0",
+            "source": "business_rule",
+            "fallback_reason": estimate.get("ml_reason") if ml_status != "valid" else None,
+            "model_loaded": bool(estimate.get("model_loaded")),
+            "algorithm": "Shoelotskey Business Rules",
         }
     except Exception as e:
         print(f"[ML ERROR] {e}")
-        # Return a safe fallback (10 days)
         fallback = datetime.now() + timedelta(days=10)
-        return {"predicted_date": fallback.isoformat(), "status": "fallback", "error": str(e)}
+        return {
+            "authoritative": "business_rule",
+            "business_rule_days": 10,
+            "business_rule_date": fallback.strftime("%Y-%m-%d"),
+            "ml_predicted_days": None,
+            "ml_predicted_date": None,
+            "ml_model": "Random Forest Regression",
+            "ml_status": "unavailable",
+            "ml_source": "random_forest",
+            "ml_reason": str(e),
+            "predicted_date": fallback.isoformat(),
+            "predicted_date_ymd": fallback.strftime("%Y-%m-%d"),
+            "predicted_days": 10,
+            "status": "fallback", "error": str(e),
+            "source": "error_fallback",
+            "fallback_reason": str(e),
+            "model_loaded": False, "algorithm": "Shoelotskey Business Rules",
+        }
+
+@app.get("/api/ml/status")
+def ml_status(current_user: User = Depends(get_current_user)):
+    """P0-4/P1-13: Honest model-availability status for the Job Order ML prediction engine."""
+    return predictor.get_status()
 
 @app.post("/api/ml/train")
 def train_model(db: Session = Depends(get_db), current_user: User = Depends(require_role("owner"))):
     """Triggers retraining of the ML model based on history (Owner only)."""
-    success = predictor.train_from_history(db)
-    if success:
+    result = predictor.train_from_history(db)
+    if result.get("status") == "success":
         log_audit(
             db=db, action="ML_TRAIN", table_name="ml_engine",
-            user=current_user, new_values={"status": "success", "retrained_by": current_user.username},
+            user=current_user,
+            new_values={
+                "status": "success", "retrained_by": current_user.username,
+                "dataset_size": result.get("dataset_size"), "mae": result.get("mae"), "r2_score": result.get("r2_score"),
+            },
             module="Machine Learning",
         )
-        return {"message": "Model retrained successfully"}
+        return {"message": "Model retrained successfully", **result}
     else:
-        return {"message": "Retraining skipped - insufficient historical data"}
+        return {"message": "Retraining skipped - insufficient historical data", **result}
 
 # ==========================================
 # 2.5 USER MANAGEMENT
@@ -2134,14 +2396,18 @@ def train_model(db: Session = Depends(get_db), current_user: User = Depends(requ
 def get_users(db: Session = Depends(get_db), current_user: User = Depends(require_role("owner"))):
     """Fetch all users (Owner only - OWASP A01). Supports seamless offline SQLite failover."""
     try:
-        users = db.query(User).options(joinedload(User.role)).all()
+        users = db.query(User).options(joinedload(User.role)).order_by(User.created_at.desc()).all()
     except Exception as e:
-        print(f"[USER MGT OFFLINE RESILIENCE] Query failed ({e}). Auto-switching to SQLite...")
         import db.database as db_mod
+        # P0-5: No SQLite failover in Production — fail safely instead.
+        if db_mod.IS_PRODUCTION_ENV:
+            print(f"[USER MGT] Query failed against PostgreSQL in Production ({e}). Rejecting (P0-5).")
+            raise HTTPException(status_code=503, detail="Database service temporarily unavailable. Please try again shortly.")
+        print(f"[USER MGT OFFLINE RESILIENCE] Query failed ({e}). Auto-switching to SQLite...")
         db.close()
         fallback_maker = db_mod.switch_to_offline_sqlite()
         db = fallback_maker()
-        users = db.query(User).options(joinedload(User.role)).all()
+        users = db.query(User).options(joinedload(User.role)).order_by(User.created_at.desc()).all()
     return users
 
 @app.post("/api/users", response_model=UserSchema)
@@ -2155,6 +2421,7 @@ def create_user(user_data: UserCreateSchema, db: Session = Depends(get_db), curr
     db_role = db.query(Role).filter(Role.role_name == user_data.role_name).first()
     if not db_role:
         raise HTTPException(status_code=400, detail="Invalid role specified")
+    assert_assignable_role(current_user, user_data.role_name)
 
     new_user = User(
         username=user_data.username,
@@ -2166,6 +2433,11 @@ def create_user(user_data: UserCreateSchema, db: Session = Depends(get_db), curr
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
+    persist_user_to_sqlite_file(
+        new_user.username, new_user.email, new_user.password_hash,
+        user_data.role_name, bool(new_user.is_active),
+    )
+    checkpoint_sqlite()
     log_audit(
         db=db, action="CREATE", table_name="users",
         record_id=new_user.user_id, user=current_user,
@@ -2222,6 +2494,7 @@ def update_user(user_id: int, user_update: UserUpdateSchema, db: Session = Depen
         db_role = db.query(Role).filter(Role.role_name == user_update.role_name).first()
         if not db_role:
             raise HTTPException(status_code=400, detail="Invalid role specified")
+        assert_assignable_role(current_user, user_update.role_name)
         db_user.role_id = db_role.role_id
         
     if user_update.is_active is not None:
@@ -2229,6 +2502,12 @@ def update_user(user_id: int, user_update: UserUpdateSchema, db: Session = Depen
 
     db.commit()
     db.refresh(db_user)
+    persist_user_to_sqlite_file(
+        db_user.username, db_user.email, db_user.password_hash,
+        db_user.role.role_name if db_user.role else "staff",
+        bool(db_user.is_active),
+    )
+    checkpoint_sqlite()
     log_audit(
         db=db, action="UPDATE", table_name="users",
         record_id=user_id, user=current_user,
@@ -2254,14 +2533,20 @@ def delete_user(user_id: int, db: Session = Depends(get_db), current_user: User 
     # [PRIORITY 1 FIX] Prevent Foreign Key constraint violations and preserve audit trail integrity:
     # If the user has any transaction history (Orders, Expenses, Status Logs, Inventory Logs), deactivate instead of hard-deleting.
     has_history = (
-        db.query(Order.order_id).filter(Order.processor_id == user_id).first() or
+        db.query(Order.order_id).filter(Order.user_id == user_id).first() or
         db.query(Expense.expense_id).filter(Expense.user_id == user_id).first() or
-        db.query(StatusLog.log_id).filter(StatusLog.user_id == user_id).first() or
+        db.query(StatusLog.status_log_id).filter(StatusLog.user_id == user_id).first() or
         db.query(InventoryLog.log_id).filter(InventoryLog.user_id == user_id).first()
     )
     if has_history:
         db_user.is_active = False
         db.commit()
+        persist_user_to_sqlite_file(
+            db_user.username, db_user.email, db_user.password_hash,
+            db_user.role.role_name if db_user.role else "staff",
+            False,
+        )
+        checkpoint_sqlite()
         log_audit(
             db=db, action="UPDATE", table_name="users",
             record_id=user_id, user=current_user,
@@ -2275,6 +2560,7 @@ def delete_user(user_id: int, db: Session = Depends(get_db), current_user: User 
     deleted_snapshot = {"username": db_user.username, "email": db_user.email, "role": db_user.role.role_name}
     db.delete(db_user)
     db.commit()
+    checkpoint_sqlite()
     log_audit(
         db=db, action="DELETE", table_name="users",
         record_id=user_id, user=current_user,
@@ -2307,6 +2593,12 @@ def read_orders(db: Session = Depends(get_db), current_user: User = Depends(get_
 
     return orders
 
+def _live_canonical_order_number(db: Session, created_dt: datetime) -> str:
+    """Same ORD-YYYY-MM-DD-NNN rule as JobOrderForm when the client omits orderNumber."""
+    from order_numbering import generate_canonical_order_id
+    return generate_canonical_order_id(db, created_dt)
+
+
 @app.post("/api/orders", response_model=OrderSchema)
 def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
@@ -2329,12 +2621,12 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
             return existing_order
 
     try:
-        # Step 1: Customer Normalization
-        customer_name = order_data.get("customerName", "Guest")
-        contact = order_data.get("contactNumber", "0000000000")
+        # Step 1: Customer Normalization (soft unique lookup; DB unique deferred while duplicates remain)
+        customer_name = str(order_data.get("customerName", "Guest") or "Guest").strip()
+        contact = str(order_data.get("contactNumber", "0000000000") or "0000000000").strip()
         db_customer = db.query(Customer).filter(
-            Customer.customer_name == customer_name, 
-            Customer.contact_number == contact
+            func.lower(func.trim(Customer.customer_name)) == customer_name.lower(),
+            func.trim(Customer.contact_number) == contact,
         ).first()
         
         if not db_customer:
@@ -2365,19 +2657,21 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
         if p_val not in ["regular", "rush", "premium"]: p_val = "regular"
         db_prio = db.query(PriorityLevel).filter(PriorityLevel.priority_name == p_val).first() or db.query(PriorityLevel).first()
 
-        # Predicted Completion Handling (Integrated ML)
+        # Official release date is always the Shoelotskey business-rule date.
+        # Random Forest is computed separately and never persisted as expected_at.
+        # A staff manual override (mlAutoPredicted absent/false) is still honored.
         expected_iso = order_data.get("predictedCompletionDate")
-        if expected_iso:
+        ml_auto_predicted = bool(order_data.get("mlAutoPredicted"))
+        if expected_iso and not ml_auto_predicted:
             expected_dt = parse_local_date(expected_iso)
         else:
-            # AUTO-ML: Generate prediction based on services, material, and workload
-            expected_dt = predictor.predict_completion(db, order_data)
+            expected_dt = predictor.estimate_order_release(db, order_data)["business_rule_date"]
 
         t_date = order_data.get("transactionDate") or order_data.get("createdAt")
         created_dt = parse_local_date(t_date) if t_date else datetime.now()
 
         db_order = Order(
-            order_number=order_data.get("orderNumber") or str(uuid.uuid4())[:8].upper(),
+            order_number=order_data.get("orderNumber") or _live_canonical_order_number(db, created_dt),
             customer_id=db_customer.customer_id,
             status_id=db_status.status_id,
             priority_id=db_prio.priority_id,
@@ -2442,6 +2736,8 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
                 "brand": order_data.get("brand"),
                 "shoeModel": order_data.get("shoeModel"),
                 "shoeMaterial": order_data.get("shoeMaterial"),
+                "shoeSize": order_data.get("shoeSize") or order_data.get("size"),
+                "color": order_data.get("color"),
                 "quantity": order_data.get("quantity", 1),
                 "condition": order_data.get("condition", {}),
                 "baseService": order_data.get("baseService", []),
@@ -2449,14 +2745,21 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
                 "inventoryUsed": order_data.get("inventoryUsed", [])
             }]
 
+        conflict = color_count_conflict_message(items_list)
+        if conflict:
+            raise HTTPException(status_code=400, detail=conflict)
+
         for item_data in items_list:
+            item_color = item_data.get("color") or order_data.get("color") or ""
+            if isinstance(item_color, list):
+                item_color = ", ".join(str(c).strip() for c in item_color if str(c).strip())
             db_item = Item(
                 order_id=db_order.order_id, 
                 brand=item_data.get("brand") or order_data.get("brand") or "Unknown", 
                 shoe_model=item_data.get("shoeModel") or order_data.get("shoeModel") or "Unknown",
                 material=item_data.get("shoeMaterial") or order_data.get("shoeMaterial") or "Unknown",
                 shoe_size=str(item_data.get("shoeSize") or item_data.get("size") or order_data.get("shoeSize") or order_data.get("size") or ""),
-                color=str(item_data.get("color") or order_data.get("color") or ""),
+                color=str(item_color or ""),
                 quantity=item_data.get("quantity", 1),
                 item_notes=item_data.get("condition", {}).get("others") if isinstance(item_data.get("condition"), dict) else None
             )
@@ -2472,10 +2775,10 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
                     inv_amount = float(usage.get("amount") or 0)
                     
                     if inv_id and inv_amount > 0:
-                        inv_item = db.query(Inventory).filter(Inventory.item_id == inv_id).first()
+                        inv_item = lock_inventory_row(db, inv_id)
                         if inv_item:
                             print(f"[INVENTORY] Deducting {inv_amount} {inv_item.unit} of '{inv_item.item_name}' for Order {db_order.order_number}")
-                            inv_item.stock_quantity = max(0.0, inv_item.stock_quantity - inv_amount)
+                            inv_item.stock_quantity = max(0.0, float(inv_item.stock_quantity or 0) - inv_amount)
                             recalculate_inventory_status(inv_item)
                             
                             # Log the stock movement
@@ -2513,15 +2816,16 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
 
             # Associate Services
             services_applied = []
-            base_s = item_data.get("baseService", [])
+            base_s = item_data.get("baseService") or []
             if isinstance(base_s, list): services_applied.extend(base_s)
             
-            ads = item_data.get("addOns", [])
+            ads = item_data.get("addOns") or []
             for ad in ads: 
                 if isinstance(ad, dict): services_applied.append(ad.get("name"))
                 else: services_applied.append(ad)
 
             for s_name in list(set(services_applied)):
+                if not s_name: continue
                 service_obj = db.query(Service).filter(Service.service_name == s_name).first()
                 if service_obj:
                     pricing = ItemServiceMapping(item_id=db_item.item_id, service_id=service_obj.service_id, actual_price=service_obj.base_price)
@@ -2547,6 +2851,21 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
         print(f"[TRANS ERROR] {e}")
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+
+def _item_text(value) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, list):
+        return ", ".join(str(part).strip() for part in value if str(part).strip())
+    return str(value).strip()
+
+
+def _keep_item_text(existing, incoming) -> str:
+    """Never blank an existing size/color with an empty edit/sync payload."""
+    incoming_text = _item_text(incoming)
+    existing_text = _item_text(existing)
+    return incoming_text if incoming_text else existing_text
+
 
 def build_order_snapshot(db_order) -> dict:
     """Serializes the complete business object for audit logging (snapshot)."""
@@ -2623,6 +2942,11 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
     db_order = db.query(Order).filter(Order.order_id == order_id).first()
     if not db_order:
         raise HTTPException(status_code=404, detail="System Error: Order record missing.")
+
+    if "items" in updates:
+        conflict = color_count_conflict_message(updates.get("items"))
+        if conflict:
+            raise HTTPException(status_code=400, detail=conflict)
     
     old_order_snapshot = build_order_snapshot(db_order)
     
@@ -2640,6 +2964,8 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
             "completed": "for-release"
         }
         mapped_status = status_map.get(status_name, "new-order")
+        old_status_name = (db_order.status.status_name if db_order.status else "") or ""
+        old_mapped = status_map.get(old_status_name.lower().strip(), old_status_name.lower().strip())
         # Direct DB lookup for the status object
         db_status = db.query(Status).filter(func.lower(Status.status_name) == mapped_status.lower()).first()
         if db_status:
@@ -2671,7 +2997,7 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
                         Inventory.is_active == True,
                         Inventory.auto_deduct == True,
                         Inventory.auto_deduct_trigger.in_(trigger_names)
-                    ).all()
+                    ).with_for_update().all()
                     
                     for item in auto_items:
                         # Check if already deducted for this order to prevent duplicate deductions
@@ -2758,12 +3084,33 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
             print(f"[EDIT] Error: Mapped status '{mapped_status}' not found in Status table.")
 
         if mapped_status == "claimed":
-            db_order.claimed_at = datetime.now()
+            if old_mapped != "claimed":
+                db_order.claimed_at = datetime.now()
         else:
             db_order.claimed_at = None
 
+        def _first_for_release_log():
+            return (
+                db.query(StatusLog)
+                .join(Status, StatusLog.status_id == Status.status_id)
+                .filter(
+                    StatusLog.order_id == order_id,
+                    func.lower(Status.status_name) == "for-release",
+                )
+                .order_by(StatusLog.changed_at.asc())
+                .first()
+            )
+
         if mapped_status == "for-release":
-            db_order.released_at = datetime.now()
+            if old_mapped not in ("for-release", "claimed"):
+                db_order.released_at = datetime.now()
+            elif not db_order.released_at:
+                prev_release = _first_for_release_log()
+                db_order.released_at = prev_release.changed_at if prev_release else datetime.now()
+        elif mapped_status == "claimed":
+            if not db_order.released_at:
+                prev_release = _first_for_release_log()
+                db_order.released_at = prev_release.changed_at if prev_release else (db_order.claimed_at or datetime.now())
         else:
             db_order.released_at = None
 
@@ -2842,9 +3189,13 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
                     if "brand" in item_update: db_item.brand = item_update["brand"]
                     if "shoeModel" in item_update: db_item.shoe_model = item_update["shoeModel"]
                     if "shoeMaterial" in item_update: db_item.material = item_update["shoeMaterial"]
-                    if "color" in item_update: db_item.color = item_update["color"]
+                    if "color" in item_update:
+                        db_item.color = _keep_item_text(db_item.color, item_update.get("color"))
                     if "shoeSize" in item_update or "size" in item_update:
-                        db_item.shoe_size = str(item_update.get("shoeSize") or item_update.get("size") or "")
+                        db_item.shoe_size = _keep_item_text(
+                            db_item.shoe_size,
+                            item_update.get("shoeSize") or item_update.get("size"),
+                        )
                     if "quantity" in item_update: db_item.quantity = item_update["quantity"]
 
                     if "inventoryUsed" in item_update:
@@ -2857,9 +3208,9 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
                                 i_id = u.get("itemId") or u.get("id")
                                 i_amt = float(u.get("amount") or 0)
                                 if i_id:
-                                    inv_item = db.query(Inventory).filter(Inventory.item_id == i_id).first()
+                                    inv_item = lock_inventory_row(db, i_id)
                                     if inv_item:
-                                        inv_item.stock_quantity += i_amt
+                                        inv_item.stock_quantity = float(inv_item.stock_quantity or 0) + i_amt
                                         recalculate_inventory_status(inv_item)
                         
                         if isinstance(new_usage, list):
@@ -2867,9 +3218,9 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
                                 i_id = u.get("itemId") or u.get("id")
                                 i_amt = float(u.get("amount") or 0)
                                 if i_id and i_amt > 0:
-                                    inv_item = db.query(Inventory).filter(Inventory.item_id == i_id).first()
+                                    inv_item = lock_inventory_row(db, i_id)
                                     if inv_item:
-                                        inv_item.stock_quantity = max(0.0, inv_item.stock_quantity - i_amt)
+                                        inv_item.stock_quantity = max(0.0, float(inv_item.stock_quantity or 0) - i_amt)
                                         recalculate_inventory_status(inv_item)
                                         db.add(InventoryLog(item_id=i_id, change_amount=-i_amt, action_type='manual_edit', order_id=db_order.order_id, user_id=current_user.user_id))
                         
@@ -2887,9 +3238,9 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
                 inv_id = usage.get("itemId") or usage.get("id")
                 inv_amount = float(usage.get("amount") or 0)
                 if inv_id and inv_amount > 0:
-                    inv_item = db.query(Inventory).filter(Inventory.item_id == inv_id).first()
+                    inv_item = lock_inventory_row(db, inv_id)
                     if inv_item:
-                        inv_item.stock_quantity += inv_amount # Restock previous usage
+                        inv_item.stock_quantity = float(inv_item.stock_quantity or 0) + inv_amount # Restock previous usage
                         recalculate_inventory_status(inv_item)
         
         # 2. Apply new usage (Deduct)
@@ -2898,9 +3249,9 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
                 inv_id = usage.get("itemId") or usage.get("id")
                 inv_amount = float(usage.get("amount") or 0)
                 if inv_id and inv_amount > 0:
-                    inv_item = db.query(Inventory).filter(Inventory.item_id == inv_id).first()
+                    inv_item = lock_inventory_row(db, inv_id)
                     if inv_item:
-                        inv_item.stock_quantity = max(0.0, inv_item.stock_quantity - inv_amount) # Deduct new usage
+                        inv_item.stock_quantity = max(0.0, float(inv_item.stock_quantity or 0) - inv_amount) # Deduct new usage
                         recalculate_inventory_status(inv_item)
                         
                         # Log the adjustment
@@ -2925,13 +3276,17 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
 
     if "predictedCompletionDate" in updates:
         expected_iso = updates["predictedCompletionDate"]
-        if expected_iso:
+        ml_auto = bool(updates.get("mlAutoPredicted"))
+        if expected_iso and not ml_auto:
             db_order.expected_at = parse_local_date(expected_iso)
         else:
-            db_order.expected_at = predictor.predict_completion(db, updates)
-    elif "status" in updates or "priorityLevel" in updates:
-        # Re-run prediction if status/priority changed but date wasn't manually set
-        db_order.expected_at = predictor.predict_completion(db, updates)
+            db_order.expected_at = predictor.estimate_order_release(
+                db, live_order_payload_from_db_order(db_order, updates)
+            )["business_rule_date"]
+    elif "items" in updates or "priorityLevel" in updates:
+        db_order.expected_at = predictor.estimate_order_release(
+            db, live_order_payload_from_db_order(db_order, updates)
+        )["business_rule_date"]
 
     # 6. Cascading Updates: Items, Conditions, and Services
     items_updates = updates.get("items", [])
@@ -2965,6 +3320,13 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
             if "brand" in item_data: db_item.brand = item_data["brand"]
             if "shoeModel" in item_data: db_item.shoe_model = item_data["shoeModel"]
             if "shoeMaterial" in item_data: db_item.material = item_data["shoeMaterial"]
+            if "color" in item_data:
+                db_item.color = _keep_item_text(db_item.color, item_data.get("color"))
+            if "shoeSize" in item_data or "size" in item_data:
+                db_item.shoe_size = _keep_item_text(
+                    db_item.shoe_size,
+                    item_data.get("shoeSize") or item_data.get("size"),
+                )
             if "quantity" in item_data: db_item.quantity = item_data["quantity"]
             if "condition" in item_data and isinstance(item_data["condition"], dict) and "others" in item_data["condition"]:
                 db_item.item_notes = item_data["condition"]["others"]
@@ -2982,17 +3344,28 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
 
             # Sync Services (Pricing Snapshots)
             if ("baseService" in item_data or "addOns" in item_data):
+                # 1. Fetch existing mappings to preserve historical prices
+                existing_mappings = {}
+                for m in db.query(ItemServiceMapping).filter(ItemServiceMapping.item_id == db_item.item_id).all():
+                    existing_mappings[m.service_id] = m.actual_price
+                
+                # 2. Clear old mappings
                 db.query(ItemServiceMapping).filter(ItemServiceMapping.item_id == db_item.item_id).delete()
+                
                 services_applied = []
                 if "baseService" in item_data and isinstance(item_data["baseService"], list): services_applied.extend(item_data["baseService"])
                 if "addOns" in item_data and isinstance(item_data["addOns"], list):
                     for ad in item_data["addOns"]:
+                        if not ad: continue
                         services_applied.append(ad.get("name") if isinstance(ad, dict) else ad)
                 
                 for s_name in set(services_applied):
+                    if not s_name: continue
                     service_obj = db.query(Service).filter(Service.service_name == s_name).first()
                     if service_obj:
-                        db.add(ItemServiceMapping(item_id=db_item.item_id, service_id=service_obj.service_id, actual_price=service_obj.base_price))
+                        # 3. Use historical price if it existed, otherwise use current catalog price
+                        price = existing_mappings.get(service_obj.service_id, service_obj.base_price)
+                        db.add(ItemServiceMapping(item_id=db_item.item_id, service_id=service_obj.service_id, actual_price=price))
 
     try:
         db.commit()
@@ -3013,24 +3386,52 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
 
 @app.delete("/api/orders/{order_id}")
 def delete_order(order_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Permanent or cancellation removal of order with full cascade."""
+    """
+    Permanent or cancellation removal of order with full cascade.
+
+    SECURITY (OWASP A01 / P0-6): The Job Orders UI only ever exposes "Cancel Order"
+    for orders still in 'new-order' or 'on-going' status (see JobOrders.tsx) — this
+    is a legitimate Staff-accessible business action (pre-completion cancellation,
+    with the associated refund/forfeiture logic handled client-side). Any order
+    that has progressed further ('for-release', 'claimed', or any other status) is
+    a completed/near-completed transaction and must not be permanently deletable
+    except by an Owner/Admin, even via a direct API call that bypasses the UI.
+    """
     db_order = db.query(Order).filter(Order.order_id == order_id).first()
     if not db_order:
         raise HTTPException(status_code=404, detail="Order not found")
+
+    user_role = current_user.role.role_name
+    current_status = db_order.status.status_name if db_order.status else None
+    cancellable_statuses = ("new-order", "on-going")
+    if user_role not in ("owner", "admin") and current_status not in cancellable_statuses:
+        print(f"[SECURITY] Unauthorized delete attempt by {current_user.username} (Role: {user_role}) on order {order_id} (status: {current_status}).")
+        raise HTTPException(
+            status_code=403,
+            detail="Only an Owner can delete a job order that has reached For Release/Claimed status.",
+        )
+
     deleted_snapshot = build_order_snapshot(db_order)
-    
-    # Explicit cascade handling for database schemas without ON DELETE CASCADE
+
+    # Detach any InventoryLog rows referencing this order (preserve inventory audit
+    # history rather than deleting it — see business rule: preserve audit logs).
     try:
-        db.execute(text("DELETE FROM item_service_mapping WHERE item_id IN (SELECT item_id FROM items WHERE order_id = :oid)"), {"oid": order_id})
-        db.execute(text("DELETE FROM item_condition_mapping WHERE item_id IN (SELECT item_id FROM items WHERE order_id = :oid)"), {"oid": order_id})
-        db.execute(text("DELETE FROM items WHERE order_id = :oid"), {"oid": order_id})
-        db.execute(text("DELETE FROM payments WHERE order_id = :oid"), {"oid": order_id})
-        db.execute(text("DELETE FROM deliveries WHERE order_id = :oid"), {"oid": order_id})
-        db.query(StatusLog).filter(StatusLog.order_id == order_id).delete(synchronize_session=False)
         db.query(InventoryLog).filter(InventoryLog.order_id == order_id).update({"order_id": None}, synchronize_session=False)
     except Exception as cascade_err:
-        print(f"[CASCADE WARNING] Child table cleanup warning during delete: {cascade_err}")
-    
+        print(f"[CASCADE WARNING] InventoryLog detach warning during delete: {cascade_err}")
+
+    # NOTE (bugfix, discovered while verifying P0-6): `Order.items` is configured with
+    # cascade="all, delete-orphan", and `Item.services` / `Item.conditions` are
+    # secondary-table (many-to-many) relationships. SQLAlchemy's ORM unit-of-work
+    # ALREADY automatically deletes the corresponding `item_service_mapping` /
+    # `item_condition_mapping` bridge rows when `db.delete(db_order)` cascades down
+    # to each Item below. Manually bulk-deleting those same bridge rows first (via
+    # `.delete(synchronize_session=False)`) desynchronized the ORM's identity map,
+    # causing SQLAlchemy's own subsequent cascade delete to find 0 matching rows and
+    # raise a StaleDataError ("expected to delete 1 row(s); Only 0 were matched"),
+    # turning every cancel/delete of an order with services or conditions attached
+    # into an HTTP 500. Removed the redundant manual deletes; the ORM cascade below
+    # already handles them correctly.
     db.delete(db_order)
     db.commit()
     log_audit(
@@ -3047,7 +3448,7 @@ def delete_order(order_id: int, db: Session = Depends(get_db), current_user: Use
 # ==========================================
 
 @app.get("/api/services", response_model=List[ServiceSchema])
-def get_catalog(db: Session = Depends(get_db)):
+def get_catalog(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Returns the available service catalog with real-time pricing, ordered by user preference."""
     return db.query(Service).filter(Service.is_active == True).order_by(Service.sort_order.asc()).all()
 
@@ -3158,8 +3559,13 @@ def delete_service(service_id: int, db: Session = Depends(get_db), current_user:
         log_audit(
             db=db, action="DEACTIVATE", table_name="services",
             record_id=service_id, user=current_user,
-            old_values={"service_name": svc_name, "was_active": True},
-            new_values={"is_active": False, "reason": "linked_to_past_orders"},
+            old_values={"service_name": svc_name, "was_active": True, "soft_delete": True},
+            new_values={
+                "is_active": False,
+                "soft_delete": True,
+                "reason": "linked_to_past_orders",
+                "details": f"Service '{svc_name}' deactivated because it is linked to past orders.",
+            },
             module="Services",
         )
         return {"status": "success", "message": "Service deactivated (Soft Delete) because it is linked to past orders"}
@@ -3177,20 +3583,20 @@ def delete_service(service_id: int, db: Session = Depends(get_db), current_user:
 
 
 @app.get("/api/lookups/statuses", response_model=List[StatusSchema])
-def get_statuses(db: Session = Depends(get_db)):
+def get_statuses(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Returns all order lifecycle statuses for UI drop-downs."""
     return db.query(Status).all()
 
 
 @app.get("/api/expenses", response_model=List[ExpenseSchema])
-def get_expenses(db: Session = Depends(get_db)):
-    """Retrieves all standard logged business and whole-product restock expenses."""
+def get_expenses(db: Session = Depends(get_db), current_user: User = Depends(require_role("owner"))):
+    """Retrieves all standard logged business and whole-product restock expenses (Owner only - OWASP A01)."""
     standard_expenses = db.query(Expense).all()
     return list(standard_expenses)
 
 @app.post("/api/expenses", response_model=ExpenseSchema)
-def create_expense(expense_data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Logs a new business expense (Auth Required)."""
+def create_expense(expense_data: dict, db: Session = Depends(get_db), current_user: User = Depends(require_role("owner"))):
+    """Logs a new business expense (Owner only - OWASP A01)."""
     # Logic: If date is missing, use now. Use first admin user as fallback for user_id.
     user_id = expense_data.get('user_id', current_user.user_id)
     
@@ -3228,14 +3634,14 @@ def create_expense(expense_data: dict, db: Session = Depends(get_db), current_us
     return new_expense
 
 @app.put("/api/expenses/{expense_id}", response_model=ExpenseSchema)
-def update_expense(expense_id: int, expense_data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Updates an existing expense (Auth Required)."""
+def update_expense(expense_id: int, expense_data: dict, db: Session = Depends(get_db), current_user: User = Depends(require_role("owner"))):
+    """Updates an existing expense (Owner only - OWASP A01)."""
     if expense_id >= 1000000:
         log_id = expense_id - 1000000
         log = db.query(InventoryLog).filter(InventoryLog.log_id == log_id).first()
         if not log:
             raise HTTPException(status_code=404, detail="Expense (Restock Log) not found")
-        item = log.inventory_item
+        item = lock_inventory_row(db, log.item_id) if log.item_id else None
         if not item:
             raise HTTPException(status_code=404, detail="Inventory item for restock log not found")
             
@@ -3260,7 +3666,7 @@ def update_expense(expense_id: int, expense_data: dict, db: Session = Depends(ge
                 new_change = qty_packages * divisor
                 log.change_amount = new_change
                 # Adjust stock quantity by the difference
-                item.stock_quantity += (new_change - old_change)
+                item.stock_quantity = float(item.stock_quantity or 0) + (new_change - old_change)
                 recalculate_inventory_status(item)
                 
         if 'date' in expense_data:
@@ -3346,10 +3752,10 @@ def delete_expense(expense_id: int, db: Session = Depends(get_db), current_user:
         log = db.query(InventoryLog).filter(InventoryLog.log_id == log_id).first()
         if not log:
             raise HTTPException(status_code=404, detail="Expense (Restock Log) not found")
-        item = log.inventory_item
+        item = lock_inventory_row(db, log.item_id) if log.item_id else None
         if item:
             # Reverse the restock quantity from stock_quantity without going below zero
-            item.stock_quantity = max(0.0, item.stock_quantity - log.change_amount)
+            item.stock_quantity = max(0.0, float(item.stock_quantity or 0) - float(log.change_amount or 0))
             recalculate_inventory_status(item)
         db.delete(log)
         db.commit()
@@ -3378,7 +3784,7 @@ def delete_expense(expense_id: int, db: Session = Depends(get_db), current_user:
 @app.get("/api/activities")
 def get_activities(
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("owner")),  # SECURITY FIX: Owner-only (OWASP A01)
+    current_user: User = Depends(require_role(["owner", "admin"])),  # Matches Activity History UI (Owner + Developer)
     limit: int = 100,
     offset: int = 0,
     module: Optional[str] = None,
@@ -3410,6 +3816,10 @@ def get_activities(
         "payments":         "Sales",
         "deliveries":       "Job Orders",
         "customers":        "Job Orders",
+        "historical_orders": "Historical Records",
+        "historical_items":  "Historical Records",
+        "historical_images": "Historical Records",
+        "router_v2":         "System",
     }
 
     def resolve_details(log) -> str:
@@ -3438,16 +3848,35 @@ def get_activities(
         if log.action_type == "ML_TRAIN":
             return "Machine Learning model retrained on latest historical data"
 
+        nv = log.new_values if isinstance(log.new_values, dict) else {}
+        ov = log.old_values if isinstance(log.old_values, dict) else {}
+        if isinstance(nv.get("details"), str) and nv["details"].strip():
+            return nv["details"].strip()
+
+        target = (
+            nv.get("username") or ov.get("username")
+            or nv.get("item_name") or ov.get("item_name")
+            or nv.get("service_name") or ov.get("service_name")
+            or nv.get("customer_name") or ov.get("customer_name")
+            or nv.get("order_number") or ov.get("order_number")
+        )
+        target_suffix = f": {target}" if target else (f" (ID: {log.record_id})" if log.record_id else "")
+
         # Generic meaningful detail
         readable_table = READABLE_TABLE_MAP.get(log.table_name or "", log.table_name or "Record")
         if log.action_type == "CREATE":
-            return f"New {readable_table} record created (ID: {log.record_id})"
+            return f"New {readable_table} record created{target_suffix}"
         if log.action_type == "UPDATE":
-            changed_keys = list((log.new_values or {}).keys()) or ["fields"]
-            return f"{readable_table} record #{log.record_id} updated — changed: {', '.join(changed_keys[:5])}"
+            changed_keys = [k for k in nv.keys() if k != "details"] or ["fields"]
+            who = f" {target}" if target else f" #{log.record_id}"
+            return f"{readable_table} record{who} updated — changed: {', '.join(changed_keys[:5])}"
         if log.action_type == "DELETE":
-            return f"{readable_table} record #{log.record_id} permanently deleted"
-        return f"{log.action_type} on {readable_table}"
+            soft = bool(nv.get("is_active") is False or nv.get("soft_delete") or ov.get("soft_delete"))
+            verb = "removed from catalog (soft delete)" if soft else "permanently deleted"
+            return f"{readable_table} record{target_suffix} {verb}"
+        if log.action_type == "DEACTIVATE":
+            return f"{readable_table} record{target_suffix} deactivated"
+        return f"{log.action_type} on {readable_table}{target_suffix}"
 
     # Build base query
     q = db.query(AuditLog)
@@ -3484,14 +3913,23 @@ def get_activities(
 
         # Action type classification for frontend badge coloring
         action_upper = (log.action_type or "").upper()
-        if action_upper in ("SERVER_ERROR", "DELETE", "LOGIN_FAILED"):
+        table_upper = (log.table_name or "").upper()
+        if action_upper in ("SERVER_ERROR", "DELETE", "DEACTIVATE", "LOGIN_FAILED"):
             log_type = "critical"
-        elif action_upper in ("404_NOT_FOUND", "SYSTEM"):
+        elif action_upper in ("404_NOT_FOUND", "SYSTEM") or table_upper in ("USERS", "SYSTEM"):
             log_type = "system"
         elif action_upper in ("LOGIN", "LOGIN_SUCCESS", "LOGOUT", "PASSWORD_RESET"):
             log_type = "auth"
-        else:
+        elif table_upper in ("SERVICES",):
+            log_type = "service"
+        elif table_upper in ("INVENTORY", "INVENTORY_LOGS"):
+            log_type = "inventory"
+        elif table_upper in ("EXPENSES",):
+            log_type = "expense"
+        elif table_upper in ("ORDERS", "ITEMS", "PAYMENTS", "DELIVERIES", "STATUS_LOG", "CUSTOMERS"):
             log_type = "order"
+        else:
+            log_type = "system"
 
         results.append({
             "id":         str(log.audit_log_id),
@@ -3517,25 +3955,19 @@ def get_activities(
     }
 
 @app.post("/api/activities")
-def log_custom_activity(activity: dict, db: Session = Depends(get_db)):
+def log_custom_activity(activity: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
-    Frontend event logger for UI-specific actions (PRINT, LOGOUT, etc.).
-    Now correctly maps all action types — no more hardcoded 'UPDATE'/'CREATE' fallback.
+    Frontend event logger for UI-specific actions (PRINT, status changes, etc.).
+    Maps all action types — no hardcoded 'UPDATE'/'CREATE' fallback.
 
-    Note: No auth required intentionally — frontend logs events like LOGOUT after the token is cleared.
-    The endpoint ONLY creates log entries; it cannot read, modify, or delete existing logs.
+    SECURITY (OWASP A01 / P1-1): Requires a valid authenticated session. The actor
+    identity is ALWAYS taken from the verified JWT (`current_user`), never from a
+    client-supplied `user`/`username`/`userId` field, to prevent forging log entries
+    under another account's name. (The real LOGOUT event is recorded separately by
+    `POST /api/logout`, which runs *before* the token is cleared client-side, so no
+    legitimate caller of this endpoint needs to log out first.)
     """
-    # Resolve user by username (fallback to user_id if provided)
-    actor_username = activity.get("user") or activity.get("username")
-    actor_user_id = activity.get("userId") or activity.get("user_id")
-    u = None
-    if actor_username:
-        u = db.query(User).filter(User.username == actor_username).first()
-    elif actor_user_id:
-        try:
-            u = db.query(User).filter(User.user_id == int(actor_user_id)).first()
-        except Exception:
-            pass
+    u = current_user
 
     # Map action type — pass through as-is (no more hardcoded fallback)
     action_type = (activity.get("action") or activity.get("type") or "CREATE").upper().replace(" ", "_")
@@ -3570,14 +4002,25 @@ def get_inventory(db: Session = Depends(get_db), current_user: User = Depends(ge
     return repo.get_all()
 
 @app.post("/api/inventory", response_model=InventorySchema)
-def create_inventory_item(item: InventorySchema, db: Session = Depends(get_db), current_user: User = Depends(require_role(["owner"]))):
+def create_inventory_item(item: InventorySchema, db: Session = Depends(get_db), current_user: User = Depends(require_role(["owner", "admin", "staff"]))):
     """Admin-only: Add new material to catalog."""
     if item.stock_quantity < 0:
         raise HTTPException(status_code=400, detail="Stock quantity cannot be negative.")
     if item.package_size <= 0:
         raise HTTPException(status_code=400, detail="Volume per Package must be greater than zero.")
+    # P1-3 FIX: inventory_number is a separate, editable, unique reference number distinct
+    # from item_id (the internal autoincrement PK) — the model/schema already support it,
+    # but this endpoint never copied it from the request onto the new row, and a duplicate
+    # would previously fall through to a generic sanitized 500 via the global exception
+    # handler instead of a clear, actionable validation error.
+    inventory_number = (item.inventory_number or "").strip() or None
+    if inventory_number:
+        existing = db.query(Inventory).filter(Inventory.inventory_number == inventory_number).first()
+        if existing:
+            raise HTTPException(status_code=400, detail=f"Inventory Number '{inventory_number}' is already in use by another item.")
     new_item = Inventory(
         item_name=item.item_name,
+        inventory_number=inventory_number,
         category=item.category,
         stock_quantity=item.stock_quantity,
         unit=item.unit,
@@ -3590,7 +4033,9 @@ def create_inventory_item(item: InventorySchema, db: Session = Depends(get_db), 
         consumption_unit=item.consumption_unit,
         package_size=item.package_size,
         package_unit=item.package_unit,
-        low_stock_threshold=item.low_stock_threshold
+        low_stock_threshold=item.low_stock_threshold,
+        is_retail=bool(item.is_retail),
+        retail_price=item.retail_price if item.retail_price is not None else 0
     )
     recalculate_inventory_status(new_item)
     repo = InventoryRepository(db)
@@ -3615,10 +4060,9 @@ def create_inventory_item(item: InventorySchema, db: Session = Depends(get_db), 
     return new_item
 
 @app.put("/api/inventory/{item_id}", response_model=InventorySchema)
-def update_inventory_item(item_id: int, updates: InventoryUpdateSchema, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Modify stock or metadata."""
-    repo = InventoryRepository(db)
-    item = repo.get_by_id(item_id)
+def update_inventory_item(item_id: int, updates: InventoryUpdateSchema, db: Session = Depends(get_db), current_user: User = Depends(require_role(["owner", "admin", "staff"]))):
+    """Modify stock or metadata (Owner only - OWASP A01)."""
+    item = lock_inventory_row(db, item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
     
@@ -3629,8 +4073,30 @@ def update_inventory_item(item_id: int, updates: InventoryUpdateSchema, db: Sess
     old_inv_snapshot = {"item_name": item.item_name, "stock_quantity": item.stock_quantity}
 
     update_data = updates.model_dump(exclude_unset=True)
+
+    # P1-3 FIX: reject a duplicate inventory_number clearly (400) instead of letting a
+    # unique-constraint violation fall through to the generic sanitized 500 handler.
+    if "inventory_number" in update_data:
+        new_number = (update_data["inventory_number"] or "").strip() or None
+        update_data["inventory_number"] = new_number
+        if new_number:
+            dup = db.query(Inventory).filter(
+                Inventory.inventory_number == new_number,
+                Inventory.item_id != item_id,
+            ).first()
+            if dup:
+                raise HTTPException(status_code=400, detail=f"Inventory Number '{new_number}' is already in use by another item.")
+
     for key, value in update_data.items():
         setattr(item, key, value)
+
+    # Keep retail flags consistent for response serialization.
+    if getattr(item, "is_retail", None) is None:
+        item.is_retail = False
+    if getattr(item, "retail_price", None) is None:
+        item.retail_price = 0
+    if not item.is_retail:
+        item.retail_price = 0
         
     if item.stock_quantity < 0:
         raise HTTPException(status_code=400, detail="Stock quantity cannot be negative.")
@@ -3647,8 +4113,8 @@ def update_inventory_item(item_id: int, updates: InventoryUpdateSchema, db: Sess
             user_id=current_user.user_id
         ))
     
-    repo.commit()
-    repo.refresh(item)
+    db.commit()
+    db.refresh(item)
     log_audit(
         db=db, action="UPDATE", table_name="inventory",
         record_id=item_id, user=current_user,
@@ -3659,22 +4125,46 @@ def update_inventory_item(item_id: int, updates: InventoryUpdateSchema, db: Sess
     return item
 
 @app.delete("/api/inventory/{item_id}")
-def delete_inventory_item(item_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_role(["owner"]))):
-    """Admin-only: Soft-delete item from catalog."""
+def delete_inventory_item(item_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_role(["owner", "admin", "staff"]))):
+    """Soft-delete inventory item from catalog (preserves transaction history)."""
     repo = InventoryRepository(db)
     item = repo.get_by_id(item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
     
     # Soft delete to preserve transaction logs and relational integrity (3NF)
-    item_name = item.item_name
+    old_snapshot = {
+        "item_name": item.item_name,
+        "category": item.category,
+        "stock_quantity": float(item.stock_quantity or 0),
+        "unit": item.unit,
+        "status": item.status,
+        "was_active": True,
+        "soft_delete": True,
+    }
     item.is_active = False
     repo.commit()
+    # Keep offline SQLite in sync so a later SQLite→cloud push cannot revive this row.
+    try:
+        if not is_sqlite and os.path.exists(LOCAL_SQLITE_PATH):
+            import sqlite3
+            with sqlite3.connect(LOCAL_SQLITE_PATH) as sqlite_conn:
+                sqlite_conn.execute(
+                    "UPDATE inventory SET is_active = 0 WHERE item_name = ?",
+                    (old_snapshot["item_name"],),
+                )
+                sqlite_conn.commit()
+    except Exception as mirror_err:
+        print(f"[SYNC WARNING] Could not mirror inventory soft-delete to SQLite: {mirror_err}")
     log_audit(
         db=db, action="DELETE", table_name="inventory",
         record_id=item_id, user=current_user,
-        old_values={"item_name": item_name, "was_active": True},
-        new_values={"is_active": False},
+        old_values=old_snapshot,
+        new_values={
+            "is_active": False,
+            "soft_delete": True,
+            "details": f"Inventory item '{old_snapshot['item_name']}' removed from catalog (soft delete).",
+        },
         module="Inventory",
     )
     return {"status": "success", "message": "Item deactivated"}
@@ -3686,11 +4176,10 @@ def adjust_stock(
     action: str = Body(...), # 'deduction', 'restock'
     order_id: Optional[int] = Body(None),
     db: Session = Depends(get_db), 
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_role(["owner", "admin", "staff"]))
 ):
-    """Record stock movement and update balance."""
-    repo = InventoryRepository(db)
-    item = repo.get_by_id(item_id)
+    """Record stock movement and update balance (Owner only - OWASP A01)."""
+    item = lock_inventory_row(db, item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
     
@@ -3700,11 +4189,11 @@ def adjust_stock(
 
     # 1. Update the inventory balance
     if action == 'deduction':
-        if (item.stock_quantity - amount) < 0:
+        if (float(item.stock_quantity or 0) - amount) < 0:
             raise HTTPException(status_code=400, detail="Insufficient stock: quantity cannot be negative.")
-        item.stock_quantity = max(0.0, item.stock_quantity - amount)
+        item.stock_quantity = max(0.0, float(item.stock_quantity or 0) - amount)
     else:
-        item.stock_quantity += amount
+        item.stock_quantity = float(item.stock_quantity or 0) + amount
     
     # 2. Update status using helper
     recalculate_inventory_status(item)
@@ -3719,8 +4208,8 @@ def adjust_stock(
     )
     
     db.add(log)
-    repo.commit()
-    
+    db.commit()
+    db.refresh(item)
     # Write manual inventory adjustment to system audit trail
     log_audit(
         db=db, action="UPDATE", table_name="inventory",
@@ -3797,14 +4286,26 @@ async def list_historical_orders(
     service: Optional[str] = None,
     priority: Optional[str] = None,
     sync_status: Optional[str] = None,
+    ocr_status: Optional[str] = None,
+    finalized_only: bool = False,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     page: int = 1,
     limit: int = 20,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(require_role("admin")),
 ):
+    # Repair older OCR/import rows once, so the list never exposes blank,
+    # date-mismatched, or duplicate historical IDs.
+    from order_numbering import repair_historical_order_ids
+    if repair_historical_order_ids(db):
+        db.commit()
     query = db.query(HistoricalOrder)
+
+    if finalized_only or (ocr_status and ocr_status.lower() in ("validated", "finalized")):
+        query = query.filter(HistoricalOrder.ocr_status.in_(["Validated", "Corrected", "VALIDATED", "CORRECTED"]))
+    elif ocr_status:
+        query = query.filter(HistoricalOrder.ocr_status == ocr_status)
 
     if search:
         sq = f"%{search}%"
@@ -3837,6 +4338,7 @@ async def list_historical_orders(
         query
         .options(
             joinedload(HistoricalOrder.customer),
+            joinedload(HistoricalOrder.image),
             joinedload(HistoricalOrder.items).joinedload(HistoricalItem.services)
         )
         .order_by(HistoricalOrder.date_received.desc())
@@ -3845,43 +4347,21 @@ async def list_historical_orders(
         .all()
     )
 
-    results = []
+    from api.historical_processing import (
+        load_service_price_map,
+        persist_normalized_timeline_if_stale,
+        serialize_historical_order,
+    )
+    catalog = load_service_price_map(db)
+    from historical.ocr_status import validated_filter_values
+    validated_statuses = set(validated_filter_values()) | {"Validated", "Corrected", "VALIDATED", "CORRECTED"}
+    dirty = False
     for o in orders:
-        results.append({
-            "historical_order_id": o.historical_order_id,
-            "order_id": o.order_id,
-            "customer_name": o.customer.customer_name if o.customer else "",
-            "contact_number": o.customer.contact_number if o.customer else "",
-            "branch": o.branch,
-            "date_received": o.date_received.isoformat() if o.date_received else None,
-            "original_estimated_release_date": o.original_estimated_release_date.isoformat() if o.original_estimated_release_date else None,
-            "claimed_date": o.claimed_date.isoformat() if o.claimed_date else None,
-            "completion_days": o.completion_days,
-            "total_pairs": o.total_pairs,
-            "grand_total": float(o.grand_total or 0),
-            "downpayment": float(o.downpayment or 0),
-            "balance": float(o.balance or 0),
-            "priority": o.priority,
-            "sync_status": o.sync_status,
-            "status": "Completed",
-            "items": [
-                {
-                    "historical_item_id": item.historical_item_id,
-                    "brand": item.brand,
-                    "model": item.model,
-                    "color": item.color,
-                    "size": item.size,
-                    "material": item.material,
-                    "priority": item.priority,
-                    "remarks": item.remarks,
-                    "services": [
-                        {"service_name": svc.service_name, "service_type": svc.service_type, "price": float(svc.price or 0)}
-                        for svc in item.services
-                    ],
-                }
-                for item in o.items
-            ],
-        })
+        if (o.ocr_status or "") in validated_statuses and persist_normalized_timeline_if_stale(o):
+            dirty = True
+    if dirty:
+        db.commit()
+    results = [serialize_historical_order(o, catalog) for o in orders]
 
     return {"total": total, "page": page, "limit": limit, "data": results}
 
@@ -3893,15 +4373,11 @@ async def list_historical_orders(
 async def create_historical_order(
     payload: dict = Body(...),
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(require_role("admin")),
 ):
-    # Uniqueness check
-    existing = db.query(HistoricalOrder).filter(HistoricalOrder.order_id == payload.get("order_id")).first()
-    if existing:
-        raise HTTPException(status_code=409, detail=f"Order ID '{payload.get('order_id')}' already exists.")
-
     # Customer — find or create
-    customer_name = (payload.get("customer_name") or "").strip()
+    from order_numbering import generate_canonical_order_id, normalize_customer_name
+    customer_name = normalize_customer_name(payload.get("customer_name") or "")
     contact_number = (payload.get("contact_number") or "").strip()
     if not customer_name:
         raise HTTPException(status_code=422, detail="customer_name is required.")
@@ -3914,6 +4390,8 @@ async def create_historical_order(
         customer = Customer(customer_name=customer_name, contact_number=contact_number)
         db.add(customer)
         db.flush()
+    elif customer.customer_name != customer_name:
+        customer.customer_name = customer_name
 
     # Date parsing
     def _parse(val):
@@ -3930,6 +4408,8 @@ async def create_historical_order(
 
     if not date_received:
         raise HTTPException(status_code=422, detail="date_received is required.")
+    # The date is authoritative; never trust a copied/typed/paper ID here.
+    order_id = generate_canonical_order_id(db, date_received)
     if original_estimated_release_date and original_estimated_release_date < date_received:
         raise HTTPException(status_code=422, detail="Expected release date cannot be earlier than date received.")
     if claimed_date and claimed_date < date_received:
@@ -3941,12 +4421,17 @@ async def create_historical_order(
         completion_days = (claimed_date - date_received).days
 
     grand_total  = float(payload.get("grand_total", 0))
+    raw_orig = payload.get("original_grand_total")
+    try:
+        original_grand_total = float(raw_orig) if raw_orig not in (None, "") else None
+    except (TypeError, ValueError):
+        original_grand_total = None
     downpayment  = float(payload.get("downpayment", 0))
     balance      = round(grand_total - downpayment, 2)
     total_pairs  = int(payload.get("total_pairs", 1))
 
     order = HistoricalOrder(
-        order_id=payload.get("order_id"),
+        order_id=order_id,
         customer_id=customer.customer_id,
         branch=payload.get("branch"),
         date_received=date_received,
@@ -3955,6 +4440,7 @@ async def create_historical_order(
         completion_days=completion_days,
         total_pairs=total_pairs,
         grand_total=grand_total,
+        original_grand_total=original_grand_total,
         downpayment=downpayment,
         balance=balance,
         priority=payload.get("priority", "regular"),
@@ -3967,6 +4453,17 @@ async def create_historical_order(
     # Items
     items_payload = payload.get("items", [])
     for item_data in items_payload:
+        services = item_data.get("services") or []
+        raw_price = item_data.get("item_price")
+        if isinstance(raw_price, str) and raw_price.strip().lower() == "free":
+            item_price = 0.0
+        else:
+            try:
+                item_price = float(raw_price) if raw_price not in (None, "") else None
+            except (TypeError, ValueError):
+                item_price = None
+        if item_price is None:
+            item_price = round(sum(float(s.get("price") or 0) for s in services), 2)
         item = HistoricalItem(
             historical_order_id=order.historical_order_id,
             brand=item_data.get("brand"),
@@ -3976,19 +4473,31 @@ async def create_historical_order(
             material=item_data.get("material"),
             priority=item_data.get("priority"),
             remarks=item_data.get("remarks"),
+            item_price=item_price,
         )
         db.add(item)
         db.flush()
 
-        for svc_data in item_data.get("services", []):
+        for svc_data in services:
             svc = HistoricalItemService(
                 historical_item_id=item.historical_item_id,
                 service_name=svc_data.get("service_name", ""),
                 service_type=svc_data.get("service_type", "base"),
-                price=float(svc_data.get("price", 0)),
+                price=float(svc_data.get("price", 0) or 0),
             )
             db.add(svc)
 
+    db.flush()
+    db.expire(order, ["items"])
+    from api.historical_processing import apply_explicit_completion_days, apply_normalized_timeline
+    apply_normalized_timeline(order)
+    if payload.get("completion_days") is not None:
+        apply_explicit_completion_days(
+            order,
+            payload.get("completion_days"),
+            claimed_date=claimed_date,
+            expected_release=original_estimated_release_date,
+        )
     db.commit()
     return {"status": "created", "historical_order_id": order.historical_order_id, "order_id": order.order_id}
 
@@ -4001,7 +4510,7 @@ async def update_historical_order(
     historical_order_id: int,
     payload: dict = Body(...),
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(require_role("admin")),
 ):
     order = db.query(HistoricalOrder).filter(HistoricalOrder.historical_order_id == historical_order_id).first()
     if not order:
@@ -4015,10 +4524,49 @@ async def update_historical_order(
         except Exception:
             return None
 
+    def _money(val, default=None):
+        if val in (None, ""):
+            return default
+        try:
+            return float(val)
+        except (TypeError, ValueError):
+            return default
+
+    # Customer — find-or-create so edits actually persist (do not mutate shared CRM rows blindly)
+    from order_numbering import resolve_historical_order_id, normalize_customer_name
+    if "customer_name" in payload or "contact_number" in payload:
+        customer_name = (payload.get("customer_name") if "customer_name" in payload else None)
+        if customer_name is None and order.customer is not None:
+            customer_name = order.customer.customer_name
+        customer_name = normalize_customer_name(customer_name or "")
+        contact_number = payload.get("contact_number") if "contact_number" in payload else None
+        if contact_number is None and order.customer is not None:
+            contact_number = order.customer.contact_number
+        contact_number = (contact_number or "").strip()
+        if not customer_name:
+            raise HTTPException(status_code=422, detail="customer_name is required.")
+
+        customer = db.query(Customer).filter(
+            func.lower(Customer.customer_name) == customer_name.lower(),
+            Customer.contact_number == contact_number,
+        ).first()
+        if not customer:
+            customer = Customer(customer_name=customer_name, contact_number=contact_number)
+            db.add(customer)
+            db.flush()
+        order.customer_id = customer.customer_id
+
     if "date_received" in payload:
         order.date_received = _parse(payload["date_received"]) or order.date_received
+    # Recalculate from the date on every edit. This also fixes old wrong IDs.
+    order.order_id = resolve_historical_order_id(
+        db, date_value=order.date_received, current_order_id=order.order_id,
+        exclude_historical_order_id=historical_order_id,
+    )
     if "original_estimated_release_date" in payload:
-        order.original_estimated_release_date = _parse(payload["original_estimated_release_date"]) or order.original_estimated_release_date
+        parsed_expected = _parse(payload["original_estimated_release_date"])
+        if parsed_expected is not None:
+            order.original_estimated_release_date = parsed_expected
     if "claimed_date" in payload:
         order.claimed_date = _parse(payload["claimed_date"])
     if order.claimed_date and order.date_received:
@@ -4031,6 +4579,12 @@ async def update_historical_order(
         order.payment_method = payload["payment_method"]
     if "grand_total" in payload:
         order.grand_total = float(payload["grand_total"])
+    if "original_grand_total" in payload:
+        raw_orig = payload.get("original_grand_total")
+        try:
+            order.original_grand_total = float(raw_orig) if raw_orig not in (None, "") else None
+        except (TypeError, ValueError):
+            order.original_grand_total = None
     if "downpayment" in payload:
         order.downpayment = float(payload["downpayment"])
     order.balance = round(float(order.grand_total or 0) - float(order.downpayment or 0), 2)
@@ -4043,6 +4597,14 @@ async def update_historical_order(
             db.delete(old_item)
         db.flush()
         for item_data in payload["items"]:
+            services = item_data.get("services") or []
+            raw_price = item_data.get("item_price")
+            if isinstance(raw_price, str) and raw_price.strip().lower() == "free":
+                item_price = 0.0
+            else:
+                item_price = _money(raw_price, None)
+            if item_price is None:
+                item_price = round(sum(_money(s.get("price"), 0.0) or 0.0 for s in services), 2)
             item = HistoricalItem(
                 historical_order_id=order.historical_order_id,
                 brand=item_data.get("brand"),
@@ -4052,19 +4614,41 @@ async def update_historical_order(
                 material=item_data.get("material"),
                 priority=item_data.get("priority"),
                 remarks=item_data.get("remarks"),
+                item_price=item_price,
             )
             db.add(item)
             db.flush()
-            for svc_data in item_data.get("services", []):
+            for svc_data in services:
                 db.add(HistoricalItemService(
                     historical_item_id=item.historical_item_id,
                     service_name=svc_data.get("service_name", ""),
                     service_type=svc_data.get("service_type", "base"),
-                    price=float(svc_data.get("price", 0)),
+                    price=float(svc_data.get("price", 0) or 0),
                 ))
 
+    db.flush()
+    db.expire(order, ["items", "customer"])
+    from api.historical_processing import apply_explicit_completion_days, apply_normalized_timeline
+    apply_normalized_timeline(order)
+    if payload.get("completion_days") is not None:
+        apply_explicit_completion_days(
+            order,
+            payload.get("completion_days"),
+            claimed_date=_parse(payload.get("claimed_date")) if payload.get("claimed_date") else order.claimed_date,
+            expected_release=(
+                _parse(payload.get("original_estimated_release_date"))
+                if payload.get("original_estimated_release_date")
+                else order.original_estimated_release_date
+            ),
+        )
     db.commit()
-    return {"status": "updated", "historical_order_id": order.historical_order_id}
+    db.refresh(order)
+    return {
+        "status": "updated",
+        "historical_order_id": order.historical_order_id,
+        "order_id": order.order_id,
+        "customer_name": order.customer.customer_name if order.customer else None,
+    }
 
 
 # ------------------------------------------------------------------
@@ -4074,13 +4658,30 @@ async def update_historical_order(
 async def delete_historical_order(
     historical_order_id: int,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(require_role("admin")),
 ):
     order = db.query(HistoricalOrder).filter(HistoricalOrder.historical_order_id == historical_order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Historical order not found.")
+    old_snapshot = {
+        "order_id": order.order_id,
+        "customer_name": order.customer.customer_name if order.customer else None,
+        "date_received": order.date_received.isoformat() if order.date_received else None,
+        "ocr_status": order.ocr_status,
+        "grand_total": float(order.grand_total) if order.grand_total is not None else None,
+    }
     db.delete(order)
     db.commit()
+    log_audit(
+        db=db,
+        action="DELETE",
+        table_name="historical_orders",
+        record_id=historical_order_id,
+        user=current_user,
+        old_values=old_snapshot,
+        new_values={"details": f"Historical order {old_snapshot.get('order_id') or historical_order_id} permanently deleted."},
+        module="Historical Records",
+    )
     return {"status": "deleted", "historical_order_id": historical_order_id}
 
 
@@ -4090,23 +4691,46 @@ async def delete_historical_order(
 @app.get("/api/historical/stats")
 async def get_historical_stats(
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
 ):
-    total = db.query(HistoricalOrder).count()
-    validated = db.query(HistoricalOrder).filter(
-        HistoricalOrder.claimed_date.isnot(None),
+    from historical.ocr_status import pending_filter_values, validated_filter_values
+
+    pending = pending_filter_values()
+    validated_vals = validated_filter_values()
+
+    total = db.query(func.count(HistoricalOrder.historical_order_id)).scalar() or 0
+    validated = db.query(func.count(HistoricalOrder.historical_order_id)).filter(
+        HistoricalOrder.ocr_status.in_(validated_vals)
+    ).scalar() or 0
+    pending_review = db.query(func.count(HistoricalOrder.historical_order_id)).filter(
+        HistoricalOrder.ocr_status.in_(pending)
+    ).scalar() or 0
+    pending_ocr = db.query(func.count(HistoricalImage.historical_image_id)).filter(
+        HistoricalImage.ocr_status.in_(pending)
+    ).scalar() or 0
+    ml_eligible = db.query(func.count(HistoricalOrder.historical_order_id)).filter(
+        HistoricalOrder.ocr_status.in_(validated_vals),
+        HistoricalOrder.date_received.isnot(None),
         HistoricalOrder.completion_days.isnot(None),
-    ).count()
-    missing_fields = db.query(HistoricalOrder).filter(
-        (HistoricalOrder.completion_days == None) |
-        (HistoricalOrder.claimed_date == None)
-    ).count()
-    pending_ocr = db.query(HistoricalImage).filter(HistoricalImage.ocr_status == "Pending").count()
+        HistoricalOrder.completion_days > 0,
+    ).scalar() or 0
+    missing_fields = db.query(func.count(HistoricalOrder.historical_order_id)).filter(
+        HistoricalOrder.ocr_status.in_(validated_vals),
+        or_(
+            HistoricalOrder.completion_days.is_(None),
+            HistoricalOrder.completion_days <= 0,
+            HistoricalOrder.date_received.is_(None),
+        ),
+    ).scalar() or 0
     return {
         "total": total,
         "validated": validated,
+        "ml_eligible": ml_eligible,
         "missing_fields": missing_fields,
+        "pending_review": pending_review,
         "pending_ocr": pending_ocr,
-        "ready_for_training": validated,
+        "ready_for_training": ml_eligible,
+        "export_record_count": ml_eligible,
     }
 
 
@@ -4114,7 +4738,13 @@ async def get_historical_stats(
 # GET /api/temp/debug_image
 # ------------------------------------------------------------------
 @app.get("/api/temp/debug_image")
-async def debug_image(db: Session = Depends(get_db)):
+async def debug_image(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    """Local-only schema helper. Disabled in Production."""
+    if _IS_PRODUCTION:
+        raise HTTPException(status_code=403, detail="Debug endpoints disabled in production")
     try:
         db.execute(text("ALTER TABLE historical_orders ADD COLUMN payment_method VARCHAR(50);"))
         db.commit()
@@ -4125,18 +4755,25 @@ async def debug_image(db: Session = Depends(get_db)):
 # ------------------------------------------------------------------
 # GET /api/historical/image/{image_filename} — Dynamically fetch image from any subfolder
 # ------------------------------------------------------------------
-@app.get("/api/historical/image/{image_filename}")
-async def get_historical_image(image_filename: str):
+@app.get("/api/historical/image/{image_filename:path}")
+async def get_historical_image(
+    image_filename: str,
+    current_user: User = Depends(require_role("admin")),
+):
     hist_dir = os.path.join(os.path.dirname(__file__), "historical_data")
     
-    clean_filename = image_filename.strip().lower()
+    clean_filename = os.path.basename(image_filename).strip().lower()
     
+    def _serve(path: str):
+        media = "application/pdf" if path.lower().endswith(".pdf") else None
+        return FileResponse(path, media_type=media, headers={"Content-Disposition": "inline"})
+
     # 1. Check pilot_batch first (fastest)
     pilot_dir = os.path.join(hist_dir, "pilot_batch")
     if os.path.exists(pilot_dir):
         for f in os.listdir(pilot_dir):
             if f.lower() == clean_filename:
-                return FileResponse(os.path.join(pilot_dir, f))
+                return _serve(os.path.join(pilot_dir, f))
         
     # 2. Search recursively in source directory (for missing cloud sync files)
     source_dir = os.path.join(hist_dir, "source")
@@ -4144,9 +4781,63 @@ async def get_historical_image(image_filename: str):
         for root, dirs, files in os.walk(source_dir):
             for f in files:
                 if f.lower() == clean_filename:
-                    return FileResponse(os.path.join(root, f))
+                    return _serve(os.path.join(root, f))
                 
     raise HTTPException(status_code=404, detail="Image not found in any local folder")
+
+
+# ------------------------------------------------------------------
+# GET /api/historical/archives — Monthly PDF batch archives
+# ------------------------------------------------------------------
+@app.get("/api/historical/archives")
+async def list_historical_archives(
+    current_user: User = Depends(require_role("admin")),
+):
+    """Scan source folders for monthly PDF batch reports."""
+    hist_dir = os.path.join(os.path.dirname(__file__), "historical_data")
+    source_root = os.path.join(hist_dir, "source", "Digital Job Order Forms")
+    archives = []
+    if not os.path.isdir(source_root):
+        return {"archives": [], "total": 0}
+
+    month_order = [
+        "August", "September", "October", "November", "December", "January",
+        "February", "March", "April", "May", "June", "July",
+    ]
+    found_months = {}
+    for month_name in sorted(os.listdir(source_root)):
+        month_path = os.path.join(source_root, month_name)
+        if not os.path.isdir(month_path):
+            continue
+        pdfs = [f for f in os.listdir(month_path) if f.lower().endswith(".pdf")]
+        if not pdfs:
+            continue
+        pdfs.sort()
+        primary = pdfs[0]
+        rel_url = (
+            f"/historical_data/source/Digital Job Order Forms/{month_name}/{primary}"
+        )
+        year_hint = "2025" if month_name not in ("January", "February") else "2026"
+        if month_name == "January":
+            year_hint = "2026"
+        elif month_name in ("August", "September", "October", "November", "December"):
+            year_hint = "2025"
+        found_months[month_name] = {
+            "month": month_name,
+            "year": year_hint,
+            "filename": primary,
+            "url": rel_url,
+            "pdf_count": len(pdfs),
+        }
+
+    for month_name in month_order:
+        if month_name in found_months:
+            archives.append(found_months[month_name])
+    for month_name, entry in found_months.items():
+        if month_name not in month_order:
+            archives.append(entry)
+
+    return {"archives": archives, "total": len(archives)}
 
 
 # ------------------------------------------------------------------
@@ -4156,103 +4847,158 @@ async def get_historical_image(image_filename: str):
 async def get_historical_validation_queue(
     db: Session = Depends(get_db),
     limit: int = 20,
+    current_user: User = Depends(require_role("admin")),
 ):
+    from historical.ocr_status import pending_filter_values, validated_filter_values
+    from sqlalchemy.orm import defer, joinedload, noload, selectinload
+
+    from api.historical_processing import _build_queue_item, assign_display_order_ids, load_service_price_map, sort_review_queue
+
     results = []
-    # Source A: OCR-pending images
-    images = db.query(HistoricalImage).filter(HistoricalImage.ocr_status == "Pending").limit(limit).all()
-    for img in images:
-        order = img.order
-        if order:
-            results.append(_build_hist_queue_item(img, order, "ocr_pending"))
-    # Source B: Orders with missing ML-critical fields
-    incomplete = db.query(HistoricalOrder).filter(
-        (HistoricalOrder.completion_days == None) |
-        (HistoricalOrder.claimed_date == None) |
-        (HistoricalOrder.priority == None)
-    ).limit(limit).all()
+    service_prices = load_service_price_map(db)
+    # Source A: pending OCR images, oldest paper date first (archive starts mid-August).
+    pending_orders = (
+        db.query(HistoricalOrder)
+        .join(HistoricalImage, HistoricalImage.historical_order_id == HistoricalOrder.historical_order_id)
+        .options(
+            defer(HistoricalOrder.audit_trail),
+            noload(HistoricalOrder.predictions),
+            joinedload(HistoricalOrder.customer),
+            joinedload(HistoricalOrder.image),
+            selectinload(HistoricalOrder.items).selectinload(HistoricalItem.services),
+        )
+        .filter(HistoricalImage.ocr_status.in_(pending_filter_values()))
+        .order_by(
+            HistoricalOrder.date_received.asc(),
+            HistoricalImage.historical_image_id.asc(),
+        )
+        .limit(limit)
+        .all()
+    )
+    for order in pending_orders:
+        img = order.image
+        if not img:
+            continue
+        item = _build_queue_item(img, order, "ocr_pending", service_prices=service_prices)
+        if item:
+            results.append(item)
+    # Source B: already-validated records still missing ML fields (not the pending OCR set).
     seen = {r["order"]["historical_order_id"] for r in results if r.get("order")}
+    incomplete = (
+        db.query(HistoricalOrder)
+        .options(
+            defer(HistoricalOrder.audit_trail),
+            noload(HistoricalOrder.predictions),
+            joinedload(HistoricalOrder.customer),
+            joinedload(HistoricalOrder.image),
+            selectinload(HistoricalOrder.items).selectinload(HistoricalItem.services),
+        )
+        .filter(
+            HistoricalOrder.ocr_status.in_(validated_filter_values()),
+            or_(
+                HistoricalOrder.completion_days.is_(None),
+                HistoricalOrder.claimed_date.is_(None),
+            ),
+        )
+        .order_by(HistoricalOrder.date_received.asc())
+        .limit(min(limit, 50))
+        .all()
+    )
     for order in incomplete:
         if order.historical_order_id in seen:
             continue
-        results.append(_build_hist_queue_item(order.image, order, "incomplete_fields"))
+        item = _build_queue_item(order.image, order, "incomplete_fields", service_prices=service_prices)
+        if item:
+            results.append(item)
+    assign_display_order_ids(db, results)
+    sort_review_queue(results)
     return results
 
 
-def _build_hist_queue_item(img, order, source: str):
-    missing = []
-    if not order.completion_days: missing.append("completion_days")
-    if not order.claimed_date: missing.append("claimed_date")
-    if not order.priority: missing.append("priority")
-    items_data = []
-    for i in (order.items or []):
-        if not i.brand: missing.append(f"pair_{i.historical_item_id}_brand")
-        if not i.model: missing.append(f"pair_{i.historical_item_id}_model")
-        KNOWN_ADDONS = {'mret', 'mr', 'mres', 'minor retouch', 'minor reglue', 'minor restoration', 'retouch', 'reglue'}
-        base_s = []
-        addon_s = []
-        for s in (i.services or []):
-            s_name = s.service_name.strip()
-            s_name_lower = s_name.lower()
-            s_type = 'addon' if any(a in s_name_lower for a in KNOWN_ADDONS) else s.service_type
-            val = s_name if float(s.price) == 0 else f"{s_name} (₱{float(s.price):.2f})"
-            if s_type == 'addon':
-                addon_s.append(val)
-            else:
-                base_s.append(val)
-        
-        conditions_list = []
-        if getattr(i, 'scratches', False): conditions_list.append("Scratches")
-        if getattr(i, 'yellowing', False): conditions_list.append("Yellowing")
-        if getattr(i, 'sole_separation', False): conditions_list.append("Sole Separation")
-        if getattr(i, 'deep_stains', False): conditions_list.append("Deep Stains")
-        if getattr(i, 'rips_holes', False): conditions_list.append("Rips/Holes")
-        if getattr(i, 'worn_out', False): conditions_list.append("Worn Out")
-        
-        model_val = i.model or ""
-        color_val = i.color or ""
-        mat_val = getattr(i, 'material', "") or ""
-        
-        # Rule 1: Suede duplicated in both model and material -> remove from material
-        if model_val and mat_val and model_val.strip().lower() == mat_val.strip().lower():
-            mat_val = ""
-            
-        # Rule 2: Color mistakenly put in Model (e.g., "White/Blue")
-        color_keywords = {'white', 'black', 'blue', 'red', 'green', 'yellow', 'brown', 'pink', 'purple', 'orange', 'grey', 'gray', 'silver', 'gold', 'multi', 'navy', 'cream'}
-        words_in_model = [w.strip() for w in model_val.lower().replace('/', ' ').split() if w.strip()]
-        if words_in_model and all(w in color_keywords for w in words_in_model):
-            if not color_val:
-                color_val = model_val
-            model_val = ""
-            
-        items_data.append({
-            "model": model_val, "brand": i.brand, "color": color_val, "size": i.size,
-            "material": mat_val if mat_val else None,
-            "base_services": base_s,
-            "addon_services": addon_s,
-            "conditions": conditions_list,
-            "item_price": float(i.item_price) if getattr(i, 'item_price', None) is not None else None
-        })
+def _build_hist_queue_item(img, order, source: str, db=None, reserved=None):
+    from api.historical_processing import _build_queue_item
+    return _build_queue_item(img, order, source, db=db, reserved=reserved or [])
+
+
+# ------------------------------------------------------------------
+# POST /api/historical/processing/validate/{historical_image_id} — Approve/reject OCR record
+# ------------------------------------------------------------------
+@app.post("/api/historical/processing/validate/{historical_image_id}")
+async def validate_historical_image(
+    historical_image_id: int,
+    payload: Dict[str, Any] = Body(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    img = db.query(HistoricalImage).filter(
+        HistoricalImage.historical_image_id == historical_image_id
+    ).first()
+    if not img:
+        raise HTTPException(status_code=404, detail="Image not found")
+
+    from api.historical_processing import apply_queue_review_action
+    result = apply_queue_review_action(
+        payload.get("action"),
+        img,
+        img.order,
+        payload.get("corrections") or {},
+        db,
+    )
+    db.commit()
+    return {"status": "success", "new_status": img.ocr_status, "action": result}
+
+
+# ------------------------------------------------------------------
+# POST /api/historical/processing/reocr/{historical_image_id} — Re-run OCR for one scan
+# ------------------------------------------------------------------
+@app.post("/api/historical/processing/reocr/{historical_image_id}")
+async def reocr_historical_image_route(
+    historical_image_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+):
+    from pathlib import Path
+    from historical.ocr_engine import extract_from_file, extraction_is_usable
+    from historical_ocr_import import apply_extraction_to_order
+    from api.historical_processing import _build_queue_item
+
+    img = db.query(HistoricalImage).filter(
+        HistoricalImage.historical_image_id == historical_image_id
+    ).first()
+    if not img:
+        raise HTTPException(status_code=404, detail="Image not found")
+    order = img.order
+    if order is None:
+        raise HTTPException(status_code=404, detail="Linked historical order not found")
+
+    path = Path(img.image_path) if img.image_path else None
+    if path is None or not path.exists():
+        raise HTTPException(status_code=404, detail="Source image file is missing on disk")
+
+    try:
+        page_results = extract_from_file(path)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"OCR failed: {exc}") from exc
+
+    if not page_results:
+        raise HTTPException(status_code=500, detail="OCR returned no pages")
+
+    _, extracted, confidence, engine = page_results[0]
+    apply_extraction_to_order(db, order, extracted, engine, confidence)
+    img.ocr_confidence = confidence
+    img.ocr_version = engine
+    img.processed_at = datetime.now()
+    db.commit()
+    db.refresh(order)
+    db.refresh(img)
+
+    rebuilt = _build_queue_item(img, order, source="ocr_pending", db=db)
     return {
-        "historical_image_id": img.historical_image_id if img else None,
-        "image_filename": img.image_filename if img else None,
-        "image_path": img.image_path if img else None,
-        "ocr_confidence": img.ocr_confidence if img else 1.0,
-        "source": source,
-        "missing_fields": missing,
-        "order": {
-            "historical_order_id": order.historical_order_id,
-            "order_id": order.order_id,
-            "customer": {"name": order.customer.customer_name if order.customer else None, "contact": order.customer.contact_number if order.customer else None},
-            "date_received": str(order.date_received) if order.date_received else None,
-            "original_estimated_release_date": str(order.original_estimated_release_date) if order.original_estimated_release_date else None,
-            "claimed_date": str(order.claimed_date) if order.claimed_date else None,
-            "completion_days": order.completion_days,
-            "priority": order.priority,
-            "payment_method": order.payment_method,
-            "branch": order.branch,
-            "grand_total": float(order.grand_total) if order.grand_total else 0,
-            "items": items_data,
-        },
+        "status": "success",
+        "usable": extraction_is_usable(extracted),
+        "engine": engine,
+        "confidence": confidence,
+        "item": rebuilt,
     }
 
 
@@ -4264,6 +5010,7 @@ async def validate_hist_order_fields(
     historical_order_id: int,
     payload: Dict[str, Any] = Body(...),
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
 ):
     from datetime import date as date_type
     order = db.query(HistoricalOrder).filter(HistoricalOrder.historical_order_id == historical_order_id).first()
@@ -4311,9 +5058,25 @@ async def validate_hist_order_fields(
             order.completion_days = (cd - dr).days
         except Exception:
             pass
-    order.sync_status = "synced"
+    action = str(payload.get("action") or "").strip().lower()
+    from historical.ocr_status import REJECTED, VALIDATED
+    from api.historical_processing import apply_canonical_id_on_validate, apply_normalized_timeline
+    if action == "approve":
+        apply_canonical_id_on_validate(order, db, submitted_id=corrections.get("order_id"))
+        order.ocr_status = VALIDATED
+        order.sync_status = "synced"
+        if getattr(order, "image", None):
+            order.image.ocr_status = VALIDATED
+            order.image.processed_at = datetime.now()
+    elif action == "reject":
+        order.ocr_status = REJECTED
+        if getattr(order, "image", None):
+            order.image.ocr_status = REJECTED
+            order.image.processed_at = datetime.now()
+    else:
+        apply_normalized_timeline(order)
     db.commit()
-    return {"status": "success", "historical_order_id": historical_order_id}
+    return {"status": "success", "historical_order_id": historical_order_id, "action": action or "save"}
 
 
 # ------------------------------------------------------------------
@@ -4323,6 +5086,7 @@ async def validate_hist_order_fields(
 async def bulk_import_historical(
     payload: List[Dict[str, Any]] = Body(...),
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
 ):
     from datetime import date as date_type
     BUSINESS_START = date_type(2025, 8, 15)
@@ -4425,11 +5189,15 @@ async def get_historical_analytics(
     branch: Optional[str] = None,
     priority: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(require_role("admin")),
 ):
-    require_role(["owner"])(current_user)
 
-    query = db.query(HistoricalOrder)
+    from historical.ocr_status import validated_filter_values
+
+    # Analytics must use finalized records only. Pending OCR is not business truth.
+    query = db.query(HistoricalOrder).filter(
+        HistoricalOrder.ocr_status.in_(validated_filter_values())
+    )
     if start_date:
         try:
             query = query.filter(HistoricalOrder.date_received >= datetime.fromisoformat(start_date))
@@ -4456,7 +5224,9 @@ async def get_historical_analytics(
     completed = [o for o in orders if o.completion_days is not None and o.completion_days > 0]
     avg_completion = round(sum(o.completion_days for o in completed) / len(completed), 1) if completed else 0
 
-    # Service frequency
+    from historical.local_ocr_parser import expand_service_names_for_analytics
+
+    # Service frequency — codes (BC, FR) roll up to the full service name
     service_freq: Dict[str, int] = {}
     brand_freq: Dict[str, int] = {}
     for o in orders:
@@ -4464,8 +5234,8 @@ async def get_historical_analytics(
             brand = item.brand or "Unknown"
             brand_freq[brand] = brand_freq.get(brand, 0) + 1
             for svc in item.services:
-                svc_name = svc.service_name or "Other"
-                service_freq[svc_name] = service_freq.get(svc_name, 0) + 1
+                for svc_name in expand_service_names_for_analytics(svc.service_name or "Other"):
+                    service_freq[svc_name] = service_freq.get(svc_name, 0) + 1
 
     most_requested_service = max(service_freq, key=service_freq.get) if service_freq else "N/A"
     most_serviced_brand    = max(brand_freq, key=brand_freq.get) if brand_freq else "N/A"
@@ -4547,7 +5317,7 @@ async def get_historical_analytics(
 @app.get("/api/historical/export-csv")
 async def export_historical_csv(
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(require_role("admin")),
 ):
     csv_bytes = historical_ml_engine.export_dataset(db)
     return StreamingResponse(
@@ -4563,10 +5333,13 @@ async def export_historical_csv(
 @app.post("/api/historical/train")
 async def train_historical_model(
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(require_role("admin")),
 ):
-    require_role(["owner"])(current_user)
     result = historical_ml_engine.train_model(db)
+    if result.get("status") == "success":
+        # Reload live predictor singleton so /api/predict uses the freshly trained artifact.
+        predictor.metadata = predictor._load_metadata()
+        predictor.model = predictor._load_model()
     return result
 
 
@@ -4577,9 +5350,8 @@ async def train_historical_model(
 async def predict_historical_release(
     payload: dict = Body(...),
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(require_role("admin")),
 ):
-    require_role(["owner"])(current_user)
 
     date_received_str = payload.get("date_received")
     date_received = None
@@ -4641,9 +5413,8 @@ async def predict_historical_release(
 @app.get("/api/historical/predictions")
 async def list_historical_predictions(
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(require_role("admin")),
 ):
-    require_role(["owner"])(current_user)
     preds = (
         db.query(HistoricalPrediction)
         .order_by(HistoricalPrediction.prediction_date.desc())
@@ -4674,13 +5445,9 @@ async def list_historical_predictions(
 @app.get("/api/historical/model-info")
 async def get_historical_model_info(
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(require_role("admin")),
 ):
-    require_role(["owner"])(current_user)
-    record_count = db.query(HistoricalOrder).filter(
-        HistoricalOrder.claimed_date.isnot(None),
-        HistoricalOrder.completion_days.isnot(None),
-    ).count()
+    record_count = len(historical_ml_engine._query_ml_eligible_orders(db))
     info = historical_ml_engine.get_model_info()
     info["records_available"] = record_count
     return info
@@ -4690,11 +5457,19 @@ async def get_historical_model_info(
 # Ensures pages like /orders or /settings work even after a browser refresh.
 # MUST BE AT THE BOTTOM to avoid intercepting other GET routes
 @app.get("/{full_path:path}")
-async def catch_all(full_path: str):
+async def catch_all(full_path: str, request: Request):
     # Only serve the UI if it's NOT an API call
     if full_path.startswith("api"):
         raise HTTPException(status_code=404, detail="API route not found")
-        
+
+    vite_auth = local_vite_auth_redirect(
+        request.headers.get("host", ""),
+        full_path,
+        request.url.query,
+    )
+    if vite_auth:
+        return RedirectResponse(url=vite_auth, status_code=307)
+
     index_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dist", "index.html"))
     
     # If the path looks like a static file that exists, serve it

@@ -1,6 +1,8 @@
 import React from 'react';
 import { Button } from '@/app/components/ui/button';
 import { AlertTriangle, Home, ArrowLeft, ShieldAlert, Wrench, RefreshCw, ServerOff, Terminal } from 'lucide-react';
+// P1-10 FIX: centralized API/static base resolution (see src/app/lib/apiBase.ts).
+import { STATIC_BASE } from '@/app/lib/apiBase';
 
 
 export interface SystemErrorScreenProps {
@@ -56,7 +58,9 @@ const SystemErrorScreen: React.FC<SystemErrorScreenProps> = ({
                 const target = e.target as HTMLImageElement;
                 if (!target.dataset.retried) {
                   target.dataset.retried = "true";
-                  target.src = "http://localhost:8000/static/branded_shoe_404.png";
+                  // P1-10 FIX: use the centralized local-dev backend origin instead of a
+                  // bare hardcoded localhost:8000.
+                  target.src = `${STATIC_BASE}/static/branded_shoe_404.png`;
                 } else {
                   target.src = "/logo.png";
                 }

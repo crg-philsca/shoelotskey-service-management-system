@@ -144,14 +144,23 @@ export function getInventoryPresentation(item: any): InventoryPresentation {
     let statusLabel: string;
     let reorderRecommendation: string;
 
+    // P1-4 FIX: This previously only treated an item as "Low Stock" when an explicit
+    // low_stock_threshold (> 0) was set, silently reporting "In Stock" for any item
+    // relying on the packageSize/1-unit fallback threshold. That diverged from the single
+    // authoritative rule used everywhere else (backend `Inventory.recalculate_status()`,
+    // `InventoryContext.calculateStatus()`, and `Dashboard.tsx`'s lowStockItems filter),
+    // which all fall back to packageSize, then 1, when no explicit threshold is set. This
+    // effectiveThreshold mirrors that same rule so the Inventory table/detail view can never
+    // show a different status than the Dashboard or the backend-persisted `item.status`.
+    const effectiveThreshold = threshold > 0 ? threshold : (packageSize > 0 ? packageSize : 1);
     if (stock <= 0) {
         stockStatus = 'No Stock';
         statusLabel = 'NO STOCK';
         reorderRecommendation = 'URGENT: Reorder immediately (Stock depleted)';
-    } else if (threshold > 0 && stock <= threshold) {
+    } else if (stock <= effectiveThreshold) {
         stockStatus = 'Low Stock';
         statusLabel = 'LOW STOCK';
-        reorderRecommendation = `Reorder recommended (At or below threshold of ${threshold.toLocaleString()} ${unit})`;
+        reorderRecommendation = `Reorder recommended (At or below threshold of ${effectiveThreshold.toLocaleString()} ${unit})`;
     } else {
         stockStatus = 'In Stock';
         statusLabel = 'IN STOCK';

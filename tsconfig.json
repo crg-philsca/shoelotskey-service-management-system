@@ -22,11 +22,10 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
 
-    /* Path mapping */
-    "baseUrl": ".",
+    /* Path mapping (TS 6+: use relative paths; baseUrl deprecated) */
     "paths": {
-      "@/*": ["src/*"],
-      "@": ["src"]
+      "@/*": ["./src/*"],
+      "@": ["./src"]
     }
   },
   "include": ["src"],

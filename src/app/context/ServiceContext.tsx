@@ -1,5 +1,7 @@
 import { createContext, useContext, useState, ReactNode, useEffect, useMemo } from 'react';
 import { Service } from '@/app/types';
+// P1-10 FIX: centralized API base resolution (see src/app/lib/apiBase.ts).
+import { API_BASE } from '@/app/lib/apiBase';
 
 interface ServiceContextType {
     services: Service[];
@@ -10,10 +12,6 @@ interface ServiceContextType {
 }
 
 const ServiceContext = createContext<ServiceContextType | undefined>(undefined);
-
-const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '5173' || window.location.hostname.startsWith('192.')))
-    ? `${window.location.protocol}//${window.location.hostname}:8000/api`
-    : '/api';
 
 export function ServiceProvider({ children, user }: { children: ReactNode, user: { token: string } }) {
     const [services, setServices] = useState<Service[]>([]);

@@ -20,7 +20,11 @@ __pycache__/
 *.pyo
 *.pyd
 .Python
+.pytest_cache/
 *.db
+*.db-wal
+*.db-shm
+*.sqlite
 *.sqlite3
 
 # Environment Variables

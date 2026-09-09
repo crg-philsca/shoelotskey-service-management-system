@@ -48,10 +48,10 @@ export default function RestockModal({ open, onOpenChange }: RestockModalProps) 
     const hasPackage = selectedItem && Number((selectedItem as any).package_size || (selectedItem as any).packageSize) > 0;
     const packageUnit = hasPackage 
         ? ((selectedItem as any).package_unit || (selectedItem as any).packageUnit || 'Package') 
-        : (selectedItem?.unit?.toLowerCase() === 'ml' ? 'Jug / Bottle' : selectedItem?.unit?.toLowerCase() === 'g' ? 'Tub / Can' : (selectedItem?.unit || 'Unit'));
+        : (selectedItem?.unit || 'Unit');
     const packageSize = hasPackage 
         ? Number((selectedItem as any).package_size || (selectedItem as any).packageSize) 
-        : (selectedItem?.unit?.toLowerCase() === 'ml' || selectedItem?.unit?.toLowerCase() === 'g' ? 1000 : 1);
+        : 1;
     
     const unitPrice = selectedItem ? Number(selectedItem.price || 0) : 0;
     const computedTotalCost = (Number(quantity) || 0) * unitPrice;

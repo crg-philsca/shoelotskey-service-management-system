@@ -52,6 +52,16 @@ import {
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Cell } from 'recharts';
 import type { JobOrder } from '@/app/types';
 import React from 'react';
+import {
+  buildOrderActivityTrends,
+  collectedSales,
+  isCancelledOrder,
+  isDateInRange,
+  isSalesEligible,
+  orderEventDate,
+  serviceVolumeByCanonical,
+  type ReportRange,
+} from '@/app/lib/salesAnalytics';
 
 // [STABILITY] Error Boundary to prevent White Screen on crash
 class DashboardErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error: any}> {
@@ -84,7 +94,7 @@ class DashboardErrorBoundary extends React.Component<{children: React.ReactNode}
  * @param onSetHeaderActionRight - Function to inject components into the global header's right action area.
  */
 interface DashboardProps {
-  user: { username: string; role: 'owner' | 'staff'; token: string };
+  user: { username: string; role: 'owner' | 'staff' | 'admin'; token: string };
   onSetHeaderActionRight?: (action: ReactNode | null) => void;
 }
 
@@ -233,10 +243,10 @@ const TrendTooltip = ({ active, payload, label }: any) => {
         <p className="text-sm font-black text-gray-900 mb-2">{label}</p>
         <div className="space-y-1.5">
           <div className="flex items-center gap-2 text-[10px] font-black text-[#A78BFA] uppercase">
-            <div className="w-1.5 h-1.5 rounded-full bg-[#A78BFA]" /> Orders Created: {payload[0].value}
+            <div className="w-2 h-2 rounded-full bg-[#A78BFA]" /> Orders Created: {payload[0].value}
           </div>
-          <div className="flex items-center gap-2 text-[10px] font-black text-[#34D399] uppercase">
-            <div className="w-1.5 h-1.5 rounded-full bg-[#34D399]" /> Orders Released: {payload[1].value}
+          <div className="flex items-center gap-2 text-[10px] font-black text-[#F97316] uppercase">
+            <div className="w-2 h-2 rounded-full bg-[#F97316]" /> Orders Released: {payload[1].value}
           </div>
         </div>
       </div>
@@ -253,7 +263,9 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isUpdatingStock, setIsUpdatingStock] = useState(false);
   const [cancelOrderModal, setCancelOrderModal] = useState<JobOrder | null>(null);
-  const [profitRange, setProfitRange] = useState<'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Annually'>('Daily');
+  const [profitRange, setProfitRange] = useState<ReportRange>('Daily');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
   // STATE: Drill-down status filter
   // When a user clicks a status card (e.g., 'New Order'), this state is set
   // and the dashboard switches to show a detailed table for that status.
@@ -286,34 +298,11 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
   // Separate Range-Filtered Orders (for Analytics) from Global Orders (for Status Cards)
   const analyticsOrders = useMemo(() => {
     const now = new Date();
-    // Safety: check both Today and Yesterday for 'Daily' to catch timezone edge cases
-    const todayStr = dateFnsFormat(now, 'yyyy-MM-dd');
-    
-    const isWithinRange = (order: JobOrder) => {
+    return (orders || []).filter((order) => {
       if (!order) return false;
-      const createdAt = new Date(order.createdAt || 0);
-      const transactionDate = new Date(order.transactionDate || order.createdAt || 0);
-      
-      const isDateMatch = (d: Date) => {
-        if (isNaN(d.getTime())) return false;
-        const orderDateStr = dateFnsFormat(d, 'yyyy-MM-dd');
-        return orderDateStr === todayStr;
-      };
-
-      if (profitRange === 'Daily') {
-        return isDateMatch(transactionDate) || isDateMatch(createdAt);
-      }
-      
-      const compareDate = isNaN(transactionDate.getTime()) ? createdAt : transactionDate;
-      const diffDays = (now.getTime() - compareDate.getTime()) / (1000 * 60 * 60 * 24);
-      if (profitRange === 'Weekly') return diffDays <= 7.5;
-      if (profitRange === 'Monthly') return diffDays <= 31.5;
-      if (profitRange === 'Quarterly') return diffDays <= 93;
-      return diffDays <= 367; // Annually
-    };
-
-    return (orders || []).filter(order => isWithinRange(order));
-  }, [orders, profitRange]);
+      return isDateInRange(orderEventDate(order), profitRange, now, customStartDate, customEndDate);
+    });
+  }, [orders, profitRange, customStartDate, customEndDate]);
 
   // Use the range-filtered 'analyticsOrders' for Status Summary cards to respect date filters
   const statusCounts = useMemo(() => {
@@ -338,17 +327,16 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
   }, [orders, analyticsOrders, selectedStatus]);
 
   const totalSales = useMemo(() => {
-    return (analyticsOrders || []).reduce((sum, order) => {
-      if ((order?.status as string)?.toLowerCase() === 'cancelled') return sum;
-      return sum + Math.min(order?.grandTotal || 0, order?.amountReceived || 0);
-    }, 0);
+    return (analyticsOrders || [])
+      .filter(isSalesEligible)
+      .reduce((sum, order) => sum + collectedSales(order), 0);
   }, [analyticsOrders]);
 
   const totalPendingPayments = useMemo(() => {
     return (analyticsOrders || []).reduce((sum, order) => {
-      if ((order?.status as string)?.toLowerCase() === 'cancelled') return sum;
+      if (isCancelledOrder(order)) return sum;
       if (order?.paymentStatus === 'fully-paid') return sum;
-      return sum + ((order?.grandTotal || 0) - (order?.amountReceived || 0));
+      return sum + Math.max(0, (order?.grandTotal || 0) - (order?.amountReceived || 0));
     }, 0);
   }, [analyticsOrders]);
 
@@ -356,97 +344,44 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
   
   const lowStockItems = useMemo(() => {
     // [STABILITY] Trigger alert if status is not 'In Stock' OR if quantity is critical (<= threshold)
-    return (inventoryData || []).filter(item => {
+    const filtered = (inventoryData || []).filter(item => {
       const threshold = (item.low_stock_threshold && item.low_stock_threshold > 0)
         ? item.low_stock_threshold
         : ((item.package_size && item.package_size > 0) ? item.package_size : 1);
       return item.isActive && (item.status !== 'In Stock' || Number(item.stock) <= threshold);
     });
+
+    return filtered.sort((a, b) => {
+      const presA = getInventoryPresentation(a);
+      const presB = getInventoryPresentation(b);
+      const stockA = Number(a.stock || 0);
+      const stockB = Number(b.stock || 0);
+      
+      // "no stock on top"
+      if (stockA <= 0 && stockB > 0) return -1;
+      if (stockB <= 0 && stockA > 0) return 1;
+      
+      // "and the lowest stock remaining percent"
+      return presA.percentageRemaining - presB.percentageRemaining;
+    });
   }, [inventoryData]);
 
   const filteredExpenses = useMemo(() => {
     const now = new Date();
-    const isWithinRange = (dateValue: Date) => {
-      const diffDays = (now.getTime() - dateValue.getTime()) / (1000 * 60 * 60 * 24);
-      if (profitRange === 'Daily') {
-        if (isNaN(dateValue.getTime())) return false;
-        return dateFnsFormat(dateValue, 'yyyy-MM-dd') === dateFnsFormat(now, 'yyyy-MM-dd');
-      }
-      if (profitRange === 'Weekly') return diffDays < 7;
-      if (profitRange === 'Monthly') return diffDays < 30;
-      if (profitRange === 'Quarterly') return diffDays < 90;
-      return diffDays < 365; // Annually
-    };
-
-    return expenses.filter(exp => {
-      return isWithinRange(new Date(exp.date));
-    });
-  }, [expenses, profitRange]);
+    return expenses.filter((exp) => isDateInRange(new Date(exp.date), profitRange, now, customStartDate, customEndDate));
+  }, [expenses, profitRange, customStartDate, customEndDate]);
 
   const totalExpenses = useMemo(() => {
     return filteredExpenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
   }, [filteredExpenses]);
 
   /**
-   * MEMO: serviceVolumeData
-   * Aggregates order data into service categories for the volume and sales charts.
-   * Maps specific sub-services (like 'Minor Reglue (with cleaning)') into parent groups.
+   * Service Volume by Type: pair counts and collected sales for the selected range.
+   * Sales use cash received only (unpaid balance is excluded) and are split across
+   * services so they cannot exceed period sales.
    */
   const serviceVolumeData = useMemo(() => {
-    const basicCleaningBreakdown = {
-      'Basic Cleaning': 0,
-      'Unyellowing': 0,
-      'Minor Retouch': 0,
-      'Minor Restoration': 0,
-    };
-  
-    const result = [
-      { name: 'Basic Cleaning', value: 0, sales: 0, breakdown: basicCleaningBreakdown },
-      { name: 'Minor Reglue', value: 0, sales: 0 },
-      { name: 'Full Reglue', value: 0, sales: 0 },
-      { name: 'Color Renewal', value: 0, sales: 0 },
-    ];
-
-    (analyticsOrders || []).forEach(order => {
-      if (!order) return;
-      const items = (order.items && order.items.length) ? order.items : [{
-        baseService: Array.isArray(order.baseService) ? order.baseService : [order.baseService],
-        addOns: order.addOns || []
-      }];
-  
-      items.forEach(item => {
-        if (!item) return;
-        const itemBaseServices = Array.isArray(item.baseService) ? item.baseService : [item.baseService];
-        const salesShare = ((order.grandTotal || 0) / (items.length || 1));
-        const serviceCount = itemBaseServices.length || 1;
-        
-        itemBaseServices.forEach(baseService => {
-          const serviceNameLower = String(baseService || '').toLowerCase();
-          if (!serviceNameLower) return;
-          
-          if (serviceNameLower.includes('full reglue')) {
-            result[2].value += 1;
-            result[2].sales += salesShare / serviceCount;
-          } else if (serviceNameLower.includes('minor reglue')) {
-            result[1].value += 1;
-            result[1].sales += salesShare / serviceCount;
-          } else if (serviceNameLower.includes('color renewal') || serviceNameLower.includes('color') || serviceNameLower.includes('renewal')) {
-            result[3].value += 1;
-            result[3].sales += salesShare / serviceCount;
-          } else if (serviceNameLower.includes('cleaning') || serviceNameLower.includes('unyellowing') || serviceNameLower.includes('retouch') || serviceNameLower.includes('restoration') || serviceNameLower.includes('basic')) {
-            result[0].value += 1;
-            result[0].sales += salesShare / serviceCount;
-            
-            if (serviceNameLower.includes('unyellowing')) basicCleaningBreakdown['Unyellowing'] += 1;
-            else if (serviceNameLower.includes('retouch')) basicCleaningBreakdown['Minor Retouch'] += 1;
-            else if (serviceNameLower.includes('restoration')) basicCleaningBreakdown['Minor Restoration'] += 1;
-            else basicCleaningBreakdown['Basic Cleaning'] += 1;
-          }
-        });
-      });
-    });
-  
-    return result;
+    return serviceVolumeByCanonical(analyticsOrders || []);
   }, [analyticsOrders]);
 
   /**
@@ -454,100 +389,10 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
    * Prepares sequential data points for the TREND charts.
    * Adapts automatically based on profitRange (Hours for Daily, Days for Weekly, etc.).
    */
-  const timeSeriesData = useMemo(() => {
-    const now = new Date();
-    const source = analyticsOrders || [];
-
-    if (profitRange === 'Daily') {
-      const hours = Array.from({ length: 24 }, (_, i) => i);
-      const dailyData = hours.map(hour => {
-          const periodStart = new Date(now);
-          periodStart.setHours(hour, 0, 0, 0);
-          const periodEnd = new Date(now);
-          periodEnd.setHours(hour + 1, 0, 0, 0);
-
-          return {
-            hourIndex: hour,
-            period: `${hour}:00`,
-            newOrders: source.filter(order => {
-              if (!order?.createdAt) return false;
-              const orderTime = new Date(order.createdAt);
-              return orderTime >= periodStart && orderTime < periodEnd;
-            }).length,
-            releasedOrders: source.filter(order => {
-              if (!order?.actualCompletionDate) return false;
-              const releaseTime = new Date(order.actualCompletionDate);
-              return releaseTime >= periodStart && releaseTime < periodEnd;
-            }).length,
-          };
-        });
-
-      // Default to 9:00 AM (9) to 9:00 PM (21), but dynamically expand if transactions exist outside these hours.
-      const startHour = Math.min(9, dailyData.reduce((min, d) => (d.newOrders > 0 || d.releasedOrders > 0) ? Math.min(min, d.hourIndex) : min, 9));
-      const endHour = Math.max(21, dailyData.reduce((max, d) => (d.newOrders > 0 || d.releasedOrders > 0) ? Math.max(max, d.hourIndex) : max, 21));
-
-      return dailyData
-        .filter(data => data.hourIndex >= startHour && data.hourIndex <= endHour)
-        .map(({ hourIndex, ...rest }) => rest);
-    }
-
-    if (profitRange === 'Weekly') {
-      return Array.from({ length: 7 }, (_, i) => {
-        const date = new Date(now);
-        date.setDate(date.getDate() - (6 - i));
-        const dayStart = new Date(date);
-        dayStart.setHours(0, 0, 0, 0);
-        const dayEnd = new Date(date);
-        dayEnd.setHours(23, 59, 59, 999);
-
-        return {
-          period: date.toLocaleDateString('en-US', { weekday: 'short' }),
-          newOrders: source.filter(order => {
-            if (!order?.createdAt) return false;
-            const orderTime = new Date(order.createdAt);
-            return orderTime >= dayStart && orderTime <= dayEnd;
-          }).length,
-          releasedOrders: source.filter(order => {
-            if (!order?.actualCompletionDate) return false;
-            const releaseTime = new Date(order.actualCompletionDate);
-            return releaseTime >= dayStart && releaseTime <= dayEnd;
-          }).length,
-        };
-      });
-    }
-
-    // Monthly/Quarterly/Annually fallbacks
-    const getSafeTimeSeries = (length: number, dayOffset: number, labelFn: (d: Date, i: number) => string) => {
-      return Array.from({ length }, (_, i) => {
-        const date = new Date(now);
-        date.setDate(date.getDate() - (dayOffset - i));
-        const start = new Date(date); start.setHours(0,0,0,0);
-        const end = new Date(date); end.setHours(23,59,59,999);
-        return {
-          period: labelFn(date, i),
-          newOrders: source.filter(o => o?.createdAt && new Date(o.createdAt) >= start && new Date(o.createdAt) <= end).length,
-          releasedOrders: source.filter(o => o?.actualCompletionDate && new Date(o.actualCompletionDate) >= start && new Date(o.actualCompletionDate) <= end).length,
-        };
-      });
-    };
-
-    if (profitRange === 'Monthly') return getSafeTimeSeries(30, 29, (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
-    if (profitRange === 'Quarterly') return getSafeTimeSeries(12, 84, (_, i) => `Wk ${i+1}`);
-
-    return Array.from({ length: 12 }, (_, i) => {
-      const ms = new Date(now);
-      ms.setMonth(ms.getMonth() - (11 - i));
-      ms.setDate(1); ms.setHours(0,0,0,0);
-      const me = new Date(ms);
-      me.setMonth(me.getMonth() + 1);
-      me.setDate(0); me.setHours(23,59,59,999);
-      return {
-        period: ms.toLocaleDateString('en-US', { month: 'short' }),
-        newOrders: source.filter(o => o?.createdAt && new Date(o.createdAt) >= ms && new Date(o.createdAt) <= me).length,
-        releasedOrders: source.filter(o => o?.actualCompletionDate && new Date(o.actualCompletionDate) >= ms && new Date(o.actualCompletionDate) <= me).length,
-      };
-    });
-  }, [analyticsOrders, profitRange]);
+  const timeSeriesData = useMemo(
+    () => buildOrderActivityTrends(orders ?? [], profitRange, customStartDate, customEndDate),
+    [orders, profitRange, customStartDate, customEndDate],
+  );
 
   const chartTitle = 'ORDER ACTIVITY TRENDS';
 
@@ -555,64 +400,55 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
   useEffect(() => {
     if (!onSetHeaderActionRight) return;
 
-    if (!selectedStatus) {
-      onSetHeaderActionRight(
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="w-10 h-10 sm:w-40 flex items-center justify-center sm:justify-between rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-sm font-semibold uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:border-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                aria-label="Select range"
-                type="button"
-              >
-                <CalendarIcon className="h-4 w-4 sm:mr-1 shrink-0" aria-hidden="true" />
-                <span className="hidden sm:inline truncate mx-1 flex-1 text-center">{profitRange}</span>
-                <ChevronDown className="hidden sm:block h-4 w-4 text-white shrink-0" aria-hidden="true" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-40 p-0 rounded-xl border border-red-600 bg-white shadow-lg overflow-hidden animate-in slide-in-from-top-2 duration-200">
-              {['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Annually'].map((range) => (
-                <DropdownMenuItem
-                  key={range}
-                  onClick={() => setProfitRange(range as typeof profitRange)}
-                  className={`uppercase px-4 py-2 text-sm font-semibold cursor-pointer transition-colors ${profitRange === range ? 'bg-red-600 text-white focus:bg-red-600 focus:text-white' : 'bg-white text-red-700 hover:bg-red-100 hover:text-red-700 focus:bg-red-100 focus:text-red-700'}`}
-                >
-                  {range}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-      );
-    } else {
-      // Status drill-down view: show only filter
-      onSetHeaderActionRight(
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              className="w-10 h-10 sm:w-40 flex items-center justify-center sm:justify-between rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-sm font-semibold uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:border-white focus:outline-none focus:ring-2 focus:ring-red-500"
-              aria-label="Select range"
-              type="button"
+    const rangeMenu = (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            className="w-10 h-10 sm:w-40 flex items-center justify-center sm:justify-between rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-sm font-bold uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:border-white focus:outline-none focus:ring-2 focus:ring-red-500"
+            aria-label="Select range"
+            type="button"
+          >
+            <CalendarIcon className="h-4 w-4 sm:mr-1 shrink-0" aria-hidden="true" />
+            <span className="hidden sm:inline truncate mx-1 flex-1 text-center">{profitRange}</span>
+            <ChevronDown className="hidden sm:block h-4 w-4 text-white shrink-0" aria-hidden="true" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-40 min-w-40 p-0 rounded-xl border border-red-600 bg-white shadow-lg overflow-hidden animate-in slide-in-from-top-2 duration-200">
+          {['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Annually', 'Custom'].map((range) => (
+            <DropdownMenuItem
+              key={range}
+              onClick={() => setProfitRange(range as typeof profitRange)}
+              className={`uppercase px-4 py-2 text-sm font-semibold cursor-pointer transition-colors ${profitRange === range ? 'bg-red-600 text-white focus:bg-red-600 focus:text-white' : 'bg-white text-red-700 hover:bg-red-100 hover:text-red-700 focus:bg-red-100 focus:text-red-700'}`}
             >
-              <CalendarIcon className="h-4 w-4 sm:mr-1 shrink-0" aria-hidden="true" />
-              <span className="hidden sm:inline truncate mx-1 flex-1 text-center">{profitRange}</span>
-              <ChevronDown className="hidden sm:block h-4 w-4 text-white shrink-0" aria-hidden="true" />
+              {range}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+
+    onSetHeaderActionRight(
+      <div className="flex items-center gap-2">
+        {profitRange === 'Custom' && (
+          <div className="hidden lg:flex items-center gap-1">
+            <input type="date" aria-label="Custom start date" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} className="h-10 rounded-md border border-gray-300 px-2 text-xs" />
+            <span className="text-xs text-gray-500">–</span>
+            <input type="date" aria-label="Custom end date" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)} className="h-10 rounded-md border border-gray-300 px-2 text-xs" />
+            <button
+              type="button"
+              className="h-10 px-2 text-sm font-bold uppercase text-red-700 border border-red-200 rounded-md bg-white hover:bg-red-50 hover:text-red-700"
+              onClick={() => { setCustomStartDate(''); setCustomEndDate(''); setProfitRange('Daily'); }}
+            >
+              Clear
             </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-40 p-0 rounded-xl border border-red-600 bg-white shadow-lg overflow-hidden">
-            {['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Annually'].map((range) => (
-              <DropdownMenuItem
-                key={range}
-                onClick={() => setProfitRange(range as typeof profitRange)}
-                className={`uppercase px-4 py-2 text-sm font-semibold cursor-pointer ${profitRange === range ? 'bg-red-600 text-white focus:bg-red-600 focus:text-white' : 'bg-white text-red-700 hover:bg-red-100 hover:text-red-700 focus:bg-red-100 focus:text-red-700'}`}
-              >
-                {range}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      );
-    }
+          </div>
+        )}
+        {rangeMenu}
+      </div>
+    );
+
     return () => onSetHeaderActionRight(null);
-  }, [onSetHeaderActionRight, profitRange, selectedStatus]);
+  }, [onSetHeaderActionRight, profitRange, customStartDate, customEndDate]);
 
   if (loading) {
     return (
@@ -630,6 +466,26 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
             <div className="flex items-center gap-2 px-1 mb-2">
               <div className="h-1.5 w-1.5 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.6)]"></div>
               <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Cloud Sync Active</span>
+            </div>
+          )}
+
+          {profitRange === 'Custom' && (
+            <div className="flex flex-wrap items-end justify-center gap-2 rounded-xl border border-red-100 bg-red-50/60 p-3 lg:hidden">
+              <label className="flex flex-col gap-1">
+                <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Start date</span>
+                <input type="date" aria-label="Custom start date" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} className="h-10 rounded-md border border-gray-300 bg-white px-2 text-xs" />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">End date</span>
+                <input type="date" aria-label="Custom end date" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)} className="h-10 rounded-md border border-gray-300 bg-white px-2 text-xs" />
+              </label>
+              <button
+                type="button"
+                className="h-10 px-3 text-sm font-bold uppercase text-red-700 border border-red-200 rounded-md bg-white hover:bg-red-50 hover:text-red-700"
+                onClick={() => { setCustomStartDate(''); setCustomEndDate(''); setProfitRange('Daily'); }}
+              >
+                Clear
+              </button>
             </div>
           )}
 
@@ -703,7 +559,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                 <CardTitle className="text-center text-base font-bold text-gray-900 uppercase mb-0 pb-0 tracking-tight">Overview Summary</CardTitle>
               </CardHeader>
               <CardContent className="pt-0 pb-0 mb-0 -mt-5">
-                <div className={`grid gap-2 ${role === 'owner' ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4' : 'grid-cols-1 md:grid-cols-2'}`}>
+                <div className={`grid gap-2 ${role !== 'staff' ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4' : 'grid-cols-1 md:grid-cols-2'}`}>
                   {/* Card 1: Total Active Orders */}
                   <Card className={`border-none shadow-md bg-white overflow-hidden relative ${role === 'staff' ? 'col-span-1 md:col-span-2' : 'col-span-1'}`}>
                     <div className="absolute top-0 right-0 p-4 opacity-10">
@@ -715,7 +571,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                     </CardContent>
                   </Card>
                   {/* Assigned Orders Removed per user request */}
-                  {role === 'owner' && (
+                  {role !== 'staff' && (
                     <>
                       {/* Card 2: Pending Payments (Red) */}
                       <Card className="border-none shadow-md bg-white overflow-hidden relative col-span-1 border-t-4 border-red-500">
@@ -982,7 +838,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                 <th className="h-10 px-4 text-left font-black text-gray-700 uppercase tracking-widest text-[11px]">QTY</th>
                                 <th className="h-10 px-4 text-center font-black text-gray-700 uppercase tracking-widest text-[11px]">Order Date</th>
                                 <th className="h-10 px-4 text-center font-black text-gray-700 uppercase tracking-widest text-[11px]">
-                                  {selectedStatus === 'for-release' ? 'Release Date' : selectedStatus === 'claimed' ? 'Claimed Date' : 'Predicted Date'}
+                                  {selectedStatus === 'for-release' ? 'Release Date' : selectedStatus === 'claimed' ? 'Claimed Date' : 'Estimated Date'}
                                 </th>
                                 <th className="h-10 px-4 text-left font-black text-gray-700 uppercase tracking-widest text-[11px]">Priority</th>
                                 <th className="h-10 px-4 text-left font-black text-gray-700 uppercase tracking-widest text-[11px]">Payment</th>
@@ -1027,7 +883,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                       <div className="text-xs font-bold text-gray-900 leading-tight max-w-[160px] text-wrap break-words">{order.customerName || '-'}</div>
                                       <div className="text-xs text-gray-500 mt-1 whitespace-nowrap">{order.contactNumber || ''}</div>
                                     </td>
-                                    <td className="p-4 text-xs text-gray-600">
+                                    <td className="p-4 text-xs font-medium text-gray-700">
                                       {Array.isArray(order.baseService)
                                         ? order.baseService.map((s, i) => (
                                           <div key={i}>{String(s || '').replace(' (with basic cleaning)', '')}{i < order.baseService.length - 1 ? ',' : ''}</div>
@@ -1038,7 +894,13 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                     <td className="p-4 text-center text-sm font-medium text-gray-700 whitespace-nowrap">
                                       {(() => {
                                         const d = new Date(order.createdAt);
-                                        return isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy');
+                                        if (isNaN(d.getTime())) return '-';
+                                        return (
+                                          <div className="inline-flex items-center justify-center gap-1.5">
+                                            <CalendarIcon size={12} className="text-purple-600 shrink-0" />
+                                            <span>{dateFnsFormat(d, 'MM/dd/yy')}</span>
+                                          </div>
+                                        );
                                       })()}
                                     </td>
                                     <td className="p-4 text-center text-sm font-medium text-gray-700 whitespace-nowrap">
@@ -1049,17 +911,40 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                             const d = new Date(claimDate);
                                             const formattedDate = isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy');
                                             return (
-                                              <div className="flex flex-col">
-                                                <span>{formattedDate}</span>
+                                              <div className="flex flex-col items-center">
+                                                <div className="inline-flex items-center justify-center gap-1.5">
+                                                  <CalendarIcon size={12} className="text-slate-500 shrink-0" />
+                                                  <span>{formattedDate}</span>
+                                                </div>
                                                 <span className="text-[10px] text-gray-400 font-medium tracking-wider mt-0.5 whitespace-nowrap truncate max-w-[120px]" title={order.claimedBy || order.customerName || '-'}>
                                                   by {order.claimedBy || order.customerName || '-'}
                                                 </span>
                                               </div>
                                             );
                                           }
+                                          if (selectedStatus === 'for-release') {
+                                            const released = order.actualReleaseDate
+                                              || (order as any).statusHistory?.find((s: any) => s.status === 'for-release')?.timestamp
+                                              || order.actualCompletionDate;
+                                            if (!released) return '-';
+                                            const d = new Date(released);
+                                            if (isNaN(d.getTime())) return '-';
+                                            return (
+                                              <div className="inline-flex items-center justify-center gap-1.5">
+                                                <CalendarIcon size={12} className="text-orange-600 shrink-0" />
+                                                <span>{dateFnsFormat(d, 'MM/dd/yy')}</span>
+                                              </div>
+                                            );
+                                          }
                                           if (!order.predictedCompletionDate) return '-';
                                           const d = new Date(order.predictedCompletionDate);
-                                          return isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy');
+                                          if (isNaN(d.getTime())) return '-';
+                                          return (
+                                            <div className="inline-flex items-center justify-center gap-1.5">
+                                              <CalendarIcon size={12} className="text-emerald-600 shrink-0" />
+                                              <span>{dateFnsFormat(d, 'MM/dd/yy')}</span>
+                                            </div>
+                                          );
                                         })()}
                                     </td>
                                     <td className="p-4">
@@ -1305,16 +1190,18 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
 
           {!selectedStatus && (
             <div className="space-y-6">
-              <div className="grid grid-cols-1 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Service Volume Chart */}
                 <Card className="border-none shadow-md bg-white overflow-hidden">
                   <CardHeader className="flex flex-row items-center justify-between pb-2 pt-6 px-6">
-                    <CardTitle className="text-sm font-black uppercase tracking-tight text-gray-800">Service Volume by Type</CardTitle>
-                    <div className="flex items-center gap-4 text-[9px] font-bold uppercase tracking-wider text-gray-500">
-                      <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#A3C9C2]" /> BASIC CLEANING</div>
-                      <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#A78BFA]" /> FULL REGLUE</div>
-                      <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#C4B5FD]" /> MINOR REGLUE</div>
-                      <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#FBBF24]" /> COLOR RENEWAL</div>
+                    <CardTitle className="text-sm font-black uppercase tracking-tight text-gray-800 leading-tight whitespace-nowrap">
+                      Service Volume by Type
+                    </CardTitle>
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[9px] font-bold uppercase tracking-wider text-gray-500 ml-4">
+                      <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#A2C2B9]" /> BASIC CLEANING</div>
+                      <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#93C5FD]" /> MINOR REGLUE</div>
+                      <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#D69BE5]" /> FULL REGLUE</div>
+                      <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#F5CD93]" /> COLOR RENEWAL</div>
                     </div>
                   </CardHeader>
                   <CardContent className="pt-4 px-6 pb-8">
@@ -1335,10 +1222,10 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                             axisLine={{ stroke: '#e2e8f0' }} 
                             tickLine={false} 
                          />
-                         <Tooltip content={<ServiceTooltip isOwner={role === 'owner'} />} cursor={{fill: '#f8fafc'}} />
+                         <Tooltip content={<ServiceTooltip isOwner={['owner', 'admin'].includes(role)} />} cursor={{fill: '#f8fafc'}} />
                          <Bar dataKey="value" radius={[4, 4, 0, 0]} barSize={60}>
                            {serviceVolumeData.map((_item, index) => (
-                             <Cell key={`cell-${index}`} fill={['#A3C9C2', '#C4B5FD', '#A78BFA', '#FBBF24'][index % 4]} />
+                             <Cell key={`cell-${index}`} fill={['#A2C2B9', '#93C5FD', '#D69BE5', '#F5CD93'][index % 4]} />
                            ))}
                          </Bar>
                        </BarChart>
@@ -1350,9 +1237,9 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                 <Card className="border-none shadow-md bg-white overflow-hidden">
                    <CardHeader className="flex flex-row items-center justify-between pb-2 pt-6 px-6">
                      <CardTitle className="text-sm font-black uppercase tracking-tight text-gray-800">{chartTitle}</CardTitle>
-                     <div className="flex items-center gap-4 text-[9px] font-bold uppercase tracking-wider text-gray-500">
+                     <div className="flex items-center gap-3 text-[9px] font-bold uppercase tracking-wider text-gray-500 ml-4">
                         <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#A78BFA]" /> ORDERS CREATED</div>
-                        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#34D399]" /> ORDERS RELEASED</div>
+                        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#F97316]" /> ORDERS RELEASED</div>
                      </div>
                    </CardHeader>
                    <CardContent className="pt-4 px-6 pb-8">
@@ -1373,12 +1260,14 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                          />
                          <Tooltip content={<TrendTooltip />} />
                          <Line type="monotone" dataKey="newOrders" stroke="#A78BFA" strokeWidth={3} dot={{ r: 4, fill: '#A78BFA', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
-                         <Line type="monotone" dataKey="releasedOrders" stroke="#34D399" strokeWidth={3} dot={{ r: 4, fill: '#34D399', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
+                         <Line type="monotone" dataKey="releasedOrders" stroke="#F97316" strokeWidth={3} dot={{ r: 4, fill: '#F97316', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
                        </LineChart>
                      </ResponsiveContainer>
                    </CardContent>
                 </Card>
+              </div>
 
+              <div className="grid grid-cols-1 gap-6">
                 {/* Low Stock Alerts */}
                 <Card className="border-none shadow-md bg-white">
                   <CardHeader className="flex flex-row items-center justify-between border-b border-gray-100 pt-4 !pb-3 px-6">
@@ -1398,7 +1287,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                       {lowStockItems.map((item, idx) => {
                         const pres = getInventoryPresentation(item);
                         const isCritical = Number(item.stock || 0) <= 0;
-                        const barColor = isCritical ? 'bg-red-500' : pres.percentageRemaining > 50 ? 'bg-emerald-400' : 'bg-amber-400';
+                        const barColor = isCritical ? 'bg-red-500' : pres.percentageRemaining > 50 ? 'bg-blue-500' : 'bg-amber-400';
                         const textColor = isCritical ? 'text-red-600' : 'text-amber-600';
 
                         return (

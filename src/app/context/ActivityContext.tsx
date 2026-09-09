@@ -1,5 +1,7 @@
-import { createContext, useContext, useState, ReactNode, useEffect, useMemo } from 'react';
+import { createContext, useContext, useState, ReactNode, useEffect, useMemo, useCallback } from 'react';
 import { format as dateFnsFormat } from 'date-fns';
+// P1-10 FIX: centralized API base resolution (see src/app/lib/apiBase.ts).
+import { API_BASE } from '@/app/lib/apiBase';
 
 export interface ActivityLog {
     id: string;
@@ -19,60 +21,29 @@ export interface ActivityLog {
     type: 'service' | 'order' | 'system' | 'expense' | 'inventory' | 'critical' | string;
 }
 
-const DEFAULT_SEED_LOGS: ActivityLog[] = [
-    {
-        id: '104',
-        timestamp: '07/27/2026, 14:45',
-        user: 'Owner',
-        action: 'Deleted Inventory Item',
-        table: 'Inventory',
-        recordId: '12',
-        details: 'Deleted inventory item #12 (Expired Sole Adhesive Paste) from stock records',
-        type: 'inventory',
-        oldValues: { itemName: 'Expired Sole Adhesive Paste', category: 'Chemicals', stockQuantity: 0, unitPrice: 250.00 },
-        newValues: null
-    },
-    {
-        id: '103',
-        timestamp: '07/27/2026, 11:00',
-        user: 'Staff B',
-        action: 'Changed Order Status to "On-going"',
-        table: 'Orders',
-        recordId: '101',
-        details: 'Changed status of Job Order #ORD-2026-07-27-101 from New Order to On-going',
-        type: 'order',
-        oldValues: { orderNumber: 'ORD-2026-07-27-101', status: 'New Order' },
-        newValues: { orderNumber: 'ORD-2026-07-27-101', status: 'On-going', updatedBy: 'Staff B' }
-    },
-    {
-        id: '102',
-        timestamp: '07/27/2026, 10:30',
-        user: 'Owner',
-        action: 'Updated Service Price',
-        table: 'Services',
-        recordId: '5',
-        details: 'Updated price for Deep Cleaning & Reglue service from ₱300.00 to ₱325.00',
-        type: 'service',
-        oldValues: { serviceName: 'Deep Cleaning & Reglue', price: 300.00, durationDays: 10 },
-        newValues: { serviceName: 'Deep Cleaning & Reglue', price: 325.00, durationDays: 10 }
-    },
-    {
-        id: '101',
-        timestamp: '07/27/2026, 09:15',
-        user: 'Staff A',
-        action: 'Created Job Order #102',
-        table: 'Orders',
-        recordId: '102',
-        details: 'Created Job Order #ORD-2026-07-27-102 with 1 Pair (Nike Air Force 1)',
-        type: 'order',
-        oldValues: null,
-        newValues: { orderNumber: 'ORD-2026-07-27-102', customerName: 'Juan Dela Cruz', totalAmount: 450.00, status: 'New Order' }
-    }
-];
+function isResolvedPilImportError(log: ActivityLog): boolean {
+    const action = String(log.actionRaw || log.action || '').toUpperCase().replace(/\s+/g, '_');
+    if (action !== 'SERVER_ERROR') return false;
+    const blob = `${log.details || ''} ${JSON.stringify(log.oldValues || {})} ${JSON.stringify(log.newValues || {})}`;
+    return blob.includes("No module named 'PIL'") || blob.includes('No module named "PIL"');
+}
+
+function withoutResolvedPilErrors(logs: ActivityLog[]): ActivityLog[] {
+    return logs.filter((log) => !isResolvedPilImportError(log));
+}
+
+// P1-14 FIX: This module previously fell back to a hardcoded DEFAULT_SEED_LOGS array of
+// fabricated activity records (fake users, fake timestamps, fake order/inventory/service
+// changes) whenever the backend was unreachable or returned no rows, and rendered them in
+// the exact same Activity History UI as genuine audit records with no "this is demo/offline
+// data" indicator. That risks an evaluator or Owner mistaking synthetic history for a real
+// audit trail. It has been removed — see fetchLogs() below, which now shows a real empty
+// state (or the last genuinely-fetched localStorage cache) instead of fabricating history.
 
 interface ActivityContextType {
     activities: ActivityLog[];
     addActivity: (activity: Omit<ActivityLog, 'id' | 'timestamp'> & { table?: string; recordId?: number | string; oldValues?: any; newValues?: any }) => void;
+    refreshActivities: () => Promise<boolean>;
 }
 
 const ActivityContext = createContext<ActivityContextType | undefined>(undefined);
@@ -83,12 +54,33 @@ const ActivityContext = createContext<ActivityContextType | undefined>(undefined
  * PERSISTENCE: Syncs with Backend API (/api/activities).
  * FALLBACK: Uses localStorage if backend is unreachable.
  */
-const API_BASE = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '5173'))
-    ? `http://${window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname}:8000/api`
-    : '/api';
-
 export function ActivityProvider({ children, user }: { children: ReactNode, user: { token: string } }) {
     const [activities, setActivities] = useState<ActivityLog[]>([]);
+
+    const formatLogList = (logList: any[]): ActivityLog[] => withoutResolvedPilErrors(logList.map((d: any) => ({
+        ...d,
+        table: d.table || (d.type === 'service' ? 'Services' : d.type === 'inventory' ? 'Inventory' : d.type === 'expense' ? 'Expenses' : d.type === 'system' ? 'Users' : 'Orders'),
+        module: d.module || (d.type === 'service' ? 'Services' : d.type === 'inventory' ? 'Inventory' : d.type === 'expense' ? 'Expenses' : d.type === 'system' ? 'User Management' : 'Job Orders'),
+        role: d.role || (d.user === 'Owner' ? 'owner' : 'staff')
+    })));
+
+    const refreshActivities = useCallback(async (): Promise<boolean> => {
+        try {
+            const res = await fetch(`${API_BASE}/activities?limit=2000`, {
+                headers: { 'Authorization': `Bearer ${user.token}` }
+            });
+            if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
+            const data = await res.json();
+            const logList = Array.isArray(data) ? data : (Array.isArray(data?.items) ? data.items : []);
+            const formatted = formatLogList(logList);
+            setActivities(formatted);
+            localStorage.setItem('shoelotskey_activities', JSON.stringify(formatted));
+            return true;
+        } catch (err) {
+            console.warn("[DEBUG] ActivityContext: refresh failed; keeping current list.", err);
+            return false;
+        }
+    }, [user.token]);
 
     /**
      * EFFECT: Initial Sync
@@ -96,39 +88,22 @@ export function ActivityProvider({ children, user }: { children: ReactNode, user
      */
     useEffect(() => {
         const fetchLogs = async () => {
+            console.log('[DEBUG] ActivityContext: Fetching system logs...');
+            const ok = await refreshActivities();
+            if (ok) return;
+            console.warn("[DEBUG] ActivityContext: Backend unreachable. Using local cache if available.");
             try {
-                console.log('[DEBUG] ActivityContext: Fetching system logs...');
-                const res = await fetch(`${API_BASE}/activities`, {
-                    headers: { 'Authorization': `Bearer ${user.token}` }
-                });
-                if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
-                const data = await res.json();
-                const logList = Array.isArray(data) ? data : (Array.isArray(data?.items) ? data.items : []);
-                if (logList.length > 0) {
-                    const formatted = logList.map((d: any) => ({
-                        ...d,
-                        table: d.table || (d.type === 'service' ? 'Services' : d.type === 'inventory' ? 'Inventory' : d.type === 'expense' ? 'Expenses' : d.type === 'system' ? 'Users' : 'Orders'),
-                        module: d.module || (d.type === 'service' ? 'Services' : d.type === 'inventory' ? 'Inventory' : d.type === 'expense' ? 'Expenses' : d.type === 'system' ? 'User Management' : 'Job Orders'),
-                        role: d.role || (d.user === 'Owner' ? 'owner' : 'staff')
-                    }));
-                    setActivities(formatted);
-                    localStorage.setItem('shoelotskey_activities', JSON.stringify(formatted));
-                } else {
-                    setActivities(DEFAULT_SEED_LOGS);
-                }
-            } catch (err) {
-                console.warn("[DEBUG] ActivityContext: Backend unreachable. Using local cache or seed logs.", err);
-                try {
-                    const saved = localStorage.getItem('shoelotskey_activities');
-                    if (saved) {
-                        const parsed = JSON.parse(saved);
-                        setActivities(parsed.length > 0 ? parsed : DEFAULT_SEED_LOGS);
-                    } else {
-                        setActivities(DEFAULT_SEED_LOGS);
-                    }
-                } catch (parseErr) {
-                    setActivities(DEFAULT_SEED_LOGS);
-                }
+                // P1-14 FIX: `shoelotskey_activities` in localStorage only ever contains
+                // a genuine previously-fetched snapshot from the backend (written above),
+                // so falling back to it while offline is legitimate cached real data, not
+                // fabricated history. If there is no such cache, show an empty state.
+                const saved = localStorage.getItem('shoelotskey_activities');
+                const parsed = saved ? JSON.parse(saved) : [];
+                const cleaned = withoutResolvedPilErrors(Array.isArray(parsed) ? parsed : []);
+                setActivities(cleaned);
+                localStorage.setItem('shoelotskey_activities', JSON.stringify(cleaned));
+            } catch (parseErr) {
+                setActivities([]);
             }
         };
         // --- OFFLINE AUTO-SYNC logic ---
@@ -171,7 +146,7 @@ export function ActivityProvider({ children, user }: { children: ReactNode, user
         processSyncQueue();
         const syncInterval = setInterval(processSyncQueue, 30000); // Check every 30s
         return () => clearInterval(syncInterval);
-    }, [user.token]);
+    }, [user.token, refreshActivities]);
 
     const queueActivitySync = (activity: ActivityLog) => {
         if (typeof window === 'undefined') return;
@@ -229,7 +204,11 @@ export function ActivityProvider({ children, user }: { children: ReactNode, user
         }
     };
 
-    const contextValue = useMemo(() => ({ activities, addActivity }), [activities, addActivity]);
+    const visibleActivities = useMemo(() => withoutResolvedPilErrors(activities), [activities]);
+    const contextValue = useMemo(
+        () => ({ activities: visibleActivities, addActivity, refreshActivities }),
+        [visibleActivities, addActivity, refreshActivities],
+    );
 
     return (
         <ActivityContext.Provider value={contextValue}>
