@@ -263,7 +263,14 @@ def frontend_base_for_reset_link(host: str, origin: str = "", referer: str = "")
         env = (os.getenv("FRONTEND_URL") or LOCAL_VITE_ORIGIN).rstrip("/")
         return env
 
-    protocol = "https" if "herokuapp.com" in host or ".app" in host else "http"
+    clean_host = host.lower().split(":")[0]
+    is_secure_host = (
+        clean_host == "shoelotskey-villamor-pasay.app"
+        or clean_host.endswith(".shoelotskey-villamor-pasay.app")
+        or clean_host.endswith(".herokuapp.com")
+        or clean_host.endswith(".app")
+    )
+    protocol = "https" if is_secure_host else "http"
     if host:
         return f"{protocol}://{host}"
     return (os.getenv("PUBLIC_APP_URL") or "https://shoelotskey-villamor-pasay.app").rstrip("/")

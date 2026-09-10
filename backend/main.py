@@ -1718,7 +1718,8 @@ def health_check(db: Session = Depends(get_db), current_user: User = Depends(req
         counts["orders"] = db.query(Order).count()
         user_ids = [u.user_id for u in db.query(User).limit(5).all()]
     except Exception as e:
-        counts["error"] = str(e)
+        logger.warning(f"[DIAGNOSTIC] Counts query failed: {e}")
+        counts["error"] = "Diagnostic counts query unavailable"
 
     error_str = "Skipped (Disabled to prevent DB pollution)"
 
@@ -2546,7 +2547,7 @@ async def get_prediction(
             "algorithm": "Shoelotskey Business Rules",
         }
     except Exception as e:
-        print(f"[ML ERROR] {e}")
+        logger.error(f"[ML ERROR] Prediction exception: {e}", exc_info=True)
         fallback = datetime.now() + timedelta(days=10)
         return {
             "authoritative": "business_rule",
@@ -2557,14 +2558,16 @@ async def get_prediction(
             "ml_model": "Random Forest Regression",
             "ml_status": "unavailable",
             "ml_source": "random_forest",
-            "ml_reason": str(e),
+            "ml_reason": "ML estimation pipeline temporarily unavailable",
             "predicted_date": fallback.isoformat(),
             "predicted_date_ymd": fallback.strftime("%Y-%m-%d"),
             "predicted_days": 10,
-            "status": "fallback", "error": str(e),
+            "status": "fallback",
+            "error": "ML estimation pipeline temporarily unavailable",
             "source": "error_fallback",
-            "fallback_reason": str(e),
-            "model_loaded": False, "algorithm": "Shoelotskey Business Rules",
+            "fallback_reason": "ML estimation pipeline temporarily unavailable",
+            "model_loaded": False,
+            "algorithm": "Shoelotskey Business Rules",
         }
 
 @app.get("/api/ml/status")
@@ -5290,7 +5293,8 @@ async def debug_image(
         db.commit()
         return {"status": "success", "message": "payment_method added"}
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        logger.error(f"[SCHEMA ERROR] Migration failed: {e}", exc_info=True)
+        return {"status": "error", "message": "Database schema update failed"}
 
 # ------------------------------------------------------------------
 # GET /api/historical/image/{image_filename} — Dynamically fetch image from any subfolder
@@ -5750,7 +5754,8 @@ async def bulk_import_historical(
                     ))
             inserted += 1
         except Exception as e:
-            errors.append({"index": idx, "order_id": record.get("order_id"), "error": str(e)})
+            logger.error(f"[HISTORICAL INSERT ERROR] Order {record.get('order_id')}: {e}", exc_info=True)
+            errors.append({"index": idx, "order_id": record.get("order_id"), "error": "Record validation or insertion failed"})
             skipped += 1
 
     db.commit()
@@ -6048,11 +6053,13 @@ async def catch_all(full_path: str, request: Request):
     if vite_auth:
         return RedirectResponse(url=vite_auth, status_code=307)
 
-    index_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dist", "index.html"))
+    dist_dir = os.path.realpath(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dist")))
+    index_path = os.path.join(dist_dir, "index.html")
     
-    # If the path looks like a static file that exists, serve it
-    file_candidate = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dist", full_path))
-    if os.path.isfile(file_candidate):
+    # If the path looks like a static file that exists inside dist, serve it safely
+    safe_rel_path = os.path.normpath(full_path).lstrip("/\\")
+    file_candidate = os.path.realpath(os.path.abspath(os.path.join(dist_dir, safe_rel_path)))
+    if file_candidate.startswith(dist_dir + os.sep) and os.path.isfile(file_candidate):
         return FileResponse(file_candidate)
         
     # Default to index.html for React Router

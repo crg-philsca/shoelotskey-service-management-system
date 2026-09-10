@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useRef, type ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useOrders } from '@/app/context/OrderContext';
+import { formatPeso } from '@/app/lib/currency';
 import {
     ArrowLeft,
     ChevronLeft,
@@ -545,7 +546,7 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                                                             </span>
                                                             {pStatus === 'downpayment' && (
                                                                 <span className="text-[10px] text-red-500 font-medium tracking-wider mt-0.5 whitespace-nowrap">
-                                                                    BAL: ₱{Math.max((Number(order.grandTotal) || 0) - (Number(order.amountReceived) || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                                                    BAL: {formatPeso(Math.max(0, (Number(order.grandTotal) || 0) - (Number(order.depositAmount) || (Number(order.amountReceived) && Number(order.amountReceived) < Number(order.grandTotal) ? Number(order.amountReceived) : 0))))}
                                                                 </span>
                                                             )}
                                                         </>

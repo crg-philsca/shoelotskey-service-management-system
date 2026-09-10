@@ -138,7 +138,9 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
     const baseTotal = order?.grandTotal || 0;
     const retailTotal = purchasedProducts.reduce((sum, item) => sum + ((item.quantity || 0) * (item.price || 0)), 0);
     const totalAmount = baseTotal + retailTotal;
-    const amountPaid = order?.amountReceived || 0;
+    const amountPaid = order?.paymentStatus === 'fully-paid'
+        ? baseTotal
+        : (order?.depositAmount || (order?.amountReceived && order.amountReceived < baseTotal ? order.amountReceived : 0));
     const effectiveTotal = Math.max(0, totalAmount - (enableRefund ? refundAmount : 0));
     const isFullyPaid = order?.paymentStatus === 'fully-paid' && retailTotal === 0 && (!enableRefund || refundAmount === 0);
     const remainingBalance = isFullyPaid ? 0 : Math.max(0, effectiveTotal - amountPaid);

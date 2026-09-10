@@ -117,13 +117,24 @@ export default function OrderDetailModal({
       quantity: item.quantity || 1,
     }));
     const controller = new AbortController();
-    const storedUser = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
     let authToken = '';
     try {
+      const storedUser = typeof window !== 'undefined' ? (localStorage.getItem('user') || sessionStorage.getItem('user')) : null;
       authToken = storedUser ? (JSON.parse(storedUser)?.token || '') : '';
     } catch {
       authToken = '';
     }
+    const rawTxDate = order.transactionDate || order.createdAt;
+    let isoTxDate = new Date().toISOString();
+    try {
+      if (rawTxDate) {
+        const parsed = new Date(rawTxDate);
+        if (!isNaN(parsed.getTime())) {
+          isoTxDate = parsed.toISOString();
+        }
+      }
+    } catch {}
+
     fetch(`${API_BASE}/predict`, {
       method: 'POST',
       headers: {
@@ -132,9 +143,9 @@ export default function OrderDetailModal({
       },
       body: JSON.stringify({
         items,
-        priorityLevel: order.priorityLevel,
-        grandTotal: order.grandTotal,
-        transactionDate: (order.transactionDate || order.createdAt)?.toString?.() || order.transactionDate || order.createdAt,
+        priorityLevel: order.priorityLevel || 'regular',
+        grandTotal: order.grandTotal || 0,
+        transactionDate: isoTxDate,
       }),
       signal: controller.signal,
     })
@@ -400,13 +411,12 @@ export default function OrderDetailModal({
                 <DateValue colorClass="text-blue-600">
                   {estimate?.ml_predicted_date
                     ? formatDate(estimate.ml_predicted_date, 'MM/dd/yy')
-                    : '-'}
+                    : (order.predictedCompletionDate ? formatDate(order.predictedCompletionDate, 'MM/dd/yy') : '-')}
                 </DateValue>
                 <p className="text-[10px] text-slate-500 mt-1">
-                  ML:{' '}
                   {estimate?.ml_predicted_days != null
-                    ? `${estimate.ml_predicted_days} days`
-                    : 'unavailable'}
+                    ? `ML: ${estimate.ml_predicted_days} days (Random Forest)`
+                    : 'ML unavailable (Official Business Rules applied)'}
                 </p>
               </div>
 

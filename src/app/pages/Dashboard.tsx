@@ -62,6 +62,7 @@ import {
   serviceVolumeByCanonical,
   type ReportRange,
 } from '@/app/lib/salesAnalytics';
+import { formatPeso } from '@/app/lib/currency';
 
 // [STABILITY] Error Boundary to prevent White Screen on crash
 class DashboardErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error: any}> {
@@ -970,7 +971,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                                 </span>
                                                 {order.paymentStatus === 'downpayment' && (
                                                   <span className="text-[10px] text-red-500 font-medium tracking-wider mt-0.5 whitespace-nowrap">
-                                                    BAL: {'\u20B1'}{(order.grandTotal - (order.amountReceived || 0)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                                    BAL: {formatPeso(Math.max(0, (order.grandTotal || 0) - (order.depositAmount || (order.amountReceived && order.amountReceived < order.grandTotal ? order.amountReceived : 0))))}
                                                   </span>
                                                 )}
                                             </>

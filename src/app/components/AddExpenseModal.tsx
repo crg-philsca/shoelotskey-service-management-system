@@ -208,12 +208,12 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditE
         let compiledNotes = notes;
         if (category === 'Staff Salary' && staffItems.length > 0 && staffItems.some(i => i.name || i.amount)) {
             const breakdown = "[STAFF PAYROLL ALLOCATION]\n" + staffItems.filter(i => i.name || i.amount).map(s => 
-                `• ${s.name || 'Unnamed Staff'} (${s.role || 'Staff'}): ₱${parseFloat(s.amount || '0').toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                `• ${s.name || 'Unnamed Staff'} (${s.role || 'Staff'}): ₱${parseFloat(s.amount || '0').toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
             ).join('\n');
             compiledNotes = breakdown + (notes ? `\n\n[ADDITIONAL NOTES]\n${notes}` : '');
         } else if (['Cleaning Materials', 'Cleaning Aids', 'Chemicals'].includes(category) && supplyItems.length > 0 && supplyItems.some(i => i.name || i.price)) {
             const breakdown = `[${category.toUpperCase()} ITEMIZED BREAKDOWN]\n` + supplyItems.filter(i => i.name || i.price).map(i => 
-                `• ${i.name || 'Unnamed Item'}: ₱${parseFloat(i.price || '0').toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                `• ${i.name || 'Unnamed Item'}: ₱${parseFloat(i.price || '0').toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
             ).join('\n');
             compiledNotes = breakdown + (notes ? `\n\n[ADDITIONAL NOTES]\n${notes}` : '');
         }

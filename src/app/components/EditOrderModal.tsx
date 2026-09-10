@@ -233,7 +233,7 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
         basicCleaningRushReduction: order?.rushReductionDays || 9
     });
 
-    const formatPeso = (val: number) => `₱${val.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+    const formatPeso = (val: number) => `₱${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     const formatDate = (date: any) => {
         if (!date) return '-';
         return new Date(date).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });

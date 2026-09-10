@@ -18,6 +18,7 @@ import {
   salesByCanonicalService,
   type ReportRange,
 } from '@/app/lib/salesAnalytics';
+import { formatPeso } from '@/app/lib/currency';
 
 interface SalesReportProps {
   onSetHeaderActionRight?: (action: React.ReactNode | null) => void;
@@ -88,7 +89,8 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
     return filteredOrdersByDate.reduce((sum: number, order: JobOrder) => {
       if ((order?.status as string)?.toLowerCase() === 'cancelled') return sum;
       if (order?.paymentStatus === 'fully-paid') return sum;
-      return sum + ((order.grandTotal || 0) - (order.amountReceived || 0));
+      const orderBalance = Math.max(0, (order.grandTotal || 0) - (order.depositAmount || (order.amountReceived && order.amountReceived < order.grandTotal ? order.amountReceived : 0)));
+      return sum + orderBalance;
     }, 0);
   }, [filteredOrdersByDate]);
 
@@ -323,7 +325,7 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
               <CardContent className="pt-6">
                 <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">{dateRange} Sales</p>
                 <p className="text-2xl font-black text-green-600 tracking-tight">
-                  ₱{(totalSalesAmount || 0).toLocaleString()}
+                  {formatPeso(totalSalesAmount || 0)}
                 </p>
               </CardContent>
             </Card>
@@ -353,7 +355,7 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
               <CardContent className="pt-6">
                 <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">{dateRange} Expenses</p>
                 <p className="text-2xl font-black text-orange-600 tracking-tight">
-                  ₱{(totalExpensesAmount || 0).toLocaleString()}
+                  {formatPeso(totalExpensesAmount || 0)}
                 </p>
               </CardContent>
             </Card>
@@ -375,7 +377,7 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
               <CardContent className="pt-6">
                 <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">Pending Payments</p>
                 <p className="text-2xl font-black text-red-600 tracking-tight">
-                  ₱{totalPendingPayments.toLocaleString()}
+                  {formatPeso(totalPendingPayments)}
                 </p>
               </CardContent>
             </Card>
@@ -387,7 +389,7 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
               <CardContent className="pt-6">
                 <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">Total Revenue</p>
                 <p className="text-2xl font-black text-yellow-600 tracking-tight">
-                  ₱{totalRevenue.toLocaleString()}
+                  {formatPeso(totalRevenue)}
                 </p>
               </CardContent>
             </Card>
@@ -399,7 +401,7 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
               <CardContent className="pt-6">
                 <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">Net Profit</p>
                 <p className="text-2xl font-black text-blue-600 tracking-tight">
-                  ₱{profit.toLocaleString()}
+                  {formatPeso(profit)}
                 </p>
               </CardContent>
             </Card>
@@ -578,7 +580,7 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
                   <td className="px-3 py-2 text-[10px] border border-gray-200">{new Date(order.transactionDate || order.createdAt).toLocaleDateString()}</td>
                   <td className="px-3 py-2 text-[10px] font-bold border border-gray-200">{order.orderNumber}</td>
                   <td className="px-3 py-2 text-[10px] border border-gray-200">{order.customerName}</td>
-                  <td className="px-3 py-2 text-[10px] font-black text-right border border-gray-200">₱{orderCollectedSales(order).toLocaleString()}</td>
+                  <td className="px-3 py-2 text-[10px] font-black text-right border border-gray-200">{formatPeso(orderCollectedSales(order))}</td>
                   <td className="px-3 py-2 text-[10px] text-center border border-gray-200 font-bold uppercase">{order.paymentMethod}</td>
                   <td className="px-3 py-2 text-[10px] text-center border border-gray-200 font-bold uppercase">{order.paymentStatus}</td>
                 </tr>
@@ -587,7 +589,7 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
             <tfoot>
               <tr className="bg-red-50">
                 <td colSpan={3} className="px-3 py-2 text-[11px] font-black uppercase text-red-600 text-right">Total Sales</td>
-                <td className="px-3 py-2 text-[11px] font-black text-right text-red-600 border border-red-100">₱{totalSalesAmount.toLocaleString()}</td>
+                <td className="px-3 py-2 text-[11px] font-black text-right text-red-600 border border-red-100">{formatPeso(totalSalesAmount)}</td>
                 <td colSpan={2} className="bg-white"></td>
               </tr>
             </tfoot>
@@ -616,14 +618,14 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
                   <td className="px-3 py-2 text-[10px] border border-gray-200">{new Date(exp.date).toLocaleDateString()}</td>
                   <td className="px-3 py-2 text-[10px] border border-gray-200">{exp.notes || exp.description || ''}</td>
                   <td className="px-3 py-2 text-[10px] border border-gray-200 font-bold uppercase">{exp.category}</td>
-                  <td className="px-3 py-2 text-[10px] font-black text-right border border-gray-200 text-red-600">₱{Number(exp.amount || 0).toLocaleString()}</td>
+                  <td className="px-3 py-2 text-[10px] font-black text-right border border-gray-200 text-red-600">{formatPeso(exp.amount || 0)}</td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
               <tr className="bg-red-50">
                 <td colSpan={3} className="px-3 py-2 text-[11px] font-black uppercase text-red-600 text-right">Total Expenses</td>
-                <td className="px-3 py-2 text-[11px] font-black text-right text-red-600 border border-red-100">₱{totalExpensesAmount.toLocaleString()}</td>
+                <td className="px-3 py-2 text-[11px] font-black text-right text-red-600 border border-red-100">{formatPeso(totalExpensesAmount)}</td>
               </tr>
             </tfoot>
           </table>
@@ -636,16 +638,16 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
             <div className="space-y-4">
               <div className="flex justify-between border-b border-gray-100 pb-2">
                 <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Total Sales</span>
-                <span className="text-[12px] font-black text-gray-900">₱{totalSalesAmount.toLocaleString()}</span>
+                <span className="text-[12px] font-black text-gray-900">{formatPeso(totalSalesAmount)}</span>
               </div>
               <div className="flex justify-between border-b border-gray-100 pb-2">
                 <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Total Operating Expenses</span>
-                <span className="text-[12px] font-black text-red-600">(₱{totalExpensesAmount.toLocaleString()})</span>
+                <span className="text-[12px] font-black text-red-600">({formatPeso(totalExpensesAmount)})</span>
               </div>
               <div className="flex justify-between pt-2">
                 <span className="text-sm font-black text-red-600 uppercase tracking-tighter">Net Profit / Loss</span>
                 <span className={`text-lg font-black ${profit >= 0 ? 'text-green-600' : 'text-red-700'}`}>
-                  ₱{profit.toLocaleString()}
+                  {formatPeso(profit)}
                 </span>
               </div>
             </div>

@@ -225,7 +225,7 @@ function normalizeShoe(item: ShoeItem): ShoeItem {
 }
 
 function fmtPeso(n?: number | null) {
-  return `₱${(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
+  return `₱${(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 /**

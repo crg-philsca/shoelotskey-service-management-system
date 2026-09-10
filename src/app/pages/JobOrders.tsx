@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useOrders } from '../context/OrderContext';
 import { JobOrder } from '@/app/types';
+import { formatPeso } from '@/app/lib/currency';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
@@ -349,11 +350,11 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                                                             <span className="text-[9px] text-gray-400 font-medium uppercase tracking-wider mt-0.5 whitespace-nowrap">
                                                                 {order.paymentMethod}
                                                             </span>
-                                                            {order.paymentStatus === 'downpayment' && (
-                                                                <span className="text-[10px] text-red-500 font-medium tracking-wider mt-0.5 whitespace-nowrap">
-                                                                    BAL: {'\u20B1'}{(order.grandTotal - (order.amountReceived || 0)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                                                                </span>
-                                                            )}
+                                                             {order.paymentStatus === 'downpayment' && (
+                                                                 <span className="text-[10px] text-red-500 font-medium tracking-wider mt-0.5 whitespace-nowrap">
+                                                                     BAL: {formatPeso(Math.max(0, (order.grandTotal || 0) - (order.depositAmount || (order.amountReceived && order.amountReceived < order.grandTotal ? order.amountReceived : 0))))}
+                                                                 </span>
+                                                             )}
                                                         </>
                                                     )}
                                                 </div>

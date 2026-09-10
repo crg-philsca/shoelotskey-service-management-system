@@ -3,7 +3,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, case
 from typing import List, Dict, Any, Optional
 from datetime import datetime, date
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 
 from db.database import get_db
 from auth_utils import require_role
@@ -1815,7 +1818,8 @@ def bulk_import_records(
             inserted += 1
 
         except Exception as e:
-            errors.append({"index": idx, "order_id": record.get("order_id"), "error": str(e)})
+            logger.error(f"[HISTORICAL BATCH INSERT ERROR] Order {record.get('order_id')}: {e}", exc_info=True)
+            errors.append({"index": idx, "order_id": record.get("order_id"), "error": "Record validation or insertion failed"})
             skipped += 1
 
     db.commit()

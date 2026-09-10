@@ -120,7 +120,7 @@ export default function InventoryDetailModal({
                   Unit Cost / Retail Price
                 </Label>
                 <p className="text-base font-extrabold text-slate-900">
-                  Cost: ₱{(item.price || 0).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}
+                  Cost: ₱{(item.price || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
                 {Boolean(item.is_retail) && Number(item.retail_price || 0) > 0 ? (
                   <span className="inline-block mt-1 text-[10px] font-black uppercase px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md">
