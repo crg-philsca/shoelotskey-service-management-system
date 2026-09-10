@@ -43,8 +43,12 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
   const [dateRange, setDateRange] = useState<ReportRange>(() => {
     return (location.state as any)?.dateRange || 'Daily';
   });
-  const [customStartDate, setCustomStartDate] = useState('');
-  const [customEndDate, setCustomEndDate] = useState('');
+  const [customStartDate, setCustomStartDate] = useState<string>(() => {
+    return (location.state as any)?.customStartDate || '';
+  });
+  const [customEndDate, setCustomEndDate] = useState<string>(() => {
+    return (location.state as any)?.customEndDate || '';
+  });
   const now = new Date();
 
   const reportPeriodLabel = useMemo(() => {
@@ -311,7 +315,7 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
             <Card
               className="border-none shadow-md bg-gradient-to-br from-green-50 to-green-100 overflow-hidden relative group cursor-pointer hover:shadow-lg transition-all"
-              onClick={() => navigate('/total-sales', { state: { dateRange } })}
+              onClick={() => navigate('/total-sales', { state: { dateRange, customStartDate, customEndDate } })}
             >
               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                 <TrendingUp size={48} className="text-green-600" />
@@ -326,7 +330,7 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
 
             <Card
               className="border-none shadow-md bg-gradient-to-br from-purple-50 to-purple-100 overflow-hidden relative group cursor-pointer hover:shadow-lg transition-all"
-              onClick={() => navigate('/total-orders', { state: { dateRange } })}
+              onClick={() => navigate('/total-orders', { state: { dateRange, customStartDate, customEndDate } })}
             >
               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                 <ShoppingBag size={48} className="text-purple-600" />
@@ -341,7 +345,7 @@ export default function SalesReport({ onSetHeaderActionRight, user }: SalesRepor
 
             <Card
               className="border-none shadow-md bg-gradient-to-br from-orange-50 to-orange-100 overflow-hidden relative group cursor-pointer hover:shadow-lg transition-all"
-              onClick={() => navigate('/expenses', { state: { dateRange } })}
+              onClick={() => navigate('/expenses', { state: { dateRange, customStartDate, customEndDate } })}
             >
               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                 <TrendingDown size={48} className="text-orange-600" />

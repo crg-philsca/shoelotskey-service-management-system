@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Filter, ArrowLeft, ChevronLeft, ChevronRight, ClipboardCheck, Eye, ShieldAlert, ShoppingCart, Package, Key, Printer, Tag, Users, Activity } from 'lucide-react';
+import { Search, Filter, ArrowLeft, ChevronLeft, ChevronRight, ClipboardCheck, Eye, ShieldAlert, ShoppingCart, Package, Key, Printer, Tag, Users, Activity, FileText } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Badge } from '@/app/components/ui/badge';
@@ -138,8 +138,16 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
         if (type === 'inventory' || activity.table === 'Inventory') return 'Inventory';
         if (type === 'expense' || activity.table === 'Expenses') return 'Expenses';
         if (type === 'order' || activity.table === 'Orders' || activity.table === 'Job Orders') return 'Job Orders';
-        if (action.includes('LOGIN') || action.includes('LOGOUT') || action.includes('PASSWORD')) return 'Authentication';
+        if (
+            action.includes('LOGIN') ||
+            action.includes('LOGOUT') ||
+            action.includes('LOGGED') ||
+            action.includes('PASSWORD') ||
+            action.includes('TIMEOUT') ||
+            action.includes('SESSION')
+        ) return 'Authentication';
         if (type === 'reports' || action === 'PRINT') return 'Reports';
+        if (type === 'historical' || activity.module === 'Historical Records' || activity.table === 'Historical Records') return 'Historical Records';
         if (type === 'system' || activity.table === 'Users') return 'User Management';
         if (type === 'ml' || action.includes('PREDICT') || action.includes('TRAIN')) return 'Machine Learning';
         return activity.table || 'System';
@@ -149,53 +157,167 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
         const action = activity.action.toUpperCase();
         const actionRaw = (activity.actionRaw || '').toUpperCase();
         const type = (activity.type || '').toLowerCase();
-        
-        // Priority 1: Explicit DELETE actions
-        if (action.includes('DELETE') || actionRaw.includes('DELETE') || action.includes('DEACTIVATE')) {
-            if (type === 'inventory' || activity.table === 'Inventory' || activity.table === 'inventory') return 'Inventory Deleted';
-            if (type === 'service' || activity.table === 'Services' || activity.table === 'services') return 'Service Deleted';
-            if (type === 'order' || activity.table === 'Orders' || activity.table === 'Job Orders') return 'Job Order Deleted';
-            if (type === 'expense' || activity.table === 'Expenses' || activity.table === 'expenses') return 'Expense Deleted';
-            if (activity.module === 'Historical Records' || activity.table === 'Historical Records') return 'Historical Record Deleted';
-            if (type === 'system' || activity.table === 'Users' || activity.table === 'users') return 'User Deleted';
+        const combined = `${actionRaw} ${action}`;
+        const moduleName = String(activity.module || getModuleBadge(activity) || '').toUpperCase();
+        const isOrder =
+            type === 'order' ||
+            activity.table === 'Orders' ||
+            activity.table === 'Job Orders' ||
+            moduleName === 'JOB ORDERS';
+        const isService =
+            type === 'service' || activity.table === 'Services' || activity.table === 'services' || moduleName === 'SERVICES';
+        const isInventory =
+            type === 'inventory' || activity.table === 'Inventory' || activity.table === 'inventory' || moduleName === 'INVENTORY';
+        const isExpense =
+            type === 'expense' || activity.table === 'Expenses' || activity.table === 'expenses' || moduleName === 'EXPENSES';
+        const isUser =
+            type === 'system' || activity.table === 'Users' || activity.table === 'users' || moduleName === 'USER MANAGEMENT';
+        const isHistorical =
+            moduleName === 'HISTORICAL RECORDS' ||
+            activity.table === 'Historical Records' ||
+            activity.table === 'historical_orders';
+
+        // Cancel Order must never display as "Updated" or "Deleted"
+        if (actionRaw === 'CANCEL' || action === 'CANCEL' || combined.includes('CANCEL')) {
+            return 'Job Order Cancelled';
+        }
+
+        // Soft-delete / deactivate
+        if (actionRaw === 'DEACTIVATE' || action.includes('DEACTIVATE')) {
+            if (isInventory) return 'Inventory Deleted';
+            if (isService) return 'Service Deactivated';
+            if (isUser) return 'User Deactivated';
+            if (isExpense) return 'Expense Deleted';
+            if (isHistorical) return 'Historical Record Deleted';
+            return 'Record Deactivated';
+        }
+
+        // Explicit DELETE
+        if (action.includes('DELETE') || actionRaw.includes('DELETE')) {
+            if (isInventory) return 'Inventory Deleted';
+            if (isService) return 'Service Deleted';
+            if (isOrder) return 'Job Order Deleted';
+            if (isExpense) return 'Expense Deleted';
+            if (isHistorical) return 'Historical Record Deleted';
+            if (isUser) return 'User Deleted';
             return 'Record Deleted';
         }
 
-        if (action.includes('404') || actionRaw.includes('404')) return 'Page Not Found';
-        if (action.includes('FAILED') || actionRaw.includes('FAILED')) return 'Failed Login';
-        if (action.includes('TIMEOUT') || actionRaw.includes('TIMEOUT')) return 'Session Timeout';
-        if (action.includes('LOGIN')) return 'User Logged In';
-        if (action.includes('LOGOUT')) return 'User Logged Out';
+        if (combined.includes('404')) return 'Page Not Found';
+        if (combined.includes('SERVER_ERROR') || combined.includes('SERVER ERROR')) return 'Server Error';
+        if (combined.includes('FAILED')) return 'Failed Login';
+        if (combined.includes('TIMEOUT')) return 'Session Timeout';
+        // LOGOUT before LOGIN — "LOGGED OUT" must not be classified as login.
+        if (combined.includes('LOGOUT') || combined.includes('LOGGED OUT')) return 'User Logged Out';
+        if (combined.includes('PASSWORD')) return 'Password Reset';
+        if (combined.includes('LOGIN') || combined.includes('LOGGED IN')) return 'User Logged In';
         
-        if (action.includes('RESTOCK') || activity.details.toLowerCase().includes('restock')) return 'Inventory Restocked';
+        if (action.includes('RESTOCK') || (activity.details || '').toLowerCase().includes('restock')) return 'Inventory Restocked';
+        if (action.includes('DEDUCT') || (activity.details || '').toLowerCase().includes('deduct')) return 'Inventory Updated';
         
         if (action.includes('PRINT') || type === 'reports') return 'Report Generated';
-        if (type === 'inventory' && (action.includes('DEDUCT') || action.includes('UPDATE'))) return 'Inventory Updated';
-        if (type === 'inventory' && action.includes('CREATE')) return 'Inventory Added';
-        if (type === 'order' || activity.table === 'Orders' || activity.table === 'Job Orders') {
+
+        if (isInventory) {
+            if (action.includes('CREATE')) return 'Inventory Added';
+            return 'Inventory Updated';
+        }
+        if (isOrder) {
             if (action.includes('CREATE')) return 'New Job Order';
             if (activity.newValues?.status === 'claimed') return 'Order Claimed';
             if (activity.newValues?.status === 'for-release') return 'Order Ready For Release';
             return 'Job Order Updated';
         }
-        if (type === 'service' || activity.table === 'Services') {
+        if (isService) {
             if (action.includes('CREATE')) return 'Service Created';
             return 'Service Updated';
         }
-        if (type === 'system' || activity.table === 'Users') {
+        if (isExpense) {
+            if (action.includes('CREATE')) return 'Expense Created';
+            return 'Expense Updated';
+        }
+        if (isUser) {
             if (action.includes('CREATE')) return 'User Created';
             return 'User Updated';
+        }
+        if (isHistorical) {
+            if (action.includes('CREATE')) return 'Historical Record Created';
+            return 'Historical Record Updated';
         }
 
         return activity.action;
     };
 
+    /** Normalize action tokens so "User Logged Out" and "LOGOUT" match the same checks. */
+    const getActionTokens = (activity: ActivityLog) => {
+        const raw = String(activity.actionRaw || '').toUpperCase();
+        const action = String(activity.action || '').toUpperCase();
+        const title = getBusinessActionTitle(activity).toUpperCase();
+        return `${raw} ${action} ${title}`.replace(/[_-]+/g, ' ');
+    };
+
+    const isLogoutAction = (activity: ActivityLog) => {
+        const t = getActionTokens(activity);
+        return t.includes('LOGOUT') || t.includes('LOGGED OUT');
+    };
+
+    const isLoginAction = (activity: ActivityLog) => {
+        if (isLogoutAction(activity)) return false;
+        const t = getActionTokens(activity);
+        return (t.includes('LOGIN') || t.includes('LOGGED IN')) && !t.includes('FAILED');
+    };
+
+    const getAffectedRecordLabel = (activity: ActivityLog) => {
+        const moduleName = String(getModuleBadge(activity) || '').toUpperCase();
+        const isAuth =
+            moduleName === 'AUTHENTICATION' ||
+            isLogoutAction(activity) ||
+            isLoginAction(activity) ||
+            getActionTokens(activity).includes('PASSWORD') ||
+            getActionTokens(activity).includes('TIMEOUT');
+
+        if (isAuth) {
+            return (
+                activity.oldValues?.username ||
+                activity.newValues?.username ||
+                activity.newValues?.username_attempted ||
+                activity.user ||
+                'N/A'
+            );
+        }
+
+        return (
+            activity.oldValues?.username ||
+            activity.newValues?.username ||
+            activity.oldValues?.order_number ||
+            activity.newValues?.order_number ||
+            activity.oldValues?.orderNumber ||
+            activity.newValues?.orderNumber ||
+            activity.oldValues?.order_id ||
+            activity.newValues?.order_id ||
+            activity.oldValues?.item_name ||
+            activity.newValues?.item_name ||
+            activity.oldValues?.service_name ||
+            activity.newValues?.service_name ||
+            activity.oldValues?.customer_name ||
+            activity.newValues?.customer_name ||
+            activity.oldValues?.customerName ||
+            activity.newValues?.customerName ||
+            activity.oldValues?.description ||
+            activity.newValues?.description ||
+            (String(activity.newValues?.details || activity.details || '').match(/(?:for|account for)\s+([A-Za-z0-9_.-]+)/i)?.[1]) ||
+            activity.recordId ||
+            'N/A'
+        );
+    };
+
     const getActionIcon = (title: string) => {
         const t = title.toUpperCase();
-        if (t.includes('JOB ORDER') || t.includes('CLAIMED') || t.includes('RELEASE')) return <ShoppingCart className="w-3.5 h-3.5" />;
+        if (t.includes('JOB ORDER') || t.includes('CLAIMED') || t.includes('RELEASE') || t.includes('CANCEL')) return <ShoppingCart className="w-3.5 h-3.5" />;
         if (t.includes('INVENTORY') || t.includes('RESTOCK')) return <Package className="w-3.5 h-3.5" />;
-        if (t.includes('LOGIN') || t.includes('LOGOUT') || t.includes('PASSWORD')) return <Key className="w-3.5 h-3.5" />;
+        if (t.includes('LOGIN') || t.includes('LOGOUT') || t.includes('LOGGED') || t.includes('PASSWORD') || t.includes('SESSION')) return <Key className="w-3.5 h-3.5" />;
+        if (t.includes('SERVER ERROR')) return <Activity className="w-3.5 h-3.5" />;
         if (t.includes('SERVICE')) return <Tag className="w-3.5 h-3.5" />;
+        if (t.includes('EXPENSE')) return <Tag className="w-3.5 h-3.5" />;
         if (t.includes('REPORT')) return <Printer className="w-3.5 h-3.5" />;
         if (t.includes('USER')) return <Users className="w-3.5 h-3.5" />;
         return <Activity className="w-3.5 h-3.5" />;
@@ -353,7 +475,7 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
         const actionStr = getBusinessActionTitle(log).toUpperCase();
         const module = getModuleBadge(log).toUpperCase();
         
-        const ignoredKeys = new Set(['id', 'order_id', 'item_id', 'user_id', 'customer_id', 'created_at', 'updated_at', 'history', 'items', 'inventory_used', 'inventoryused', '_id', 'token', 'password', 'ordernumber', 'order_number', 'updater_id', 'updaterid', 'inventoryapplied', 'inventory_applied', 'last_modified', 'is_retail', 'isretail', 'sync_version', 'modifier', 'record_id']);
+        const ignoredKeys = new Set(['id', 'order_id', 'item_id', 'user_id', 'customer_id', 'created_at', 'updated_at', 'history', 'items', 'inventory_used', 'inventoryused', '_id', 'token', 'password', 'ordernumber', 'order_number', 'updater_id', 'updaterid', 'inventoryapplied', 'inventory_applied', 'last_modified', 'is_retail', 'isretail', 'sync_version', 'modifier', 'record_id', 'details', 'cancelled']);
 
         const mapBusinessLabel = (key: string) => {
             const lowerKey = key.toLowerCase();
@@ -365,6 +487,15 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             if (lowerKey === 'status_after') return 'Status After';
             if (lowerKey === 'summary') return 'Summary';
             if (lowerKey === 'grand_total' || lowerKey === 'grandtotal') return 'Grand Total';
+            if (lowerKey === 'stock_quantity' || lowerKey === 'stockquantity' || lowerKey === 'stock') return 'Stock Quantity';
+            if (lowerKey === 'item_name' || lowerKey === 'itemname') return 'Item Name';
+            if (lowerKey === 'inventory_number' || lowerKey === 'inventorynumber') return 'Inventory Number';
+            if (lowerKey === 'unit_price' || lowerKey === 'unitprice') return 'Unit Price';
+            if (lowerKey === 'retail_price' || lowerKey === 'retailprice') return 'Retail Price';
+            if (lowerKey === 'is_retail' || lowerKey === 'isretail') return 'Retail Item';
+            if (lowerKey === 'auto_deduct' || lowerKey === 'autodeduct') return 'Auto Deduct';
+            if (lowerKey === 'package_size' || lowerKey === 'packagesize') return 'Package Size';
+            if (lowerKey === 'package_unit' || lowerKey === 'packageunit') return 'Package Unit';
             if (lowerKey === 'low_stock_threshold' || lowerKey === 'lowstockthreshold') return 'Low Stock Threshold';
             if (lowerKey === 'customer_name' || lowerKey === 'customername') return 'Customer Name';
             if (lowerKey === 'contact_number' || lowerKey === 'contactnumber') return 'Contact Number';
@@ -378,13 +509,62 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             return val;
         };
 
+        const humanizeReadableValue = (raw: string): string => {
+            const trimmed = raw.trim();
+            if (!trimmed) return 'None';
+            const lower = trimmed.toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+            const known: Record<string, string> = {
+                'new order': 'New Order',
+                'on going': 'On-going',
+                'ongoing': 'On-going',
+                'for release': 'For Release',
+                'claimed': 'Claimed',
+                'cancelled': 'Cancelled',
+                'canceled': 'Cancelled',
+                'regular': 'Regular',
+                'rush': 'Rush',
+                'pickup': 'Pickup',
+                'delivery': 'Delivery',
+                'cash': 'Cash',
+                'gcash': 'GCash',
+                'maya': 'Maya',
+                'empty': 'None',
+                'null': 'None',
+                'none': 'None',
+                'not set': 'None',
+                'n/a': 'None',
+                'na': 'None',
+            };
+            if (known[lower]) return known[lower];
+            // Title-case slug-like values so they don't look like code
+            if (/[_-]/.test(trimmed) || /^[a-z0-9]+(?:[\s_-][a-z0-9]+)+$/i.test(trimmed)) {
+                return lower
+                    .split(' ')
+                    .filter(Boolean)
+                    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+                    .join(' ');
+            }
+            return trimmed;
+        };
+
         const mapBusinessValue = (key: string, val: any): string => {
+            const lowerKey = key.toLowerCase();
             if (val === true || val === 'true') return 'Yes';
             if (val === false || val === 'false') return 'No';
-            if (val === null || val === undefined || val === '' || val === 'Empty') return '— Not Set';
-            if (typeof val === 'string' && val.toLowerCase() === 'empty') return '— Not Set';
+            if (val === null || val === undefined || val === '') {
+                // Status cleared reads more naturally than a technical placeholder
+                if (lowerKey === 'status' || lowerKey === 'status_after' || lowerKey === 'statusafter') {
+                    return 'Cleared';
+                }
+                return 'None';
+            }
+            if (typeof val === 'string' && ['empty', 'null', 'none', 'not set', 'n/a', 'na'].includes(val.trim().toLowerCase())) {
+                if (lowerKey === 'status' || lowerKey === 'status_after' || lowerKey === 'statusafter') {
+                    return 'Cleared';
+                }
+                return 'None';
+            }
 
-            const lowerKey = key.toLowerCase();
             if (lowerKey === 'is_active' || lowerKey === 'was_active') {
                 if (val === true || val === 'true' || val === 1) return 'Active';
                 if (val === false || val === 'false' || val === 0) return 'Inactive';
@@ -393,33 +573,35 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                 return (val === true || val === 'true') ? 'Yes (kept in database)' : 'No';
             }
             if (Array.isArray(val)) {
-                if (val.length === 0) return '— None';
+                if (val.length === 0) return 'None';
                 return val.map((entry) => {
-                    if (entry == null) return '—';
+                    if (entry == null) return 'None';
                     if (typeof entry === 'object') {
-                        return entry.name || entry.item_name || entry.service_name || entry.label || JSON.stringify(entry);
+                        const label = entry.name || entry.item_name || entry.service_name || entry.label;
+                        return label != null ? humanizeReadableValue(String(label)) : 'Details recorded';
                     }
-                    return String(entry);
+                    return humanizeReadableValue(String(entry));
                 }).join(', ');
             }
             if (typeof val === 'object') {
                 const preferred =
                     val.name || val.item_name || val.service_name || val.username ||
                     val.customer_name || val.order_number || val.label || val.details;
-                if (preferred != null && preferred !== '') return String(preferred);
+                if (preferred != null && preferred !== '') return humanizeReadableValue(String(preferred));
                 try {
-                    return Object.entries(val)
+                    const parts = Object.entries(val)
                         .filter(([k]) => !['id', 'password', 'token'].includes(String(k).toLowerCase()))
-                        .map(([k, v]) => `${mapBusinessLabel(k)}: ${mapBusinessValue(k, v)}`)
-                        .join(' · ');
+                        .map(([k, v]) => `${mapBusinessLabel(k)}: ${mapBusinessValue(k, v)}`);
+                    return parts.length > 0 ? parts.join(' · ') : 'None';
                 } catch {
-                    return '—';
+                    return 'None';
                 }
             }
             
             if (lowerKey.includes('price') || lowerKey.includes('total') || lowerKey.includes('amount') || lowerKey.includes('cost')) {
                 return String(formatCurrency(val));
             }
+            if (typeof val === 'string') return humanizeReadableValue(val);
             return String(val);
         };
 
@@ -467,9 +649,16 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                 
                 const normalizeValue = (v: any) => {
                     if (v === undefined || v === null || v === '' || v === ' ') return null;
-                    if (typeof v === 'string') return v.trim();
-                    if (typeof v === 'number') return String(v);
                     if (typeof v === 'boolean') return String(v);
+                    if (typeof v === 'number' && Number.isFinite(v)) return String(v);
+                    if (typeof v === 'string') {
+                        const trimmed = v.trim();
+                        if (trimmed !== '' && !isNaN(Number(trimmed)) && /^-?\d+(\.\d+)?$/.test(trimmed)) {
+                            return String(Number(trimmed));
+                        }
+                        return trimmed;
+                    }
+                    // JSON may revive Decimals as plain objects rarely; stringify as last resort
                     return v;
                 };
 
@@ -477,10 +666,57 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                 const normNew = normalizeValue(item.newVal);
 
                 if (normOld === null && normNew === null) return false;
+                if (normOld === null || normNew === null) return true;
+                // Numeric equality: "10" vs 10 vs "10.0"
+                const oldNum = Number(normOld);
+                const newNum = Number(normNew);
+                if (
+                    typeof normOld === 'string' && typeof normNew === 'string'
+                    && normOld !== '' && normNew !== ''
+                    && !isNaN(oldNum) && !isNaN(newNum)
+                    && /^-?\d+(\.\d+)?$/.test(normOld) && /^-?\d+(\.\d+)?$/.test(normNew)
+                ) {
+                    return oldNum !== newNum;
+                }
                 return JSON.stringify(normOld) !== JSON.stringify(normNew);
             });
 
             if (changedItems.length === 0) {
+                // Human banner / top-level details already cover empty-diff cases.
+                if (typeof newVals.details === 'string' && newVals.details.trim()) {
+                    return null;
+                }
+                if (log.details && !String(log.details).toLowerCase().includes('no field value')) {
+                    return (
+                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 mt-3 space-y-2">
+                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">What changed</span>
+                            <span className="text-[13px] font-bold text-slate-800 leading-snug">{log.details}</span>
+                            {(oldVals.item_name || newVals.item_name || oldVals.stock_quantity != null || newVals.stock_quantity != null) && (
+                                <div className="pt-2 border-t border-slate-200 space-y-2">
+                                    {(oldVals.item_name || newVals.item_name) && (
+                                        <div className="flex flex-col gap-0.5">
+                                            <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Item Name</span>
+                                            <span className="font-black text-gray-900 text-[13px]">{newVals.item_name || oldVals.item_name}</span>
+                                        </div>
+                                    )}
+                                    {(oldVals.stock_quantity != null || newVals.stock_quantity != null) && (
+                                        <div className="flex flex-col gap-0.5">
+                                            <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Stock Quantity</span>
+                                            <div className="flex items-center gap-2 text-[13px] font-black">
+                                                <span className="text-rose-700/80 line-through">{mapBusinessValue('stock_quantity', oldVals.stock_quantity)}</span>
+                                                <span className="text-gray-300">→</span>
+                                                <span className="text-emerald-700">{mapBusinessValue('stock_quantity', newVals.stock_quantity)}</span>
+                                                {(newVals.unit || oldVals.unit) && (
+                                                    <span className="text-gray-500 font-bold text-[11px]">{newVals.unit || oldVals.unit}</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    );
+                }
                 return (
                     <div className="bg-gray-50 p-3 rounded-xl border border-dashed border-gray-200 text-center mt-3">
                         <span className="text-[11px] font-bold text-gray-500 italic">No user-visible business changes were made.</span>
@@ -550,6 +786,24 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                 </div>
             );
         };
+
+        // Humanized API summary (always prefer showing this for UPDATEs when present)
+        const humanSummary =
+            (typeof newVals.details === 'string' && newVals.details.trim())
+                ? newVals.details.trim()
+                : (typeof log.details === 'string' && log.details.trim() ? log.details.trim() : '');
+        const humanBanner =
+            humanSummary &&
+            (actionStr.includes('UPDATE') || actionStr.includes('CREATED') || actionStr.includes('ADDED') || actionStr.includes('NEW'))
+                ? (
+                    <div className="mb-4 space-y-1.5">
+                        <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">What Changed</span>
+                        <div className="text-[13px] font-bold text-slate-800 bg-slate-50 p-2.5 rounded-xl border border-slate-200 shadow-sm leading-snug">
+                            {humanSummary}
+                        </div>
+                    </div>
+                )
+                : null;
 
         // Event Specific Summaries
         let eventSummary = null;
@@ -633,7 +887,14 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
 
         // Layout Router
         if (module === 'AUTHENTICATION') {
-            if (actionStr.includes('FAILED')) {
+            const tokens = getActionTokens(log);
+            const logout = isLogoutAction(log);
+            const loginOk = isLoginAction(log);
+            const failed = tokens.includes('FAILED');
+            const timedOut = tokens.includes('TIMEOUT');
+            const passwordReset = tokens.includes('PASSWORD');
+
+            if (failed) {
                 return (
                     <div className="space-y-2.5 mt-2">
                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Failed Login Attempt</span>
@@ -644,7 +905,7 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                             </div>
                             <div className="flex flex-col gap-0.5 mt-2">
                                 <span className="font-extrabold text-red-500 uppercase text-[9px] tracking-widest">Status</span>
-                                <span className="font-black text-[13px] text-red-700">Failed</span>
+                                <span className="font-black text-[13px] text-red-700">Login failed</span>
                             </div>
                             <div className="flex flex-col gap-0.5 mt-2">
                                 <span className="font-extrabold text-red-500 uppercase text-[9px] tracking-widest">Reason</span>
@@ -665,7 +926,7 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                 );
             }
 
-            if (actionStr.includes('TIMEOUT')) {
+            if (timedOut) {
                 return (
                     <div className="space-y-2.5 mt-2">
                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Session Expired</span>
@@ -675,18 +936,71 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                                 <span className="font-black text-amber-900 text-[13px]">{log.user}</span>
                             </div>
                             <div className="flex flex-col gap-0.5 mt-2">
+                                <span className="font-extrabold text-amber-600 uppercase text-[9px] tracking-widest">Status</span>
+                                <span className="font-black text-[13px] text-amber-700">Session timed out</span>
+                            </div>
+                            <div className="flex flex-col gap-0.5 mt-2">
                                 <span className="font-extrabold text-amber-600 uppercase text-[9px] tracking-widest">Reason</span>
-                                <span className="font-black text-[13px] text-amber-700">Session timed out due to inactivity.</span>
+                                <span className="font-black text-[13px] text-amber-700">Signed out automatically due to inactivity.</span>
                             </div>
                             <div className="flex flex-col gap-0.5 mt-2 pt-2 border-t border-amber-200">
-                                <span className="font-extrabold text-amber-600 uppercase text-[9px] tracking-widest">Action Required</span>
-                                <span className="font-black text-[13px] text-amber-900">Please log in again.</span>
+                                <span className="font-extrabold text-amber-600 uppercase text-[9px] tracking-widest">Next step</span>
+                                <span className="font-black text-[13px] text-amber-900">Please log in again to continue.</span>
                             </div>
                         </div>
                     </div>
                 );
             }
 
+            if (passwordReset) {
+                return (
+                    <div className="space-y-2.5 mt-2">
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Password Reset</span>
+                        <div className="bg-purple-50 p-3 rounded-xl border border-purple-200 shadow-sm space-y-2">
+                            <div className="flex flex-col gap-0.5">
+                                <span className="font-extrabold text-purple-600 uppercase text-[9px] tracking-widest">Username</span>
+                                <span className="font-black text-purple-900 text-[13px]">{log.user}</span>
+                            </div>
+                            <div className="flex flex-col gap-0.5 mt-2">
+                                <span className="font-extrabold text-purple-600 uppercase text-[9px] tracking-widest">Status</span>
+                                <span className="font-black text-[13px] text-purple-700">Password updated successfully</span>
+                            </div>
+                            <div className="flex flex-col gap-0.5 mt-2 pt-2 border-t border-purple-200">
+                                <span className="font-extrabold text-purple-600 uppercase text-[9px] tracking-widest">What happened</span>
+                                <span className="font-bold text-[12px] text-purple-900">This account’s password was reset through the secure reset flow.</span>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (logout) {
+                return (
+                    <div className="space-y-2.5 mt-2">
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Session Details</span>
+                        <div className="bg-white p-3 rounded-xl border border-rose-100 shadow-sm space-y-2">
+                            <div className="flex flex-col gap-0.5">
+                                <span className="font-extrabold text-rose-600 uppercase text-[9px] tracking-widest">Username</span>
+                                <span className="font-black text-gray-900 text-[13px]">{log.user}</span>
+                            </div>
+                            <div className="flex flex-col gap-0.5 mt-2">
+                                <span className="font-extrabold text-rose-600 uppercase text-[9px] tracking-widest">Status</span>
+                                <span className="font-black text-[13px] text-rose-700">Successful logout</span>
+                            </div>
+                            <div className="flex flex-col gap-0.5 mt-2 pt-2 border-t border-rose-100">
+                                <span className="font-extrabold text-rose-600 uppercase text-[9px] tracking-widest">What happened</span>
+                                <span className="font-bold text-[12px] text-gray-800">
+                                    {log.details && !String(log.details).toLowerCase().includes('sql')
+                                        ? log.details
+                                        : `${log.user} signed out of the system.`}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            // Default auth success = login
             return (
                 <div className="space-y-2.5 mt-2">
                     <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Session Details</span>
@@ -697,7 +1011,72 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                         </div>
                         <div className="flex flex-col gap-0.5 mt-2">
                             <span className="font-extrabold text-emerald-600 uppercase text-[9px] tracking-widest">Status</span>
-                            <span className="font-black text-[13px] text-emerald-600">Successful {actionStr.includes('LOGOUT') ? 'Logout' : 'Login'}</span>
+                            <span className="font-black text-[13px] text-emerald-600">
+                                {loginOk ? 'Successful login' : 'Authentication event'}
+                            </span>
+                        </div>
+                        <div className="flex flex-col gap-0.5 mt-2 pt-2 border-t border-emerald-100">
+                            <span className="font-extrabold text-emerald-600 uppercase text-[9px] tracking-widest">What happened</span>
+                            <span className="font-bold text-[12px] text-gray-800">
+                                {log.details && !String(log.details).toLowerCase().includes('sql')
+                                    ? log.details
+                                    : `${log.user} signed in successfully.`}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        if (actionStr.includes('SERVER ERROR') || (log.actionRaw || '').toUpperCase() === 'SERVER_ERROR') {
+            const rawError = oldVals.error || newVals.summary || log.details || '';
+            const humanError = (() => {
+                const text = String(rawError || '');
+                const lower = text.toLowerCase();
+                if (lower.includes('grand_total') && (lower.includes('not null') || lower.includes('empty'))) {
+                    return 'Historical order could not be saved because Grand Total was empty. Enter a grand total and try again.';
+                }
+                if (lower.includes('not null constraint') || lower.includes('integrityerror') || lower.includes('[sql:')) {
+                    return 'A database rule blocked this save. Check required fields and try again.';
+                }
+                if (lower.includes('sqlalchemy') || lower.includes('sqlite3') || lower.includes('psycopg')) {
+                    return 'A database operation failed. Please verify the form values and try again.';
+                }
+                // Already humanized from API, or short enough to show
+                const cleaned = text.replace(/\s+/g, ' ').trim();
+                if (cleaned.length > 220) return `${cleaned.slice(0, 217)}…`;
+                return cleaned || 'An unexpected server error occurred.';
+            })();
+
+            return (
+                <div className="space-y-2.5 mt-2">
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Server Error Details</span>
+                    <div className="bg-red-50 p-3 rounded-xl border border-red-200 shadow-sm space-y-3">
+                        <div className="flex flex-col gap-0.5">
+                            <span className="font-extrabold text-red-500 uppercase text-[9px] tracking-widest">What happened</span>
+                            <span className="font-black text-red-900 text-[13px] leading-snug">{humanError}</span>
+                        </div>
+                        {(newVals.method || newVals.url) && (
+                            <div className="flex flex-col gap-0.5 pt-2 border-t border-red-200">
+                                <span className="font-extrabold text-red-500 uppercase text-[9px] tracking-widest">Request</span>
+                                <span className="font-bold text-red-800 text-[12px]">
+                                    {[newVals.method, newVals.url].filter(Boolean).join(' ')}
+                                </span>
+                            </div>
+                        )}
+                        {(newVals.file || newVals.line) && (
+                            <div className="flex flex-col gap-0.5 pt-2 border-t border-red-200">
+                                <span className="font-extrabold text-red-500 uppercase text-[9px] tracking-widest">Technical location</span>
+                                <span className="font-bold text-red-800 text-[12px]">
+                                    {newVals.file || 'unknown'}{newVals.line ? ` (line ${newVals.line})` : ''}
+                                </span>
+                            </div>
+                        )}
+                        <div className="flex flex-col gap-0.5 pt-2 border-t border-red-200">
+                            <span className="font-extrabold text-red-500 uppercase text-[9px] tracking-widest">Next step</span>
+                            <span className="font-bold text-red-900 text-[12px]">
+                                Fix the form values and retry. Raw database code is hidden from this view.
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -705,7 +1084,7 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
         }
 
         if (module === 'INVENTORY' && actionStr.includes('RESTOCK')) {
-            const added = newVals.stock_added || newVals.quantity || log.details.match(/added (\d+)/i)?.[1];
+            const added = newVals.stock_added || newVals.quantity || newVals.amount || log.details.match(/added (\d+)/i)?.[1];
             const itemName = newVals.item_name || newVals.name || log.details.match(/Restocked\s*(.*?)\s*:/)?.[1] || 'Inventory Item';
             return (
                 <div className="space-y-2.5 mt-2">
@@ -724,20 +1103,94 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             );
         }
 
-        if (actionStr.includes('DELETE') || actionStr.includes('DEACTIVAT')) {
+        // Inventory create / update — always show human before→after fields
+        if (module === 'INVENTORY' && (actionStr.includes('UPDATE') || actionStr.includes('ADDED') || actionStr.includes('CREATE'))) {
+            const itemName = newVals.item_name || oldVals.item_name || 'Inventory Item';
+            const unit = newVals.unit || oldVals.unit || '';
+            const invFields = [
+                'item_name', 'inventory_number', 'category', 'stock_quantity', 'unit',
+                'unit_price', 'status', 'low_stock_threshold', 'package_size', 'package_unit',
+                'is_retail', 'retail_price', 'auto_deduct',
+            ];
+            const rows = invFields
+                .map((key) => {
+                    const oldV = oldVals[key];
+                    const newV = newVals[key];
+                    const hasOld = oldV !== undefined;
+                    const hasNew = newV !== undefined;
+                    if (!hasOld && !hasNew) return null;
+                    const same =
+                        oldV === newV
+                        || (oldV != null && newV != null && String(oldV) === String(newV))
+                        || (oldV != null && newV != null && !isNaN(Number(oldV)) && !isNaN(Number(newV)) && Number(oldV) === Number(newV));
+                    if (hasOld && hasNew && same && key !== 'item_name' && key !== 'stock_quantity') return null;
+                    return { key, oldV, newV, same: hasOld && hasNew && same };
+                })
+                .filter(Boolean) as { key: string; oldV: any; newV: any; same: boolean }[];
+
+            return (
+                <div className="space-y-2.5 mt-2">
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
+                        {actionStr.includes('ADDED') || actionStr.includes('CREATE') ? 'Inventory Item Created' : 'Inventory Changes'}
+                    </span>
+                    {(typeof newVals.details === 'string' && newVals.details.trim()) && (
+                        <div className="bg-amber-50 p-2.5 rounded-xl border border-amber-100 text-[12px] font-bold text-amber-900">
+                            {newVals.details}
+                        </div>
+                    )}
+                    <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm space-y-3">
+                        <div className="flex flex-col gap-0.5">
+                            <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Item</span>
+                            <span className="font-black text-gray-900 text-[13px]">{itemName}</span>
+                        </div>
+                        {rows.filter((r) => r.key !== 'item_name').map(({ key, oldV, newV, same }) => (
+                            <div key={key} className="flex flex-col gap-0.5 pt-2 border-t border-gray-100">
+                                <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">{mapBusinessLabel(key)}</span>
+                                {same || oldV === undefined ? (
+                                    <span className="font-black text-gray-900 text-[13px]">
+                                        {mapBusinessValue(key, newV)}
+                                        {key === 'stock_quantity' && unit ? ` ${unit}` : ''}
+                                    </span>
+                                ) : (
+                                    <div className="flex items-center gap-2 text-[13px] font-black">
+                                        <span className="text-rose-700/80 line-through decoration-rose-300">
+                                            {mapBusinessValue(key, oldV)}
+                                            {key === 'stock_quantity' && unit ? ` ${unit}` : ''}
+                                        </span>
+                                        <span className="text-gray-300">→</span>
+                                        <span className="text-emerald-700">
+                                            {mapBusinessValue(key, newV)}
+                                            {key === 'stock_quantity' && unit ? ` ${unit}` : ''}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                        {rows.length <= 1 && !(typeof newVals.details === 'string' && newVals.details.trim()) && log.details && (
+                            <div className="pt-2 border-t border-gray-100 text-[12px] font-bold text-gray-700">{log.details}</div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        if (actionStr.includes('DELETE') || actionStr.includes('DEACTIVAT') || actionStr.includes('CANCEL')) {
             const deletedVals = { ...oldVals };
             if (newVals?.is_active === false) deletedVals.status_after = 'Inactive (soft delete)';
             if (newVals?.soft_delete) deletedVals.removal_type = 'Removed from catalog (record kept for history)';
             if (newVals?.reason) deletedVals.reason = newVals.reason;
+            if (newVals?.previous_status) deletedVals.previous_status = newVals.previous_status;
             if (newVals?.details && typeof newVals.details === 'string') deletedVals.summary = newVals.details;
-            const title = newVals?.soft_delete || newVals?.is_active === false || actionStr.includes('DEACTIVAT')
-                ? 'Removed Record Details'
-                : 'Deleted Record Details';
+            const title = actionStr.includes('CANCEL')
+                ? 'Cancelled Order Details'
+                : (newVals?.soft_delete || newVals?.is_active === false || actionStr.includes('DEACTIVAT')
+                    ? 'Removed Record Details'
+                    : 'Deleted Record Details');
             return (
                 <div className="space-y-2.5 mt-2">
-                    {log.details && (
+                    {(log.details || (typeof newVals.details === 'string' && newVals.details.trim())) && (
                         <div className="bg-rose-50 p-3 rounded-xl border border-rose-100 text-[12px] font-bold text-rose-800">
-                            {log.details}
+                            {typeof newVals.details === 'string' && newVals.details.trim() ? newVals.details : log.details}
                         </div>
                     )}
                     {renderFieldList(deletedVals, title)}
@@ -848,18 +1301,43 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
         let mainContent = null;
         if (actionStr.includes('CREATE') || actionStr.includes('NEW') || actionStr.includes('ADDED') || (log.action && log.action.toUpperCase() === 'CREATE')) {
             mainContent = renderFieldList(newVals, 'Created Record Details');
-        } else if (actionStr.includes('DELETE') || (log.action && log.action.toUpperCase() === 'DELETE')) {
-            mainContent = renderFieldList(oldVals, 'Deleted Record Details');
+        } else if (
+            actionStr.includes('DELETE') ||
+            actionStr.includes('DEACTIVAT') ||
+            actionStr.includes('CANCEL') ||
+            (log.action && ['DELETE', 'DEACTIVATE', 'CANCEL'].includes(log.action.toUpperCase().replace(/\s+/g, '_')))
+        ) {
+            const deletedVals = { ...oldVals };
+            if (newVals?.details && typeof newVals.details === 'string') deletedVals.summary = newVals.details;
+            if (newVals?.previous_status) deletedVals.previous_status = newVals.previous_status;
+            mainContent = (
+                <div className="space-y-2.5">
+                    {(log.details || (typeof newVals.details === 'string' && newVals.details.trim())) && (
+                        <div className="bg-rose-50 p-3 rounded-xl border border-rose-100 text-[12px] font-bold text-rose-800">
+                            {typeof newVals.details === 'string' && newVals.details.trim() ? newVals.details : log.details}
+                        </div>
+                    )}
+                    {renderFieldList(deletedVals, actionStr.includes('CANCEL') ? 'Cancelled Order Details' : 'Deleted Record Details')}
+                </div>
+            );
         } else if (Object.keys(oldVals).length > 0 && Object.keys(newVals).length > 0) {
             mainContent = renderDiffList();
         } else if (Object.keys(newVals).length > 0) {
             mainContent = renderFieldList(newVals, 'Updated Values');
+        } else if (log.details) {
+            mainContent = (
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 mt-3">
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Summary</span>
+                    <span className="text-[13px] font-bold text-slate-800 leading-snug">{log.details}</span>
+                </div>
+            );
         }
 
-        if (!eventSummary && !mainContent) return null;
+        if (!eventSummary && !mainContent && !humanBanner) return null;
 
         return (
             <>
+                {humanBanner}
                 {eventSummary}
                 {mainContent}
             </>
@@ -936,7 +1414,7 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                                     <th className="px-4 py-3 text-left text-[11px] font-extrabold text-slate-800 uppercase tracking-wider">Action</th>
                                     <th className="px-4 py-3 text-center text-[11px] font-extrabold text-slate-800 uppercase tracking-wider">Module / Table</th>
                                     <th className="px-4 py-3 text-center text-[11px] font-extrabold text-slate-800 uppercase tracking-wider">Date & Time</th>
-                                    <th className="px-4 py-3 text-center text-[11px] font-extrabold text-slate-800 uppercase tracking-wider">Details</th>
+                                    <th className="px-4 py-3 text-center text-[11px] font-extrabold text-slate-800 uppercase tracking-wider">Inspect</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200 bg-white">
@@ -1013,14 +1491,14 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                                                 <td className="px-4 py-3.5 text-center text-xs text-gray-700 font-bold whitespace-nowrap">
                                                     {normalizeDate(activity.timestamp)}
                                                 </td>
-                                                <td className="px-4 py-3.5 text-center">
+                                                <td className="px-4 py-3.5 text-center whitespace-nowrap">
                                                     <button 
                                                         type="button" 
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             handleRowClick(activity);
                                                         }}
-                                                        className="inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition-all border border-red-200 shadow-xs"
+                                                        className="inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 px-3.5 py-1.5 rounded-lg transition-all border border-red-200 shadow-xs hover:shadow-sm active:scale-95"
                                                     >
                                                         <Eye size={14} />
                                                         <span>Inspect</span>
@@ -1207,9 +1685,12 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                             <div className="p-1.5 bg-white/20 rounded-xl border border-white/20">
                                 {getActionIcon(selectedLog ? getBusinessActionTitle(selectedLog) : '')}
                             </div>
-                            <h2 className="text-white text-[15px] font-black uppercase tracking-widest m-0 leading-none">
-                                {selectedLog ? getBusinessActionTitle(selectedLog) : 'Audit Record'}
-                            </h2>
+                            <div>
+                                <span className="text-[10px] font-black uppercase tracking-widest text-red-100 block">Activity History Log</span>
+                                <h2 className="text-white text-[15px] font-black uppercase tracking-widest m-0 leading-none">
+                                    {selectedLog ? getBusinessActionTitle(selectedLog) : 'Audit Record'}
+                                </h2>
+                            </div>
                         </div>
                     </div>
 
@@ -1240,10 +1721,28 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                                     <div className="flex flex-col gap-1 mt-2 border-t border-slate-100 pt-3">
                                         <span className="font-extrabold text-slate-400 uppercase text-[9px] tracking-widest">Affected Record</span>
                                         <span className="text-[13px] font-black text-slate-800 leading-tight">
-                                            {selectedLog.oldValues?.username || selectedLog.newValues?.username || selectedLog.oldValues?.order_number || selectedLog.newValues?.order_number || selectedLog.oldValues?.orderNumber || selectedLog.newValues?.orderNumber || selectedLog.oldValues?.item_name || selectedLog.newValues?.item_name || selectedLog.oldValues?.service_name || selectedLog.newValues?.service_name || (String(selectedLog.newValues?.details || selectedLog.details || '').match(/(?:for|account for)\s+([A-Za-z0-9_.-]+)/i)?.[1]) || selectedLog.recordId || 'N/A'}
+                                            {getAffectedRecordLabel(selectedLog)}
                                         </span>
                                     </div>
                                 </div>
+
+                                {/* Activity Details & Notes INSIDE View Activity History Logs Modal */}
+                                {(() => {
+                                    const rawDetails = selectedLog.details || 
+                                        (selectedLog.newValues && typeof selectedLog.newValues === 'object' && selectedLog.newValues.details) || 
+                                        (selectedLog.oldValues && typeof selectedLog.oldValues === 'object' && selectedLog.oldValues.details) || '';
+                                    if (!rawDetails) return null;
+                                    return (
+                                        <div className="mt-1 pt-3 border-t border-slate-200 flex flex-col gap-1.5">
+                                            <span className="font-extrabold text-slate-500 uppercase text-[9px] tracking-widest flex items-center gap-1.5">
+                                                <FileText size={12} className="text-red-500" /> Activity Details & Notes
+                                            </span>
+                                            <div className="p-3 bg-white rounded-lg border border-slate-200 text-xs font-semibold text-slate-800 leading-relaxed shadow-2xs">
+                                                {String(rawDetails)}
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
                             </div>
 
                             {/* Changes Section */}
@@ -1271,11 +1770,10 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                                             <span className="text-[9px] font-extrabold text-gray-400 uppercase">Audit ID</span>
                                             <span className="text-[10px] font-bold text-gray-800">{selectedLog.id}</span>
                                         </div>
-                                        {selectedLog.details && 
-                                         !selectedLog.details.includes('Updated item') && 
-                                         !selectedLog.details.includes('Restocked') && 
-                                         !selectedLog.details.includes('Logged in successfully') &&
-                                         !selectedLog.details.includes('Logged out successfully') && (
+                                        {selectedLog.details &&
+                                         !selectedLog.details.includes('Updated item') &&
+                                         !selectedLog.details.includes('Restocked') &&
+                                         !/logged (in|out)|signed (in|out)|password|session timed|server error/i.test(selectedLog.details) && (
                                             <div className="pt-2 border-t border-gray-200/50 mt-2">
                                                 <span className="text-[9px] font-extrabold text-gray-400 uppercase block mb-1">Raw Trace</span>
                                                 <span className="text-[10px] font-medium text-gray-600 block leading-tight">{selectedLog.details}</span>

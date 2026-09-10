@@ -164,6 +164,7 @@ from auth_utils import (
     require_role,
     create_access_token,
     sanitize_error,
+    humanize_server_error,
     frontend_base_for_reset_link,
     local_vite_auth_redirect,
 )
@@ -202,12 +203,15 @@ def recalculate_inventory_status(item: Inventory):
 
 def lock_inventory_row(db: Session, inv_id: int):
     """Row-lock inventory for safe concurrent stock updates (PostgreSQL; best-effort on SQLite)."""
-    return (
-        db.query(Inventory)
-        .filter(Inventory.item_id == inv_id)
-        .with_for_update()
-        .first()
-    )
+    q = db.query(Inventory).filter(Inventory.item_id == inv_id)
+    try:
+        bind = db.get_bind()
+        if bind and bind.dialect.name == "sqlite":
+            return q.first()
+        return q.with_for_update().first()
+    except Exception:
+        return q.first()
+
 
 
 def assert_assignable_role(actor: User, role_name: str) -> str:
@@ -252,6 +256,190 @@ TABLE_TO_MODULE: dict = {
     "historical_images":   "Historical Records",
 }
 
+# Human labels for Activity History / audit diffs (never show raw snake_case alone).
+AUDIT_FIELD_LABELS: dict = {
+    "service_name": "Service Name",
+    "base_price": "Price",
+    "duration_days": "Duration (Days)",
+    "category": "Category",
+    "description": "Description",
+    "service_code": "Service Code",
+    "is_active": "Status",
+    "was_active": "Previous Status",
+    "username": "Username",
+    "email": "Email",
+    "role": "Role",
+    "role_name": "Role",
+    "password_changed": "Password Changed",
+    "item_name": "Item Name",
+    "inventory_number": "Inventory Number",
+    "stock_quantity": "Stock Quantity",
+    "unit": "Unit",
+    "unit_price": "Unit Price",
+    "retail_price": "Retail Price",
+    "status": "Status",
+    "amount": "Amount",
+    "order_number": "Order Number",
+    "orderNumber": "Order Number",
+    "customer_name": "Customer",
+    "customerName": "Customer",
+    "contact_number": "Contact Number",
+    "contactNumber": "Contact Number",
+    "priorityLevel": "Priority",
+    "grandTotal": "Grand Total",
+    "grand_total": "Grand Total",
+    "paymentMethod": "Payment Method",
+    "paymentStatus": "Payment Status",
+    "predictedCompletionDate": "Estimated Date",
+    "previous_status": "Previous Status",
+    "soft_delete": "Soft Delete",
+    "reason": "Reason",
+    "action": "Adjustment Type",
+    "notes": "Notes",
+    "expense_date": "Expense Date",
+    "reorder_count": "Services Reordered",
+    "order_id": "Order ID",
+    "date_received": "Date Received",
+    "ocr_status": "OCR Status",
+    "branch": "Branch",
+    "priority": "Priority",
+}
+
+_AUDIT_SKIP_KEYS = {
+    "details", "password", "password_hash", "token", "history",
+    "inventory_used", "inventoryUsed", "items",
+}
+
+
+def _audit_values_equal(a, b) -> bool:
+    if a is None and b is None:
+        return True
+    if a is None or b is None:
+        return False
+    try:
+        if isinstance(a, (int, float)) or isinstance(b, (int, float)):
+            return float(a) == float(b)
+    except (TypeError, ValueError):
+        pass
+    if isinstance(a, bool) or isinstance(b, bool):
+        return bool(a) == bool(b)
+    if isinstance(a, (dict, list)) or isinstance(b, (dict, list)):
+        try:
+            return json.dumps(a, sort_keys=True, default=str) == json.dumps(b, sort_keys=True, default=str)
+        except Exception:
+            return str(a) == str(b)
+    return str(a).strip() == str(b).strip()
+
+
+def _human_audit_value(key: str, value) -> str:
+    if value is None or value == "":
+        return "None"
+    if key in ("is_active", "was_active"):
+        return "Active" if value in (True, "true", 1, "1") else "Inactive"
+    if key in ("soft_delete", "password_changed", "auto_deduct", "is_retail", "inventoryApplied"):
+        return "Yes" if value in (True, "true", 1, "1") else "No"
+    if key in ("base_price", "unit_price", "retail_price", "grandTotal", "grand_total", "amount", "amountReceived", "balance", "depositAmount"):
+        try:
+            return f"₱{float(value):,.2f}"
+        except (TypeError, ValueError):
+            pass
+    if key in ("status", "priorityLevel", "paymentMethod", "paymentStatus", "shippingPreference"):
+        return str(value).replace("-", " ").replace("_", " ").strip().title()
+    if isinstance(value, bool):
+        return "Yes" if value else "No"
+    if isinstance(value, list):
+        if not value:
+            return "None"
+        parts = []
+        for entry in value:
+            if isinstance(entry, dict):
+                parts.append(str(entry.get("name") or entry.get("item_name") or entry.get("service_name") or entry))
+            else:
+                parts.append(str(entry))
+        return ", ".join(parts)
+    return str(value)
+
+
+def _audit_entity_name(old_values: Optional[dict], new_values: Optional[dict]) -> Optional[str]:
+    ov = old_values if isinstance(old_values, dict) else {}
+    nv = new_values if isinstance(new_values, dict) else {}
+    for key in (
+        "order_number", "orderNumber", "service_name", "item_name",
+        "username", "customer_name", "customerName", "description",
+    ):
+        val = nv.get(key) if nv.get(key) not in (None, "") else ov.get(key)
+        if val not in (None, ""):
+            return str(val)
+    return None
+
+
+def build_audit_change_bits(old_values: Optional[dict], new_values: Optional[dict], limit: int = 8) -> list:
+    """Return human-readable 'Label: old → new' fragments for Activity History."""
+    ov = old_values if isinstance(old_values, dict) else {}
+    nv = new_values if isinstance(new_values, dict) else {}
+    bits = []
+    for key in sorted(set(list(ov.keys()) + list(nv.keys()))):
+        if key in _AUDIT_SKIP_KEYS:
+            continue
+        if key not in ov:
+            bits.append(f"{AUDIT_FIELD_LABELS.get(key, key.replace('_', ' ').title())}: (new) {_human_audit_value(key, nv.get(key))}")
+        elif key not in nv:
+            bits.append(f"{AUDIT_FIELD_LABELS.get(key, key.replace('_', ' ').title())}: {_human_audit_value(key, ov.get(key))} → (removed)")
+        elif not _audit_values_equal(ov.get(key), nv.get(key)):
+            label = AUDIT_FIELD_LABELS.get(key, key.replace("_", " ").title())
+            bits.append(
+                f"{label}: {_human_audit_value(key, ov.get(key))} → {_human_audit_value(key, nv.get(key))}"
+            )
+        if len(bits) >= limit:
+            break
+    return bits
+
+
+def ensure_audit_details(
+    action: str,
+    table_name: str,
+    old_values: Optional[dict],
+    new_values: Optional[dict],
+) -> Optional[dict]:
+    """
+    Guarantee every mutating audit row carries a human-readable `details` string
+    so Activity History never shows an empty 'Updated' card.
+    """
+    ov = dict(old_values) if isinstance(old_values, dict) else {}
+    nv = dict(new_values) if isinstance(new_values, dict) else {}
+    if isinstance(nv.get("details"), str) and nv["details"].strip():
+        return nv or None
+
+    module = TABLE_TO_MODULE.get(table_name, (table_name or "Record").replace("_", " ").title())
+    entity = _audit_entity_name(ov, nv)
+    who = f" '{entity}'" if entity else ""
+    action_u = (action or "").upper()
+    bits = build_audit_change_bits(ov, nv)
+
+    if action_u in ("CREATE",):
+        nv["details"] = f"{module} record{who} created" + (f" — {'; '.join(bits[:4])}" if bits else "")
+    elif action_u in ("CANCEL",):
+        prev = ov.get("status") or ov.get("previous_status") or nv.get("previous_status")
+        nv["details"] = (
+            f"Job order{who} cancelled"
+            + (f" (was {str(prev).replace('-', ' ').title()})" if prev else "")
+            + "."
+        )
+    elif action_u in ("DELETE", "DEACTIVATE"):
+        soft = bool(nv.get("soft_delete") or nv.get("is_active") is False or action_u == "DEACTIVATE")
+        verb = "removed from catalog (soft delete)" if soft else "permanently deleted"
+        nv["details"] = f"{module} record{who} {verb}" + (f" — {'; '.join(bits[:3])}" if bits else "")
+    elif action_u in ("UPDATE", "RESTOCK", "DEDUCT"):
+        if bits:
+            nv["details"] = f"{module} record{who} updated — {'; '.join(bits)}"
+        else:
+            nv["details"] = f"{module} record{who} updated (saved; no field value changes detected)"
+    else:
+        nv["details"] = f"{action_u.replace('_', ' ').title()} on {module}{who}"
+
+    return nv
+
+
 def log_audit(
     db: Session,
     action: str,
@@ -270,10 +458,11 @@ def log_audit(
     - NEVER raises an exception. A logging failure must never abort a business transaction.
     - Captures username/role at event-time (forensic integrity — not via JOIN at query-time).
     - Automatically resolves module from table_name if not explicitly provided.
+    - Auto-injects human-readable `details` for Activity History when missing.
 
     Args:
         db:          Active SQLAlchemy session.
-        action:      Action type string (CREATE, UPDATE, DELETE, LOGIN, LOGOUT, etc.)
+        action:      Action type string (CREATE, UPDATE, DELETE, CANCEL, LOGIN, LOGOUT, etc.)
         table_name:  The database table affected.
         record_id:   The primary key of the affected record.
         user:        The authenticated User ORM object (or None for system events).
@@ -284,6 +473,16 @@ def log_audit(
     """
     try:
         resolved_module = module or TABLE_TO_MODULE.get(table_name, table_name.replace('_', ' ').title())
+
+        # Mutating business actions should always carry readable details for the UI.
+        action_u = (action or "").upper()
+        if action_u in (
+            "CREATE", "UPDATE", "DELETE", "DEACTIVATE", "CANCEL", "RESTOCK", "DEDUCT"
+        ) or table_name in (
+            "orders", "users", "services", "inventory", "expenses", "historical_orders"
+        ):
+            if isinstance(old_values, dict) or isinstance(new_values, dict) or action_u in ("CREATE", "DELETE", "CANCEL"):
+                new_values = ensure_audit_details(action_u, table_name, old_values, new_values)
 
         ip_address = None
         user_agent = None
@@ -419,7 +618,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     raw_msg = str(exc)
     safe_msg = sanitize_error(raw_msg)
     
-    # [VITAL DEFENSE TOOL] Log to DB for Audit UI
+    # [VITAL DEFENSE TOOL] Log to DB for Audit UI — store Owner-readable text only
     try:
         db = SessionLocal()
         log_audit(
@@ -428,12 +627,16 @@ async def global_exception_handler(request: Request, exc: Exception):
             table_name="backend_v2",
             record_id=0,
             user=None,
-            old_values={"error": raw_msg},
+            old_values={
+                "error": safe_msg,
+                "error_class": type(exc).__name__,
+            },
             new_values={
                 "file": file_name,
                 "line": line_no,
                 "url": request.url.path,
-                "method": request.method
+                "method": request.method,
+                "summary": safe_msg,
             },
             request=request,
             module="System"
@@ -1085,33 +1288,32 @@ def seed_lookups(db: Session):
             db.commit()
             print(">>> Catalog Sync: Initial seeding complete.")
         else:
-            print(f">>> Catalog Sync: {service_count} services found. Ensuring required reglue additions exist...")
-            # Auto-insert Midsole Full Reglue & Undersole Full Reglue if missing
-            additional_services = [
-                {"service_name": "Midsole Full Reglue", "base_price": 150, "category": "addon", "duration_days": 20, "service_code": "MFR", "is_active": True, "sort_order": 20},
-                {"service_name": "Undersole Full Reglue", "base_price": 150, "category": "addon", "duration_days": 20, "service_code": "UFR", "is_active": True, "sort_order": 21},
-            ]
-            for item in additional_services:
-                exists = db.query(Service).filter(Service.service_name == item["service_name"]).first()
-                if not exists:
-                    item_copy = item.copy()
-                    cat_name = item_copy.pop("category", "base")
-                    item_copy["category_id"] = cat_map.get(cat_name, cat_map.get("base"))
-                    db.add(Service(**item_copy))
-                    print(f"  -> Added missing service: {item['service_name']}")
+            # Do NOT re-insert catalog rows on every boot. Owner deletes (hard or soft)
+            # must stick — previously Midsole/Undersole Full Reglue were force-added here
+            # whenever missing, which made them reappear after every server restart.
+            print(f">>> Catalog Sync: {service_count} services found. Skipping forced service inserts.")
+
+            # Deactivate legacy duplicate service names unconditionally so they stop cluttering Add-ons
+            for legacy_name in ("Midsole Full Reglue", "Undersole Full Reglue"):
+                legacy_svcs = db.query(Service).filter(
+                    Service.service_name == legacy_name,
+                    Service.is_active == True,
+                ).all()
+                for ls in legacy_svcs:
+                    ls.is_active = False
+                    print(f"  -> Deactivated legacy duplicate '{legacy_name}'")
             
-            # ── Clean up duplicate Color Renewal services ──
+            # ── Clean up duplicate Color Renewal services safely ──
             cr_services = db.query(Service).filter(Service.service_name == "Color Renewal").all()
             if len(cr_services) > 1:
                 print(">>> Cleaning up duplicate Color Renewal services...")
-                # Keep the one with base_price 800 or 500, remove the rest (like 0)
                 kept = False
                 for cr in sorted(cr_services, key=lambda x: x.base_price, reverse=True):
                     if not kept:
                         kept = True
-                        cr.is_active = True # ensure the kept one is active
+                        cr.is_active = True
                     else:
-                        db.delete(cr)
+                        cr.is_active = False
             db.commit()
     except Exception as lock_err:
         db.rollback()
@@ -2055,7 +2257,7 @@ def login(request: LoginRequest, db: Session = Depends(get_db), http_request: Re
                 log_audit(
                     db=db, action="LOGIN", table_name="auth",
                     record_id=db_user.user_id, user=db_user,
-                    new_values={"status": "success"},
+                    new_values={"status": "success", "username": db_user.username},
                     request=http_request, module="Authentication",
                 )
             except Exception as auth_db_err:
@@ -2119,7 +2321,7 @@ def logout(db: Session = Depends(get_db), current_user: User = Depends(get_curre
     log_audit(
         db=db, action="LOGOUT", table_name="auth",
         record_id=current_user.user_id, user=current_user,
-        new_values={"status": "logged_out"},
+        new_values={"status": "logged_out", "username": current_user.username},
         module="Authentication",
     )
     print(f"[AUTH] Logout recorded for: {current_user.username}")
@@ -2453,12 +2655,14 @@ def update_user(user_id: int, user_update: UserUpdateSchema, db: Session = Depen
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
         
-    # Capture before-state for audit diff
+    # Capture before-state for audit diff (include role so Activity History can show role changes)
     old_snapshot = {
         "username": db_user.username,
         "email": db_user.email,
+        "role": db_user.role.role_name if db_user.role else None,
         "is_active": db_user.is_active,
     }
+    password_changed = False
 
     if user_update.username:
         # Check uniqueness
@@ -2481,6 +2685,7 @@ def update_user(user_id: int, user_update: UserUpdateSchema, db: Session = Depen
         if is_same_password:
             raise HTTPException(status_code=400, detail="The new password must be different from the current password.")
         db_user.password_hash = bcrypt.hash(user_update.password)
+        password_changed = True
         
     # [PRIORITY 2 FIX] Prevent demotion or deactivation of the last active Owner
     is_demoting = user_update.role_name and user_update.role_name != 'owner'
@@ -2508,11 +2713,18 @@ def update_user(user_id: int, user_update: UserUpdateSchema, db: Session = Depen
         bool(db_user.is_active),
     )
     checkpoint_sqlite()
+    new_user_snapshot = {
+        "username": db_user.username,
+        "email": db_user.email,
+        "role": db_user.role.role_name if db_user.role else None,
+        "is_active": db_user.is_active,
+        "password_changed": password_changed,
+    }
     log_audit(
         db=db, action="UPDATE", table_name="users",
         record_id=user_id, user=current_user,
         old_values=old_snapshot,
-        new_values={"username": db_user.username, "email": db_user.email, "is_active": db_user.is_active},
+        new_values=new_user_snapshot,
         module="User Management",
     )
     return db_user
@@ -2548,16 +2760,33 @@ def delete_user(user_id: int, db: Session = Depends(get_db), current_user: User 
         )
         checkpoint_sqlite()
         log_audit(
-            db=db, action="UPDATE", table_name="users",
+            db=db, action="DEACTIVATE", table_name="users",
             record_id=user_id, user=current_user,
-            old_values={"is_active": True},
-            new_values={"is_active": False, "reason": "Deactivated instead of hard deletion due to historical transactions"},
+            old_values={
+                "username": db_user.username,
+                "email": db_user.email,
+                "role": db_user.role.role_name if db_user.role else None,
+                "is_active": True,
+            },
+            new_values={
+                "username": db_user.username,
+                "email": db_user.email,
+                "role": db_user.role.role_name if db_user.role else None,
+                "is_active": False,
+                "soft_delete": True,
+                "reason": "Deactivated instead of hard deletion due to historical transactions",
+            },
             module="User Management",
         )
         return {"status": "success", "message": f"User {user_id} has historical transactions and was deactivated instead of deleted."}
 
     # Capture before-state for audit trail (after deletion the record is gone)
-    deleted_snapshot = {"username": db_user.username, "email": db_user.email, "role": db_user.role.role_name}
+    deleted_snapshot = {
+        "username": db_user.username,
+        "email": db_user.email,
+        "role": db_user.role.role_name if db_user.role else None,
+        "is_active": db_user.is_active,
+    }
     db.delete(db_user)
     db.commit()
     checkpoint_sqlite()
@@ -2565,6 +2794,7 @@ def delete_user(user_id: int, db: Session = Depends(get_db), current_user: User 
         db=db, action="DELETE", table_name="users",
         record_id=user_id, user=current_user,
         old_values=deleted_snapshot,
+        new_values={"username": deleted_snapshot["username"]},
         module="User Management",
     )
     return {"status": "success", "message": f"User {user_id} deleted"}
@@ -2834,15 +3064,14 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
         db.commit()
         db.refresh(db_order)
         print(f"[TRANS] Success: Job Order {db_order.order_number} verified with {len(db_order.items)} items.")
+        create_snapshot = build_order_snapshot(db_order)
+        create_snapshot["order_number"] = db_order.order_number
+        create_snapshot["customer_name"] = order_data.get("customerName") or create_snapshot.get("customerName")
+        create_snapshot["items_count"] = len(db_order.items or [])
         log_audit(
             db=db, action="CREATE", table_name="orders",
             record_id=db_order.order_id, user=current_user,
-            new_values={
-                "order_number": db_order.order_number,
-                "customer": order_data.get("customerName"),
-                "grand_total": float(db_order.grand_total),
-                "items_count": len(db_order.items),
-            },
+            new_values=create_snapshot,
             module="Job Orders",
         )
         return db_order
@@ -2993,11 +3222,19 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
                     elif target_trigger == "for-release":
                         trigger_names.append("Shoe Released")
                         
-                    auto_items = db.query(Inventory).filter(
+                    auto_q = db.query(Inventory).filter(
                         Inventory.is_active == True,
                         Inventory.auto_deduct == True,
                         Inventory.auto_deduct_trigger.in_(trigger_names)
-                    ).with_for_update().all()
+                    )
+                    try:
+                        bind = db.get_bind()
+                        if bind and bind.dialect.name == "sqlite":
+                            auto_items = auto_q.all()
+                        else:
+                            auto_items = auto_q.with_for_update().all()
+                    except Exception:
+                        auto_items = auto_q.all()
                     
                     for item in auto_items:
                         # Check if already deducted for this order to prevent duplicate deductions
@@ -3133,28 +3370,76 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
     # 4. Handle Payment & Shipping
     if db_order.payments:
         db_pay = db_order.payments[0]
-        if "paymentMethod" in updates:
-            # DB stores lowercase: 'cash', 'gcash', 'maya', 'bank-transfer'
-            m_name = str(updates["paymentMethod"]).lower().strip()
-            if m_name not in ["cash", "gcash", "maya", "bank-transfer"]: m_name = "cash"
-            db_m = db.query(PaymentMethod).filter(PaymentMethod.method_name == m_name).first()
-            if db_m: 
-                db_pay.method_id = db_m.method_id
-        if "paymentStatus" in updates:
-            # DB stores: 'fully-paid', 'downpayment', 'pending'
-            ps_raw = str(updates["paymentStatus"]).lower().strip()
-            ps_name = ps_raw if ps_raw in ["fully-paid", "downpayment", "pending"] else "fully-paid"
-            db_ps = db.query(PaymentStatus).filter(PaymentStatus.status_name == ps_name).first()
-            if db_ps: 
-                db_pay.status_id = db_ps.p_status_id
-        if "amountReceived" in updates: 
-            db_pay.amount_received = updates["amountReceived"]
-        if "balance" in updates: 
-            db_pay.balance = updates["balance"]
-        if "referenceNo" in updates: 
-            db_pay.reference_no = updates["referenceNo"]
-        if "depositAmount" in updates: 
-            db_pay.deposit_amount = updates["depositAmount"]
+        is_claim_settlement = (
+            "finalPaymentMethod" in updates or 
+            (updates.get("status") == "claimed" and updates.get("paymentStatus") == "fully-paid" and float(db_pay.deposit_amount or 0) > 0)
+        )
+        
+        if is_claim_settlement:
+            # Preserve db_pay as downpayment, do NOT overwrite its payment method or reference number!
+            db_pay.balance = 0.0
+            
+            # Determine claim settlement payment method
+            claim_m_raw = str(updates.get("finalPaymentMethod") or updates.get("paymentMethod") or "cash").lower().strip()
+            if "," in claim_m_raw:
+                claim_m_raw = claim_m_raw.split(",")[-1].strip()
+            if claim_m_raw not in ["cash", "gcash", "maya", "bank-transfer"]:
+                claim_m_raw = "cash"
+            db_m_claim = db.query(PaymentMethod).filter(PaymentMethod.method_name == claim_m_raw).first() or db_pay.method
+            db_ps_full = db.query(PaymentStatus).filter(PaymentStatus.status_name == "fully-paid").first() or db_pay.p_status
+            
+            total_recv = float(updates.get("amountReceived") or 0.0)
+            dp_amount = float(db_pay.deposit_amount or db_pay.amount_received or 0.0)
+            claim_amt = max(0.0, total_recv - dp_amount)
+            claim_ref = updates.get("claimReferenceNo") or (updates.get("referenceNo") if claim_m_raw in ["gcash", "maya"] else None)
+
+            if len(db_order.payments) > 1:
+                # Update existing second payment
+                second_pay = db_order.payments[1]
+                second_pay.method_id = db_m_claim.method_id
+                second_pay.status_id = db_ps_full.p_status_id
+                second_pay.amount_received = claim_amt
+                second_pay.balance = 0.0
+                second_pay.reference_no = claim_ref
+            else:
+                # Add second payment row (3NF normalized multi-payment)
+                second_pay = Payment(
+                    order_id=db_order.order_id,
+                    method_id=db_m_claim.method_id,
+                    status_id=db_ps_full.p_status_id,
+                    amount_received=claim_amt,
+                    balance=0.0,
+                    reference_no=claim_ref,
+                    deposit_amount=0.0,
+                    created_at=datetime.now()
+                )
+                db.add(second_pay)
+        else:
+            # Standard single payment update
+            if "paymentMethod" in updates:
+                # DB stores lowercase: 'cash', 'gcash', 'maya', 'bank-transfer'
+                m_name = str(updates["paymentMethod"]).lower().strip()
+                if "," in m_name:
+                    m_name = m_name.split(",")[0].strip()
+                if m_name not in ["cash", "gcash", "maya", "bank-transfer"]: m_name = "cash"
+                db_m = db.query(PaymentMethod).filter(PaymentMethod.method_name == m_name).first()
+                if db_m: 
+                    db_pay.method_id = db_m.method_id
+            if "paymentStatus" in updates:
+                # DB stores: 'fully-paid', 'downpayment', 'pending'
+                ps_raw = str(updates["paymentStatus"]).lower().strip()
+                ps_name = ps_raw if ps_raw in ["fully-paid", "downpayment", "pending"] else "fully-paid"
+                db_ps = db.query(PaymentStatus).filter(PaymentStatus.status_name == ps_name).first()
+                if db_ps: 
+                    db_pay.status_id = db_ps.p_status_id
+            if "amountReceived" in updates: 
+                db_pay.amount_received = updates["amountReceived"]
+            if "balance" in updates: 
+                db_pay.balance = updates["balance"]
+            if "referenceNo" in updates: 
+                db_pay.reference_no = updates["referenceNo"]
+            if "depositAmount" in updates: 
+                db_pay.deposit_amount = updates["depositAmount"]
 
     if db_order.delivery:
         if "shippingPreference" in updates:
@@ -3412,6 +3697,10 @@ def delete_order(order_id: int, db: Session = Depends(get_db), current_user: Use
         )
 
     deleted_snapshot = build_order_snapshot(db_order)
+    # Staff cancel of early-lifecycle orders vs Owner hard-delete of progressed orders
+    is_cancel = current_status in cancellable_statuses
+    audit_action = "CANCEL" if is_cancel else "DELETE"
+    order_label = deleted_snapshot.get("orderNumber") or deleted_snapshot.get("order_number") or str(order_id)
 
     # Detach any InventoryLog rows referencing this order (preserve inventory audit
     # history rather than deleting it — see business rule: preserve audit logs).
@@ -3435,12 +3724,25 @@ def delete_order(order_id: int, db: Session = Depends(get_db), current_user: Use
     db.delete(db_order)
     db.commit()
     log_audit(
-        db=db, action="DELETE", table_name="orders",
+        db=db, action=audit_action, table_name="orders",
         record_id=order_id, user=current_user,
         old_values=deleted_snapshot,
+        new_values={
+            "order_number": order_label,
+            "orderNumber": order_label,
+            "previous_status": deleted_snapshot.get("status"),
+            "cancelled": is_cancel,
+        },
         module="Job Orders",
     )
-    return {"status": "success", "message": f"Order {order_id} removed"}
+    return {
+        "status": "success",
+        "message": (
+            f"Order {order_label} cancelled"
+            if is_cancel
+            else f"Order {order_label} removed"
+        ),
+    }
 
 
 # ==========================================
@@ -3453,8 +3755,8 @@ def get_catalog(db: Session = Depends(get_db), current_user: User = Depends(get_
     return db.query(Service).filter(Service.is_active == True).order_by(Service.sort_order.asc()).all()
 
 @app.post("/api/services", response_model=ServiceSchema)
-def create_service(service_data: dict, db: Session = Depends(get_db), current_user: User = Depends(require_role("owner"))):
-    """Adds a new service to the catalog with category resolution (Owner only)."""
+def create_service(service_data: dict, db: Session = Depends(get_db), current_user: User = Depends(require_role(["owner", "admin"]))):
+    """Adds a new service to the catalog with category resolution (Owner and Admin)."""
     print(f"[CATALOG] Creating new service: {service_data.get('service_name')}")
     
     # Resolve category string to ID
@@ -3484,13 +3786,21 @@ def create_service(service_data: dict, db: Session = Depends(get_db), current_us
     log_audit(
         db=db, action="CREATE", table_name="services",
         record_id=db_service.service_id, user=current_user,
-        new_values={"service_name": db_service.service_name, "base_price": float(db_service.base_price), "category": cat_name},
+        new_values={
+            "service_name": db_service.service_name,
+            "base_price": float(db_service.base_price or 0),
+            "duration_days": int(db_service.duration_days or 0),
+            "category": cat_name,
+            "description": db_service.description,
+            "service_code": db_service.service_code,
+            "is_active": bool(db_service.is_active),
+        },
         module="Services",
     )
     return db_service
 
 @app.put("/api/services/reorder")
-def reorder_services_bulk(reorder_data: List[dict], db: Session = Depends(get_db), current_user: User = Depends(require_role("owner"))):
+def reorder_services_bulk(reorder_data: List[dict], db: Session = Depends(get_db), current_user: User = Depends(require_role(["owner", "admin"]))):
     """
     BULK REORDER: Updates sort_order for multiple services in one transaction (Owner only).
     Payload: [{"id": 1, "sort_order": 1}, {"id": 2, "sort_order": 2}]
@@ -3502,21 +3812,47 @@ def reorder_services_bulk(reorder_data: List[dict], db: Session = Depends(get_db
             new_order = item.get("sort_order")
             db.query(Service).filter(Service.service_id == svc_id).update({"sort_order": new_order})
         db.commit()
+        log_audit(
+            db=db, action="UPDATE", table_name="services",
+            record_id=None, user=current_user,
+            old_values={"reorder_count": len(reorder_data)},
+            new_values={
+                "reorder_count": len(reorder_data),
+                "details": f"Service catalog display order updated for {len(reorder_data)} service(s).",
+            },
+            module="Services",
+        )
         return {"status": "success"}
     except Exception as e:
         db.rollback()
         print(f"[ERROR] Bulk reorder failed: {e}")
         raise HTTPException(status_code=500, detail="Failed to save new order")
 
+def _service_audit_snapshot(db_service) -> dict:
+    cat = None
+    try:
+        cat = db_service.category.category_name if getattr(db_service, "category", None) else None
+    except Exception:
+        cat = None
+    return {
+        "service_name": db_service.service_name,
+        "base_price": float(db_service.base_price or 0),
+        "duration_days": int(db_service.duration_days or 0),
+        "category": cat,
+        "description": db_service.description,
+        "service_code": db_service.service_code,
+        "is_active": bool(db_service.is_active),
+    }
+
 @app.put("/api/services/{service_id}", response_model=ServiceSchema)
-def update_service(service_id: int, service_update: dict, db: Session = Depends(get_db), current_user: User = Depends(require_role("owner"))):
-    """Updates an existing service with category string-to-ID resolution (Owner only)."""
+def update_service(service_id: int, service_update: dict, db: Session = Depends(get_db), current_user: User = Depends(require_role(["owner", "admin"]))):
+    """Updates an existing service with category string-to-ID resolution (Owner and Admin)."""
     db_service = db.query(Service).filter(Service.service_id == service_id).first()
     if not db_service:
         raise HTTPException(status_code=404, detail="Service not found")
     
-    # Capture before-state
-    old_svc_snapshot = {"service_name": db_service.service_name, "base_price": float(db_service.base_price), "is_active": db_service.is_active}
+    # Capture before-state (full business fields for readable Activity History)
+    old_svc_snapshot = _service_audit_snapshot(db_service)
 
     # Handle category update via string resolution if provided
     if "category" in service_update:
@@ -3536,21 +3872,23 @@ def update_service(service_id: int, service_update: dict, db: Session = Depends(
         db=db, action="UPDATE", table_name="services",
         record_id=service_id, user=current_user,
         old_values=old_svc_snapshot,
-        new_values={"service_name": db_service.service_name, "base_price": float(db_service.base_price), "is_active": db_service.is_active},
+        new_values=_service_audit_snapshot(db_service),
         module="Services",
     )
     return db_service
 
 @app.delete("/api/services/{service_id}")
-def delete_service(service_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_role("owner"))):
-    """Removes a service from the catalog (Owner only)."""
+def delete_service(service_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_role(["owner", "admin"]))):
+    """Removes a service from the catalog (Owner and Admin)."""
     db_service = db.query(Service).filter(Service.service_id == service_id).first()
     if not db_service:
         raise HTTPException(status_code=404, detail="Service not found")
     
+    svc_name = db_service.service_name
+    deleted_snapshot = _service_audit_snapshot(db_service)
+    
     # Check if this service is referenced in any order item mappings
     referenced = db.query(ItemServiceMapping).filter(ItemServiceMapping.service_id == service_id).first()
-    svc_name = db_service.service_name
     
     if referenced:
         # Soft delete to maintain 3NF Integrity with past orders
@@ -3570,16 +3908,39 @@ def delete_service(service_id: int, db: Session = Depends(get_db), current_user:
         )
         return {"status": "success", "message": "Service deactivated (Soft Delete) because it is linked to past orders"}
     else:
-        # Permanent hard delete (clean up duplicates or unused services)
-        db.delete(db_service)
-        db.commit()
-        log_audit(
-            db=db, action="DELETE", table_name="services",
-            record_id=service_id, user=current_user,
-            old_values={"service_name": svc_name},
-            module="Services",
-        )
-        return {"status": "success", "message": "Service deleted permanently"}
+        # Permanent hard delete (clean up duplicates or unused services), with safe soft-delete fallback
+        try:
+            db.delete(db_service)
+            db.commit()
+            log_audit(
+                db=db, action="DELETE", table_name="services",
+                record_id=service_id, user=current_user,
+                old_values=deleted_snapshot,
+                new_values={
+                    "service_name": svc_name,
+                    "details": f"Service '{svc_name}' permanently deleted.",
+                },
+                module="Services",
+            )
+            return {"status": "success", "message": "Service deleted permanently"}
+        except Exception:
+            db.rollback()
+            db_service = db.query(Service).filter(Service.service_id == service_id).first()
+            if db_service:
+                db_service.is_active = False
+                db.commit()
+            log_audit(
+                db=db, action="DEACTIVATE", table_name="services",
+                record_id=service_id, user=current_user,
+                old_values=deleted_snapshot,
+                new_values={
+                    "is_active": False,
+                    "soft_delete": True,
+                    "details": f"Service '{svc_name}' deactivated (Soft Delete) due to existing references.",
+                },
+                module="Services",
+            )
+            return {"status": "success", "message": "Service deactivated (Soft Delete)"}
 
 
 @app.get("/api/lookups/statuses", response_model=List[StatusSchema])
@@ -3712,7 +4073,11 @@ def update_expense(expense_id: int, expense_data: dict, db: Session = Depends(ge
     if not db_exp:
         raise HTTPException(status_code=404, detail="Expense not found")
 
-    old_exp_snapshot = {"amount": float(db_exp.amount), "description": db_exp.description}
+    old_exp_snapshot = {
+        "amount": float(db_exp.amount or 0),
+        "description": db_exp.description,
+        "expense_date": db_exp.expense_date.isoformat() if getattr(db_exp, "expense_date", None) else None,
+    }
     
     if 'amount' in expense_data:
         db_exp.amount = expense_data['amount']
@@ -3739,7 +4104,13 @@ def update_expense(expense_id: int, expense_data: dict, db: Session = Depends(ge
         db=db, action="UPDATE", table_name="expenses",
         record_id=expense_id, user=current_user,
         old_values=old_exp_snapshot,
-        new_values={"amount": float(db_exp.amount), "description": db_exp.description},
+        new_values={
+            "amount": float(db_exp.amount or 0),
+            "description": db_exp.description,
+            "expense_date": db_exp.expense_date.isoformat() if getattr(db_exp, "expense_date", None) else None,
+            "category": cat,
+            "notes": notes,
+        },
         module="Expenses",
     )
     return db_exp
@@ -3762,7 +4133,17 @@ def delete_expense(expense_id: int, db: Session = Depends(get_db), current_user:
         log_audit(
             db=db, action="DELETE", table_name="expenses",
             record_id=expense_id, user=current_user,
-            old_values={"type": "inventory_restock", "item": item.item_name if item else "unknown"},
+            old_values={
+                "type": "inventory_restock",
+                "item_name": item.item_name if item else "unknown",
+                "amount": float(log.change_amount or 0),
+            },
+            new_values={
+                "details": (
+                    f"Restock expense for '{item.item_name if item else 'unknown'}' permanently deleted "
+                    f"(stock reversed)."
+                ),
+            },
             module="Expenses",
         )
         return {"status": "success", "message": "Restock log deleted."}
@@ -3770,13 +4151,24 @@ def delete_expense(expense_id: int, db: Session = Depends(get_db), current_user:
     db_exp = db.query(Expense).filter(Expense.expense_id == expense_id).first()
     if not db_exp:
         raise HTTPException(status_code=404, detail="Expense not found")
-    exp_snapshot = {"amount": float(db_exp.amount), "description": db_exp.description}
+    exp_snapshot = {
+        "amount": float(db_exp.amount or 0),
+        "description": db_exp.description,
+        "expense_date": db_exp.expense_date.isoformat() if getattr(db_exp, "expense_date", None) else None,
+    }
     db.delete(db_exp)
     db.commit()
     log_audit(
         db=db, action="DELETE", table_name="expenses",
         record_id=expense_id, user=current_user,
         old_values=exp_snapshot,
+        new_values={
+            "description": exp_snapshot.get("description"),
+            "details": (
+                f"Expense '{exp_snapshot.get('description') or expense_id}' "
+                f"({_human_audit_value('amount', exp_snapshot.get('amount'))}) permanently deleted."
+            ),
+        },
         module="Expenses",
     )
     return {"status": "success", "message": "Expense deleted."}
@@ -3829,10 +4221,13 @@ def get_activities(
             client = log.new_values.get("client", "unknown") if log.new_values else "unknown"
             return f"Page Not Found: {broken_url} (from {client})"
         if log.action_type == "SERVER_ERROR" and (log.new_values or log.old_values):
-            f_name = (log.new_values or {}).get("file", "unknown")
-            line   = (log.new_values or {}).get("line", 0)
-            error  = (log.old_values or {}).get("error", "Unknown error")
-            return f"CRITICAL: {error} | File: {f_name} | Line: {line}"
+            nv = log.new_values if isinstance(log.new_values, dict) else {}
+            ov = log.old_values if isinstance(log.old_values, dict) else {}
+            error = humanize_server_error(str(ov.get("error") or nv.get("summary") or "Unknown error"))
+            where = nv.get("url") or ""
+            method = nv.get("method") or ""
+            loc = f" during {method} {where}" if where else ""
+            return f"Server error{loc}: {error}"
         if log.action_type in ("LOGIN", "LOGIN_SUCCESS"):
             actor = log.username or "unknown user"
             return f"{actor} logged into the system"
@@ -3841,7 +4236,10 @@ def get_activities(
             return f"Failed login attempt for '{actor}'"
         if log.action_type == "LOGOUT":
             actor = log.username or "unknown user"
-            return f"{actor} logged out"
+            return f"{actor} signed out of the system"
+        if log.action_type == "SESSION_TIMEOUT":
+            actor = log.username or "unknown user"
+            return f"{actor} was signed out automatically due to inactivity"
         if log.action_type == "PASSWORD_RESET":
             actor = log.username or "unknown user"
             return f"{actor} reset their password"
@@ -3858,7 +4256,10 @@ def get_activities(
             or nv.get("item_name") or ov.get("item_name")
             or nv.get("service_name") or ov.get("service_name")
             or nv.get("customer_name") or ov.get("customer_name")
+            or nv.get("customerName") or ov.get("customerName")
             or nv.get("order_number") or ov.get("order_number")
+            or nv.get("orderNumber") or ov.get("orderNumber")
+            or nv.get("description") or ov.get("description")
         )
         target_suffix = f": {target}" if target else (f" (ID: {log.record_id})" if log.record_id else "")
 
@@ -3866,10 +4267,16 @@ def get_activities(
         readable_table = READABLE_TABLE_MAP.get(log.table_name or "", log.table_name or "Record")
         if log.action_type == "CREATE":
             return f"New {readable_table} record created{target_suffix}"
+        if log.action_type == "CANCEL":
+            prev = ov.get("status") or nv.get("previous_status")
+            prev_txt = f" (was {str(prev).replace('-', ' ').title()})" if prev else ""
+            return f"Job order{target_suffix} cancelled{prev_txt}"
         if log.action_type == "UPDATE":
-            changed_keys = [k for k in nv.keys() if k != "details"] or ["fields"]
-            who = f" {target}" if target else f" #{log.record_id}"
-            return f"{readable_table} record{who} updated — changed: {', '.join(changed_keys[:5])}"
+            bits = build_audit_change_bits(ov, nv, limit=6)
+            who = f" {target}" if target else (f" #{log.record_id}" if log.record_id else "")
+            if bits:
+                return f"{readable_table} record{who} updated — {'; '.join(bits)}"
+            return f"{readable_table} record{who} updated (no field value changes recorded)"
         if log.action_type == "DELETE":
             soft = bool(nv.get("is_active") is False or nv.get("soft_delete") or ov.get("soft_delete"))
             verb = "removed from catalog (soft delete)" if soft else "permanently deleted"
@@ -3914,11 +4321,11 @@ def get_activities(
         # Action type classification for frontend badge coloring
         action_upper = (log.action_type or "").upper()
         table_upper = (log.table_name or "").upper()
-        if action_upper in ("SERVER_ERROR", "DELETE", "DEACTIVATE", "LOGIN_FAILED"):
+        if action_upper in ("SERVER_ERROR", "DELETE", "DEACTIVATE", "CANCEL", "LOGIN_FAILED"):
             log_type = "critical"
         elif action_upper in ("404_NOT_FOUND", "SYSTEM") or table_upper in ("USERS", "SYSTEM"):
             log_type = "system"
-        elif action_upper in ("LOGIN", "LOGIN_SUCCESS", "LOGOUT", "PASSWORD_RESET"):
+        elif action_upper in ("LOGIN", "LOGIN_SUCCESS", "LOGOUT", "PASSWORD_RESET", "SESSION_TIMEOUT"):
             log_type = "auth"
         elif table_upper in ("SERVICES",):
             log_type = "service"
@@ -3928,6 +4335,8 @@ def get_activities(
             log_type = "expense"
         elif table_upper in ("ORDERS", "ITEMS", "PAYMENTS", "DELIVERIES", "STATUS_LOG", "CUSTOMERS"):
             log_type = "order"
+        elif table_upper in ("HISTORICAL_ORDERS", "HISTORICAL_ITEMS", "HISTORICAL_IMAGES"):
+            log_type = "historical"
         else:
             log_type = "system"
 
@@ -3941,8 +4350,36 @@ def get_activities(
             "module":     resolved_module,
             "table":      readable_table,
             "recordId":   log.record_id,
-            "oldValues":  log.old_values,
-            "newValues":  log.new_values,
+            "oldValues":  (
+                {
+                    **(log.old_values if isinstance(log.old_values, dict) else {}),
+                    "error": humanize_server_error(
+                        str((log.old_values or {}).get("error") or "")
+                    ),
+                }
+                if action_upper == "SERVER_ERROR" and isinstance(log.old_values, dict)
+                else log.old_values
+            ),
+            "newValues":  (
+                {
+                    **(log.new_values if isinstance(log.new_values, dict) else {}),
+                    **(
+                        {
+                            "summary": humanize_server_error(
+                                str(
+                                    (log.new_values or {}).get("summary")
+                                    or (log.old_values or {}).get("error")
+                                    or ""
+                                )
+                            )
+                        }
+                        if action_upper == "SERVER_ERROR"
+                        else {}
+                    ),
+                }
+                if action_upper == "SERVER_ERROR" and isinstance(log.new_values, dict)
+                else log.new_values
+            ),
             "details":    resolve_details(log),
             "type":       log_type,
             "ipAddress":  log.ip_address,
@@ -4059,6 +4496,31 @@ def create_inventory_item(item: InventorySchema, db: Session = Depends(get_db), 
     )
     return new_item
 
+def _inventory_audit_snapshot(item: Inventory) -> dict:
+    """JSON-safe inventory fields for human-readable Activity History diffs."""
+    def _num(v):
+        try:
+            return float(v) if v is not None else None
+        except (TypeError, ValueError):
+            return v
+
+    return {
+        "item_name": item.item_name,
+        "inventory_number": getattr(item, "inventory_number", None),
+        "category": item.category,
+        "stock_quantity": _num(item.stock_quantity),
+        "unit": item.unit,
+        "unit_price": _num(item.unit_price),
+        "status": item.status,
+        "low_stock_threshold": _num(getattr(item, "low_stock_threshold", None)),
+        "package_size": _num(getattr(item, "package_size", None)),
+        "package_unit": getattr(item, "package_unit", None),
+        "is_retail": bool(getattr(item, "is_retail", False)),
+        "retail_price": _num(getattr(item, "retail_price", None)),
+        "auto_deduct": bool(getattr(item, "auto_deduct", False)),
+    }
+
+
 @app.put("/api/inventory/{item_id}", response_model=InventorySchema)
 def update_inventory_item(item_id: int, updates: InventoryUpdateSchema, db: Session = Depends(get_db), current_user: User = Depends(require_role(["owner", "admin", "staff"]))):
     """Modify stock or metadata (Owner only - OWASP A01)."""
@@ -4066,11 +4528,9 @@ def update_inventory_item(item_id: int, updates: InventoryUpdateSchema, db: Sess
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
     
-    # Store old stock quantity to compute the diff
-    old_stock = item.stock_quantity
-    
-    # Store old snapshot for audit diff
-    old_inv_snapshot = {"item_name": item.item_name, "stock_quantity": item.stock_quantity}
+    # Store old snapshot for audit diff (before mutation)
+    old_inv_snapshot = _inventory_audit_snapshot(item)
+    old_stock = old_inv_snapshot["stock_quantity"]
 
     update_data = updates.model_dump(exclude_unset=True)
 
@@ -4104,8 +4564,8 @@ def update_inventory_item(item_id: int, updates: InventoryUpdateSchema, db: Sess
     recalculate_inventory_status(item)
     
     # S.O.L.I.D & 3NF: Log stock difference if it changed
-    if item.stock_quantity != old_inv_snapshot["stock_quantity"]:
-        diff = item.stock_quantity - old_inv_snapshot["stock_quantity"]
+    if float(item.stock_quantity or 0) != float(old_stock or 0):
+        diff = float(item.stock_quantity or 0) - float(old_stock or 0)
         db.add(InventoryLog(
             item_id=item.item_id,
             change_amount=diff,
@@ -4115,11 +4575,26 @@ def update_inventory_item(item_id: int, updates: InventoryUpdateSchema, db: Sess
     
     db.commit()
     db.refresh(item)
+    new_inv_snapshot = _inventory_audit_snapshot(item)
+    changed_labels = [
+        k for k in new_inv_snapshot.keys()
+        if str(old_inv_snapshot.get(k)) != str(new_inv_snapshot.get(k))
+    ]
+    detail_bits = []
+    for k in changed_labels[:8]:
+        detail_bits.append(f"{k.replace('_', ' ')}: {old_inv_snapshot.get(k)} → {new_inv_snapshot.get(k)}")
     log_audit(
         db=db, action="UPDATE", table_name="inventory",
         record_id=item_id, user=current_user,
         old_values=old_inv_snapshot,
-        new_values={"item_name": item.item_name, "stock_quantity": item.stock_quantity},
+        new_values={
+            **new_inv_snapshot,
+            "details": (
+                f"Inventory item '{new_inv_snapshot.get('item_name')}' updated — {'; '.join(detail_bits)}"
+                if detail_bits
+                else f"Inventory item '{new_inv_snapshot.get('item_name')}' saved with no field value changes."
+            ),
+        },
         module="Inventory",
     )
     return item
@@ -4214,8 +4689,22 @@ def adjust_stock(
     log_audit(
         db=db, action="UPDATE", table_name="inventory",
         record_id=item_id, user=current_user,
-        old_values={"item_name": item.item_name, "stock_quantity": old_stock},
-        new_values={"item_name": item.item_name, "stock_quantity": item.stock_quantity, "action": action, "amount": amount},
+        old_values={
+            "item_name": item.item_name,
+            "stock_quantity": float(old_stock or 0),
+            "unit": item.unit,
+        },
+        new_values={
+            "item_name": item.item_name,
+            "stock_quantity": float(item.stock_quantity or 0),
+            "unit": item.unit,
+            "action": action,
+            "amount": float(amount),
+            "details": (
+                f"{'Restocked' if action == 'restock' else 'Deducted'} {amount} {item.unit or ''} "
+                f"on '{item.item_name}': stock {float(old_stock or 0)} → {float(item.stock_quantity or 0)}"
+            ).strip(),
+        },
         module="Inventory",
     )
     return {"status": "success", "new_stock": item.stock_quantity}
@@ -4499,7 +4988,31 @@ async def create_historical_order(
             expected_release=original_estimated_release_date,
         )
     db.commit()
-    return {"status": "created", "historical_order_id": order.historical_order_id, "order_id": order.order_id}
+    log_audit(
+        db=db,
+        action="CREATE",
+        table_name="historical_orders",
+        record_id=order.historical_order_id,
+        user=current_user,
+        new_values={
+            "order_id": order.order_id,
+            "customer_name": customer_name,
+            "date_received": date_received.isoformat() if date_received else None,
+            "grand_total": float(grand_total),
+            "priority": order.priority,
+            "branch": order.branch,
+            "details": (
+                f"Historical order {order.order_id} created for '{customer_name}' "
+                f"(₱{float(grand_total):,.2f})."
+            ),
+        },
+        module="Historical Records",
+    )
+    return {
+        "status": "created",
+        "historical_order_id": order.historical_order_id,
+        "order_id": order.order_id,
+    }
 
 
 # ------------------------------------------------------------------
@@ -4515,6 +5028,15 @@ async def update_historical_order(
     order = db.query(HistoricalOrder).filter(HistoricalOrder.historical_order_id == historical_order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Historical order not found.")
+
+    old_hist_snapshot = {
+        "order_id": order.order_id,
+        "customer_name": order.customer.customer_name if order.customer else None,
+        "date_received": order.date_received.isoformat() if order.date_received else None,
+        "grand_total": float(order.grand_total) if order.grand_total is not None else None,
+        "priority": order.priority,
+        "branch": order.branch,
+    }
 
     def _parse(val):
         if not val:
@@ -4643,6 +5165,24 @@ async def update_historical_order(
         )
     db.commit()
     db.refresh(order)
+    new_hist_snapshot = {
+        "order_id": order.order_id,
+        "customer_name": order.customer.customer_name if order.customer else None,
+        "date_received": order.date_received.isoformat() if order.date_received else None,
+        "grand_total": float(order.grand_total) if order.grand_total is not None else None,
+        "priority": order.priority,
+        "branch": order.branch,
+    }
+    log_audit(
+        db=db,
+        action="UPDATE",
+        table_name="historical_orders",
+        record_id=historical_order_id,
+        user=current_user,
+        old_values=old_hist_snapshot,
+        new_values=new_hist_snapshot,
+        module="Historical Records",
+    )
     return {
         "status": "updated",
         "historical_order_id": order.historical_order_id,
@@ -4998,7 +5538,7 @@ async def reocr_historical_image_route(
             path,
             interactive=True,
             cancel_key=cancel_key,
-            local_engine="tesseract",
+            local_engine="auto",
         )
     except OcrCancelled:
         clear_ocr_cancel(cancel_key)

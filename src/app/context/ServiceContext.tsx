@@ -25,6 +25,27 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
         localStorage.setItem('service_sync_queue', JSON.stringify(queue));
     };
 
+    const sanitizeServices = (raw: any[]): Service[] => {
+        if (!Array.isArray(raw)) return [];
+        return raw
+            .filter(bs => {
+                const name = (bs.name || bs.service_name || '').trim().toLowerCase();
+                if (name === 'midsole full reglue' || name === 'undersole full reglue') return false;
+                return true;
+            })
+            .map((bs: any) => ({
+                id: (bs.service_id ?? bs.id).toString(),
+                name: bs.service_name ?? bs.name,
+                price: parseFloat(bs.base_price ?? bs.price ?? 0),
+                category: typeof bs.category === 'object' ? bs.category?.category_name : bs.category,
+                active: bs.is_active !== undefined ? bs.is_active : (bs.active ?? true),
+                description: bs.description || '',
+                durationDays: bs.duration_days ?? bs.durationDays ?? 0,
+                code: bs.service_code ?? bs.code ?? '',
+                sortOrder: bs.sort_order ?? bs.sortOrder ?? 0
+            }));
+    };
+
     useEffect(() => {
         const processSyncQueue = async () => {
             if (typeof window === 'undefined' || !navigator.onLine) return;
@@ -91,18 +112,9 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
                     });
                     const data = await response.json();
                     if (Array.isArray(data)) {
-                        const mappedServices = data.map((bs: any) => ({
-                            id: bs.service_id.toString(),
-                            name: bs.service_name,
-                            price: parseFloat(bs.base_price),
-                            category: typeof bs.category === 'object' ? bs.category?.category_name : bs.category,
-                            active: bs.is_active,
-                            description: bs.description || '',
-                            durationDays: bs.duration_days || 0,
-                            code: bs.service_code || '',
-                            sortOrder: bs.sort_order || 0
-                        }));
-                        setServices(mappedServices);
+                        const cleanServices = sanitizeServices(data);
+                        setServices(cleanServices);
+                        localStorage.setItem('service_data_cache', JSON.stringify(cleanServices));
                     }
                 }
             } catch (e) {
@@ -114,7 +126,10 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
             const cache = localStorage.getItem('service_data_cache');
             if (cache) {
                 try {
-                    setServices(JSON.parse(cache));
+                    const parsed = JSON.parse(cache);
+                    const cleanCache = sanitizeServices(parsed);
+                    setServices(cleanCache);
+                    localStorage.setItem('service_data_cache', JSON.stringify(cleanCache));
                 } catch(e) {}
             }
 
@@ -124,19 +139,9 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
                 .then(res => res.json())
                 .then(data => {
                     if (Array.isArray(data)) {
-                        const mappedServices = data.map((bs: any) => ({
-                            id: bs.service_id.toString(),
-                            name: bs.service_name,
-                            price: parseFloat(bs.base_price),
-                            category: typeof bs.category === 'object' ? bs.category?.category_name : bs.category,
-                            active: bs.is_active,
-                            description: bs.description || '',
-                            durationDays: bs.duration_days || 0,
-                            code: bs.service_code || '',
-                            sortOrder: bs.sort_order || 0
-                        }));
-                        setServices(mappedServices);
-                        localStorage.setItem('service_data_cache', JSON.stringify(mappedServices));
+                        const cleanServices = sanitizeServices(data);
+                        setServices(cleanServices);
+                        localStorage.setItem('service_data_cache', JSON.stringify(cleanServices));
                     }
                 })
                 .catch(err => {
@@ -153,7 +158,11 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
     const addService = (service: Service) => {
         const tempId = service.id && service.id !== 'new' ? service.id : Math.random().toString();
         const optimisticService: Service = { ...service, id: tempId, sortOrder: service.sortOrder || services.length + 1 };
-        setServices((prev) => [...prev, optimisticService]);
+        setServices((prev) => {
+            const updated = sanitizeServices([...prev, optimisticService]);
+            localStorage.setItem('service_data_cache', JSON.stringify(updated));
+            return updated;
+        });
 
         const payload = {
             service_name: service.name,
@@ -193,13 +202,21 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
                     code: data.service_code || '',
                     sortOrder: data.sort_order || optimisticService.sortOrder
                 };
-                setServices((prev) => prev.map(s => s.id === tempId ? verifiedSvc : s));
+                setServices((prev) => {
+                    const updated = prev.map(s => s.id === tempId ? verifiedSvc : s);
+                    localStorage.setItem('service_data_cache', JSON.stringify(updated));
+                    return updated;
+                });
             })
             .catch(err => {
                 console.error("Service sync failed:", err);
                 if (err.message && err.message.startsWith('HTTP_')) {
                     import('sonner').then(({ toast }) => toast.error('Action denied (400/401/403).'));
-                    setServices((prev) => prev.filter(s => s.id !== tempId));
+                    setServices((prev) => {
+                        const updated = prev.filter(s => s.id !== tempId);
+                        localStorage.setItem('service_data_cache', JSON.stringify(updated));
+                        return updated;
+                    });
                     return;
                 }
                 queueServiceSync({ type: 'POST', payload });
@@ -207,7 +224,11 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
     };
 
     const updateService = (id: string, updates: Partial<Service>) => {
-        setServices((prev) => prev.map((s) => s.id === id ? { ...s, ...updates } : s));
+        setServices((prev) => {
+            const updated = prev.map((s) => s.id === id ? { ...s, ...updates } : s);
+            localStorage.setItem('service_data_cache', JSON.stringify(updated));
+            return updated;
+        });
 
         const payload: any = {};
         if (updates.name !== undefined) payload.service_name = updates.name;
@@ -235,17 +256,21 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
                 return res.json();
             })
             .then(data => {
-                setServices((prev) => prev.map((service) => service.id === id ? {
-                    ...service,
-                    name: data.service_name,
-                    price: parseFloat(data.base_price),
-                    category: typeof data.category === 'object' ? data.category?.category_name : (data.category || service.category),
-                    active: data.is_active,
-                    description: data.description || '',
-                    durationDays: data.duration_days || 0,
-                    code: data.service_code || '',
-                    sortOrder: data.sort_order ?? service.sortOrder
-                } : service));
+                setServices((prev) => {
+                    const updated = prev.map((service) => service.id === id ? {
+                        ...service,
+                        name: data.service_name,
+                        price: parseFloat(data.base_price),
+                        category: typeof data.category === 'object' ? data.category?.category_name : (data.category || service.category),
+                        active: data.is_active,
+                        description: data.description || '',
+                        durationDays: data.duration_days || 0,
+                        code: data.service_code || '',
+                        sortOrder: data.sort_order ?? service.sortOrder
+                    } : service);
+                    localStorage.setItem('service_data_cache', JSON.stringify(updated));
+                    return updated;
+                });
             })
             .catch(err => {
                 console.error("Service sync failed:", err);
@@ -258,6 +283,13 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
     };
 
     const deleteService = (id: string) => {
+        // 1. Instantly remove from state and update localStorage cache
+        setServices((prev) => {
+            const updated = prev.filter((s) => s.id !== id);
+            localStorage.setItem('service_data_cache', JSON.stringify(updated));
+            return updated;
+        });
+
         fetch(`${API_BASE}/services/${id}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${user.token}` }
@@ -267,7 +299,6 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
                     throw new Error(`HTTP_${res.status}: Permission denied or invalid data.`);
                 }
                 if (!res.ok) throw new Error('Delete failed');
-                setServices((prev) => prev.filter((s) => s.id !== id));
             })
             .catch(err => {
                 console.error("Service sync failed:", err);
@@ -275,7 +306,6 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
                     import('sonner').then(({ toast }) => toast.error('Delete denied (400/401/403).'));
                     return;
                 }
-                setServices((prev) => prev.filter((s) => s.id !== id)); // Fallback
                 queueServiceSync({ type: 'DELETE', id });
             });
     };

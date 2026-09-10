@@ -332,7 +332,7 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                                             <td className="p-4">
                                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase border whitespace-nowrap
                                                     ${order.priorityLevel === 'rush' ? 'bg-red-50 text-red-700 border-red-100' :
-                                                        'bg-slate-50 text-slate-700 border-slate-200'
+                                                        'bg-emerald-50 text-emerald-700 border-emerald-100'
                                                     }`}>
                                                     {order.priorityLevel || 'regular'}
                                                 </span>

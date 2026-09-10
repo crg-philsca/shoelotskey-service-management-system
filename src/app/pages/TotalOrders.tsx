@@ -12,7 +12,11 @@ import {
     ChevronDown,
     Wallet,
     Clock3,
+    MoreVertical,
+    Edit,
+    Trash2,
 } from 'lucide-react';
+import { format as dateFnsFormat } from 'date-fns';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/app/components/ui/table';
@@ -21,13 +25,15 @@ import { Input } from '@/app/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu';
 import { useServices } from '@/app/context/ServiceContext';
+import EditOrderModal from '@/app/components/EditOrderModal';
 import OrderDetailModal from '@/app/components/OrderDetailModal';
+import { toast } from 'sonner';
 import type { JobOrder } from '@/app/types';
 import { isDateInRange, orderEventDate, type ReportRange } from '@/app/lib/salesAnalytics';
 
 type TotalOrdersProps = {
     onSetHeaderActionRight?: (action: ReactNode | null) => void;
-    user: { token: string };
+    user: { token: string; role: 'owner' | 'staff' | 'admin'; username: string };
 };
 
 function FormattedDateInput({ value, onChange, className, id }: { value: string; onChange: (val: string) => void; className?: string; id?: string }) {
@@ -132,10 +138,16 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
 
     const navigate = useNavigate();
     const location = useLocation();
-    const { orders } = useOrders();
+    const { orders, updateOrder, deleteOrder } = useOrders();
 
     const [profitRange, setProfitRange] = useState<ReportRange>(() => {
         return (location.state as any)?.dateRange || 'Daily';
+    });
+    const [customStartDate, setCustomStartDate] = useState<string>(() => {
+        return (location.state as any)?.customStartDate || '';
+    });
+    const [customEndDate, setCustomEndDate] = useState<string>(() => {
+        return (location.state as any)?.customEndDate || '';
     });
     const [searchQuery, setSearchQuery] = useState('');
     const [filterService, setFilterService] = useState<string>('all');
@@ -147,19 +159,10 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const [selectedOrder, setSelectedOrder] = useState<JobOrder | null>(null);
+    const [isEditing, setIsEditing] = useState(false);
+    const [viewingOrder, setViewingOrder] = useState<JobOrder | null>(null);
+    const [orderToDelete, setOrderToDelete] = useState<JobOrder | null>(null);
     const itemsPerPage = 15;
-
-    const formatNumericDateTime = (value: string | number | Date | undefined) => {
-        if (!value) return '-';
-        const d = new Date(value);
-        if (isNaN(d.getTime())) return '-';
-        const mm = String(d.getMonth() + 1).padStart(2, '0');
-        const dd = String(d.getDate()).padStart(2, '0');
-        const yy = String(d.getFullYear()).slice(-2);
-        const hh = String(d.getHours()).padStart(2, '0');
-        const min = String(d.getMinutes()).padStart(2, '0');
-        return `${mm}/${dd}/${yy} ${hh}:${min}`;
-    };
 
     const { services } = useServices();
     const baseServices = (services || []).filter((s) => s?.category === 'base' && s?.active);
@@ -167,7 +170,7 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
     useEffect(() => {
         if (!onSetHeaderActionRight) return;
 
-        onSetHeaderActionRight(
+        const rangeMenu = (
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                     <button
@@ -176,12 +179,12 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                         className="w-10 h-10 sm:w-40 flex items-center justify-center sm:justify-between rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-sm font-bold uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:border-white focus:outline-none focus:ring-2 focus:ring-red-500"
                     >
                         <CalendarIcon className="h-4 w-4 sm:mr-1 shrink-0" aria-hidden="true" />
-                        <span className="hidden sm:inline truncate mx-1">{profitRange}</span>
+                        <span className="hidden sm:inline truncate mx-1 flex-1 text-center">{profitRange}</span>
                         <ChevronDown className="hidden sm:block h-4 w-4 text-white shrink-0" aria-hidden="true" />
                     </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-40 p-0 rounded-xl border border-red-600 bg-white shadow-lg overflow-hidden">
-                    {['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Annually'].map((range) => (
+                <DropdownMenuContent align="end" className="w-40 min-w-40 p-0 rounded-xl border border-red-600 bg-white shadow-lg overflow-hidden">
+                    {['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Annually', 'Custom'].map((range) => (
                         <DropdownMenuItem
                             key={range}
                             onClick={() => setProfitRange(range as typeof profitRange)}
@@ -197,13 +200,33 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
             </DropdownMenu>
         );
 
+        onSetHeaderActionRight(
+            <div className="flex items-center gap-2">
+                {profitRange === 'Custom' && (
+                    <div className="hidden lg:flex items-center gap-1">
+                        <input type="date" aria-label="Custom start date" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} className="h-10 rounded-md border border-gray-300 px-2 text-xs" />
+                        <span className="text-xs text-gray-500">–</span>
+                        <input type="date" aria-label="Custom end date" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)} className="h-10 rounded-md border border-gray-300 px-2 text-xs" />
+                        <button
+                            type="button"
+                            className="h-10 px-2 text-sm font-bold uppercase text-red-700 border border-red-200 rounded-md bg-white hover:bg-red-50 hover:text-red-700"
+                            onClick={() => { setCustomStartDate(''); setCustomEndDate(''); setProfitRange('Daily'); }}
+                        >
+                            Clear
+                        </button>
+                    </div>
+                )}
+                {rangeMenu}
+            </div>
+        );
+
         return () => onSetHeaderActionRight(null);
-    }, [onSetHeaderActionRight, profitRange]);
+    }, [onSetHeaderActionRight, profitRange, customStartDate, customEndDate]);
 
     const filteredOrders = useMemo(() => {
         const now = new Date();
         let filtered = (orders || []).filter((order: JobOrder) =>
-            order && isDateInRange(orderEventDate(order), profitRange, now)
+            order && isDateInRange(orderEventDate(order), profitRange, now, customStartDate, customEndDate)
         );
 
         if (filterService !== 'all') {
@@ -279,7 +302,7 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
         });
 
         return filtered;
-    }, [orders, profitRange, filterService, filterPriority, filterPaymentStatus, filterOrderStatus, startDate, endDate, searchQuery]);
+    }, [orders, profitRange, customStartDate, customEndDate, filterService, filterPriority, filterPaymentStatus, filterOrderStatus, startDate, endDate, searchQuery]);
 
     const totalPages = Math.ceil(filteredOrders.length / itemsPerPage) || 1;
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -297,6 +320,25 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
 
     return (
         <div className="space-y-6">
+            {profitRange === 'Custom' && (
+                <div className="flex flex-wrap items-end justify-center gap-2 rounded-xl border border-red-100 bg-red-50/60 p-3 lg:hidden">
+                    <label className="flex flex-col gap-1">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Start date</span>
+                        <input type="date" aria-label="Custom start date" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} className="h-10 rounded-md border border-gray-300 bg-white px-2 text-xs" />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">End date</span>
+                        <input type="date" aria-label="Custom end date" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)} className="h-10 rounded-md border border-gray-300 bg-white px-2 text-xs" />
+                    </label>
+                    <button
+                        type="button"
+                        className="h-10 px-3 text-sm font-bold uppercase text-red-700 border border-red-200 rounded-md bg-white hover:bg-red-50 hover:text-red-700"
+                        onClick={() => { setCustomStartDate(''); setCustomEndDate(''); setProfitRange('Daily'); }}
+                    >
+                        Clear
+                    </button>
+                </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <Card className="border-none shadow-lg bg-gradient-to-br from-blue-50 to-white">
                     <CardContent className="pt-6 pb-4">
@@ -353,7 +395,7 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                         <CardTitle className="text-lg font-black uppercase tracking-tight text-gray-900">Orders</CardTitle>
                         <div className="flex flex-wrap md:flex-nowrap items-center gap-2 md:gap-3 w-full">
                             <Button
-                                onClick={() => navigate('/sales-report', { state: { dateRange: profitRange } })}
+                                onClick={() => navigate('/sales-report', { state: { dateRange: profitRange, customStartDate, customEndDate } })}
                                 className="bg-red-600 text-white hover:bg-red-700 h-10 px-3 flex-shrink-0 uppercase text-[11px] font-bold flex items-center gap-2 rounded-xl shadow-sm"
                                 size="sm"
                             >
@@ -398,23 +440,26 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                     </div>
                 </CardHeader>
                 <CardContent className="pt-0">
-                    <div className="overflow-x-auto">
-                        <Table>
-                            <TableHeader>
-                                <TableRow className="bg-[#fef5f3]">
-                                    <TableHead className="font-black text-gray-600 uppercase text-xs">Order #</TableHead>
-                                    <TableHead className="font-black text-gray-600 uppercase text-xs">Customer Name</TableHead>
-                                    <TableHead className="font-black text-gray-600 uppercase text-xs">Service Type</TableHead>
-                                    <TableHead className="font-black text-gray-600 uppercase text-xs">Order Date</TableHead>
-                                    <TableHead className="font-black text-gray-600 uppercase text-xs">Priority Level</TableHead>
-                                    <TableHead className="font-black text-gray-600 uppercase text-xs">Payment Status</TableHead>
-                                    <TableHead className="font-black text-gray-600 uppercase text-xs text-right">Total Amount</TableHead>
+                    <div className="overflow-x-auto -mx-1 px-1">
+                        <Table className="w-full text-sm min-w-[950px]">
+                            <TableHeader className="bg-red-50/50 border-b border-red-100">
+                                <TableRow className="border-b border-red-100 hover:bg-transparent">
+                                    <TableHead className="h-10 px-4 text-left font-black text-gray-700 uppercase tracking-widest text-[11px]">Order #</TableHead>
+                                    <TableHead className="h-10 px-4 text-left font-black text-gray-700 uppercase tracking-widest text-[11px]">Customer</TableHead>
+                                    <TableHead className="h-10 px-4 text-left font-black text-gray-700 uppercase tracking-widest text-[11px]">Services</TableHead>
+                                    <TableHead className="h-10 px-4 text-left font-black text-gray-700 uppercase tracking-widest text-[11px]">QTY</TableHead>
+                                    <TableHead className="h-10 px-4 text-center font-black text-gray-700 uppercase tracking-widest text-[11px]">Order Date</TableHead>
+                                    <TableHead className="h-10 px-4 text-center font-black text-gray-700 uppercase tracking-widest text-[11px]">Estimated Date</TableHead>
+                                    <TableHead className="h-10 px-4 text-left font-black text-gray-700 uppercase tracking-widest text-[11px]">Priority</TableHead>
+                                    <TableHead className="h-10 px-4 text-left font-black text-gray-700 uppercase tracking-widest text-[11px]">Payment</TableHead>
+                                    <TableHead className="h-10 px-4 text-right font-black text-gray-700 uppercase tracking-widest text-[11px]">Total</TableHead>
+                                    <TableHead className="h-10 px-4 text-center font-black text-gray-700 uppercase tracking-widest text-[11px]">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
-                            <TableBody>
+                            <TableBody className="divide-y divide-gray-100">
                                 {paginatedOrders.length === 0 ? (
-                                    <TableRow>
-                                        <TableCell colSpan={7} className="px-6 py-20 text-center">
+                                    <TableRow className="hover:bg-transparent">
+                                        <TableCell colSpan={10} className="px-6 py-20 text-center">
                                             <div className="flex flex-col items-center justify-center space-y-3 opacity-40">
                                                 <ShoppingBag size={48} className="text-gray-300" />
                                                 <p className="text-sm font-black text-gray-400 uppercase tracking-[0.2em]">
@@ -424,39 +469,130 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                                         </TableCell>
                                     </TableRow>
                                 ) : (
-                                    paginatedOrders.map((order) => (
-                                        <TableRow key={order.id} onClick={() => setSelectedOrder(order)} className="hover:bg-red-50/30 cursor-pointer transition-colors">
-                                            <TableCell className="font-semibold text-gray-800">{order.orderNumber || order.id || '-'}</TableCell>
-                                            <TableCell className="font-medium text-gray-800">{order.customerName || 'Walk-In'}</TableCell>
-                                            <TableCell className="text-sm text-gray-700">
-                                                {Array.isArray(order.baseService)
-                                                    ? order.baseService.map((s) => String(s || '').replace(' (with basic cleaning)', '')).join(', ')
-                                                    : String(order.baseService || '-').replace(' (with basic cleaning)', '')}
+                                    paginatedOrders.map((order: JobOrder) => {
+                                        const orderDate = new Date(order.createdAt || (order as any).transactionDate);
+                                        const pStatus = order.paymentStatus || '';
+                                        const servicesList = (Array.isArray(order.baseService)
+                                            ? order.baseService
+                                            : String(order.baseService || '').split(',')
+                                        )
+                                            .map((s) => String(s || '').trim().replace(' (with basic cleaning)', ''))
+                                            .filter(Boolean);
+
+                                        return (
+                                        <TableRow key={order.id} onClick={() => setViewingOrder(order)} className="border-b border-gray-100 hover:bg-gray-50/80 transition-all cursor-pointer">
+                                            <TableCell className="p-4 text-xs font-medium whitespace-nowrap text-gray-800">{order.orderNumber || order.id || '-'}</TableCell>
+                                            <TableCell className="p-4 pr-8">
+                                                <div className="text-xs font-bold text-gray-900 leading-tight max-w-[160px] text-wrap break-words">{order.customerName || 'Walk-In'}</div>
+                                                {order.contactNumber && (
+                                                    <div className="text-xs text-gray-500 mt-1 whitespace-nowrap">{order.contactNumber}</div>
+                                                )}
                                             </TableCell>
-                                            <TableCell className="text-sm text-gray-700">
-                                                {formatNumericDateTime(order.createdAt)}
+                                            <TableCell className="p-4 text-xs font-medium text-gray-700 whitespace-normal">
+                                                {servicesList.length > 0 ? (
+                                                    servicesList.map((srv, idx) => (
+                                                        <div key={idx}>{srv}{idx < servicesList.length - 1 ? ',' : ''}</div>
+                                                    ))
+                                                ) : (
+                                                    <span className="text-gray-400 italic">-</span>
+                                                )}
                                             </TableCell>
-                                            <TableCell className="text-sm text-gray-800">
-                                                {order.priorityLevel === 'rush'
-                                                    ? 'Rush'
-                                                    : order.priorityLevel === 'regular'
-                                                        ? 'Regular'
-                                                        : (order.priorityLevel || 'Normal')}
+                                            <TableCell className="p-4 text-xs font-medium text-gray-700 whitespace-nowrap">
+                                                {order.quantity || 1} PR
                                             </TableCell>
-                                            <TableCell className="text-sm font-semibold text-gray-800">
-                                                {order.paymentStatus === 'fully-paid'
-                                                    ? 'Fully Paid'
-                                                    : order.paymentStatus === 'downpayment'
-                                                        ? 'Downpayment'
-                                                        : order.paymentStatus
-                                                            ? order.paymentStatus.charAt(0).toUpperCase() + order.paymentStatus.slice(1)
-                                                            : 'Pending'}
+                                            <TableCell className="p-4 text-center text-sm font-medium text-gray-700 whitespace-nowrap">
+                                                {isNaN(orderDate.getTime()) ? '-' : (
+                                                    <div className="inline-flex items-center justify-center gap-1.5">
+                                                        <CalendarIcon size={12} className="text-purple-600 shrink-0" />
+                                                        <span>{dateFnsFormat(orderDate, 'MM/dd/yy')}</span>
+                                                    </div>
+                                                )}
                                             </TableCell>
-                                            <TableCell className="text-right font-bold text-sm text-gray-900">
-                                                ₱{(Number(order.grandTotal) || 0).toLocaleString()}
+                                            <TableCell className="p-4 text-center text-sm font-medium text-gray-700 whitespace-nowrap">
+                                                {(() => {
+                                                    if (!order.predictedCompletionDate) return <span className="text-gray-400">-</span>;
+                                                    const d = new Date(order.predictedCompletionDate);
+                                                    if (isNaN(d.getTime())) return <span className="text-gray-400">-</span>;
+                                                    return (
+                                                        <div className="inline-flex items-center justify-center gap-1.5">
+                                                            <CalendarIcon size={12} className="text-emerald-600 shrink-0" />
+                                                            <span>{dateFnsFormat(d, 'MM/dd/yy')}</span>
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </TableCell>
+                                            <TableCell className="p-4">
+                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase border whitespace-nowrap ${
+                                                    order.priorityLevel === 'rush'
+                                                        ? 'bg-red-50 text-red-700 border-red-100'
+                                                        : 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                                }`}>
+                                                    {order.priorityLevel === 'rush' ? 'Rush' : order.priorityLevel === 'regular' ? 'Regular' : (order.priorityLevel || 'Regular')}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell className="p-4">
+                                                <div className="flex flex-col">
+                                                    <span className={`text-xs font-bold tracking-wider whitespace-nowrap ${
+                                                        pStatus === 'fully-paid' ? 'text-green-600' :
+                                                        pStatus === 'downpayment' ? 'text-yellow-600' : 'text-red-600'
+                                                    }`}>
+                                                        {pStatus === 'fully-paid' ? 'FULLY PAID' : pStatus === 'downpayment' ? 'DOWNPAYMENT' : pStatus ? pStatus.toUpperCase() : '-'}
+                                                    </span>
+                                                    {order.paymentMethod && (
+                                                        <>
+                                                            <span className="text-[9px] text-gray-400 font-medium uppercase tracking-wider mt-0.5 whitespace-nowrap">
+                                                                {order.paymentMethod}
+                                                            </span>
+                                                            {pStatus === 'downpayment' && (
+                                                                <span className="text-[10px] text-red-500 font-medium tracking-wider mt-0.5 whitespace-nowrap">
+                                                                    BAL: ₱{Math.max((Number(order.grandTotal) || 0) - (Number(order.amountReceived) || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                                                </span>
+                                                            )}
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="p-4 text-right whitespace-nowrap">
+                                                <div className="flex flex-col items-end">
+                                                    <span className="font-medium text-gray-900">₱{(Number(order.grandTotal) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="p-4 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="outline" className="h-7 px-2 border-red-200 text-red-700 bg-red-50 hover:bg-red-100 font-black text-xs gap-1 rounded-md">
+                                                            <MoreVertical className="h-3.5 w-3.5 text-red-500" />
+                                                            <ChevronDown className="h-3 w-3 opacity-50" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end" className="w-56 p-2 space-y-1">
+                                                        <DropdownMenuItem
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setSelectedOrder(order);
+                                                                setIsEditing(true);
+                                                            }}
+                                                            className="border border-yellow-200 rounded-md px-2.5 py-1.5 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:text-yellow-800 focus:bg-yellow-100 font-bold mb-1 cursor-pointer"
+                                                        >
+                                                            <Edit className="h-4 w-4 mr-2 text-yellow-600" />
+                                                            Edit Order Detail
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setOrderToDelete(order);
+                                                            }}
+                                                            className="border border-red-200 rounded-md px-2.5 py-1.5 text-red-700 bg-red-50 hover:bg-red-100 focus:text-red-800 focus:bg-red-100 font-bold cursor-pointer"
+                                                        >
+                                                            <Trash2 className="h-4 w-4 mr-2 text-red-600" />
+                                                            Delete Order
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
                                             </TableCell>
                                         </TableRow>
-                                    ))
+                                        );
+                                    })
                                 )}
                             </TableBody>
                         </Table>
@@ -629,10 +765,68 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                 </DialogContent>
             </Dialog>
 
+            {/* Edit Order Modal */}
+            {selectedOrder && (
+                <EditOrderModal
+                    open={isEditing}
+                    onOpenChange={(open) => {
+                        setIsEditing(open);
+                        if (!open) setSelectedOrder(null);
+                    }}
+                    order={selectedOrder}
+                    user={user}
+                    onSave={(id, updates) => { 
+                        updateOrder(id, updates); 
+                        setSelectedOrder((prev: any) => prev ? { ...prev, ...updates } : null); 
+                        setIsEditing(false); 
+                    }}
+                />
+            )}
+
+            {/* Delete Confirmation Modal */}
+            <Dialog open={!!orderToDelete} onOpenChange={(open) => !open && setOrderToDelete(null)}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="text-center text-base font-black uppercase tracking-tight">Confirm Soft Delete</DialogTitle>
+                    </DialogHeader>
+                    <div className="py-6 flex flex-col items-center gap-4">
+                        <div className="h-16 w-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center">
+                            <Trash2 size={32} />
+                        </div>
+                        <div className="text-center">
+                            <p className="text-sm font-bold text-gray-900">Are you sure you want to delete this order?</p>
+                            <p className="text-xs text-gray-500 mt-1">This action will remove <span className="font-black text-red-600">{orderToDelete?.orderNumber}</span> from the orders record. This cannot be undone.</p>
+                        </div>
+                    </div>
+                    <div className="flex gap-3">
+                        <Button 
+                            variant="ghost" 
+                            className="flex-1 bg-gray-100 font-bold uppercase text-[10px] tracking-widest h-10 rounded-xl"
+                            onClick={() => setOrderToDelete(null)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button 
+                            variant="destructive" 
+                            className="flex-1 bg-red-600 hover:bg-red-700 font-bold uppercase text-[10px] tracking-widest h-10 rounded-xl shadow-lg shadow-red-100"
+                            onClick={async () => {
+                                if (orderToDelete) {
+                                    await deleteOrder(orderToDelete.id);
+                                    toast.success(`Order ${orderToDelete.orderNumber} deleted successfully`);
+                                    setOrderToDelete(null);
+                                }
+                            }}
+                        >
+                            Yes, Delete
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
             <OrderDetailModal
-                order={selectedOrder}
-                open={!!selectedOrder}
-                onOpenChange={(open) => !open && setSelectedOrder(null)}
+                order={viewingOrder}
+                open={!!viewingOrder}
+                onOpenChange={(open) => !open && setViewingOrder(null)}
             />
         </div>
     );

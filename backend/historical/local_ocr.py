@@ -18,11 +18,13 @@ from typing import Optional, Tuple
 
 from historical.local_ocr_parser import parse_raw_ocr_text
 
+import time
+
 EASYOCR_VERSION = "easyocr-v1"
 TESSERACT_VERSION = "tesseract-v1"
 
 _easyocr_reader = None
-_gemini_quota_exhausted = False
+_gemini_quota_exhausted_until = 0.0
 
 DEFAULT_TESSERACT_PATHS = [
     r"C:\Program Files\Tesseract-OCR\tesseract.exe",
@@ -30,13 +32,13 @@ DEFAULT_TESSERACT_PATHS = [
 ]
 
 
-def mark_gemini_quota_exhausted() -> None:
-    global _gemini_quota_exhausted
-    _gemini_quota_exhausted = True
+def mark_gemini_quota_exhausted(duration_seconds: float = 60.0) -> None:
+    global _gemini_quota_exhausted_until
+    _gemini_quota_exhausted_until = time.time() + float(duration_seconds)
 
 
 def is_gemini_quota_exhausted() -> bool:
-    return _gemini_quota_exhausted
+    return time.time() < _gemini_quota_exhausted_until
 
 
 def _resolve_tesseract_cmd() -> Optional[str]:
@@ -52,17 +54,61 @@ def _resolve_tesseract_cmd() -> Optional[str]:
     return None
 
 
-def _preprocess_image(image_bytes: bytes):
-    from PIL import Image, ImageEnhance, ImageFilter
+def _preprocess_handwritten_image(image_bytes: bytes):
+    """
+    Optimized preprocessing for handwritten receipt slips:
+    1. Upscales small images so handwritten strokes are distinct.
+    2. Converts to grayscale, eliminating yellow/pink carbon paper tint.
+    3. Auto-contrasts and median filters to remove speckles.
+    4. Generates both enhanced contrast grayscale and Otsu-binarized black & white.
+    """
+    from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
     img = Image.open(BytesIO(image_bytes)).convert("RGB")
     w, h = img.size
-    if max(w, h) < 1200:
-        scale = 1200 / max(w, h)
-        img = img.resize((int(w * scale), int(h * scale)), Image.Resampling.LANCZOS)
-    img = ImageEnhance.Contrast(img).enhance(1.4)
-    img = img.filter(ImageFilter.SHARPEN)
-    return img
+    target_side = 1600
+    if max(w, h) < target_side:
+        scale = target_side / float(max(w, h))
+        img = img.resize((max(1, int(w * scale)), max(1, int(h * scale))), Image.Resampling.LANCZOS)
+    elif max(w, h) > 2400:
+        scale = 2400 / float(max(w, h))
+        img = img.resize((max(1, int(w * scale)), max(1, int(h * scale))), Image.Resampling.LANCZOS)
+
+    gray = img.convert("L")
+    gray = ImageOps.autocontrast(gray, cutoff=2)
+    denoised = gray.filter(ImageFilter.MedianFilter(size=3))
+    img_contrast = ImageEnhance.Contrast(denoised).enhance(1.8)
+
+    # Otsu thresholding
+    hist = img_contrast.histogram()
+    total = sum(hist)
+    sum_b = 0
+    w_b = 0
+    max_var = 0.0
+    thresh = 128
+    sum_all = sum(i * hist[i] for i in range(256))
+    for i in range(256):
+        w_b += hist[i]
+        if w_b == 0:
+            continue
+        w_f = total - w_b
+        if w_f == 0:
+            break
+        sum_b += i * hist[i]
+        m_b = sum_b / w_b
+        m_f = (sum_all - sum_b) / w_f
+        var_between = w_b * w_f * (m_b - m_f) ** 2
+        if var_between > max_var:
+            max_var = var_between
+            thresh = i
+
+    img_bin = img_contrast.point(lambda p: 255 if p > thresh else 0)
+    return img_contrast, img_bin
+
+
+def _preprocess_image(image_bytes: bytes):
+    img_contrast, _ = _preprocess_handwritten_image(image_bytes)
+    return img_contrast
 
 
 def _get_easyocr_reader():
@@ -108,10 +154,37 @@ def run_tesseract_ocr(image_bytes: bytes) -> Tuple[str, float]:
     if not cmd:
         raise RuntimeError("Tesseract binary not found")
     pytesseract.pytesseract.tesseract_cmd = cmd
-    img = _preprocess_image(image_bytes)
-    text = pytesseract.image_to_string(img, config="--psm 6 --oem 3")
-    _, confidence = parse_raw_ocr_text(text, TESSERACT_VERSION)
-    return text, confidence
+
+    img_contrast, img_bin = _preprocess_handwritten_image(image_bytes)
+
+    # Handwritten receipt forms have tabular/sparse cells and handwritten notes.
+    # PSM 11 (sparse text) and PSM 4 (single column variable) with LSTM OEM 1
+    # are vastly superior to PSM 6 (single uniform block) on handwriting.
+    candidates = [
+        ("--psm 11 --oem 1 -c preserve_interword_spaces=1", img_bin),
+        ("--psm 11 --oem 1 -c preserve_interword_spaces=1", img_contrast),
+        ("--psm 4 --oem 1 -c preserve_interword_spaces=1", img_contrast),
+        ("--psm 6 --oem 1", img_contrast),
+    ]
+
+    best_text = ""
+    best_conf = 0.0
+
+    for cfg, img_target in candidates:
+        try:
+            text = pytesseract.image_to_string(img_target, config=cfg)
+            if not text or not text.strip():
+                continue
+            _, conf = parse_raw_ocr_text(text, TESSERACT_VERSION)
+            if conf > best_conf or not best_text:
+                best_text = text
+                best_conf = conf
+                if best_conf >= 0.45:
+                    break
+        except Exception:
+            continue
+
+    return best_text, best_conf
 
 
 def run_easyocr_ocr(image_bytes: bytes) -> Tuple[str, float]:

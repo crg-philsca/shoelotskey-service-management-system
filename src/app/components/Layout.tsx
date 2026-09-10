@@ -61,6 +61,7 @@ export default function Layout({ children, user, onLogout, headerAction, headerA
     '/activity-history': 'Activity History',
     '/inventory': 'Inventory Management',
     '/job-order-form/historical-records': 'Historical Records',
+    '/service-management/historical-records': 'Historical Records',
   };
 
   const menuItems = user.role === 'admin' ? adminMenuItems : (user.role === 'owner' ? ownerMenuItems : staffMenuItems);

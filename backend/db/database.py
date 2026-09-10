@@ -297,14 +297,37 @@ def ensure_sqlite_schema_and_defaults(target_engine):
                     existing_cols = {c['name'] for c in inspector.get_columns(table_name)}
                     for col in table_obj.columns:
                         if col.name not in existing_cols:
-                            col_type_str = "VARCHAR(255)" if str(col.type).startswith("VARCHAR") or str(col.type).startswith("String") else "INTEGER DEFAULT 0" if "INT" in str(col.type).upper() else "BOOLEAN DEFAULT 1" if "BOOL" in str(col.type).upper() else "TIMESTAMP NULL"
+                            col_type_upper = str(col.type).upper()
+                            if col_type_upper.startswith("VARCHAR") or col_type_upper.startswith("STRING") or "TEXT" in col_type_upper:
+                                col_type_str = "VARCHAR(255)"
+                            elif "INT" in col_type_upper:
+                                col_type_str = "INTEGER DEFAULT 0"
+                            elif "NUMERIC" in col_type_upper or "FLOAT" in col_type_upper or "DECIMAL" in col_type_upper:
+                                col_type_str = "NUMERIC(10, 2) DEFAULT 0.00"
+                            elif "BOOL" in col_type_upper:
+                                col_type_str = "BOOLEAN DEFAULT 1" if col.name == "is_active" else "BOOLEAN DEFAULT 0"
+                            elif "TIME" in col_type_upper or "DATE" in col_type_upper:
+                                col_type_str = "TIMESTAMP NULL"
+                            else:
+                                col_type_str = "VARCHAR(255)"
                             try:
                                 conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {col.name} {col_type_str}"))
                                 print(f"[OFFLINE MIGRATION] Automatically added column '{col.name}' to local table '{table_name}'.")
                             except Exception:
                                 pass
                                 
-        # 3. Ensure default Roles and Users exist so offline login and viewing users never fail
+        # 3. Clean up legacy/corrupted states in local SQLite
+        with target_engine.begin() as conn:
+            try:
+                conn.execute(text("UPDATE services SET is_active = 0 WHERE service_name IN ('Midsole Full Reglue', 'Undersole Full Reglue');"))
+            except Exception:
+                pass
+            try:
+                conn.execute(text("UPDATE inventory SET is_retail = 0 WHERE (retail_price IS NULL OR retail_price <= 0) AND is_retail = 1;"))
+            except Exception:
+                pass
+
+        # 4. Ensure default Roles and Users exist so offline login and viewing users never fail
         SubSession = sessionmaker(bind=target_engine)
         with SubSession() as ldb:
             if ldb.query(Role).count() == 0:

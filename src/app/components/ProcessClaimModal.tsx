@@ -4,7 +4,7 @@ import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
-import { JobOrder, PaymentMethod, InventoryUsed } from "@/app/types";
+import { JobOrder, PaymentMethod, InventoryUsed, PaymentRecord } from "@/app/types";
 import { CheckCircle2, User, ShieldAlert, Wrench, ShoppingBag, Trash2, Printer, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { formatReferenceNo } from "@/app/lib/utils";
@@ -128,9 +128,7 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
         if (selectedRetailToAdd) {
             const item = inventoryData.find(i => i.id.toString() === selectedRetailToAdd);
             if (item) {
-                const retailPrice = item.is_retail
-                    ? Number(item.retail_price ?? 0)
-                    : Number(item.price || 0);
+                const retailPrice = Number(item.retail_price || 0);
                 setRetailPriceInput(String(retailPrice > 0 ? retailPrice : 0));
             }
         }
@@ -200,8 +198,8 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
     const handleAddRetailProduct = () => {
         const item = inventoryData.find(i => i.id.toString() === selectedRetailToAdd);
         if (!item) return;
-        if (!item.is_retail) {
-            toast.error("Only inventory items marked as Retail can be sold at claim.");
+        if (!item.is_retail || Number(item.retail_price || 0) <= 0) {
+            toast.error("Only inventory items marked as Retail with a valid price can be sold at claim.");
             return;
         }
         const qty = parseFloat(retailQtyInput) || 1;
@@ -342,26 +340,86 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
         };
 
         let currentTotal = effectiveTotal;
+        const finalReason = refundReason === 'Custom Quality / Service Warranty Defect' ? customRefundReason : refundReason;
         if (enableRefund && refundAmount > 0) {
-            const finalReason = refundReason === 'Custom Quality / Service Warranty Defect' ? customRefundReason : refundReason;
             updateData.refundAmount = refundAmount;
             updateData.refundReason = finalReason;
         }
 
+        // Preserve initial payment method and track payment history
+        const initialMethod = order.initialPaymentMethod || order.paymentMethod || 'cash';
+        const initialAmount = order.depositAmount || order.amountReceived || 0;
+        const initialRef = order.referenceNo;
+        const initialDate = order.createdAt || order.transactionDate || timestamp;
+        const initialProcessor = order.processedBy || 'Staff';
+
+        // Prepare existing payment history or synthesize initial entry
+        let existingHistory: PaymentRecord[] = Array.isArray(order.paymentHistory) && order.paymentHistory.length > 0
+            ? [...order.paymentHistory]
+            : [];
+
+        if (existingHistory.length === 0 && initialAmount > 0) {
+            existingHistory.push({
+                id: 'pay-1',
+                paymentType: (order.depositAmount && order.depositAmount > 0) || order.paymentStatus === 'downpayment' ? 'downpayment' : 'full-payment',
+                method: initialMethod,
+                amount: initialAmount,
+                referenceNo: initialRef || undefined,
+                date: initialDate,
+                processedBy: initialProcessor,
+                notes: (order.depositAmount && order.depositAmount > 0) || order.paymentStatus === 'downpayment' ? 'Initial Downpayment' : 'Initial Payment'
+            });
+        }
+
+        let updatedHistory = [...existingHistory];
+
         if (remainingBalance > 0) {
+            const settlementAmt = Math.min(amountReceived, remainingBalance) || remainingBalance;
+            const claimPayRecord: PaymentRecord = {
+                id: `pay-${Date.now()}`,
+                paymentType: 'final-payment',
+                method: paymentMethod,
+                amount: settlementAmt,
+                referenceNo: ['gcash', 'maya'].includes(paymentMethod) ? referenceNo : undefined,
+                date: timestamp,
+                processedBy: currentUser,
+                notes: 'Balance Settlement upon Claim'
+            };
+            updatedHistory.push(claimPayRecord);
+
             updateData.paymentStatus = 'fully-paid';
-            updateData.paymentMethod = paymentMethod;
+            updateData.initialPaymentMethod = initialMethod;
+            updateData.finalPaymentMethod = paymentMethod;
+            // Preserve both payment methods if different (e.g., Maya, Cash) so tables and reports show both
+            const normalizedInitial = String(initialMethod).toLowerCase();
+            const normalizedFinal = String(paymentMethod).toLowerCase();
+            updateData.paymentMethod = normalizedInitial === normalizedFinal ? initialMethod : `${initialMethod}, ${paymentMethod}`;
+            updateData.paymentHistory = updatedHistory;
             updateData.amountReceived = (order.amountReceived || 0) + amountReceived;
             updateData.balance = 0;
             updateData.change = Math.max(0, updateData.amountReceived - currentTotal);
             if (['gcash', 'maya'].includes(paymentMethod)) {
-                updateData.referenceNo = referenceNo;
+                updateData.claimReferenceNo = referenceNo;
             }
+            // Keep original referenceNo or preserve both
+            updateData.referenceNo = order.referenceNo || referenceNo;
         } else {
             updateData.paymentStatus = 'fully-paid';
             updateData.balance = 0;
+            updateData.initialPaymentMethod = initialMethod;
+            updateData.paymentHistory = updatedHistory;
             if (enableRefund && refundAmount > 0) {
                 updateData.amountReceived = Math.max(0, (order.amountReceived || 0) - refundAmount + retailTotal);
+                updatedHistory.push({
+                    id: `pay-refund-${Date.now()}`,
+                    paymentType: 'refund',
+                    method: 'cash',
+                    amount: -refundAmount,
+                    date: timestamp,
+                    processedBy: currentUser,
+                    notes: `Refund: ${finalReason}`
+                });
+                updateData.paymentHistory = updatedHistory;
             } else if (retailTotal > 0) {
                 updateData.amountReceived = (order.amountReceived || 0) + retailTotal;
             }
@@ -382,11 +440,16 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
             baseTotal,
             retailTotal,
             refundAmount: enableRefund ? refundAmount : 0,
-            refundReason: enableRefund ? (refundReason === 'Custom Quality / Service Warranty Defect' ? customRefundReason : refundReason) : null,
+            refundReason: enableRefund ? finalReason : null,
             grandTotal: effectiveTotal,
             amountPaid: updateData.amountReceived || order.amountReceived || effectiveTotal,
-            paymentMethod: remainingBalance > 0 ? paymentMethod : (order.paymentMethod || 'cash'),
+            paymentMethod: updateData.paymentMethod || order.paymentMethod || 'cash',
+            initialPaymentMethod: initialMethod,
+            finalPaymentMethod: remainingBalance > 0 ? paymentMethod : undefined,
+            paymentHistory: updatedHistory,
             referenceNo: remainingBalance > 0 ? referenceNo : order.referenceNo,
+            initialReferenceNo: order.referenceNo,
+            claimReferenceNo: remainingBalance > 0 && ['gcash', 'maya'].includes(paymentMethod) ? referenceNo : undefined,
             change: updateData.change || 0,
             services: order.items || [],
             recordedMaterials,
@@ -405,15 +468,15 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
     return (
         <>
             <Dialog open={open && !showReceipt} onOpenChange={onOpenChange}>
-                <DialogContent className="max-w-[480px] max-h-[88vh] flex flex-col bg-white p-0 gap-0 overflow-hidden border-none shadow-2xl rounded-2xl">
-                    <DialogHeader className="px-5 py-3.5 bg-white border-b border-gray-50 flex flex-row items-center justify-between shrink-0">
+                <DialogContent className="max-w-[500px] w-full h-[85vh] max-h-[700px] flex flex-col bg-white p-0 gap-0 overflow-hidden border-none shadow-2xl rounded-2xl">
+                    <DialogHeader className="px-5 py-3.5 bg-white border-b border-gray-100 flex flex-row items-center justify-between shrink-0">
                         <DialogTitle className="text-[14px] font-black uppercase tracking-tight text-gray-800 flex items-center gap-1.5">
                             <CheckCircle2 className="w-4 h-4 text-red-600" />
                             Process Claim & Finalize Inventory
                         </DialogTitle>
                     </DialogHeader>
 
-                    <div className="p-4 space-y-3.5 overflow-y-auto max-h-[68vh] flex-1 custom-scrollbar">
+                    <div className="p-4 space-y-3.5 overflow-y-auto flex-1 min-h-0 custom-scrollbar">
                         {/* Compact Order Summary Card */}
                         <div className="bg-[#F9FAFB] p-3 rounded-xl border border-gray-100 flex flex-col gap-2 shadow-sm">
                             <div className="flex justify-between items-start border-b border-gray-200/50 pb-2">
@@ -491,7 +554,7 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
                                                     <SelectValue placeholder="Add material..." />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    {inventoryData.filter(i => i.isActive && !i.is_retail).map(item => {
+                                                    {inventoryData.filter(i => i.isActive).map(item => {
                                                         const pres = getInventoryPresentation(item);
                                                         return (
                                                             <SelectItem key={item.id} value={item.id.toString()} className="text-[11px]">
@@ -646,12 +709,12 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
                                                     <SelectValue placeholder="Choose product..." />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    {inventoryData.filter(i => i.isActive && i.is_retail && i.stock > 0).map(item => (
+                                                    {inventoryData.filter(i => i.isActive && Boolean(i.is_retail) && Number(i.retail_price || 0) > 0 && i.stock > 0).map(item => (
                                                         <SelectItem key={item.id} value={item.id.toString()} className="text-[11px]">
-                                                            <span className="font-bold">{item.name}</span> <span className="text-gray-400 font-normal">({item.stock} {item.unit} left • ₱{Number(item.retail_price ?? item.price ?? 0)})</span>
+                                                            <span className="font-bold">{item.name}</span> <span className="text-gray-400 font-normal">({item.stock} {item.unit} left • ₱{Number(item.retail_price || 0).toFixed(2)})</span>
                                                         </SelectItem>
                                                     ))}
-                                                    {inventoryData.filter(i => i.isActive && i.is_retail && i.stock > 0).length === 0 && (
+                                                    {inventoryData.filter(i => i.isActive && Boolean(i.is_retail) && Number(i.retail_price || 0) > 0 && i.stock > 0).length === 0 && (
                                                         <div className="px-3 py-2 text-[10px] font-bold text-gray-400 uppercase">
                                                             No retail items configured — mark items as Retail in Inventory
                                                         </div>
@@ -860,7 +923,7 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
                         </div>
                     </div>
 
-                    <DialogFooter className="bg-[#FAFAFA] border-t border-gray-100 p-3 flex flex-row items-center justify-center gap-3 sm:justify-center">
+                    <DialogFooter className="bg-[#FAFAFA] border-t border-gray-100 p-3 flex flex-row items-center justify-center gap-3 sm:justify-center shrink-0">
                         <Button
                             variant="outline"
                             size="sm"
@@ -886,8 +949,9 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
 
             {/* [REQUIREMENT 5] Customer Claim & Purchase Receipt Modal */}
             <Dialog open={showReceipt} onOpenChange={(val) => { if (!val) { setShowReceipt(false); onOpenChange(false); } }}>
-                <DialogContent className="max-w-[420px] bg-white p-6 rounded-3xl border-none shadow-2xl">
-                    <div id="print-receipt-content" className="space-y-5 text-gray-800 print:p-0 print:m-0 print:shadow-none print:border-none">
+                <DialogContent className="max-w-[440px] w-full h-[85vh] max-h-[700px] flex flex-col bg-white p-0 gap-0 overflow-hidden rounded-3xl border-none shadow-2xl">
+                    <div className="p-6 overflow-y-auto flex-1 min-h-0 custom-scrollbar">
+                        <div id="print-receipt-content" className="space-y-5 text-gray-800 print:p-0 print:m-0 print:shadow-none print:border-none">
                         {/* Receipt Header */}
                         <div className="text-center border-b border-dashed border-gray-200 pb-4 space-y-1">
                             <h3 className="text-sm font-black uppercase tracking-widest text-gray-900">Shoelotskey</h3>
@@ -980,15 +1044,37 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
                                 <span>Grand Total:</span>
                                 <span className="text-emerald-700">₱{claimedOrderSummary?.grandTotal?.toFixed(2)}</span>
                             </div>
-                            <div className="flex justify-between text-[11px] font-bold text-gray-600 pt-1 border-t border-gray-200">
-                                <span>Amount Received ({claimedOrderSummary?.paymentMethod?.toUpperCase()}):</span>
-                                <span>₱{claimedOrderSummary?.amountPaid?.toFixed(2)}</span>
-                            </div>
-                            {claimedOrderSummary?.referenceNo && (
-                                <div className="flex justify-between text-[10px] font-mono text-gray-500">
-                                    <span>Ref No:</span>
-                                    <span>{claimedOrderSummary.referenceNo}</span>
+                            {/* Payment Breakdown / History */}
+                            {claimedOrderSummary?.paymentHistory && claimedOrderSummary.paymentHistory.length > 1 ? (
+                                <div className="pt-2 border-t border-gray-200 space-y-1">
+                                    <span className="text-[9px] font-black uppercase text-gray-400 tracking-wider block">Payment Breakdown</span>
+                                    {claimedOrderSummary.paymentHistory.map((p: any, idx: number) => (
+                                        <div key={idx} className="flex justify-between text-[11px] font-bold text-gray-700">
+                                            <span>
+                                                {p.paymentType === 'downpayment' ? '1. Downpayment' : p.paymentType === 'final-payment' ? '2. Claim Balance' : 'Payment'} ({String(p.method).toUpperCase()}):
+                                                {p.referenceNo && <span className="font-mono text-[9px] text-gray-500 ml-1">Ref: {p.referenceNo}</span>}
+                                            </span>
+                                            <span>₱{Number(p.amount || 0).toFixed(2)}</span>
+                                        </div>
+                                    ))}
+                                    <div className="flex justify-between text-xs font-black text-gray-900 pt-1 border-t border-dashed border-gray-200">
+                                        <span>Total Amount Received:</span>
+                                        <span className="text-emerald-700">₱{claimedOrderSummary?.amountPaid?.toFixed(2)}</span>
+                                    </div>
                                 </div>
+                            ) : (
+                                <>
+                                    <div className="flex justify-between text-[11px] font-bold text-gray-600 pt-1 border-t border-gray-200">
+                                        <span>Amount Received ({claimedOrderSummary?.paymentMethod?.toUpperCase()}):</span>
+                                        <span>₱{claimedOrderSummary?.amountPaid?.toFixed(2)}</span>
+                                    </div>
+                                    {claimedOrderSummary?.referenceNo && (
+                                        <div className="flex justify-between text-[10px] font-mono text-gray-500">
+                                            <span>Ref No:</span>
+                                            <span>{claimedOrderSummary.referenceNo}</span>
+                                        </div>
+                                    )}
+                                </>
                             )}
                             <div className="flex justify-between text-[11px] font-bold text-gray-600">
                                 <span>Change Due:</span>
@@ -1006,9 +1092,10 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
                             <p className="text-[9px] text-gray-400">Processed By: {claimedOrderSummary?.processedBy}</p>
                         </div>
                     </div>
+                </div>
 
                     {/* Action Buttons (Excluded from print) */}
-                    <div className="flex items-center gap-3 pt-4 border-t border-gray-100 print:hidden">
+                    <div className="flex items-center gap-3 p-4 bg-[#FAFAFA] border-t border-gray-100 print:hidden shrink-0">
                         <Button
                             variant="outline"
                             onClick={() => window.print()}

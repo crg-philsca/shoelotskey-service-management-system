@@ -267,6 +267,7 @@ export default function App() {
                     <Route path="/total-orders" element={<ProtectedRoute allowedRoles={allRoles} user={user}><TotalOrders user={user} onSetHeaderActionRight={setHeaderActionRight} /></ProtectedRoute>} />
                     <Route path="/expenses" element={<ProtectedRoute allowedRoles={allRoles} user={user}><Expenses user={user} onSetHeaderActionRight={setHeaderActionRight} /></ProtectedRoute>} />
                     <Route path="/job-order-form/historical-records" element={<ProtectedRoute allowedRoles={['admin']} user={user}><HistoricalRecords user={user} onSetHeaderActionRight={setHeaderActionRight} /></ProtectedRoute>} />
+                    <Route path="/service-management/historical-records" element={<ProtectedRoute allowedRoles={['admin']} user={user}><HistoricalRecords user={user} onSetHeaderActionRight={setHeaderActionRight} /></ProtectedRoute>} />
 
                     <Route 
                       path="/inventory" 

@@ -118,7 +118,7 @@ export interface BaseJobOrderData {
   zipCode?: string;
 
   // Payment
-  paymentMethod?: PaymentMethod;
+  paymentMethod?: PaymentMethod | string;
   paymentStatus?: PaymentStatus;
   amountReceived?: number;
   change?: number;
@@ -128,10 +128,25 @@ export interface BaseJobOrderData {
   releaseTime?: string;
   refundAmount?: number;
   refundReason?: string;
+  initialPaymentMethod?: PaymentMethod | string;
+  finalPaymentMethod?: PaymentMethod | string;
+  claimReferenceNo?: string;
+  paymentHistory?: PaymentRecord[];
 
   // Metadata
   transactionDate: Date;
   processedBy: string;
+}
+
+export interface PaymentRecord {
+  id: string;
+  paymentType: 'downpayment' | 'final-payment' | 'full-payment' | 'additional-payment' | 'refund';
+  method: PaymentMethod | string;
+  amount: number;
+  referenceNo?: string;
+  date: Date | string;
+  processedBy?: string;
+  notes?: string;
 }
 
 export interface ShoeItem {

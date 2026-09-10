@@ -461,7 +461,14 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                         className="hover:bg-gray-50/80 transition-colors cursor-pointer"
                                     >
                                         <td className="px-6 py-4">
-                                            <p className="text-sm font-bold text-gray-900 leading-none">{item.name}</p>
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <p className="text-sm font-bold text-gray-900 leading-none">{item.name}</p>
+                                                {Boolean(item.is_retail) && Number(item.retail_price || 0) > 0 && (
+                                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                        Retail: ₱{Number(item.retail_price).toFixed(2)}
+                                                    </span>
+                                                )}
+                                            </div>
                                             <p className="text-[10px] text-gray-400 mt-1 uppercase font-semibold">Inventory No.: {item.inventory_number || `INV-${item.id.toString().padStart(4, '0')}`}</p>
                                         </td>
                                         <td className="px-6 py-4 text-xs font-bold text-gray-600 uppercase">

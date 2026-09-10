@@ -134,12 +134,15 @@ def _get_client():
 
 
 def _model_name() -> str:
-    return os.getenv("GEMINI_MODEL_NAME", "gemini-2.0-flash")
+    val = os.getenv("GEMINI_MODEL_NAME", "gemini-2.0-flash").strip()
+    if val in ("gemini-3.5-flash", "gemini-3.6-flash", ""):
+        return "gemini-2.0-flash"
+    return val
 
 
 def _fallback_models() -> List[str]:
     primary = _model_name()
-    fallbacks = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-2.0-flash-lite"]
+    fallbacks = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite", "gemini-1.5-pro"]
     seen = {primary}
     ordered = [primary]
     for m in fallbacks:
@@ -195,9 +198,9 @@ def _run_gemini_ocr(
 
     client = _get_client()
     last_err = None
-    models = [_model_name()] if interactive else _fallback_models()
-    max_attempts = 2 if interactive else 4
-    max_sleep = 8 if interactive else 35
+    models = _fallback_models()
+    max_attempts = 1 if interactive else 4
+    max_sleep = 6 if interactive else 35
 
     for model in models:
         for attempt in range(max_attempts):
@@ -334,9 +337,9 @@ def extract_from_bytes(
 
     if interactive:
         image_bytes, mime_type = _prepare_image_for_ocr(image_bytes, mime_type)
-        # Skip EasyOCR cold-start (PyTorch) during interactive review.
         if local_engine == "auto":
-            local_engine = "tesseract"
+            from historical.local_ocr import easyocr_available
+            local_engine = "easyocr" if easyocr_available() else "tesseract"
 
     gemini_stub: Optional[Tuple[Dict[str, Any], float, str]] = None
     if use_gemini and not is_gemini_quota_exhausted():
@@ -350,14 +353,14 @@ def extract_from_bytes(
             engine = data.get("_ocr_model", OCR_VERSION)
             if extraction_is_usable(data):
                 return data, confidence, engine
-            # Keep stub only if local fallback is disabled.
+            # Keep stub only if local fallback is disabled or returns lower quality.
             gemini_stub = (data, confidence, engine)
         except OcrCancelled:
             raise
         except Exception as exc:
             msg = str(exc).lower()
             if "429" in msg or "quota" in msg or "resource_exhausted" in msg:
-                mark_gemini_quota_exhausted()
+                mark_gemini_quota_exhausted(300.0)  # 5-min cooldown — prevents tight fallback loops during batch runs
 
     if is_ocr_cancelled(cancel_key):
         raise OcrCancelled("OCR cancelled by reviewer")
@@ -366,6 +369,25 @@ def extract_from_bytes(
         data, confidence, engine = extract_local_from_bytes(
             image_bytes, engine=local_engine,
         )
+        # For handwritten forms, Gemini partial extraction with recognized fields
+        # should NOT be superseded by crude Tesseract noise.
+        if gemini_stub is not None:
+            g_data, g_conf, g_engine = gemini_stub
+            g_has_entities = bool(
+                g_data.get("customer_name")
+                or g_data.get("contact_number")
+                or g_data.get("grand_total")
+                or (g_data.get("items") and len(g_data["items"]) > 0)
+            )
+            l_has_entities = bool(
+                data.get("customer_name")
+                or data.get("contact_number")
+                or data.get("grand_total")
+                or (data.get("items") and len(data["items"]) > 0)
+            )
+            if (g_has_entities and not l_has_entities) or g_conf >= confidence:
+                return g_data, g_conf, g_engine
+
         if extraction_is_usable(data) or gemini_stub is None:
             return data, confidence, engine
         # Local also empty — return the Gemini stub for audit trail continuity.

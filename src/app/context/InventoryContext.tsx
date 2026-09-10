@@ -207,9 +207,15 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
         const optimisticItem: InventoryItem = {
             ...item,
             id: tempId,
-            status: calculateStatus(item.stock, item.low_stock_threshold, item.package_size)
+            status: calculateStatus(item.stock, item.low_stock_threshold, item.package_size),
+            is_retail: Boolean(item.is_retail),
+            retail_price: item.is_retail ? Number(item.retail_price || 0) : 0
         };
-        setInventoryData(prev => [optimisticItem, ...prev]);
+        setInventoryData(prev => {
+            const updated = [optimisticItem, ...prev];
+            localStorage.setItem('inventory_cache', JSON.stringify(updated));
+            return updated;
+        });
         
         try {
             const res = await fetch(`${API_BASE}/inventory`, {
@@ -219,9 +225,6 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
                     'Authorization': `Bearer ${user.token}`
                 },
                 body: JSON.stringify({
-                    // P1-3 FIX: inventory_number was never sent to the backend, so newly
-                    // created items always landed with a null inventory_number regardless
-                    // of what the Add Item form captured.
                     inventory_number: item.inventory_number || null,
                     item_name: item.name,
                     category: item.category,
@@ -236,12 +239,12 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
                     consumption_unit: item.consumption_unit || '',
                     package_size: item.package_size || 0.0,
                     package_unit: item.package_unit || '',
-                    low_stock_threshold: item.low_stock_threshold || 0.0
+                    low_stock_threshold: item.low_stock_threshold || 0.0,
+                    is_retail: Boolean(item.is_retail),
+                    retail_price: item.is_retail ? Number(item.retail_price || 0) : 0
                 })
             });
             if (res.status === 400 || res.status === 401 || res.status === 403) {
-                // P1-3 FIX: surface the backend's actual validation message (e.g. a clear
-                // duplicate Inventory Number error) instead of a generic status-code toast.
                 let detail = 'Action denied.';
                 try { detail = (await res.json())?.detail || detail; } catch { /* ignore */ }
                 throw new Error(`HTTP_${res.status}::${detail}`);
@@ -255,55 +258,90 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
             console.error("[CRITICAL] Inventory Add failed:", err);
             if (err?.message && err.message.startsWith('HTTP_')) {
                 setInventoryData(oldData);
+                localStorage.setItem('inventory_cache', JSON.stringify(oldData));
                 const detail = err.message.split('::')[1] || 'Action denied (400/401/403).';
                 import('sonner').then(({ toast }) => toast.error(detail));
                 return;
             }
-            const saved = localStorage.getItem('inventory_cache');
-            const cache = saved ? JSON.parse(saved) : [];
-            cache.unshift(optimisticItem);
-            localStorage.setItem('inventory_cache', JSON.stringify(cache));
         }
     };
 
     const updateItem = async (updatedItem: InventoryItem) => {
         const oldData = [...inventoryData];
-        setInventoryData(prev => prev.map(item => item.id === updatedItem.id ? updatedItem : item));
+        const normalizedItem: InventoryItem = {
+            ...updatedItem,
+            is_retail: Boolean(updatedItem.is_retail),
+            retail_price: updatedItem.is_retail ? Number(updatedItem.retail_price || 0) : 0
+        };
+
+        // Optimistic UI Update and immediate cache persistence
+        setInventoryData(prev => {
+            const updated = prev.map(item => item.id === normalizedItem.id ? normalizedItem : item);
+            localStorage.setItem('inventory_cache', JSON.stringify(updated));
+            return updated;
+        });
+
         try {
-            const res = await fetch(`${API_BASE}/inventory/${updatedItem.id}`, {
+            const res = await fetch(`${API_BASE}/inventory/${normalizedItem.id}`, {
                 method: 'PUT',
                 headers: { 
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${user.token}`
                 },
                 body: JSON.stringify({
-                    // P1-3 FIX: inventory_number was never sent on update either, so an
-                    // edited Inventory Number never actually persisted to the backend.
-                    inventory_number: updatedItem.inventory_number || null,
-                    item_name: updatedItem.name,
-                    category: updatedItem.category,
-                    stock_quantity: updatedItem.stock,
-                    unit: updatedItem.unit,
-                    unit_price: updatedItem.price,
-                    is_active: updatedItem.isActive,
-                    status: updatedItem.status,
-                    auto_deduct: updatedItem.auto_deduct || false,
-                    auto_deduct_trigger: updatedItem.auto_deduct_trigger || 'Job Started',
-                    trigger_service: updatedItem.trigger_service || 'All',
-                    consumption_qty: updatedItem.consumption_qty || 0.0,
-                    consumption_unit: updatedItem.consumption_unit || '',
-                    package_size: updatedItem.package_size || 0.0,
-                    package_unit: updatedItem.package_unit || '',
-                    low_stock_threshold: updatedItem.low_stock_threshold || 0.0
+                    inventory_number: normalizedItem.inventory_number || null,
+                    item_name: normalizedItem.name,
+                    category: normalizedItem.category,
+                    stock_quantity: normalizedItem.stock,
+                    unit: normalizedItem.unit,
+                    unit_price: normalizedItem.price,
+                    is_active: normalizedItem.isActive,
+                    status: normalizedItem.status,
+                    auto_deduct: normalizedItem.auto_deduct || false,
+                    auto_deduct_trigger: normalizedItem.auto_deduct_trigger || 'Job Started',
+                    trigger_service: normalizedItem.trigger_service || 'All',
+                    consumption_qty: normalizedItem.consumption_qty || 0.0,
+                    consumption_unit: normalizedItem.consumption_unit || '',
+                    package_size: normalizedItem.package_size || 0.0,
+                    package_unit: normalizedItem.package_unit || '',
+                    low_stock_threshold: normalizedItem.low_stock_threshold || 0.0,
+                    is_retail: normalizedItem.is_retail,
+                    retail_price: normalizedItem.retail_price
                 })
             });
             if (res.status === 400 || res.status === 401 || res.status === 403) {
-                // P1-3 FIX: surface the backend's actual validation message.
                 let detail = 'Update denied.';
                 try { detail = (await res.json())?.detail || detail; } catch { /* ignore */ }
                 throw new Error(`HTTP_${res.status}::${detail}`);
             }
             if (res.ok) {
+                const returned = await res.json();
+                const mappedReturned: InventoryItem = {
+                    id: returned.item_id,
+                    inventory_number: returned.inventory_number,
+                    name: returned.item_name,
+                    category: returned.category,
+                    stock: returned.stock_quantity,
+                    unit: returned.unit,
+                    price: parseFloat(returned.unit_price),
+                    status: returned.status,
+                    isActive: returned.is_active,
+                    auto_deduct: returned.auto_deduct,
+                    auto_deduct_trigger: returned.auto_deduct_trigger,
+                    trigger_service: returned.trigger_service,
+                    consumption_qty: returned.consumption_qty,
+                    consumption_unit: returned.consumption_unit,
+                    package_size: returned.package_size,
+                    package_unit: returned.package_unit,
+                    low_stock_threshold: returned.low_stock_threshold ?? 0,
+                    is_retail: Boolean(returned.is_retail),
+                    retail_price: parseFloat(returned.retail_price || 0)
+                };
+                setInventoryData(prev => {
+                    const updated = prev.map(item => item.id === mappedReturned.id ? mappedReturned : item);
+                    localStorage.setItem('inventory_cache', JSON.stringify(updated));
+                    return updated;
+                });
                 fetchInventory();
             } else {
                 throw new Error("Update failed");
@@ -312,13 +350,14 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
             console.error("[CRITICAL] Inventory Update failed:", err);
             if (err?.message && err.message.startsWith('HTTP_')) {
                 setInventoryData(oldData);
+                localStorage.setItem('inventory_cache', JSON.stringify(oldData));
                 const detail = err.message.split('::')[1] || 'Update denied (400/401/403).';
                 import('sonner').then(({ toast }) => toast.error(detail));
                 return;
             }
             const saved = localStorage.getItem('inventory_cache');
             if (saved) {
-                const cache = JSON.parse(saved).map((i: any) => i.id === updatedItem.id ? updatedItem : i);
+                const cache = JSON.parse(saved).map((i: any) => i.id === normalizedItem.id ? normalizedItem : i);
                 localStorage.setItem('inventory_cache', JSON.stringify(cache));
             }
         }

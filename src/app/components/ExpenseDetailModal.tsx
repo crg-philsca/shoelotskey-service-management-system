@@ -1,6 +1,6 @@
 import { Dialog, DialogContent, DialogTitle } from '@/app/components/ui/dialog';
 import { Button } from '@/app/components/ui/button';
-import { Receipt, Calendar, Tag, FileText, DollarSign, Clock, Pencil, Printer } from 'lucide-react';
+import { Receipt, Calendar, Tag, FileText, Clock } from 'lucide-react';
 
 interface ExpenseDetailModalProps {
   expense: any | null;
@@ -39,7 +39,7 @@ export default function ExpenseDetailModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md bg-white rounded-3xl p-0 overflow-hidden shadow-2xl border border-gray-100">
+      <DialogContent className="max-w-md bg-white rounded-3xl p-0 overflow-hidden shadow-2xl border-0 outline-none ring-0 focus:ring-0 focus-visible:ring-0 sm:max-w-md">
         {/* Header */}
         <div className="bg-red-600 px-6 py-5 text-white">
           <DialogTitle className="text-lg font-black uppercase tracking-wider flex items-center gap-2.5">
@@ -58,8 +58,8 @@ export default function ExpenseDetailModal({
           {/* Main Amount Callout Card */}
           <div className="bg-gradient-to-br from-red-50/70 to-orange-50/30 rounded-2xl p-4 border border-red-100/60 shadow-xs flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-3 bg-red-100/80 rounded-xl text-red-700">
-                <DollarSign size={24} strokeWidth={2.5} />
+              <div className="p-3 bg-red-100/80 rounded-xl text-red-700 flex items-center justify-center min-w-[48px] min-h-[48px]">
+                <span className="text-2xl font-black leading-none tracking-tight">₱</span>
               </div>
               <div>
                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Amount Paid</p>
@@ -110,38 +110,28 @@ export default function ExpenseDetailModal({
           </div>
         </div>
 
-        {/* Footer Actions */}
-        <div className="bg-gray-50 px-6 py-4 border-t border-gray-100 flex items-center justify-between gap-3">
+        {/* Footer Actions — elongated, centered Close + Edit */}
+        <div className="bg-gray-50 px-6 py-4 border-t border-gray-100 flex items-center justify-center gap-3">
           <Button
             type="button"
             variant="outline"
             onClick={() => onOpenChange(false)}
-            className="w-32 h-11 rounded-xl font-bold text-xs uppercase tracking-wider border-gray-200 text-gray-600 hover:bg-gray-100"
+            className="flex-1 max-w-[180px] h-11 rounded-xl font-bold text-xs uppercase tracking-wider border-gray-200 text-gray-600 hover:bg-gray-100"
           >
             Close
           </Button>
-          <div className="flex items-center gap-2">
+          {onEdit && (
             <Button
               type="button"
-              onClick={() => window.print()}
-              variant="outline"
-              className="h-11 px-4 rounded-xl font-bold text-xs uppercase tracking-wider border-gray-200 text-gray-700 hover:bg-gray-100 flex items-center gap-1.5"
+              onClick={() => {
+                onOpenChange(false);
+                onEdit(expense);
+              }}
+              className="flex-1 max-w-[180px] h-11 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md flex items-center justify-center"
             >
-              <Printer size={15} strokeWidth={2} /> Print
+              Edit
             </Button>
-            {onEdit && (
-              <Button
-                type="button"
-                onClick={() => {
-                  onOpenChange(false);
-                  onEdit(expense);
-                }}
-                className="h-11 px-5 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md flex items-center gap-1.5"
-              >
-                <Pencil size={14} strokeWidth={2.5} /> Edit Expense
-              </Button>
-            )}
-          </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>

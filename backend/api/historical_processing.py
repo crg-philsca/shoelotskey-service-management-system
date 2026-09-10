@@ -1357,7 +1357,11 @@ def apply_order_corrections(order, corrections, db: Session, assign_canonical_id
             except Exception:
                 pass
         elif field in ("grand_total", "original_grand_total", "downpayment", "balance"):
-            setattr(order, field, _money_or_none(value))
+            money = _money_or_none(value)
+            # grand_total is NOT NULL — never wipe it with empty OCR/edit input.
+            if field == "grand_total" and money is None:
+                continue
+            setattr(order, field, money)
         elif field in ("discount", "discount_type", "discount_percent", "discount_value"):
             # Persisted on the OCR audit blob below (no dedicated columns).
             continue
@@ -1373,6 +1377,12 @@ def apply_order_corrections(order, corrections, db: Session, assign_canonical_id
 
     # Keep balance coherent with the final (discounted) grand total when both sides are present.
     final_total = _money_or_none(getattr(order, "grand_total", None))
+    if final_total is None:
+        # Required column — fall back to original / zero rather than committing NULL.
+        final_total = _money_or_none(getattr(order, "original_grand_total", None))
+        if final_total is None:
+            final_total = 0.0
+        order.grand_total = final_total
     down = _money_or_none(getattr(order, "downpayment", None))
     if final_total is not None:
         final_total = max(0.0, float(final_total))
@@ -1537,7 +1547,7 @@ def reocr_historical_image(
             path,
             interactive=True,
             cancel_key=cancel_key,
-            local_engine="tesseract",
+            local_engine="auto",
         )
     except OcrCancelled:
         clear_ocr_cancel(cancel_key)

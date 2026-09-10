@@ -1030,6 +1030,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
             barangay: deliveryAddress.barangay,
             zipCode: deliveryAddress.zipCode,
             paymentMethod,
+            initialPaymentMethod: paymentMethod,
             paymentStatus,
             amountReceived: totals.amountReceivedNum,
             balance: totals.remainingBalance,
@@ -1037,6 +1038,18 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
             referenceNo,
             // shelfLocation removed
             depositAmount: parseFloat(depositAmount) || 0,
+            paymentHistory: [
+                {
+                    id: `pay-${Date.now()}`,
+                    paymentType: paymentStatus === 'downpayment' ? 'downpayment' : 'full-payment',
+                    method: paymentMethod,
+                    amount: totals.amountReceivedNum,
+                    referenceNo: ['gcash', 'maya'].includes(paymentMethod) ? referenceNo : undefined,
+                    date: createdDate,
+                    processedBy: user?.username || 'Current User',
+                    notes: paymentStatus === 'downpayment' ? 'Initial Downpayment' : 'Full Payment'
+                }
+            ],
             releaseTime,
             transactionDate: createdDate,
             processedBy: user?.username || 'Current User',

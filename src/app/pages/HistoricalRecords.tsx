@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   Archive, Plus, Download, Search, Trash2, Edit2, Eye,
@@ -871,6 +872,7 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
   editRecord: HistoricalRecord | null,
   setEditRecord: (v: HistoricalRecord | null) => void
 }) {
+  const navigate = useNavigate();
   const [records, setRecords] = useState<HistoricalRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -1019,7 +1021,7 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between w-full gap-2 mb-4">
         <div className="flex items-center gap-2 flex-1">
-          <Button onClick={() => window.location.href = '/service-management'}
+          <Button onClick={() => navigate('/service-management')}
             className="h-9 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white text-[11px] font-black uppercase tracking-widest shadow-md flex items-center gap-1.5 shrink-0">
             <ChevronLeft className="h-4 w-4" /> BACK
           </Button>
@@ -1448,6 +1450,7 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
 // ─── TAB: ANALYTICS ──────────────────────────────────────────────────────────
 
 function AnalyticsTab({ user }: { user: HistoricalRecordsProps['user'] }) {
+  const navigate = useNavigate();
   const [data, setData] = useState<any>(null);
   const [modelInfo, setModelInfo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -1504,7 +1507,7 @@ function AnalyticsTab({ user }: { user: HistoricalRecordsProps['user'] }) {
       {/* Filters & Controls */}
       <div className="flex flex-wrap items-center justify-between w-full gap-2">
         <div className="flex items-center gap-2">
-          <Button onClick={() => window.location.href = '/job-order-form'}
+          <Button onClick={() => navigate('/service-management')}
             className="h-9 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white text-[11px] font-black uppercase tracking-widest shadow-md flex items-center gap-1.5 shrink-0 mr-2">
             <ChevronLeft className="h-4 w-4" /> BACK
           </Button>
@@ -1716,6 +1719,7 @@ function AnalyticsTab({ user }: { user: HistoricalRecordsProps['user'] }) {
 // ─── TAB: MACHINE LEARNING ────────────────────────────────────────────────────
 
 function MachineLearningTab({ user }: { user: HistoricalRecordsProps['user'] }) {
+  const navigate = useNavigate();
   const [modelInfo, setModelInfo] = useState<any>(null);
   const [liveStats, setLiveStats] = useState<any>(null);
   const [predictions, setPredictions] = useState<any[]>([]);
@@ -1794,7 +1798,7 @@ function MachineLearningTab({ user }: { user: HistoricalRecordsProps['user'] }) 
     <div className="space-y-6">
       {/* Top Controls */}
       <div className="flex flex-wrap items-center justify-between w-full gap-2">
-        <Button onClick={() => window.location.href = '/job-order-form'}
+        <Button onClick={() => navigate('/service-management')}
           className="h-9 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white text-[11px] font-black uppercase tracking-widest shadow-md flex items-center gap-1.5 shrink-0">
           <ChevronLeft className="h-4 w-4" /> BACK
         </Button>
@@ -2048,6 +2052,7 @@ function MachineLearningTab({ user }: { user: HistoricalRecordsProps['user'] }) 
 // ─── ARCHIVES TAB ─────────────────────────────────────────────────────────────
 
 function ArchivesTab({ user }: { user: HistoricalRecordsProps['user'] }) {
+  const navigate = useNavigate();
   const [archives, setArchives] = useState<{ month: string; year: string; filename: string; url: string; pdf_count?: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -2088,6 +2093,12 @@ function ArchivesTab({ user }: { user: HistoricalRecordsProps['user'] }) {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
+      <div className="flex items-center justify-between w-full">
+        <Button onClick={() => navigate('/service-management')}
+          className="h-9 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white text-[11px] font-black uppercase tracking-widest shadow-md flex items-center gap-1.5 shrink-0">
+          <ChevronLeft className="h-4 w-4" /> BACK
+        </Button>
+      </div>
       <Card className="border-gray-100 shadow-sm rounded-2xl overflow-hidden">
         <CardHeader className="bg-gray-50/50 border-b border-gray-100 pb-4">
           <CardTitle className="text-sm font-black uppercase tracking-widest text-gray-700 flex items-center gap-2">
@@ -2135,6 +2146,7 @@ function ArchivesTab({ user }: { user: HistoricalRecordsProps['user'] }) {
 type Tab = 'records' | 'analytics' | 'ml' | 'ocr' | 'archives';
 
 export default function HistoricalRecords({ user, onSetHeaderActionRight }: HistoricalRecordsProps) {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>('records');
   const [showForm, setShowForm] = useState(false);
   const [editRecord, setEditRecord] = useState<HistoricalRecord | null>(null);
@@ -2142,10 +2154,20 @@ export default function HistoricalRecords({ user, onSetHeaderActionRight }: Hist
 
   useEffect(() => {
     if (onSetHeaderActionRight) {
-      onSetHeaderActionRight(null);
+      onSetHeaderActionRight(
+        <Button
+          onClick={() => navigate('/service-management')}
+          className="h-9 px-3 rounded-lg border border-red-200 bg-white text-red-700 hover:bg-red-50 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-xs transition"
+          title="Back to Service Management"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          <span className="hidden sm:inline">Back to Services</span>
+          <span className="sm:hidden">Back</span>
+        </Button>
+      );
     }
     return () => { if (onSetHeaderActionRight) onSetHeaderActionRight(null); };
-  }, [onSetHeaderActionRight]);
+  }, [onSetHeaderActionRight, navigate]);
 
   const tabs: { key: Tab; label: string; icon: React.ElementType; ownerOnly?: boolean }[] = [
     { key: 'records',   label: 'Records',          icon: Archive },

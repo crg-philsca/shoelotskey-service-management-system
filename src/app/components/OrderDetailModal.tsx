@@ -177,6 +177,53 @@ export default function OrderDetailModal({
   const isClaimed = order.status === 'claimed';
   const isForRelease = order.status === 'for-release' || isClaimed;
 
+  // Resolve or synthesize payment history
+  const paymentHistory: any[] = (() => {
+    if (Array.isArray(order.paymentHistory) && order.paymentHistory.length > 0) {
+      return order.paymentHistory;
+    }
+    const history: any[] = [];
+    const dpAmt = order.depositAmount || (order.paymentStatus === 'downpayment' ? order.amountReceived : 0) || 0;
+    const totalRecv = order.amountReceived || 0;
+    const initialMethod = order.initialPaymentMethod || order.paymentMethod || 'cash';
+    const finalMethod = order.finalPaymentMethod;
+
+    if (dpAmt > 0 && totalRecv > dpAmt && isClaimed) {
+      history.push({
+        id: 'pay-1',
+        paymentType: 'downpayment',
+        method: initialMethod,
+        amount: dpAmt,
+        referenceNo: order.referenceNo,
+        date: order.createdAt || order.transactionDate,
+        processedBy: order.processedBy || 'Staff',
+        notes: 'Initial Downpayment'
+      });
+      history.push({
+        id: 'pay-2',
+        paymentType: 'final-payment',
+        method: finalMethod || (String(order.paymentMethod || '').includes(',') ? String(order.paymentMethod).split(',')[1].trim() : 'cash'),
+        amount: Math.max(0, totalRecv - dpAmt),
+        referenceNo: (order as any).claimReferenceNo,
+        date: order.actualCompletionDate || order.updatedAt,
+        processedBy: order.claimedBy || order.releasedBy || 'Staff',
+        notes: 'Balance Settlement upon Claim'
+      });
+    } else if (totalRecv > 0) {
+      history.push({
+        id: 'pay-1',
+        paymentType: dpAmt > 0 || order.paymentStatus === 'downpayment' ? 'downpayment' : 'full-payment',
+        method: initialMethod,
+        amount: totalRecv,
+        referenceNo: order.referenceNo,
+        date: order.createdAt || order.transactionDate,
+        processedBy: order.processedBy || 'Staff',
+        notes: dpAmt > 0 || order.paymentStatus === 'downpayment' ? 'Initial Downpayment' : 'Full Payment'
+      });
+    }
+    return history;
+  })();
+
   const safeInventoryUsed: any[] = Array.isArray(order?.inventoryUsed)
     ? order.inventoryUsed
     : (typeof order?.inventoryUsed === 'string'
@@ -668,7 +715,7 @@ export default function OrderDetailModal({
               </span>
             </div>
 
-            <div className={`grid gap-4 ${['gcash', 'maya'].includes(order.paymentMethod?.toLowerCase() || '') && order.referenceNo ? 'grid-cols-3' : 'grid-cols-2'}`}>
+            <div className={`grid gap-4 ${['gcash', 'maya'].includes(order.paymentMethod?.toLowerCase() || '') && order.referenceNo && paymentHistory.length <= 1 ? 'grid-cols-3' : 'grid-cols-2'}`}>
               <div className="text-left">
                 <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block">
                   Method
@@ -678,8 +725,8 @@ export default function OrderDetailModal({
                 </p>
               </div>
 
-              <div className={['gcash', 'maya'].includes(order.paymentMethod?.toLowerCase() || '') && order.referenceNo ? 'text-center' : 'text-right'}>
-                <Label className={`text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block ${['gcash', 'maya'].includes(order.paymentMethod?.toLowerCase() || '') && order.referenceNo ? 'text-center' : 'text-right'}`}>
+              <div className={['gcash', 'maya'].includes(order.paymentMethod?.toLowerCase() || '') && order.referenceNo && paymentHistory.length <= 1 ? 'text-center' : 'text-right'}>
+                <Label className={`text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block ${['gcash', 'maya'].includes(order.paymentMethod?.toLowerCase() || '') && order.referenceNo && paymentHistory.length <= 1 ? 'text-center' : 'text-right'}`}>
                   Amount Received
                 </Label>
                 <p className="text-sm font-bold text-slate-800">
@@ -690,7 +737,7 @@ export default function OrderDetailModal({
                 </p>
               </div>
 
-              {['gcash', 'maya'].includes(order.paymentMethod?.toLowerCase() || '') && order.referenceNo && (
+              {['gcash', 'maya'].includes(order.paymentMethod?.toLowerCase() || '') && order.referenceNo && paymentHistory.length <= 1 && (
                 <div className="text-right">
                   <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block text-right">
                     Reference Number
@@ -698,6 +745,57 @@ export default function OrderDetailModal({
                   <p className="text-sm font-mono font-bold text-slate-900 tracking-tight">
                     {order.referenceNo}
                   </p>
+                </div>
+              )}
+
+              {/* Payment History Breakdown Section */}
+              {paymentHistory.length > 0 && (
+                <div className="pt-2 border-t border-slate-200/60 col-span-full space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                      Payment History
+                    </Label>
+                    <span className="text-[10px] font-bold text-slate-500">
+                      {paymentHistory.length} transaction{paymentHistory.length > 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {paymentHistory.map((p, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-2.5 rounded-lg bg-white border border-slate-200/80 shadow-2xs">
+                        <div className="flex items-center gap-2.5">
+                          <div className={`p-1.5 rounded-md ${p.paymentType === 'downpayment' ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                            {p.paymentType === 'downpayment' ? <Wallet size={14} /> : <CheckCircle2 size={14} />}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-bold text-slate-800">
+                                {p.paymentType === 'downpayment' ? 'Downpayment' : p.paymentType === 'final-payment' ? 'Balance Settled (Claim)' : 'Payment'}
+                              </span>
+                              <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                                {p.method}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-slate-400 flex flex-wrap items-center gap-2 mt-0.5">
+                              {p.referenceNo && (
+                                <span>Ref: <span className="font-mono font-bold text-slate-600">{p.referenceNo}</span></span>
+                              )}
+                              {p.date && (
+                                <span>• {new Date(p.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                              )}
+                              {p.processedBy && (
+                                <span>• By: {p.processedBy}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-xs font-black text-slate-900">
+                            ₱{Number(p.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -1000,10 +1098,24 @@ export default function OrderDetailModal({
                 </div>
                 <div className="border-b border-dashed border-gray-300 my-1"></div>
                 
-                <div className="flex justify-between items-center text-slate-600">
-                  <span>Deposit Paid</span>
-                  <span className="font-bold text-slate-900">₱{(order.paymentStatus === 'downpayment' ? (order.amountReceived || (order.grandTotal || 0) / 2) : (order.amountReceived || 0)).toFixed(2)}</span>
-                </div>
+                {paymentHistory && paymentHistory.length > 0 ? (
+                  <div className="space-y-1 pt-0.5">
+                    {paymentHistory.map((p: any, idx: number) => (
+                      <div key={idx} className="flex justify-between items-center text-slate-600">
+                        <span>
+                          {p.paymentType === 'downpayment' ? 'Downpayment' : p.paymentType === 'final-payment' ? 'Balance Paid' : 'Payment'}
+                          {' '}({String(p.method || 'cash').toUpperCase()}{p.referenceNo ? ` · Ref: ${p.referenceNo}` : ''})
+                        </span>
+                        <span className="font-bold text-slate-900">₱{Number(p.amount || 0).toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span>Deposit Paid</span>
+                    <span className="font-bold text-slate-900">₱{(order.paymentStatus === 'downpayment' ? (order.amountReceived || (order.grandTotal || 0) / 2) : (order.amountReceived || 0)).toFixed(2)}</span>
+                  </div>
+                )}
                 
                 <div className="flex justify-between items-center text-slate-600">
                   <span>Balance Due</span>

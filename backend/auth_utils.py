@@ -76,7 +76,15 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Security(securi
                     ).first()
                     
                     if not recent_timeout:
-                        log_audit(db=db, action="SESSION_TIMEOUT", table_name="auth", record_id=user.user_id, user=user, module="Authentication", new_values={"status": "session_expired"})
+                        log_audit(
+                            db=db,
+                            action="SESSION_TIMEOUT",
+                            table_name="auth",
+                            record_id=user.user_id,
+                            user=user,
+                            module="Authentication",
+                            new_values={"status": "session_expired", "username": user.username},
+                        )
         except Exception:
             pass
         raise HTTPException(status_code=401, detail="Session expired - Please log in again")
@@ -156,11 +164,64 @@ def require_role(role_name):
     return role_checker
 
 def sanitize_error(message: str) -> str:
-    """OWASP A10: EXCEPTIONAL CONDITIONS MISHANDLING PREVENTON."""
-    # Ensure raw tracebacks aren't exposed to the user
-    if "SQLAlchemy" in message or "database" in message.lower():
-        return "A database operation error occurred. Contact administrator."
-    return message
+    """OWASP A10: do not expose raw SQL / stack traces to clients or audit UIs."""
+    return humanize_server_error(message)
+
+
+def humanize_server_error(message: str) -> str:
+    """
+    Convert raw exception / SQLAlchemy text into a short Owner-readable sentence.
+    Safe for Activity History Inspect and API error responses.
+    """
+    text = str(message or "").strip()
+    if not text:
+        return "An unexpected server error occurred. Please try again."
+
+    lower = text.lower()
+
+    if "not null constraint failed" in lower and "grand_total" in lower:
+        return (
+            "Historical order could not be saved because Grand Total was empty. "
+            "Enter a grand total (or clear the discount and restore the total), then save again."
+        )
+    if "not null constraint failed" in lower:
+        field = "a required field"
+        if ":" in text:
+            # e.g. NOT NULL constraint failed: historical_orders.grand_total
+            try:
+                field = text.split(":", 1)[1].strip().split()[0].split(".")[-1].replace("_", " ")
+            except Exception:
+                pass
+        return f"Save blocked: {field} is required and was empty."
+
+    if "unique constraint" in lower or "duplicate key" in lower:
+        return "Save blocked: that value already exists (duplicate record)."
+
+    if "foreign key" in lower:
+        return "Save blocked: a related record is missing or invalid."
+
+    if any(
+        token in lower
+        for token in (
+            "sqlalchemy",
+            "integrityerror",
+            "operationalerror",
+            "psycopg",
+            "sqlite3",
+            "[sql:",
+            "background on this error",
+        )
+    ):
+        return "A database operation failed. Please verify the form values and try again."
+
+    if "traceback" in lower or "file \"" in lower:
+        return "An unexpected server error occurred. Please try again."
+
+    # Cap any residual message — never ship multi-KB SQL parameter dumps to the UI.
+    cleaned = " ".join(text.split())
+    if len(cleaned) > 180:
+        cleaned = cleaned[:177].rstrip() + "…"
+    return cleaned
 
 
 LOCAL_VITE_ORIGIN = "http://localhost:5173"

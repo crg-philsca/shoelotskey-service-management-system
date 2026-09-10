@@ -9,7 +9,6 @@ import {
   Copy,
   Check,
   Info,
-  Edit,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { InventoryItem } from '@/app/types';
@@ -118,11 +117,20 @@ export default function InventoryDetailModal({
               </div>
               <div className="text-right">
                 <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block">
-                  Unit Price
+                  Unit Cost / Retail Price
                 </Label>
                 <p className="text-base font-extrabold text-slate-900">
-                  ₱{(item.price || 0).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}
+                  Cost: ₱{(item.price || 0).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}
                 </p>
+                {Boolean(item.is_retail) && Number(item.retail_price || 0) > 0 ? (
+                  <span className="inline-block mt-1 text-[10px] font-black uppercase px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md">
+                    Retail: ₱{Number(item.retail_price).toFixed(2)}
+                  </span>
+                ) : (
+                  <span className="inline-block mt-1 text-[10px] font-medium text-slate-400">
+                    Not for retail sale
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -247,18 +255,6 @@ export default function InventoryDetailModal({
 
         {/* Footer Actions */}
         <div className="p-4 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between gap-3">
-          {onEdit && (
-            <Button
-              className="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs py-2 h-10 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-md"
-              onClick={() => {
-                onOpenChange(false);
-                onEdit(item);
-              }}
-            >
-              <Edit size={14} />
-              Edit Inventory Item
-            </Button>
-          )}
           <Button
             variant="outline"
             className="flex-1 border-slate-200 text-slate-700 hover:bg-slate-100 font-bold text-xs py-2 h-10 rounded-xl transition-colors"
@@ -266,6 +262,17 @@ export default function InventoryDetailModal({
           >
             Close
           </Button>
+          {onEdit && (
+            <Button
+              className="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold text-xs py-2 h-10 rounded-xl flex items-center justify-center transition-colors shadow-md"
+              onClick={() => {
+                onOpenChange(false);
+                onEdit(item);
+              }}
+            >
+              Edit
+            </Button>
+          )}
         </div>
       </DialogContent>
     </Dialog>

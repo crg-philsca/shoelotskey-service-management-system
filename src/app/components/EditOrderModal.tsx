@@ -111,7 +111,7 @@ interface EditOrderModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSave?: (id: string, updates: Partial<JobOrder>) => void;
-    user?: { username: string; role: 'owner' | 'staff' | 'admin' };
+    user?: { username?: string; role?: 'owner' | 'staff' | 'admin' | string; token?: string };
 }
 
 const SECTION_TITLE = "text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2";

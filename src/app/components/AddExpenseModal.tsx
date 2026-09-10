@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/app/components/ui/textarea';
 import { toast } from 'sonner';
 import { Search, Plus, Trash2, Users, Package } from 'lucide-react';
+import { EXPENSE_CATEGORIES, cleanExpenseCategory } from '@/app/lib/expenseCategories';
 
 interface AddExpenseModalProps {
     isOpen: boolean;
@@ -15,20 +16,6 @@ interface AddExpenseModalProps {
     onEditExpense?: (id: string, expense: any) => void;
     initialData?: any | null;
 }
-
-const EXPENSE_CATEGORIES = [
-    'Water',
-    'Internet',
-    'Staff Salary',
-    'Logistics',
-    'Cleaning Materials',
-    'Cleaning Aids',
-    'Chemicals',
-    'Food',
-    'Rent',
-    'Electricity',
-    'Other (Manual Insert)'
-];
 
 const LABEL_STYLE = "text-[11px] font-bold text-gray-500 mb-1 block uppercase tracking-tight";
 const INPUT_STYLE = "bg-[#F8F9FA] border-gray-100 h-9 text-xs focus:ring-red-50 focus:border-red-100 transition-all";
@@ -109,8 +96,8 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditE
             if (initialData) {
                 let cat = initialData.category;
                 // Clean legacy tags like "(Monthly)" if present when editing
-                const cleanCat = cat.replace(/\s*\((Monthly|Daily|Weekly|Quarterly|Yearly)\)/gi, '');
-                const isCustom = !EXPENSE_CATEGORIES.includes(cleanCat);
+                const cleanCat = cleanExpenseCategory(cat);
+                const isCustom = !(EXPENSE_CATEGORIES as readonly string[]).includes(cleanCat);
                 setCategory(isCustom ? 'Other (Manual Insert)' : cleanCat);
                 if (isCustom) setCustomCategory(cleanCat);
                 

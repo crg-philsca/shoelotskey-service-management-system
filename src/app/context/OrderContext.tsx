@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, ReactNode, useEffect, useRef, useMemo } from 'react';
-import { JobOrder } from '@/app/types';
+import { JobOrder, PaymentRecord } from '@/app/types';
 import { useActivities } from './ActivityContext';
 // P1-10 FIX: centralized API base resolution (see src/app/lib/apiBase.ts).
 import { API_BASE } from '@/app/lib/apiBase';
@@ -213,15 +213,95 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                 ).reduce((sum: number, s: any) => sum + (parseFloat(s.base_price) || 0) * (currItem.quantity || 1), 0) || 0)
                 , 0) || 0,
             priorityLevel: (bo.priority?.priority_name || bo.priority || 'regular').toLowerCase() as any,
-            paymentStatus: (bo.payments?.[0]?.p_status?.status_name || 'fully-paid').toLowerCase() as any,
-            paymentMethod: (bo.payments?.[0]?.method?.method_name || 'cash').toLowerCase() as any,
+            ...(() => {
+                const paymentsList: any[] = bo.payments || [];
+                let paymentHistory: PaymentRecord[] = [];
+
+                if (paymentsList.length > 1) {
+                    paymentHistory = paymentsList.map((p: any, idx: number) => {
+                        const isDP = idx === 0 && ((parseFloat(p.deposit_amount) || 0) > 0 || (p.p_status?.status_name || '').toLowerCase() === 'downpayment');
+                        return {
+                            id: p.payment_id ? String(p.payment_id) : `pay-${idx + 1}`,
+                            paymentType: isDP ? 'downpayment' : 'final-payment',
+                            method: (p.method?.method_name || 'cash').toLowerCase(),
+                            amount: parseFloat(p.amount_received) || 0,
+                            referenceNo: p.reference_no || undefined,
+                            date: p.created_at ? parseUTC(p.created_at) : parseUTC(bo.created_at),
+                            processedBy: idx === 0 ? (bo.processor?.username || 'Staff') : (bo.status_logs?.find((sl: any) => (sl.status?.status_name || '').toLowerCase() === 'claimed')?.user?.username || 'Staff'),
+                            notes: isDP ? 'Initial Downpayment' : 'Balance Settlement upon Claim'
+                        };
+                    });
+                } else if (paymentsList.length === 1) {
+                    const p = paymentsList[0];
+                    const dpAmt = parseFloat(p.deposit_amount) || 0;
+                    const totalRecv = parseFloat(p.amount_received) || 0;
+                    const isClaimedOrFull = (bo.status?.status_name || '').toLowerCase() === 'claimed' || (p.p_status?.status_name || '').toLowerCase() === 'fully-paid';
+
+                    if (dpAmt > 0 && isClaimedOrFull && totalRecv > dpAmt) {
+                        paymentHistory = [
+                            {
+                                id: 'pay-1',
+                                paymentType: 'downpayment',
+                                method: (p.method?.method_name || 'cash').toLowerCase(),
+                                amount: dpAmt,
+                                referenceNo: p.reference_no || undefined,
+                                date: p.created_at ? parseUTC(p.created_at) : parseUTC(bo.created_at),
+                                processedBy: bo.processor?.username || 'Staff',
+                                notes: 'Initial Downpayment'
+                            },
+                            {
+                                id: 'pay-2',
+                                paymentType: 'final-payment',
+                                method: 'cash',
+                                amount: Math.max(0, totalRecv - dpAmt),
+                                date: bo.claimed_at ? parseUTC(bo.claimed_at) : parseUTC(bo.updated_at || bo.created_at),
+                                processedBy: bo.status_logs?.find((sl: any) => (sl.status?.status_name || '').toLowerCase() === 'claimed')?.user?.username || 'Staff',
+                                notes: 'Balance Settlement upon Claim'
+                            }
+                        ];
+                    } else {
+                        paymentHistory = [
+                            {
+                                id: 'pay-1',
+                                paymentType: dpAmt > 0 || (p.p_status?.status_name || '').toLowerCase() === 'downpayment' ? 'downpayment' : 'full-payment',
+                                method: (p.method?.method_name || 'cash').toLowerCase(),
+                                amount: totalRecv,
+                                referenceNo: p.reference_no || undefined,
+                                date: p.created_at ? parseUTC(p.created_at) : parseUTC(bo.created_at),
+                                processedBy: bo.processor?.username || 'Staff',
+                                notes: dpAmt > 0 ? 'Initial Downpayment' : 'Full Payment'
+                            }
+                        ];
+                    }
+                }
+
+                const initialMethod = paymentHistory.length > 0 ? paymentHistory[0].method : (bo.payments?.[0]?.method?.method_name || 'cash').toLowerCase();
+                const finalMethod = paymentHistory.length > 1 ? paymentHistory[paymentHistory.length - 1].method : undefined;
+                const totalReceived = paymentHistory.length > 0
+                    ? paymentHistory.reduce((sum, p) => sum + (p.amount || 0), 0)
+                    : (parseFloat(bo.payments?.[0]?.amount_received) || 0);
+                const combinedMethod = finalMethod && finalMethod !== initialMethod
+                    ? `${initialMethod}, ${finalMethod}`
+                    : initialMethod;
+                const latestStatus = paymentsList.length > 1
+                    ? (paymentsList[paymentsList.length - 1]?.p_status?.status_name || 'fully-paid').toLowerCase()
+                    : (bo.payments?.[0]?.p_status?.status_name || 'fully-paid').toLowerCase();
+
+                return {
+                    paymentStatus: latestStatus as any,
+                    paymentMethod: combinedMethod as any,
+                    initialPaymentMethod: initialMethod,
+                    finalPaymentMethod: finalMethod,
+                    amountReceived: totalReceived,
+                    change: Math.max(0, totalReceived - (parseFloat(bo.grand_total) || 0)),
+                    referenceNo: bo.payments?.[0]?.reference_no || paymentHistory.find(p => p.referenceNo)?.referenceNo || '',
+                    depositAmount: parseFloat(bo.payments?.[0]?.deposit_amount) || (paymentHistory.find(p => p.paymentType === 'downpayment')?.amount || 0),
+                    paymentHistory
+                };
+            })(),
             shippingPreference: (bo.delivery?.preference?.pref_name || 'pickup').toLowerCase() as any,
             deliveryAddress: bo.delivery?.delivery_address || '',
             deliveryCourier: bo.delivery?.delivery_courier || '',
-            amountReceived: parseFloat(bo.payments?.[0]?.amount_received) || 0,
-            change: Math.max(0, (parseFloat(bo.payments?.[0]?.amount_received) || 0) - (parseFloat(bo.grand_total) || 0)),
-            referenceNo: bo.payments?.[0]?.reference_no || '',
-            depositAmount: parseFloat(bo.payments?.[0]?.deposit_amount) || 0,
             releaseTime: bo.delivery?.release_time || '',
             province: bo.delivery?.province || '',
             city: bo.delivery?.city || '',
