@@ -35,6 +35,7 @@ import { toast } from 'sonner';
 import { useOrders } from '@/app/context/OrderContext';
 import type { JobOrder } from '@/app/types';
 import { calculateOfficialReleaseBreakdown } from '@/app/lib/businessRules';
+import StockUpdateModal from '@/app/components/StockUpdateModal';
 
 interface OrderDetailModalProps {
   order: JobOrder | null;
@@ -120,6 +121,7 @@ export default function OrderDetailModal({
   const [pairReleaseDate, setPairReleaseDate] = useState<string>('');
   const [pairClaimedDate, setPairClaimedDate] = useState<string>('');
   const [isUpdatingPair, setIsUpdatingPair] = useState(false);
+  const [isStockModalOpen, setIsStockModalOpen] = useState(false);
   const { orders, updateOrder } = useOrders();
 
   // Dynamically retrieve the real-time updated order from OrderContext so edits are reflected immediately
@@ -1323,8 +1325,8 @@ export default function OrderDetailModal({
             </div>
           </div>
 
-          {/* Card 7: Logged Materials & Stock Status (Shown only if supplies logged) */}
-          {safeInventoryUsed && safeInventoryUsed.filter((u: any) => u.quantity > 0).length > 0 && (
+          {/* Card 7: Logged Materials & Stock Status */}
+          {order && (
             <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-100 space-y-3">
               <div className="flex items-center justify-between border-b border-emerald-200/60 pb-2">
                 <div className="flex items-center gap-2">
@@ -1333,25 +1335,43 @@ export default function OrderDetailModal({
                     Materials / Supply Logged
                   </h4>
                 </div>
-                {(order as any).inventoryApplied && (
-                  <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
-                    <CheckCircle2 size={10} /> Stock Deducted
-                  </span>
-                )}
-              </div>
-              <div className="space-y-2">
-                {safeInventoryUsed.filter((u: any) => u.quantity > 0).map((used: any, idx: number) => (
-                  <div
-                    key={idx}
-                    className="flex justify-between items-center text-xs font-medium text-slate-700"
-                  >
-                    <span>{used.name}</span>
-                    <span className="font-bold text-slate-900 bg-emerald-100/60 px-2 py-0.5 rounded-md">
-                      {used.quantity} {used.unit}
+                <div className="flex items-center gap-2">
+                  {(order as any).inventoryApplied && (
+                    <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                      <CheckCircle2 size={10} /> Stock Deducted
                     </span>
-                  </div>
-                ))}
+                  )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setIsStockModalOpen(true)}
+                    className="h-6 px-2.5 text-[11px] font-bold text-emerald-700 border-emerald-300 bg-white hover:bg-emerald-100 shadow-xs flex items-center gap-1 cursor-pointer"
+                    title="Update materials recorded for this order"
+                  >
+                    <Package size={12} className="text-emerald-600" />
+                    <span>Update Inventory</span>
+                  </Button>
+                </div>
               </div>
+              {safeInventoryUsed && safeInventoryUsed.filter((u: any) => u.quantity > 0).length > 0 ? (
+                <div className="space-y-2">
+                  {safeInventoryUsed.filter((u: any) => u.quantity > 0).map((used: any, idx: number) => (
+                    <div
+                      key={idx}
+                      className="flex justify-between items-center text-xs font-medium text-slate-700"
+                    >
+                      <span>{used.name}</span>
+                      <span className="font-bold text-slate-900 bg-emerald-100/60 px-2 py-0.5 rounded-md">
+                        {used.quantity} {used.unit}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-2 text-[11px] text-emerald-700/80 font-medium">
+                  No materials recorded for this order yet. Click &quot;Update Inventory&quot; to log consumed supplies.
+                </div>
+              )}
             </div>
           )}
 
@@ -1808,6 +1828,20 @@ export default function OrderDetailModal({
           </Dialog>
         );
       })()}
+
+      <StockUpdateModal
+        order={order}
+        open={isStockModalOpen}
+        onOpenChange={setIsStockModalOpen}
+        onSilentSave={(id, updates) => {
+          updateOrder(id, updates);
+        }}
+        onSave={(id, updates) => {
+          updateOrder(id, updates);
+          setIsStockModalOpen(false);
+        }}
+        user={user}
+      />
     </Dialog>
   );
 }

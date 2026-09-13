@@ -42,12 +42,12 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
     const [inventoryData, setInventoryData] = useState<InventoryItem[]>([]);
     const inFlightActions = useRef<Set<string>>(new Set());
 
-    // [FIX] Use per-item low_stock_threshold. Fall back to package_size, then 1.
+    // Use per-item low_stock_threshold. Fall back to package_size only if package_size > 1.
     const calculateStatus = (stock: number, threshold?: number, packageSize?: number) => {
         if (stock <= 0) return 'Critical';
         const limit = (threshold && threshold > 0) ? threshold
-            : ((packageSize && packageSize > 0) ? packageSize : 1);
-        if (stock <= limit) return 'Low Stock';
+            : ((packageSize && packageSize > 1) ? packageSize : 0);
+        if (limit > 0 && stock <= limit) return 'Low Stock';
         return 'In Stock';
     };
 

@@ -244,6 +244,8 @@ export interface User {
   email?: string;
   password?: string;
   active: boolean;
+  failedLoginAttempts?: number;
+  lockedUntil?: string | null;
 }
 
 export interface Shelf {

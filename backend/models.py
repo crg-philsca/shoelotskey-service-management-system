@@ -365,11 +365,11 @@ class Inventory(Base):
 
     def recalculate_status(self):
         threshold = self.low_stock_threshold if (self.low_stock_threshold and self.low_stock_threshold > 0.0) else (
-            self.package_size if (self.package_size and self.package_size > 0.0) else 1.0
+            self.package_size if (self.package_size and self.package_size > 1.0) else 0.0
         )
         if self.stock_quantity <= 0.0:
             self.status = "Critical"  # type: ignore[assignment]
-        elif self.stock_quantity <= threshold:
+        elif threshold > 0.0 and self.stock_quantity <= threshold:
             self.status = "Low Stock"  # type: ignore[assignment]
         else:
             self.status = "In Stock"  # type: ignore[assignment]

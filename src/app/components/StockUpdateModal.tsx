@@ -111,12 +111,24 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave, on
             return;
         }
 
-        const isPackaged = item.package_size && item.package_size > 0;
-        const defaultQty = isPackaged ? (item.consumption_qty || 10) : 1;
-        
-        if (defaultQty > item.stock) {
-            toast.error('Insufficient stock available.');
+        if (item.stock <= 0) {
+            toast.error('Insufficient stock available (0 in stock).');
             return;
+        }
+
+        const countUnits = ['pcs', 'pc', 'pair', 'pairs', 'set', 'sets', 'item', 'items', 'bottle', 'bottles', 'box', 'boxes', 'can', 'cans', 'roll', 'rolls', 'sheet', 'sheets'];
+        const unitLower = (item.unit || '').trim().toLowerCase();
+        const isCountUnit = countUnits.includes(unitLower);
+        
+        const isBulkPackaged = !isCountUnit && (item.package_size && item.package_size > 1);
+        let defaultQty = isBulkPackaged ? (item.consumption_qty || 10) : (item.consumption_qty && item.consumption_qty > 0 ? item.consumption_qty : 1);
+        
+        // Clamp defaultQty to available stock
+        if (defaultQty > item.stock) {
+            defaultQty = Math.max(1, Math.min(defaultQty, Math.floor(item.stock)));
+            if (defaultQty > item.stock) {
+                defaultQty = item.stock;
+            }
         }
 
         const displayUnit = item.unit || 'mL';
@@ -304,12 +316,15 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave, on
                                     <SelectTrigger className="w-full h-11 bg-gray-50 rounded-xl border-gray-100 text-xs font-bold text-gray-900 focus:bg-white focus:border-emerald-600">
                                         <SelectValue placeholder="Choose material..." />
                                     </SelectTrigger>
-                                    <SelectContent>
+                                    <SelectContent className="max-h-56 max-w-[calc(100vw-3rem)] sm:max-w-[420px] w-full overflow-y-auto z-50">
                                         {(inventoryData || []).filter(i => i.isActive).map(item => {
                                             const presentation = getInventoryPresentation(item);
                                             return (
-                                                <SelectItem key={item.id} value={item.id.toString()}>
-                                                    <span className="font-bold">{item.name}</span> <span className="text-gray-400 font-normal">({presentation.availableText})</span>
+                                                <SelectItem key={item.id} value={item.id.toString()} className="text-xs py-2">
+                                                    <div className="flex items-center justify-between gap-2 w-full max-w-[340px] truncate text-left">
+                                                        <span className="font-bold text-gray-900 truncate">{item.name}</span>
+                                                        <span className="text-gray-500 font-normal shrink-0 text-[11px]">({presentation.availableText})</span>
+                                                    </div>
                                                 </SelectItem>
                                             );
                                         })}
@@ -428,21 +443,25 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave, on
                                             </button>
                                             <div className="flex items-center gap-1">
                                                 <span className="text-[9px] font-black uppercase tracking-wider text-gray-400 mr-1">Adjust:</span>
-                                                {[-10, -5, 5, 10, 25, 50].map((val) => (
-                                                    <button
-                                                        key={val}
-                                                        type="button"
-                                                        onClick={() => handleQuickAdd(item.itemId, val)}
-                                                        disabled={val < 0 && item.quantity === 0}
-                                                        className={`px-2 py-0.5 rounded-md text-[10px] font-black shadow-2xs transition-all border disabled:opacity-40 disabled:pointer-events-none ${
-                                                            val < 0 
-                                                                ? 'bg-white hover:bg-red-50/80 border-gray-200 text-red-600' 
-                                                                : 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200 text-emerald-700'
-                                                        }`}
-                                                    >
-                                                        {val > 0 ? `+${val}` : val}
-                                                    </button>
-                                                ))}
+                                                {(() => {
+                                                    const isCount = ['pcs', 'pc', 'pair', 'pairs', 'set', 'sets', 'item', 'items', 'bottle', 'bottles', 'box', 'boxes', 'can', 'cans'].includes(actualUnit.toLowerCase());
+                                                    const adjustValues = isCount ? [-2, -1, 1, 2, 5] : [-10, -5, 5, 10, 25, 50];
+                                                    return adjustValues.map((val) => (
+                                                        <button
+                                                            key={val}
+                                                            type="button"
+                                                            onClick={() => handleQuickAdd(item.itemId, val)}
+                                                            disabled={val < 0 && item.quantity === 0}
+                                                            className={`px-2 py-0.5 rounded-md text-[10px] font-black shadow-2xs transition-all border disabled:opacity-40 disabled:pointer-events-none ${
+                                                                val < 0 
+                                                                    ? 'bg-white hover:bg-red-50/80 border-gray-200 text-red-600' 
+                                                                    : 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200 text-emerald-700'
+                                                            }`}
+                                                        >
+                                                            {val > 0 ? `+${val}` : val}
+                                                        </button>
+                                                    ));
+                                                })()}
                                             </div>
                                         </div>
                                     </div>

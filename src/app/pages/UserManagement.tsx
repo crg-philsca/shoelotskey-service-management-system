@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/ca
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { Input } from '@/app/components/ui/input';
-import { PlusCircle, Edit, Trash, Search, Filter, ChevronLeft, ChevronRight, History as HistoryIcon, Activity, AlertTriangle, Lock, MoreVertical } from 'lucide-react';
+import { PlusCircle, Edit, Trash, Search, Filter, ChevronLeft, ChevronRight, History as HistoryIcon, Activity, AlertTriangle, Lock, Unlock, MoreVertical } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import React from 'react';
@@ -85,7 +85,9 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
             username: u.username,
             email: u.email,
             role: u.role?.role_name || 'staff',
-            active: u.is_active
+            active: u.is_active,
+            failedLoginAttempts: u.failed_login_attempts || 0,
+            lockedUntil: u.locked_until || null
           }));
           setUsers(mappedUsers);
           localStorage.setItem('userManagement_cache', JSON.stringify(mappedUsers));
@@ -294,6 +296,35 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
       }
     };
 
+    const handleUnlockUser = async (targetUser: User) => {
+      try {
+        const response = await fetch(`${API_BASE}/users/${targetUser.id}/unlock`, {
+          method: 'POST',
+          headers: { 
+            'Authorization': `Bearer ${user.token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        if (response.ok) {
+          toast.success(`Account for ${targetUser.username} unlocked successfully`);
+          await fetchUsers();
+          addActivity({
+            user: currentUser,
+            action: 'Unlock User',
+            details: `Unlocked user account ${targetUser.username} (cleared failed login attempts and lockout)`,
+            type: 'system',
+            recordId: targetUser.id
+          });
+        } else {
+          const err = await response.json().catch(() => ({}));
+          toast.error(`Failed to unlock account: ${formatError(err.detail, 'Unknown error')}`);
+        }
+      } catch (error) {
+        console.error('Error unlocking user:', error);
+        toast.error('Network error unlocking user account');
+      }
+    };
+
     const handleEditClick = (user: User) => {
       if (user.username?.toLowerCase() === 'admin' || user.role?.toLowerCase() === 'admin') {
         toast.error('System account cannot be modified.');
@@ -442,6 +473,10 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
                 ) : (
                   paginatedUsers.map((user) => {
                     const isSystemAdmin = user.username?.toLowerCase() === 'admin' || user.role?.toLowerCase() === 'admin';
+                    const isLocked = Boolean(
+                      (user.failedLoginAttempts !== undefined && user.failedLoginAttempts >= 3) || 
+                      (user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now())
+                    );
                     return (
                     <tr key={user.id} className="hover:bg-gray-50/80 transition-colors animate-in fade-in duration-500">
                       <td className="px-3 py-2 text-xs font-medium max-w-0">
@@ -475,59 +510,95 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
                         )}
                       </td>
                       <td className="px-3 py-2 text-center max-w-0">
-                        <Badge className={`
-                          ${user.active ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-gray-100 text-gray-500 border-gray-200'}
-                          text-[10px] font-black uppercase whitespace-nowrap
-                        `}>
-                          {user.active ? 'Active' : 'Inactive'}
-                        </Badge>
+                        {isLocked ? (
+                          <Badge className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] font-black uppercase whitespace-nowrap inline-flex items-center gap-1 shadow-none">
+                            <Lock size={10} className="text-amber-600 shrink-0" />
+                            <span>Locked (15m)</span>
+                          </Badge>
+                        ) : (
+                          <Badge className={`
+                            ${user.active ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-gray-100 text-gray-500 border-gray-200'}
+                            text-[10px] font-black uppercase whitespace-nowrap
+                          `}>
+                            {user.active ? 'Active' : 'Inactive'}
+                          </Badge>
+                        )}
                       </td>
                       <td className="px-2 py-2 text-xs text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        {isSystemAdmin ? (
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            disabled
-                            className="h-7 w-7 p-0 rounded-md border border-gray-200 text-gray-300 bg-gray-50 opacity-40 cursor-not-allowed shadow-none inline-flex items-center justify-center" 
-                            title="System account protected"
-                          >
-                            <MoreVertical className="h-3.5 w-3.5 text-gray-400" />
-                          </Button>
-                        ) : (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button 
-                                variant="outline" 
-                                className="h-7 w-7 p-0 border-red-200 text-red-700 bg-red-50 hover:bg-red-100 font-bold rounded-md inline-flex items-center justify-center" 
-                                title="Actions"
-                              >
-                                <MoreVertical className="h-3.5 w-3.5 text-red-500" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-44 p-1.5 space-y-1">
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleEditClick(user);
-                                }}
-                                className="border border-yellow-200 rounded-md px-2.5 py-1.5 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:text-yellow-800 focus:bg-yellow-100 font-bold cursor-pointer"
-                              >
-                                <Edit className="h-4 w-4 mr-2 text-yellow-600" />
-                                Edit User
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteUser(user.id);
-                                }}
-                                className="border border-red-200 rounded-md px-2.5 py-1.5 text-red-700 bg-red-50 hover:bg-red-100 focus:text-red-800 focus:bg-red-100 font-bold cursor-pointer"
-                              >
-                                <Trash className="h-4 w-4 mr-2 text-red-600" />
-                                Delete User
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        )}
+                        <div className="inline-flex items-center justify-center gap-1">
+                          {isLocked && (
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleUnlockUser(user);
+                              }}
+                              className="h-7 px-2 border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 hover:text-amber-800 font-bold rounded-md inline-flex items-center gap-1 text-[11px] shadow-xs"
+                              title="Unlock account immediately"
+                            >
+                              <Unlock className="h-3.5 w-3.5 text-amber-600" />
+                              <span className="hidden sm:inline">Unlock</span>
+                            </Button>
+                          )}
+                          {isSystemAdmin ? (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              disabled
+                              className="h-7 w-7 p-0 rounded-md border border-gray-200 text-gray-300 bg-gray-50 opacity-40 cursor-not-allowed shadow-none inline-flex items-center justify-center" 
+                              title="System account protected"
+                            >
+                              <MoreVertical className="h-3.5 w-3.5 text-gray-400" />
+                            </Button>
+                          ) : (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button 
+                                  variant="outline" 
+                                  className="h-7 w-7 p-0 border-red-200 text-red-700 bg-red-50 hover:bg-red-100 font-bold rounded-md inline-flex items-center justify-center" 
+                                  title="Actions"
+                                >
+                                  <MoreVertical className="h-3.5 w-3.5 text-red-500" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-44 p-1.5 space-y-1">
+                                {isLocked && (
+                                  <DropdownMenuItem
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleUnlockUser(user);
+                                    }}
+                                    className="border border-amber-200 rounded-md px-2.5 py-1.5 text-amber-700 bg-amber-50 hover:bg-amber-100 focus:text-amber-800 focus:bg-amber-100 font-bold cursor-pointer"
+                                  >
+                                    <Unlock className="h-4 w-4 mr-2 text-amber-600" />
+                                    Unlock Account
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEditClick(user);
+                                  }}
+                                  className="border border-yellow-200 rounded-md px-2.5 py-1.5 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:text-yellow-800 focus:bg-yellow-100 font-bold cursor-pointer"
+                                >
+                                  <Edit className="h-4 w-4 mr-2 text-yellow-600" />
+                                  Edit User
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteUser(user.id);
+                                  }}
+                                  className="border border-red-200 rounded-md px-2.5 py-1.5 text-red-700 bg-red-50 hover:bg-red-100 focus:text-red-800 focus:bg-red-100 font-bold cursor-pointer"
+                                >
+                                  <Trash className="h-4 w-4 mr-2 text-red-600" />
+                                  Delete User
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
+                        </div>
                       </td>
                     </tr>
                     );

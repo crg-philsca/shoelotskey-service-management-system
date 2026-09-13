@@ -60,7 +60,8 @@ export function getInventoryPresentation(item: any): InventoryPresentation {
     const threshold = Number(item.low_stock_threshold ?? item.lowStockThreshold ?? 0);
     const consumption = Number(item.consumption_qty ?? item.consumptionQty ?? 0);
 
-    const isPackaged = packageSize > 0 && packageUnit !== '';
+    const isCountUnit = ['pcs', 'pc', 'pair', 'pairs', 'set', 'sets', 'item', 'items', 'bottle', 'bottles', 'box', 'boxes', 'can', 'cans', 'roll', 'rolls', 'sheet', 'sheets'].includes(unit.toLowerCase());
+    const isPackaged = packageSize > 1 || (packageSize > 0 && packageUnit !== '' && packageUnit.toLowerCase() !== unit.toLowerCase() && !isCountUnit);
     const currentQuantityLabel = `${stock.toLocaleString()} ${unit}`;
 
     let fullPackages = 0;
@@ -73,7 +74,8 @@ export function getInventoryPresentation(item: any): InventoryPresentation {
     let equivalentLabel = '';
     let packageLabel = '';
 
-    const effectiveThreshold = threshold > 0 ? threshold : (packageSize > 0 ? packageSize : 1);
+    // Only fallback to packageSize if packageSize > 1. If threshold is not set (0) and packageSize <= 1, threshold is 0 (no alert).
+    const effectiveThreshold = threshold > 0 ? threshold : (isPackaged && packageSize > 1 ? packageSize : 0);
 
     if (isPackaged) {
         const unitSingular = formatUnitName(packageUnit, 1);
@@ -169,7 +171,7 @@ export function getInventoryPresentation(item: any): InventoryPresentation {
         stockStatus = 'No Stock';
         statusLabel = 'NO STOCK';
         reorderRecommendation = 'URGENT: Reorder immediately (Stock depleted)';
-    } else if (stock <= effectiveThreshold) {
+    } else if (effectiveThreshold > 0 && stock <= effectiveThreshold) {
         stockStatus = 'Low Stock';
         statusLabel = 'LOW STOCK';
         reorderRecommendation = `Reorder recommended (At or below threshold of ${effectiveThreshold.toLocaleString()} ${unit})`;

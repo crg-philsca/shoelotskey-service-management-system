@@ -2983,6 +2983,48 @@ def delete_user(user_id: int, db: Session = Depends(get_db), current_user: User 
     )
     return {"status": "success", "message": f"User {user_id} deleted"}
 
+@app.post("/api/users/{user_id}/unlock")
+def unlock_user(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_role("owner"))):
+    """Unlock a locked user account and reset failed login attempts (Owner and Admin only)."""
+    db_user = db.query(User).filter(User.user_id == user_id).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    old_attempts = db_user.failed_login_attempts or 0
+    was_locked = bool(db_user.locked_until and db_user.locked_until > datetime.utcnow())
+
+    db_user.failed_login_attempts = 0
+    db_user.locked_until = None
+    db.commit()
+    db.refresh(db_user)
+
+    from auth_utils import invalidate_user_cache
+    invalidate_user_cache(db_user.username)
+
+    # Sync to local SQLite if file exists
+    try:
+        import sqlite3
+        conn = sqlite3.connect("backend/db/shoelotskey.db")
+        conn.execute("UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE user_id = ? OR username = ?", (user_id, db_user.username))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[UNLOCK USER] SQLite sync warning: {e}")
+
+    log_audit(
+        db=db, action="UNLOCK", table_name="users",
+        record_id=user_id, user=current_user,
+        old_values={"failed_attempts": old_attempts, "locked": was_locked},
+        new_values={"failed_attempts": 0, "locked": False, "username": db_user.username},
+        module="User Management",
+    )
+    return {
+        "status": "success",
+        "message": f"Account '{db_user.username}' unlocked successfully. Login attempts reset to 0.",
+        "user_id": db_user.user_id,
+        "username": db_user.username
+    }
+
 # ==========================================
 # 3. JOB ORDERS (Complex 3NF Normalization)
 # ==========================================

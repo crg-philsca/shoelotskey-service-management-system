@@ -68,6 +68,8 @@ class UserSchema(BaseModel):
     is_active: bool = True
     created_at: Optional[datetime] = None
     role: Optional[RoleSchema] = None
+    failed_login_attempts: Optional[int] = 0
+    locked_until: Optional[datetime] = None
     class Config:
         from_attributes = True
 

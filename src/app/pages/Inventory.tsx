@@ -2,9 +2,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/ca
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { Input } from '@/app/components/ui/input';
-import { Package, PlusCircle, PackagePlus, Search, Filter, AlertTriangle, ArrowUpRight, ChevronLeft, ChevronRight, Edit, Trash2, XCircle, X, ShieldCheck, Loader2, MoreVertical } from 'lucide-react';
+import { Package, PlusCircle, PackagePlus, PackageMinus, Search, Filter, AlertTriangle, ArrowUpRight, ChevronLeft, ChevronRight, Edit, Trash2, XCircle, X, ShieldCheck, Loader2, MoreVertical } from 'lucide-react';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import RestockModal from '@/app/components/RestockModal';
+import UpdateStockModal from '@/app/components/UpdateStockModal';
 import InventoryDetailModal from '@/app/components/InventoryDetailModal';
 import { Switch } from '@/app/components/ui/switch';
 import { 
@@ -87,6 +88,8 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [isRestockOpen, setIsRestockOpen] = useState(false);
+    const [isUpdateStockOpen, setIsUpdateStockOpen] = useState(false);
+    const [selectedUpdateItem, setSelectedUpdateItem] = useState<InventoryItem | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<InventoryItem | null>(null);
     
     // Filter State
@@ -178,6 +181,19 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                         >
                             <PackagePlus className="h-4 w-4 sm:mr-1.5 shrink-0 text-red-600" />
                             <span className="hidden sm:inline font-bold text-red-600">Restock</span>
+                        </Button>
+                    )}
+                    {['owner', 'admin', 'staff'].includes(user.role?.toLowerCase() || '') && (
+                        <Button 
+                            className="w-10 h-10 sm:w-40 flex items-center justify-center rounded-md border border-emerald-300 bg-white px-2 sm:px-3 py-2 hover:bg-emerald-50 hover:text-emerald-700 text-sm font-bold uppercase text-emerald-700 shadow-sm transition focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            onClick={() => {
+                                setSelectedUpdateItem(null);
+                                setIsUpdateStockOpen(true);
+                            }}
+                            title="Update Stock Usage"
+                        >
+                            <PackageMinus className="h-4 w-4 sm:mr-1.5 shrink-0 text-emerald-600" />
+                            <span className="hidden sm:inline font-bold text-emerald-700">Update Stock</span>
                         </Button>
                     )}
                     {['owner', 'admin', 'staff'].includes(user.role?.toLowerCase() || '') && (
@@ -758,6 +774,19 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end" className="w-48 p-1.5 space-y-1">
+                                                    {['owner', 'admin', 'staff'].includes(user.role?.toLowerCase() || '') && (
+                                                        <DropdownMenuItem
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setSelectedUpdateItem(item);
+                                                                setIsUpdateStockOpen(true);
+                                                            }}
+                                                            className="border border-emerald-200 rounded-md px-2.5 py-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 focus:text-emerald-800 focus:bg-emerald-100 font-bold cursor-pointer"
+                                                        >
+                                                            <PackageMinus className="h-4 w-4 mr-2 text-emerald-600" />
+                                                            Update Stock Usage
+                                                        </DropdownMenuItem>
+                                                    )}
                                                     {['owner', 'admin', 'staff'].includes(user.role?.toLowerCase() || '') && (
                                                         <DropdownMenuItem
                                                             onClick={(e) => {
@@ -1442,6 +1471,13 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
             </Dialog>
 
             <RestockModal open={isRestockOpen} onOpenChange={setIsRestockOpen} user={JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}')} />
+            
+            <UpdateStockModal 
+                open={isUpdateStockOpen} 
+                onOpenChange={setIsUpdateStockOpen} 
+                initialItem={selectedUpdateItem} 
+                user={user} 
+            />
             
             <InventoryDetailModal
                 item={selectedItem}

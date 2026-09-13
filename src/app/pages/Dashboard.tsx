@@ -368,12 +368,11 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
   const { inventoryData } = useInventory();
   
   const lowStockItems = useMemo(() => {
-    // [STABILITY] Trigger alert if status is not 'In Stock' OR if quantity is critical (<= threshold)
+    // Trigger alert if status is not 'In Stock' (derived consistently from getInventoryPresentation)
     const filtered = (inventoryData || []).filter(item => {
-      const threshold = (item.low_stock_threshold && item.low_stock_threshold > 0)
-        ? item.low_stock_threshold
-        : ((item.package_size && item.package_size > 0) ? item.package_size : 1);
-      return item.isActive && (item.status !== 'In Stock' || Number(item.stock) <= threshold);
+      if (!item.isActive) return false;
+      const pres = getInventoryPresentation(item);
+      return pres.stockStatus !== 'In Stock';
     });
 
     return filtered.sort((a, b) => {
