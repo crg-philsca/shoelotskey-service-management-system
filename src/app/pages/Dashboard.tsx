@@ -303,7 +303,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
 
   const baseServices = services.filter(s => s.category === 'base' && s.active);
 
-  // Separate Range-Filtered Orders (for Analytics) from Global Orders (for Status Cards)
+  // Range-Filtered Orders for Analytics and Status Drill-Down
   const analyticsOrders = useMemo(() => {
     const now = new Date();
     return (orders || []).filter((order) => {
@@ -312,28 +312,27 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
     });
   }, [orders, profitRange, customStartDate, customEndDate]);
 
-  // Use the global 'orders' for Status Summary cards so all active/cancelled orders are represented
+  // Status counts strictly derived from the selected timeframe filter (analyticsOrders)
   const statusCounts = useMemo(() => {
-    const all = orders || [];
+    const list = analyticsOrders || [];
     return {
-      new: all.filter(o => o.status === 'new-order').length,
-      ongoing: all.filter(o => o.status === 'on-going').length,
-      forRelease: all.filter(o => o.status === 'for-release').length,
-      claimed: all.filter(o => o.status === 'claimed').length,
-      cancelled: all.filter(o => o.status === 'cancelled' || (o.status as any) === 'canceled').length,
+      new: list.filter(o => o.status === 'new-order').length,
+      ongoing: list.filter(o => o.status === 'on-going').length,
+      forRelease: list.filter(o => o.status === 'for-release').length,
+      claimed: list.filter(o => o.status === 'claimed').length,
+      cancelled: list.filter(o => isCancelledOrder(o)).length,
     };
-  }, [orders]);
+  }, [analyticsOrders]);
 
   /**
    * MEMO: overviewOrders
+   * Filtered strictly by active timeframe filter and selected drill-down status.
    */
   const overviewOrders = useMemo(() => {
-    // [CRITICAL FIX] If a specific status is selected, show ALL orders for that status
-    // so we don't 'lose' work-in-progress tasks due to the date filter.
-    const source = selectedStatus ? (orders || []) : (analyticsOrders || []);
+    const source = analyticsOrders || [];
     if (!selectedStatus) return source;
-    return source.filter(order => order.status === selectedStatus || (selectedStatus === 'cancelled' && (order.status === 'cancelled' || (order.status as any) === 'canceled')));
-  }, [orders, analyticsOrders, selectedStatus]);
+    return source.filter(order => order.status === selectedStatus || (selectedStatus === 'cancelled' && isCancelledOrder(order)));
+  }, [analyticsOrders, selectedStatus]);
 
   const totalSales = useMemo(() => {
     return (analyticsOrders || [])
@@ -545,7 +544,12 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
           {/* Status Summary - Always Visible */}
           <Card>
             <CardHeader className="text-center pt-5 pb-0 mb-0">
-              <CardTitle className="text-center text-base font-bold text-gray-900 uppercase mb-0 pb-0 tracking-tight">Status Summary</CardTitle>
+              <CardTitle className="text-center text-base font-bold text-gray-900 uppercase mb-0 pb-0 tracking-tight">
+                Status Summary
+                <span className="ml-2 text-xs font-semibold text-gray-400 normal-case tracking-normal">
+                  ({profitRange === 'Annually' ? 'Annual' : profitRange})
+                </span>
+              </CardTitle>
             </CardHeader>
             <CardContent className="flex justify-center pt-0 pb-0 mb-0 -mt-5">
               <div className="grid w-full grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-2">
@@ -700,13 +704,14 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                 <div className="flex items-center justify-center">
                   <CardTitle className="text-center text-[15px] font-black text-gray-900 uppercase tracking-[0.1em] leading-tight p-0 m-0">
                     {(() => {
+                      const rangeLabel = profitRange === 'Annually' ? 'ANNUAL' : profitRange.toUpperCase();
                       switch (selectedStatus) {
-                        case 'new-order': return 'NEW ORDER';
-                        case 'on-going': return 'ON-GOING';
-                        case 'for-release': return 'FOR RELEASE';
-                        case 'claimed': return 'CLAIMED';
-                        case 'cancelled': return 'CANCELLED';
-                        default: return 'STATUS';
+                        case 'new-order': return `NEW ORDER — ${rangeLabel}`;
+                        case 'on-going': return `ON-GOING — ${rangeLabel}`;
+                        case 'for-release': return `FOR RELEASE — ${rangeLabel}`;
+                        case 'claimed': return `CLAIMED — ${rangeLabel}`;
+                        case 'cancelled': return `CANCELLED — ${rangeLabel}`;
+                        default: return `STATUS — ${rangeLabel}`;
                       }
                     })()}
                   </CardTitle>
@@ -865,12 +870,18 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
 
                     if (startDate) {
                       const start = new Date(startDate);
-                      filtered = filtered.filter(order => order?.createdAt && new Date(order.createdAt) >= start);
+                      filtered = filtered.filter(order => {
+                        const d = orderEventDate(order);
+                        return !isNaN(d.getTime()) && d >= start;
+                      });
                     }
                     if (endDate) {
                       const end = new Date(endDate);
                       end.setHours(23, 59, 59, 999);
-                      filtered = filtered.filter(order => order?.createdAt && new Date(order.createdAt) <= end);
+                      filtered = filtered.filter(order => {
+                        const d = orderEventDate(order);
+                        return !isNaN(d.getTime()) && d <= end;
+                      });
                     }
 
                     if (searchQuery) {
@@ -949,13 +960,14 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                       <p className="text-sm font-black text-gray-400 uppercase tracking-[0.2em]">
                                         {(() => {
                                           if (searchQuery) return 'No matching orders found';
+                                          const rangeLabel = profitRange === 'Annually' ? 'annual' : profitRange.toLowerCase();
                                           switch (selectedStatus) {
-                                            case 'new-order': return 'No new orders found';
-                                            case 'on-going': return 'No ongoing orders found';
-                                            case 'for-release': return 'No orders for release';
-                                            case 'claimed': return 'No claimed orders found';
-                                            case 'cancelled': return 'No cancelled orders found';
-                                            default: return 'No orders found';
+                                            case 'new-order': return `No new orders found for ${rangeLabel}`;
+                                            case 'on-going': return `No ongoing orders found for ${rangeLabel}`;
+                                            case 'for-release': return `No orders for release for ${rangeLabel}`;
+                                            case 'claimed': return `No claimed orders found for ${rangeLabel}`;
+                                            case 'cancelled': return `No cancelled orders found for ${rangeLabel}`;
+                                            default: return `No orders found for ${rangeLabel}`;
                                           }
                                         })()}
                                       </p>

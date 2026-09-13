@@ -80,9 +80,45 @@ export function isSalesEligible(order: JobOrder): boolean {
 }
 
 export function orderEventDate(order: JobOrder): Date {
-  if (isCancelledOrder(order) && order?.cancelledAt) {
-    const c = new Date(order.cancelledAt as any);
-    if (!isNaN(c.getTime())) return c;
+  if (isCancelledOrder(order)) {
+    if (order?.cancelledAt) {
+      const c = new Date(order.cancelledAt as any);
+      if (!isNaN(c.getTime())) return c;
+    }
+    const cHist = (order as any)?.statusHistory?.find?.((s: any) => s.status === 'cancelled' || s.status === 'canceled');
+    if (cHist?.timestamp) {
+      const c = new Date(cHist.timestamp as any);
+      if (!isNaN(c.getTime())) return c;
+    }
+  }
+  if (order?.status === 'claimed') {
+    if (order?.actualCompletionDate || order?.actualReleaseDate) {
+      const c = new Date((order.actualCompletionDate || order.actualReleaseDate) as any);
+      if (!isNaN(c.getTime())) return c;
+    }
+    const clHist = (order as any)?.statusHistory?.find?.((s: any) => s.status === 'claimed');
+    if (clHist?.timestamp) {
+      const c = new Date(clHist.timestamp as any);
+      if (!isNaN(c.getTime())) return c;
+    }
+  }
+  if (order?.status === 'for-release') {
+    if (order?.actualReleaseDate) {
+      const r = new Date(order.actualReleaseDate as any);
+      if (!isNaN(r.getTime())) return r;
+    }
+    const relHist = (order as any)?.statusHistory?.find?.((s: any) => s.status === 'for-release');
+    if (relHist?.timestamp) {
+      const r = new Date(relHist.timestamp as any);
+      if (!isNaN(r.getTime())) return r;
+    }
+  }
+  if (order?.status === 'on-going') {
+    const ogHist = (order as any)?.statusHistory?.find?.((s: any) => s.status === 'on-going');
+    if (ogHist?.timestamp) {
+      const og = new Date(ogHist.timestamp as any);
+      if (!isNaN(og.getTime())) return og;
+    }
   }
   const raw = order?.transactionDate || order?.createdAt;
   return raw ? new Date(raw as any) : new Date(NaN);
