@@ -362,3 +362,36 @@ input[type="date"]::-webkit-datetime-edit-year-field {
   animation: shoeWalk 2s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
   transform-origin: 48% 88%;
 }
+
+/* Mobile Toast and Pop-Up Alert Responsiveness */
+@media (max-width: 640px) {
+  [data-sonner-toaster] {
+    left: 12px !important;
+    right: 12px !important;
+    width: calc(100vw - 24px) !important;
+    max-width: calc(100vw - 24px) !important;
+    margin: 0 auto !important;
+    top: 12px !important;
+    display: flex !important;
+    justify-content: center !important;
+  }
+
+  [data-sonner-toast] {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    font-size: 13px !important;
+    border-radius: 12px !important;
+    padding: 12px 14px !important;
+    word-break: break-word !important;
+  }
+
+  [data-slot="dialog-content"],
+  [role="dialog"] {
+    width: calc(100vw - 20px) !important;
+    max-width: calc(100vw - 20px) !important;
+    margin: 0 auto !important;
+    max-height: 92dvh !important;
+    overflow-y: auto !important;
+  }
+}

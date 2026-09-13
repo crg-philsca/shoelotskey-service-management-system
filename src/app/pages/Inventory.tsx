@@ -699,21 +699,23 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                                              <span className="text-xs font-black text-gray-900 truncate">{(item.stock || 0).toLocaleString()}</span>
                                                             <span className="text-[9.5px] font-extrabold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded uppercase shrink-0">{item.unit || ''}</span>
                                                         </div>
-                                                        {pres.isPackaged && (
-                                                            <>
-                                                                {/* Equivalent line */}
-                                                                <span className={`text-[9.5px] font-bold leading-tight text-center truncate max-w-full ${equivalentColor}`} title={pres.equivalentLabel}>
-                                                                    {pres.equivalentLabel}
-                                                                </span>
-                                                                {/* Proportion bar */}
-                                                                <div className="w-16 sm:w-20 max-w-full h-1.5 bg-gray-100 rounded-full overflow-hidden border border-gray-200">
-                                                                    <div
-                                                                        className={`h-full rounded-full ${barColor}`}
-                                                                        style={{ width: `${Math.min(pres.progressBarValue, 100)}%` }}
-                                                                    />
-                                                                </div>
-                                                            </>
+                                                        {/* Equivalent line / breakdown */}
+                                                        {pres.isPackaged ? (
+                                                            <span className={`text-[9.5px] font-bold leading-tight text-center truncate max-w-full ${equivalentColor}`} title={pres.equivalentLabel}>
+                                                                {pres.equivalentLabel}
+                                                            </span>
+                                                        ) : (
+                                                            <span className={`text-[9.5px] font-bold leading-tight text-center truncate max-w-full ${equivalentColor}`} title={pres.currentQuantityLabel}>
+                                                                {pres.stockStatus}
+                                                            </span>
                                                         )}
+                                                        {/* Proportion bar */}
+                                                        <div className="w-16 sm:w-20 max-w-full h-1.5 bg-gray-100 rounded-full overflow-hidden border border-gray-200">
+                                                            <div
+                                                                className={`h-full rounded-full ${barColor}`}
+                                                                style={{ width: `${Math.min(pres.progressBarValue, 100)}%` }}
+                                                            />
+                                                        </div>
                                                     </div>
                                                 );
                                             })()}

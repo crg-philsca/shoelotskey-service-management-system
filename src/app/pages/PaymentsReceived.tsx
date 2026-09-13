@@ -32,6 +32,7 @@ import { toast } from 'sonner';
 import type { JobOrder } from '@/app/types';
 import {
   collectedSales,
+  isCancelledOrder,
   isDateInRange,
   isSalesEligible,
   orderEventDate,
@@ -271,7 +272,7 @@ export default function PaymentsReceived({ onSetHeaderActionRight, user }: Payme
   const periodOrders = useMemo(() => {
     const now = new Date();
     return (orders || [])
-      .filter((order: JobOrder) => isSalesEligible(order))
+      .filter((order: JobOrder) => isSalesEligible(order) || (isCancelledOrder(order) && (order.refundStatus === 'refunded' || Number(order.refundAmount || 0) > 0 || Number(order.amountReceived || order.depositAmount || 0) > 0)))
       .filter((order: JobOrder) => isDateInRange(orderEventDate(order), timeframe, now, customStartDate, customEndDate));
   }, [orders, timeframe, customStartDate, customEndDate]);
 
@@ -393,7 +394,8 @@ export default function PaymentsReceived({ onSetHeaderActionRight, user }: Payme
       list = list.filter((order) => {
         const status = String(order.paymentStatus || '').toLowerCase();
         const billed = Number(order.grandTotal) || 0;
-        const collected = collectedSales(order);
+        const isCancelled = isCancelledOrder(order);
+        const collected = isCancelled ? Number(order.amountReceived || order.depositAmount || 0) : collectedSales(order);
         return status === 'downpayment' || (collected > 0 && collected < billed);
       });
     } else if (cardFilter === 'cash') {
@@ -775,7 +777,11 @@ export default function PaymentsReceived({ onSetHeaderActionRight, user }: Payme
                   </TableRow>
                 ) : (
                   paginatedOrders.map((order: JobOrder) => {
-                    const collected = collectedSales(order);
+                    const isCancelled = isCancelledOrder(order);
+                    const isDP = String(order.paymentStatus || '').toLowerCase() === 'downpayment';
+                    const isPaid = String(order.paymentStatus || '').toLowerCase() === 'fully-paid';
+                    const paidAmt = Number(order.amountReceived || order.depositAmount || 0);
+                    const collected = isCancelled ? paidAmt : collectedSales(order);
                     const dateVal = order.transactionDate || order.createdAt;
                     const dateStr = dateVal ? dateFnsFormat(new Date(dateVal), 'MM/dd/yy hh:mm a') : '—';
                     let methodStr = (order.paymentMethod || 'cash').toUpperCase();
@@ -795,9 +801,6 @@ export default function PaymentsReceived({ onSetHeaderActionRight, user }: Payme
                       if (m === 'MAYA') return 'bg-purple-50 text-purple-700 border-purple-300';
                       return 'bg-sky-50 text-sky-700 border-sky-300'; // CASH
                     };
-                    const isDP = String(order.paymentStatus || '').toLowerCase() === 'downpayment';
-                    const isPaid = String(order.paymentStatus || '').toLowerCase() === 'fully-paid';
-                    const isCancelled = String(order.status || '').toLowerCase().includes('cancel');
 
 
                     return (
@@ -838,22 +841,37 @@ export default function PaymentsReceived({ onSetHeaderActionRight, user }: Payme
                           </div>
                         </TableCell>
                         <TableCell className="px-2 py-2 text-xs font-bold text-emerald-700 text-center whitespace-nowrap">
-                          {formatPeso(collected)}
+                          <div>{formatPeso(collected)}</div>
+                          {isCancelled && (
+                            <div className="text-[9px] font-semibold text-gray-500">
+                              {order.refundStatus === 'refunded' ? 'Refunded' : 'Retained'}
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell className="px-2 py-2 text-center whitespace-nowrap">
-                          <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase border whitespace-nowrap ${
-                              isCancelled
-                                ? 'bg-rose-50 text-rose-700 border-rose-300'
-                                : isPaid
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
-                                : isDP
-                                ? 'bg-amber-50 text-amber-700 border-amber-300'
-                                : 'bg-gray-50 text-gray-600 border-gray-300'
-                            }`}
-                          >
-                            {isCancelled ? 'Cancelled' : isPaid ? 'Fully Paid' : isDP ? 'Downpayment' : order.paymentStatus || 'Pending'}
-                          </span>
+                          {isCancelled ? (
+                            order.refundStatus === 'refunded' ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase border whitespace-nowrap bg-rose-50 text-rose-700 border-rose-300">
+                                CANCELLED (REFUNDED)
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase border whitespace-nowrap bg-amber-50 text-amber-700 border-amber-300">
+                                CANCELLED (RETAINED)
+                              </span>
+                            )
+                          ) : (
+                            <span
+                              className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase border whitespace-nowrap ${
+                                isPaid
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                                  : isDP
+                                  ? 'bg-amber-50 text-amber-700 border-amber-300'
+                                  : 'bg-gray-50 text-gray-600 border-gray-300'
+                              }`}
+                            >
+                              {isPaid ? 'Fully Paid' : isDP ? 'Downpayment' : order.paymentStatus || 'Pending'}
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell className="px-2 py-2 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                           <DropdownMenu>

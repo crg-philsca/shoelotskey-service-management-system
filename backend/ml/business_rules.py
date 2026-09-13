@@ -126,7 +126,7 @@ def combo_override_days(flags: Dict[str, bool]) -> Optional[int]:
         if flags.get("has_unyellowing"):
             return 15
         if flags.get("has_minor_reglue"):
-            return 10
+            return 25
     if (
         (flags.get("has_full_restoration") or flags.get("has_full_reglue"))
         and flags.get("has_minor_restoration")

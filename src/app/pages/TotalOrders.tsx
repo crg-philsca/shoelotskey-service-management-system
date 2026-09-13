@@ -335,9 +335,9 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
         let filtered = [...baseFilteredOrders];
 
         if (cardFilter === 'fully-paid') {
-            filtered = filtered.filter((order) => order.paymentStatus === 'fully-paid' && !isCancelledOrder(order));
+            filtered = filtered.filter((order) => order.paymentStatus === 'fully-paid');
         } else if (cardFilter === 'downpayment') {
-            filtered = filtered.filter((order) => order.paymentStatus === 'downpayment' && !isCancelledOrder(order));
+            filtered = filtered.filter((order) => order.paymentStatus === 'downpayment');
         } else if (cardFilter === 'active') {
             filtered = filtered.filter((order) => order.status !== 'claimed' && !isCancelledOrder(order));
         } else if (cardFilter === 'cancelled') {
@@ -683,16 +683,16 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                                                          order.refundStatus === 'refunded' ? (
                                                              <>
                                                                  <span className="text-[10px] font-bold tracking-wider text-rose-600">
-                                                                     REFUNDED
+                                                                     CANCELLED (REFUNDED)
                                                                  </span>
                                                                  <span className="text-[9px] text-rose-600 font-medium tracking-wider mt-0.5">
-                                                                     Refund: {formatPeso(Number(order.refundAmount || order.grandTotal || 0))}
+                                                                     Refund: {formatPeso(Number(order.refundAmount || order.amountReceived || order.depositAmount || order.grandTotal || 0))}
                                                                  </span>
                                                              </>
                                                          ) : (
                                                              <>
                                                                  <span className="text-[10px] font-bold tracking-wider text-amber-700">
-                                                                     NO REFUND
+                                                                     CANCELLED (RETAINED)
                                                                  </span>
                                                                  <span className="text-[9px] text-amber-700 font-medium tracking-wider mt-0.5">
                                                                      Retained: {formatPeso(Number(order.amountReceived || order.depositAmount || 0))}

@@ -466,7 +466,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
             <ChevronDown className="hidden sm:block h-4 w-4 text-white shrink-0" aria-hidden="true" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-40 min-w-40 p-0 rounded-xl border border-red-600 bg-white shadow-lg overflow-hidden animate-in slide-in-from-top-2 duration-200">
+        <DropdownMenuContent align="end" className="w-40 min-w-40 p-0 rounded-xl border border-red-600 bg-white shadow-lg overflow-hidden animate-in slide-in-from-top-2 duration-200 z-[100]">
           {['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Annually', 'Custom'].map((range) => (
             <DropdownMenuItem
               key={range}
@@ -627,7 +627,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                     </div>
                     <CardContent className="pt-4 pb-3 px-4">
                       <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">Active Orders</p>
-                      <p className="text-2xl font-black text-yellow-600 tracking-tight">{overviewOrders.filter(o => ['new-order', 'on-going', 'for-release'].includes(o.status)).length}</p>
+                      <p className="text-2xl font-black text-yellow-600 tracking-tight">{statusCounts.new + statusCounts.ongoing + statusCounts.forRelease}</p>
                     </CardContent>
                   </Card>
                   {/* Assigned Orders Removed per user request */}
@@ -1096,16 +1096,16 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                           order.refundStatus === 'refunded' ? (
                                             <>
                                               <span className="text-[10px] font-bold text-rose-600 tracking-wider whitespace-nowrap truncate max-w-full">
-                                                REFUNDED
+                                                CANCELLED (REFUNDED)
                                               </span>
                                               <span className="text-[8.5px] text-rose-600 font-bold tracking-wider mt-0.5 whitespace-nowrap truncate max-w-full">
-                                                Refund: {formatPeso(Number(order.refundAmount || order.grandTotal || 0))}
+                                                Refund: {formatPeso(Number(order.refundAmount || order.amountReceived || order.depositAmount || order.grandTotal || 0))}
                                               </span>
                                             </>
                                           ) : (
                                             <>
                                               <span className="text-[10px] font-bold text-amber-700 tracking-wider whitespace-nowrap truncate max-w-full">
-                                                NO REFUND
+                                                CANCELLED (RETAINED)
                                               </span>
                                               <span className="text-[8.5px] text-amber-700 font-bold tracking-wider mt-0.5 whitespace-nowrap truncate max-w-full">
                                                 Retained: {formatPeso(Number(order.amountReceived || order.depositAmount || 0))}
@@ -1526,7 +1526,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                               <div className="flex-1 bg-gray-200 rounded-full h-1.5 overflow-hidden">
                                 <div
                                   className={`h-full rounded-full transition-all ${barColor}`}
-                                  style={{ width: `${Math.min(pres.isPackaged ? pres.progressBarValue : 0, 100)}%` }}
+                                  style={{ width: `${Math.min(pres.progressBarValue, 100)}%` }}
                                 />
                               </div>
                               {pres.isPackaged && (

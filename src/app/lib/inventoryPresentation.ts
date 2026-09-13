@@ -73,6 +73,8 @@ export function getInventoryPresentation(item: any): InventoryPresentation {
     let equivalentLabel = '';
     let packageLabel = '';
 
+    const effectiveThreshold = threshold > 0 ? threshold : (packageSize > 0 ? packageSize : 1);
+
     if (isPackaged) {
         const unitSingular = formatUnitName(packageUnit, 1);
         const unitSingularLower = formatUnitNameLower(packageUnit, 1);
@@ -84,14 +86,18 @@ export function getInventoryPresentation(item: any): InventoryPresentation {
             containersLabel = `0 ${formatUnitNameLower(packageUnit, 0)}`;
             compactLabel = `0% of one ${unitSingularLower}`;
             equivalentLabel = compactLabel;
+            progressBarValue = 0;
         } else {
             fullPackages = Math.floor(stock / packageSize);
             remainingVolume = Math.round(stock % packageSize);
             percentageRemaining = Math.round((remainingVolume / packageSize) * 100);
-            // progressBarValue: cap at 100, but for >1 package show as % of one package filled
-            progressBarValue = Math.min(Math.max((stock % packageSize === 0 && fullPackages > 0)
-                ? 100
-                : (remainingVolume / packageSize) * 100, 0), 100);
+            // progressBarValue: if 1 or more full packages, stock is well-supplied (100%).
+            // If less than 1 package, show exact percentage of the single package remaining.
+            if (fullPackages >= 1) {
+                progressBarValue = 100;
+            } else {
+                progressBarValue = Math.min(Math.max(percentageRemaining, 0), 100);
+            }
 
             if (fullPackages > 0) {
                 const pluralUnit = formatUnitName(packageUnit, fullPackages);
@@ -117,6 +123,13 @@ export function getInventoryPresentation(item: any): InventoryPresentation {
         compactLabel = currentQuantityLabel;
         equivalentLabel = currentQuantityLabel;
         packageLabel = '';
+        if (stock <= 0) {
+            progressBarValue = 0;
+        } else if (effectiveThreshold > 0 && stock <= effectiveThreshold) {
+            progressBarValue = Math.min(100, Math.max(10, Math.round((stock / effectiveThreshold) * 50)));
+        } else {
+            progressBarValue = 100;
+        }
     }
 
     const totalContainers = isPackaged && packageSize > 0 ? Math.ceil(stock / packageSize) : 0;
@@ -152,7 +165,6 @@ export function getInventoryPresentation(item: any): InventoryPresentation {
     // which all fall back to packageSize, then 1, when no explicit threshold is set. This
     // effectiveThreshold mirrors that same rule so the Inventory table/detail view can never
     // show a different status than the Dashboard or the backend-persisted `item.status`.
-    const effectiveThreshold = threshold > 0 ? threshold : (packageSize > 0 ? packageSize : 1);
     if (stock <= 0) {
         stockStatus = 'No Stock';
         statusLabel = 'NO STOCK';
