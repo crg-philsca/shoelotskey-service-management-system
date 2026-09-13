@@ -12,21 +12,24 @@ OFFICIAL_DURATION_DAYS = {
     "Full Reglue": 25,
     "Color Renewal": 25,
     "Unyellowing": 5,
-    "Minor Retouch": 5,
-    "Minor Restoration": 25,
+    "Sole Unyellowing": 5,
+    "Minor Retouch": 0,
+    "Minor Restoration": 0,
     "Full Restoration": 25,
     "White Paint": 0,
     "2 Colors": 0,
     "3 Colors": 0,
-    "Midsole Full Reglue": 20,
-    "Undersole Full Reglue": 20,
-    "Midsole": 20,
-    "Undersole": 20,
-    "Add Glue Layer": 2,
+    "Midsole Full Reglue": 25,
+    "Undersole Full Reglue": 25,
+    "Full Reglue Midsole": 25,
+    "Full Reglue Undersole": 25,
+    "Midsole": 25,
+    "Undersole": 25,
+    "Add Glue Layer": 0,
 }
 
 DEFAULT_RUSH_REDUCTION_DAYS = 9
-MIN_DURATION_DAYS = 3
+MIN_DURATION_DAYS = 1
 
 
 def _as_name_list(value) -> List[str]:
@@ -58,13 +61,13 @@ def _addon_pairs(value) -> List[Tuple[str, int]]:
     for item in value:
         if isinstance(item, dict):
             name = item.get("name")
-            qty = item.get("quantity", 1)
+            qty = item.get("quantity") or 1
         else:
             name = item
             qty = 1
         if name:
             try:
-                qty_int = int(qty or 1)
+                qty_int = int(qty)
             except (TypeError, ValueError):
                 qty_int = 1
             pairs.append((str(name), qty_int))
@@ -91,7 +94,14 @@ def collect_service_flags(items: Iterable[dict]) -> Dict[str, bool]:
             flags["has_basic_cleaning"] = True
         if "Minor Reglue" in names:
             flags["has_minor_reglue"] = True
-        if "Full Reglue" in names:
+        if (
+            "Full Reglue" in names
+            or any(
+                n in ("Full Reglue Midsole", "Full Reglue Undersole", "Midsole Full Reglue", "Undersole Full Reglue", "Midsole", "Undersole")
+                or ("full reglue" in n.lower() and ("midsole" in n.lower() or "undersole" in n.lower()))
+                for n in names
+            )
+        ):
             flags["has_full_reglue"] = True
         if "Color Renewal" in names:
             flags["has_color_renewal"] = True
@@ -143,15 +153,21 @@ def parse_duration_days(val) -> int:
 
 
 def official_service_days(name: str, duration_map: Optional[Dict[str, int]] = None) -> int:
-    if duration_map and name in duration_map:
-        return parse_duration_days(duration_map[name])
-    if name in OFFICIAL_DURATION_DAYS:
-        return OFFICIAL_DURATION_DAYS[name]
-    if name in ("Full Restoration", "FR"):
+    cleaned = (name or "").strip()
+    lowered = cleaned.lower()
+    if (
+        cleaned in ("Full Reglue Midsole", "Full Reglue Undersole", "Midsole Full Reglue", "Undersole Full Reglue", "Midsole", "Undersole")
+        or ("full reglue" in lowered and ("midsole" in lowered or "undersole" in lowered))
+    ):
         return 25
-    if name == "Basic Cleaning":
+    if duration_map and cleaned in duration_map:
+        return parse_duration_days(duration_map[cleaned])
+    if cleaned in OFFICIAL_DURATION_DAYS:
+        return OFFICIAL_DURATION_DAYS[cleaned]
+    if cleaned in ("Full Restoration", "FR"):
+        return 25
+    if cleaned == "Basic Cleaning":
         return 10
-    lowered = (name or "").lower()
     if "reglue" in lowered or "color renewal" in lowered:
         return 25
     return 0
@@ -163,9 +179,13 @@ def calculate_official_release_days(order_data: dict, duration_map: Optional[Dic
     if not flags["has_services"]:
         return 0
 
-    overridden = combo_override_days(flags)
-    if overridden is not None:
-        return max(MIN_DURATION_DAYS, overridden)
+    priority_days = 0
+    if str(order_data.get("priorityLevel") or "").lower() == "rush":
+        rush_raw = order_data.get("rushReductionDays", DEFAULT_RUSH_REDUCTION_DAYS)
+        try:
+            priority_days = -(int(rush_raw) if rush_raw not in (None, "") else DEFAULT_RUSH_REDUCTION_DAYS)
+        except (TypeError, ValueError):
+            priority_days = -DEFAULT_RUSH_REDUCTION_DAYS
 
     longest_pair = 0
     for item in items:
@@ -174,22 +194,36 @@ def calculate_official_release_days(order_data: dict, duration_map: Optional[Dic
             "reglue" in (s or "").lower() or "color renewal" in (s or "").lower()
             for s in services_arr
         )
-        filtered = [s for s in services_arr if s != "Basic Cleaning"] if has_duration_inclusive else services_arr
-        pair_days = 0
+        filtered = [s for s in services_arr if (s or "").strip() != "Basic Cleaning"] if has_duration_inclusive else services_arr
+        has_full_reglue_base = any(
+            "full reglue" in (s or "").lower()
+            for s in services_arr
+        )
+        pair_base_days = 0
         for service_name in filtered:
             days = official_service_days(service_name, duration_map)
-            pair_days += days if days else (10 if service_name == "Basic Cleaning" else 25)
-        for addon_name, qty in _addon_pairs(item.get("addOns")):
-            pair_days += official_service_days(addon_name, duration_map) * int(qty or 1)
-        longest_pair = max(longest_pair, pair_days)
+            d = days if days else (10 if (service_name or "").strip() == "Basic Cleaning" else 25)
+            pair_base_days = max(pair_base_days, d)
+        pair_days = pair_base_days
 
-    priority_days = 0
-    if str(order_data.get("priorityLevel") or "").lower() == "rush":
-        rush_raw = order_data.get("rushReductionDays", DEFAULT_RUSH_REDUCTION_DAYS)
-        try:
-            priority_days = -(int(rush_raw) if rush_raw not in (None, "") else DEFAULT_RUSH_REDUCTION_DAYS)
-        except (TypeError, ValueError):
-            priority_days = -DEFAULT_RUSH_REDUCTION_DAYS
+        reglue_addon_accounted = False
+        for addon_name, qty in _addon_pairs(item.get("addOns")):
+            cleaned_addon = (addon_name or "").strip()
+            lowered_addon = cleaned_addon.lower()
+            is_reglue_part = (
+                cleaned_addon in ("Full Reglue Midsole", "Full Reglue Undersole", "Midsole Full Reglue", "Undersole Full Reglue", "Midsole", "Undersole")
+                or ("full reglue" in lowered_addon and ("midsole" in lowered_addon or "undersole" in lowered_addon))
+                or ("reglue" in lowered_addon and ("midsole" in lowered_addon or "undersole" in lowered_addon))
+            )
+            if is_reglue_part:
+                if has_full_reglue_base:
+                    continue
+                if not reglue_addon_accounted:
+                    pair_days += official_service_days(cleaned_addon, duration_map)
+                    reglue_addon_accounted = True
+                continue
+            pair_days += official_service_days(cleaned_addon, duration_map) * int(qty or 1)
+        longest_pair = max(longest_pair, pair_days)
 
     return max(MIN_DURATION_DAYS, longest_pair + priority_days)
 

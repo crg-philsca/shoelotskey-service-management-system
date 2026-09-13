@@ -1,13 +1,19 @@
-import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/app/components/ui/dialog';
+import { useState, useEffect, useRef } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/app/components/ui/dialog';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { Textarea } from '@/app/components/ui/textarea';
 import { toast } from 'sonner';
 import { Search, Plus, Trash2, Users, Package } from 'lucide-react';
-import { EXPENSE_CATEGORIES, cleanExpenseCategory } from '@/app/lib/expenseCategories';
+import {
+    INVENTORY_EXPENSE_CATEGORIES,
+    OPERATIONAL_EXPENSE_CATEGORIES,
+    OTHER_EXPENSE_CATEGORIES,
+    EXPENSE_CATEGORIES,
+    cleanExpenseCategory,
+} from '@/app/lib/expenseCategories';
 
 interface AddExpenseModalProps {
     isOpen: boolean;
@@ -75,6 +81,77 @@ function FormattedDateInput({ value, onChange, className, id }: { value: string;
     );
 }
 
+function parseExpenseNotesToBreakdown(rawNotes: string, cat: string) {
+    if (!rawNotes) return { parsedSupply: [], parsedStaff: [], cleanNotes: '' };
+
+    const parsedSupply: { id: string; name: string; price: string }[] = [];
+    const parsedStaff: { id: string; name: string; role: string; amount: string }[] = [];
+    let cleanNotes = rawNotes;
+
+    const breakdownHeaderRegex = /\[(.*?(?:BREAKDOWN|PAYROLL ALLOCATION))\]/i;
+    const headerMatch = rawNotes.match(breakdownHeaderRegex);
+
+    if (headerMatch && headerMatch.index !== undefined) {
+        const afterHeader = rawNotes.substring(headerMatch.index + headerMatch[0].length);
+        const addNotesRegex = /\[ADDITIONAL NOTES\]/i;
+        const addNotesMatch = afterHeader.match(addNotesRegex);
+
+        let breakdownBlock = '';
+        if (addNotesMatch && addNotesMatch.index !== undefined) {
+            breakdownBlock = afterHeader.substring(0, addNotesMatch.index);
+            cleanNotes = afterHeader.substring(addNotesMatch.index + addNotesMatch[0].length).trim();
+        } else {
+            const lines = afterHeader.split('\n');
+            const bulletLines: string[] = [];
+            const remainderLines: string[] = [];
+            let inBullets = true;
+            for (const l of lines) {
+                const tr = l.trim();
+                if (!tr) continue;
+                if (tr.startsWith('•') || tr.startsWith('-') || tr.startsWith('*')) {
+                    if (inBullets) bulletLines.push(tr);
+                    else remainderLines.push(l);
+                } else {
+                    inBullets = false;
+                    remainderLines.push(l);
+                }
+            }
+            breakdownBlock = bulletLines.join('\n');
+            cleanNotes = remainderLines.join('\n').trim();
+        }
+
+        const bulletLines = breakdownBlock.split('\n');
+        for (const line of bulletLines) {
+            const trimmed = line.trim().replace(/^[•\-\*]\s*/, '');
+            if (!trimmed) continue;
+
+            if (cat === 'Staff Salary') {
+                const staffMatch = trimmed.match(/^(.*?)(?:\s*\((.*?)\))?:\s*(?:₱|PHP|P)?\s*([\d,]+(?:\.\d+)?)/i);
+                if (staffMatch) {
+                    parsedStaff.push({
+                        id: Math.random().toString(),
+                        name: staffMatch[1].trim(),
+                        role: staffMatch[2]?.trim() || 'Technician',
+                        amount: staffMatch[3].replace(/,/g, '')
+                    });
+                    continue;
+                }
+            }
+
+            const supplyMatch = trimmed.match(/^(.*?):\s*(?:₱|PHP|P)?\s*([\d,]+(?:\.\d+)?)/i);
+            if (supplyMatch) {
+                parsedSupply.push({
+                    id: Math.random().toString(),
+                    name: supplyMatch[1].trim(),
+                    price: supplyMatch[2].replace(/,/g, '')
+                });
+            }
+        }
+    }
+
+    return { parsedSupply, parsedStaff, cleanNotes };
+}
+
 export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditExpense, initialData }: AddExpenseModalProps) {
     const [category, setCategory] = useState<string>('');
     const [customCategory, setCustomCategory] = useState('');
@@ -89,6 +166,8 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditE
     // Dynamic itemized lists for specialized categories
     const [staffItems, setStaffItems] = useState<{ id: string; name: string; role: string; amount: string }[]>([]);
     const [supplyItems, setSupplyItems] = useState<{ id: string; name: string; price: string }[]>([]);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const isSubmittingRef = useRef(false);
 
     // Pre-populate with current date and time or initialData
     useEffect(() => {
@@ -104,16 +183,26 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditE
                 setAmount(formatAmount(initialData.amount.toString()));
                 
                 const freq = initialData.frequency || 'Monthly';
-                if (['Daily', 'Weekly', 'Bi-Weekly', 'Monthly', 'Quarterly', 'Yearly', 'One-Time'].includes(freq)) {
+                if (['Daily', 'Weekly', 'Bi-Weekly', 'Monthly', 'Quarterly', 'Yearly', 'One-Time', 'Restock'].includes(freq)) {
                     setFrequency(freq);
                 } else {
                     setFrequency('Custom (Specify)');
                     setCustomFrequency(freq);
                 }
                 
-                setNotes(initialData.notes || '');
-                setStaffItems([]);
-                setSupplyItems([]);
+                const { parsedSupply, parsedStaff, cleanNotes } = parseExpenseNotesToBreakdown(initialData.notes || '', cleanCat);
+                setNotes(cleanNotes);
+
+                if (cleanCat === 'Staff Salary') {
+                    setStaffItems(parsedStaff.length > 0 ? parsedStaff : [{ id: Math.random().toString(), name: '', role: 'Technician', amount: '' }]);
+                    setSupplyItems([]);
+                } else if ((INVENTORY_EXPENSE_CATEGORIES as readonly string[]).includes(cleanCat)) {
+                    setSupplyItems(parsedSupply.length > 0 ? parsedSupply : [{ id: Math.random().toString(), name: '', price: '' }]);
+                    setStaffItems([]);
+                } else {
+                    setStaffItems([]);
+                    setSupplyItems([]);
+                }
                 
                 const d = new Date(initialData.date);
                 if (!isNaN(d.getTime())) {
@@ -145,9 +234,9 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditE
         if (selectedCat === 'Staff Salary' && staffItems.length === 0) {
             setStaffItems([{ id: Math.random().toString(), name: '', role: 'Technician', amount: '' }]);
             setFrequency('Weekly');
-        } else if (['Cleaning Materials', 'Cleaning Aids', 'Chemicals'].includes(selectedCat) && supplyItems.length === 0) {
+        } else if ((INVENTORY_EXPENSE_CATEGORIES as readonly string[]).includes(selectedCat) && supplyItems.length === 0) {
             setSupplyItems([{ id: Math.random().toString(), name: '', price: '' }]);
-            setFrequency('Monthly');
+            setFrequency('One-Time');
         }
     };
 
@@ -192,81 +281,96 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditE
         }
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (isSubmitting || isSubmittingRef.current) return;
+        isSubmittingRef.current = true;
+        setIsSubmitting(true);
 
-        const finalCategory = category === 'Other (Manual Insert)' ? customCategory : category;
-        const finalAmount = parseFloat(amount.replace(/,/g, ''));
-        const finalFrequency = frequency === 'Custom (Specify)' ? customFrequency : frequency;
+        try {
+            const finalCategory = category === 'Other (Manual Insert)' ? customCategory : category;
+            const finalAmount = parseFloat(amount.replace(/,/g, ''));
+            const finalFrequency = frequency === 'Custom (Specify)' ? customFrequency : frequency;
 
-        if (!finalCategory || isNaN(finalAmount)) {
-            toast.error('Please fill in all required fields and enter a valid amount');
-            return;
+            if (!finalCategory || isNaN(finalAmount)) {
+                toast.error('Please fill in all required fields and enter a valid amount');
+                return;
+            }
+
+            // Compile itemized lists into notes for pristine data preservation
+            let compiledNotes = notes;
+            if (category === 'Staff Salary' && staffItems.length > 0 && staffItems.some(i => i.name || i.amount)) {
+                const breakdown = "[STAFF PAYROLL ALLOCATION]\n" + staffItems.filter(i => i.name || i.amount).map(s => 
+                    `• ${s.name || 'Unnamed Staff'} (${s.role || 'Staff'}): ₱${parseFloat(s.amount || '0').toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                ).join('\n');
+                compiledNotes = breakdown + (notes ? `\n\n[ADDITIONAL NOTES]\n${notes}` : '');
+            } else if ((INVENTORY_EXPENSE_CATEGORIES as readonly string[]).includes(category) && supplyItems.length > 0 && supplyItems.some(i => i.name || i.price)) {
+                const breakdown = `[${category.toUpperCase()} ITEMIZED BREAKDOWN]\n` + supplyItems.filter(i => i.name || i.price).map(i => 
+                    `• ${i.name || 'Unnamed Item'}: ₱${parseFloat(i.price || '0').toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                ).join('\n');
+                compiledNotes = breakdown + (notes ? `\n\n[ADDITIONAL NOTES]\n${notes}` : '');
+            }
+
+            const expensePayload = {
+                id: initialData?.id || Math.random().toString(36).substr(2, 9),
+                category: finalCategory,
+                amount: finalAmount,
+                frequency: finalFrequency || 'One-Time',
+                date: `${date}T${time}`,
+                notes: compiledNotes
+            };
+
+            if (initialData && onEditExpense) {
+                await onEditExpense(initialData.id, expensePayload);
+                toast.success(`Expense updated: ${finalCategory}`);
+            } else if (onAddExpense) {
+                await onAddExpense(expensePayload);
+                toast.success(`Expense logged: ${finalCategory}`);
+            }
+
+            onClose();
+            setCategory('');
+            setCustomCategory('');
+            setAmount('');
+            setNotes('');
+            setCategorySearch('');
+        } catch (err: any) {
+            console.error('[EXPENSE SUBMIT ERROR]', err);
+            toast.error(err?.message || 'Failed to save expense');
+        } finally {
+            isSubmittingRef.current = false;
+            setIsSubmitting(false);
         }
-
-        // Compile itemized lists into notes for pristine data preservation
-        let compiledNotes = notes;
-        if (category === 'Staff Salary' && staffItems.length > 0 && staffItems.some(i => i.name || i.amount)) {
-            const breakdown = "[STAFF PAYROLL ALLOCATION]\n" + staffItems.filter(i => i.name || i.amount).map(s => 
-                `• ${s.name || 'Unnamed Staff'} (${s.role || 'Staff'}): ₱${parseFloat(s.amount || '0').toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-            ).join('\n');
-            compiledNotes = breakdown + (notes ? `\n\n[ADDITIONAL NOTES]\n${notes}` : '');
-        } else if (['Cleaning Materials', 'Cleaning Aids', 'Chemicals'].includes(category) && supplyItems.length > 0 && supplyItems.some(i => i.name || i.price)) {
-            const breakdown = `[${category.toUpperCase()} ITEMIZED BREAKDOWN]\n` + supplyItems.filter(i => i.name || i.price).map(i => 
-                `• ${i.name || 'Unnamed Item'}: ₱${parseFloat(i.price || '0').toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-            ).join('\n');
-            compiledNotes = breakdown + (notes ? `\n\n[ADDITIONAL NOTES]\n${notes}` : '');
-        }
-
-        const expensePayload = {
-            id: initialData?.id || Math.random().toString(36).substr(2, 9),
-            category: finalCategory,
-            amount: finalAmount,
-            frequency: finalFrequency || 'One-Time',
-            date: `${date}T${time}`,
-            notes: compiledNotes
-        };
-
-        if (initialData && onEditExpense) {
-            onEditExpense(initialData.id, expensePayload);
-            toast.success(`Expense updated: ${finalCategory}`);
-        } else if (onAddExpense) {
-            onAddExpense(expensePayload);
-            toast.success(`Expense logged: ${finalCategory}`);
-        }
-
-        onClose();
-        setCategory('');
-        setCustomCategory('');
-        setAmount('');
-        setNotes('');
-        setCategorySearch('');
     };
 
-    const filteredCategories = EXPENSE_CATEGORIES.filter(cat =>
-        cat.toLowerCase().includes(categorySearch.toLowerCase())
-    );
+    const searchLow = categorySearch.toLowerCase().trim();
+    const filteredInv = INVENTORY_EXPENSE_CATEGORIES.filter(cat => cat.toLowerCase().includes(searchLow));
+    const filteredOp = OPERATIONAL_EXPENSE_CATEGORIES.filter(cat => cat.toLowerCase().includes(searchLow));
+    const filteredOth = OTHER_EXPENSE_CATEGORIES.filter(cat => cat.toLowerCase().includes(searchLow));
+    const hasAnyResults = filteredInv.length > 0 || filteredOp.length > 0 || filteredOth.length > 0;
 
     const isStaffSalary = category === 'Staff Salary';
-    const isSupplyCategory = ['Cleaning Materials', 'Cleaning Aids', 'Chemicals'].includes(category);
+    const isSupplyCategory = (INVENTORY_EXPENSE_CATEGORIES as readonly string[]).includes(category);
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-[550px] max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
+            <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-[560px] max-h-[90vh] flex flex-col p-0 rounded-2xl border-0 shadow-2xl bg-white overflow-hidden">
+                <DialogHeader className="p-6 pb-3 border-b border-gray-100 shrink-0">
                     <DialogTitle className="text-xl font-bold text-red-600 uppercase text-center w-full">
                         {initialData ? 'Edit Expense' : 'Log New Expense'}
                     </DialogTitle>
+                    <DialogDescription className="sr-only">Form to log or edit business expenses</DialogDescription>
                 </DialogHeader>
-                <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-                    <div className="grid grid-cols-2 gap-4">
+                <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                    <div className="overflow-y-auto p-6 pt-4 space-y-4 flex-1 min-h-0 custom-scrollbar">
+                        <div className="grid grid-cols-2 gap-4">
                         <div className={`space-y-2 ${category === 'Other (Manual Insert)' ? 'col-span-1' : 'col-span-2'}`}>
                             <Label htmlFor="category" className={LABEL_STYLE}>Category</Label>
                             <Select value={category} onValueChange={handleCategorySelect}>
                                 <SelectTrigger id="category" className={INPUT_STYLE}>
                                     <SelectValue placeholder="Select expense type" />
                                 </SelectTrigger>
-                                <SelectContent className="rounded-xl border-gray-100 shadow-xl p-1">
+                                <SelectContent className="rounded-xl border-gray-100 shadow-xl p-1 max-w-[340px] sm:max-w-[420px]">
                                     <div className="relative px-2 py-2 mb-1">
                                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
                                         <input
@@ -277,15 +381,48 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditE
                                             onKeyDown={(e) => e.stopPropagation()}
                                         />
                                     </div>
-                                    <div className="max-h-[200px] overflow-y-auto">
-                                        {filteredCategories.length > 0 ? (
-                                            filteredCategories.map((cat) => (
-                                                <SelectItem key={cat} value={cat} className="text-xs font-bold text-gray-600 focus:bg-red-100 focus:text-red-700">
-                                                    {cat}
-                                                </SelectItem>
-                                            ))
-                                        ) : (
-                                            <div className="px-4 py-2 text-[10px] text-gray-400 italic">No results</div>
+                                    <div className="max-h-[240px] overflow-y-auto pr-1">
+                                        {filteredInv.length > 0 && (
+                                            <SelectGroup>
+                                                <SelectLabel className="text-[10px] font-black uppercase text-amber-800 bg-amber-50 px-2 py-1 rounded-md mb-1 tracking-wider flex items-center gap-1">
+                                                    📦 Inventory Expenses
+                                                </SelectLabel>
+                                                {filteredInv.map((cat) => (
+                                                    <SelectItem key={cat} value={cat} className="text-xs font-semibold text-gray-700 pl-3 focus:bg-amber-50 focus:text-amber-900 cursor-pointer">
+                                                        {cat}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectGroup>
+                                        )}
+
+                                        {filteredOp.length > 0 && (
+                                            <SelectGroup className="mt-2">
+                                                <SelectLabel className="text-[10px] font-black uppercase text-blue-800 bg-blue-50 px-2 py-1 rounded-md mb-1 tracking-wider flex items-center gap-1">
+                                                    🏢 Operational Expenses
+                                                </SelectLabel>
+                                                {filteredOp.map((cat) => (
+                                                    <SelectItem key={cat} value={cat} className="text-xs font-semibold text-gray-700 pl-3 focus:bg-blue-50 focus:text-blue-900 cursor-pointer">
+                                                        {cat}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectGroup>
+                                        )}
+
+                                        {filteredOth.length > 0 && (
+                                            <SelectGroup className="mt-2">
+                                                <SelectLabel className="text-[10px] font-black uppercase text-purple-800 bg-purple-50 px-2 py-1 rounded-md mb-1 tracking-wider flex items-center gap-1">
+                                                    🏷️ Other Expenses
+                                                </SelectLabel>
+                                                {filteredOth.map((cat) => (
+                                                    <SelectItem key={cat} value={cat} className="text-xs font-semibold text-gray-700 pl-3 focus:bg-purple-50 focus:text-purple-900 cursor-pointer">
+                                                        {cat}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectGroup>
+                                        )}
+
+                                        {!hasAnyResults && (
+                                            <div className="px-4 py-3 text-[11px] text-gray-400 italic text-center">No categories matching &quot;{categorySearch}&quot;</div>
                                         )}
                                     </div>
                                 </SelectContent>
@@ -475,6 +612,7 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditE
                                     <SelectItem value="Quarterly" className="font-medium text-xs">Quarterly</SelectItem>
                                     <SelectItem value="Yearly" className="font-medium text-xs">Yearly</SelectItem>
                                     <SelectItem value="One-Time" className="font-medium text-xs">One-Time</SelectItem>
+                                    <SelectItem value="Restock" className="font-bold text-xs text-amber-800">Restock</SelectItem>
                                     <SelectItem value="Custom (Specify)" className="font-bold text-xs text-red-600">Custom (Specify)</SelectItem>
                                 </SelectContent>
                             </Select>
@@ -554,13 +692,14 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditE
                             className="min-h-[70px] bg-[#F8F9FA] border-gray-100 rounded-md p-3 text-xs focus:ring-red-50 focus:border-red-100 resize-none"
                         />
                     </div>
+                    </div>
 
-                    <DialogFooter className="pt-2 flex flex-row gap-3 sm:justify-between">
-                        <Button type="button" variant="outline" onClick={onClose} className="flex-1 h-9 font-bold text-xs border border-gray-300 bg-gray-200 hover:bg-gray-700 text-gray-700 hover:text-white transition-all uppercase tracking-widest">
+                    <DialogFooter className="p-5 py-3.5 border-t border-gray-100 bg-gray-50/70 shrink-0 flex flex-row gap-3 sm:justify-between">
+                        <Button type="button" variant="outline" onClick={onClose} className="flex-1 h-10 font-bold text-xs border border-gray-300 bg-gray-200 hover:bg-gray-700 text-gray-700 hover:text-white transition-all uppercase tracking-widest rounded-xl">
                             CANCEL
                         </Button>
-                        <Button type="submit" className="flex-1 h-9 bg-red-600 hover:bg-red-700 text-white font-bold text-xs uppercase tracking-widest shadow-lg shadow-red-200">
-                            {initialData ? 'SAVE CHANGES' : 'RECORD EXPENSE'}
+                        <Button type="submit" disabled={isSubmitting} className="flex-1 h-10 bg-red-600 hover:bg-red-700 text-white font-bold text-xs uppercase tracking-widest shadow-lg shadow-red-200 disabled:opacity-50 rounded-xl">
+                            {isSubmitting ? 'SAVING...' : initialData ? 'SAVE CHANGES' : 'RECORD EXPENSE'}
                         </Button>
                     </DialogFooter>
                 </form>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { format as dateFnsFormat } from 'date-fns';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
@@ -48,16 +48,20 @@ import {
   ChevronRight,
   AlertTriangle,
   CheckCircle2,
+  Loader2,
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Cell } from 'recharts';
 import type { JobOrder } from '@/app/types';
 import React from 'react';
 import {
   buildOrderActivityTrends,
+  getOrderActivityPeriodLabel,
   collectedSales,
-  isCancelledOrder,
   isDateInRange,
   isSalesEligible,
+  isCancelledOrder,
+  totalRefundsIssued,
+  totalRetainedDeposits,
   orderEventDate,
   serviceVolumeByCanonical,
   type ReportRange,
@@ -259,11 +263,13 @@ const TrendTooltip = ({ active, payload, label }: any) => {
 function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
   const role = user.role;
 
-  const { orders, loading, refreshing, updateOrder, deleteOrder } = useOrders();
+  const { orders, loading, refreshing, updateOrder } = useOrders();
   const { services } = useServices();
   const [isEditing, setIsEditing] = useState(false);
   const [isUpdatingStock, setIsUpdatingStock] = useState(false);
   const [cancelOrderModal, setCancelOrderModal] = useState<JobOrder | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const isCancellingRef = useRef(false);
   const [profitRange, setProfitRange] = useState<ReportRange>('Daily');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
@@ -271,7 +277,8 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
   // When a user clicks a status card (e.g., 'New Order'), this state is set
   // and the dashboard switches to show a detailed table for that status.
   const location = useLocation();
-  const [selectedStatus, setSelectedStatus] = useState<'new-order' | 'on-going' | 'for-release' | 'claimed' | null>(() => {
+  const navigate = useNavigate();
+  const [selectedStatus, setSelectedStatus] = useState<'new-order' | 'on-going' | 'for-release' | 'claimed' | 'cancelled' | null>(() => {
     return (location.state as any)?.status || null;
   });
 
@@ -313,6 +320,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
       ongoing: all.filter(o => o.status === 'on-going').length,
       forRelease: all.filter(o => o.status === 'for-release').length,
       claimed: all.filter(o => o.status === 'claimed').length,
+      cancelled: all.filter(o => o.status === 'cancelled' || (o.status as any) === 'canceled').length,
     };
   }, [analyticsOrders]);
 
@@ -324,21 +332,38 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
     // so we don't 'lose' work-in-progress tasks due to the date filter.
     const source = selectedStatus ? (orders || []) : (analyticsOrders || []);
     if (!selectedStatus) return source;
-    return source.filter(order => order.status === selectedStatus);
+    return source.filter(order => order.status === selectedStatus || (selectedStatus === 'cancelled' && (order.status === 'cancelled' || (order.status as any) === 'canceled')));
   }, [orders, analyticsOrders, selectedStatus]);
 
   const totalSales = useMemo(() => {
     return (analyticsOrders || [])
       .filter(isSalesEligible)
-      .reduce((sum, order) => sum + collectedSales(order), 0);
+      .reduce((sum, order) => sum + (Number(order.grandTotal) || 0), 0);
   }, [analyticsOrders]);
 
-  const totalPendingPayments = useMemo(() => {
-    return (analyticsOrders || []).reduce((sum, order) => {
-      if (isCancelledOrder(order)) return sum;
-      if (order?.paymentStatus === 'fully-paid') return sum;
-      return sum + Math.max(0, (order?.grandTotal || 0) - (order?.amountReceived || 0));
-    }, 0);
+  const totalRefunds = useMemo(() => {
+    return totalRefundsIssued(analyticsOrders || []);
+  }, [analyticsOrders]);
+
+  const totalRetainedDepositsAmount = useMemo(() => {
+    return totalRetainedDeposits(analyticsOrders || []);
+  }, [analyticsOrders]);
+
+  const netSales = useMemo(() => {
+    return Math.max(0, totalSales - totalRefunds + totalRetainedDepositsAmount);
+  }, [totalSales, totalRefunds, totalRetainedDepositsAmount]);
+
+  const totalBalanceDue = useMemo(() => {
+    return (analyticsOrders || [])
+      .filter(isSalesEligible)
+      .reduce((sum, order) => {
+        const billed = Number(order.grandTotal) || 0;
+        const isDP = String(order.paymentStatus || '').toLowerCase() === 'downpayment';
+        const collected = (isDP && order.depositAmount != null && Number(order.depositAmount) > 0)
+          ? Number(order.depositAmount)
+          : collectedSales(order);
+        return sum + Math.max(0, billed - collected);
+      }, 0);
   }, [analyticsOrders]);
 
   const { inventoryData } = useInventory();
@@ -395,7 +420,34 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
     [orders, profitRange, customStartDate, customEndDate],
   );
 
-  const chartTitle = 'ORDER ACTIVITY TRENDS';
+  const chartTitle = profitRange === 'Quarterly'
+    ? 'ORDER ACTIVITY — QUARTERLY'
+    : profitRange === 'Daily'
+    ? 'ORDER ACTIVITY — DAILY'
+    : profitRange === 'Weekly'
+    ? 'ORDER ACTIVITY — WEEKLY'
+    : profitRange === 'Monthly'
+    ? 'ORDER ACTIVITY — MONTHLY'
+    : profitRange === 'Annually'
+    ? 'ORDER ACTIVITY — ANNUAL'
+    : 'ORDER ACTIVITY TRENDS';
+
+  const serviceVolumeTitle = profitRange === 'Quarterly'
+    ? 'SERVICE VOLUME BY TYPE — QUARTERLY'
+    : profitRange === 'Daily'
+    ? 'SERVICE VOLUME BY TYPE — DAILY'
+    : profitRange === 'Weekly'
+    ? 'SERVICE VOLUME BY TYPE — WEEKLY'
+    : profitRange === 'Monthly'
+    ? 'SERVICE VOLUME BY TYPE — MONTHLY'
+    : profitRange === 'Annually'
+    ? 'SERVICE VOLUME BY TYPE — ANNUAL'
+    : 'SERVICE VOLUME BY TYPE';
+
+  const chartPeriodSubtitle = useMemo(
+    () => getOrderActivityPeriodLabel(profitRange, customStartDate, customEndDate),
+    [profitRange, customStartDate, customEndDate],
+  );
 
   // Header right action: Navigation and contextual buttons
   useEffect(() => {
@@ -410,7 +462,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
             type="button"
           >
             <CalendarIcon className="h-4 w-4 sm:mr-1 shrink-0" aria-hidden="true" />
-            <span className="hidden sm:inline truncate mx-1 flex-1 text-center">{profitRange}</span>
+            <span className="hidden sm:inline truncate mx-1 flex-1 text-center">{profitRange === 'Annually' ? 'Annual' : profitRange}</span>
             <ChevronDown className="hidden sm:block h-4 w-4 text-white shrink-0" aria-hidden="true" />
           </button>
         </DropdownMenuTrigger>
@@ -421,7 +473,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
               onClick={() => setProfitRange(range as typeof profitRange)}
               className={`uppercase px-4 py-2 text-sm font-semibold cursor-pointer transition-colors ${profitRange === range ? 'bg-red-600 text-white focus:bg-red-600 focus:text-white' : 'bg-white text-red-700 hover:bg-red-100 hover:text-red-700 focus:bg-red-100 focus:text-red-700'}`}
             >
-              {range}
+              {range === 'Annually' ? 'Annual' : range}
             </DropdownMenuItem>
           ))}
         </DropdownMenuContent>
@@ -496,7 +548,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
               <CardTitle className="text-center text-base font-bold text-gray-900 uppercase mb-0 pb-0 tracking-tight">Status Summary</CardTitle>
             </CardHeader>
             <CardContent className="flex justify-center pt-0 pb-0 mb-0 -mt-5">
-              <div className="grid w-full grid-cols-2 lg:grid-cols-4 gap-2">
+              <div className="grid w-full grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-2">
                 {/* New Order */}
                 <Card
                   className={`border-none shadow-md bg-gradient-to-br from-purple-50 to-purple-100 overflow-hidden relative cursor-pointer transition-all ${selectedStatus === 'new-order' ? 'ring-2 ring-purple-600' : ''}`}
@@ -556,53 +608,81 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
           {/* Overview Summary Section - Always Shown */}
           {!selectedStatus && (
             <Card>
-              <CardHeader className="pt-5 pb-0 mb-0 relative group">
+              <CardHeader className="pt-4 pb-0 mb-0 relative group">
                 <CardTitle className="text-center text-base font-bold text-gray-900 uppercase mb-0 pb-0 tracking-tight">Overview Summary</CardTitle>
               </CardHeader>
               <CardContent className="pt-0 pb-0 mb-0 -mt-5">
                 <div className={`grid gap-2 ${role !== 'staff' ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4' : 'grid-cols-1 md:grid-cols-2'}`}>
                   {/* Card 1: Total Active Orders */}
-                  <Card className={`border-none shadow-md bg-white overflow-hidden relative ${role === 'staff' ? 'col-span-1 md:col-span-2' : 'col-span-1'}`}>
-                    <div className="absolute top-0 right-0 p-4 opacity-10">
-                      <FileText size={48} className="text-yellow-600" />
+                  <Card 
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Navigate to active orders"
+                    onClick={() => navigate('/total-orders', { state: { dateRange: profitRange, customStartDate, customEndDate, filterCard: 'active' } })}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/total-orders', { state: { dateRange: profitRange, customStartDate, customEndDate, filterCard: 'active' } }); } }}
+                    className={`border-none shadow-md bg-white overflow-hidden relative cursor-pointer hover:shadow-lg transition-all ${role === 'staff' ? 'col-span-1 md:col-span-2' : 'col-span-1'}`}
+                  >
+                    <div className="absolute top-0 right-0 p-3 opacity-10">
+                      <FileText size={42} className="text-yellow-600" />
                     </div>
-                    <CardContent className="pt-6">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">Active Orders</p>
+                    <CardContent className="pt-4 pb-3 px-4">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">Active Orders</p>
                       <p className="text-2xl font-black text-yellow-600 tracking-tight">{overviewOrders.filter(o => ['new-order', 'on-going', 'for-release'].includes(o.status)).length}</p>
                     </CardContent>
                   </Card>
                   {/* Assigned Orders Removed per user request */}
                   {role !== 'staff' && (
                     <>
-                      {/* Card 2: Pending Payments (Red) */}
-                      <Card className="border-none shadow-md bg-white overflow-hidden relative col-span-1 border-t-4 border-red-500">
-                        <div className="absolute top-0 right-0 p-4 opacity-10">
-                          <CircleAlert size={48} className="text-red-600" />
+                      {/* Card 2: Sales (Green) - Next to Active Orders */}
+                      <Card 
+                        role="button"
+                        tabIndex={0}
+                        aria-label="Navigate to total sales"
+                        onClick={() => navigate('/total-sales', { state: { dateRange: profitRange, customStartDate, customEndDate, filterCard: 'all' } })}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/total-sales', { state: { dateRange: profitRange, customStartDate, customEndDate, filterCard: 'all' } }); } }}
+                        className="border-none shadow-md bg-white overflow-hidden relative col-span-1 border-t-4 border-green-500 cursor-pointer hover:shadow-lg transition-all"
+                      >
+                        <div className="absolute top-0 right-0 p-3 opacity-10">
+                          <TrendingUp size={42} className="text-green-600" />
                         </div>
-                        <CardContent className="pt-6">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">{profitRange} Pending Payments</p>
-                          <p className="text-2xl font-black text-red-600 tracking-tight">{'\u20B1'}{(totalPendingPayments || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                        <CardContent className="pt-4 pb-3 px-4">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">{profitRange === 'Annually' ? 'Annual' : profitRange} Sales</p>
+                          <p className="text-2xl font-black text-green-600 tracking-tight">{formatPeso(netSales)}</p>
                         </CardContent>
                       </Card>
 
-                      {/* Card 3: Total Sales (Green) */}
-                      <Card className="border-none shadow-md bg-white overflow-hidden relative col-span-1 border-t-4 border-green-500">
-                        <div className="absolute top-0 right-0 p-4 opacity-10">
-                          <TrendingUp size={48} className="text-green-600" />
+                      {/* Card 3: Balance Due (Red) */}
+                      <Card 
+                        role="button"
+                        tabIndex={0}
+                        aria-label="Navigate to balance due sales"
+                        onClick={() => navigate('/total-sales', { state: { dateRange: profitRange, customStartDate, customEndDate, filterCard: 'balance-due' } })}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/total-sales', { state: { dateRange: profitRange, customStartDate, customEndDate, filterCard: 'balance-due' } }); } }}
+                        className="border-none shadow-md bg-white overflow-hidden relative col-span-1 border-t-4 border-red-500 cursor-pointer hover:shadow-lg transition-all"
+                      >
+                        <div className="absolute top-0 right-0 p-3 opacity-10">
+                          <CircleAlert size={42} className="text-red-600" />
                         </div>
-                        <CardContent className="pt-6">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">{profitRange} Total Sales</p>
-                          <p className="text-2xl font-black text-green-600 tracking-tight">{'\u20B1'}{(totalSales || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                        <CardContent className="pt-4 pb-3 px-4">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">{profitRange === 'Annually' ? 'Annual' : profitRange} Balance Due</p>
+                          <p className="text-2xl font-black text-red-600 tracking-tight">{'\u20B1'}{(totalBalanceDue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                         </CardContent>
                       </Card>
 
                       {/* Card 4: Total Expenses (Orange) */}
-                      <Card className="border-none shadow-md bg-white overflow-hidden relative col-span-1 border-t-4 border-orange-500">
-                        <div className="absolute top-0 right-0 p-4 opacity-10">
-                          <TrendingDown size={48} className="text-orange-600" />
+                      <Card 
+                        role="button"
+                        tabIndex={0}
+                        aria-label="Navigate to expenses report"
+                        onClick={() => navigate('/expenses', { state: { dateRange: profitRange, customStartDate, customEndDate, filterCard: 'all' } })}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/expenses', { state: { dateRange: profitRange, customStartDate, customEndDate, filterCard: 'all' } }); } }}
+                        className="border-none shadow-md bg-white overflow-hidden relative col-span-1 border-t-4 border-orange-500 cursor-pointer hover:shadow-lg transition-all"
+                      >
+                        <div className="absolute top-0 right-0 p-3 opacity-10">
+                          <TrendingDown size={42} className="text-orange-600" />
                         </div>
-                        <CardContent className="pt-6">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">{profitRange} Total Expenses</p>
+                        <CardContent className="pt-4 pb-3 px-4">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">{profitRange === 'Annually' ? 'Annual' : profitRange} Expenses</p>
                           <p className="text-2xl font-black text-orange-600 tracking-tight">{'\u20B1'}{(totalExpenses || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                         </CardContent>
                       </Card>
@@ -625,6 +705,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                         case 'on-going': return 'ON-GOING';
                         case 'for-release': return 'FOR RELEASE';
                         case 'claimed': return 'CLAIMED';
+                        case 'cancelled': return 'CANCELLED';
                         default: return 'STATUS';
                       }
                     })()}
@@ -772,7 +853,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                 {/* Orders Table */}
                 <div>
                   {(() => {
-                    let filtered = (analyticsOrders || []).filter(order => order?.status === selectedStatus);
+                    let filtered = (analyticsOrders || []).filter(order => order?.status === selectedStatus || (selectedStatus === 'cancelled' && (order?.status === 'cancelled' || (order?.status as any) === 'canceled')));
 
                     if (filterService !== 'all') {
                       filtered = filtered.filter(order => (order?.baseService || []).includes(filterService));
@@ -829,22 +910,22 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
 
                     return (
                       <>
-                        <div className="overflow-x-auto -mx-4 px-4 overflow-y-hidden no-scrollbar">
-                          <table className="w-full text-sm min-w-[700px]">
+                        <div className="overflow-x-auto -mx-1 px-1 overflow-y-hidden no-scrollbar">
+                          <table className="w-full text-xs">
                             <thead className="bg-red-50/50 border-b border-red-100">
                               <tr>
-                                <th className="h-10 px-4 text-left font-black text-gray-700 uppercase tracking-widest text-[11px]">Order #</th>
-                                <th className="h-10 px-4 text-left font-black text-gray-700 uppercase tracking-widest text-[11px]">Customer</th>
-                                <th className="h-10 px-4 text-left font-black text-gray-700 uppercase tracking-widest text-[11px]">Services</th>
-                                <th className="h-10 px-4 text-left font-black text-gray-700 uppercase tracking-widest text-[11px]">QTY</th>
-                                <th className="h-10 px-4 text-center font-black text-gray-700 uppercase tracking-widest text-[11px]">Order Date</th>
-                                <th className="h-10 px-4 text-center font-black text-gray-700 uppercase tracking-widest text-[11px]">
-                                  {selectedStatus === 'for-release' ? 'Release Date' : selectedStatus === 'claimed' ? 'Claimed Date' : 'Estimated Date'}
+                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap w-[110px]">Order #</th>
+                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap w-[140px]">Customer</th>
+                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] min-w-[140px]">Services</th>
+                                <th className="h-9 px-1.5 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap w-[50px]">QTY</th>
+                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap w-[90px]">Order Date</th>
+                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap w-[95px]">
+                                  {selectedStatus === 'for-release' ? 'Release Date' : selectedStatus === 'claimed' ? 'Claimed Date' : selectedStatus === 'cancelled' ? 'Cancelled Date' : 'Estimated Date'}
                                 </th>
-                                <th className="h-10 px-4 text-left font-black text-gray-700 uppercase tracking-widest text-[11px]">Priority</th>
-                                <th className="h-10 px-4 text-left font-black text-gray-700 uppercase tracking-widest text-[11px]">Payment</th>
-                                <th className="h-10 px-4 text-right font-black text-gray-700 uppercase tracking-widest text-[11px] hidden md:table-cell">Total</th>
-                                <th className="h-10 px-4 text-center font-black text-gray-700 uppercase tracking-widest text-[11px]">Actions</th>
+                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap w-[75px]">Priority</th>
+                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap w-[130px]">Payment</th>
+                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap hidden md:table-cell w-[95px]">Total</th>
+                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap w-[60px]">Actions</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -861,6 +942,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                             case 'on-going': return 'No ongoing orders found';
                                             case 'for-release': return 'No orders for release';
                                             case 'claimed': return 'No claimed orders found';
+                                            case 'cancelled': return 'No cancelled orders found';
                                             default: return 'No orders found';
                                           }
                                         })()}
@@ -879,33 +961,63 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                       setIsEditing(false);
                                     }}
                                   >
-                                    <td className="p-4 text-xs font-medium whitespace-nowrap">{order.orderNumber}</td>
-                                    <td className="p-4 pr-8">
-                                      <div className="text-xs font-bold text-gray-900 leading-tight max-w-[160px] text-wrap break-words">{order.customerName || '-'}</div>
-                                      <div className="text-xs text-gray-500 mt-1 whitespace-nowrap">{order.contactNumber || ''}</div>
+                                    <td className="px-2 py-2.5 text-center text-[11px] font-semibold whitespace-nowrap text-gray-800 w-[110px]">{order.orderNumber || order.id || '-'}</td>
+                                    <td className="px-2 py-2.5 text-center w-[140px]">
+                                      <div className="flex flex-col items-center justify-center text-center">
+                                        <div className="text-xs font-bold text-gray-900 leading-tight max-w-[130px] truncate" title={order.customerName || 'Walk-In'}>{order.customerName || 'Walk-In'}</div>
+                                        {order.contactNumber && (
+                                          <div className="text-[10px] text-gray-500 mt-0.5 whitespace-nowrap">{order.contactNumber}</div>
+                                        )}
+                                      </div>
                                     </td>
-                                    <td className="p-4 text-xs font-medium text-gray-700">
-                                      {Array.isArray(order.baseService)
-                                        ? order.baseService.map((s, i) => (
-                                          <div key={i}>{String(s || '').replace(' (with basic cleaning)', '')}{i < order.baseService.length - 1 ? ',' : ''}</div>
-                                        ))
-                                        : <div>{String(order.baseService || '-').replace(' (with basic cleaning)', '')}</div>}
+                                    <td className="px-2 py-2 text-center text-[11px] font-semibold text-gray-800 min-w-[140px]">
+                                      {(() => {
+                                        const servicesList = (Array.isArray(order.baseService)
+                                          ? order.baseService
+                                          : String(order.baseService || '').split(',')
+                                        )
+                                          .flatMap((s) => String(s || '').split(','))
+                                          .map((s) => String(s || '').trim().replace(' (with basic cleaning)', ''))
+                                          .filter(Boolean);
+                                        return servicesList.length > 0 ? (
+                                          <div className="flex flex-col items-center justify-center text-center text-[11px] font-semibold text-gray-800 leading-snug" title={servicesList.join(', ')}>
+                                            {servicesList.slice(0, 3).map((srv, idx) => (
+                                              <span key={idx} className="block text-[11px] font-semibold text-gray-800 leading-tight">
+                                                {srv}{idx < servicesList.length - 1 ? ',' : ''}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <span className="text-gray-400 italic font-normal text-center block">-</span>
+                                        );
+                                      })()}
                                     </td>
-                                    <td className="p-4 text-xs font-medium text-gray-700">{order.quantity || 1} PR</td>
-                                    <td className="p-4 text-center text-sm font-medium text-gray-700 whitespace-nowrap">
+                                    <td className="px-1.5 py-2.5 text-center text-xs font-semibold text-gray-700 whitespace-nowrap w-[50px]">{order.quantity || 1} PR</td>
+                                    <td className="px-2 py-2.5 text-center text-xs font-medium text-gray-700 whitespace-nowrap w-[90px]">
                                       {(() => {
                                         const d = new Date(order.createdAt);
                                         if (isNaN(d.getTime())) return '-';
                                         return (
-                                          <div className="inline-flex items-center justify-center gap-1.5">
+                                          <div className="inline-flex items-center justify-center gap-1">
                                             <CalendarIcon size={12} className="text-purple-600 shrink-0" />
                                             <span>{dateFnsFormat(d, 'MM/dd/yy')}</span>
                                           </div>
                                         );
                                       })()}
                                     </td>
-                                    <td className="p-4 text-center text-sm font-medium text-gray-700 whitespace-nowrap">
+                                    <td className="px-2 py-2.5 text-center text-xs font-medium text-gray-700 whitespace-nowrap w-[90px]">
                                         {(() => {
+                                          if (selectedStatus === 'cancelled') {
+                                            const cDate = order.cancelledAt || (order as any).updatedAt || order.createdAt;
+                                            if (!cDate) return '-';
+                                            const d = new Date(cDate);
+                                            return (
+                                              <div className="inline-flex items-center justify-center gap-1">
+                                                <CalendarIcon size={12} className="text-rose-600 shrink-0" />
+                                                <span>{isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy')}</span>
+                                              </div>
+                                            );
+                                          }
                                           if (selectedStatus === 'claimed') {
                                             const claimDate = order.actualCompletionDate || ((order as any).statusHistory?.find((s: any) => s.status === 'claimed')?.timestamp);
                                             if (!claimDate) return '-';
@@ -913,7 +1025,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                             const formattedDate = isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy');
                                             return (
                                               <div className="flex flex-col items-center">
-                                                <div className="inline-flex items-center justify-center gap-1.5">
+                                                <div className="inline-flex items-center justify-center gap-1">
                                                   <CalendarIcon size={12} className="text-slate-500 shrink-0" />
                                                   <span>{formattedDate}</span>
                                                 </div>
@@ -931,7 +1043,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                             const d = new Date(released);
                                             if (isNaN(d.getTime())) return '-';
                                             return (
-                                              <div className="inline-flex items-center justify-center gap-1.5">
+                                              <div className="inline-flex items-center justify-center gap-1">
                                                 <CalendarIcon size={12} className="text-orange-600 shrink-0" />
                                                 <span>{dateFnsFormat(d, 'MM/dd/yy')}</span>
                                               </div>
@@ -941,54 +1053,74 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                           const d = new Date(order.predictedCompletionDate);
                                           if (isNaN(d.getTime())) return '-';
                                           return (
-                                            <div className="inline-flex items-center justify-center gap-1.5">
+                                            <div className="inline-flex items-center justify-center gap-1">
                                               <CalendarIcon size={12} className="text-emerald-600 shrink-0" />
                                               <span>{dateFnsFormat(d, 'MM/dd/yy')}</span>
                                             </div>
                                           );
                                         })()}
                                     </td>
-                                    <td className="p-4">
-                                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase border whitespace-nowrap
-                                             ${order.priorityLevel === 'rush' ? 'bg-red-50 text-red-700 border-red-100' :
-                                          order.priorityLevel === 'premium' ? 'bg-amber-50 text-amber-700 border-amber-100' :
-                                            'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                    <td className="px-2 py-2.5 text-center whitespace-nowrap w-[75px]">
+                                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase border whitespace-nowrap ${order.priorityLevel === 'rush'
+                                        ? 'bg-red-50 text-red-700 border-red-100'
+                                        : 'bg-emerald-50 text-emerald-700 border-emerald-100'
                                         }`}>
                                         {order.priorityLevel}
                                       </span>
                                     </td>
-                                    <td className="p-4">
-                                      <div className="flex flex-col">
-                                        <span className={`text-xs font-bold tracking-wider whitespace-nowrap ${order.paymentStatus === 'fully-paid' ? 'text-green-600' :
-                                            order.paymentStatus === 'downpayment' ? 'text-yellow-600' : 'text-red-600'
-                                            }`}>
-                                            {order.paymentStatus === 'fully-paid' ? 'FULLY PAID' : order.paymentStatus === 'downpayment' ? 'DOWNPAYMENT' : order.paymentStatus ? order.paymentStatus.toUpperCase() : '-'}
-                                        </span>
-                                        {order.paymentMethod && (
+                                    <td className="px-2 py-2.5 whitespace-nowrap w-[130px]">
+                                      <div className="flex flex-col items-center justify-center text-center">
+                                        {isCancelledOrder(order) ? (
+                                          order.refundStatus === 'refunded' ? (
                                             <>
-                                                <span className="text-[9px] text-gray-400 font-medium uppercase tracking-wider mt-0.5 whitespace-nowrap">
-                                                  {order.paymentMethod}
-                                                </span>
-                                                {order.paymentStatus === 'downpayment' && (
-                                                  <span className="text-[10px] text-red-500 font-medium tracking-wider mt-0.5 whitespace-nowrap">
-                                                    BAL: {formatPeso(Math.max(0, (order.grandTotal || 0) - (order.depositAmount || (order.amountReceived && order.amountReceived < order.grandTotal ? order.amountReceived : 0))))}
-                                                  </span>
-                                                )}
+                                              <span className="text-[11px] font-bold text-rose-600 tracking-wider whitespace-nowrap">
+                                                REFUNDED
+                                              </span>
+                                              <span className="text-[9px] text-rose-600 font-bold tracking-wider mt-0.5 whitespace-nowrap">
+                                                Refund: {formatPeso(Number(order.refundAmount || order.grandTotal || 0))}
+                                              </span>
                                             </>
+                                          ) : (
+                                            <>
+                                              <span className="text-[11px] font-bold text-amber-700 tracking-wider whitespace-nowrap">
+                                                NO REFUND
+                                              </span>
+                                              <span className="text-[9px] text-amber-700 font-bold tracking-wider mt-0.5 whitespace-nowrap">
+                                                Retained: {formatPeso(Number(order.amountReceived || order.depositAmount || 0))}
+                                              </span>
+                                            </>
+                                          )
+                                        ) : (
+                                          <>
+                                            <span className={`text-[11px] font-bold tracking-wider whitespace-nowrap ${order.paymentStatus === 'fully-paid' ? 'text-green-600' :
+                                                order.paymentStatus === 'downpayment' ? 'text-yellow-600' : 'text-red-600'
+                                                }`}>
+                                                {order.paymentStatus === 'fully-paid' ? 'FULLY PAID' : order.paymentStatus === 'downpayment' ? 'DOWNPAYMENT' : order.paymentStatus ? order.paymentStatus.toUpperCase() : '-'}
+                                            </span>
+                                            {order.paymentMethod && (
+                                                <>
+                                                    <span className="text-[9px] text-gray-400 font-medium uppercase tracking-wider mt-0.5 whitespace-nowrap">
+                                                      {order.paymentMethod}
+                                                    </span>
+                                                      {order.paymentStatus === 'downpayment' && (
+                                                        <span className="text-[10px] text-red-500 font-medium tracking-wider mt-0.5 whitespace-nowrap">
+                                                          BAL: {formatPeso(order.balance !== undefined && order.balance !== null && !isNaN(Number(order.balance)) ? Math.max(0, Number(order.balance)) : Math.max(0, (order.grandTotal || 0) - (order.depositAmount || (order.amountReceived && order.amountReceived < order.grandTotal ? order.amountReceived : 0))))}
+                                                        </span>
+                                                      )}
+                                                </>
+                                            )}
+                                          </>
                                         )}
                                       </div>
                                     </td>
-                                    <td className="p-4 text-right hidden md:table-cell">
-                                      <div className="flex flex-col items-end">
-                                        <span className="font-medium text-gray-900">{'\u20B1'}{(order.grandTotal || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                      </div>
+                                    <td className="px-2 py-2.5 text-center font-medium text-gray-900 whitespace-nowrap hidden md:table-cell w-[95px]">
+                                      {'\u20B1'}{(order.grandTotal || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </td>
-                                    <td className="p-4 text-right" onClick={(e) => e.stopPropagation()}>
+                                    <td className="px-2 py-2.5 text-center whitespace-nowrap w-[60px]" onClick={(e) => e.stopPropagation()}>
                                       <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
-                                          <Button variant="outline" className="h-7 px-2 border-red-200 text-red-700 bg-red-50 hover:bg-red-100 font-black text-xs gap-1 rounded-md">
+                                          <Button variant="outline" className="h-7 w-7 p-0 border-red-200 text-red-700 bg-red-50 hover:bg-red-100 font-bold rounded-md inline-flex items-center justify-center" title="Actions">
                                             <MoreVertical className="h-3.5 w-3.5 text-red-500" />
-                                            <ChevronDown className="h-3 w-3 opacity-50" />
                                           </Button>
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end" className="w-56 p-2 space-y-1">
@@ -1095,6 +1227,16 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                               Undo to For Release
                                             </DropdownMenuItem>
                                           )}
+                                          {(order.status === 'cancelled' || (order.status as any) === 'canceled') && (
+                                            <DropdownMenuItem onClick={(e) => {
+                                              e.stopPropagation();
+                                              if (order) setSelectedOrder({...order});
+                                              setIsEditing(false);
+                                            }} className="border border-gray-200 rounded-md px-2.5 py-1.5 text-gray-700 bg-gray-50 hover:bg-gray-100 focus:text-gray-800 focus:bg-gray-100 font-bold mb-1">
+                                              <FileText className="h-4 w-4 mr-2 text-gray-600" />
+                                              View Details
+                                            </DropdownMenuItem>
+                                          )}
                                         </DropdownMenuContent>
                                       </DropdownMenu>
                                     </td>
@@ -1190,41 +1332,49 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
           <ProcessClaimModal order={processClaimOrder} open={!!processClaimOrder} onOpenChange={(open) => !open && setProcessClaimOrder(null)} onConfirm={(id, data) => { updateOrder(id, data, user.username); }} user={user} />
 
           {!selectedStatus && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              {/* Service Volume & Activity Trends Charts */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* Service Volume Chart */}
                 <Card className="border-none shadow-md bg-white overflow-hidden">
-                  <CardHeader className="flex flex-row items-center justify-between pb-2 pt-6 px-6">
-                    <CardTitle className="text-sm font-black uppercase tracking-tight text-gray-800 leading-tight whitespace-nowrap">
-                      Service Volume by Type
-                    </CardTitle>
-                    <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[9px] font-bold uppercase tracking-wider text-gray-500 ml-4">
-                      <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#A2C2B9]" /> BASIC CLEANING</div>
-                      <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#93C5FD]" /> MINOR REGLUE</div>
-                      <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#D69BE5]" /> FULL REGLUE</div>
-                      <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#F5CD93]" /> COLOR RENEWAL</div>
+                  <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-1.5 pt-3.5 px-4 sm:px-5 gap-2">
+                    <div className="flex flex-col">
+                      <CardTitle className="text-xs sm:text-sm font-black uppercase tracking-tight text-gray-800 leading-tight">
+                        {serviceVolumeTitle}
+                      </CardTitle>
+                      {chartPeriodSubtitle && (
+                        <span className="text-[11px] font-bold text-red-600 mt-0.5 tracking-normal">
+                          {chartPeriodSubtitle}
+                        </span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-2.5 gap-y-1 text-[8.5px] font-bold uppercase tracking-wider text-gray-500">
+                      <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-[#A2C2B9]" /> BASIC CLEANING</div>
+                      <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-[#93C5FD]" /> MINOR REGLUE</div>
+                      <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-[#D69BE5]" /> FULL REGLUE</div>
+                      <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-[#F5CD93]" /> COLOR RENEWAL</div>
                     </div>
                   </CardHeader>
-                  <CardContent className="pt-4 px-6 pb-8">
-                    <ResponsiveContainer width="100%" height={300}>
-                       <BarChart data={serviceVolumeData} margin={{ top: 5, right: 10, left: 10, bottom: 35 }}>
+                  <CardContent className="pt-1 px-3 sm:px-4 pb-2.5">
+                    <ResponsiveContainer width="100%" height={215}>
+                       <BarChart data={serviceVolumeData} margin={{ top: 8, right: 10, left: -10, bottom: 25 }}>
                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                          <XAxis 
                             dataKey="name" 
-                            tick={{ fontSize: 10, fontWeight: 700, fill: '#64748b' }} 
+                            tick={{ fontSize: 9.5, fontWeight: 700, fill: '#64748b' }} 
                             axisLine={{ stroke: '#e2e8f0' }} 
-                            tickLine={false}
-                            dy={10} 
-                            angle={-20}
+                            tickLine={false} 
+                            dy={6} 
+                            angle={-15}
                             textAnchor="end"
                          />
                          <YAxis 
-                            tick={{ fontSize: 11, fontWeight: 600, fill: '#64748b' }} 
+                            tick={{ fontSize: 10, fontWeight: 600, fill: '#64748b' }} 
                             axisLine={{ stroke: '#e2e8f0' }} 
                             tickLine={false} 
                          />
                          <Tooltip content={<ServiceTooltip isOwner={['owner', 'admin'].includes(role)} />} cursor={{fill: '#f8fafc'}} />
-                         <Bar dataKey="value" radius={[4, 4, 0, 0]} barSize={60}>
+                         <Bar dataKey="value" radius={[4, 4, 0, 0]} barSize={48}>
                            {serviceVolumeData.map((_item, index) => (
                              <Cell key={`cell-${index}`} fill={['#A2C2B9', '#93C5FD', '#D69BE5', '#F5CD93'][index % 4]} />
                            ))}
@@ -1236,55 +1386,62 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
 
                 {/* Activity Trend Chart */}
                 <Card className="border-none shadow-md bg-white overflow-hidden">
-                   <CardHeader className="flex flex-row items-center justify-between pb-2 pt-6 px-6">
-                     <CardTitle className="text-sm font-black uppercase tracking-tight text-gray-800">{chartTitle}</CardTitle>
-                     <div className="flex items-center gap-3 text-[9px] font-bold uppercase tracking-wider text-gray-500 ml-4">
-                        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#A78BFA]" /> ORDERS CREATED</div>
-                        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#F97316]" /> ORDERS RELEASED</div>
+                   <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-1.5 pt-3.5 px-4 sm:px-5 gap-2">
+                     <div className="flex flex-col">
+                       <CardTitle className="text-xs sm:text-sm font-black uppercase tracking-tight text-gray-800 leading-tight">{chartTitle}</CardTitle>
+                       {chartPeriodSubtitle && (
+                         <span className="text-[11px] font-bold text-red-600 mt-0.5 tracking-normal">
+                           {chartPeriodSubtitle}
+                         </span>
+                       )}
+                     </div>
+                     <div className="flex items-center gap-2.5 text-[8.5px] font-bold uppercase tracking-wider text-gray-500">
+                        <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-[#A78BFA]" /> ORDERS CREATED</div>
+                        <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-[#F97316]" /> ORDERS RELEASED</div>
                      </div>
                    </CardHeader>
-                   <CardContent className="pt-4 px-6 pb-8">
-                     <ResponsiveContainer width="100%" height={300}>
-                       <LineChart data={timeSeriesData}>
+                   <CardContent className="pt-1 px-3 sm:px-4 pb-2.5">
+                     <ResponsiveContainer width="100%" height={215}>
+                       <LineChart data={timeSeriesData} margin={{ top: 8, right: 15, left: -10, bottom: 5 }}>
                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                          <XAxis 
                             dataKey="period" 
-                            tick={{ fontSize: 10, fontWeight: 600, fill: '#64748b' }} 
+                            tick={{ fontSize: 9.5, fontWeight: 600, fill: '#64748b' }} 
                             axisLine={{ stroke: '#e2e8f0' }} 
                             tickLine={false} 
-                            dy={10}
+                            dy={6} 
                          />
                          <YAxis 
-                            tick={{ fontSize: 11, fontWeight: 600, fill: '#64748b' }} 
+                            tick={{ fontSize: 10, fontWeight: 600, fill: '#64748b' }} 
                             axisLine={{ stroke: '#e2e8f0' }} 
                             tickLine={false} 
                          />
                          <Tooltip content={<TrendTooltip />} />
-                         <Line type="monotone" dataKey="newOrders" stroke="#A78BFA" strokeWidth={3} dot={{ r: 4, fill: '#A78BFA', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
-                         <Line type="monotone" dataKey="releasedOrders" stroke="#F97316" strokeWidth={3} dot={{ r: 4, fill: '#F97316', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
+                         <Line type="monotone" dataKey="newOrders" stroke="#A78BFA" strokeWidth={2.5} dot={{ r: 3.5, fill: '#A78BFA', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 5 }} />
+                         <Line type="monotone" dataKey="releasedOrders" stroke="#F97316" strokeWidth={2.5} dot={{ r: 3.5, fill: '#F97316', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 5 }} />
                        </LineChart>
                      </ResponsiveContainer>
                    </CardContent>
                 </Card>
               </div>
 
-              <div className="grid grid-cols-1 gap-6">
-                {/* Low Stock Alerts */}
-                <Card className="border-none shadow-md bg-white">
-                  <CardHeader className="flex flex-row items-center justify-between border-b border-gray-100 pt-4 !pb-3 px-6">
-                    <CardTitle className="text-sm font-black uppercase text-gray-800 flex items-center gap-2">
-                       <Package size={16} className="text-red-500" /> Stock Status Alerts
+              {/* Stock Status Alerts - Compact bottom position */}
+              <div className="grid grid-cols-1 gap-4">
+                <Card className="border-none shadow-md bg-white gap-0">
+                  <CardHeader className="flex flex-row items-center justify-between border-b border-gray-100 px-4 h-11 !py-0 !pt-0 !pb-0 m-0 space-y-0">
+                    <CardTitle className="text-xs font-black uppercase text-gray-800 flex items-center gap-2 m-0 leading-none">
+                       <Package size={14} className="text-red-500 shrink-0" /> Stock Status Alerts
                     </CardTitle>
-                    <Badge className="bg-red-50 text-red-600 border-red-100 uppercase text-[9px] font-black shadow-sm">{lowStockItems.length} Warnings</Badge>
+                    <Badge className="bg-red-50 text-red-600 border-red-100 uppercase text-[9px] font-black leading-none shrink-0 py-1 px-2.5">{lowStockItems.length} Warnings</Badge>
                   </CardHeader>
-                  <CardContent className="px-4 pb-4 pt-2">
+                  <CardContent className="px-4 pt-2.5 pb-3.5">
                     {lowStockItems.length === 0 ? (
-                      <div className="py-8 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-                         <ClipboardCheck className="mx-auto mb-2 text-emerald-400" size={28} />
-                         <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">All stock levels normal</p>
+                      <div className="py-6 text-center bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                         <ClipboardCheck className="mx-auto mb-2 text-emerald-400" size={24} />
+                         <p className="text-xs font-black uppercase tracking-widest text-gray-400">All stock levels normal</p>
                       </div>
                     ) : (
-                      <div className={`flex flex-col gap-2 ${lowStockItems.length > 2 ? 'max-h-[168px] overflow-y-auto pr-1 custom-scrollbar' : ''}`}>
+                      <div className={`flex flex-col gap-2.5 ${lowStockItems.length > 3 ? 'max-h-[220px] overflow-y-auto pr-1 custom-scrollbar' : ''}`}>
                       {lowStockItems.map((item, idx) => {
                         const pres = getInventoryPresentation(item);
                         const isCritical = Number(item.stock || 0) <= 0;
@@ -1292,57 +1449,54 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                         const textColor = isCritical ? 'text-red-600' : 'text-amber-600';
 
                         return (
-                          <div key={idx} className="flex flex-col gap-2 px-3 py-3 rounded-xl bg-white border border-gray-100 shadow-sm hover:border-red-200 transition-all">
-                            {/* Name + badge + % remaining */}
+                          <div key={idx} className="flex flex-col gap-2 p-3 rounded-lg bg-gray-50/60 border border-gray-100 hover:border-red-200 transition-all">
+                            {/* Row 1: Name (left) + Status Badge (top-right) */}
                             <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-1.5">
-                                <AlertTriangle size={13} className={isCritical ? 'text-red-500' : 'text-amber-500'} />
+                              <div className="flex items-center gap-2">
+                                <AlertTriangle size={14} className={isCritical ? 'text-red-500 shrink-0' : 'text-amber-500 shrink-0'} />
                                 <span className="text-xs font-black text-gray-800 uppercase tracking-wide leading-none">{item.name}</span>
                               </div>
-                              <div className="flex items-center gap-2">
-                                {pres.isPackaged && (
-                                  <span className={`text-[11px] font-black ${textColor}`}>
-                                    {pres.percentageRemaining}% remaining
-                                  </span>
-                                )}
-                                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded tracking-wider ${isCritical ? 'bg-red-600 text-white' : 'bg-amber-500 text-white'}`}>
-                                  {isCritical ? 'No Stock' : 'Low Stock'}
-                                </span>
-                              </div>
+                              <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded tracking-wider leading-none shrink-0 ${isCritical ? 'bg-red-600 text-white' : 'bg-amber-500 text-white'}`}>
+                                {isCritical ? 'No Stock' : 'Low Stock'}
+                              </span>
                             </div>
 
-                            {/* Stock + Package inline */}
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex flex-col gap-0.5">
-                                <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Current Stock</span>
-                                <span className="text-sm font-bold text-gray-900">{pres.currentQuantityLabel}</span>
+                            {/* Row 2: Current Stock (left) + Package (right) */}
+                            <div className="flex items-center justify-between gap-2 text-xs mt-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Current Stock:</span>
+                                <span className="text-xs font-bold text-gray-900">{pres.currentQuantityLabel}</span>
                               </div>
                               {pres.isPackaged && (
-                                <div className="flex flex-col gap-0.5 text-right">
-                                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Package</span>
-                                  <span className="text-xs font-bold text-gray-600">1 {pres.packageLabel}</span>
+                                <div className="flex items-center gap-1.5 text-right">
+                                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Package:</span>
+                                  <span className="text-[11px] font-semibold text-gray-600">1 {pres.packageLabel}</span>
                                 </div>
                               )}
                             </div>
 
-                            {/* Progress bar */}
-                            <div className="space-y-0.5">
-                              <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                            {/* Row 3: Progress bar with % remaining inline */}
+                            <div className="flex items-center gap-3 mt-1">
+                              <div className="flex-1 bg-gray-200 rounded-full h-1.5 overflow-hidden">
                                 <div
                                   className={`h-full rounded-full transition-all ${barColor}`}
                                   style={{ width: `${Math.min(pres.isPackaged ? pres.progressBarValue : 0, 100)}%` }}
                                 />
                               </div>
+                              {pres.isPackaged && (
+                                <span className={`text-[10px] font-black shrink-0 ${textColor}`}>
+                                  {pres.percentageRemaining}% remaining
+                                </span>
+                              )}
                               {!pres.isPackaged && (
-                                <span className={`text-[9px] font-bold ${textColor}`}>
+                                <span className={`text-[9px] font-bold shrink-0 ${textColor}`}>
                                   {pres.currentQuantityLabel}
                                 </span>
                               )}
                             </div>
                           </div>
                         );
-                      })
-                      }
+                      })}
                       </div>
                     )}
                   </CardContent>
@@ -1397,26 +1551,46 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                     <div className="flex gap-3 pt-2">
                       <Button
                         variant="outline"
-                        className="flex-1 bg-gray-100 border-gray-200 text-gray-700 font-black uppercase text-xs h-10 rounded-xl hover:bg-gray-200"
-                        onClick={() => setCancelOrderModal(null)}
+                        disabled={isCancelling}
+                        className="flex-1 bg-gray-100 border-gray-200 text-gray-700 font-black uppercase text-xs h-10 rounded-xl hover:bg-gray-200 disabled:opacity-50"
+                        onClick={() => { if (!isCancelling) setCancelOrderModal(null); }}
                       >
                         Do Not Cancel
                       </Button>
                       <Button
-                        className={`flex-1 text-white font-black uppercase text-xs h-10 rounded-xl shadow-lg ${isRefundAllowed ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200' : 'bg-red-600 hover:bg-red-700 shadow-red-200'}`}
+                        disabled={isCancelling}
+                        className={`flex-1 text-white font-black uppercase text-xs h-10 rounded-xl shadow-lg disabled:opacity-50 flex items-center justify-center gap-1.5 ${isRefundAllowed ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200' : 'bg-red-600 hover:bg-red-700 shadow-red-200'}`}
                         onClick={async () => {
-                          if (cancelOrderModal) {
-                            await deleteOrder(cancelOrderModal.id);
-                            if (cancelOrderModal.status === 'new-order') {
-                              toast.success(`Order #${cancelOrderModal.orderNumber} cancelled. Full refund of ₱${(cancelOrderModal.amountReceived || 0).toLocaleString()} issued since service had not commenced.`);
-                            } else {
-                              toast.error(`Order #${cancelOrderModal.orderNumber} cancelled. No refund issued per policy (service already commenced).`);
+                          if (cancelOrderModal && !isCancellingRef.current) {
+                            isCancellingRef.current = true;
+                            setIsCancelling(true);
+                            const orderToCancel = cancelOrderModal;
+                            try {
+                              const isRefund = orderToCancel.status === 'new-order';
+                              const depositAmt = orderToCancel.depositAmount || orderToCancel.amountReceived || 0;
+                              await updateOrder(orderToCancel.id, {
+                                status: 'cancelled',
+                                cancellationStage: orderToCancel.status as any,
+                                refundStatus: isRefund ? 'refunded' : 'no-refund',
+                                refundAmount: isRefund ? depositAmt : 0,
+                                refundReason: isRefund ? 'Order cancelled before service commenced (full refund)' : 'Order cancelled during service (deposit forfeited per policy)',
+                                cancelledAt: new Date()
+                              });
+                              setCancelOrderModal(null);
+                              if (isRefund) {
+                                toast.success(`Order #${orderToCancel.orderNumber} cancelled. Full refund of ₱${depositAmt.toLocaleString()} issued since service had not commenced.`);
+                              } else {
+                                toast.error(`Order #${orderToCancel.orderNumber} cancelled. No refund issued per policy (service already commenced).`);
+                              }
+                            } finally {
+                              isCancellingRef.current = false;
+                              setIsCancelling(false);
                             }
-                            setCancelOrderModal(null);
                           }
                         }}
                       >
-                        {isRefundAllowed ? "Yes, Cancel & Refund" : "Yes, Cancel (No Refund)"}
+                        {isCancelling && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                        {isCancelling ? "Processing..." : (isRefundAllowed ? "Yes, Cancel & Refund" : "Yes, Cancel (No Refund)")}
                       </Button>
                     </div>
                   </>

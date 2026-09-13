@@ -26,6 +26,10 @@ __pycache__/
 *.db-shm
 *.sqlite
 *.sqlite3
+*.backup
+*_backup*
+backend/db/*.json
+backend/backup_pg_pre_sync.py
 
 # Environment Variables
 .env
@@ -42,6 +46,26 @@ hard_reset_db.py
 recreate_db.py
 seed_now.py
 tmp_rebuild.txt
+scratch_*.py
+backend/scratch_*.py
+backend/check_*.py
+backend/inspect_*.py
+backend/set_env_credentials.py
+backend/find_*.py
+backend/compare_*.py
+backend/test_api_predict.py
+backend/test_cached_speed.py
+backend/test_export_debug.py
+backend/test_live_login.py
+backend/test_login_auth.py
+backend/test_models.py
+backend/test_predict_ord.py
+backend/test_routes_debug.py
+powershell.bat
+build_docs.py
+deep_generate.py
+generate_final_docs*.py
+backend/historical_data/output/
 # IDE / System
 .vscode/
 Thumbs.db

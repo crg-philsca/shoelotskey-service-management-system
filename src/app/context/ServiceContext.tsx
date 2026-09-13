@@ -2,6 +2,7 @@ import { createContext, useContext, useState, ReactNode, useEffect, useMemo } fr
 import { Service } from '@/app/types';
 // P1-10 FIX: centralized API base resolution (see src/app/lib/apiBase.ts).
 import { API_BASE } from '@/app/lib/apiBase';
+import { useActivities } from './ActivityContext';
 
 interface ServiceContextType {
     services: Service[];
@@ -13,7 +14,8 @@ interface ServiceContextType {
 
 const ServiceContext = createContext<ServiceContextType | undefined>(undefined);
 
-export function ServiceProvider({ children, user }: { children: ReactNode, user: { token: string } }) {
+export function ServiceProvider({ children, user }: { children: ReactNode, user: { token: string; username?: string } }) {
+    const { addActivity } = useActivities();
     const [services, setServices] = useState<Service[]>([]);
 
     // --- OFFLINE AUTO-SYNC QUEUE ---
@@ -23,6 +25,22 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
         const queue = queueStr ? JSON.parse(queueStr) : [];
         queue.push({ ...task, timestamp: Date.now() });
         localStorage.setItem('service_sync_queue', JSON.stringify(queue));
+    };
+
+    const parseConnectedAddons = (val: any): string[] => {
+        if (!val) return [];
+        if (Array.isArray(val)) return val.map(String).map(s => s.trim()).filter(Boolean);
+        if (typeof val === 'string') {
+            const trimmed = val.trim();
+            if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+                try {
+                    const parsed = JSON.parse(trimmed);
+                    if (Array.isArray(parsed)) return parsed.map(String).map(s => s.trim()).filter(Boolean);
+                } catch (_) {}
+            }
+            return trimmed.split(',').map(s => s.trim()).filter(Boolean);
+        }
+        return [];
     };
 
     const sanitizeServices = (raw: any[]): Service[] => {
@@ -42,7 +60,8 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
                 description: bs.description || '',
                 durationDays: bs.duration_days ?? bs.durationDays ?? 0,
                 code: bs.service_code ?? bs.code ?? '',
-                sortOrder: bs.sort_order ?? bs.sortOrder ?? 0
+                sortOrder: bs.sort_order ?? bs.sortOrder ?? 0,
+                connectedAddons: parseConnectedAddons(bs.connected_addons ?? bs.connectedAddons)
             }));
     };
 
@@ -97,10 +116,26 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
                             }
                         }
                         
-                        if (res && !res.ok) throw new Error('Sync failed');
+                        if (res) {
+                            if (res.status === 404) {
+                                // If resource is already 404, it is already deleted or does not exist on backend
+                                hasChanges = true;
+                                continue;
+                            }
+                            if (!res.ok) {
+                                if (res.status === 400 || res.status === 422) {
+                                    console.warn(`[SERVICE SYNC] Dropping unprocessable task (status ${res.status})`, task);
+                                    continue;
+                                }
+                                throw new Error(`Sync failed with status ${res.status}`);
+                            }
+                        }
                         hasChanges = true;
                     } catch (err) {
-                        remainingQueue.push(task);
+                        const isStale = task.timestamp && (Date.now() - task.timestamp > 24 * 60 * 60 * 1000);
+                        if (!isStale) {
+                            remainingQueue.push(task);
+                        }
                     }
                 }
                 localStorage.setItem('service_sync_queue', JSON.stringify(remainingQueue));
@@ -172,7 +207,8 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
             description: service.description || null,
             duration_days: service.durationDays || 0,
             service_code: service.code || null,
-            sort_order: optimisticService.sortOrder
+            sort_order: optimisticService.sortOrder,
+            connected_addons: service.connectedAddons || []
         };
 
         fetch(`${API_BASE}/services`, {
@@ -200,12 +236,29 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
                     description: data.description || '',
                     durationDays: data.duration_days || 0,
                     code: data.service_code || '',
-                    sortOrder: data.sort_order || optimisticService.sortOrder
+                    sortOrder: data.sort_order || optimisticService.sortOrder,
+                    connectedAddons: parseConnectedAddons(data.connected_addons) || optimisticService.connectedAddons || []
                 };
                 setServices((prev) => {
                     const updated = prev.map(s => s.id === tempId ? verifiedSvc : s);
                     localStorage.setItem('service_data_cache', JSON.stringify(updated));
                     return updated;
+                });
+
+                addActivity({
+                    user: user.username || 'System',
+                    action: 'CREATE',
+                    actionRaw: 'CREATE',
+                    type: 'service',
+                    table: 'services',
+                    module: 'Services',
+                    recordId: data.service_id,
+                    details: `Created new service: ${service.name} (₱${service.price})`,
+                    newValues: {
+                        service_name: service.name,
+                        base_price: service.price,
+                        category: service.category
+                    }
                 });
             })
             .catch(err => {
@@ -239,6 +292,7 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
         if (updates.durationDays !== undefined) payload.duration_days = updates.durationDays;
         if (updates.code !== undefined) payload.service_code = updates.code;
         if (updates.sortOrder !== undefined) payload.sort_order = updates.sortOrder;
+        if (updates.connectedAddons !== undefined) payload.connected_addons = updates.connectedAddons;
 
         fetch(`${API_BASE}/services/${id}`, {
             method: 'PUT',
@@ -266,10 +320,23 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
                         description: data.description || '',
                         durationDays: data.duration_days || 0,
                         code: data.service_code || '',
-                        sortOrder: data.sort_order ?? service.sortOrder
+                        sortOrder: data.sort_order ?? service.sortOrder,
+                        connectedAddons: parseConnectedAddons(data.connected_addons ?? updates.connectedAddons ?? service.connectedAddons)
                     } : service);
                     localStorage.setItem('service_data_cache', JSON.stringify(updated));
                     return updated;
+                });
+
+                addActivity({
+                    user: user.username || 'System',
+                    action: 'UPDATE',
+                    actionRaw: 'UPDATE',
+                    type: 'service',
+                    table: 'services',
+                    module: 'Services',
+                    recordId: id,
+                    details: `Updated service: ${data.service_name || updates.name || id}`,
+                    newValues: updates
                 });
             })
             .catch(err => {
@@ -284,6 +351,7 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
 
     const deleteService = (id: string) => {
         // 1. Instantly remove from state and update localStorage cache
+        const targetSvc = services.find(s => s.id === id);
         setServices((prev) => {
             const updated = prev.filter((s) => s.id !== id);
             localStorage.setItem('service_data_cache', JSON.stringify(updated));
@@ -299,6 +367,21 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
                     throw new Error(`HTTP_${res.status}: Permission denied or invalid data.`);
                 }
                 if (!res.ok) throw new Error('Delete failed');
+
+                addActivity({
+                    user: user.username || 'System',
+                    action: 'DELETE',
+                    actionRaw: 'DELETE',
+                    type: 'service',
+                    table: 'services',
+                    module: 'Services',
+                    recordId: id,
+                    details: `Deleted service: ${targetSvc?.name || id}`,
+                    oldValues: targetSvc ? {
+                        service_name: targetSvc.name,
+                        base_price: targetSvc.price
+                    } : undefined
+                });
             })
             .catch(err => {
                 console.error("Service sync failed:", err);

@@ -18,8 +18,30 @@ from typing import Iterable, Optional, Sequence, Set, Union
 from sqlalchemy.orm import Session
 
 
+CUSTOMER_NAME_MAX_LENGTH = 60
+CUSTOMER_NAME_MIN_LENGTH = 2
+CUSTOMER_NAME_REGEX = re.compile(r"^[a-zA-ZÀ-ÿ\s.\-']+$")
+
+
+def validate_customer_name(value: Optional[str]) -> tuple:
+    """Returns (is_valid: bool, error_message: str, sanitized_name: str)"""
+    if not value or not str(value).strip():
+        return False, "Customer name is required.", ""
+    sanitized = re.sub(r"\s+", " ", str(value).strip())
+    if len(sanitized) < CUSTOMER_NAME_MIN_LENGTH:
+        return False, f"Customer name must be at least {CUSTOMER_NAME_MIN_LENGTH} characters.", sanitized
+    if len(sanitized) > CUSTOMER_NAME_MAX_LENGTH:
+        return False, f"Customer name cannot exceed {CUSTOMER_NAME_MAX_LENGTH} characters.", sanitized
+    if not CUSTOMER_NAME_REGEX.match(sanitized):
+        return False, "Customer name can only contain letters, spaces, dots, hyphens, and apostrophes.", sanitized
+    letters = re.findall(r"[a-zA-ZÀ-ÿ]", sanitized)
+    if len(letters) < 2:
+        return False, "Customer name must contain at least 2 letters.", sanitized
+    return True, "", normalize_customer_name(sanitized)
+
+
 def normalize_customer_name(value: Optional[str]) -> str:
-    """Store names as ``First M. Last`` instead of all-caps/OCR casing."""
+    """Store names as ``First M. Last`` instead of all-caps/OCR casing (max 60 chars)."""
     if not value:
         return ""
     words = re.sub(r"\s+", " ", str(value).strip()).split(" ")
@@ -32,10 +54,10 @@ def normalize_customer_name(value: Optional[str]) -> str:
                 fixed.append(part)
             elif part:
                 bare = part.rstrip(".")
-                suffix = "." if len(bare) == 1 else ("." if part.endswith(".") else "")
+                suffix = "." if (len(bare) == 1 and len(parts) == 1) else ("." if part.endswith(".") else "")
                 fixed.append(bare[:1].upper() + bare[1:].lower() + suffix)
         normalized.append("".join(fixed))
-    return " ".join(normalized)
+    return " ".join(normalized)[:CUSTOMER_NAME_MAX_LENGTH].strip()
 
 CANONICAL_ORDER_ID_RE = re.compile(r"^ORD-\d{4}-\d{2}-\d{2}-\d{3}$")
 PLACEHOLDER_PREFIXES = (
@@ -227,16 +249,23 @@ def resolve_historical_order_id(
     reserved_set = {str(x) for x in (reserved or []) if x}
     dt = parse_order_date(date_value)
 
+    expected_prefix = date_prefix(dt) if dt else None
+
     for candidate in (extracted_order_id, current_order_id):
         if is_placeholder_order_id(candidate):
             continue
+        cand_str = str(candidate).strip()
+        # If candidate is canonical ORD-YYYY-MM-DD-NNN, verify date matches target date_value
+        if expected_prefix and is_canonical_order_id(cand_str):
+            if not cand_str.startswith(expected_prefix):
+                continue
         clash = _id_taken(
             db,
-            candidate,
+            cand_str,
             exclude_historical_order_id=exclude_historical_order_id,
         )
-        if not clash and candidate not in reserved_set:
-            return str(candidate).strip()
+        if not clash and cand_str not in reserved_set:
+            return cand_str
 
     if dt is None:
         dt = date.today()

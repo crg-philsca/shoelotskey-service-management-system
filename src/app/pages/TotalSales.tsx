@@ -15,14 +15,17 @@ import {
     LineChart,
     TrendingUp,
     Trash2,
+    Eye,
     MoreVertical,
-    Edit
+    Edit,
+    Clock,
+    RotateCcw
 } from 'lucide-react';
 import { format as dateFnsFormat } from 'date-fns';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/app/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { Input } from '@/app/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu';
@@ -34,6 +37,8 @@ import {
     collectedSales,
     isDateInRange,
     isSalesEligible,
+    isCancelledOrder,
+    cancelledOrdersBreakdown,
     orderEventDate,
     type ReportRange,
 } from '@/app/lib/salesAnalytics';
@@ -151,6 +156,8 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
     const [viewingOrder, setViewingOrder] = useState<JobOrder | null>(null);
     const [isEditing, setIsEditing] = useState(false);
     const [orderToDelete, setOrderToDelete] = useState<JobOrder | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const isDeletingRef = useRef(false);
 
     const [profitRange, setProfitRange] = useState<ReportRange>(() => {
         return (location.state as any)?.dateRange || 'Daily';
@@ -161,10 +168,27 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
     const [customEndDate, setCustomEndDate] = useState<string>(() => {
         return (location.state as any)?.customEndDate || '';
     });
+
+    useEffect(() => {
+        const state = location.state as any;
+        if (state?.dateRange) {
+            setProfitRange(state.dateRange);
+        }
+        if (state?.customStartDate !== undefined) {
+            setCustomStartDate(state.customStartDate || '');
+        }
+        if (state?.customEndDate !== undefined) {
+            setCustomEndDate(state.customEndDate || '');
+        }
+    }, [location.state]);
+
     const [searchQuery, setSearchQuery] = useState('');
     const [filterService, setFilterService] = useState<string>('all');
     const [filterPriority, setFilterPriority] = useState<string>('all');
     const [filterPaymentStatus, setFilterPaymentStatus] = useState<string>('all');
+    const [cardFilter, setCardFilter] = useState<'all' | 'balance-due' | 'refunds' | 'net-sales'>(() => {
+        return (location.state as any)?.filterCard || 'all';
+    });
     const [filterPaymentMethod, setFilterPaymentMethod] = useState<string>('all');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
@@ -238,7 +262,8 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
             .filter((order: JobOrder) => isDateInRange(orderEventDate(order), profitRange, now, customStartDate, customEndDate));
     }, [orders, profitRange, customStartDate, customEndDate]);
 
-    const filteredOrders = useMemo(() => {
+    // Base filtered orders for date range, search, service, priority, and payment status (independent of card payment method filter)
+    const baseFilteredOrders = useMemo(() => {
         let filtered = [...salesOrders];
 
         if (filterService !== 'all') {
@@ -251,16 +276,6 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
 
         if (filterPaymentStatus !== 'all') {
             filtered = filtered.filter((order) => order.paymentStatus === filterPaymentStatus);
-        }
-
-        if (filterPaymentMethod !== 'all') {
-            filtered = filtered.filter((order) => {
-                const method = (order.paymentMethod || '').toLowerCase();
-                const initMethod = (order.initialPaymentMethod || '').toLowerCase();
-                const finalMethod = (order.finalPaymentMethod || '').toLowerCase();
-                const hasInHistory = order.paymentHistory?.some(p => (p.method || '').toLowerCase() === filterPaymentMethod);
-                return method.includes(filterPaymentMethod) || initMethod === filterPaymentMethod || finalMethod === filterPaymentMethod || Boolean(hasInHistory);
-            });
         }
 
         if (startDate) {
@@ -278,6 +293,86 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
             filtered = filtered.filter((order) =>
                 order.customerName.toLowerCase().includes(query) || order.orderNumber.toLowerCase().includes(query)
             );
+        }
+
+        return filtered;
+    }, [salesOrders, filterService, filterPriority, filterPaymentStatus, startDate, endDate, searchQuery]);
+
+
+
+    const grossTotalSales = useMemo(() => {
+        return baseFilteredOrders.reduce((sum: number, order: JobOrder) => sum + (Number(order.grandTotal) || 0), 0);
+    }, [baseFilteredOrders]);
+
+    const cancellationStats = useMemo(() => {
+        const now = new Date();
+        const periodOrders = (orders || []).filter((order: JobOrder) =>
+            isDateInRange(orderEventDate(order), profitRange, now, customStartDate, customEndDate)
+        );
+        return cancelledOrdersBreakdown(periodOrders);
+    }, [orders, profitRange, customStartDate, customEndDate]);
+
+    const netSalesAmount = useMemo(() => {
+        return Math.max(0, grossTotalSales - cancellationStats.totalRefunded + cancellationStats.totalRetained);
+    }, [grossTotalSales, cancellationStats]);
+
+    const totalBalanceDue = useMemo(() => {
+        return baseFilteredOrders.reduce((sum: number, order: JobOrder) => {
+            const billed = Number(order.grandTotal) || 0;
+            const isDP = String(order.paymentStatus || '').toLowerCase() === 'downpayment';
+            const collected = (isDP && order.depositAmount != null && Number(order.depositAmount) > 0)
+                ? Number(order.depositAmount)
+                : collectedSales(order);
+            return sum + Math.max(0, billed - collected);
+        }, 0);
+    }, [baseFilteredOrders]);
+
+
+    // Table orders filtered by the active card filter (Total Sales, Balance Due, Refunds Issued, Net Sales)
+    const filteredOrders = useMemo(() => {
+        let filtered = [...baseFilteredOrders];
+
+        if (cardFilter === 'balance-due') {
+            filtered = filtered.filter((order) => {
+                const billed = Number(order.grandTotal) || 0;
+                const isDP = String(order.paymentStatus || '').toLowerCase() === 'downpayment';
+                const collected = (isDP && order.depositAmount != null && Number(order.depositAmount) > 0)
+                    ? Number(order.depositAmount)
+                    : collectedSales(order);
+                return Math.max(0, billed - collected) > 0;
+            });
+        } else if (cardFilter === 'refunds') {
+            filtered = filtered.filter((order) => {
+                const rf = Number(order.refundAmount || 0);
+                const isCancelled = isCancelledOrder(order);
+                const hasRefund = rf > 0 || (isCancelled && (order.refundStatus === 'refunded' || Number(order.amountReceived || order.depositAmount || 0) > 0));
+                return hasRefund;
+            });
+        } else if (cardFilter === 'net-sales') {
+            filtered = filtered.filter((order) => {
+                if (isCancelledOrder(order)) {
+                    const paid = Number(order.amountReceived || order.depositAmount || 0);
+                    const refunded = Number(order.refundAmount || (order.refundStatus === 'refunded' ? paid : 0));
+                    return Math.max(0, paid - refunded) > 0;
+                }
+                return (Number(order.grandTotal) || 0) > 0;
+            });
+        }
+
+        if (filterPaymentMethod !== 'all') {
+            filtered = filtered.filter((order) => {
+                const method = (order.paymentMethod || '').toLowerCase();
+                const initMethod = (order.initialPaymentMethod || '').toLowerCase();
+                const finalMethod = (order.finalPaymentMethod || '').toLowerCase();
+                const methods = method.split(',').map(m => m.trim().toLowerCase());
+                const inHistory = order.paymentHistory?.some(p => (p.method || '').toLowerCase() === filterPaymentMethod);
+                return (
+                    methods.includes(filterPaymentMethod) ||
+                    initMethod === filterPaymentMethod ||
+                    finalMethod === filterPaymentMethod ||
+                    Boolean(inHistory)
+                );
+            });
         }
 
         // Sort: Recently updated/created first, then by priority, then by Order Number descending
@@ -299,13 +394,13 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
             const priorityB = priorityOrder[b.priorityLevel as keyof typeof priorityOrder] ?? 2;
             if (priorityA !== priorityB) return priorityA - priorityB;
 
+            // Order Number descending
             return b.orderNumber.localeCompare(a.orderNumber);
         });
 
         return filtered;
-    }, [salesOrders, filterService, filterPriority, filterPaymentStatus, filterPaymentMethod, startDate, endDate, searchQuery]);
+    }, [baseFilteredOrders, cardFilter, filterPaymentMethod]);
 
-    const totalSales = filteredOrders.reduce((sum: number, order: JobOrder) => sum + collectedSales(order), 0);
     const totalPages = Math.ceil(filteredOrders.length / itemsPerPage) || 1;
     const startIndex = (currentPage - 1) * itemsPerPage;
     const paginatedOrders = filteredOrders.slice(startIndex, startIndex + itemsPerPage);
@@ -315,37 +410,29 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    const paymentBreakdown = filteredOrders.reduce((acc: Record<string, number>, order: JobOrder) => {
-        if (order.paymentHistory && order.paymentHistory.length > 0) {
-            order.paymentHistory.forEach(p => {
-                const m = (p.method || 'cash').toLowerCase();
-                acc[m] = (acc[m] || 0) + (Number(p.amount) || 0);
-            });
-        } else if (order.initialPaymentMethod && order.finalPaymentMethod && order.initialPaymentMethod !== order.finalPaymentMethod) {
-            const initM = order.initialPaymentMethod.toLowerCase();
-            const finM = order.finalPaymentMethod.toLowerCase();
-            const dp = Number(order.depositAmount) || (order.paymentStatus === 'downpayment' ? Number(order.amountReceived) : 0) || 0;
-            const bal = Math.max(0, (Number(order.amountReceived) || 0) - dp);
-            acc[initM] = (acc[initM] || 0) + dp;
-            acc[finM] = (acc[finM] || 0) + bal;
-        } else {
-            const method = (order.paymentMethod || 'cash').toLowerCase();
-            acc[method] = (acc[method] || 0) + collectedSales(order);
-        }
-        return acc;
-    }, {} as Record<string, number>);
-
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 pb-10">
             {profitRange === 'Custom' && (
-                <div className="flex flex-wrap items-end justify-center gap-2 rounded-xl border border-red-100 bg-red-50/60 p-3 lg:hidden">
+                <div className="flex flex-wrap items-end justify-center gap-2 p-3 bg-red-50/60 border border-red-100 rounded-xl lg:hidden">
                     <label className="flex flex-col gap-1">
                         <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Start date</span>
-                        <input type="date" aria-label="Custom start date" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} className="h-10 rounded-md border border-gray-300 bg-white px-2 text-xs" />
+                        <input
+                            type="date"
+                            aria-label="Custom start date"
+                            value={customStartDate}
+                            onChange={(e) => setCustomStartDate(e.target.value)}
+                            className="h-10 text-xs px-2 rounded-md border border-gray-300 bg-white"
+                        />
                     </label>
                     <label className="flex flex-col gap-1">
                         <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">End date</span>
-                        <input type="date" aria-label="Custom end date" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)} className="h-10 rounded-md border border-gray-300 bg-white px-2 text-xs" />
+                        <input
+                            type="date"
+                            aria-label="Custom end date"
+                            value={customEndDate}
+                            onChange={(e) => setCustomEndDate(e.target.value)}
+                            className="h-10 text-xs px-2 rounded-md border border-gray-300 bg-white"
+                        />
                     </label>
                     <button
                         type="button"
@@ -356,52 +443,115 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                     </button>
                 </div>
             )}
+
+            {/* Top Financial Banner: Total Sales Header */}
+            <div className="bg-white rounded-2xl p-5 sm:p-6 shadow-xs border border-gray-200/80 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div>
+                    <div className="flex items-center gap-2 mb-1.5">
+                        <span className="h-2 w-2 rounded-full bg-red-600"></span>
+                        <span className="text-[11px] font-black uppercase tracking-widest text-red-700">
+                            Total Sales Overview ({profitRange === 'Annually' ? 'Annual' : profitRange})
+                        </span>
+                    </div>
+                    <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-gray-900">{formatPeso(grossTotalSales)}</h1>
+                </div>
+                <div className="text-xs font-semibold text-gray-500">
+                    Showing <span className="font-bold text-gray-900">{filteredOrders.length}</span> of {baseFilteredOrders.length} orders
+                    {cardFilter !== 'all' && (
+                        <span className="ml-1.5 inline-flex items-center text-xs font-bold text-red-600 cursor-pointer hover:underline" onClick={() => { setCardFilter('all'); setCurrentPage(1); }}>
+                            (Clear filter)
+                        </span>
+                    )}
+                </div>
+            </div>
+
+            {/* TOTAL SALES — 4 Interactive Outcome Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Card className="border-none shadow-lg bg-gradient-to-br from-green-50 to-white">
-                    <CardContent className="pt-6 pb-4">
-                        <div className="flex items-center gap-2 mb-2">
-                            <div className="p-2 rounded-lg bg-green-100 text-green-700">
-                                <LineChart className="h-4 w-4" />
+                {/* Total Sales */}
+                <Card 
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Filter by all total sales"
+                    onClick={() => { setCardFilter(cardFilter === 'all' ? 'all' : 'all'); setCurrentPage(1); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCardFilter('all'); setCurrentPage(1); } }}
+                    className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-emerald-50 to-white hover:shadow-md ${
+                        cardFilter === 'all' ? 'border-emerald-600 ring-2 ring-emerald-600/20' : 'border-transparent hover:border-emerald-200'
+                    }`}
+                >
+                    <CardContent className="pt-5 pb-3.5 px-4">
+                        <div className="flex items-center gap-2 mb-1.5">
+                            <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-700">
+                                <LineChart className="h-3.5 w-3.5" />
                             </div>
                             <p className="text-xs font-black uppercase tracking-wider text-gray-500">Total Sales</p>
                         </div>
-                        <p className="text-3xl font-black text-green-700 tracking-tight">₱{totalSales.toLocaleString()}</p>
+                        <p className="text-2xl font-black text-emerald-700 tracking-tight">{formatPeso(grossTotalSales)}</p>
                     </CardContent>
                 </Card>
 
-                <Card className="border-none shadow-lg bg-gradient-to-br from-amber-50 to-white">
-                    <CardContent className="pt-6 pb-4">
-                        <div className="flex items-center gap-2 mb-2">
-                            <div className="p-2 rounded-lg bg-amber-100 text-amber-700">
-                                <Wallet className="h-4 w-4" />
+                {/* Balance Due */}
+                <Card 
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Filter by balance due"
+                    onClick={() => { setCardFilter(cardFilter === 'balance-due' ? 'all' : 'balance-due'); setCurrentPage(1); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCardFilter(cardFilter === 'balance-due' ? 'all' : 'balance-due'); setCurrentPage(1); } }}
+                    className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-amber-50 to-white hover:shadow-md ${
+                        cardFilter === 'balance-due' ? 'border-amber-600 ring-2 ring-amber-600/20' : 'border-transparent hover:border-amber-200'
+                    }`}
+                >
+                    <CardContent className="pt-5 pb-3.5 px-4">
+                        <div className="flex items-center gap-2 mb-1.5">
+                            <div className="p-1.5 rounded-lg bg-amber-100 text-amber-700">
+                                <Clock className="h-3.5 w-3.5" />
                             </div>
-                            <p className="text-xs font-black uppercase tracking-wider text-gray-500">Cash Sales</p>
+                            <p className="text-xs font-black uppercase tracking-wider text-gray-500">Balance Due</p>
                         </div>
-                        <p className="text-3xl font-black text-amber-700 tracking-tight">₱{Math.round(paymentBreakdown.cash || 0).toLocaleString()}</p>
+                        <p className="text-2xl font-black text-amber-700 tracking-tight">{formatPeso(totalBalanceDue)}</p>
                     </CardContent>
                 </Card>
 
-                <Card className="border-none shadow-lg bg-gradient-to-br from-cyan-50 to-white">
-                    <CardContent className="pt-6 pb-4">
-                        <div className="flex items-center gap-2 mb-2">
-                            <div className="p-2 rounded-lg bg-cyan-100 text-cyan-700">
-                                <Wallet className="h-4 w-4" />
+                {/* Refunds Issued */}
+                <Card 
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Filter by refunds issued"
+                    onClick={() => { setCardFilter(cardFilter === 'refunds' ? 'all' : 'refunds'); setCurrentPage(1); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCardFilter(cardFilter === 'refunds' ? 'all' : 'refunds'); setCurrentPage(1); } }}
+                    className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-rose-50 to-white hover:shadow-md ${
+                        cardFilter === 'refunds' ? 'border-rose-600 ring-2 ring-rose-600/20' : 'border-transparent hover:border-rose-200'
+                    }`}
+                >
+                    <CardContent className="pt-5 pb-3.5 px-4">
+                        <div className="flex items-center gap-2 mb-1.5">
+                            <div className="p-1.5 rounded-lg bg-rose-100 text-rose-700">
+                                <RotateCcw className="h-3.5 w-3.5" />
                             </div>
-                            <p className="text-xs font-black uppercase tracking-wider text-gray-500">GCash Sales</p>
+                            <p className="text-xs font-black uppercase tracking-wider text-gray-500">Refunds Issued</p>
                         </div>
-                        <p className="text-3xl font-black text-cyan-700 tracking-tight">₱{Math.round(paymentBreakdown.gcash || 0).toLocaleString()}</p>
+                        <p className="text-2xl font-black text-rose-700 tracking-tight">{formatPeso(cancellationStats.totalRefunded)}</p>
                     </CardContent>
                 </Card>
 
-                <Card className="border-none shadow-lg bg-gradient-to-br from-pink-50 to-white">
-                    <CardContent className="pt-6 pb-4">
-                        <div className="flex items-center gap-2 mb-2">
-                            <div className="p-2 rounded-lg bg-pink-100 text-pink-700">
-                                <Wallet className="h-4 w-4" />
+                {/* Net Sales */}
+                <Card 
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Filter by net sales"
+                    onClick={() => { setCardFilter(cardFilter === 'net-sales' ? 'all' : 'net-sales'); setCurrentPage(1); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCardFilter(cardFilter === 'net-sales' ? 'all' : 'net-sales'); setCurrentPage(1); } }}
+                    className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-blue-50 to-white hover:shadow-md ${
+                        cardFilter === 'net-sales' ? 'border-blue-600 ring-2 ring-blue-600/20' : 'border-transparent hover:border-blue-200'
+                    }`}
+                >
+                    <CardContent className="pt-5 pb-3.5 px-4">
+                        <div className="flex items-center gap-2 mb-1.5">
+                            <div className="p-1.5 rounded-lg bg-blue-100 text-blue-700">
+                                <Wallet className="h-3.5 w-3.5" />
                             </div>
-                            <p className="text-xs font-black uppercase tracking-wider text-gray-500">Maya Sales</p>
+                            <p className="text-xs font-black uppercase tracking-wider text-gray-500">Net Sales</p>
                         </div>
-                        <p className="text-3xl font-black text-pink-700 tracking-tight">₱{Math.round(paymentBreakdown.maya || 0).toLocaleString()}</p>
+                        <p className="text-2xl font-black text-blue-700 tracking-tight">{formatPeso(netSalesAmount)}</p>
                     </CardContent>
                 </Card>
             </div>
@@ -458,20 +608,32 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                 </CardHeader>
 
                 <CardContent className="pt-0">
-                    <div className="overflow-x-auto -mx-1 px-1">
-                        <Table className="w-full text-sm min-w-[950px]">
+                    <div className="overflow-x-auto w-full">
+                        <Table className="w-full table-fixed min-w-[760px] text-xs">
+                            <colgroup>
+                                <col className="w-[9%]" />
+                                <col className="w-[14%]" />
+                                <col className="w-[16%]" />
+                                <col className="w-[5%]" />
+                                <col className="w-[8%]" />
+                                <col className="w-[8%]" />
+                                <col className="w-[8%]" />
+                                <col className="w-[14%]" />
+                                <col className="w-[10%]" />
+                                <col className="w-[8%]" />
+                            </colgroup>
                             <TableHeader className="bg-red-50/50 border-b border-red-100">
                                 <TableRow className="border-b border-red-100 hover:bg-transparent">
-                                    <TableHead className="h-10 px-4 text-left font-black text-gray-700 uppercase tracking-widest text-[11px]">Order #</TableHead>
-                                    <TableHead className="h-10 px-4 text-left font-black text-gray-700 uppercase tracking-widest text-[11px]">Customer</TableHead>
-                                    <TableHead className="h-10 px-4 text-left font-black text-gray-700 uppercase tracking-widest text-[11px]">Services</TableHead>
-                                    <TableHead className="h-10 px-4 text-left font-black text-gray-700 uppercase tracking-widest text-[11px]">QTY</TableHead>
-                                    <TableHead className="h-10 px-4 text-center font-black text-gray-700 uppercase tracking-widest text-[11px]">Order Date</TableHead>
-                                    <TableHead className="h-10 px-4 text-center font-black text-gray-700 uppercase tracking-widest text-[11px]">Estimated Date</TableHead>
-                                    <TableHead className="h-10 px-4 text-left font-black text-gray-700 uppercase tracking-widest text-[11px]">Priority</TableHead>
-                                    <TableHead className="h-10 px-4 text-left font-black text-gray-700 uppercase tracking-widest text-[11px]">Payment</TableHead>
-                                    <TableHead className="h-10 px-4 text-right font-black text-gray-700 uppercase tracking-widest text-[11px]">Total</TableHead>
-                                    <TableHead className="h-10 px-4 text-center font-black text-gray-700 uppercase tracking-widest text-[11px]">Actions</TableHead>
+                                    <TableHead className="h-8 px-1.5 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Order #</TableHead>
+                                    <TableHead className="h-8 px-1.5 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Customer</TableHead>
+                                    <TableHead className="h-8 px-1.5 text-center font-black text-gray-700 uppercase tracking-wider text-[10px]">Services</TableHead>
+                                    <TableHead className="h-8 px-1 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">QTY</TableHead>
+                                    <TableHead className="h-8 px-1 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Order Date</TableHead>
+                                    <TableHead className="h-8 px-1 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Est. Date</TableHead>
+                                    <TableHead className="h-8 px-1 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Priority</TableHead>
+                                    <TableHead className="h-8 px-1 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Payment</TableHead>
+                                    <TableHead className="h-8 px-1.5 text-right font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Total</TableHead>
+                                    <TableHead className="h-8 px-1 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody className="divide-y divide-gray-100">
@@ -493,62 +655,68 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                                             ? order.baseService
                                             : String(order.baseService || '').split(',')
                                         )
+                                            .flatMap((s) => String(s || '').split(','))
                                             .map((s) => s.trim().replace(' (with basic cleaning)', ''))
                                             .filter(Boolean);
 
-                                        return (
-                                            <TableRow key={order.id} onClick={() => setViewingOrder(order)} className="border-b border-gray-100 hover:bg-gray-50/80 transition-all cursor-pointer">
-                                                <TableCell className="p-4 text-xs font-medium whitespace-nowrap text-gray-800">{order.orderNumber || order.id || '-'}</TableCell>
-                                                <TableCell className="p-4 pr-8">
-                                                    <div className="text-xs font-bold text-gray-900 leading-tight max-w-[160px] text-wrap break-words">{order.customerName || 'Walk-In'}</div>
-                                                    {order.contactNumber && (
-                                                        <div className="text-xs text-gray-500 mt-1 whitespace-nowrap">{order.contactNumber}</div>
-                                                    )}
+                                        return (                                             <TableRow key={order.id} onClick={() => setViewingOrder(order)} className="border-b border-gray-100 hover:bg-gray-50/80 transition-all cursor-pointer">
+                                                <TableCell className="px-1.5 py-1.5 text-center text-[11px] font-semibold whitespace-nowrap text-gray-800">{order.orderNumber || order.id || '-'}</TableCell>
+                                                <TableCell className="px-1.5 py-1.5 text-center">
+                                                    <div className="flex flex-col items-center justify-center text-center">
+                                                        <div className="text-xs font-bold text-gray-900 leading-tight truncate max-w-full" title={order.customerName || 'Walk-In'}>{order.customerName || 'Walk-In'}</div>
+                                                        {order.contactNumber && (
+                                                            <div className="text-[10px] text-gray-500 mt-0.5 whitespace-nowrap truncate max-w-full">{order.contactNumber}</div>
+                                                        )}
+                                                    </div>
                                                 </TableCell>
-                                                <TableCell className="p-4 text-xs font-medium text-gray-700 whitespace-normal">
+                                                <TableCell className="px-1.5 py-1.5 text-center text-[11px] font-semibold text-gray-800 whitespace-normal break-words">
                                                     {servicesList.length > 0 ? (
-                                                        servicesList.map((srv, idx) => (
-                                                            <div key={idx}>{srv}{idx < servicesList.length - 1 ? ',' : ''}</div>
-                                                        ))
+                                                        <div className="flex flex-col items-center justify-center text-center text-[11px] font-semibold text-gray-800 leading-snug" title={servicesList.join(', ')}>
+                                                            {servicesList.slice(0, 3).map((srv, idx) => (
+                                                                <span key={idx} className="block text-[11px] font-semibold text-gray-800 leading-tight">
+                                                                    {srv}{idx < servicesList.length - 1 ? ',' : ''}
+                                                                </span>
+                                                            ))}
+                                                        </div>
                                                     ) : (
-                                                        <span className="text-gray-400 italic">-</span>
+                                                        <span className="text-gray-400 italic font-normal text-center block">-</span>
                                                     )}
                                                 </TableCell>
-                                                <TableCell className="p-4 text-xs font-medium text-gray-700 whitespace-nowrap">
-                                                    {order.quantity || 1} PR
+                                                <TableCell className="px-1 py-1.5 text-center text-xs font-semibold text-gray-700 whitespace-nowrap">
+                                                    {order.quantity || 1}
                                                 </TableCell>
-                                                <TableCell className="p-4 text-center text-sm font-medium text-gray-700 whitespace-nowrap">
+                                                <TableCell className="px-1 py-1.5 text-center text-xs font-medium text-gray-700 whitespace-nowrap">
                                                     {isNaN(orderDate.getTime()) ? '-' : (
-                                                        <div className="inline-flex items-center justify-center gap-1.5">
-                                                            <CalendarIcon size={12} className="text-purple-600 shrink-0" />
+                                                        <div className="inline-flex items-center justify-center gap-1">
+                                                            <CalendarIcon size={11} className="text-purple-600 shrink-0" />
                                                             <span>{dateFnsFormat(orderDate, 'MM/dd/yy')}</span>
                                                         </div>
                                                     )}
                                                 </TableCell>
-                                                <TableCell className="p-4 text-center text-sm font-medium text-gray-700 whitespace-nowrap">
+                                                <TableCell className="px-1 py-1.5 text-center text-xs font-medium text-gray-700 whitespace-nowrap">
                                                     {(() => {
                                                         if (!order.predictedCompletionDate) return <span className="text-gray-400">-</span>;
                                                         const d = new Date(order.predictedCompletionDate);
                                                         if (isNaN(d.getTime())) return <span className="text-gray-400">-</span>;
                                                         return (
-                                                            <div className="inline-flex items-center justify-center gap-1.5">
-                                                                <CalendarIcon size={12} className="text-emerald-600 shrink-0" />
+                                                            <div className="inline-flex items-center justify-center gap-1">
+                                                                <CalendarIcon size={11} className="text-emerald-600 shrink-0" />
                                                                 <span>{dateFnsFormat(d, 'MM/dd/yy')}</span>
                                                             </div>
                                                         );
                                                     })()}
                                                 </TableCell>
-                                                <TableCell className="p-4">
-                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase border whitespace-nowrap ${
+                                                <TableCell className="px-1 py-1.5 text-center whitespace-nowrap">
+                                                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase border ${
                                                         order.priorityLevel === 'rush' ? 'bg-red-50 text-red-700 border-red-100' :
                                                         'bg-emerald-50 text-emerald-700 border-emerald-100'
                                                     }`}>
                                                         {order.priorityLevel || 'regular'}
                                                     </span>
                                                 </TableCell>
-                                                <TableCell className="p-4">
-                                                    <div className="flex flex-col">
-                                                        <span className={`text-xs font-bold tracking-wider whitespace-nowrap ${
+                                                <TableCell className="px-1 py-1.5 whitespace-nowrap">
+                                                    <div className="flex flex-col items-center justify-center text-center">
+                                                        <span className={`text-[11px] font-bold tracking-wider ${
                                                             pStatus === 'fully-paid' ? 'text-green-600' :
                                                             pStatus === 'downpayment' ? 'text-yellow-600' : 'text-red-600'
                                                         }`}>
@@ -556,39 +724,50 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                                                         </span>
                                                         {order.paymentMethod && (
                                                             <>
-                                                                <span className="text-[9px] text-gray-400 font-medium uppercase tracking-wider mt-0.5 whitespace-nowrap">
+                                                                <span className="text-[8.5px] text-gray-400 font-semibold uppercase tracking-wider mt-0.5">
                                                                     {order.paymentMethod}
                                                                 </span>
                                                                 {pStatus === 'downpayment' && (
-                                                                    <span className="text-[10px] text-red-500 font-medium tracking-wider mt-0.5 whitespace-nowrap">
-                                                                        BAL: {formatPeso(Math.max(0, (Number(order.grandTotal) || 0) - (Number(order.depositAmount) || (Number(order.amountReceived) && Number(order.amountReceived) < Number(order.grandTotal) ? Number(order.amountReceived) : 0))))}
+                                                                    <span className="text-[9px] text-red-500 font-bold tracking-wider mt-0.5">
+                                                                        BAL: {formatPeso(order.balance !== undefined && order.balance !== null && !isNaN(Number(order.balance)) ? Math.max(0, Number(order.balance)) : Math.max(0, (Number(order.grandTotal) || 0) - (Number(order.depositAmount) || (Number(order.amountReceived) && Number(order.amountReceived) < Number(order.grandTotal) ? Number(order.amountReceived) : 0))))}
                                                                     </span>
                                                                 )}
                                                             </>
                                                         )}
                                                     </div>
                                                 </TableCell>
-                                                <TableCell className="p-4 text-right whitespace-nowrap">
-                                                    <div className="flex flex-col items-end">
-                                                        <span className="font-medium text-gray-900">₱{(Number(order.grandTotal) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                                    </div>
+                                                <TableCell className="px-1.5 py-1.5 text-right whitespace-nowrap">
+                                                    <span className="font-bold text-gray-900 text-xs">₱{(Number(order.grandTotal) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                                 </TableCell>
-                                                <TableCell className="p-4 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                                <TableCell className="px-1 py-1.5 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild>
-                                                            <Button variant="outline" className="h-7 px-2 border-red-200 text-red-700 bg-red-50 hover:bg-red-100 font-black text-xs gap-1 rounded-md">
+                                                            <Button
+                                                                variant="outline"
+                                                                className="h-7 w-7 p-0 border-red-200 text-red-700 bg-red-50 hover:bg-red-100 font-bold rounded-md inline-flex items-center justify-center"
+                                                                title="Actions"
+                                                            >
                                                                 <MoreVertical className="h-3.5 w-3.5 text-red-500" />
-                                                                <ChevronDown className="h-3 w-3 opacity-50" />
                                                             </Button>
                                                         </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end" className="w-56 p-2 space-y-1">
+                                                        <DropdownMenuContent align="end" className="w-52 p-1.5 space-y-1">
+                                                            <DropdownMenuItem
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setViewingOrder(order);
+                                                                }}
+                                                                className="border border-blue-200 rounded-md px-2.5 py-1.5 text-blue-700 bg-blue-50 hover:bg-blue-100 focus:text-blue-800 focus:bg-blue-100 font-bold cursor-pointer"
+                                                            >
+                                                                <Eye className="h-4 w-4 mr-2 text-blue-600" />
+                                                                View Details
+                                                            </DropdownMenuItem>
                                                             <DropdownMenuItem
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
                                                                     setSelectedOrder(order);
                                                                     setIsEditing(true);
                                                                 }}
-                                                                className="border border-yellow-200 rounded-md px-2.5 py-1.5 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:text-yellow-800 focus:bg-yellow-100 font-bold mb-1 cursor-pointer"
+                                                                className="border border-yellow-200 rounded-md px-2.5 py-1.5 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:text-yellow-800 focus:bg-yellow-100 font-bold cursor-pointer"
                                                             >
                                                                 <Edit className="h-4 w-4 mr-2 text-yellow-600" />
                                                                 Edit Order Detail
@@ -796,10 +975,11 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
             )}
 
             {/* Delete Confirmation Modal */}
-            <Dialog open={!!orderToDelete} onOpenChange={(open) => !open && setOrderToDelete(null)}>
+            <Dialog open={!!orderToDelete} onOpenChange={(open) => !open && !isDeleting && setOrderToDelete(null)}>
                 <DialogContent className="max-w-md">
                     <DialogHeader>
                         <DialogTitle className="text-center text-base font-black uppercase tracking-tight">Confirm Soft Delete</DialogTitle>
+                        <DialogDescription className="sr-only">Confirm soft deletion of the selected order</DialogDescription>
                     </DialogHeader>
                     <div className="py-6 flex flex-col items-center gap-4">
                         <div className="h-16 w-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center">
@@ -815,21 +995,33 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                             variant="ghost" 
                             className="flex-1 bg-gray-100 font-bold uppercase text-[10px] tracking-widest h-10 rounded-xl"
                             onClick={() => setOrderToDelete(null)}
+                            disabled={isDeleting}
                         >
                             Cancel
                         </Button>
                         <Button 
                             variant="destructive" 
-                            className="flex-1 bg-red-600 hover:bg-red-700 font-bold uppercase text-[10px] tracking-widest h-10 rounded-xl shadow-lg shadow-red-100"
+                            className="flex-1 bg-red-600 hover:bg-red-700 font-bold uppercase text-[10px] tracking-widest h-10 rounded-xl shadow-lg shadow-red-100 disabled:opacity-50"
+                            disabled={isDeleting}
                             onClick={async () => {
+                                if (isDeletingRef.current || isDeleting) return;
                                 if (orderToDelete) {
-                                    await deleteOrder(orderToDelete.id);
-                                    toast.success(`Order ${orderToDelete.orderNumber} deleted successfully`);
-                                    setOrderToDelete(null);
+                                    isDeletingRef.current = true;
+                                    setIsDeleting(true);
+                                    try {
+                                        await deleteOrder(orderToDelete.id);
+                                        toast.success(`Order ${orderToDelete.orderNumber} deleted successfully`);
+                                        setOrderToDelete(null);
+                                    } catch (err: any) {
+                                        toast.error(err?.message || 'Failed to delete order');
+                                    } finally {
+                                        isDeletingRef.current = false;
+                                        setIsDeleting(false);
+                                    }
                                 }
                             }}
                         >
-                            Yes, Delete
+                            {isDeleting ? 'Deleting...' : 'Yes, Delete'}
                         </Button>
                     </div>
                 </DialogContent>

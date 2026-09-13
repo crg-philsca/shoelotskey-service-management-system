@@ -43,20 +43,16 @@ if PG_URL:
         separator = "&" if "?" in PG_URL else "?"
         PG_URL = f"{PG_URL}{separator}sslnegotiation=direct"
 
-    # P0-2: While running outside of Production (i.e. localhost dev/defense), NEVER
-    # trust a DATABASE_URL that resolves to a non-local host — even if a stray/stale
-    # value is present in backend/.env. This makes local↔production separation a
-    # structural guarantee instead of relying on a developer remembering to edit
-    # .env correctly. Local development must use the isolated SQLite fallback
-    # unless DATABASE_URL explicitly points at a database running on localhost.
-    if not IS_PRODUCTION_ENV:
+    # P0-2: Outside Production, remote DATABASE_URL is blocked by default to prevent
+    # accidental pollution, but can be explicitly enabled during Evaluation phase via ALLOW_REMOTE_DB=true.
+    if not IS_PRODUCTION_ENV and os.getenv("ALLOW_REMOTE_DB", "").strip().lower() != "true":
         try:
             _host = (urllib.parse.urlparse(PG_URL).hostname or "").lower()
         except Exception:
             _host = None
         if _host not in _LOCAL_DB_HOSTS:
             print(f"[DATABASE][P0-2 GUARD] Refusing remote DATABASE_URL host '{_host}' while running in Localhost mode. "
-                  f"Local development/defense must use an isolated database. Falling back to local SQLite.")
+                  f"To connect to remote PostgreSQL for evaluation demos, set ALLOW_REMOTE_DB=true in backend/.env. Falling back to local SQLite.")
             PG_URL = None
 
 # 2. DATABASE PATHS

@@ -145,9 +145,34 @@ input[type="date"]::-webkit-datetime-edit-year-field {
     display: none !important;
   }
 
-  #report-download-target {
-    padding: 14mm 16mm 16mm 16mm !important;
-    margin-top: 0 !important;
+  #report-download-target,
+  #report-print-target {
+    padding: 10mm 14mm !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
+    width: 100% !important;
+    display: block !important;
+    background: white !important;
+  }
+  
+  /* Report Print Isolation: strictly hide background dashboard and all dialogs/overlays */
+  body.printing-report * {
+    visibility: hidden !important;
+  }
+  body.printing-report #report-print-target,
+  body.printing-report #report-print-target * {
+    visibility: visible !important;
+  }
+  body.printing-report #report-print-target {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
+    padding: 10mm 14mm !important;
+    display: block !important;
+    background: white !important;
   }
   
   /* Ensure the main content container fills the page */
@@ -187,6 +212,12 @@ input[type="date"]::-webkit-datetime-edit-year-field {
   * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+  }
+
+  /* Hide modal dialogs, backdrops, and overlays during general report or receipt printing */
+  [role="dialog"]:not(:has(#print-job-summary)):not(:has(#print-receipt-content)),
+  [data-radix-portal]:not(:has(#print-job-summary)):not(:has(#print-receipt-content)) {
+    display: none !important;
   }
 
   /* [RECEIPT / SUMMARY PRINT ISOLATION]

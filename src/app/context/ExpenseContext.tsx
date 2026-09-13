@@ -1,6 +1,5 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { Expense } from '@/app/lib/mockData';
-import { useActivities } from './ActivityContext';
 // P1-10 FIX: centralized API base resolution (see src/app/lib/apiBase.ts).
 import { API_BASE } from '@/app/lib/apiBase';
 
@@ -14,9 +13,6 @@ interface ExpenseContextType {
 const ExpenseContext = createContext<ExpenseContextType | undefined>(undefined);
 
 export function ExpenseProvider({ children, user }: { children: ReactNode, user: { token: string } }) {
-    const { addActivity } = useActivities();
-    const currentUser = JSON.parse(localStorage.getItem('user') || '{"username": "System"}').username;
-
     const [expenses, setExpenses] = useState<Expense[]>([]);
 
     // --- OFFLINE AUTO-SYNC logic ---
@@ -72,7 +68,7 @@ export function ExpenseProvider({ children, user }: { children: ReactNode, user:
                                 amount: item.amount,
                                 category: parts[0] || 'Misc Expense',
                                 notes: parts[1] || '',
-                                frequency: parts[2] || (parts[0]?.toUpperCase() === 'INVENTORY' ? 'Variable / Restock' : (item.frequency || 'One-Time')),
+                                frequency: (parts[2] || (parts[0]?.toUpperCase() === 'INVENTORY' ? 'Restock' : (item.frequency || 'One-Time'))).replace(/variable\s*\/\s*restock/i, 'Restock'),
                                 date: item.expense_date || item.date
                             };
                         });
@@ -90,7 +86,13 @@ export function ExpenseProvider({ children, user }: { children: ReactNode, user:
             const cache = localStorage.getItem('expense_data_cache');
             if (cache) {
                 try {
-                    setExpenses(JSON.parse(cache));
+                    const parsed = JSON.parse(cache);
+                    if (Array.isArray(parsed)) {
+                        setExpenses(parsed.map((e: any) => ({
+                            ...e,
+                            frequency: (e.frequency || '').replace(/variable\s*\/\s*restock/i, 'Restock')
+                        })));
+                    }
                 } catch(e) {}
             }
 
@@ -107,7 +109,7 @@ export function ExpenseProvider({ children, user }: { children: ReactNode, user:
                                 amount: item.amount,
                                 category: parts[0] || 'Misc Expense',
                                 notes: parts[1] || '',
-                                frequency: parts[2] || (parts[0]?.toUpperCase() === 'INVENTORY' ? 'Variable / Restock' : (item.frequency || 'One-Time')),
+                                frequency: (parts[2] || (parts[0]?.toUpperCase() === 'INVENTORY' ? 'Restock' : (item.frequency || 'One-Time'))).replace(/variable\s*\/\s*restock/i, 'Restock'),
                                 date: item.expense_date || item.date
                             };
                         });
@@ -150,19 +152,10 @@ export function ExpenseProvider({ children, user }: { children: ReactNode, user:
                     amount: Number(data.amount),
                     category: parts[0] || expense.category || 'Misc Expense',
                     notes: parts[1] || expense.notes || '',
-                    frequency: parts[2] || expense.frequency || (parts[0]?.toUpperCase() === 'INVENTORY' ? 'Variable / Restock' : 'One-Time'),
+                    frequency: (parts[2] || expense.frequency || (parts[0]?.toUpperCase() === 'INVENTORY' ? 'Restock' : 'One-Time')).replace(/variable\s*\/\s*restock/i, 'Restock'),
                     date: data.expense_date || data.date
                 };
                 setExpenses((prev) => [mappedAdded, ...prev]);
-                addActivity({
-                    user: currentUser,
-                    action: 'Add Expense',
-                    table: 'EXPENSES',
-                    recordId: mappedAdded.id,
-                    details: `Logged new expense: ${mappedAdded.category} - ${mappedAdded.amount}`,
-                    newValues: { category: mappedAdded.category, amount: mappedAdded.amount, notes: mappedAdded.notes, date: mappedAdded.date },
-                    type: 'expense'
-                });
             })
             .catch(err => {
                 console.error("Expense backend sync failed:", err);
@@ -210,16 +203,6 @@ export function ExpenseProvider({ children, user }: { children: ReactNode, user:
                     }
                     return exp;
                 }));
-                addActivity({
-                    user: currentUser,
-                    action: 'Update Expense',
-                    table: 'EXPENSES',
-                    recordId: id,
-                    details: `Updated expense record ID: ${id}`,
-                    oldValues: Object.keys(oldVals).length > 0 ? oldVals : undefined,
-                    newValues: Object.keys(newVals).length > 0 ? newVals : undefined,
-                    type: 'expense'
-                });
             })
             .catch(err => {
                 console.error("Expense update failed:", err);
@@ -238,7 +221,6 @@ export function ExpenseProvider({ children, user }: { children: ReactNode, user:
     };
 
     const removeExpense = (id: string) => {
-        const existing = expenses.find(e => String(e.id) === String(id));
         fetch(`${API_BASE}/expenses/${id}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${user.token}` }
@@ -249,15 +231,6 @@ export function ExpenseProvider({ children, user }: { children: ReactNode, user:
                 }
                 if (!res.ok) throw new Error('Delete failed');
                 setExpenses(prev => prev.filter(exp => String(exp.id) !== String(id)));
-                addActivity({
-                    user: currentUser,
-                    action: 'Delete Expense',
-                    table: 'EXPENSES',
-                    recordId: id,
-                    details: `Deleted expense record ID: ${id}`,
-                    oldValues: existing ? { category: existing.category, amount: existing.amount, notes: existing.notes } : undefined,
-                    type: 'expense'
-                });
             })
             .catch(err => {
                 console.error("Expense delete failed:", err);

@@ -27,9 +27,11 @@ const ReleaseCalendar = lazy(() => import('@/app/pages/ReleaseCalendar'));
 const ClaimRecord = lazy(() => import('@/app/pages/ClaimRecord'));
 const ActivityHistory = lazy(() => import('@/app/pages/ActivityHistory'));
 const TotalSales = lazy(() => import('@/app/pages/TotalSales'));
+const PaymentsReceived = lazy(() => import('@/app/pages/PaymentsReceived'));
 const TotalOrders = lazy(() => import('@/app/pages/TotalOrders'));
 const Expenses = lazy(() => import('@/app/pages/Expenses'));
 const HistoricalRecords = lazy(() => import('@/app/pages/HistoricalRecords'));
+const BackupRecovery = lazy(() => import('@/app/pages/BackupRecovery'));
 const NotFound = lazy(() => import('@/app/pages/NotFound'));
 
 
@@ -79,6 +81,7 @@ export default function App() {
     return saved ? JSON.parse(saved) : null;
   });
   const [headerActionRight, setHeaderActionRight] = useState<React.ReactNode>(null);
+  const [headerCenter, setHeaderCenter] = useState<React.ReactNode>(null);
   const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
 
   // Expose toggle to window for the Layout button
@@ -243,7 +246,7 @@ export default function App() {
           <ExpenseProvider user={user}>
             <InventoryProvider user={user}>
               <ServiceProvider user={user}>
-                <Layout user={user} onLogout={handleLogout} headerAction={headerActionRight}>
+                <Layout user={user} onLogout={handleLogout} headerAction={headerActionRight} headerCenter={headerCenter}>
                   <Suspense fallback={<PageLoader />}>
                   <Routes>
                     <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -264,6 +267,9 @@ export default function App() {
                         actual backend RBAC so Staff never sees a page that can't work for them. */}
                     <Route path="/activity-history" element={<ProtectedRoute allowedRoles={['owner', 'admin']} user={user}><ActivityHistory user={user} /></ProtectedRoute>} />
                     <Route path="/total-sales" element={<ProtectedRoute allowedRoles={allRoles} user={user}><TotalSales user={user} onSetHeaderActionRight={setHeaderActionRight} /></ProtectedRoute>} />
+                    <Route path="/payments-received" element={<ProtectedRoute allowedRoles={allRoles} user={user}><PaymentsReceived user={user} onSetHeaderActionRight={setHeaderActionRight} /></ProtectedRoute>} />
+                    <Route path="/payment-received" element={<Navigate to="/payments-received" replace />} />
+                    <Route path="/payments" element={<Navigate to="/payments-received" replace />} />
                     <Route path="/total-orders" element={<ProtectedRoute allowedRoles={allRoles} user={user}><TotalOrders user={user} onSetHeaderActionRight={setHeaderActionRight} /></ProtectedRoute>} />
                     <Route path="/expenses" element={<ProtectedRoute allowedRoles={allRoles} user={user}><Expenses user={user} onSetHeaderActionRight={setHeaderActionRight} /></ProtectedRoute>} />
                     <Route path="/job-order-form/historical-records" element={<ProtectedRoute allowedRoles={['admin']} user={user}><HistoricalRecords user={user} onSetHeaderActionRight={setHeaderActionRight} /></ProtectedRoute>} />
@@ -277,7 +283,7 @@ export default function App() {
                       path="/sales-report" 
                       element={
                         <ProtectedRoute allowedRoles={['owner', 'admin']} user={user}>
-                          <SalesReport user={user} onSetHeaderActionRight={setHeaderActionRight} />
+                          <SalesReport user={user} onSetHeaderActionRight={setHeaderActionRight} onSetHeaderCenter={setHeaderCenter} />
                         </ProtectedRoute>
                       } 
                     />
@@ -294,6 +300,14 @@ export default function App() {
                       element={
                         <ProtectedRoute allowedRoles={['owner', 'admin']} user={user}>
                           <UserManagement user={user} onSetHeaderActionRight={setHeaderActionRight} />
+                        </ProtectedRoute>
+                      } 
+                    />
+                    <Route 
+                      path="/backup" 
+                      element={
+                        <ProtectedRoute allowedRoles={['owner', 'admin']} user={user}>
+                          <BackupRecovery user={user} />
                         </ProtectedRoute>
                       } 
                     />

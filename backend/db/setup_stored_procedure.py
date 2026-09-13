@@ -37,7 +37,17 @@ def deploy_stored_procedure():
         calc_orders INT;
     BEGIN
         -- Step A: Calculate totals from the normalized orders table for the previous day
-        SELECT COALESCE(SUM(grand_total), 0.0), COUNT(order_id)
+        -- Lessening refunds, and retaining forfeited cancellation deposits to explain drawer balances
+        SELECT COALESCE(SUM(
+            CASE 
+                WHEN status_id = 4 THEN (
+                    COALESCE((SELECT COALESCE(SUM(p.amount_received), 0.0) FROM payments p WHERE p.order_id = orders.order_id), 0.0) 
+                    - COALESCE(refund_amount, 0.0)
+                )
+                ELSE grand_total - COALESCE(refund_amount, 0.0)
+            END
+        ), 0.0), 
+        COUNT(CASE WHEN status_id != 4 THEN order_id END)
         INTO calc_revenue, calc_orders
         FROM orders
         WHERE DATE(created_at) = target_date;

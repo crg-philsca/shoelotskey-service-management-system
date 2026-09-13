@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Filter, ArrowLeft, ChevronLeft, ChevronRight, ClipboardCheck, Eye, ShieldAlert, ShoppingCart, Package, Key, Printer, Tag, Users, Activity, FileText } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
@@ -212,13 +212,14 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
         if (combined.includes('PASSWORD')) return 'Password Reset';
         if (combined.includes('LOGIN') || combined.includes('LOGGED IN')) return 'User Logged In';
         
-        if (action.includes('RESTOCK') || (activity.details || '').toLowerCase().includes('restock')) return 'Inventory Restocked';
-        if (action.includes('DEDUCT') || (activity.details || '').toLowerCase().includes('deduct')) return 'Inventory Updated';
+        if (action.includes('RESTOCK') || actionRaw.includes('RESTOCK') || (activity.details || '').toLowerCase().includes('restock')) return 'Inventory Restocked';
+        if (action.includes('DEDUCT') || actionRaw.includes('DEDUCT') || (activity.details || '').toLowerCase().includes('deduct')) return 'Inventory Deducted';
+        if (action.includes('REACTIVATE') || actionRaw.includes('REACTIVATE') || (activity.details || '').toLowerCase().includes('reactivated')) return 'Inventory Reactivated';
         
         if (action.includes('PRINT') || type === 'reports') return 'Report Generated';
 
         if (isInventory) {
-            if (action.includes('CREATE')) return 'Inventory Added';
+            if (action.includes('CREATE') || actionRaw.includes('CREATE')) return 'Inventory Added';
             return 'Inventory Updated';
         }
         if (isOrder) {
@@ -296,6 +297,8 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             activity.newValues?.order_id ||
             activity.oldValues?.item_name ||
             activity.newValues?.item_name ||
+            activity.oldValues?.itemName ||
+            activity.newValues?.itemName ||
             activity.oldValues?.service_name ||
             activity.newValues?.service_name ||
             activity.oldValues?.customer_name ||
@@ -304,6 +307,7 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             activity.newValues?.customerName ||
             activity.oldValues?.description ||
             activity.newValues?.description ||
+            (String(activity.newValues?.details || activity.details || '').match(/(?:on|item:?)\s*['"]?([^'"]+?)['"]?(?:\s*\(|\s*:|\s*updated|\s*$)/i)?.[1]) ||
             (String(activity.newValues?.details || activity.details || '').match(/(?:for|account for)\s+([A-Za-z0-9_.-]+)/i)?.[1]) ||
             activity.recordId ||
             'N/A'
@@ -313,7 +317,7 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
     const getActionIcon = (title: string) => {
         const t = title.toUpperCase();
         if (t.includes('JOB ORDER') || t.includes('CLAIMED') || t.includes('RELEASE') || t.includes('CANCEL')) return <ShoppingCart className="w-3.5 h-3.5" />;
-        if (t.includes('INVENTORY') || t.includes('RESTOCK')) return <Package className="w-3.5 h-3.5" />;
+        if (t.includes('INVENTORY') || t.includes('RESTOCK') || t.includes('DEDUCT')) return <Package className="w-3.5 h-3.5" />;
         if (t.includes('LOGIN') || t.includes('LOGOUT') || t.includes('LOGGED') || t.includes('PASSWORD') || t.includes('SESSION')) return <Key className="w-3.5 h-3.5" />;
         if (t.includes('SERVER ERROR')) return <Activity className="w-3.5 h-3.5" />;
         if (t.includes('SERVICE')) return <Tag className="w-3.5 h-3.5" />;
@@ -327,11 +331,11 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
         const actStr = getBusinessActionTitle(activity);
         const actUpper = actStr.toUpperCase();
         let colorClass = "bg-gray-100 text-gray-700 border-gray-200";
-        if (actUpper.includes('NEW') || actUpper.includes('CREATED') || actUpper.includes('ADDED') || actUpper.includes('LOGGED IN')) {
+        if (actUpper.includes('NEW') || actUpper.includes('CREATED') || actUpper.includes('ADDED') || actUpper.includes('REACTIVATED') || actUpper.includes('LOGGED IN') || actUpper.includes('RESTOCK')) {
             colorClass = "bg-emerald-50 text-emerald-700 border-emerald-200";
-        } else if (actUpper.includes('UPDATE') || actUpper.includes('RESTOCK') || actUpper.includes('GENERATED') || actUpper.includes('EDIT')) {
+        } else if (actUpper.includes('UPDATE') || actUpper.includes('GENERATED') || actUpper.includes('EDIT')) {
             colorClass = "bg-amber-50 text-amber-700 border-amber-200";
-        } else if (actUpper.includes('DELETE') || actUpper.includes('OUT') || actUpper.includes('FAILED') || actUpper.includes('CANCEL')) {
+        } else if (actUpper.includes('DELETE') || actUpper.includes('OUT') || actUpper.includes('FAILED') || actUpper.includes('CANCEL') || actUpper.includes('DEDUCT')) {
             colorClass = "bg-rose-50 text-rose-700 border-rose-200";
         } else if (actUpper.includes('PASSWORD') || actUpper.includes('CLAIMED') || actUpper.includes('RELEASE')) {
             colorClass = "bg-purple-50 text-purple-700 border-purple-200";
@@ -368,11 +372,22 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
         );
     }
 
-    // Deduplicate activities to handle potential React Strict Mode double-logs
-    // (Removed at user request: Audit trails should be append-only in the UI)
+    // Deduplicate activities to guarantee no identical consecutive entries are displayed
+    const dedupedActivities = useMemo(() => {
+        const seen = new Set<string>();
+        const res: ActivityLog[] = [];
+        for (const a of activities) {
+            const key = `${a.user || ''}_${a.actionRaw || a.action || ''}_${a.module || ''}_${a.table || ''}_${a.recordId || ''}_${a.timestamp || ''}`;
+            if (!seen.has(key)) {
+                seen.add(key);
+                res.push(a);
+            }
+        }
+        return res;
+    }, [activities]);
     
     // Filtering logic
-    const filteredActivities = activities.filter(activity => {
+    const filteredActivities = dedupedActivities.filter((activity: ActivityLog) => {
         const actionRaw = String(activity.actionRaw || activity.action || '').toUpperCase();
         const moduleLabel = getModuleBadge(activity).toUpperCase();
         // Hide noisy routing 404s unless the user explicitly filters System or searches for them.
@@ -423,9 +438,13 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
 
         // Type/Module Filter
         const activityMod = getModuleBadge(activity).toLowerCase();
-        const matchesType = selectedType === 'all' || 
-            activityMod === selectedType.toLowerCase() || 
-            activity.type?.toLowerCase() === selectedType.toLowerCase();
+        const selType = selectedType.toLowerCase();
+        let matchesType = selectedType === 'all' || 
+            activityMod === selType || 
+            activity.type?.toLowerCase() === selType;
+        if (!matchesType && selType === 'sales') {
+            matchesType = activityMod === 'job orders' || activityMod === 'reports' || activity.table?.toLowerCase() === 'orders' || activity.type?.toLowerCase() === 'order';
+        }
 
         // Date Range Filter
         let matchesDate = true;
@@ -494,6 +513,10 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             if (lowerKey === 'retail_price' || lowerKey === 'retailprice') return 'Retail Price';
             if (lowerKey === 'is_retail' || lowerKey === 'isretail') return 'Retail Item';
             if (lowerKey === 'auto_deduct' || lowerKey === 'autodeduct') return 'Auto Deduct';
+            if (lowerKey === 'auto_deduct_trigger' || lowerKey === 'autodeducttrigger') return 'Auto Deduct Trigger';
+            if (lowerKey === 'trigger_service' || lowerKey === 'triggerservice') return 'Trigger Service';
+            if (lowerKey === 'consumption_qty' || lowerKey === 'consumptionqty') return 'Consumption Qty';
+            if (lowerKey === 'consumption_unit' || lowerKey === 'consumptionunit') return 'Consumption Unit';
             if (lowerKey === 'package_size' || lowerKey === 'packagesize') return 'Package Size';
             if (lowerKey === 'package_unit' || lowerKey === 'packageunit') return 'Package Unit';
             if (lowerKey === 'low_stock_threshold' || lowerKey === 'lowstockthreshold') return 'Low Stock Threshold';
@@ -600,6 +623,15 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             
             if (lowerKey.includes('price') || lowerKey.includes('total') || lowerKey.includes('amount') || lowerKey.includes('cost')) {
                 return String(formatCurrency(val));
+            }
+            if (typeof val === 'number' || (typeof val === 'string' && /^-?\d+(\.\d+)?$/.test(val.trim()))) {
+                const num = Number(val);
+                if (Number.isFinite(num)) {
+                    if (Number.isInteger(num)) {
+                        return String(num);
+                    }
+                    return num.toFixed(2);
+                }
             }
             if (typeof val === 'string') return humanizeReadableValue(val);
             return String(val);
@@ -725,6 +757,16 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             }
 
             const sections = {
+                'Inventory Information': [
+                    'itemName', 'item_name', 'inventoryNumber', 'inventory_number',
+                    'category', 'stockQuantity', 'stock_quantity', 'stock', 'unit',
+                    'unitPrice', 'unit_price', 'retailPrice', 'retail_price', 'isRetail', 'is_retail',
+                    'lowStockThreshold', 'low_stock_threshold', 'packageSize', 'package_size',
+                    'packageUnit', 'package_unit', 'autoDeduct', 'auto_deduct',
+                    'autoDeductTrigger', 'auto_deduct_trigger', 'triggerService', 'trigger_service',
+                    'consumptionQty', 'consumption_qty', 'consumptionUnit', 'consumption_unit',
+                    'status', 'is_active', 'isActive'
+                ],
                 'Order Information': ['status', 'priorityLevel', 'predictedCompletionDate', 'transactionDate', 'inventoryApplied'],
                 'Shoe Information': ['brand', 'shoeModel', 'shoeMaterial', 'shoeSize', 'color', 'condition', 'quantity'],
                 'Service Information': ['baseService', 'addOns'],
@@ -734,6 +776,7 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             };
 
             const groupedChanges: { [key: string]: typeof changedItems } = {
+                'Inventory Information': [],
                 'Order Information': [],
                 'Shoe Information': [],
                 'Service Information': [],
@@ -787,11 +830,10 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             );
         };
 
-        // Humanized API summary (always prefer showing this for UPDATEs when present)
-        const humanSummary =
-            (typeof newVals.details === 'string' && newVals.details.trim())
-                ? newVals.details.trim()
-                : (typeof log.details === 'string' && log.details.trim() ? log.details.trim() : '');
+        // Humanized API summary (show if distinct from top-level log details to avoid duplication)
+        const rawLogDetail = typeof log.details === 'string' ? log.details.trim() : '';
+        const newValsDetail = (typeof newVals.details === 'string' && newVals.details.trim()) ? newVals.details.trim() : '';
+        const humanSummary = (newValsDetail && newValsDetail !== rawLogDetail) ? newValsDetail : '';
         const humanBanner =
             humanSummary &&
             (actionStr.includes('UPDATE') || actionStr.includes('CREATED') || actionStr.includes('ADDED') || actionStr.includes('NEW'))
@@ -819,13 +861,16 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                 </div>
             );
         } else if (module === 'INVENTORY' && actionStr.includes('RESTOCK')) {
-            const added = newVals.stock_added || newVals.quantity || log.details.match(/added (\d+)/i)?.[1] || 0;
-            const itemName = newVals.item_name || newVals.name || log.details.match(/Restocked\s*(.*?)\s*:/)?.[1] || 'Inventory Item';
+            const addedRaw = newVals.stock_added || newVals.quantity || newVals.amount || log.details.match(/(?:added|restocked)\s*(\d+(?:\.\d+)?)/i)?.[1] || 0;
+            const addedNum = Number(addedRaw);
+            const addedFormatted = Number.isFinite(addedNum) ? (Number.isInteger(addedNum) ? String(addedNum) : addedNum.toFixed(2)) : String(addedRaw);
+            const itemName = newVals.item_name || newVals.name || oldVals.item_name || log.details.match(/(?:on|item:?)\s*['"]?([^'"]+?)['"]?/i)?.[1] || 'Inventory Item';
+            const unit = newVals.unit || oldVals.unit || '';
             eventSummary = (
                 <div className="mb-4 space-y-1.5">
                     <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Restocked: {itemName}</span>
                     <div className="flex items-center gap-3 bg-emerald-50 p-2.5 rounded-xl border border-emerald-100 shadow-sm">
-                        <span className="text-[14px] font-black text-emerald-700">+{added}</span>
+                        <span className="text-[14px] font-black text-emerald-700">+{addedFormatted}{unit ? ` ${unit}` : ''}</span>
                         <div className="flex items-center gap-2 text-[12px] font-bold text-gray-600 border-l border-emerald-200 pl-3">
                             <span className="line-through text-gray-400">{mapBusinessValue('stock', oldVals.stock || oldVals.stock_quantity || 0)}</span>
                             <span className="text-gray-400">→</span>
@@ -834,15 +879,18 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                     </div>
                 </div>
             );
-        } else if (module === 'INVENTORY' && (actionStr.includes('CONSUME') || log.details.toLowerCase().includes('deduct'))) {
-            const used = newVals.quantity_used || log.details.match(/deducted (\d+)/i)?.[1] || 0;
-            const itemName = newVals.item_name || newVals.name || log.details.match(/from\s*(.*?)(\.|$)/i)?.[1] || 'Inventory Item';
+        } else if (module === 'INVENTORY' && (actionStr.includes('CONSUME') || actionStr.includes('DEDUCT') || log.details.toLowerCase().includes('deduct'))) {
+            const usedRaw = newVals.quantity_used || newVals.amount || log.details.match(/(?:used|deducted)\s*(\d+(?:\.\d+)?)/i)?.[1] || 0;
+            const usedNum = Number(usedRaw);
+            const usedFormatted = Number.isFinite(usedNum) ? (Number.isInteger(usedNum) ? String(usedNum) : usedNum.toFixed(2)) : String(usedRaw);
+            const itemName = newVals.item_name || newVals.name || oldVals.item_name || log.details.match(/(?:from|on|item:?)\s*['"]?([^'"]+?)['"]?/i)?.[1] || 'Inventory Item';
+            const unit = newVals.unit || oldVals.unit || '';
             eventSummary = (
                 <div className="mb-4 space-y-1.5">
-                    <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Material Consumed: {itemName}</span>
-                    <div className="flex items-center gap-3 bg-amber-50 p-2.5 rounded-xl border border-amber-100 shadow-sm">
-                        <span className="text-[14px] font-black text-amber-700">−{used}</span>
-                        <div className="flex items-center gap-2 text-[12px] font-bold text-gray-600 border-l border-amber-200 pl-3">
+                    <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Material Deducted: {itemName}</span>
+                    <div className="flex items-center gap-3 bg-rose-50 p-2.5 rounded-xl border border-rose-100 shadow-sm">
+                        <span className="text-[14px] font-black text-rose-700">−{usedFormatted}{unit ? ` ${unit}` : ''}</span>
+                        <div className="flex items-center gap-2 text-[12px] font-bold text-gray-600 border-l border-rose-200 pl-3">
                             <span className="line-through text-gray-400">{mapBusinessValue('stock', oldVals.stock || oldVals.stock_quantity || 0)}</span>
                             <span className="text-gray-400">→</span>
                             <span className="text-gray-800">{mapBusinessValue('stock', newVals.stock || newVals.stock_quantity || 0)}</span>
@@ -1103,14 +1151,15 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             );
         }
 
-        // Inventory create / update — always show human before→after fields
-        if (module === 'INVENTORY' && (actionStr.includes('UPDATE') || actionStr.includes('ADDED') || actionStr.includes('CREATE'))) {
+        // Inventory create / update / deduct / reactivate — always show human before→after fields
+        if (module === 'INVENTORY' && (actionStr.includes('UPDATE') || actionStr.includes('ADDED') || actionStr.includes('CREATE') || actionStr.includes('DEDUCT') || actionStr.includes('REACTIVAT'))) {
             const itemName = newVals.item_name || oldVals.item_name || 'Inventory Item';
             const unit = newVals.unit || oldVals.unit || '';
             const invFields = [
                 'item_name', 'inventory_number', 'category', 'stock_quantity', 'unit',
                 'unit_price', 'status', 'low_stock_threshold', 'package_size', 'package_unit',
-                'is_retail', 'retail_price', 'auto_deduct',
+                'is_retail', 'retail_price', 'auto_deduct', 'auto_deduct_trigger', 'trigger_service',
+                'consumption_qty', 'consumption_unit',
             ];
             const rows = invFields
                 .map((key) => {
@@ -1391,27 +1440,34 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
 
                         <Button 
                             variant="outline" 
-                            className={`h-9 px-3 rounded-xl transition-all flex-shrink-0 font-bold text-xs flex items-center gap-1.5 shadow-sm
+                            className={`h-9 w-9 p-0 rounded-xl transition-all flex-shrink-0 flex items-center justify-center shadow-sm relative
                                 ${selectedUser !== 'all' || selectedType !== 'all' || startDate || endDate 
                                     ? 'border-red-600 text-red-600 bg-red-50 hover:bg-red-100' 
                                     : 'border-gray-200 text-gray-600 hover:border-red-600 hover:text-red-600 hover:bg-red-50'}`}
                             onClick={() => setIsFilterOpen(true)}
                             title="Open filters"
+                            aria-label="Open filters"
                         >
                             <Filter className="h-4 w-4 stroke-[2.5]" />
-                            <span>Filters</span>
                             {(selectedUser !== 'all' || selectedType !== 'all' || startDate || endDate) && (
-                                <span className="w-2 h-2 rounded-full bg-red-600 animate-pulse"></span>
+                                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-600 ring-2 ring-white animate-pulse" />
                             )}
                         </Button>
                     </div>
 
                     <div className="overflow-x-auto -mx-4 px-4 overflow-y-hidden no-scrollbar">
-                        <table className="w-full min-w-[700px]">
+                        <table className="w-full table-fixed min-w-[700px]">
+                            <colgroup>
+                                <col className="w-[22%]" />
+                                <col className="w-[26%]" />
+                                <col className="w-[18%]" />
+                                <col className="w-[20%]" />
+                                <col className="w-[14%]" />
+                            </colgroup>
                             <thead className="bg-red-50 border-y border-red-100">
                                 <tr>
-                                    <th className="px-4 py-3 text-left text-[11px] font-extrabold text-slate-800 uppercase tracking-wider">User / Role</th>
-                                    <th className="px-4 py-3 text-left text-[11px] font-extrabold text-slate-800 uppercase tracking-wider">Action</th>
+                                    <th className="px-4 py-3 text-center text-[11px] font-extrabold text-slate-800 uppercase tracking-wider">User / Role</th>
+                                    <th className="px-4 py-3 text-center text-[11px] font-extrabold text-slate-800 uppercase tracking-wider">Action</th>
                                     <th className="px-4 py-3 text-center text-[11px] font-extrabold text-slate-800 uppercase tracking-wider">Module / Table</th>
                                     <th className="px-4 py-3 text-center text-[11px] font-extrabold text-slate-800 uppercase tracking-wider">Date & Time</th>
                                     <th className="px-4 py-3 text-center text-[11px] font-extrabold text-slate-800 uppercase tracking-wider">Inspect</th>
@@ -1432,7 +1488,7 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                                         </td>
                                     </tr>
                                 ) : (
-                                    paginatedActivities.map((activity) => {
+                                    paginatedActivities.map((activity: ActivityLog) => {
                                         const normalizeDate = (ts: string) => {
                                             if (!ts) return "";
                                             if (ts.length > 20 || isNaN(parseInt(ts.substring(0, 2)))) {
@@ -1460,8 +1516,8 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                                                 onClick={() => handleRowClick(activity)}
                                                 className="hover:bg-red-50/40 cursor-pointer transition-colors group"
                                             >
-                                                <td className="px-4 py-3.5 text-left">
-                                                    <div className="flex flex-col gap-0.5">
+                                                <td className="px-4 py-3.5 text-center">
+                                                    <div className="flex flex-col items-center justify-center gap-0.5 text-center">
                                                         <span className="text-xs font-extrabold text-gray-900 uppercase tracking-tight block">
                                                             {activity.user}
                                                         </span>
@@ -1470,8 +1526,10 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                                                         </span>
                                                     </div>
                                                 </td>
-                                                <td className="px-4 py-3.5 text-left">
-                                                    {getActionBadge(activity)}
+                                                <td className="px-4 py-3.5 text-center">
+                                                    <div className="flex items-center justify-center text-center">
+                                                        {getActionBadge(activity)}
+                                                    </div>
                                                 </td>
                                                 <td className="px-4 py-3.5 text-center">
                                                     <Badge variant="outline" className={

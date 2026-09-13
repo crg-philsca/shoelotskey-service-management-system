@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Dialog, DialogContent } from '@/app/components/ui/dialog';
+import { useState, useEffect, useRef } from 'react';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/app/components/ui/dialog';
 import { Label } from '@/app/components/ui/label';
 import { Input } from '@/app/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
@@ -13,7 +13,9 @@ import type { JobOrder, ShoeEntry } from '@/app/types';
 import { useServices } from '../context/ServiceContext';
 import { useOrderCalculations } from '../hooks/useOrderCalculations';
 import { CreatableCombobox } from './ui/creatable-combobox';
+import { CUSTOM_OPTION_KEYS } from '@/app/lib/customOptions';
 import { isAddonVisibleForBaseServices, applyColorCountExclusive, syncColorRenewalAddons, isColorCountAddon } from '@/app/lib/serviceCompatibility';
+import { validateCustomerName, CUSTOMER_NAME_MAX_LENGTH } from '@/app/lib/customerValidation';
 
 // Dropdown options
 const SHOE_BRANDS = [
@@ -141,9 +143,9 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
     // Internal state for shoes
     const [shoes, setShoes] = useState<ShoeEntry[]>([]);
     
-    // State for collapsible cards
     const [expandedShoeId, setExpandedShoeId] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const isSubmittingRef = useRef(false);
 
     useEffect(() => {
         if (order && open) {
@@ -270,19 +272,23 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
     };
 
     const handleSave = async () => {
-        if (!onSave || !order || isSubmitting) return;
+        if (!onSave || !order || isSubmittingRef.current || isSubmitting) return;
+        isSubmittingRef.current = true;
         setIsSubmitting(true);
         
         try {
-            const finalName = customerName.trim();
-            if (!finalName) {
-                toast.error('Customer name is required');
+            const validation = validateCustomerName(customerName);
+            if (!validation.isValid) {
+                toast.error(validation.error || 'Customer name is invalid');
+                isSubmittingRef.current = false;
                 setIsSubmitting(false);
                 return;
             }
+            const finalName = validation.sanitized;
             
             if (['gcash', 'maya'].includes(paymentMethod) && !referenceNo) {
                 toast.error('Reference number is required for e-payments');
+                isSubmittingRef.current = false;
                 setIsSubmitting(false);
                 return;
             }
@@ -296,6 +302,7 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
             });
             if (hasMissingShoeDetails) {
                 toast.error('Size and Color must be filled out for every item.');
+                isSubmittingRef.current = false;
                 setIsSubmitting(false);
                 return;
             }
@@ -386,6 +393,7 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
         console.error('Error updating order:', error);
         toast.error('An error occurred while updating the order.');
     } finally {
+        isSubmittingRef.current = false;
         setIsSubmitting(false);
     }
 };
@@ -434,30 +442,42 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto bg-[#F8F9FA] p-0 gap-0 rounded-2xl border-none shadow-2xl">
+            <DialogContent showCloseButton={false} className="w-[calc(100vw-1.5rem)] sm:max-w-3xl max-h-[90vh] flex flex-col overflow-hidden bg-[#F8F9FA] p-0 gap-0 rounded-2xl border border-gray-200 shadow-2xl">
+                <DialogTitle className="sr-only">Edit Order {order.orderNumber}</DialogTitle>
+                <DialogDescription className="sr-only">Form to update order information and services</DialogDescription>
                 
-                {/* Header (Sticky) */}
-                <div className="bg-white px-6 py-4 border-b border-gray-100 flex items-center justify-between sticky top-0 z-10">
-                    <div className="flex items-center gap-3">
-                        <h2 className="text-xl font-bold text-red-600 uppercase tracking-tight">Edit Order Detail</h2>
-                        <div className="bg-slate-100 hover:bg-slate-200 text-slate-900 px-3 py-1 rounded-full text-xs font-mono font-bold transition-all flex items-center gap-1.5 border border-slate-200 group cursor-default">
-                          <span>{order.orderNumber}</span>
+                {/* Header */}
+                <div className="bg-white px-4 sm:px-6 py-3.5 sm:py-4 border-b border-gray-100 flex items-center justify-between shrink-0 gap-2">
+                    {/* Left: Order Number */}
+                    <div className="flex items-center shrink-0">
+                        <div className="bg-slate-100 hover:bg-slate-200 text-slate-900 px-2.5 sm:px-3 py-1 rounded-full text-xs font-mono font-bold transition-all flex items-center gap-1.5 border border-slate-200 group cursor-default shadow-2xs">
+                            <span>{order.orderNumber}</span>
                         </div>
                     </div>
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => onOpenChange(false)}
-                        className="h-8 w-8 text-gray-400 border border-gray-200 hover:text-red-600 hover:bg-red-50 hover:border-red-100 rounded-full transition-colors flex items-center justify-center flex-shrink-0"
-                    >
-                        <X size={16} />
-                    </Button>
+
+                    {/* Center: Title */}
+                    <div className="flex-1 text-center min-w-0 px-2">
+                        <h2 className="text-sm sm:text-lg font-bold text-red-600 uppercase tracking-tight truncate">
+                            Edit Order Detail
+                        </h2>
+                    </div>
+
+                    {/* Right: Close Button */}
+                    <div className="flex items-center shrink-0">
+                        <button
+                            type="button"
+                            onClick={() => onOpenChange(false)}
+                            aria-label="Close"
+                            className="h-8 w-8 rounded-full bg-slate-100 hover:bg-red-50 text-slate-500 hover:text-red-600 border border-slate-200 hover:border-red-200 flex items-center justify-center transition-all hover:scale-105 active:scale-95 shadow-xs flex-shrink-0 cursor-pointer outline-none"
+                        >
+                            <X size={16} />
+                        </button>
+                    </div>
                 </div>
 
-                <div className="p-6 space-y-6">
+                <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
                     {/* Top Row: Meta */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-50">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 bg-white p-3.5 sm:p-4 rounded-xl shadow-sm border border-gray-50">
                         <div>
                             <Label className={LABEL_STYLE}>Order Status</Label>
                             <div className="h-9 px-3 py-1.5 rounded-xl text-xs font-bold text-gray-700 bg-gray-50/50 border border-gray-100 cursor-not-allowed flex items-center capitalize">
@@ -489,8 +509,18 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                         <h3 className={SECTION_TITLE}><span className="w-1.5 h-1.5 rounded-full bg-red-500"></span> Customer Details</h3>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div>
-                                <Label className={LABEL_STYLE}>Customer Name</Label>
-                                <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} className={INPUT_STYLE} />
+                                <div className="flex items-center justify-between mb-1">
+                                    <Label className={LABEL_STYLE}>Customer Name</Label>
+                                    <span className={`text-[10px] font-bold ${customerName.length >= CUSTOMER_NAME_MAX_LENGTH ? 'text-red-600' : 'text-gray-400'}`}>
+                                        {customerName.length}/{CUSTOMER_NAME_MAX_LENGTH}
+                                    </span>
+                                </div>
+                                <Input 
+                                    value={customerName} 
+                                    maxLength={CUSTOMER_NAME_MAX_LENGTH}
+                                    onChange={(e) => setCustomerName(e.target.value.slice(0, CUSTOMER_NAME_MAX_LENGTH))} 
+                                    className={INPUT_STYLE} 
+                                />
                             </div>
                             <div>
                                 <Label className={LABEL_STYLE}>Contact Number</Label>
@@ -549,7 +579,7 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                             {shoes.map((shoe, index) => {
                                 const isExpanded = expandedShoeId === shoe.id.toString() || shoes.length === 1;
                                 
-                                const allowedAddons = calculations.addOnServices.filter(addon => isAddonVisibleForBaseServices(addon.name, shoe.baseService || [])).sort((a, b) => {
+                                const allowedAddons = calculations.addOnServices.filter(addon => isAddonVisibleForBaseServices(addon.name, shoe.baseService || [], services)).sort((a, b) => {
                                     const baseServicesArr = shoe.baseService || [];
                                     const hasColorRenewal = baseServicesArr.some((s: string) => s.includes('Color Renewal'));
                                     const hasReglue = baseServicesArr.some((s: string) => s.toLowerCase().includes('reglue'));
@@ -604,6 +634,7 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                                             onChange={(val) => updateShoe(shoe.id, { brand: val })}
                                                             placeholder="Select brand"
                                                             searchPlaceholder="Search brand..."
+                                                            storageKey={CUSTOM_OPTION_KEYS.BRANDS}
                                                         />
                                                     </div>
                                                     <div>
@@ -620,6 +651,7 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                                             }}
                                                             placeholder="Select model"
                                                             searchPlaceholder="Search model..."
+                                                            storageKey={CUSTOM_OPTION_KEYS.MODELS}
                                                         />
                                                     </div>
                                                     <div>
@@ -630,6 +662,7 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                                             onChange={(val) => updateShoe(shoe.id, { shoeMaterial: val })}
                                                             placeholder="Select material"
                                                             searchPlaceholder="Search material..."
+                                                            storageKey={CUSTOM_OPTION_KEYS.MATERIALS}
                                                         />
                                                     </div>
                                                     <div>
@@ -640,6 +673,7 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                                             onChange={(val) => updateShoe(shoe.id, { shoeSize: val })}
                                                             placeholder="Select size"
                                                             searchPlaceholder="Search size..."
+                                                            storageKey={CUSTOM_OPTION_KEYS.SIZES}
                                                         />
                                                     </div>
                                                     <div>
@@ -651,6 +685,7 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                                             placeholder="Select color"
                                                             searchPlaceholder="Search color..."
                                                             multiple={true}
+                                                            storageKey={CUSTOM_OPTION_KEYS.COLORS}
                                                         />
                                                     </div>
                                                     {(shoe.baseService || []).includes('Basic Cleaning') && (
@@ -743,14 +778,14 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                                                                     newServices = newServices.filter((srv: string) => srv !== s.name);
                                                                                 }
                                                                                 
-                                                                                const newAllowedAddons = calculations.addOnServices.filter(addon => isAddonVisibleForBaseServices(addon.name, newServices)).map(a => a.name);
+                                                                                const newAllowedAddons = calculations.addOnServices.filter(addon => isAddonVisibleForBaseServices(addon.name, newServices, services)).map(a => a.name);
                                                                                 
                                                                                 let newAddons = [...(shoe.addOns || [])].filter((a: any) => newAllowedAddons.includes(a.name));
                                                                                 newAddons = syncColorRenewalAddons(newAddons, newServices);
                                                                                 
                                                                                 updateShoe(shoe.id, { baseService: newServices, addOns: newAddons });
                                                                             }}
-                                                                            className="mt-0.5"
+                                                                            className="mt-0.5 shrink-0 self-start"
                                                                         />
                                                                         <div className="flex flex-col gap-0.5">
                                                                             <span className="text-[11px] font-bold text-gray-700 leading-tight">{s.name}</span>
@@ -769,38 +804,145 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                                                 {allowedAddons.map(addonName => {
                                                                     const addonData = calculations.addOnServices.find(a => a.name === addonName);
                                                                     if (!addonData) return null;
-                                                                    const isSelected = shoe.addOns?.some((a: any) => a.name === addonName);
+                                                                    const isSelected = shoe.addOns?.some((a: any) => (typeof a === 'string' ? a : a.name) === addonName);
+                                                                    const currentAddon = shoe.addOns?.find((a: any) => (typeof a === 'string' ? a : a.name) === addonName);
+                                                                    const quantity = typeof currentAddon === 'object' && currentAddon?.quantity ? currentAddon.quantity : 1;
+                                                                    const checkboxId = `addon-${shoe.id}-${addonName.replace(/\s+/g, '-')}`;
                                                                     
                                                                     return (
-                                                                        <label 
+                                                                        <div 
                                                                             key={addonName} 
-                                                                            className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${isSelected ? 'border-red-500 bg-white shadow-sm' : 'border-gray-100 hover:border-gray-200 bg-gray-50/30'}`}
+                                                                            className={`p-3 rounded-xl border transition-all ${isSelected ? 'border-red-500 bg-white shadow-sm' : 'border-gray-100 hover:border-gray-200 bg-gray-50/30'}`}
                                                                         >
-                                                                            <Checkbox
-                                                                                checked={isSelected}
-                                                                                onCheckedChange={(checked) => {
-                                                                                    let newAddons = [...(shoe.addOns || [])];
-                                                                                    if (isColorCountAddon(addonName)) {
-                                                                                        newAddons = applyColorCountExclusive(
-                                                                                            newAddons,
-                                                                                            addonName,
-                                                                                            Boolean(checked),
-                                                                                            shoe.baseService || [],
-                                                                                        );
-                                                                                    } else if (checked) {
-                                                                                        newAddons.push({ name: addonName, quantity: 1 });
-                                                                                    } else {
-                                                                                        newAddons = newAddons.filter((a: any) => a.name !== addonName);
-                                                                                    }
-                                                                                    updateShoe(shoe.id, { addOns: newAddons });
-                                                                                }}
-                                                                                className="mt-0.5"
-                                                                            />
-                                                                            <div className="flex flex-col gap-0.5">
-                                                                                <span className="text-[11px] font-bold text-gray-700 leading-tight">{addonName}</span>
-                                                                                <span className="text-[10px] font-black text-gray-400">₱{addonData.price}</span>
-                                                                            </div>
-                                                                        </label>
+                                                                            {isSelected ? (
+                                                                                <div className="flex items-start gap-2.5 min-w-0 w-full">
+                                                                                    <Checkbox
+                                                                                        id={checkboxId}
+                                                                                        checked={isSelected}
+                                                                                        onCheckedChange={(checked) => {
+                                                                                            let newAddons = [...(shoe.addOns || [])];
+                                                                                            if (isColorCountAddon(addonName)) {
+                                                                                                newAddons = applyColorCountExclusive(
+                                                                                                    newAddons,
+                                                                                                    addonName,
+                                                                                                    Boolean(checked),
+                                                                                                    shoe.baseService || [],
+                                                                                                );
+                                                                                            } else if (checked) {
+                                                                                                newAddons.push({ name: addonName, quantity: 1 });
+                                                                                            } else {
+                                                                                                newAddons = newAddons.filter((a: any) => (typeof a === 'string' ? a : a.name) !== addonName);
+                                                                                            }
+
+                                                                                            let newBaseServices = Array.isArray(shoe.baseService) ? [...shoe.baseService] : [];
+                                                                                            const isReglueSole = (name: string) => {
+                                                                                                const l = (name || '').toLowerCase();
+                                                                                                return (
+                                                                                                    name === 'Full Reglue Midsole' ||
+                                                                                                    name === 'Full Reglue Undersole' ||
+                                                                                                    name === 'Midsole Full Reglue' ||
+                                                                                                    name === 'Undersole Full Reglue' ||
+                                                                                                    name === 'Midsole' ||
+                                                                                                    name === 'Undersole' ||
+                                                                                                    (l.includes('reglue') && (l.includes('midsole') || l.includes('undersole')))
+                                                                                                );
+                                                                                            };
+
+                                                                                            if (checked && isReglueSole(addonName)) {
+                                                                                                if (!newBaseServices.includes('Full Reglue')) {
+                                                                                                    newBaseServices.push('Full Reglue');
+                                                                                                }
+                                                                                                if (!newBaseServices.includes('Basic Cleaning')) {
+                                                                                                    newBaseServices.push('Basic Cleaning');
+                                                                                                }
+                                                                                            }
+
+                                                                                            const nextAddOns = syncColorRenewalAddons(newAddons, newBaseServices);
+                                                                                            updateShoe(shoe.id, { baseService: newBaseServices, addOns: nextAddOns });
+                                                                                        }}
+                                                                                        className="mt-0.5 shrink-0 self-start"
+                                                                                    />
+                                                                                    <div className="flex flex-col min-w-0 flex-1">
+                                                                                        <label htmlFor={checkboxId} className="text-[11px] font-bold text-gray-700 leading-tight cursor-pointer">
+                                                                                            {addonName}
+                                                                                        </label>
+                                                                                        <div className="flex items-center justify-between gap-2 mt-1.5 min-w-0">
+                                                                                            <input
+                                                                                                type="number"
+                                                                                                min="1"
+                                                                                                value={quantity}
+                                                                                                onChange={(e) => {
+                                                                                                    const val = e.target.value;
+                                                                                                    const newQuantity = val === '' ? 1 : Math.max(1, parseInt(val));
+                                                                                                    const newAddOns = (shoe.addOns || []).map((a: any) => {
+                                                                                                        const aName = typeof a === 'string' ? a : a.name;
+                                                                                                        return aName === addonName ? { name: addonName, quantity: newQuantity } : a;
+                                                                                                    });
+                                                                                                    updateShoe(shoe.id, { addOns: newAddOns });
+                                                                                                }}
+                                                                                                className="w-9 h-5 border border-gray-200 rounded text-[10px] font-bold text-center focus:outline-none focus:border-red-500 bg-white [&::-webkit-inner-spin-button]:opacity-100 [&::-webkit-inner-spin-button]:h-[16px] [&::-webkit-inner-spin-button]:my-auto px-0"
+                                                                                            />
+                                                                                            <span className="text-[10px] font-black text-red-600 shrink-0">
+                                                                                                ₱{addonData.price * quantity}
+                                                                                            </span>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            ) : (
+                                                                                <label htmlFor={checkboxId} className="flex items-start gap-2.5 cursor-pointer w-full">
+                                                                                    <Checkbox
+                                                                                        id={checkboxId}
+                                                                                        checked={false}
+                                                                                        onCheckedChange={(checked) => {
+                                                                                            let newAddons = [...(shoe.addOns || [])];
+                                                                                            if (isColorCountAddon(addonName)) {
+                                                                                                newAddons = applyColorCountExclusive(
+                                                                                                    newAddons,
+                                                                                                    addonName,
+                                                                                                    Boolean(checked),
+                                                                                                    shoe.baseService || [],
+                                                                                                );
+                                                                                            } else if (checked) {
+                                                                                                newAddons.push({ name: addonName, quantity: 1 });
+                                                                                            } else {
+                                                                                                newAddons = newAddons.filter((a: any) => (typeof a === 'string' ? a : a.name) !== addonName);
+                                                                                            }
+
+                                                                                            let newBaseServices = Array.isArray(shoe.baseService) ? [...shoe.baseService] : [];
+                                                                                            const isReglueSole = (name: string) => {
+                                                                                                const l = (name || '').toLowerCase();
+                                                                                                return (
+                                                                                                    name === 'Full Reglue Midsole' ||
+                                                                                                    name === 'Full Reglue Undersole' ||
+                                                                                                    name === 'Midsole Full Reglue' ||
+                                                                                                    name === 'Undersole Full Reglue' ||
+                                                                                                    name === 'Midsole' ||
+                                                                                                    name === 'Undersole' ||
+                                                                                                    (l.includes('reglue') && (l.includes('midsole') || l.includes('undersole')))
+                                                                                                );
+                                                                                            };
+
+                                                                                            if (checked && isReglueSole(addonName)) {
+                                                                                                if (!newBaseServices.includes('Full Reglue')) {
+                                                                                                    newBaseServices.push('Full Reglue');
+                                                                                                }
+                                                                                                if (!newBaseServices.includes('Basic Cleaning')) {
+                                                                                                    newBaseServices.push('Basic Cleaning');
+                                                                                                }
+                                                                                            }
+
+                                                                                            const nextAddOns = syncColorRenewalAddons(newAddons, newBaseServices);
+                                                                                            updateShoe(shoe.id, { baseService: newBaseServices, addOns: nextAddOns });
+                                                                                        }}
+                                                                                        className="mt-0.5 shrink-0 self-start"
+                                                                                    />
+                                                                                    <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                                                                                        <span className="text-[11px] font-bold text-gray-700 leading-tight">{addonName}</span>
+                                                                                        <span className="text-[10px] font-black text-gray-400">₱{addonData.price}</span>
+                                                                                    </div>
+                                                                                </label>
+                                                                            )}
+                                                                        </div>
                                                                     );
                                                                 })}
                                                             </div>
@@ -989,13 +1131,17 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                 </div>
 
                 {/* Footer */}
-                <div className="p-6 bg-white border-t border-gray-100 sticky bottom-0 z-10 w-full">
+                <div className="p-4 sm:p-5 bg-white border-t border-gray-100 shrink-0 w-full">
                     <div className="grid grid-cols-2 gap-4 w-full">
                         <Button variant="outline" className="w-full h-11 rounded-xl font-black tracking-widest text-xs border-gray-300 text-gray-600 hover:bg-gray-50 uppercase shadow-sm" onClick={() => onOpenChange(false)}>
                             Cancel
                         </Button>
-                        <Button className="w-full h-11 rounded-xl bg-[#D3544E] hover:bg-[#b9443f] text-white font-black tracking-widest text-xs uppercase shadow-sm" onClick={handleSave}>
-                            Save Changes
+                        <Button 
+                            className="w-full h-11 rounded-xl bg-[#D3544E] hover:bg-[#b9443f] text-white font-black tracking-widest text-xs uppercase shadow-sm disabled:opacity-50" 
+                            onClick={handleSave}
+                            disabled={isSubmitting}
+                        >
+                            {isSubmitting ? 'Saving...' : 'Save'}
                         </Button>
                     </div>
                 </div>

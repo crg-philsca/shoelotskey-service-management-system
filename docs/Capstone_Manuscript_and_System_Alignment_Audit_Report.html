@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Capstone Manuscript, System & Evaluation Alignment Audit Report - Shoelotskey SMS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #0284c7;
+      --primary-dark: #0369a1;
+      --primary-light: #e0f2fe;
+      --accent: #f59e0b;
+      --success: #10b981;
+      --success-light: #dcfce7;
+      --danger: #ef4444;
+      --danger-light: #fee2e2;
+      --warning-bg: #fef3c7;
+      --warning-border: #fde68a;
+      --text-dark: #0f172a;
+      --text-muted: #64748b;
+      --bg-light: #f8fafc;
+      --card-bg: #ffffff;
+      --border-color: #e2e8f0;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -2px rgba(0,0,0,0.05);
+      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -4px rgba(0,0,0,0.04);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: var(--bg-light);
+      color: var(--text-dark);
+      line-height: 1.65;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 1180px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg);
+      border: 1px solid var(--border-color);
+      overflow: hidden;
+    }
+
+    /* Header Banner */
+    .header-banner {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0369a1 100%);
+      color: #ffffff;
+      padding: 48px 40px;
+      border-bottom: 4px solid var(--accent);
+      position: relative;
+    }
+
+    .header-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      padding: 4px 12px;
+      border-radius: 9999px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+      color: #38bdf8;
+    }
+
+    .header-banner h1 {
+      font-size: 2.1rem;
+      font-weight: 800;
+      line-height: 1.25;
+      margin-bottom: 12px;
+    }
+
+    .header-banner p.subtitle {
+      font-size: 1.05rem;
+      color: #cbd5e1;
+      max-width: 900px;
+      line-height: 1.5;
+    }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-top: 28px;
+      padding-top: 24px;
+      border-top: 1px solid rgba(255, 255, 255, 0.15);
+      font-size: 0.9rem;
+    }
+
+    .meta-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .meta-label {
+      color: #94a3b8;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+    }
+
+    .meta-value {
+      color: #f1f5f9;
+      font-weight: 600;
+    }
+
+    /* Content Layout */
+    .content {
+      padding: 40px;
+    }
+
+    h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #0f172a;
+      margin-top: 40px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid var(--border-color);
+    }
+
+    h2:first-of-type {
+      margin-top: 0;
+    }
+
+    h3 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #1e293b;
+      margin-top: 24px;
+      margin-bottom: 12px;
+    }
+
+    p {
+      margin-bottom: 16px;
+      color: #334155;
+      font-size: 0.96rem;
+    }
+
+    /* KPI Summary Cards */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 20px;
+      margin: 24px 0 32px 0;
+    }
+
+    .kpi-card {
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 20px;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .kpi-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: var(--primary);
+    }
+
+    .kpi-card.success::before { background: var(--success); }
+    .kpi-card.accent::before { background: var(--accent); }
+    .kpi-card.danger::before { background: var(--danger); }
+
+    .kpi-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .kpi-value {
+      font-size: 2.1rem;
+      font-weight: 800;
+      color: var(--text-dark);
+      margin: 8px 0 4px 0;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .kpi-desc {
+      font-size: 0.82rem;
+      color: #64748b;
+      font-weight: 500;
+    }
+
+    /* Badges and Tags */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .badge-success {
+      background: var(--success-light);
+      color: #065f46;
+      border: 1px solid #a7f3d0;
+    }
+
+    .badge-danger {
+      background: var(--danger-light);
+      color: #991b1b;
+      border: 1px solid #fecaca;
+    }
+
+    .badge-warning {
+      background: var(--warning-bg);
+      color: #92400e;
+      border: 1px solid var(--warning-border);
+    }
+
+    .badge-info {
+      background: var(--primary-light);
+      color: var(--primary-dark);
+      border: 1px solid #bae6fd;
+    }
+
+    /* Tables */
+    .table-responsive {
+      overflow-x: auto;
+      margin: 20px 0;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-color);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.92rem;
+    }
+
+    th {
+      background: #f1f5f9;
+      color: #334155;
+      font-weight: 700;
+      padding: 14px 16px;
+      border-bottom: 2px solid var(--border-color);
+      text-transform: uppercase;
+      font-size: 0.78rem;
+      letter-spacing: 0.05em;
+    }
+
+    td {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border-color);
+      color: #334155;
+      vertical-align: top;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background-color: #f8fafc;
+    }
+
+    /* Callouts & Alert Boxes */
+    .alert-box {
+      padding: 18px 20px;
+      border-radius: var(--radius-md);
+      margin: 20px 0;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      border: 1px solid transparent;
+    }
+
+    .alert-success {
+      background-color: #f0fdf4;
+      border-color: #bbf7d0;
+      color: #166534;
+    }
+
+    .alert-warning {
+      background-color: #fffbeb;
+      border-color: #fde68a;
+      color: #92400e;
+    }
+
+    .alert-danger {
+      background-color: #fef2f2;
+      border-color: #fecaca;
+      color: #991b1b;
+    }
+
+    .alert-info {
+      background-color: #f0f9ff;
+      border-color: #bae6fd;
+      color: #075985;
+    }
+
+    .alert-icon {
+      font-size: 1.3rem;
+      line-height: 1;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .alert-content strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 0.98rem;
+    }
+
+    /* Quote Replacement Snippets */
+    .replacement-box {
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-left: 5px solid var(--primary);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+      margin: 12px 0 20px 0;
+      font-size: 0.92rem;
+    }
+
+    .replacement-box .target-label {
+      font-size: 0.76rem;
+      font-weight: 700;
+      color: var(--primary-dark);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .replacement-box blockquote {
+      font-style: italic;
+      color: #1e293b;
+      line-height: 1.6;
+    }
+
+    /* UI Demo Option B */
+    .ui-mockup-card {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: var(--radius-md);
+      padding: 24px;
+      margin: 24px 0;
+      color: #f8fafc;
+      box-shadow: var(--shadow-md);
+    }
+
+    .ui-mockup-header {
+      font-size: 0.82rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #94a3b8;
+      margin-bottom: 16px;
+      font-weight: 700;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .compact-bar {
+      border-radius: 8px;
+      padding: 10px 16px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 0.88rem;
+      font-family: 'Outfit', sans-serif;
+    }
+
+    .compact-bar.green {
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid #059669;
+      color: #6ee7b7;
+    }
+
+    .compact-bar.blue {
+      background: rgba(14, 165, 233, 0.15);
+      border: 1px solid #0284c7;
+      color: #7dd3fc;
+    }
+
+    .compact-bar-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .compact-bar-title {
+      font-weight: 800;
+      letter-spacing: 0.04em;
+    }
+
+    .compact-bar-date {
+      color: #ffffff;
+      font-weight: 600;
+    }
+
+    .compact-badge {
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .compact-badge.green {
+      background: #059669;
+      color: #ffffff;
+    }
+
+    .compact-badge.blue {
+      background: #0284c7;
+      color: #ffffff;
+      cursor: pointer;
+    }
+
+    .compact-bar-right {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      color: #ffffff;
+      letter-spacing: 0.05em;
+    }
+
+    /* Code Blocks */
+    pre, code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.86rem;
+    }
+
+    pre {
+      background: #1e293b;
+      color: #e2e8f0;
+      padding: 16px;
+      border-radius: var(--radius-sm);
+      overflow-x: auto;
+      margin: 16px 0;
+      border: 1px solid #334155;
+    }
+
+    /* Checklist */
+    .checklist {
+      list-style: none;
+      margin: 16px 0;
+    }
+
+    .checklist li {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 0.94rem;
+    }
+
+    .checklist li:last-child {
+      border-bottom: none;
+    }
+
+    .check-icon {
+      color: var(--success);
+      font-weight: bold;
+      font-size: 1.1rem;
+      line-height: 1.4;
+      flex-shrink: 0;
+    }
+
+    .pending-icon {
+      color: var(--accent);
+      font-weight: bold;
+      font-size: 1.1rem;
+      line-height: 1.4;
+      flex-shrink: 0;
+    }
+
+    /* Footer */
+    .footer {
+      background: #f8fafc;
+      padding: 24px 40px;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    @media print {
+      body {
+        background: #ffffff;
+        padding: 0;
+      }
+      .container {
+        box-shadow: none;
+        border: none;
+        max-width: 100%;
+      }
+      .header-banner {
+        background: #0f172a !important;
+        color: #ffffff !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    
+    <!-- Institutional Header -->
+    <header class="header-banner">
+      <div class="header-badge">Institutional Defense Audit · Capstone Research Document</div>
+      <h1>Capstone Manuscript, System & Evaluation Alignment Audit</h1>
+      <p class="subtitle">
+        Comprehensive Cross-Verification of Research Objectives, TAM, ISO/IEC 25010:2023, Panel Revision Matrix, Production Codebase, and Manuscript Chapters 1–4
+      </p>
+
+      <div class="meta-grid">
+        <div class="meta-item">
+          <span class="meta-label">Document ID</span>
+          <span class="meta-value">CMSA-2026-09-FINAL</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Institutional Affiliation</span>
+          <span class="meta-value">PhilSCA — Institute of Computer Studies</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Academic Program</span>
+          <span class="meta-value">BS in Aviation Information Technology (BSAIT)</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Evaluation Date / Status</span>
+          <span class="meta-value">September 10, 2026 · Defense-Ready</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Advisers</span>
+          <span class="meta-value">R. Peralta, MSIT & M. Aballiar-Vista, MEAM</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Researchers</span>
+          <span class="meta-value">C. Angeles, K. Gravino, M. Sedanto</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="content">
+
+      <!-- Executive Summary -->
+      <h2>1. Executive Summary & Core Finding</h2>
+      
+      <div class="alert-box alert-success">
+        <div class="alert-icon">✓</div>
+        <div class="alert-content">
+          <strong>Key Audit Finding: The System and Evaluation Instruments are Defensible & Fully Aligned</strong>
+          The deployed application (React + FastAPI + PostgreSQL) and the frozen evaluation instruments (20-item TAM and 45-item ISO/IEC 25010:2023) are robust, functional, and empirically verified. Three licensed/practicing IT experts awarded the system an exceptional grand composite mean of <strong>3.71 / 4.00 (Highly Acceptable)</strong> with <strong>zero (0) unacceptable ratings</strong> across all 45 criteria.
+        </div>
+      </div>
+
+      <p>
+        <strong>The Primary Challenge is Documentation Lag, Not System Defectiveness:</strong> 
+        The software implementation and the questionnaires represent the current, state-of-the-art state of the project. However, the manuscript text (specifically Chapters 1, 3, and 4) still contains remnants of earlier 2025 proposal drafts, the obsolete 2011 ISO standard, unbacked ML feature claims (such as technician queues and drying times), and an erroneous "5-point Likert" description.
+      </p>
+      <p>
+        <strong>Defensive Resolution:</strong> Rebuilding the system or making destabilizing schema changes is <strong>strictly prohibited and unnecessary</strong>. Aligning the manuscript to accurately describe the deployed system's verified 18-feature Random Forest model, forced-choice 4-point scale, and authoritative Business Rules architecture guarantees an airtight, successful capstone defense.
+      </p>
+
+      <!-- KPI Grid -->
+      <div class="kpi-grid">
+        <div class="kpi-card success">
+          <span class="kpi-title">Grand Composite Quality Score</span>
+          <span class="kpi-value">3.71 / 4.00</span>
+          <span class="kpi-desc">92.8% Quality Rating across 3 External IT Experts</span>
+        </div>
+
+        <div class="kpi-card">
+          <span class="kpi-title">ISO/IEC 25010 Standard Edition</span>
+          <span class="kpi-value">2023</span>
+          <span class="kpi-desc">9 Product-Quality Characteristics (45 Survey Items)</span>
+        </div>
+
+        <div class="kpi-card accent">
+          <span class="kpi-title">Likert Scale Structure</span>
+          <span class="kpi-value">4-Point</span>
+          <span class="kpi-desc">Forced-choice format (Eliminates neutral response bias)</span>
+        </div>
+
+        <div class="kpi-card danger">
+          <span class="kpi-title">Unacceptable Ratings</span>
+          <span class="kpi-value">0 / 135</span>
+          <span class="kpi-desc">Zero "Not Acceptable" scores across all evaluator items</span>
+        </div>
+      </div>
+
+      <!-- Traceability Matrix -->
+      <h2>2. Comprehensive Traceability Matrix</h2>
+      <p>
+        This matrix establishes strict end-to-end traceability across research objectives, frozen questionnaires, codebase modules, panel revision matrix requirements, and manuscript sections:
+      </p>
+
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Research Objective / Matrix Item</th>
+              <th>Questionnaire Instrument</th>
+              <th>Actual Production System</th>
+              <th>Current Manuscript Draft</th>
+              <th>Verdict & Alignment Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <strong>Obj 1: Centralized Job Orders</strong><br>
+                <span class="meta-label">Order Intake, Tracking & Claiming</span>
+              </td>
+              <td>Functional Suitability: Items 1, 2, 5</td>
+              <td>Full CRUD lifecycle (`New` &rarr; `On-Going` &rarr; `For Release` &rarr; `Claimed`), customer autocomplete, persistent custom options.</td>
+              <td>Documented in SRS, DFD Level 1, and functional specifications.</td>
+              <td><span class="badge badge-success">✓ Passed & Aligned</span></td>
+            </tr>
+            <tr>
+              <td>
+                <strong>Obj 2: Machine Learning Turnaround</strong><br>
+                <span class="meta-label">Duration Estimation Engine</span>
+              </td>
+              <td>Functional Suitability: Item 3; Reliability: Item 5</td>
+              <td><strong>Random Forest Regressor (18 operational features)</strong> acting as an <strong>Advisory Forecast</strong> alongside authoritative Business Rules.</td>
+              <td>Claims 85% accuracy benchmark; claims inputs include technician queue, material type, and drying times.</td>
+              <td><span class="badge badge-danger">🔴 Revise Paper</span><br><small>Report actual 18 features and advisory role.</small></td>
+            </tr>
+            <tr>
+              <td>
+                <strong>Obj 3: Analytics & Reporting</strong><br>
+                <span class="meta-label">Matrix Requirement: Sales, Expenses, ROI</span>
+              </td>
+              <td>Functional Suitability: Item 4; Performance: Item 3</td>
+              <td>Dashboard with monthly revenue, expenses, net profit/loss, canonical service volume, printable financial reports.</td>
+              <td>Described in Chapter 3 system architecture and Chapter 1 problem statement.</td>
+              <td><span class="badge badge-success">✓ Passed & Aligned</span></td>
+            </tr>
+            <tr>
+              <td>
+                <strong>Obj 4: ISO/IEC 25010 Quality</strong><br>
+                <span class="meta-label">Software Quality Evaluation</span>
+              </td>
+              <td><strong>45 items across 9 characteristics</strong> (ISO/IEC 25010:2023 edition).</td>
+              <td>Matches all 9 dimensions: Interaction Capability, Flexibility, and Safety are active in the system.</td>
+              <td>RQ4 & Obj 4 cite the <strong>withdrawn 2011 7-characteristic model</strong>; includes "Portability".</td>
+              <td><span class="badge badge-danger">🔴 Revise Paper</span><br><small>Update RQ4 & Obj 4 to 2023 standard.</small></td>
+            </tr>
+            <tr>
+              <td>
+                <strong>Obj 5: User Acceptance (TAM)</strong><br>
+                <span class="meta-label">PU, PEOU, BI, ASU</span>
+              </td>
+              <td><strong>20 items across 4 constructs</strong> on a 4-point Likert scale (Owner + Staff).</td>
+              <td>System workflow tested and accepted by Shoelotskey Owner and operational personnel.</td>
+              <td>Correctly lists 4 constructs, but Chapter 4 erroneously states "5-point Likert scale".</td>
+              <td><span class="badge badge-danger">🔴 Revise Paper</span><br><small>Correct scale description to 4-point.</small></td>
+            </tr>
+            <tr>
+              <td>
+                <strong>Obj 6: Future Recommendations</strong><br>
+                <span class="meta-label">Matrix & Evaluator Enhancements</span>
+              </td>
+              <td>Part III qualitative open-ended responses from technical evaluators.</td>
+              <td>Documented in formal project roadmap (real-time SMS webhooks, automated backups, granular RBAC).</td>
+              <td>Mapped directly into Chapter 5 recommendations for future development.</td>
+              <td><span class="badge badge-success">✓ Passed & Aligned</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- The 8 Critical Revisions -->
+      <h2>3. The 8 Critical Manuscript Revisions (Word-for-Word Replacements)</h2>
+      <p>
+        To eliminate any vulnerability during the oral defense, apply these exact 8 text replacements to the capstone manuscript:
+      </p>
+
+      <!-- Revision 1 -->
+      <h3>🔴 Revision 1: ISO/IEC 25010:2023 Nine-Characteristic Standard</h3>
+      <p>
+        <strong>The Problem:</strong> Chapter 1 (Pages 4–5, RQ4; Page 10, Objective 4) and Chapter 4 list the old 2011 standard (7 characteristics including Portability).<br>
+        <strong>The Reality:</strong> The approved, signed evaluation instrument uses the current <strong>ISO/IEC 25010:2023</strong> edition containing <strong>9 product-quality characteristics</strong>.
+      </p>
+      <div class="replacement-box">
+        <div class="target-label">Exact Replacement Text for Chapter 1 (RQ4 and Objective 4) & Chapter 4:</div>
+        <blockquote>
+          "4. Evaluate the software product quality of the developed system based on the ISO/IEC 25010:2023 international standard across nine (9) characteristics: Functional Suitability, Performance Efficiency, Compatibility, Interaction Capability, Reliability, Security, Maintainability, Flexibility, and Safety."
+        </blockquote>
+      </div>
+
+      <!-- Revision 2 -->
+      <h3>🔴 Revision 2: Likert Scale Correction (4-Point Forced-Choice)</h3>
+      <p>
+        <strong>The Problem:</strong> Chapter 4 (Page 88) erroneously states: <em>"using a 5-point Likert scale questionnaire based on ISO/IEC 25010 and Technology Acceptance Model (TAM) criteria."</em><br>
+        <strong>The Reality:</strong> Both instruments explicitly employ a 4-point rating scale ($4 = \text{Highly Acceptable}, 3 = \text{Acceptable}, 2 = \text{Less Acceptable}, 1 = \text{Not Acceptable}$).
+      </p>
+      <div class="replacement-box">
+        <div class="target-label">Exact Replacement Text for Chapter 4 (Methodology & Instrument Section):</div>
+        <blockquote>
+          "The evaluation questionnaires utilized a four-point forced-choice Likert scale (4 – Highly Acceptable, 3 – Acceptable, 2 – Less Acceptable, and 1 – Not Acceptable). A four-point format was specifically implemented to eliminate neutral response bias ('undecided') and obtain definitive, actionable evaluative feedback from both external IT practitioners and operational enterprise users."
+        </blockquote>
+      </div>
+
+      <!-- Revision 3 -->
+      <h3>🔴 Revision 3: Machine Learning Feature Contract (Actual 18 Features vs Fabricated Claims)</h3>
+      <p>
+        <strong>The Problem:</strong> Chapters 1, 2, and 3 claim the Random Forest model takes "technician queue length, assigned staff, shoe material type, condition severity, and previous turnaround times" as input features.<br>
+        <strong>The Reality:</strong> The system does not assign technicians or track drying times. The production model (`historical_ml_engine.py`) takes <strong>exactly 18 concrete operational features</strong> captured at intake.
+      </p>
+      <div class="replacement-box">
+        <div class="target-label">Exact Replacement Text for Chapter 3 (Machine Learning Methodology):</div>
+        <blockquote>
+          "The Random Forest Regressor utilizes eighteen (18) structured operational features extracted directly during job order creation: total shoe pairs (`total_pairs`), individual service quantities (`basic_cleaning_qty`, `full_reglue_qty`, `minor_reglue_qty`, `full_restoration_qty`, `minor_restoration_qty`, `color_renewal_qty`, `unyellowing_qty`), encoded priority (`priority_encoded`: Regular, Rush, Premium), transaction amount (`grand_total`), calendar intake factors (`day_of_week_received`, `month_received`), and binary defect indicators (`scratches_count`, `yellowing_count`, `sole_separation_count`, `deep_stains_count`, `rips_holes_count`, `worn_out_count`). The model predicts a continuous turnaround duration in days."
+        </blockquote>
+      </div>
+
+      <!-- Revision 4 -->
+      <h3>🔴 Revision 4: 85% ML Target Benchmark vs Regression Metrics ($MAE$, $RMSE$, $R^2$)</h3>
+      <p>
+        <strong>The Problem:</strong> Objective 2 sets an "accuracy of 85% or higher compared to manual estimation," and the text asserts that the model produces "accurate pick-up dates."<br>
+        <strong>The Reality:</strong> Regression algorithms output continuous values; claiming an "85% accuracy percentage" is mathematically invalid.
+      </p>
+      <div class="replacement-box">
+        <div class="target-label">Defensive Wording for Chapter 4 (Results and Discussion):</div>
+        <blockquote>
+          "While an 85% accuracy threshold was formulated as the initial exploratory target in the capstone proposal, continuous duration prediction is properly evaluated using regression metrics: Mean Absolute Error (MAE) and Root Mean Squared Error (RMSE). On the validated historical micro-enterprise dataset, the Random Forest model achieved an MAE of approximately 7.61 days. Consequently, the machine learning component is maintained as an <strong>Advisory Forecast</strong> rather than an authoritative release date mechanism, ensuring shop operations remain dependable."
+        </blockquote>
+      </div>
+
+      <!-- Revision 5 -->
+      <h3>🔴 Revision 5: Official Business Rules vs Advisory ML Hierarchy</h3>
+      <p>
+        <strong>The System Implementation:</strong> The Job Order Form UI is frozen to <strong>Option B</strong>:
+      </p>
+
+      <!-- UI Mockup Option B -->
+      <div class="ui-mockup-card">
+        <div class="ui-mockup-header">
+          <span>Job Order Intake · Compact Turnaround Estimation Bar (Frozen Option B)</span>
+          <span class="badge badge-success">Live in System</span>
+        </div>
+        
+        <div class="compact-bar green">
+          <div class="compact-bar-left">
+            <span class="compact-bar-title">🟢 BUSINESS RULES:</span>
+            <span class="compact-bar-date">Official Release Date: 09/20/2026</span>
+            <span class="compact-badge green">OFFICIAL</span>
+          </div>
+          <div class="compact-bar-right">TOTAL: 10 DAYS</div>
+        </div>
+
+        <div class="compact-bar blue">
+          <div class="compact-bar-left">
+            <span class="compact-bar-title">🔵 ML PREDICTION:</span>
+            <span class="compact-bar-date">Predicted Release Date: 09/20/2026</span>
+            <span class="compact-badge blue">ADVISORY ⓘ</span>
+          </div>
+          <div class="compact-bar-right">TOTAL: 10 DAYS</div>
+        </div>
+      </div>
+
+      <div class="replacement-box">
+        <div class="target-label">Exact Replacement Text for Chapter 3 & Chapter 4:</div>
+        <blockquote>
+          "The system enforces a dual-tier turnaround estimation architecture: (1) <strong>Authoritative Business Rules</strong> calculate the committed customer release date based on standard base service durations, add-on days, and rush reductions; and (2) an <strong>Advisory Random Forest Regressor</strong> calculates an empirical forecast for staff planning. The advisory prediction cannot alter, postpone, or overwrite the official customer commitment date."
+        </blockquote>
+      </div>
+
+      <!-- Revision 6 -->
+      <h3>🔴 Revision 6: Administrative ML Retraining vs Continuous Online Learning</h3>
+      <p>
+        <strong>The Problem:</strong> Chapter 1 claims: <em>"The system automatically learns from its mistakes... if an ML prediction was wrong, the actual completion time is fed back in real-time."</em><br>
+        <strong>The Reality:</strong> Random Forest requires batch retraining. In the system, retraining is an <strong>Owner-only administrative operation</strong> (`/api/historical/train`).
+      </p>
+      <div class="replacement-box">
+        <div class="target-label">Exact Replacement Text for Chapter 1 (Conceptual Framework):</div>
+        <blockquote>
+          "The system incorporates a closed-loop historical data ingestion pipeline. Completed and validated job orders are archived in the historical dataset. The shop owner can periodically execute an administrative retraining command to update the Random Forest model using verified operational records, ensuring the model adapts to long-term shop trends over time."
+        </blockquote>
+      </div>
+
+      <!-- Revision 7 -->
+      <h3>🔴 Revision 7: Respondent Sample Typographical Errors and Evaluation Dates</h3>
+      <p>
+        <strong>The Problem:</strong> Chapter 4 contains glaring typographical errors: <em>"one (1) business owner and five (4) staff members"</em> and <em>"same six (5) participants."</em> It also dates testing to June 2025.<br>
+        <strong>The Reality:</strong> The TAM evaluation sample is Owner + 2 Staff members. The formal evaluation questionnaires are dated <strong>July 27, 2026</strong>, and IT Expert reviews were conducted in <strong>September 2026</strong>.
+      </p>
+      <div class="replacement-box">
+        <div class="target-label">Exact Replacement Text for Chapter 4 (Sample and Timeline):</div>
+        <blockquote>
+          "The research distinguished between the preliminary requirements analysis phase conducted in 2025 and the formal system evaluation conducted in July–September 2026. The operational usability evaluation (TAM) was administered to three (3) primary enterprise stakeholders: the business owner and two (2) designated front-desk staff. Software product quality (ISO/IEC 25010:2023) was evaluated independently by three (3) qualified external IT practitioners."
+        </blockquote>
+      </div>
+
+      <!-- Revision 8 -->
+      <h3>🔴 Revision 8: Cloud Infrastructure & Security Clarifications</h3>
+      <p>
+        <strong>The Problem:</strong> Chapter 3 claims a "Node.js real-time file monitoring daemon" and claims Heroku Postgres provides "high availability with instant failover."<br>
+        <strong>The Reality:</strong> The backend is Python FastAPI; there is no Node.js security agent. The database is Heroku Postgres Essential-0, which does not provide HA replicas.
+      </p>
+      <div class="replacement-box">
+        <div class="target-label">Exact Replacement Text for Chapter 3 (Deployment Architecture):</div>
+        <blockquote>
+          "The production environment is hosted on Heroku dynos connected to a managed Heroku PostgreSQL relational database instance utilizing SSL-encrypted connections (`sslmode=require`) and automated daily backups. Application security is enforced directly within the FastAPI backend via JSON Web Token (JWT) authentication, bcrypt password hashing, parameterized SQL queries via SQLAlchemy ORM, and defensive input validation."
+        </blockquote>
+      </div>
+
+      <!-- Evaluator Feedback Synthesis -->
+      <h2>4. Evaluator Feedback Synthesis (All 3 IT Experts)</h2>
+      <p>
+        The table below provides the full statistical breakdown across all three independent evaluators, demonstrating consistent Acceptable to Highly Acceptable ratings:
+      </p>
+
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>ISO/IEC 25010:2023 Quality Dimension</th>
+              <th>Evaluator 1<br><small>Jheo Corona (Web Dev)</small></th>
+              <th>Evaluator 2<br><small>Dr. E. Yu (Senior DIT)</small></th>
+              <th>Evaluator 3<br><small>Edison R. Yu (Senior Dev)</small></th>
+              <th>Dimension Composite Mean</th>
+              <th>Verbal Interpretation</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>1. Functional Suitability</strong></td>
+              <td>3.80</td>
+              <td>3.80</td>
+              <td>3.20</td>
+              <td><strong>3.60 / 4.00</strong></td>
+              <td><span class="badge badge-success">Highly Acceptable</span></td>
+            </tr>
+            <tr>
+              <td><strong>2. Performance Efficiency</strong></td>
+              <td>3.80</td>
+              <td>3.80</td>
+              <td>3.60</td>
+              <td><strong>3.73 / 4.00</strong></td>
+              <td><span class="badge badge-success">Highly Acceptable</span></td>
+            </tr>
+            <tr>
+              <td><strong>3. Compatibility</strong></td>
+              <td>3.80</td>
+              <td>3.80</td>
+              <td>3.20</td>
+              <td><strong>3.60 / 4.00</strong></td>
+              <td><span class="badge badge-success">Highly Acceptable</span></td>
+            </tr>
+            <tr>
+              <td><strong>4. Interaction Capability</strong></td>
+              <td>3.80</td>
+              <td>3.60</td>
+              <td>3.20</td>
+              <td><strong>3.53 / 4.00</strong></td>
+              <td><span class="badge badge-success">Highly Acceptable</span></td>
+            </tr>
+            <tr>
+              <td><strong>5. Reliability</strong></td>
+              <td>3.80</td>
+              <td>3.80</td>
+              <td>3.40</td>
+              <td><strong>3.67 / 4.00</strong></td>
+              <td><span class="badge badge-success">Highly Acceptable</span></td>
+            </tr>
+            <tr>
+              <td><strong>6. Security</strong></td>
+              <td>4.00</td>
+              <td>4.00</td>
+              <td>3.60</td>
+              <td><strong>3.87 / 4.00</strong></td>
+              <td><span class="badge badge-success">Highly Acceptable</span></td>
+            </tr>
+            <tr>
+              <td><strong>7. Maintainability</strong></td>
+              <td>3.60</td>
+              <td>3.80</td>
+              <td>3.20</td>
+              <td><strong>3.53 / 4.00</strong></td>
+              <td><span class="badge badge-success">Highly Acceptable</span></td>
+            </tr>
+            <tr>
+              <td><strong>8. Flexibility</strong></td>
+              <td>3.80</td>
+              <td>3.80</td>
+              <td>3.60</td>
+              <td><strong>3.73 / 4.00</strong></td>
+              <td><span class="badge badge-success">Highly Acceptable</span></td>
+            </tr>
+            <tr>
+              <td><strong>9. Safety</strong></td>
+              <td>3.80</td>
+              <td>4.00</td>
+              <td>3.80</td>
+              <td><strong>3.87 / 4.00</strong></td>
+              <td><span class="badge badge-success">Highly Acceptable</span></td>
+            </tr>
+            <tr style="background: #f8fafc; font-weight: bold;">
+              <td>GRAND COMPOSITE MEAN</td>
+              <td>3.80 / 4.00</td>
+              <td>3.82 / 4.00</td>
+              <td>3.51 / 4.00</td>
+              <td>3.71 / 4.00</td>
+              <td><span class="badge badge-success">HIGHLY ACCEPTABLE (92.8%)</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Analysis of Evaluator 3 Comments -->
+      <h3>Analysis of Evaluator 3 (Edison R. Yu) Qualitative Comments</h3>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Expert 3 Observation / Comment</th>
+              <th>Current System Status</th>
+              <th>Technical Explanation & Defense Position</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Data Inconsistency / Validations</strong></td>
+              <td><span class="badge badge-success">Implemented</span></td>
+              <td>Form schemas enforce positive amounts, non-negative balances, sanitized customer inputs, and strict status transition enums.</td>
+            </tr>
+            <tr>
+              <td><strong>Non-Persistent / Duplicated Data</strong></td>
+              <td><span class="badge badge-success">Implemented</span></td>
+              <td>Persistent brand/service storage implemented via `customOptions.ts`; idempotent submission guards (`isSubmitting`) prevent double order creations.</td>
+            </tr>
+            <tr>
+              <td><strong>Clearer Error Messages in UI</strong></td>
+              <td><span class="badge badge-success">Implemented</span></td>
+              <td>Sonner toast notifications deliver user-friendly messages rather than raw HTTP error dumps.</td>
+            </tr>
+            <tr>
+              <td><strong>Exportable Reports</strong></td>
+              <td><span class="badge badge-success">Implemented</span></td>
+              <td>Dedicated printable sales, expense, and ROI reports are active per the Capstone Revision Matrix. Direct CSV export is on the post-defense roadmap.</td>
+            </tr>
+            <tr>
+              <td><strong>Real-Time Notifications & Backup/Restore</strong></td>
+              <td><span class="badge badge-info">Future Roadmap</span></td>
+              <td>Expert 3 noted these under "Recommended Future Enhancements." Heroku cloud automated snapshots protect the database; real-time SMS webhooks are documented in Chapter 5.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Boundaries / What NOT to do -->
+      <h2>5. Defensive Guardrails: What NOT to Do</h2>
+      <div class="alert-box alert-danger">
+        <div class="alert-icon">⚠</div>
+        <div class="alert-content">
+          <strong>Strict Guidelines to Protect System Integrity</strong>
+          Prior to oral defense and production redeployment, adhere strictly to these boundaries:
+        </div>
+      </div>
+      <ul class="checklist">
+        <li>
+          <span class="check-icon">✕</span>
+          <span><strong>Do NOT alter the frozen 45 ISO survey statements or 20 TAM items:</strong> The surveys have been signed and administered. Modifying statements now invalidates the empirical data.</span>
+        </li>
+        <li>
+          <span class="check-icon">✕</span>
+          <span><strong>Do NOT implement technician assignment or staff queues:</strong> The shop does not assign individual technicians to jobs, and the ML model does not track staff capacity. Introducing this would create unbacked claims.</span>
+        </li>
+        <li>
+          <span class="check-icon">✕</span>
+          <span><strong>Do NOT claim 85% ML accuracy without regression context:</strong> Frame 85% as the initial proposal benchmark and report continuous regression metrics honestly ($MAE \approx 7.6\text{ days}$).</span>
+        </li>
+        <li>
+          <span class="check-icon">✕</span>
+          <span><strong>Do NOT attempt heavy database schema migrations:</strong> The PostgreSQL cloud schema is stable and tested. Destructive migrations prior to defense create catastrophic downtime risks.</span>
+        </li>
+        <li>
+          <span class="check-icon">✕</span>
+          <span><strong>Do NOT add unvetted third-party SMS or OCR daemons to Heroku:</strong> Free or third-party SMS APIs (Twilio/Semaphore) require live credit balances and webhook secrets that can fail during live defense demonstrations.</span>
+        </li>
+      </ul>
+
+      <!-- Step-by-Step Deployment Checklist -->
+      <h2>6. Step-by-Step Pre-Redeployment & Oral Defense Checklist</h2>
+
+      <h3>Phase 1: Local Code Hygiene & Integrity Verification (Completed)</h3>
+      <ul class="checklist">
+        <li>
+          <span class="check-icon">✓</span>
+          <span><strong>Fixed Unused Variables in `JobOrderForm.tsx`:</strong> Resolved `formatBusinessRuleLabel` and `predictionError` compiler warnings (`@[current_problems]`).</span>
+        </li>
+        <li>
+          <span class="check-icon">✓</span>
+          <span><strong>Adopted Compact Turnaround Option B:</strong> Symmetrical horizontal bar display live in `JobOrderForm.tsx` with unambiguous `[OFFICIAL]` vs `[ADVISORY] ⓘ` operational tags.</span>
+        </li>
+        <li>
+          <span class="check-icon">✓</span>
+          <span><strong>Sanitized Turnaround Modal Text:</strong> Removed all mentions of "technician queues" and "leather drying times."</span>
+        </li>
+        <li>
+          <span class="check-icon">✓</span>
+          <span><strong>Verified Custom Option Learning:</strong> New shoe brands and models typed by staff persist in `localStorage` across page refreshes (`customOptions.ts`).</span>
+        </li>
+        <li>
+          <span class="check-icon">✓</span>
+          <span><strong>Verified Inventory KPI Count:</strong> Preserved 4 operational cards (Total, In Stock, No Stock, Low Stock) to maintain clean POS responsiveness.</span>
+        </li>
+      </ul>
+
+      <h3>Phase 2: Repository Cleanup Before Code Audit</h3>
+      <ul class="checklist">
+        <li>
+          <span class="pending-icon">○</span>
+          <span><strong>Ignore Temporary Inspection Artifacts:</strong> Ensure `scratch/`, `tmp/`, and one-off diagnostic scripts (`inspect_*.py`, `debug_*.py`) are ignored via `.gitignore`.</span>
+        </li>
+        <li>
+          <span class="pending-icon">○</span>
+          <span><strong>Run Local TypeScript Build Test:</strong> Execute <code>npm run build</code> in the root directory to guarantee zero Vite compilation errors.</span>
+        </li>
+        <li>
+          <span class="pending-icon">○</span>
+          <span><strong>Run Backend Unit Tests:</strong> Execute <code>pytest backend/tests</code> to verify all core CRUD and turnaround calculation unit tests pass.</span>
+        </li>
+      </ul>
+
+      <h3>Phase 3: Production Cloud Redeployment (Heroku)</h3>
+      <ul class="checklist">
+        <li>
+          <span class="pending-icon">○</span>
+          <span><strong>Commit Changes to Staging/Main:</strong> Commit with clear semantic message: <code>git commit -m "fix: adopt option b turnaround bar and complete defense alignment audit"</code>.</span>
+        </li>
+        <li>
+          <span class="pending-icon">○</span>
+          <span><strong>Deploy to Heroku Dyno:</strong> Push code to the Heroku remote and monitor release logs to confirm Vite asset bundling succeeds.</span>
+        </li>
+        <li>
+          <span class="pending-icon">○</span>
+          <span><strong>Execute Production Smoke Test:</strong>
+            <br>1. Log in with production admin/staff credentials.
+            <br>2. Create a test job order (Basic Cleaning + Rush &rarr; Total: 1 day).
+            <br>3. Verify the green Business Rules bar and blue ML Prediction bar appear cleanly.
+            <br>4. Click <code>[ADVISORY] ⓘ</code> and verify the details modal opens smoothly without crashing.
+            <br>5. Check the Sales Report page and test the Print/PDF export feature.
+          </span>
+        </li>
+      </ul>
+
+      <h3>Phase 4: Manuscript Finalization (Academic Oral Defense)</h3>
+      <ul class="checklist">
+        <li>
+          <span class="pending-icon">○</span>
+          <span><strong>Apply 8 Critical Text Replacements:</strong> Update Chapters 1, 2, 3, and 4 in the Word/LaTeX manuscript using the exact quotations in Section 3 of this report.</span>
+        </li>
+        <li>
+          <span class="pending-icon">○</span>
+          <span><strong>Embed Statistical Table in Chapter 4:</strong> Present the 3-evaluator ISO/IEC 25010:2023 composite table (Grand Mean: 3.71 / 4.00, Highly Acceptable).</span>
+        </li>
+        <li>
+          <span class="pending-icon">○</span>
+          <span><strong>Align Defense Slides:</strong> Ensure presentation slide decks emphasize the 9 ISO characteristics, the 18 concrete RF features, and the authoritative Business Rules architecture.</span>
+        </li>
+      </ul>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <div>
+        <strong>Shoelotskey Service Management System</strong> · Capstone Oral Defense Alignment Audit
+      </div>
+      <div>
+        Institute of Computer Studies · National Aviation Academy of the Philippines (PhilSCA)
+      </div>
+    </footer>
+
+  </div>
+
+</body>
+</html>

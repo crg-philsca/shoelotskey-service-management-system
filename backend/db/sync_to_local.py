@@ -3,12 +3,17 @@ import sys
 from sqlalchemy import create_engine, MetaData, text, NullPool
 from sqlalchemy.exc import OperationalError
 
-# Path normalization to securely locate backend root and import shared database modules
 curr_dir = os.path.dirname(os.path.abspath(__file__))
 backend_dir = os.path.dirname(curr_dir) if os.path.basename(curr_dir) == "db" else curr_dir
-sys.path.insert(0, backend_dir)
+if curr_dir not in sys.path:
+    sys.path.insert(0, curr_dir)
+if backend_dir not in sys.path:
+    sys.path.insert(0, backend_dir)
 
-from database import engine as shared_pg_engine, LOCAL_SQLITE_PATH, LOCAL_SQLITE, is_sqlite, ensure_sqlite_schema_and_defaults
+try:
+    from database import engine as shared_pg_engine, LOCAL_SQLITE_PATH, LOCAL_SQLITE, is_sqlite, ensure_sqlite_schema_and_defaults
+except ImportError:
+    from db.database import engine as shared_pg_engine, LOCAL_SQLITE_PATH, LOCAL_SQLITE, is_sqlite, ensure_sqlite_schema_and_defaults
 
 # Tables EXCLUDED from cloud-to-local sync.
 # audit_logs: 2000+ rows of write-only JSON, not needed for offline CRUD. 
@@ -192,23 +197,87 @@ def sync_data():
                         }
                     except Exception:
                         preserved_item_fields = {}
+                if table_name == "inventory":
+                    # Non-destructive inventory sync with soft-delete / tombstone protection.
+                    local_rows = sqlite_conn.execute(
+                        text("SELECT item_id, item_name, inventory_number, is_active, sync_uuid, deleted_at FROM inventory")
+                    ).fetchall()
+                    local_by_uuid = {str(r[4]).strip(): r for r in local_rows if r[4]}
+                    local_by_num = {str(r[2]).strip().lower(): r for r in local_rows if r[2]}
+                    local_by_name = {str(r[1]).strip().lower(): r for r in local_rows if r[1]}
+                    
+                    sqlite_cols = set(sqlite_table.columns.keys())
+                    for row in rows or []:
+                        mapping = {k: v for k, v in dict(row._mapping).items() if k in sqlite_cols}
+                        uuid_key = str(mapping.get("sync_uuid", "")).strip() if mapping.get("sync_uuid") else None
+                        num_key = str(mapping.get("inventory_number", "")).strip().lower() if mapping.get("inventory_number") else None
+                        name_key = str(mapping.get("item_name", "")).strip().lower()
+                        
+                        existing_local = (uuid_key and local_by_uuid.get(uuid_key)) or (num_key and local_by_num.get(num_key)) or local_by_name.get(name_key)
+                        if existing_local:
+                            local_is_active = bool(existing_local[3])
+                            remote_is_active = bool(mapping.get("is_active", True))
+                            # TOMBSTONE PROTECTION: If either database marked it soft-deleted, it stays soft-deleted!
+                            final_is_active = local_is_active and remote_is_active
+                            final_deleted_at = existing_local[5] or mapping.get("deleted_at")
+                            if not final_is_active and not final_deleted_at:
+                                final_deleted_at = datetime.now()
 
-                # Delete existing local records
-                sqlite_conn.execute(text(f"DELETE FROM {table_name};"))
-                
+                            update_data = {
+                                **mapping,
+                                "is_active": final_is_active,
+                                "deleted_at": final_deleted_at,
+                                "target_id": existing_local[0]
+                            }
+                            update_data.pop("item_id", None)
+                            
+                            set_clauses = ", ".join([f"{k} = :{k}" for k in update_data.keys() if k != "target_id"])
+                            sqlite_conn.execute(
+                                text(f"UPDATE inventory SET {set_clauses} WHERE item_id = :target_id"),
+                                update_data
+                            )
+                        else:
+                            # Safely insert new cloud-only item without wiping existing items
+                            sqlite_conn.execute(sqlite_table.insert(), [mapping])
+                    print(f"  -> MERGED {len(rows or [])} cloud inventory item(s) safely with tombstone protection.")
+                    continue
+
                 if rows:
                     # Get the columns that actually exist in the target SQLite table
                     sqlite_cols = set(sqlite_table.columns.keys())
-                    
+                    pk_cols = [c.name for c in sqlite_table.primary_key.columns] if sqlite_table.primary_key else []
+
                     # Map SQLAlchemy Row objects to dictionaries and filter out legacy columns
                     insert_data = [
                         {k: v for k, v in dict(row._mapping).items() if k in sqlite_cols}
                         for row in rows
                     ]
-                    
-                    # Insert the filtered records into SQLite
-                    sqlite_conn.execute(sqlite_table.insert(), insert_data)
-                    print(f"  -> SUCCESS: Copied {len(rows)} records.")
+
+                    if pk_cols:
+                        # Non-destructive UPSERT / MERGE: update matching PK rows or insert new ones.
+                        # Do not wipe local records that may have been created offline.
+                        set_clause = ", ".join([f"{c} = excluded.{c}" for c in sqlite_cols if c not in pk_cols])
+                        pk_clause = ", ".join(pk_cols)
+                        
+                        # Chunked inserts for SQLite variable limits
+                        chunk_size = 100
+                        for i in range(0, len(insert_data), chunk_size):
+                            chunk = insert_data[i:i + chunk_size]
+                            for row_dict in chunk:
+                                cols = list(row_dict.keys())
+                                col_names = ", ".join(cols)
+                                placeholders = ", ".join([f":{c}" for c in cols])
+                                if set_clause:
+                                    sql = f"INSERT INTO {table_name} ({col_names}) VALUES ({placeholders}) ON CONFLICT({pk_clause}) DO UPDATE SET {set_clause}"
+                                else:
+                                    sql = f"INSERT INTO {table_name} ({col_names}) VALUES ({placeholders}) ON CONFLICT({pk_clause}) DO NOTHING"
+                                sqlite_conn.execute(text(sql), row_dict)
+                        print(f"  -> SUCCESS: Merged {len(rows)} records non-destructively.")
+                    else:
+                        sqlite_conn.execute(text(f"DELETE FROM {table_name};"))
+                        sqlite_conn.execute(sqlite_table.insert(), insert_data)
+                        print(f"  -> SUCCESS: Copied {len(rows)} records.")
+
                     if table_name == "items" and preserved_item_fields:
                         restored = 0
                         for item_id, (size, color) in preserved_item_fields.items():
@@ -231,7 +300,7 @@ def sync_data():
                         if restored:
                             print(f"  -> PRESERVED local size/color on {restored} item(s) that cloud left blank.")
                 else:
-                    print("  -> NOTE: Table is empty.")
+                    print("  -> NOTE: Cloud table is empty, keeping local records intact.")
 
             # Re-enable constraints after transaction finishes
             sqlite_conn.execute(text("PRAGMA foreign_keys = ON;"))

@@ -13,15 +13,17 @@ import {
     ChevronDown,
     Wallet,
     Clock3,
+    Ban,
+    Eye,
+    Trash2,
     MoreVertical,
     Edit,
-    Trash2,
 } from 'lucide-react';
 import { format as dateFnsFormat } from 'date-fns';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/app/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { Input } from '@/app/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu';
@@ -150,6 +152,9 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
     const [customEndDate, setCustomEndDate] = useState<string>(() => {
         return (location.state as any)?.customEndDate || '';
     });
+    const [cardFilter, setCardFilter] = useState<'all' | 'fully-paid' | 'downpayment' | 'active' | 'cancelled'>(() => {
+        return (location.state as any)?.filterCard || 'all';
+    });
     const [searchQuery, setSearchQuery] = useState('');
     const [filterService, setFilterService] = useState<string>('all');
     const [filterPriority, setFilterPriority] = useState<string>('all');
@@ -163,6 +168,8 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
     const [isEditing, setIsEditing] = useState(false);
     const [viewingOrder, setViewingOrder] = useState<JobOrder | null>(null);
     const [orderToDelete, setOrderToDelete] = useState<JobOrder | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const isDeletingRef = useRef(false);
     const itemsPerPage = 15;
 
     const { services } = useServices();
@@ -224,11 +231,17 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
         return () => onSetHeaderActionRight(null);
     }, [onSetHeaderActionRight, profitRange, customStartDate, customEndDate]);
 
-    const filteredOrders = useMemo(() => {
+    // Base orders for selected date range
+    const baseOrders = useMemo(() => {
         const now = new Date();
-        let filtered = (orders || []).filter((order: JobOrder) =>
+        return (orders || []).filter((order: JobOrder) =>
             order && isDateInRange(orderEventDate(order), profitRange, now, customStartDate, customEndDate)
         );
+    }, [orders, profitRange, customStartDate, customEndDate]);
+
+    // Base filtered orders for search, service, priority, and date range from dialog (independent of top card filter)
+    const baseFilteredOrders = useMemo(() => {
+        let filtered = [...baseOrders];
 
         if (filterService !== 'all') {
             filtered = filtered.filter((order) => {
@@ -257,7 +270,7 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
         if (startDate) {
             const start = new Date(startDate);
             filtered = filtered.filter((order) => {
-                const d = new Date(order.createdAt || 0);
+                const d = new Date(order.createdAt || (order as any).transactionDate || 0);
                 return !isNaN(d.getTime()) && d >= start;
             });
         }
@@ -265,7 +278,7 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
             const end = new Date(endDate);
             end.setHours(23, 59, 59, 999);
             filtered = filtered.filter((order) => {
-                const d = new Date(order.createdAt || 0);
+                const d = new Date(order.createdAt || (order as any).transactionDate || 0);
                 return !isNaN(d.getTime()) && d <= end;
             });
         }
@@ -276,6 +289,34 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                 String(order.customerName || '').toLowerCase().includes(query) ||
                 String(order.orderNumber || order.id || '').toLowerCase().includes(query)
             );
+        }
+
+        return filtered;
+    }, [baseOrders, filterService, filterPriority, filterPaymentStatus, filterOrderStatus, startDate, endDate, searchQuery]);
+
+    // Card counts calculated across all orders matching the date range & search/dialog filters
+    const totalOrdersCount = baseFilteredOrders.length;
+    const paidOrdersCount = baseFilteredOrders.filter((order) => order.paymentStatus === 'fully-paid').length;
+    const downpaymentOrdersCount = baseFilteredOrders.filter((order) => order.paymentStatus === 'downpayment').length;
+    const activeOrdersCount = baseFilteredOrders.filter((order) => 
+        order.status !== 'claimed' && (order.status as string)?.toLowerCase() !== 'cancelled' && (order.status as string)?.toLowerCase() !== 'canceled'
+    ).length;
+    const cancelledOrdersCount = baseFilteredOrders.filter((order) => 
+        order.status === 'cancelled' || (order.status as string)?.toLowerCase() === 'cancelled' || (order.status as string)?.toLowerCase() === 'canceled'
+    ).length;
+
+    // Table orders filtered by the active card filter
+    const filteredOrders = useMemo(() => {
+        let filtered = [...baseFilteredOrders];
+
+        if (cardFilter === 'fully-paid') {
+            filtered = filtered.filter((order) => order.paymentStatus === 'fully-paid');
+        } else if (cardFilter === 'downpayment') {
+            filtered = filtered.filter((order) => order.paymentStatus === 'downpayment');
+        } else if (cardFilter === 'active') {
+            filtered = filtered.filter((order) => order.status !== 'claimed' && (order.status as string)?.toLowerCase() !== 'cancelled' && (order.status as string)?.toLowerCase() !== 'canceled');
+        } else if (cardFilter === 'cancelled') {
+            filtered = filtered.filter((order) => order.status === 'cancelled' || (order.status as string)?.toLowerCase() === 'cancelled' || (order.status as string)?.toLowerCase() === 'canceled');
         }
 
         // Sort: Recently updated/created first, then by priority, then by Order Number descending
@@ -303,16 +344,11 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
         });
 
         return filtered;
-    }, [orders, profitRange, customStartDate, customEndDate, filterService, filterPriority, filterPaymentStatus, filterOrderStatus, startDate, endDate, searchQuery]);
+    }, [baseFilteredOrders, cardFilter]);
 
     const totalPages = Math.ceil(filteredOrders.length / itemsPerPage) || 1;
     const startIndex = (currentPage - 1) * itemsPerPage;
     const paginatedOrders = filteredOrders.slice(startIndex, startIndex + itemsPerPage);
-
-    const totalOrdersCount = filteredOrders.length;
-    const paidOrdersCount = filteredOrders.filter((order) => order.paymentStatus === 'fully-paid').length;
-    const downpaymentOrdersCount = filteredOrders.filter((order) => order.paymentStatus === 'downpayment').length;
-    const activeOrdersCount = filteredOrders.filter((order) => order.paymentStatus !== 'fully-paid').length; // Active means not fully-paid (downpayment, unpaid, pending)
 
     const handlePageChange = (page: number) => {
         setCurrentPage(page);
@@ -340,55 +376,92 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                     </button>
                 </div>
             )}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Card className="border-none shadow-lg bg-gradient-to-br from-blue-50 to-white">
-                    <CardContent className="pt-6 pb-4">
-                        <div className="flex items-center gap-2 mb-2">
-                            <div className="p-2 rounded-lg bg-blue-100 text-blue-700">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-3.5">
+                <Card 
+                    onClick={() => { setCardFilter('all'); setCurrentPage(1); }}
+                    className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-blue-50 to-white hover:shadow-md ${
+                        cardFilter === 'all' ? 'border-blue-600 ring-2 ring-blue-600/20' : 'border-transparent hover:border-blue-200'
+                    }`}
+                >
+                    <CardContent className="pt-4 pb-3.5 px-3 sm:px-3.5">
+                        <div className="flex items-center gap-1.5 mb-1.5">
+                            <div className="p-1.5 rounded-lg bg-blue-100 text-blue-700 shrink-0">
                                 <ShoppingBag className="h-4 w-4" />
                             </div>
-                            <p className="text-xs font-black uppercase tracking-wider text-gray-500">Total Orders</p>
+                            <p className="text-[9.5px] 2xl:text-[10px] font-black uppercase tracking-tight text-gray-500 whitespace-nowrap">Total Orders</p>
                         </div>
-                        <p className="text-3xl font-black text-blue-700 tracking-tight">{totalOrdersCount}</p>
+                        <p className="text-2xl font-black text-blue-700 tracking-tight">{totalOrdersCount}</p>
                     </CardContent>
                 </Card>
 
-                <Card className="border-none shadow-lg bg-gradient-to-br from-green-50 to-white">
-                    <CardContent className="pt-6 pb-4">
-                        <div className="flex items-center gap-2 mb-2">
-                            <div className="p-2 rounded-lg bg-green-100 text-green-700">
+                <Card 
+                    onClick={() => { setCardFilter(cardFilter === 'fully-paid' ? 'all' : 'fully-paid'); setCurrentPage(1); }}
+                    className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-green-50 to-white hover:shadow-md ${
+                        cardFilter === 'fully-paid' ? 'border-green-600 ring-2 ring-green-600/20' : 'border-transparent hover:border-green-200'
+                    }`}
+                >
+                    <CardContent className="pt-4 pb-3.5 px-3 sm:px-3.5">
+                        <div className="flex items-center gap-1.5 mb-1.5">
+                            <div className="p-1.5 rounded-lg bg-green-100 text-green-700 shrink-0">
                                 <Wallet className="h-4 w-4" />
                             </div>
-                            <p className="text-xs font-black uppercase tracking-wider text-gray-500">Fully Paid Orders</p>
+                            <p className="text-[9.5px] 2xl:text-[10px] font-black uppercase tracking-tight text-gray-500 whitespace-nowrap">Fully Paid Orders</p>
                         </div>
-                        <p className="text-3xl font-black text-green-700 tracking-tight">{paidOrdersCount}</p>
+                        <p className="text-2xl font-black text-green-700 tracking-tight">{paidOrdersCount}</p>
                     </CardContent>
                 </Card>
 
-                <Card className="border-none shadow-lg bg-gradient-to-br from-red-50 to-white">
-                    <CardContent className="pt-6 pb-4">
-                        <div className="flex items-center gap-2 mb-2">
-                            <div className="p-2 rounded-lg bg-red-100 text-red-700">
+                <Card 
+                    onClick={() => { setCardFilter(cardFilter === 'downpayment' ? 'all' : 'downpayment'); setCurrentPage(1); }}
+                    className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-red-50 to-white hover:shadow-md ${
+                        cardFilter === 'downpayment' ? 'border-red-600 ring-2 ring-red-600/20' : 'border-transparent hover:border-red-200'
+                    }`}
+                >
+                    <CardContent className="pt-4 pb-3.5 px-3 sm:px-3.5">
+                        <div className="flex items-center gap-1.5 mb-1.5">
+                            <div className="p-1.5 rounded-lg bg-red-100 text-red-700 shrink-0">
                                 <Wallet className="h-4 w-4" />
                             </div>
-                            <p className="text-xs font-black uppercase tracking-wider text-gray-500">Downpayment Orders</p>
+                            <p className="text-[9.5px] 2xl:text-[10px] font-black uppercase tracking-tight text-gray-500 whitespace-nowrap">Downpayment Orders</p>
                         </div>
-                        <p className="text-3xl font-black text-red-700 tracking-tight">{downpaymentOrdersCount}</p>
+                        <p className="text-2xl font-black text-red-700 tracking-tight">{downpaymentOrdersCount}</p>
                     </CardContent>
                 </Card>
 
-                <Card className="border-none shadow-lg bg-gradient-to-br from-amber-50 to-white">
-                    <CardContent className="pt-6 pb-4">
-                        <div className="flex items-center gap-2 mb-2">
-                            <div className="p-2 rounded-lg bg-amber-100 text-amber-700">
+                <Card 
+                    onClick={() => { setCardFilter(cardFilter === 'active' ? 'all' : 'active'); setCurrentPage(1); }}
+                    className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-amber-50 to-white hover:shadow-md ${
+                        cardFilter === 'active' ? 'border-amber-600 ring-2 ring-amber-600/20' : 'border-transparent hover:border-amber-200'
+                    }`}
+                >
+                    <CardContent className="pt-4 pb-3.5 px-3 sm:px-3.5">
+                        <div className="flex items-center gap-1.5 mb-1.5">
+                            <div className="p-1.5 rounded-lg bg-amber-100 text-amber-700 shrink-0">
                                 <Clock3 className="h-4 w-4" />
                             </div>
-                            <p className="text-xs font-black uppercase tracking-wider text-gray-500">Active Orders</p>
+                            <p className="text-[9.5px] 2xl:text-[10px] font-black uppercase tracking-tight text-gray-500 whitespace-nowrap">Active Orders</p>
                         </div>
-                        <p className="text-3xl font-black text-amber-700 tracking-tight">{activeOrdersCount}</p>
+                        <p className="text-2xl font-black text-amber-700 tracking-tight">{activeOrdersCount}</p>
                     </CardContent>
                 </Card>
-            </div >
+
+                <Card 
+                    onClick={() => { setCardFilter(cardFilter === 'cancelled' ? 'all' : 'cancelled'); setCurrentPage(1); }}
+                    className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-rose-50 to-white hover:shadow-md ${
+                        cardFilter === 'cancelled' ? 'border-rose-600 ring-2 ring-rose-600/20' : 'border-transparent hover:border-rose-200'
+                    }`}
+                >
+                    <CardContent className="pt-4 pb-3.5 px-3 sm:px-3.5">
+                        <div className="flex items-center gap-1.5 mb-1.5">
+                            <div className="p-1.5 rounded-lg bg-rose-100 text-rose-700 shrink-0">
+                                <Ban className="h-4 w-4" />
+                            </div>
+                            <p className="text-[9.5px] 2xl:text-[10px] font-black uppercase tracking-tight text-gray-500 whitespace-nowrap">Cancelled Orders</p>
+                        </div>
+                        <p className="text-2xl font-black text-rose-700 tracking-tight">{cancelledOrdersCount}</p>
+                    </CardContent>
+                </Card>
+            </div>
 
             <Card className="shadow-xl border-0">
                 <CardHeader className="pb-2 pt-6">
@@ -440,31 +513,45 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                         </div>
                     </div>
                 </CardHeader>
-                <CardContent className="pt-0">
-                    <div className="overflow-x-auto -mx-1 px-1">
-                        <Table className="w-full text-sm min-w-[950px]">
+                <CardContent className="pt-0 px-2 sm:px-4 md:px-6">
+                    <div className="overflow-x-auto w-full">
+                        <Table className="w-full table-fixed min-w-[800px] text-xs">
+                            <colgroup>
+                                <col className="w-[9%]" />
+                                <col className="w-[13%]" />
+                                <col className="w-[15%]" />
+                                <col className="w-[5%]" />
+                                <col className="w-[8%]" />
+                                <col className="w-[8%]" />
+                                <col className="w-[8%]" />
+                                <col className="w-[9%]" />
+                                <col className="w-[11%]" />
+                                <col className="w-[8%]" />
+                                <col className="w-[6%]" />
+                            </colgroup>
                             <TableHeader className="bg-red-50/50 border-b border-red-100">
                                 <TableRow className="border-b border-red-100 hover:bg-transparent">
-                                    <TableHead className="h-10 px-4 text-left font-black text-gray-700 uppercase tracking-widest text-[11px]">Order #</TableHead>
-                                    <TableHead className="h-10 px-4 text-left font-black text-gray-700 uppercase tracking-widest text-[11px]">Customer</TableHead>
-                                    <TableHead className="h-10 px-4 text-left font-black text-gray-700 uppercase tracking-widest text-[11px]">Services</TableHead>
-                                    <TableHead className="h-10 px-4 text-left font-black text-gray-700 uppercase tracking-widest text-[11px]">QTY</TableHead>
-                                    <TableHead className="h-10 px-4 text-center font-black text-gray-700 uppercase tracking-widest text-[11px]">Order Date</TableHead>
-                                    <TableHead className="h-10 px-4 text-center font-black text-gray-700 uppercase tracking-widest text-[11px]">Estimated Date</TableHead>
-                                    <TableHead className="h-10 px-4 text-left font-black text-gray-700 uppercase tracking-widest text-[11px]">Priority</TableHead>
-                                    <TableHead className="h-10 px-4 text-left font-black text-gray-700 uppercase tracking-widest text-[11px]">Payment</TableHead>
-                                    <TableHead className="h-10 px-4 text-right font-black text-gray-700 uppercase tracking-widest text-[11px]">Total</TableHead>
-                                    <TableHead className="h-10 px-4 text-center font-black text-gray-700 uppercase tracking-widest text-[11px]">Actions</TableHead>
+                                    <TableHead className="h-9 px-1.5 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Order #</TableHead>
+                                    <TableHead className="h-9 px-1.5 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Customer</TableHead>
+                                    <TableHead className="h-9 px-1.5 text-center font-black text-gray-700 uppercase tracking-wider text-[10px]">Services</TableHead>
+                                    <TableHead className="h-9 px-1 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">QTY</TableHead>
+                                    <TableHead className="h-9 px-1.5 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Order Date</TableHead>
+                                    <TableHead className="h-9 px-1.5 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Est. Date</TableHead>
+                                    <TableHead className="h-9 px-1 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Priority</TableHead>
+                                    <TableHead className="h-9 px-1.5 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Status</TableHead>
+                                    <TableHead className="h-9 px-1.5 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Payment</TableHead>
+                                    <TableHead className="h-9 px-1.5 text-right font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Total</TableHead>
+                                    <TableHead className="h-9 px-1 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody className="divide-y divide-gray-100">
                                 {paginatedOrders.length === 0 ? (
                                     <TableRow className="hover:bg-transparent">
-                                        <TableCell colSpan={10} className="px-6 py-20 text-center">
+                                        <TableCell colSpan={11} className="px-6 py-20 text-center">
                                             <div className="flex flex-col items-center justify-center space-y-3 opacity-40">
                                                 <ShoppingBag size={48} className="text-gray-300" />
                                                 <p className="text-sm font-black text-gray-400 uppercase tracking-[0.2em]">
-                                                    {searchQuery ? 'No matching orders found' : 'No orders found for this period'}
+                                                    {searchQuery || cardFilter !== 'all' ? 'No matching orders found' : 'No orders found for this period'}
                                                 </p>
                                             </div>
                                         </TableCell>
@@ -477,53 +564,61 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                                             ? order.baseService
                                             : String(order.baseService || '').split(',')
                                         )
+                                            .flatMap((s) => String(s || '').split(','))
                                             .map((s) => String(s || '').trim().replace(' (with basic cleaning)', ''))
                                             .filter(Boolean);
+                                        const isCancelled = order.status === 'cancelled' || (order.status as string)?.toLowerCase() === 'cancelled' || (order.status as string)?.toLowerCase() === 'canceled';
 
                                         return (
                                         <TableRow key={order.id} onClick={() => setViewingOrder(order)} className="border-b border-gray-100 hover:bg-gray-50/80 transition-all cursor-pointer">
-                                            <TableCell className="p-4 text-xs font-medium whitespace-nowrap text-gray-800">{order.orderNumber || order.id || '-'}</TableCell>
-                                            <TableCell className="p-4 pr-8">
-                                                <div className="text-xs font-bold text-gray-900 leading-tight max-w-[160px] text-wrap break-words">{order.customerName || 'Walk-In'}</div>
-                                                {order.contactNumber && (
-                                                    <div className="text-xs text-gray-500 mt-1 whitespace-nowrap">{order.contactNumber}</div>
-                                                )}
+                                            <TableCell className="px-1.5 py-1.5 text-center text-[11px] font-semibold whitespace-nowrap text-gray-800">{order.orderNumber || order.id || '-'}</TableCell>
+                                            <TableCell className="px-1.5 py-1.5 text-center">
+                                                <div className="flex flex-col items-center justify-center text-center">
+                                                    <div className="text-xs font-bold text-gray-900 leading-tight truncate max-w-full" title={order.customerName || 'Walk-In'}>{order.customerName || 'Walk-In'}</div>
+                                                    {order.contactNumber && (
+                                                        <div className="text-[9.5px] text-gray-500 mt-0.5 whitespace-nowrap truncate max-w-full">{order.contactNumber}</div>
+                                                    )}
+                                                </div>
                                             </TableCell>
-                                            <TableCell className="p-4 text-xs font-medium text-gray-700 whitespace-normal">
+                                            <TableCell className="px-1.5 py-1.5 text-center text-[11px] font-semibold text-gray-800 whitespace-normal break-words">
                                                 {servicesList.length > 0 ? (
-                                                    servicesList.map((srv, idx) => (
-                                                        <div key={idx}>{srv}{idx < servicesList.length - 1 ? ',' : ''}</div>
-                                                    ))
+                                                    <div className="flex flex-col items-center justify-center text-center text-[10.5px] font-semibold text-gray-800 leading-tight" title={servicesList.join(', ')}>
+                                                        {servicesList.slice(0, 3).map((srv, idx) => (
+                                                            <span key={idx} className="block text-[10.5px] font-semibold text-gray-800 leading-tight">
+                                                                {srv}{idx < servicesList.length - 1 ? ',' : ''}
+                                                            </span>
+                                                        ))}
+                                                    </div>
                                                 ) : (
-                                                    <span className="text-gray-400 italic">-</span>
+                                                    <span className="text-gray-400 italic font-normal text-center block">-</span>
                                                 )}
                                             </TableCell>
-                                            <TableCell className="p-4 text-xs font-medium text-gray-700 whitespace-nowrap">
+                                            <TableCell className="px-1 py-1.5 text-center text-xs font-semibold text-gray-700 whitespace-nowrap">
                                                 {order.quantity || 1} PR
                                             </TableCell>
-                                            <TableCell className="p-4 text-center text-sm font-medium text-gray-700 whitespace-nowrap">
+                                            <TableCell className="px-1.5 py-1.5 text-center text-xs font-medium text-gray-700 whitespace-nowrap">
                                                 {isNaN(orderDate.getTime()) ? '-' : (
-                                                    <div className="inline-flex items-center justify-center gap-1.5">
-                                                        <CalendarIcon size={12} className="text-purple-600 shrink-0" />
+                                                    <div className="inline-flex items-center justify-center gap-1">
+                                                        <CalendarIcon size={11} className="text-purple-600 shrink-0" />
                                                         <span>{dateFnsFormat(orderDate, 'MM/dd/yy')}</span>
                                                     </div>
                                                 )}
                                             </TableCell>
-                                            <TableCell className="p-4 text-center text-sm font-medium text-gray-700 whitespace-nowrap">
+                                            <TableCell className="px-1.5 py-1.5 text-center text-xs font-medium text-gray-700 whitespace-nowrap">
                                                 {(() => {
                                                     if (!order.predictedCompletionDate) return <span className="text-gray-400">-</span>;
                                                     const d = new Date(order.predictedCompletionDate);
                                                     if (isNaN(d.getTime())) return <span className="text-gray-400">-</span>;
                                                     return (
-                                                        <div className="inline-flex items-center justify-center gap-1.5">
-                                                            <CalendarIcon size={12} className="text-emerald-600 shrink-0" />
+                                                        <div className="inline-flex items-center justify-center gap-1">
+                                                            <CalendarIcon size={11} className="text-emerald-600 shrink-0" />
                                                             <span>{dateFnsFormat(d, 'MM/dd/yy')}</span>
                                                         </div>
                                                     );
                                                 })()}
                                             </TableCell>
-                                            <TableCell className="p-4">
-                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase border whitespace-nowrap ${
+                                            <TableCell className="px-1 py-1.5 text-center whitespace-nowrap">
+                                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[8.5px] font-bold uppercase border whitespace-nowrap ${
                                                     order.priorityLevel === 'rush'
                                                         ? 'bg-red-50 text-red-700 border-red-100'
                                                         : 'bg-emerald-50 text-emerald-700 border-emerald-100'
@@ -531,66 +626,124 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                                                     {order.priorityLevel === 'rush' ? 'Rush' : order.priorityLevel === 'regular' ? 'Regular' : (order.priorityLevel || 'Regular')}
                                                 </span>
                                             </TableCell>
-                                            <TableCell className="p-4">
-                                                <div className="flex flex-col">
-                                                    <span className={`text-xs font-bold tracking-wider whitespace-nowrap ${
-                                                        pStatus === 'fully-paid' ? 'text-green-600' :
-                                                        pStatus === 'downpayment' ? 'text-yellow-600' : 'text-red-600'
-                                                    }`}>
-                                                        {pStatus === 'fully-paid' ? 'FULLY PAID' : pStatus === 'downpayment' ? 'DOWNPAYMENT' : pStatus ? pStatus.toUpperCase() : '-'}
-                                                    </span>
-                                                    {order.paymentMethod && (
-                                                        <>
-                                                            <span className="text-[9px] text-gray-400 font-medium uppercase tracking-wider mt-0.5 whitespace-nowrap">
-                                                                {order.paymentMethod}
+                                            <TableCell className="px-1.5 py-1.5 text-center whitespace-nowrap">
+                                                {(() => {
+                                                    const isCancelled = order.status === 'cancelled' || (order.status as string)?.toLowerCase() === 'cancelled' || (order.status as string)?.toLowerCase() === 'canceled';
+                                                    if (isCancelled) {
+                                                        return (
+                                                            <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[8.5px] font-bold uppercase border whitespace-nowrap bg-red-50 text-red-700 border-red-200">
+                                                                CANCELLED
                                                             </span>
-                                                            {pStatus === 'downpayment' && (
-                                                                <span className="text-[10px] text-red-500 font-medium tracking-wider mt-0.5 whitespace-nowrap">
-                                                                    BAL: {formatPeso(Math.max(0, (Number(order.grandTotal) || 0) - (Number(order.depositAmount) || (Number(order.amountReceived) && Number(order.amountReceived) < Number(order.grandTotal) ? Number(order.amountReceived) : 0))))}
-                                                                </span>
-                                                            )}
-                                                        </>
-                                                    )}
-                                                </div>
+                                                        );
+                                                    }
+                                                    return (
+                                                        <span className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[8.5px] font-bold uppercase border whitespace-nowrap ${
+                                                            order.status === 'new-order' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                                                            order.status === 'on-going' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                                            order.status === 'for-release' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                                            order.status === 'claimed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                                            'bg-gray-50 text-gray-700 border-gray-200'
+                                                        }`}>
+                                                            {order.status ? order.status.replace('-', ' ') : 'new order'}
+                                                        </span>
+                                                    );
+                                                })()}
                                             </TableCell>
-                                            <TableCell className="p-4 text-right whitespace-nowrap">
-                                                <div className="flex flex-col items-end">
-                                                    <span className="font-medium text-gray-900">₱{(Number(order.grandTotal) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                                </div>
-                                            </TableCell>
-                                            <TableCell className="p-4 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <Button variant="outline" className="h-7 px-2 border-red-200 text-red-700 bg-red-50 hover:bg-red-100 font-black text-xs gap-1 rounded-md">
-                                                            <MoreVertical className="h-3.5 w-3.5 text-red-500" />
-                                                            <ChevronDown className="h-3 w-3 opacity-50" />
-                                                        </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end" className="w-56 p-2 space-y-1">
-                                                        <DropdownMenuItem
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setSelectedOrder(order);
-                                                                setIsEditing(true);
-                                                            }}
-                                                            className="border border-yellow-200 rounded-md px-2.5 py-1.5 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:text-yellow-800 focus:bg-yellow-100 font-bold mb-1 cursor-pointer"
-                                                        >
-                                                            <Edit className="h-4 w-4 mr-2 text-yellow-600" />
-                                                            Edit Order Detail
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuItem
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setOrderToDelete(order);
-                                                            }}
-                                                            className="border border-red-200 rounded-md px-2.5 py-1.5 text-red-700 bg-red-50 hover:bg-red-100 focus:text-red-800 focus:bg-red-100 font-bold cursor-pointer"
-                                                        >
-                                                            <Trash2 className="h-4 w-4 mr-2 text-red-600" />
-                                                            Delete Order
-                                                        </DropdownMenuItem>
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-                                            </TableCell>
+                                            <TableCell className="px-1.5 py-1.5 whitespace-nowrap">
+                                                 <div className="flex flex-col items-center justify-center text-center">
+                                                     {isCancelled ? (
+                                                         order.refundStatus === 'refunded' ? (
+                                                             <>
+                                                                 <span className="text-[10px] font-bold tracking-wider text-rose-600">
+                                                                     REFUNDED
+                                                                 </span>
+                                                                 <span className="text-[8.5px] text-rose-600 font-bold tracking-wider mt-0.5">
+                                                                     Refund: {formatPeso(Number(order.refundAmount || order.grandTotal || 0))}
+                                                                 </span>
+                                                             </>
+                                                         ) : (
+                                                             <>
+                                                                 <span className="text-[10px] font-bold tracking-wider text-amber-700">
+                                                                     NO REFUND
+                                                                 </span>
+                                                                 <span className="text-[8.5px] text-amber-700 font-bold tracking-wider mt-0.5">
+                                                                     Retained: {formatPeso(Number(order.amountReceived || order.depositAmount || 0))}
+                                                                 </span>
+                                                             </>
+                                                         )
+                                                     ) : (
+                                                         <>
+                                                             <span className={`text-[10px] font-bold tracking-wider ${
+                                                                 pStatus === 'fully-paid' ? 'text-green-600' :
+                                                                 pStatus === 'downpayment' ? 'text-yellow-600' : 'text-red-600'
+                                                             }`}>
+                                                                 {pStatus === 'fully-paid' ? 'FULLY PAID' : pStatus === 'downpayment' ? 'DOWNPAYMENT' : pStatus ? pStatus.toUpperCase() : '-'}
+                                                             </span>
+                                                             {order.paymentMethod && (
+                                                                 <>
+                                                                     <span className="text-[8px] text-gray-400 font-semibold uppercase tracking-wider mt-0.5">
+                                                                         {order.paymentMethod}
+                                                                     </span>
+                                                                     {pStatus === 'downpayment' && (
+                                                                         <span className="text-[8.5px] text-red-500 font-bold tracking-wider mt-0.5">
+                                                                             BAL: {formatPeso(order.balance !== undefined && order.balance !== null && !isNaN(Number(order.balance)) ? Math.max(0, Number(order.balance)) : Math.max(0, (Number(order.grandTotal) || 0) - (Number(order.depositAmount) || (Number(order.amountReceived) && Number(order.amountReceived) < Number(order.grandTotal) ? Number(order.amountReceived) : 0))))}
+                                                                         </span>
+                                                                     )}
+                                                                 </>
+                                                             )}
+                                                         </>
+                                                     )}
+                                                 </div>
+                                             </TableCell>
+                                             <TableCell className="px-1.5 py-1.5 text-right whitespace-nowrap">
+                                                  <span className="font-bold text-gray-900 text-xs">₱{(Number(order.grandTotal) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                              </TableCell>
+                                              <TableCell className="px-1 py-1.5 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                                  <DropdownMenu>
+                                                      <DropdownMenuTrigger asChild>
+                                                          <Button
+                                                              variant="outline"
+                                                              className="h-7 w-7 p-0 border-red-200 text-red-700 bg-red-50 hover:bg-red-100 font-bold rounded-md inline-flex items-center justify-center"
+                                                              title="Actions"
+                                                          >
+                                                              <MoreVertical className="h-3.5 w-3.5 text-red-500" />
+                                                          </Button>
+                                                      </DropdownMenuTrigger>
+                                                      <DropdownMenuContent align="end" className="w-52 p-1.5 space-y-1">
+                                                          <DropdownMenuItem
+                                                              onClick={(e) => {
+                                                                  e.stopPropagation();
+                                                                  setViewingOrder(order);
+                                                              }}
+                                                              className="border border-blue-200 rounded-md px-2.5 py-1.5 text-blue-700 bg-blue-50 hover:bg-blue-100 focus:text-blue-800 focus:bg-blue-100 font-bold cursor-pointer"
+                                                          >
+                                                              <Eye className="h-4 w-4 mr-2 text-blue-600" />
+                                                              View Details
+                                                          </DropdownMenuItem>
+                                                          <DropdownMenuItem
+                                                              onClick={(e) => {
+                                                                  e.stopPropagation();
+                                                                  setSelectedOrder(order);
+                                                                  setIsEditing(true);
+                                                              }}
+                                                              className="border border-yellow-200 rounded-md px-2.5 py-1.5 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:text-yellow-800 focus:bg-yellow-100 font-bold cursor-pointer"
+                                                          >
+                                                              <Edit className="h-4 w-4 mr-2 text-yellow-600" />
+                                                              Edit Order Detail
+                                                          </DropdownMenuItem>
+                                                          <DropdownMenuItem
+                                                              onClick={(e) => {
+                                                                  e.stopPropagation();
+                                                                  setOrderToDelete(order);
+                                                              }}
+                                                              className="border border-red-200 rounded-md px-2.5 py-1.5 text-red-700 bg-red-50 hover:bg-red-100 focus:text-red-800 focus:bg-red-100 font-bold cursor-pointer"
+                                                          >
+                                                              <Trash2 className="h-4 w-4 mr-2 text-red-600" />
+                                                              Delete Order
+                                                          </DropdownMenuItem>
+                                                      </DropdownMenuContent>
+                                                  </DropdownMenu>
+                                              </TableCell>
                                         </TableRow>
                                         );
                                     })
@@ -701,7 +854,6 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                                     <SelectItem value="all" className="text-xs focus:bg-red-50 focus:text-red-700">All Payment Status</SelectItem>
                                     <SelectItem value="fully-paid" className="text-xs hover:bg-red-50 focus:bg-red-50 focus:text-red-700">Fully Paid</SelectItem>
                                     <SelectItem value="downpayment" className="text-xs hover:bg-red-50 focus:bg-red-50 focus:text-red-700">Downpayment</SelectItem>
-                                    <SelectItem value="unpaid" className="text-xs hover:bg-red-50 focus:bg-red-50 focus:text-red-700">Unpaid</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -748,6 +900,7 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                             variant="ghost"
                             className="flex-1 w-full bg-gray-200 text-gray-700 hover:bg-gray-800 hover:text-white font-bold h-10 transition-colors uppercase tracking-wider rounded-xl"
                             onClick={() => {
+                                setCardFilter('all');
                                 setFilterService('all');
                                 setFilterPriority('all');
                                 setFilterPaymentStatus('all');
@@ -785,10 +938,11 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
             )}
 
             {/* Delete Confirmation Modal */}
-            <Dialog open={!!orderToDelete} onOpenChange={(open) => !open && setOrderToDelete(null)}>
+            <Dialog open={!!orderToDelete} onOpenChange={(open) => !open && !isDeleting && setOrderToDelete(null)}>
                 <DialogContent className="max-w-md">
                     <DialogHeader>
                         <DialogTitle className="text-center text-base font-black uppercase tracking-tight">Confirm Soft Delete</DialogTitle>
+                        <DialogDescription className="sr-only">Confirm soft deletion of the selected order</DialogDescription>
                     </DialogHeader>
                     <div className="py-6 flex flex-col items-center gap-4">
                         <div className="h-16 w-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center">
@@ -804,21 +958,33 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                             variant="ghost" 
                             className="flex-1 bg-gray-100 font-bold uppercase text-[10px] tracking-widest h-10 rounded-xl"
                             onClick={() => setOrderToDelete(null)}
+                            disabled={isDeleting}
                         >
                             Cancel
                         </Button>
                         <Button 
                             variant="destructive" 
-                            className="flex-1 bg-red-600 hover:bg-red-700 font-bold uppercase text-[10px] tracking-widest h-10 rounded-xl shadow-lg shadow-red-100"
+                            className="flex-1 bg-red-600 hover:bg-red-700 font-bold uppercase text-[10px] tracking-widest h-10 rounded-xl shadow-lg shadow-red-100 disabled:opacity-50"
+                            disabled={isDeleting}
                             onClick={async () => {
+                                if (isDeletingRef.current || isDeleting) return;
                                 if (orderToDelete) {
-                                    await deleteOrder(orderToDelete.id);
-                                    toast.success(`Order ${orderToDelete.orderNumber} deleted successfully`);
-                                    setOrderToDelete(null);
+                                    isDeletingRef.current = true;
+                                    setIsDeleting(true);
+                                    try {
+                                        await deleteOrder(orderToDelete.id);
+                                        toast.success(`Order ${orderToDelete.orderNumber} deleted successfully`);
+                                        setOrderToDelete(null);
+                                    } catch (err: any) {
+                                        toast.error(err?.message || 'Failed to delete order');
+                                    } finally {
+                                        isDeletingRef.current = false;
+                                        setIsDeleting(false);
+                                    }
                                 }
                             }}
                         >
-                            Yes, Delete
+                            {isDeleting ? 'Deleting...' : 'Yes, Delete'}
                         </Button>
                     </div>
                 </DialogContent>

@@ -13,8 +13,10 @@ class InventoryRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_all(self) -> list[Inventory]:
-        return self.db.query(Inventory).filter(Inventory.is_active == True).all()
+    def get_all(self, include_inactive: bool = False) -> list[Inventory]:
+        if include_inactive:
+            return self.db.query(Inventory).order_by(Inventory.item_id).all()
+        return self.db.query(Inventory).filter(Inventory.is_active == True).order_by(Inventory.item_id).all()
 
     def get_by_id(self, item_id: int) -> Inventory | None:
         return self.db.query(Inventory).filter(Inventory.item_id == item_id).first()

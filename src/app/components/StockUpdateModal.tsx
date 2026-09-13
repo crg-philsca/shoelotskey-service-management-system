@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/app/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/app/components/ui/dialog';
 import { Button } from '@/app/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { useInventory } from '@/app/context/InventoryContext';
@@ -261,7 +261,10 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave, on
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[540px] max-h-[85vh] p-0 flex flex-col overflow-hidden rounded-3xl border-none shadow-2xl bg-white">
+            <DialogContent 
+                closeClassName="top-4 right-4 bg-white/20 text-white hover:bg-white/30 border-white/30 hover:border-white/50 shadow-none"
+                className="w-[calc(100vw-1.5rem)] sm:max-w-[540px] max-h-[85vh] p-0 gap-0 flex flex-col overflow-hidden rounded-2xl border border-gray-100 shadow-2xl bg-white"
+            >
                 <DialogHeader className="shrink-0 bg-emerald-600 px-6 py-5 text-white text-center">
                     <div className="mx-auto w-10 h-10 bg-white/20 rounded-full flex items-center justify-center mb-2">
                         <Package size={20} className="text-white" />
@@ -269,9 +272,9 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave, on
                     <DialogTitle className="text-base font-black uppercase tracking-widest">
                         Update Inventory
                     </DialogTitle>
-                    <p className="text-emerald-100 text-[11px] font-bold uppercase tracking-wide">
+                    <DialogDescription className="text-emerald-100 text-[11px] font-bold uppercase tracking-wide">
                         Order #{order.orderNumber} • {order.customerName}
-                    </p>
+                    </DialogDescription>
                 </DialogHeader>
 
                 <div className="flex-1 overflow-y-auto p-5 space-y-5 custom-scrollbar">

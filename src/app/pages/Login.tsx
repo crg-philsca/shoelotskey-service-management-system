@@ -190,7 +190,6 @@ export default function Login({ onLogin }: LoginProps) {
               src="/logo.png"
               alt="Shoelotskey logo"
               className="h-32 xs:h-36 sm:h-40 md:h-48 w-auto object-contain mx-auto transform -translate-x-0.5"
-              fetchPriority="high"
               loading="eager"
               decoding="async"
             />

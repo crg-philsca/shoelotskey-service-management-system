@@ -23,11 +23,12 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
 } from '@/app/components/ui/dropdown-menu';
-import { MoreVertical, ChevronDown } from 'lucide-react';
+import { MoreVertical } from 'lucide-react';
 import HistoricalValidationQueue from './HistoricalValidationQueue';
 // P1-10 FIX: centralized API base resolution (see src/app/lib/apiBase.ts).
 import { API_BASE } from '@/app/lib/apiBase';
 import { formatOrderId } from '@/app/lib/orderNumber';
+import { validateCustomerName, CUSTOMER_NAME_MAX_LENGTH } from '@/app/lib/customerValidation';
 import { calculateOfficialReleaseBreakdown } from '@/app/lib/businessRules';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -421,7 +422,10 @@ function HistoricalOrderForm({
   function validate(): boolean {
     const errs: string[] = [];
     if (!orderId.trim()) errs.push('Order ID is required.');
-    if (!customerName.trim()) errs.push('Customer Name is required.');
+    const cValidation = validateCustomerName(customerName);
+    if (!cValidation.isValid) {
+      errs.push(cValidation.error || 'Customer Name is invalid.');
+    }
     if (!dateReceived) errs.push('Date Received is required.');
     if (!expectedRelease) errs.push('Expected Release Date is required.');
     if (expectedRelease && dateReceived && expectedRelease < dateReceived)
@@ -550,9 +554,14 @@ function HistoricalOrderForm({
                 </Select>
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase text-gray-500">Customer Name *</label>
-                <Input value={customerName} onChange={e => setCustomerName(e.target.value)}
-                  placeholder="Full name" className="h-9 text-xs" />
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold uppercase text-gray-500">Customer Name *</label>
+                  <span className={`text-[9px] font-bold ${customerName.length >= CUSTOMER_NAME_MAX_LENGTH ? 'text-red-600' : 'text-gray-400'}`}>
+                    {customerName.length}/{CUSTOMER_NAME_MAX_LENGTH}
+                  </span>
+                </div>
+                <Input value={customerName} maxLength={CUSTOMER_NAME_MAX_LENGTH} onChange={e => setCustomerName(e.target.value.slice(0, CUSTOMER_NAME_MAX_LENGTH))}
+                  placeholder="Full name (e.g. Juan Carlos Dela Cruz)" className="h-9 text-xs" />
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase text-gray-500">Contact Number</label>
@@ -1077,12 +1086,26 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
             </div>
           )}
           {/* Table */}
-          <div className="overflow-x-auto">
-        <table className="w-full min-w-[900px]">
+          <div className="overflow-x-auto w-full">
+        <table className="w-full table-fixed min-w-[900px]">
+          <colgroup>
+            <col className="w-[10%]" />
+            <col className="w-[14%]" />
+            <col className="w-[7%]" />
+            <col className="w-[9%]" />
+            <col className="w-[12%]" />
+            <col className="w-[8%]" />
+            <col className="w-[8%]" />
+            <col className="w-[8%]" />
+            <col className="w-[6%]" />
+            <col className="w-[8%]" />
+            <col className="w-[4%]" />
+            <col className="w-[6%]" />
+          </colgroup>
           <thead>
             <tr className="bg-red-50">
               {['Order ID','Customer','Priority','Shoes','Services','Order Date','Expected Date','Claimed Date','Total Days','Grand Total','View','Actions'].map(h => (
-                <th key={h} className="px-3 py-3 text-[10px] font-black uppercase text-gray-500 text-center">{h}</th>
+                <th key={h} className="px-2 py-3 text-[10px] font-black uppercase text-gray-500 text-center whitespace-nowrap">{h}</th>
               ))}
             </tr>
           </thead>
@@ -1101,7 +1124,7 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
               return (
               <tr key={r.historical_order_id} className="hover:bg-gray-50 cursor-pointer transition-colors"
                 onClick={() => setViewRecord(r)}>
-                <td className="px-3 py-3 text-xs font-bold text-center font-mono">
+                <td className="px-2 py-3 text-xs font-bold text-center font-mono whitespace-nowrap">
                   {orderId.isPlaceholder ? (
                     <span className="text-gray-300">—</span>
                   ) : orderId.isCanonical ? (
@@ -1110,22 +1133,24 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
                     <span className="text-orange-600" title="Legacy ID — not yet in ORD-YYYY-MM-DD-NNN format">{orderId.text}</span>
                   )}
                 </td>
-                <td className="px-3 py-3 text-center">
-                  <div className="text-xs font-medium text-gray-900 leading-tight">{toTitleCase(presentField(r.customer_name)) || '—'}</div>
-                  <div className="text-[10px] text-gray-500 mt-0.5">{presentField(r.contact_number) || '—'}</div>
+                <td className="px-2 py-3 text-center">
+                  <div className="flex flex-col items-center justify-center text-center">
+                    <div className="text-xs font-medium text-gray-900 leading-tight truncate max-w-full">{toTitleCase(presentField(r.customer_name)) || '—'}</div>
+                    <div className="text-[10px] text-gray-500 mt-0.5 truncate max-w-full">{presentField(r.contact_number) || '—'}</div>
+                  </div>
                 </td>
-                <td className="px-3 py-3 text-center">
+                <td className="px-1 py-3 text-center whitespace-nowrap">
                   <span className={`inline-flex px-2 py-0.5 rounded-full text-[9px] font-black uppercase border ${
                     r.priority === 'rush' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-gray-50 text-gray-600 border-gray-200'
                   }`}>{r.priority || 'Regular'}</span>
                 </td>
-                <td className="px-3 py-3 text-xs text-center text-gray-700">
+                <td className="px-2 py-3 text-xs text-center text-gray-700 whitespace-normal break-words">
                   {r.items?.length > 0 ? r.items.slice(0,2).map((it, i) => (
                     <div key={i} className="text-[10px] leading-tight">{it.brand} {it.model}</div>
                   )) : <span className="text-gray-300">—</span>}
                   {r.items?.length > 2 && <div className="text-[9px] text-gray-400">+{r.items.length - 2} more</div>}
                 </td>
-                <td className="px-3 py-3 text-xs text-center">
+                <td className="px-2 py-3 text-xs text-center whitespace-normal break-words">
                   {r.items?.flatMap(it => it.services).slice(0,3).map((s, i) => (
                     <span key={i} className="inline-block mr-0.5 mb-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded bg-red-50 text-red-700">{s.display_label || s.service_name}</span>
                   ))}
@@ -1156,8 +1181,8 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
                 <td className="px-3 py-3 text-center" onClick={e => e.stopPropagation()}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <button className="inline-flex items-center gap-0.5 h-7 px-1.5 text-xs border border-red-600 text-red-600 rounded bg-red-50 hover:bg-red-100 transition-colors">
-                        <MoreVertical className="h-3.5 w-3.5" /><ChevronDown className="h-3 w-3" />
+                      <button className="inline-flex items-center justify-center h-7 w-7 text-xs border border-red-200 text-red-700 rounded-md bg-red-50 hover:bg-red-100 transition-colors" title="Actions">
+                        <MoreVertical className="h-3.5 w-3.5" />
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-44 p-1.5 space-y-0.5">
@@ -2154,20 +2179,24 @@ export default function HistoricalRecords({ user, onSetHeaderActionRight }: Hist
 
   useEffect(() => {
     if (onSetHeaderActionRight) {
-      onSetHeaderActionRight(
-        <Button
-          onClick={() => navigate('/service-management')}
-          className="h-9 px-3 rounded-lg border border-red-200 bg-white text-red-700 hover:bg-red-50 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-xs transition"
-          title="Back to Service Management"
-        >
-          <ChevronLeft className="h-4 w-4" />
-          <span className="hidden sm:inline">Back to Services</span>
-          <span className="sm:hidden">Back</span>
-        </Button>
-      );
+      if (activeTab === 'ocr') {
+        onSetHeaderActionRight(null);
+      } else {
+        onSetHeaderActionRight(
+          <Button
+            onClick={() => navigate('/service-management')}
+            className="h-9 px-3 rounded-lg border border-red-200 bg-white text-red-700 hover:bg-red-50 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-xs transition"
+            title="Back to Service Management"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            <span className="hidden sm:inline">Back to Services</span>
+            <span className="sm:hidden">Back</span>
+          </Button>
+        );
+      }
     }
     return () => { if (onSetHeaderActionRight) onSetHeaderActionRight(null); };
-  }, [onSetHeaderActionRight, navigate]);
+  }, [onSetHeaderActionRight, navigate, activeTab]);
 
   const tabs: { key: Tab; label: string; icon: React.ElementType; ownerOnly?: boolean }[] = [
     { key: 'records',   label: 'Records',          icon: Archive },

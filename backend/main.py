@@ -10,9 +10,10 @@ import os
 import uuid
 import json
 import sys
-import os
+import re
 import requests
 import shutil
+from decimal import Decimal
 
 def auto_organize_workspace():
     try:
@@ -495,6 +496,35 @@ def log_audit(
             except Exception:
                 pass  # Never crash on metadata extraction
 
+        actor_username = user.username if user else "system"
+        action_u = (action or "").upper().replace(" ", "_")
+
+        # Deduplication check: prevent duplicate logs for the same user, action, table, and record within a recent window
+        try:
+            from datetime import timedelta
+            dedup_window_secs = 60 if action_u in ("LOGIN", "LOGIN_SUCCESS", "PRINT", "REPORT_GENERATED", "EXPORT_PDF", "EXPORT_CSV") else 10
+            window_start = datetime.now() - timedelta(seconds=dedup_window_secs)
+            recent_q = db.query(AuditLog).filter(
+                AuditLog.username == actor_username,
+                AuditLog.action_type == action,
+                AuditLog.table_name == table_name,
+                AuditLog.created_at >= window_start,
+            )
+            if record_id is not None:
+                recent_q = recent_q.filter(AuditLog.record_id == record_id)
+            else:
+                recent_q = recent_q.filter(AuditLog.record_id.is_(None))
+            
+            existing = recent_q.order_by(AuditLog.audit_log_id.desc()).first()
+            if existing:
+                # Non-destructive overwrite: enrich new_values if existing lacked details
+                if new_values and isinstance(new_values, dict) and not existing.new_values:
+                    existing.new_values = new_values
+                    db.commit()
+                return existing
+        except Exception:
+            pass  # Fail safe to ensure logging continues
+
         entry = AuditLog(
             user_id=user.user_id if user else None,
             username=user.username if user else "system",
@@ -833,6 +863,15 @@ def startup_sequence():
                 with engine.begin() as conn:
                     try: conn.execute(text("ALTER TABLE services ADD COLUMN sort_order INTEGER DEFAULT 0"))
                     except: pass
+            if "connected_addons" not in columns:
+                print(">>> Migration: Adding connected_addons to services")
+                with engine.begin() as conn:
+                    try:
+                        col_type = "JSONB" if not is_sqlite else "JSON"
+                        conn.execute(text(f"ALTER TABLE services ADD COLUMN connected_addons {col_type} NULL"))
+                    except:
+                        try: conn.execute(text("ALTER TABLE services ADD COLUMN connected_addons TEXT NULL"))
+                        except: pass
     except Exception as e:
         print(f">>> Migration Warning (services table): {e}")
 
@@ -1078,6 +1117,44 @@ def startup_sequence():
                             pass
             except Exception as al_mig_err:
                 print(f">>> Migration Warning (audit_logs on {engine_label}): {al_mig_err}")
+
+            # 4. ATOMIC MIGRATIONS: services & orders new feature columns
+            try:
+                feat_inspector = inspect(sync_engine)
+                tbl_names = feat_inspector.get_table_names()
+
+                # services.connected_addons
+                if "services" in tbl_names:
+                    svc_cols = [c['name'] for c in feat_inspector.get_columns("services")]
+                    if "connected_addons" not in svc_cols:
+                        col_type = "JSON" if is_pg else "JSON"
+                        try:
+                            with sync_engine.begin() as col_conn:
+                                col_conn.execute(text(f"ALTER TABLE services ADD COLUMN connected_addons {col_type}"))
+                            print(f">>> Migration ({engine_label}): Added services.connected_addons")
+                        except Exception as c_err:
+                            print(f">>> Migration Notice (services.connected_addons on {engine_label}): {c_err}")
+
+                # orders cancellation and refund columns
+                if "orders" in tbl_names:
+                    ord_cols = [c['name'] for c in feat_inspector.get_columns("orders")]
+                    for col_name, pg_t, sq_t in [
+                        ("cancellation_stage", "VARCHAR(30)", "VARCHAR(30)"),
+                        ("refund_status",      "VARCHAR(30)", "VARCHAR(30)"),
+                        ("refund_amount",      "NUMERIC(10, 2) DEFAULT 0.0", "DECIMAL(10, 2) DEFAULT 0.0"),
+                        ("refund_reason",      "VARCHAR(255)", "VARCHAR(255)"),
+                        ("cancelled_at",       "TIMESTAMP", "TIMESTAMP"),
+                    ]:
+                        if col_name not in ord_cols:
+                            col_type = pg_t if is_pg else sq_t
+                            try:
+                                with sync_engine.begin() as col_conn:
+                                    col_conn.execute(text(f"ALTER TABLE orders ADD COLUMN {col_name} {col_type}"))
+                                print(f">>> Migration ({engine_label}): Added orders.{col_name}")
+                            except Exception as c_err:
+                                print(f">>> Migration Notice (orders.{col_name} on {engine_label}): {c_err}")
+            except Exception as feat_mig_err:
+                print(f">>> Feature Migration Notice on {engine_label}: {feat_mig_err}")
     except Exception as al_outer_err:
         print(f">>> Migration Warning (audit_logs outer): {al_outer_err}")
 
@@ -1252,8 +1329,8 @@ def seed_lookups(db: Session):
         {"service_name": "Color Renewal", "base_price": 800, "category": "base", "duration_days": 15, "service_code": "CRN", "is_active": True, "sort_order": 4},
         
         # ADD-ON SERVICES (Restoration & Detailing)
-        {"service_name": "Undersole", "base_price": 150, "category": "addon", "duration_days": 20, "service_code": "USL", "is_active": True, "sort_order": 10},
-        {"service_name": "Midsole", "base_price": 150, "category": "addon", "duration_days": 20, "service_code": "MSL", "is_active": True, "sort_order": 11},
+        {"service_name": "Undersole", "base_price": 150, "category": "addon", "duration_days": 25, "service_code": "USL", "is_active": True, "sort_order": 10},
+        {"service_name": "Midsole", "base_price": 150, "category": "addon", "duration_days": 25, "service_code": "MSL", "is_active": True, "sort_order": 11},
         {"service_name": "Minor Restoration", "base_price": 300, "category": "addon", "duration_days": 25, "service_code": "MRS", "is_active": True, "sort_order": 12},
         {"service_name": "Minor Retouch", "base_price": 125, "category": "addon", "duration_days": 5, "service_code": "MRT", "is_active": True, "sort_order": 13},
         {"service_name": "Add Glue Layer", "base_price": 100, "category": "addon", "duration_days": 2, "service_code": "AGL", "is_active": True, "sort_order": 14},
@@ -2046,11 +2123,23 @@ def sync_backup_to_cloud(db: Session = Depends(get_db), current_user: User = Dep
 
         # 1.7. Sync audit_logs from SQLite to PG (Batch memory check to avoid connection dropouts)
         try:
-            cursor.execute("SELECT username, role, action_type, module, table_name, record_id, old_values, new_values, ip_address FROM audit_logs ORDER BY rowid DESC LIMIT 50")
-            existing_pg_logs = {f"{l.username}_{l.action_type}_{l.record_id}_{l.table_name}" for l in db.query(AuditLog.username, AuditLog.action_type, AuditLog.record_id, AuditLog.table_name).all()}
+            cursor.execute("SELECT username, role, action_type, module, table_name, record_id, old_values, new_values, ip_address, created_at FROM audit_logs ORDER BY rowid DESC LIMIT 100")
+            existing_pg_logs = {
+                f"{l.username}_{l.action_type}_{l.record_id}_{l.table_name}_{l.created_at.strftime('%Y-%m-%d %H:%M') if l.created_at else ''}"
+                for l in db.query(AuditLog.username, AuditLog.action_type, AuditLog.record_id, AuditLog.table_name, AuditLog.created_at).all()
+            }
             for off_log in cursor.fetchall():
-                log_key = f"{off_log[0]}_{off_log[2]}_{off_log[5]}_{off_log[4]}"
+                created_m = str(off_log[9])[:16] if off_log[9] else ""
+                log_key = f"{off_log[0]}_{off_log[2]}_{off_log[5]}_{off_log[4]}_{created_m}"
                 if log_key not in existing_pg_logs:
+                    parsed_cat = None
+                    if off_log[9]:
+                        try:
+                            parsed_cat = datetime.fromisoformat(str(off_log[9]))
+                        except Exception:
+                            parsed_cat = datetime.now()
+                    else:
+                        parsed_cat = datetime.now()
                     new_log = AuditLog(
                         username=off_log[0],
                         role=off_log[1],
@@ -2060,7 +2149,8 @@ def sync_backup_to_cloud(db: Session = Depends(get_db), current_user: User = Dep
                         record_id=off_log[5],
                         old_values=json.loads(off_log[6]) if off_log[6] and isinstance(off_log[6], str) else off_log[6],
                         new_values=json.loads(off_log[7]) if off_log[7] and isinstance(off_log[7], str) else off_log[7],
-                        ip_address=off_log[8]
+                        ip_address=off_log[8],
+                        created_at=parsed_cat,
                     )
                     db.add(new_log)
                     existing_pg_logs.add(log_key)
@@ -2109,9 +2199,18 @@ def trigger_daily_sales_procedure(db: Session = Depends(get_db), current_user: U
             target_date = (datetime.utcnow() - timedelta(days=1)).date()
             target_date_str = target_date.strftime("%Y-%m-%d")
             
-            # 3. Aggregate totals from normalized orders table
+            # 3. Aggregate totals from normalized orders table (lessening refunds, accounting for retained cancellation deposits)
             result = db.execute(text("""
-            SELECT COALESCE(SUM(grand_total), 0.0), COUNT(order_id)
+            SELECT COALESCE(SUM(
+                CASE 
+                    WHEN status_id = 4 THEN (
+                        COALESCE((SELECT COALESCE(SUM(p.amount_received), 0.0) FROM payments p WHERE p.order_id = orders.order_id), 0.0) 
+                        - COALESCE(refund_amount, 0.0)
+                    )
+                    ELSE grand_total - COALESCE(refund_amount, 0.0)
+                END
+            ), 0.0), 
+            COUNT(CASE WHEN status_id != 4 THEN order_id END)
             FROM orders
             WHERE DATE(created_at) = :target_date
             """), {"target_date": target_date_str}).first()
@@ -2191,11 +2290,23 @@ def login(request: LoginRequest, db: Session = Depends(get_db), http_request: Re
     """
     print(f"[AUTH] Trace: Login attempt for '{request.username}'")
     
-    try:
+    login_input = str(request.username or "").strip()
+    norm_user = login_input.lower()
+    if norm_user == "ownerowner":
+        norm_user = "owner"
+    elif norm_user == "staffstaff":
+        norm_user = "staff"
+    elif norm_user == "adminadmin":
+        norm_user = "admin"
 
+    try:
         try:
             db_user = db.query(User).options(joinedload(User.role)).filter(
-                or_(User.username == request.username, User.email == request.username)
+                or_(
+                    func.lower(User.username) == norm_user,
+                    func.lower(User.email) == login_input.lower(),
+                    func.lower(User.username) == login_input.lower()
+                )
             ).first()
         except Exception as query_err:
             import db.database as db_mod
@@ -2209,7 +2320,11 @@ def login(request: LoginRequest, db: Session = Depends(get_db), http_request: Re
             fallback_session_maker = db_mod.switch_to_offline_sqlite()
             db = fallback_session_maker()
             db_user = db.query(User).options(joinedload(User.role)).filter(
-                or_(User.username == request.username, User.email == request.username)
+                or_(
+                    func.lower(User.username) == norm_user,
+                    func.lower(User.email) == login_input.lower(),
+                    func.lower(User.username) == login_input.lower()
+                )
             ).first()
         
         if not db_user:
@@ -2242,6 +2357,8 @@ def login(request: LoginRequest, db: Session = Depends(get_db), http_request: Re
         pw_match = False
         try:
             pw_match = bcrypt.verify(request.password, db_user.password_hash)
+            if not pw_match and request.password.strip() != request.password:
+                pw_match = bcrypt.verify(request.password.strip(), db_user.password_hash)
         except Exception:
             # If the stored hash is invalid (e.g., legacy plaintext), we DO NOT
             # migrate it automatically as it introduces a pass-the-hash vulnerability.
@@ -2508,8 +2625,10 @@ async def reset_password(request: ResetPasswordRequest, db: Session = Depends(ge
 # 2.2 MACHINE LEARNING & PREDICTION
 # ==========================================
 
+_PREDICT_MEMO: Dict[str, Any] = {}
+
 @app.post("/api/predict")
-async def get_prediction(
+def get_prediction(
     order_data: Dict[str, Any],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -2519,13 +2638,22 @@ async def get_prediction(
     an independent Random Forest prediction. The official operational date is
     always the business-rule result. Authenticated staff only.
     """
-    print(f"[ML] Dual estimate for new draft (user={current_user.username})...")
+    import json
+    memo_key = None
+    try:
+        memo_key = json.dumps(order_data, sort_keys=True)
+        cached = _PREDICT_MEMO.get(memo_key)
+        if cached and (time.time() - cached["time"] < 20.0):
+            return cached["response"]
+    except Exception:
+        pass
+
     try:
         estimate = predictor.estimate_order_release(db, order_data)
         official_dt = estimate["business_rule_date"]
         ml_dt = estimate.get("ml_predicted_date")
         ml_status = estimate.get("ml_status") or "unavailable"
-        return {
+        resp = {
             "authoritative": "business_rule",
             "business_rule_days": estimate["business_rule_days"],
             "business_rule_date": official_dt.strftime("%Y-%m-%d"),
@@ -2546,8 +2674,13 @@ async def get_prediction(
             "model_loaded": bool(estimate.get("model_loaded")),
             "algorithm": "Shoelotskey Business Rules",
         }
+        if memo_key:
+            _PREDICT_MEMO[memo_key] = {"response": resp, "time": time.time()}
+        return resp
     except Exception as e:
-        logger.error(f"[ML ERROR] Prediction exception: {e}", exc_info=True)
+        import traceback
+        print(f"[ML ERROR] Prediction exception: {e}")
+        traceback.print_exc()
         fallback = datetime.now() + timedelta(days=10)
         return {
             "authoritative": "business_rule",
@@ -2658,6 +2791,9 @@ def update_user(user_id: int, user_update: UserUpdateSchema, db: Session = Depen
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
         
+    if db_user.username.lower() == "admin" or (db_user.role and db_user.role.role_name.lower() == "admin"):
+        raise HTTPException(status_code=403, detail="System account cannot be modified.")
+        
     # Capture before-state for audit diff (include role so Activity History can show role changes)
     old_snapshot = {
         "username": db_user.username,
@@ -2710,6 +2846,8 @@ def update_user(user_id: int, user_update: UserUpdateSchema, db: Session = Depen
 
     db.commit()
     db.refresh(db_user)
+    from auth_utils import invalidate_user_cache
+    invalidate_user_cache(db_user.username)
     persist_user_to_sqlite_file(
         db_user.username, db_user.email, db_user.password_hash,
         db_user.role.role_name if db_user.role else "staff",
@@ -2739,6 +2877,9 @@ def delete_user(user_id: int, db: Session = Depends(get_db), current_user: User 
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
         
+    if db_user.username.lower() == "admin" or (db_user.role and db_user.role.role_name.lower() == "admin"):
+        raise HTTPException(status_code=403, detail="System account cannot be deleted.")
+        
     # Prevent deleting the last owner
     if db_user.role.role_name == 'owner':
         owner_count = db.query(User).join(Role).filter(Role.role_name == 'owner').count()
@@ -2756,6 +2897,8 @@ def delete_user(user_id: int, db: Session = Depends(get_db), current_user: User 
     if has_history:
         db_user.is_active = False
         db.commit()
+        from auth_utils import invalidate_user_cache
+        invalidate_user_cache(db_user.username)
         persist_user_to_sqlite_file(
             db_user.username, db_user.email, db_user.password_hash,
             db_user.role.role_name if db_user.role else "staff",
@@ -2792,6 +2935,8 @@ def delete_user(user_id: int, db: Session = Depends(get_db), current_user: User 
     }
     db.delete(db_user)
     db.commit()
+    from auth_utils import invalidate_user_cache
+    invalidate_user_cache(deleted_snapshot["username"])
     checkpoint_sqlite()
     log_audit(
         db=db, action="DELETE", table_name="users",
@@ -2855,7 +3000,11 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
 
     try:
         # Step 1: Customer Normalization (soft unique lookup; DB unique deferred while duplicates remain)
-        customer_name = str(order_data.get("customerName", "Guest") or "Guest").strip()
+        raw_customer_name = str(order_data.get("customerName", "Guest") or "Guest").strip()
+        from order_numbering import validate_customer_name, normalize_customer_name
+        is_valid, err_msg, customer_name = validate_customer_name(raw_customer_name)
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=err_msg)
         contact = str(order_data.get("contactNumber", "0000000000") or "0000000000").strip()
         db_customer = db.query(Customer).filter(
             func.lower(func.trim(Customer.customer_name)) == customer_name.lower(),
@@ -2875,6 +3024,7 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
         status_map = {
             "new-order": "new-order", "on-going": "on-going",
             "for-release": "for-release", "claimed": "claimed",
+            "cancelled": "cancelled", "canceled": "cancelled",
             # Legacy fallbacks
             "Pending": "new-order", "In Progress": "on-going",
             "Completed": "for-release", "Claimed": "claimed"
@@ -2891,14 +3041,43 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
         db_prio = db.query(PriorityLevel).filter(PriorityLevel.priority_name == p_val).first() or db.query(PriorityLevel).first()
 
         # Official release date is always the Shoelotskey business-rule date.
-        # Random Forest is computed separately and never persisted as expected_at.
-        # A staff manual override (mlAutoPredicted absent/false) is still honored.
+        # Random Forest ML estimate is persisted to predicted_at and predicted_days.
+        est = predictor.estimate_order_release(db, order_data)
         expected_iso = order_data.get("predictedCompletionDate")
         ml_auto_predicted = bool(order_data.get("mlAutoPredicted"))
         if expected_iso and not ml_auto_predicted:
             expected_dt = parse_local_date(expected_iso)
         else:
-            expected_dt = predictor.estimate_order_release(db, order_data)["business_rule_date"]
+            expected_dt = est["business_rule_date"]
+
+        # ML predicted date & days to persist in DB
+        pred_dt = None
+        raw_pred_at = order_data.get("predicted_at") or order_data.get("ml_predicted_date") or order_data.get("predictedAt")
+        if raw_pred_at:
+            pred_dt = parse_local_date(raw_pred_at)
+        elif est.get("ml_predicted_date"):
+            pred_dt = est["ml_predicted_date"]
+
+        pred_days = None
+        raw_pred_days = (
+            order_data.get("predicted_days")
+            if order_data.get("predicted_days") is not None
+            else (
+                order_data.get("ml_predicted_days")
+                if order_data.get("ml_predicted_days") is not None
+                else order_data.get("predictedDays")
+            )
+        )
+        if raw_pred_days is not None:
+            try:
+                pred_days = int(raw_pred_days)
+            except (ValueError, TypeError):
+                pred_days = None
+        elif est.get("ml_predicted_days") is not None:
+            try:
+                pred_days = int(est["ml_predicted_days"])
+            except (ValueError, TypeError):
+                pred_days = None
 
         t_date = order_data.get("transactionDate") or order_data.get("createdAt")
         created_dt = parse_local_date(t_date) if t_date else datetime.now()
@@ -2910,6 +3089,8 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
             priority_id=db_prio.priority_id,
             grand_total=order_data.get("grandTotal", 0.0),
             expected_at=expected_dt,
+            predicted_at=pred_dt,
+            predicted_days=pred_days,
             created_at=created_dt,
             updated_at=created_dt,
             user_id=current_user.user_id  # Use authenticated user's ID
@@ -3111,6 +3292,11 @@ def build_order_snapshot(db_order) -> dict:
         "predictedCompletionDate": db_order.expected_at.isoformat() if getattr(db_order, "expected_at", None) else None,
         "inventoryApplied": getattr(db_order, "inventory_applied", False),
         "inventoryUsed": getattr(db_order, "inventory_used", []),
+        "cancellationStage": getattr(db_order, "cancellation_stage", None),
+        "refundStatus": getattr(db_order, "refund_status", None),
+        "refundAmount": float(db_order.refund_amount) if getattr(db_order, "refund_amount", None) is not None else 0.0,
+        "refundReason": getattr(db_order, "refund_reason", None),
+        "cancelledAt": db_order.cancelled_at.isoformat() if getattr(db_order, "cancelled_at", None) else None,
     }
     if getattr(db_order, "customer", None):
         snapshot["customerName"] = db_order.customer.customer_name
@@ -3165,13 +3351,17 @@ def build_order_snapshot(db_order) -> dict:
 
 
 @app.put("/api/orders/{order_id}", response_model=OrderSchema)
-def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def update_order(order_id: str, updates: Dict[str, Any], db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Updates order status, priority, or customer details.
-    S.O.L.I.D: Open/Closed Principle - handles various fields without changing core logic.
+    Accepts either integer order_id or order_number string (e.g. ORD-2026-09-11-001).
     """
-    print(f"[TRANS] Trace: Updating Order ID {order_id} with {updates.keys()}")
-    db_order = db.query(Order).filter(Order.order_id == order_id).first()
+    print(f"[TRANS] Trace: Updating Order '{order_id}' with {updates.keys()}")
+    db_order = None
+    if str(order_id).isdigit():
+        db_order = db.query(Order).filter(Order.order_id == int(order_id)).first()
+    if not db_order:
+        db_order = db.query(Order).filter(Order.order_number == str(order_id).strip()).first()
     if not db_order:
         raise HTTPException(status_code=404, detail="System Error: Order record missing.")
 
@@ -3191,6 +3381,8 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
             "on-going": "on-going",
             "for-release": "for-release",
             "claimed": "claimed",
+            "cancelled": "cancelled",
+            "canceled": "cancelled",
             "pending": "new-order",
             "in progress": "on-going",
             "completed": "for-release"
@@ -3367,7 +3559,12 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
 
     # 3. Handle Customer Information (Relational Update)
     if ("customerName" in updates or "contactNumber" in updates) and db_order.customer:
-        if "customerName" in updates: db_order.customer.customer_name = updates["customerName"]
+        if "customerName" in updates:
+            from order_numbering import validate_customer_name
+            is_valid, err_msg, valid_cname = validate_customer_name(updates["customerName"])
+            if not is_valid:
+                raise HTTPException(status_code=400, detail=err_msg)
+            db_order.customer.customer_name = valid_cname
         if "contactNumber" in updates: db_order.customer.contact_number = updates["contactNumber"]
 
     # 4. Handle Payment & Shipping
@@ -3576,6 +3773,59 @@ def update_order(order_id: int, updates: Dict[str, Any], db: Session = Depends(g
             db, live_order_payload_from_db_order(db_order, updates)
         )["business_rule_date"]
 
+    if "predicted_at" in updates or "ml_predicted_date" in updates or "predictedAt" in updates:
+        raw_pred = updates.get("predicted_at") or updates.get("ml_predicted_date") or updates.get("predictedAt")
+        if raw_pred:
+            db_order.predicted_at = parse_local_date(raw_pred)
+        else:
+            db_order.predicted_at = None
+
+    if "predicted_days" in updates or "ml_predicted_days" in updates or "predictedDays" in updates:
+        raw_days = updates.get("predicted_days") if updates.get("predicted_days") is not None else (updates.get("ml_predicted_days") if updates.get("ml_predicted_days") is not None else updates.get("predictedDays"))
+        if raw_days is not None:
+            try:
+                db_order.predicted_days = int(raw_days)
+            except (ValueError, TypeError):
+                db_order.predicted_days = None
+        else:
+            db_order.predicted_days = None
+    elif ("items" in updates or "priorityLevel" in updates) and db_order.predicted_at is None:
+        est = predictor.estimate_order_release(db, live_order_payload_from_db_order(db_order, updates))
+        if est.get("ml_predicted_date"):
+            db_order.predicted_at = est["ml_predicted_date"]
+        if est.get("ml_predicted_days") is not None:
+            try:
+                db_order.predicted_days = int(est["ml_predicted_days"])
+            except (ValueError, TypeError):
+                pass
+
+    # 5.5 Handle Cancellation & Refund Information
+    if "cancellationStage" in updates or "cancellation_stage" in updates:
+        db_order.cancellation_stage = updates.get("cancellationStage") or updates.get("cancellation_stage")
+
+    if "refundStatus" in updates or "refund_status" in updates:
+        db_order.refund_status = updates.get("refundStatus") or updates.get("refund_status")
+
+    if "refundAmount" in updates or "refund_amount" in updates:
+        raw_rf = updates.get("refundAmount") if updates.get("refundAmount") is not None else updates.get("refund_amount")
+        try:
+            db_order.refund_amount = Decimal(str(raw_rf)) if raw_rf is not None else Decimal('0.0')
+        except Exception:
+            db_order.refund_amount = Decimal('0.0')
+
+    if "refundReason" in updates or "refund_reason" in updates:
+        db_order.refund_reason = updates.get("refundReason") or updates.get("refund_reason")
+
+    if "cancelledAt" in updates or "cancelled_at" in updates:
+        raw_ca = updates.get("cancelledAt") or updates.get("cancelled_at")
+        if raw_ca:
+            db_order.cancelled_at = parse_local_date(str(raw_ca))
+        else:
+            db_order.cancelled_at = None
+    elif "status" in updates and str(updates.get("status", "")).lower().strip() in ("cancelled", "canceled"):
+        if not db_order.cancelled_at:
+            db_order.cancelled_at = datetime.now()
+
     # 6. Cascading Updates: Items, Conditions, and Services
     items_updates = updates.get("items", [])
     if not items_updates and ("brand" in updates or "shoeMaterial" in updates or "shoeModel" in updates or "condition" in updates):
@@ -3781,7 +4031,8 @@ def create_service(service_data: dict, db: Session = Depends(get_db), current_us
         duration_days=service_data.get('duration_days', 0),
         service_code=service_data.get('service_code'),
         is_active=service_data.get('is_active', True),
-        sort_order=sort_order
+        sort_order=sort_order,
+        connected_addons=service_data.get('connected_addons') or service_data.get('connectedAddons') or []
     )
     db.add(db_service)
     db.commit()
@@ -3797,6 +4048,7 @@ def create_service(service_data: dict, db: Session = Depends(get_db), current_us
             "description": db_service.description,
             "service_code": db_service.service_code,
             "is_active": bool(db_service.is_active),
+            "connected_addons": db_service.connected_addons,
         },
         module="Services",
     )
@@ -3845,6 +4097,7 @@ def _service_audit_snapshot(db_service) -> dict:
         "description": db_service.description,
         "service_code": db_service.service_code,
         "is_active": bool(db_service.is_active),
+        "connected_addons": getattr(db_service, "connected_addons", None),
     }
 
 @app.put("/api/services/{service_id}", response_model=ServiceSchema)
@@ -3863,6 +4116,9 @@ def update_service(service_id: int, service_update: dict, db: Session = Depends(
         db_cat = db.query(ServiceCategory).filter(ServiceCategory.category_name == cat_name).first()
         if db_cat:
             db_service.category_id = db_cat.category_id
+            
+    if "connectedAddons" in service_update:
+        service_update["connected_addons"] = service_update.pop("connectedAddons")
     
     # Map other fields
     for key, value in service_update.items():
@@ -4387,11 +4643,28 @@ def get_activities(
             "type":       log_type,
             "ipAddress":  log.ip_address,
         })
+
+    # Server-side deduplication guarantee: ensure no duplicate rows appear in the UI
+    deduped_results = []
+    seen_log_keys = set()
+    for item in results:
+        dedup_key = (
+            item.get("user") or "",
+            item.get("actionRaw") or item.get("action") or "",
+            item.get("module") or "",
+            item.get("table") or "",
+            str(item.get("recordId") or ""),
+            item.get("timestamp") or "",
+        )
+        if dedup_key not in seen_log_keys:
+            seen_log_keys.add(dedup_key)
+            deduped_results.append(item)
+
     return {
         "total":  total_count,
         "offset": offset,
         "limit":  limit,
-        "items":  results,
+        "items":  deduped_results,
     }
 
 @app.post("/api/activities")
@@ -4403,9 +4676,7 @@ def log_custom_activity(activity: dict, db: Session = Depends(get_db), current_u
     SECURITY (OWASP A01 / P1-1): Requires a valid authenticated session. The actor
     identity is ALWAYS taken from the verified JWT (`current_user`), never from a
     client-supplied `user`/`username`/`userId` field, to prevent forging log entries
-    under another account's name. (The real LOGOUT event is recorded separately by
-    `POST /api/logout`, which runs *before* the token is cleared client-side, so no
-    legitimate caller of this endpoint needs to log out first.)
+    under another account's name.
     """
     u = current_user
 
@@ -4416,14 +4687,43 @@ def log_custom_activity(activity: dict, db: Session = Depends(get_db), current_u
     table_name = activity.get("table") or activity.get("module") or "system"
     module = activity.get("module") or TABLE_TO_MODULE.get(table_name, table_name.replace('_', ' ').title())
 
+    rec_id = activity.get("recordId") or activity.get("record_id") or None
+
+    # De-duplicate identical audit logs recorded in the debounce window (handling both record_id and non-record events)
+    try:
+        from datetime import timedelta
+        dedup_secs = 60 if action_type in ("PRINT", "REPORT_GENERATED", "EXPORT_PDF", "EXPORT_CSV", "LOGIN", "LOGOUT") else 10
+        recent_q = db.query(AuditLog).filter(
+            AuditLog.table_name == table_name,
+            AuditLog.action_type == action_type,
+            AuditLog.user_id == u.user_id,
+            AuditLog.created_at >= datetime.now() - timedelta(seconds=dedup_secs),
+        )
+        if rec_id is not None:
+            recent_q = recent_q.filter(AuditLog.record_id == rec_id)
+        else:
+            recent_q = recent_q.filter(AuditLog.record_id.is_(None))
+        recent_dup = recent_q.order_by(AuditLog.audit_log_id.desc()).first()
+        if recent_dup:
+            return {"status": "already_logged", "id": recent_dup.audit_log_id}
+    except Exception:
+        pass
+
+    # Merge details into new_values dictionary without dropping other fields
+    new_vals = dict(activity.get("newValues") or activity.get("new_values") or {})
+    if activity.get("details"):
+        new_vals["details"] = activity.get("details")
+
+    old_vals = activity.get("oldValues") or activity.get("old_values")
+
     entry = log_audit(
         db=db,
         action=action_type,
         table_name=table_name,
-        record_id=activity.get("recordId") or activity.get("record_id") or None,
+        record_id=rec_id,
         user=u,
-        old_values=activity.get("oldValues") or activity.get("old_values"),
-        new_values={"details": activity.get("details")} if activity.get("details") else (activity.get("newValues") or activity.get("new_values")),
+        old_values=old_vals,
+        new_values=new_vals if new_vals else None,
         module=module,
     )
     return {"status": "logged", "id": entry.audit_log_id if entry else None}
@@ -4435,69 +4735,49 @@ def log_custom_activity(activity: dict, db: Session = Depends(get_db), current_u
 # 12. INVENTORY ENDPOINTS
 # ==========================================
 
-@app.get("/api/inventory", response_model=List[InventorySchema])
-def get_inventory(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Fetch all supply items."""
-    repo = InventoryRepository(db)
-    return repo.get_all()
-
-@app.post("/api/inventory", response_model=InventorySchema)
-def create_inventory_item(item: InventorySchema, db: Session = Depends(get_db), current_user: User = Depends(require_role(["owner", "admin", "staff"]))):
-    """Admin-only: Add new material to catalog."""
-    if item.stock_quantity < 0:
-        raise HTTPException(status_code=400, detail="Stock quantity cannot be negative.")
-    if item.package_size <= 0:
-        raise HTTPException(status_code=400, detail="Volume per Package must be greater than zero.")
-    # P1-3 FIX: inventory_number is a separate, editable, unique reference number distinct
-    # from item_id (the internal autoincrement PK) — the model/schema already support it,
-    # but this endpoint never copied it from the request onto the new row, and a duplicate
-    # would previously fall through to a generic sanitized 500 via the global exception
-    # handler instead of a clear, actionable validation error.
-    inventory_number = (item.inventory_number or "").strip() or None
-    if inventory_number:
-        existing = db.query(Inventory).filter(Inventory.inventory_number == inventory_number).first()
-        if existing:
-            raise HTTPException(status_code=400, detail=f"Inventory Number '{inventory_number}' is already in use by another item.")
-    new_item = Inventory(
-        item_name=item.item_name,
-        inventory_number=inventory_number,
-        category=item.category,
-        stock_quantity=item.stock_quantity,
-        unit=item.unit,
-        unit_price=item.unit_price,
-        is_active=item.is_active,
-        auto_deduct=item.auto_deduct,
-        auto_deduct_trigger=item.auto_deduct_trigger,
-        trigger_service=item.trigger_service,
-        consumption_qty=item.consumption_qty,
-        consumption_unit=item.consumption_unit,
-        package_size=item.package_size,
-        package_unit=item.package_unit,
-        low_stock_threshold=item.low_stock_threshold,
-        is_retail=bool(item.is_retail),
-        retail_price=item.retail_price if item.retail_price is not None else 0
-    )
-    recalculate_inventory_status(new_item)
-    repo = InventoryRepository(db)
-    repo.add(new_item)
+def generate_unique_inventory_number(db: Session) -> str:
+    """
+    Auto-generates a sequential, guaranteed-unique inventory number in fixed format INV-XXXX (e.g. INV-0001).
+    Scans all records (both active and inactive) across the database.
+    """
+    all_invs = db.query(Inventory.inventory_number).filter(
+        Inventory.inventory_number.isnot(None)
+    ).all()
     
-    # S.O.L.I.D & 3NF: Log initial stock as restock to record it in expenses
-    if new_item.stock_quantity > 0:
-        db.add(InventoryLog(
-            item_id=new_item.item_id,
-            change_amount=new_item.stock_quantity,
-            action_type='restock',
-            user_id=current_user.user_id
-        ))
-        repo.commit()
+    max_num = 0
+    existing_numbers = set()
+    for (inv_num,) in all_invs:
+        if not inv_num:
+            continue
+        cleaned = str(inv_num).strip().upper()
+        existing_numbers.add(cleaned)
+        m = re.match(r"^INV-(\d+)$", cleaned)
+        if m:
+            try:
+                num = int(m.group(1))
+                if num > max_num:
+                    max_num = num
+            except ValueError:
+                pass
+                
+    next_num = max_num + 1
+    while True:
+        candidate = f"INV-{next_num:04d}"
+        if candidate not in existing_numbers:
+            return candidate
+        next_num += 1
 
-    log_audit(
-        db=db, action="CREATE", table_name="inventory",
-        record_id=new_item.item_id, user=current_user,
-        new_values={"item_name": new_item.item_name, "stock_quantity": new_item.stock_quantity, "unit": new_item.unit, "unit_price": float(new_item.unit_price)},
-        module="Inventory",
-    )
-    return new_item
+@app.get("/api/inventory/next-number")
+def get_next_inventory_number(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Returns the next available unique inventory number in fixed format INV-XXXX."""
+    next_num = generate_unique_inventory_number(db)
+    return {"next_inventory_number": next_num}
+
+@app.get("/api/inventory", response_model=List[InventorySchema])
+def get_inventory(include_inactive: bool = False, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Fetch all supply items. Inactive/soft-deleted items are excluded by default."""
+    repo = InventoryRepository(db)
+    return repo.get_all(include_inactive=include_inactive)
 
 def _inventory_audit_snapshot(item: Inventory) -> dict:
     """JSON-safe inventory fields for human-readable Activity History diffs."""
@@ -4515,6 +4795,7 @@ def _inventory_audit_snapshot(item: Inventory) -> dict:
         "unit": item.unit,
         "unit_price": _num(item.unit_price),
         "status": item.status,
+        "is_active": bool(getattr(item, "is_active", True)),
         "low_stock_threshold": _num(getattr(item, "low_stock_threshold", None)),
         "package_size": _num(getattr(item, "package_size", None)),
         "package_unit": getattr(item, "package_unit", None),
@@ -4522,6 +4803,149 @@ def _inventory_audit_snapshot(item: Inventory) -> dict:
         "retail_price": _num(getattr(item, "retail_price", None)),
         "auto_deduct": bool(getattr(item, "auto_deduct", False)),
     }
+
+@app.post("/api/inventory", response_model=InventorySchema)
+def create_inventory_item(item: InventorySchema, db: Session = Depends(get_db), current_user: User = Depends(require_role(["owner", "admin", "staff"]))):
+    """Add new material to catalog or reactivate inactive existing item."""
+    if item.stock_quantity < 0:
+        raise HTTPException(status_code=400, detail="Stock quantity cannot be negative.")
+    
+    # Safe package size defaulting (discrete items such as Shoe Laces default to 1.0)
+    pkg_size = float(item.package_size) if (item.package_size and item.package_size > 0) else 1.0
+
+    clean_name = (item.item_name or "").strip()
+    if not clean_name:
+        raise HTTPException(status_code=400, detail="Item name is required.")
+
+    # Check if item with this name already exists (active or inactive)
+    existing_by_name = db.query(Inventory).filter(
+        func.lower(Inventory.item_name) == func.lower(clean_name)
+    ).first()
+
+    # Automatic inventory number validation, formatting, and uniqueness verification
+    raw_inv = (item.inventory_number or "").strip().upper()
+    if not raw_inv or not re.match(r"^INV-\d{4,}$", raw_inv):
+        inventory_number = generate_unique_inventory_number(db)
+    else:
+        existing_num = db.query(Inventory).filter(
+            func.upper(Inventory.inventory_number) == raw_inv
+        ).first()
+        if existing_num and (not existing_by_name or existing_num.item_id != existing_by_name.item_id):
+            # Collision detected: automatically assign guaranteed unique sequential INV-XXXX
+            inventory_number = generate_unique_inventory_number(db)
+        else:
+            inventory_number = raw_inv
+
+    if existing_by_name:
+        if existing_by_name.is_active:
+            raise HTTPException(status_code=400, detail=f"An active inventory item named '{clean_name}' already exists.")
+        
+        # REACTIVATE soft-deleted item with the new parameters
+        old_snapshot = _inventory_audit_snapshot(existing_by_name)
+        existing_by_name.is_active = True
+        existing_by_name.deleted_at = None
+        existing_by_name.deleted_by = None
+        if not existing_by_name.sync_uuid:
+            existing_by_name.sync_uuid = item.sync_uuid or str(uuid.uuid4())
+        existing_by_name.inventory_number = inventory_number
+        existing_by_name.category = item.category
+        existing_by_name.stock_quantity = item.stock_quantity
+        existing_by_name.unit = item.unit
+        existing_by_name.unit_price = item.unit_price
+        existing_by_name.auto_deduct = item.auto_deduct
+        existing_by_name.auto_deduct_trigger = item.auto_deduct_trigger
+        existing_by_name.trigger_service = item.trigger_service
+        existing_by_name.consumption_qty = item.consumption_qty
+        existing_by_name.consumption_unit = item.consumption_unit
+        existing_by_name.package_size = pkg_size
+        existing_by_name.package_unit = item.package_unit
+        existing_by_name.low_stock_threshold = item.low_stock_threshold
+        existing_by_name.is_retail = bool(item.is_retail)
+        existing_by_name.retail_price = item.retail_price if item.retail_price is not None else 0
+        recalculate_inventory_status(existing_by_name)
+
+        try:
+            db.commit()
+            db.refresh(existing_by_name)
+        except Exception as commit_err:
+            db.rollback()
+            raise HTTPException(status_code=400, detail="Item with this name or inventory number already exists.")
+
+        if existing_by_name.stock_quantity > 0:
+            try:
+                db.add(InventoryLog(
+                    item_id=existing_by_name.item_id,
+                    change_amount=existing_by_name.stock_quantity,
+                    action_type='restock',
+                    user_id=current_user.user_id
+                ))
+                db.commit()
+            except Exception:
+                db.rollback()
+
+        log_audit(
+            db=db, action="CREATE", table_name="inventory",
+            record_id=existing_by_name.item_id, user=current_user,
+            old_values=old_snapshot,
+            new_values={
+                **_inventory_audit_snapshot(existing_by_name),
+                "details": f"Inventory item '{existing_by_name.item_name}' restored and reactivated."
+            },
+            module="Inventory",
+        )
+        return existing_by_name
+
+    # Brand new item
+    new_item = Inventory(
+        sync_uuid=item.sync_uuid or str(uuid.uuid4()),
+        item_name=clean_name,
+        inventory_number=inventory_number,
+        category=item.category,
+        stock_quantity=item.stock_quantity,
+        unit=item.unit,
+        unit_price=item.unit_price,
+        is_active=item.is_active,
+        auto_deduct=item.auto_deduct,
+        auto_deduct_trigger=item.auto_deduct_trigger,
+        trigger_service=item.trigger_service,
+        consumption_qty=item.consumption_qty,
+        consumption_unit=item.consumption_unit,
+        package_size=pkg_size,
+        package_unit=item.package_unit,
+        low_stock_threshold=item.low_stock_threshold,
+        is_retail=bool(item.is_retail),
+        retail_price=item.retail_price if item.retail_price is not None else 0
+    )
+    recalculate_inventory_status(new_item)
+    repo = InventoryRepository(db)
+    try:
+        repo.add(new_item)
+    except Exception as add_err:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Inventory item '{clean_name}' or number '{inventory_number}' already exists.")
+
+    if new_item.stock_quantity > 0:
+        try:
+            db.add(InventoryLog(
+                item_id=new_item.item_id,
+                change_amount=new_item.stock_quantity,
+                action_type='restock',
+                user_id=current_user.user_id
+            ))
+            repo.commit()
+        except Exception:
+            db.rollback()
+
+    log_audit(
+        db=db, action="CREATE", table_name="inventory",
+        record_id=new_item.item_id, user=current_user,
+        new_values={
+            **_inventory_audit_snapshot(new_item),
+            "details": f"Added inventory item: {new_item.item_name} ({new_item.stock_quantity} {new_item.unit or ''})"
+        },
+        module="Inventory",
+    )
+    return new_item
 
 
 @app.put("/api/inventory/{item_id}", response_model=InventorySchema)
@@ -4620,25 +5044,67 @@ def delete_inventory_item(item_id: int, db: Session = Depends(get_db), current_u
         "was_active": True,
         "soft_delete": True,
     }
+    now_dt = datetime.now()
     item.is_active = False
+    item.deleted_at = now_dt
+    item.deleted_by = current_user.username
     repo.commit()
-    # Keep offline SQLite in sync so a later SQLite→cloud push cannot revive this row.
+    # Mirror soft-delete bidirectionally so neither SQLite nor PostgreSQL revives the row upon sync
     try:
-        if not is_sqlite and os.path.exists(LOCAL_SQLITE_PATH):
-            import sqlite3
-            with sqlite3.connect(LOCAL_SQLITE_PATH) as sqlite_conn:
-                sqlite_conn.execute(
-                    "UPDATE inventory SET is_active = 0 WHERE item_name = ?",
-                    (old_snapshot["item_name"],),
-                )
-                sqlite_conn.commit()
+        if is_sqlite:
+            # We are on local SQLite; push soft-delete to remote PostgreSQL if available
+            remote_url = os.getenv("DATABASE_URL")
+            if remote_url and os.getenv("ALLOW_REMOTE_DB", "true").lower() == "true":
+                from sqlalchemy import create_engine as _ce, text as _text
+                pg_clean = remote_url.replace("postgres://", "postgresql+psycopg://").replace("postgresql+psycopg2://", "postgresql+psycopg://")
+                if "sslnegotiation" in pg_clean:
+                    import urllib.parse
+                    _p = urllib.parse.urlparse(pg_clean)
+                    _q = urllib.parse.parse_qs(_p.query)
+                    _q.pop("sslnegotiation", None)
+                    pg_clean = urllib.parse.urlunparse(_p._replace(query=urllib.parse.urlencode(_q, doseq=True)))
+                rem_eng = _ce(pg_clean, connect_args={"connect_timeout": 2})
+                with rem_eng.begin() as r_conn:
+                    r_conn.execute(
+                        _text("""
+                            UPDATE inventory 
+                            SET is_active = FALSE, deleted_at = NOW(), deleted_by = :del_by
+                            WHERE (sync_uuid IS NOT NULL AND sync_uuid = :sync_uuid)
+                               OR lower(item_name) = :name 
+                               OR (inventory_number IS NOT NULL AND inventory_number = :inv_num)
+                        """),
+                        {
+                            "del_by": current_user.username,
+                            "sync_uuid": item.sync_uuid,
+                            "name": old_snapshot["item_name"].lower(),
+                            "inv_num": item.inventory_number
+                        }
+                    )
+        else:
+            # We are on PostgreSQL; push soft-delete to local SQLite if it exists
+            if os.path.exists(LOCAL_SQLITE_PATH):
+                import sqlite3
+                with sqlite3.connect(LOCAL_SQLITE_PATH) as sqlite_conn:
+                    sqlite_conn.execute(
+                        """
+                            UPDATE inventory 
+                            SET is_active = 0, deleted_at = ?, deleted_by = ?
+                            WHERE (sync_uuid IS NOT NULL AND sync_uuid = ?)
+                               OR lower(item_name) = ? 
+                               OR (inventory_number IS NOT NULL AND inventory_number = ?)
+                        """,
+                        (now_dt.isoformat(), current_user.username, item.sync_uuid, old_snapshot["item_name"].lower(), item.inventory_number),
+                    )
+                    sqlite_conn.commit()
     except Exception as mirror_err:
-        print(f"[SYNC WARNING] Could not mirror inventory soft-delete to SQLite: {mirror_err}")
+        print(f"[SYNC WARNING] Could not mirror inventory soft-delete: {mirror_err}")
     log_audit(
         db=db, action="DELETE", table_name="inventory",
         record_id=item_id, user=current_user,
         old_values=old_snapshot,
         new_values={
+            "item_name": old_snapshot["item_name"],
+            "inventory_number": old_snapshot.get("inventory_number"),
             "is_active": False,
             "soft_delete": True,
             "details": f"Inventory item '{old_snapshot['item_name']}' removed from catalog (soft delete).",
@@ -4690,15 +5156,19 @@ def adjust_stock(
     db.refresh(item)
     # Write manual inventory adjustment to system audit trail
     log_audit(
-        db=db, action="UPDATE", table_name="inventory",
+        db=db,
+        action="RESTOCK" if action == "restock" else "DEDUCT",
+        table_name="inventory",
         record_id=item_id, user=current_user,
         old_values={
             "item_name": item.item_name,
+            "inventory_number": getattr(item, "inventory_number", None),
             "stock_quantity": float(old_stock or 0),
             "unit": item.unit,
         },
         new_values={
             "item_name": item.item_name,
+            "inventory_number": getattr(item, "inventory_number", None),
             "stock_quantity": float(item.stock_quantity or 0),
             "unit": item.unit,
             "action": action,
@@ -4868,11 +5338,11 @@ async def create_historical_order(
     current_user: User = Depends(require_role("admin")),
 ):
     # Customer — find or create
-    from order_numbering import generate_canonical_order_id, normalize_customer_name
-    customer_name = normalize_customer_name(payload.get("customer_name") or "")
+    from order_numbering import generate_canonical_order_id, validate_customer_name, normalize_customer_name
+    is_valid, err_msg, customer_name = validate_customer_name(payload.get("customer_name") or "")
+    if not is_valid:
+        raise HTTPException(status_code=422, detail=err_msg)
     contact_number = (payload.get("contact_number") or "").strip()
-    if not customer_name:
-        raise HTTPException(status_code=422, detail="customer_name is required.")
 
     customer = db.query(Customer).filter(
         func.lower(Customer.customer_name) == customer_name.lower(),
@@ -5063,13 +5533,11 @@ async def update_historical_order(
         customer_name = (payload.get("customer_name") if "customer_name" in payload else None)
         if customer_name is None and order.customer is not None:
             customer_name = order.customer.customer_name
-        customer_name = normalize_customer_name(customer_name or "")
+        from order_numbering import validate_customer_name
+        is_valid, err_msg, customer_name = validate_customer_name(customer_name)
+        if not is_valid:
+            raise HTTPException(status_code=422, detail=err_msg)
         contact_number = payload.get("contact_number") if "contact_number" in payload else None
-        if contact_number is None and order.customer is not None:
-            contact_number = order.customer.contact_number
-        contact_number = (contact_number or "").strip()
-        if not customer_name:
-            raise HTTPException(status_code=422, detail="customer_name is required.")
 
         customer = db.query(Customer).filter(
             func.lower(Customer.customer_name) == customer_name.lower(),
@@ -6034,6 +6502,257 @@ async def get_historical_model_info(
     info = historical_ml_engine.get_model_info()
     info["records_available"] = record_count
     return info
+
+
+# ==========================================
+# REPORTS GENERATION & EXPORT ENDPOINTS (OWASP A01 & Authoritative Accounting)
+# ==========================================
+from report_service import calculate_report_data, generate_report_csv, generate_report_xlsx, generate_report_pdf
+from backup_service import create_full_system_backup, verify_backup_archive, BACKUP_DIR
+
+@app.get("/api/reports/data")
+def get_report_data_api(
+    report_type: str = "sales",
+    period_type: str = "daily",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["owner", "admin"]))
+):
+    """Authoritative backend report calculation (Sales, Expenses, ROI)."""
+    return calculate_report_data(db, report_type, period_type, start_date, end_date)
+
+@app.get("/api/reports/export-csv")
+def export_report_csv_api(
+    report_type: str = "sales",
+    period_type: str = "daily",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["owner", "admin"]))
+):
+    """Generates and streams RFC 4180 structured CSV report with active spreadsheet formulas."""
+    data = calculate_report_data(db, report_type, period_type, start_date, end_date)
+    csv_content = generate_report_csv(data, report_type)
+    
+    clean_type = report_type.lower().replace(" ", "_")
+    period_slug = data["period_label"].lower().replace(" ", "_").replace("–", "-").replace(",", "")
+    filename = f"shoelotskey_{clean_type}_{period_slug}.csv"
+    
+    log_audit(
+        db=db, action="EXPORT_CSV", table_name="reports",
+        user=current_user,
+        new_values={"report_type": report_type, "period": data["period_label"], "filename": filename},
+        module="Reports"
+    )
+    
+    from fastapi.responses import Response
+    return Response(
+        content=f"\ufeff{csv_content}",
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
+
+@app.get("/api/reports/export-xlsx")
+def export_report_xlsx_api(
+    report_type: str = "sales",
+    period_type: str = "daily",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["owner", "admin"]))
+):
+    """Generates and streams native Excel (.xlsx) report with active formulas and corporate styling."""
+    data = calculate_report_data(db, report_type, period_type, start_date, end_date)
+    xlsx_bytes = generate_report_xlsx(data, report_type)
+    
+    clean_type = report_type.lower().replace(" ", "_")
+    period_slug = data["period_label"].lower().replace(" ", "_").replace("–", "-").replace(",", "")
+    filename = f"shoelotskey_{clean_type}_{period_slug}.xlsx"
+    
+    log_audit(
+        db=db, action="EXPORT_XLSX", table_name="reports",
+        user=current_user,
+        new_values={"report_type": report_type, "period": data["period_label"], "filename": filename},
+        module="Reports"
+    )
+    
+    from fastapi.responses import Response
+    return Response(
+        content=xlsx_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
+
+@app.get("/api/reports/export-pdf")
+def export_report_pdf_api(
+    report_type: str = "sales",
+    period_type: str = "daily",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["owner", "admin"]))
+):
+    """Generates and streams authoritative paginated PDF report."""
+    data = calculate_report_data(db, report_type, period_type, start_date, end_date)
+    pdf_bytes = generate_report_pdf(data, report_type)
+    
+    clean_type = report_type.lower().replace(" ", "_")
+    period_slug = data["period_label"].lower().replace(" ", "_").replace("–", "-").replace(",", "")
+    filename = f"shoelotskey_{clean_type}_{period_slug}.pdf"
+    
+    log_audit(
+        db=db, action="EXPORT_PDF", table_name="reports",
+        user=current_user,
+        new_values={"report_type": report_type, "period": data["period_label"], "filename": filename},
+        module="Reports"
+    )
+    
+    from fastapi.responses import Response
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
+
+# ==========================================
+# SECURE SYSTEM BACKUP & RECOVERY (OWNER ONLY)
+# ==========================================
+@app.post("/api/admin/backup/create")
+def create_system_backup_api(
+    payload: Dict[str, Any] = Body(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["owner", "admin"]))
+):
+    """
+    Creates a full read-only system recovery backup.
+    Requires Owner/Admin password re-authentication.
+    Strictly primary Owner ('owner') and Admin ('admin') only.
+    Never logs or stores password.
+    """
+    if current_user.username.lower() not in ["owner", "admin"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied. Only the primary Owner account ('owner') and Admin ('admin') are authorized to create system backups."
+        )
+
+    password = str(payload.get("password") or "")
+    if not password:
+        raise HTTPException(status_code=400, detail="Password confirmation is required to create a system backup.")
+        
+    pw_match = False
+    try:
+        pw_match = bcrypt.verify(password, current_user.password_hash)
+    except Exception:
+        pass
+        
+    if not pw_match:
+        log_audit(
+            db=db, action="BACKUP_FAILED", table_name="system",
+            user=current_user,
+            new_values={"reason": "Password re-authentication failed"},
+            module="System Backup"
+        )
+        raise HTTPException(status_code=401, detail="Invalid password. Backup authorization rejected.")
+        
+    result = create_full_system_backup(db, current_user.username)
+    
+    log_audit(
+        db=db, action="BACKUP", table_name="system",
+        user=current_user,
+        new_values={
+            "filename": result["filename"],
+            "file_size": result["file_size"],
+            "total_records": result["total_records"],
+            "sha256": result["checksum_sha256"],
+            "status": "verified"
+        },
+        module="System Backup"
+    )
+    return result
+
+@app.post("/api/admin/backup/download/{filename}")
+@app.get("/api/admin/backup/download/{filename}")
+def download_system_backup_api(
+    filename: str,
+    payload: Optional[Dict[str, Any]] = Body(None),
+    password: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["owner", "admin"]))
+):
+    """Securely downloads a verified backup archive with password re-authentication (Owner & Admin only)."""
+    if current_user.username.lower() not in ["owner", "admin"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied. Only the primary Owner account ('owner') and Admin ('admin') are authorized to download system backups."
+        )
+
+    clean_name = os.path.basename(filename.strip())
+    if clean_name != filename.strip() or not clean_name.endswith(".tar.gz"):
+        raise HTTPException(status_code=400, detail="Invalid backup file identifier.")
+        
+    file_path = os.path.join(BACKUP_DIR, clean_name)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Requested backup archive not found.")
+
+    # Re-authentication verification
+    pwd = str((payload.get("password") if payload else None) or password or "").strip()
+    if not pwd:
+        raise HTTPException(status_code=400, detail="Password re-authentication is required to download a system backup archive.")
+
+    pw_match = False
+    try:
+        pw_match = bcrypt.verify(pwd, current_user.password_hash)
+    except Exception:
+        pass
+
+    if not pw_match:
+        log_audit(
+            db=db, action="BACKUP_DOWNLOAD_FAILED", table_name="system",
+            user=current_user,
+            new_values={"filename": clean_name, "reason": "Password re-authentication failed"},
+            module="System Backup"
+        )
+        raise HTTPException(status_code=401, detail="Invalid password. Download authorization rejected.")
+        
+    log_audit(
+        db=db, action="BACKUP_DOWNLOAD", table_name="system",
+        user=current_user,
+        new_values={"filename": clean_name},
+        module="System Backup"
+    )
+    return FileResponse(
+        path=file_path,
+        media_type="application/gzip",
+        filename=clean_name
+    )
+
+@app.get("/api/admin/backup/list")
+def list_system_backups_api(
+    current_user: User = Depends(require_role(["owner", "admin"]))
+):
+    """Lists available verified system backup archives on server (Owner & Admin only)."""
+    if current_user.username.lower() not in ["owner", "admin"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied. Only the primary Owner account ('owner') and Admin ('admin') can view system backups."
+        )
+
+    backups = []
+    if os.path.exists(BACKUP_DIR):
+        for fname in sorted(os.listdir(BACKUP_DIR), reverse=True):
+            if fname.endswith(".tar.gz"):
+                fpath = os.path.join(BACKUP_DIR, fname)
+                try:
+                    stat = os.stat(fpath)
+                    backups.append({
+                        "filename": fname,
+                        "size_bytes": stat.st_size,
+                        "created_at": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %I:%M %p")
+                    })
+                except Exception:
+                    pass
+    return backups
 
 
 # 3. SPA Support (Catch-all)

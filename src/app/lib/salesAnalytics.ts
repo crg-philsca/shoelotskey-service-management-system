@@ -16,13 +16,59 @@ export const CANONICAL_SERVICE_COLORS: Record<CanonicalBaseService, string> = {
 const BC_BREAKDOWN_KEYS = ['Basic Cleaning', 'Unyellowing', 'Minor Retouch', 'Minor Restoration'] as const;
 
 export function isCancelledOrder(order: JobOrder): boolean {
-  return String(order?.status || '').toLowerCase() === 'cancelled';
+  const st = String(order?.status || '').toLowerCase().trim();
+  return st === 'cancelled' || st === 'canceled';
+}
+
+export function totalRefundsIssued(orders: JobOrder[]): number {
+  return (orders || []).reduce((sum, o) => {
+    if (isCancelledOrder(o)) {
+      const rf = Number(o.refundAmount || 0);
+      if (rf > 0) return sum + rf;
+      if (o.refundStatus === 'refunded') {
+        const paid = Number(o.amountReceived || o.depositAmount || 0);
+        return sum + paid;
+      }
+    }
+    return sum;
+  }, 0);
+}
+
+export function totalRetainedDeposits(orders: JobOrder[]): number {
+  return (orders || []).reduce((sum, o) => {
+    if (isCancelledOrder(o)) {
+      const paid = Number(o.amountReceived || o.depositAmount || 0);
+      const refunded = Number(o.refundAmount || (o.refundStatus === 'refunded' ? paid : 0));
+      const retained = Math.max(0, paid - refunded);
+      return sum + retained;
+    }
+    return sum;
+  }, 0);
+}
+
+export function cancelledOrdersBreakdown(orders: JobOrder[]) {
+  const cancelled = (orders || []).filter(isCancelledOrder);
+  const totalRefunded = totalRefundsIssued(cancelled);
+  const totalRetained = totalRetainedDeposits(cancelled);
+  const totalPaid = cancelled.reduce((sum, o) => sum + Number(o.amountReceived || o.depositAmount || 0), 0);
+  return {
+    count: cancelled.length,
+    totalPaid,
+    totalRefunded,
+    totalRetained,
+    refundedCount: cancelled.filter(o => o.refundStatus === 'refunded' || Number(o.refundAmount || 0) > 0).length,
+    retainedCount: cancelled.filter(o => o.refundStatus === 'no-refund' || (Number(o.amountReceived || o.depositAmount || 0) > Number(o.refundAmount || 0))).length,
+  };
 }
 
 export function collectedSales(order: JobOrder): number {
   if (!order || isCancelledOrder(order)) return 0;
   const billed = Number(order.grandTotal || 0);
-  const received = Number(order.amountReceived || 0);
+  const status = String(order.paymentStatus || '').toLowerCase();
+  let received = Number(order.amountReceived || 0);
+  if (status === 'downpayment' && order.depositAmount != null && Number(order.depositAmount) > 0) {
+    received = Number(order.depositAmount);
+  }
   if (!Number.isFinite(billed) || !Number.isFinite(received)) return 0;
   return Math.max(0, Math.min(billed, received));
 }
@@ -39,7 +85,11 @@ export function orderEventDate(order: JobOrder): Date {
 }
 
 export function orderReleaseDate(order: JobOrder): Date | null {
-  const raw = order?.actualReleaseDate || order?.actualCompletionDate;
+  const raw = order?.actualReleaseDate 
+    || order?.actualCompletionDate 
+    || (Array.isArray((order as any).statusHistory) 
+        ? ((order as any).statusHistory.find((s: any) => s.status === 'claimed' || s.status === 'for-release')?.timestamp) 
+        : null);
   if (!raw) return null;
   const date = new Date(raw as any);
   return isNaN(date.getTime()) ? null : date;
@@ -55,18 +105,85 @@ export function isDateInRange(
   if (!date || isNaN(date.getTime())) return false;
   const todayStr = dateFnsFormat(now, 'yyyy-MM-dd');
   const dateStr = dateFnsFormat(date, 'yyyy-MM-dd');
-  const diffDays = (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24);
 
   if (range === 'Daily') return dateStr === todayStr;
-  if (range === 'Weekly') return diffDays <= 7.5;
-  if (range === 'Monthly') return diffDays <= 31.5;
-  if (range === 'Quarterly') return diffDays <= 93;
-  if (range === 'Annually') return diffDays <= 367;
+  if (range === 'Weekly') {
+    const dayOfWeek = now.getDay();
+    const distanceToMonday = (dayOfWeek + 6) % 7;
+    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - distanceToMonday, 0, 0, 0, 0);
+    const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6, 23, 59, 59, 999);
+    return date >= monday && date <= sunday;
+  }
+  if (range === 'Monthly') {
+    return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+  }
+  if (range === 'Quarterly') {
+    const nowQuarter = Math.floor(now.getMonth() / 3);
+    const dateQuarter = Math.floor(date.getMonth() / 3);
+    return date.getFullYear() === now.getFullYear() && nowQuarter === dateQuarter;
+  }
+  if (range === 'Annually') {
+    return date.getFullYear() === now.getFullYear();
+  }
   if (range === 'Custom') {
     if (!customStartDate || !customEndDate) return false;
     return dateStr >= customStartDate && dateStr <= customEndDate;
   }
   return false;
+}
+
+export function getOrderActivityPeriodLabel(
+  range: ReportRange,
+  customStartDate = '',
+  customEndDate = '',
+  now = new Date(),
+): string {
+  if (range === 'Daily') {
+    return dateFnsFormat(now, 'MMMM d, yyyy');
+  }
+
+  if (range === 'Weekly') {
+    const dayOfWeek = now.getDay();
+    const distanceToMonday = (dayOfWeek + 6) % 7;
+    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - distanceToMonday);
+    const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6);
+    if (monday.getMonth() === sunday.getMonth()) {
+      return `${dateFnsFormat(monday, 'MMMM')} ${monday.getDate()}–${sunday.getDate()}, ${sunday.getFullYear()}`;
+    }
+    return `${dateFnsFormat(monday, 'MMMM d')} – ${dateFnsFormat(sunday, 'MMMM d, yyyy')}`;
+  }
+
+  if (range === 'Monthly') {
+    return dateFnsFormat(now, 'MMMM yyyy');
+  }
+
+  if (range === 'Quarterly') {
+    const q = Math.floor(now.getMonth() / 3) + 1;
+    const quarterMonths: Record<number, string> = {
+      1: 'January–March',
+      2: 'April–June',
+      3: 'July–September',
+      4: 'October–December',
+    };
+    return `Q${q} ${now.getFullYear()} (${quarterMonths[q]})`;
+  }
+
+  if (range === 'Annually') {
+    return `${now.getFullYear()}`;
+  }
+
+  if (range === 'Custom') {
+    if (customStartDate && customEndDate) {
+      const s = new Date(customStartDate);
+      const e = new Date(customEndDate);
+      if (!isNaN(s.getTime()) && !isNaN(e.getTime())) {
+        return `${dateFnsFormat(s, 'MMMM d, yyyy')} – ${dateFnsFormat(e, 'MMMM d, yyyy')}`;
+      }
+    }
+    return 'Custom Range';
+  }
+
+  return '';
 }
 
 export function classifyBaseService(name: string): CanonicalBaseService | null {
@@ -163,13 +280,50 @@ export function allocateCollectedToCanonicalServices(order: JobOrder): Record<Ca
       })
       .filter((line): line is { canonical: CanonicalBaseService; weight: number } => Boolean(line));
 
-    const addonWeight = (item.historicalAddOnPrices || []).reduce((sum, row) => {
+    const directWeights: Record<CanonicalBaseService, number> = {
+      'Basic Cleaning': 0,
+      'Minor Reglue': 0,
+      'Full Reglue': 0,
+      'Color Renewal': 0,
+    };
+
+    lines.forEach((line) => {
+      directWeights[line.canonical] += line.weight;
+    });
+
+    // Directly attribute service-specific add-on prices to their canonical parent
+    const unassociatedAddonWeight = (item.historicalAddOnPrices || []).reduce((sum, row) => {
       const price = Number(row.price);
-      return sum + (Number.isFinite(price) && price > 0 ? price * qty : 0);
+      const rowWeight = Number.isFinite(price) && price > 0 ? price * qty : 0;
+      if (rowWeight <= 0) return sum;
+
+      const addonName = String(row.name || '').toLowerCase();
+      const hasLine = (cat: CanonicalBaseService) => lines.some((l) => l.canonical === cat);
+
+      if (hasLine('Color Renewal') && (addonName.includes('color') || addonName.includes('colour') || addonName.includes('paint') || addonName.includes('restoration'))) {
+        directWeights['Color Renewal'] += rowWeight;
+      } else if (hasLine('Full Reglue') && (addonName.includes('reglue') || addonName.includes('midsole') || addonName.includes('undersole'))) {
+        directWeights['Full Reglue'] += rowWeight;
+      } else if (hasLine('Minor Reglue') && (addonName.includes('reglue') || addonName.includes('midsole') || addonName.includes('undersole'))) {
+        directWeights['Minor Reglue'] += rowWeight;
+      } else if (hasLine('Basic Cleaning') && (addonName.includes('clean') || addonName.includes('unyellowing') || addonName.includes('booster'))) {
+        directWeights['Basic Cleaning'] += rowWeight;
+      } else {
+        return sum + rowWeight;
+      }
+      return sum;
     }, 0);
 
-    const baseWeight = lines.reduce((sum, line) => sum + line.weight, 0);
-    return { lines, itemWeight: baseWeight + addonWeight };
+    // If there are unassociated add-ons, distribute them evenly among lines
+    if (unassociatedAddonWeight > 0 && lines.length > 0) {
+      const perLine = unassociatedAddonWeight / lines.length;
+      lines.forEach((line) => {
+        directWeights[line.canonical] += perLine;
+      });
+    }
+
+    const itemWeight = lines.reduce((sum, line) => sum + (directWeights[line.canonical] > 0 ? directWeights[line.canonical] : 1), 0);
+    return { lines, directWeights, itemWeight };
   }).filter((row) => row.lines.length > 0);
 
   if (prepared.length === 0) return shares;
@@ -179,9 +333,10 @@ export function allocateCollectedToCanonicalServices(order: JobOrder): Record<Ca
 
   prepared.forEach((row) => {
     const itemShare = collected * ((row.itemWeight > 0 ? row.itemWeight : 1) / (orderWeight > 0 ? orderWeight : fallbackCount));
-    const lineWeight = row.lines.reduce((sum, line) => sum + line.weight, 0) || row.lines.length;
+    const totalRowWeight = row.lines.reduce((sum, line) => sum + (row.directWeights[line.canonical] > 0 ? row.directWeights[line.canonical] : 1), 0) || row.lines.length;
     row.lines.forEach((line) => {
-      shares[line.canonical] += itemShare * (line.weight / lineWeight);
+      const effectiveWeight = row.directWeights[line.canonical] > 0 ? row.directWeights[line.canonical] : 1;
+      shares[line.canonical] += itemShare * (effectiveWeight / totalRowWeight);
     });
   });
 
@@ -206,13 +361,11 @@ export function salesByCanonicalService(orders: JobOrder[]): Array<{ name: Canon
       totals[key] += shares[key];
     });
   });
-  return CANONICAL_BASE_SERVICES
-    .map((name) => ({
-      name,
-      amount: money(totals[name]),
-      fill: CANONICAL_SERVICE_COLORS[name],
-    }))
-    .sort((a, b) => b.amount - a.amount);
+  return CANONICAL_BASE_SERVICES.map((name) => ({
+    name,
+    amount: money(totals[name]),
+    fill: CANONICAL_SERVICE_COLORS[name],
+  }));
 }
 
 export function serviceVolumeByCanonical(orders: JobOrder[]) {
@@ -315,11 +468,11 @@ export function buildOrderActivityTrends(
     let releasedOrders = 0;
     source.forEach((order) => {
       const created = orderEventDate(order);
-      if (!isNaN(created.getTime()) && isDateInRange(created, range, now, customStartDate, customEndDate) && inBucket(created, start, end)) {
+      if (!isNaN(created.getTime()) && inBucket(created, start, end)) {
         newOrders += 1;
       }
       const released = orderReleaseDate(order);
-      if (released && isDateInRange(released, range, now, customStartDate, customEndDate) && inBucket(released, start, end)) {
+      if (released && !isNaN(released.getTime()) && inBucket(released, start, end)) {
         releasedOrders += 1;
       }
     });
@@ -334,7 +487,8 @@ export function buildOrderActivityTrends(
       const periodEnd = new Date(now);
       periodEnd.setHours(hour, 59, 59, 999);
       const point = countIn(periodStart, periodEnd);
-      return { hourIndex: hour, period: `${hour}:00`, newOrders: point.newOrders, releasedOrders: point.releasedOrders };
+      const militaryHour = `${String(hour).padStart(2, '0')}:00`;
+      return { hourIndex: hour, period: militaryHour, newOrders: point.newOrders, releasedOrders: point.releasedOrders };
     });
     const startHour = Math.min(9, dailyData.reduce((min, d) => (d.newOrders > 0 || d.releasedOrders > 0) ? Math.min(min, d.hourIndex) : min, 9));
     const endHour = Math.max(21, dailyData.reduce((max, d) => (d.newOrders > 0 || d.releasedOrders > 0) ? Math.max(max, d.hourIndex) : max, 21));
@@ -344,22 +498,29 @@ export function buildOrderActivityTrends(
   }
 
   if (range === 'Weekly') {
+    const dayOfWeek = now.getDay();
+    const distanceToMonday = (dayOfWeek + 6) % 7;
+    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - distanceToMonday);
+
     return Array.from({ length: 7 }, (_, i) => {
-      const date = new Date(now);
-      date.setDate(date.getDate() - (6 - i));
+      const date = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
       const dayStart = new Date(date);
       dayStart.setHours(0, 0, 0, 0);
       const dayEnd = new Date(date);
       dayEnd.setHours(23, 59, 59, 999);
       const point = countIn(dayStart, dayEnd);
-      return { period: date.toLocaleDateString('en-US', { weekday: 'short' }), newOrders: point.newOrders, releasedOrders: point.releasedOrders };
+      return { 
+        period: date.toLocaleDateString('en-US', { weekday: 'short' }), 
+        newOrders: point.newOrders, 
+        releasedOrders: point.releasedOrders 
+      };
     });
   }
 
   if (range === 'Custom') {
     if (!customStartDate || !customEndDate) return [];
     const start = new Date(`${customStartDate}T00:00:00`);
-    const end = new Date(`${customEndDate}T00:00:00`);
+    const end = new Date(`${customEndDate}T23:59:59.999`);
     if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) return [];
     const points: ActivityPoint[] = [];
     const cursor = new Date(start);
@@ -382,14 +543,16 @@ export function buildOrderActivityTrends(
   }
 
   if (range === 'Monthly') {
-    return Array.from({ length: 30 }, (_, i) => {
-      const date = new Date(now);
-      date.setDate(date.getDate() - (29 - i));
-      const start = new Date(date); start.setHours(0, 0, 0, 0);
-      const end = new Date(date); end.setHours(23, 59, 59, 999);
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    return Array.from({ length: daysInMonth }, (_, i) => {
+      const day = i + 1;
+      const start = new Date(year, month, day, 0, 0, 0, 0);
+      const end = new Date(year, month, day, 23, 59, 59, 999);
       const point = countIn(start, end);
       return {
-        period: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        period: String(day),
         newOrders: point.newOrders,
         releasedOrders: point.releasedOrders,
       };
@@ -397,28 +560,32 @@ export function buildOrderActivityTrends(
   }
 
   if (range === 'Quarterly') {
-    return Array.from({ length: 12 }, (_, i) => {
-      const weekEnd = new Date(now);
-      weekEnd.setDate(weekEnd.getDate() - (11 - i) * 7);
-      weekEnd.setHours(23, 59, 59, 999);
-      const weekStart = new Date(weekEnd);
-      weekStart.setDate(weekStart.getDate() - 6);
-      weekStart.setHours(0, 0, 0, 0);
-      const point = countIn(weekStart, weekEnd);
-      return { period: `Wk ${i + 1}`, newOrders: point.newOrders, releasedOrders: point.releasedOrders };
+    const currentMonth = now.getMonth();
+    const quarterIndex = Math.floor(currentMonth / 3);
+    const startMonth = quarterIndex * 3;
+    const year = now.getFullYear();
+
+    return Array.from({ length: 3 }, (_, i) => {
+      const monthIdx = startMonth + i;
+      const start = new Date(year, monthIdx, 1, 0, 0, 0, 0);
+      const end = new Date(year, monthIdx + 1, 0, 23, 59, 59, 999);
+      const point = countIn(start, end);
+      return {
+        period: start.toLocaleDateString('en-US', { month: 'short' }),
+        newOrders: point.newOrders,
+        releasedOrders: point.releasedOrders,
+      };
     });
   }
 
+  // Annually: 12 months of the selected year
+  const year = now.getFullYear();
   return Array.from({ length: 12 }, (_, i) => {
-    const ms = new Date(now);
-    ms.setMonth(ms.getMonth() - (11 - i));
-    ms.setDate(1); ms.setHours(0, 0, 0, 0);
-    const me = new Date(ms);
-    me.setMonth(me.getMonth() + 1);
-    me.setDate(0); me.setHours(23, 59, 59, 999);
-    const point = countIn(ms, me);
+    const start = new Date(year, i, 1, 0, 0, 0, 0);
+    const end = new Date(year, i + 1, 0, 23, 59, 59, 999);
+    const point = countIn(start, end);
     return {
-      period: ms.toLocaleDateString('en-US', { month: 'short' }),
+      period: start.toLocaleDateString('en-US', { month: 'short' }),
       newOrders: point.newOrders,
       releasedOrders: point.releasedOrders,
     };

@@ -1,4 +1,4 @@
-export type JobStatus = 'new-order' | 'on-going' | 'for-release' | 'claimed';
+export type JobStatus = 'new-order' | 'on-going' | 'for-release' | 'claimed' | 'cancelled';
 export type Priority = 'regular' | 'rush' | 'premium';
 export type ShippingPreference = 'pickup' | 'delivery';
 export type PaymentMethod = 'cash' | 'gcash' | 'maya';
@@ -186,6 +186,9 @@ export interface JobOrder extends BaseJobOrderData {
   status: JobStatus;
   assignedTo?: string;
   predictedCompletionDate?: Date;
+  predictedAt?: Date;
+  predictedDays?: number;
+  estimatedDays?: number;
   actualReleaseDate?: Date;
   actualCompletionDate?: Date;
   createdAt: Date;
@@ -201,6 +204,9 @@ export interface JobOrder extends BaseJobOrderData {
   }>;
   inventoryUsed?: InventoryUsed[];
   inventoryApplied?: boolean;
+  cancellationStage?: 'new-order' | 'on-going';
+  refundStatus?: 'refunded' | 'no-refund';
+  cancelledAt?: Date | string;
 }
 
 export interface Service {
@@ -213,6 +219,7 @@ export interface Service {
   durationDays?: string | number;
   code?: string;
   sortOrder?: number;
+  connectedAddons?: string[];
 }
 
 export interface User {

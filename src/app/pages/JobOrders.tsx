@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useOrders } from '../context/OrderContext';
 import { JobOrder } from '@/app/types';
 import { formatPeso } from '@/app/lib/currency';
@@ -8,7 +8,7 @@ import { Input } from '@/app/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu';
-import { Search, Filter, MoreVertical, Edit, ArrowRight, RotateCcw, UserPlus, ShoppingBag, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Search, Filter, MoreVertical, Edit, ArrowRight, RotateCcw, UserPlus, ShoppingBag, AlertTriangle, CheckCircle2, FileText, Loader2 } from 'lucide-react';
 import { useServices } from '@/app/context/ServiceContext';
 import EditOrderModal from '@/app/components/EditOrderModal';
 import JobOrderFormModal from '@/app/components/JobOrderFormModal';
@@ -88,7 +88,7 @@ interface JobOrdersProps {
  * - Detailed Order View & Inline Editing
  */
 export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersProps) {
-    const { orders, loading, updateOrder, deleteOrder } = useOrders();
+    const { orders, loading, updateOrder } = useOrders();
     const { services } = useServices();
     const [searchQuery, setSearchQuery] = useState('');
     const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -99,6 +99,8 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
     const [selectedOrder, setSelectedOrder] = useState<JobOrder | null>(null);
     const [processClaimOrder, setProcessClaimOrder] = useState<JobOrder | null>(null);
     const [cancelOrderModal, setCancelOrderModal] = useState<JobOrder | null>(null);
+    const [isCancelling, setIsCancelling] = useState(false);
+    const isCancellingRef = useRef(false);
     const [isEditing, setIsEditing] = useState(false);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [startDate, setStartDate] = useState('');
@@ -227,6 +229,7 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                                     <SelectItem value="on-going">On-Going</SelectItem>
                                     <SelectItem value="for-release">For Release</SelectItem>
                                     <SelectItem value="claimed">Claimed</SelectItem>
+                                    <SelectItem value="cancelled">Cancelled</SelectItem>
                                 </SelectContent>
                             </Select>
                             <Button
@@ -241,24 +244,35 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                     </div>
 
                     {/* Table */}
-                    <div className="rounded-xl border">
-                        <table className="w-full text-sm">
-                            <thead className="bg-gray-50 border-b">
+                    <div className="overflow-x-auto w-full rounded-xl border">
+                        <table className="w-full table-fixed min-w-[760px] text-sm">
+                            <colgroup>
+                                <col className="w-[4%]" />
+                                <col className="w-[11%]" />
+                                <col className="w-[16%]" />
+                                <col className="w-[16%]" />
+                                <col className="w-[6%]" />
+                                <col className="w-[12%]" />
+                                <col className="w-[9%]" />
+                                <col className="w-[16%]" />
+                                <col className="w-[10%]" />
+                            </colgroup>
+                            <thead className="bg-red-50/50 border-b border-red-100">
                                 <tr>
-                                    <th className="h-10 px-4 text-center font-medium text-gray-500 w-10">
+                                    <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px]">
                                         <Checkbox
                                             checked={paginatedOrders.length > 0 && selectedOrderIds.length === paginatedOrders.length}
                                             onCheckedChange={handleSelectAll}
                                         />
                                     </th>
-                                    <th className="h-10 px-4 text-left font-medium text-gray-500">Order #</th>
-                                    <th className="h-10 px-4 text-left font-medium text-gray-500">Customer</th>
-                                    <th className="h-10 px-4 text-left font-medium text-gray-500">Service</th>
-                                    <th className="h-10 px-4 text-left font-medium text-gray-500">QTY</th>
-                                    <th className="h-10 px-4 text-left font-medium text-gray-500">Status</th>
-                                    <th className="h-10 px-4 text-left font-medium text-gray-500">Priority</th>
-                                    <th className="h-10 px-4 text-left font-medium text-gray-500">Payment</th>
-                                    <th className="h-10 px-4 text-right font-medium text-gray-500">Actions</th>
+                                    <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Order #</th>
+                                    <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Customer</th>
+                                    <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px]">Service</th>
+                                    <th className="h-9 px-1.5 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">QTY</th>
+                                    <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Status</th>
+                                    <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Priority</th>
+                                    <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Payment</th>
+                                    <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -301,65 +315,114 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                                                 setIsEditing(false);
                                             }}
                                         >
-                                            <td className="p-4 text-center" onClick={e => e.stopPropagation()}>
+                                            <td className="px-2 py-2 text-center" onClick={e => e.stopPropagation()}>
                                                 <Checkbox
                                                     checked={selectedOrderIds.includes(order.id)}
                                                     onCheckedChange={(checked) => handleSelectOrder(order.id, checked as boolean)}
                                                 />
                                             </td>
-                                            <td className="p-4 text-xs font-medium whitespace-nowrap">{order.orderNumber}</td>
-                                            <td className="p-4">
-                                                <div className="font-medium text-gray-900 line-clamp-2 leading-tight min-w-[120px] max-w-[180px] text-wrap">{order.customerName}</div>
-                                                <div className="text-xs text-gray-500 mt-1 whitespace-nowrap">{order.contactNumber}</div>
+                                            <td className="px-2 py-2 text-center text-xs font-medium whitespace-nowrap">{order.orderNumber}</td>
+                                            <td className="px-2 py-2 text-center">
+                                                <div className="flex flex-col items-center justify-center text-center">
+                                                    <div className="font-medium text-gray-900 leading-tight truncate max-w-full text-xs" title={order.customerName}>{order.customerName}</div>
+                                                    <div className="text-[10px] text-gray-500 mt-0.5 whitespace-nowrap truncate max-w-full">{order.contactNumber}</div>
+                                                </div>
                                             </td>
-                                            <td className="p-4 text-xs font-medium text-gray-700">
-                                                {Array.isArray(order.baseService)
-                                                    ? order.baseService.map((s: string, i: number) => (
-                                                        <div key={i}>{String(s || '').replace(' (with basic cleaning)', '')}{i < order.baseService.length - 1 ? ',' : ''}</div>
-                                                    ))
-                                                    : <div>{String(order.baseService || '-').replace(' (with basic cleaning)', '')}</div>}
+                                            <td className="px-2 py-2 text-xs font-medium text-gray-700 text-center whitespace-normal break-words">
+                                                {(() => {
+                                                    const servicesList = (Array.isArray(order.baseService)
+                                                        ? order.baseService
+                                                        : String(order.baseService || '').split(',')
+                                                    )
+                                                        .map((s) => String(s || '').trim().replace(' (with basic cleaning)', ''))
+                                                        .filter(Boolean);
+                                                    const fullText = servicesList.join(', ') || '-';
+                                                    return (
+                                                        <span className="block text-center leading-tight truncate max-w-full" title={fullText}>
+                                                            {fullText}
+                                                        </span>
+                                                    );
+                                                })()}
                                             </td>
-                                            <td className="p-4 text-xs font-medium text-gray-700">{order.quantity || 1} PR</td>
-                                            <td className="p-4">
-                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase border whitespace-nowrap
-                                                    ${order.status === 'new-order' ? 'bg-purple-50 text-purple-700 border-purple-100' :
-                                                        order.status === 'on-going' ? 'bg-blue-50 text-blue-700 border-blue-100' :
-                                                            order.status === 'for-release' ? 'bg-orange-50 text-orange-700 border-orange-100' :
-                                                                'bg-gray-50 text-gray-700 border-gray-200'
-                                                    }`}>
-                                                    {(order.status || 'new-order').replace('-', ' ')}
-                                                </span>
+                                            <td className="px-2 py-2 text-xs font-medium text-gray-700 text-center whitespace-nowrap">{order.quantity || 1} PR</td>
+                                            <td className="px-2 py-2 text-center">
+                                                {(() => {
+                                                    const isCancelled = order.status === 'cancelled' || (order.status as string)?.toLowerCase() === 'cancelled' || (order.status as string)?.toLowerCase() === 'canceled';
+                                                    if (isCancelled) {
+                                                        const isRefunded = order.refundStatus === 'refunded';
+                                                        return (
+                                                            <div className="flex flex-col items-center gap-0.5">
+                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase border whitespace-nowrap bg-rose-50 text-rose-700 border-rose-200">
+                                                                    CANCELLED
+                                                                </span>
+                                                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold border whitespace-nowrap ${
+                                                                    isRefunded ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'
+                                                                }`}>
+                                                                    {isRefunded ? `REFUNDED (${formatPeso(order.refundAmount || order.amountReceived || 0)})` : 'FORFEITED (NO REFUND)'}
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    }
+                                                    return (
+                                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border whitespace-nowrap
+                                                            ${order.status === 'new-order' ? 'bg-purple-50 text-purple-700 border-purple-100' :
+                                                                order.status === 'on-going' ? 'bg-blue-50 text-blue-700 border-blue-100' :
+                                                                    order.status === 'for-release' ? 'bg-orange-50 text-orange-700 border-orange-100' :
+                                                                        'bg-gray-50 text-gray-700 border-gray-200'
+                                                            }`}>
+                                                            {(order.status || 'new-order').replace('-', ' ')}
+                                                        </span>
+                                                    );
+                                                })()}
                                             </td>
-                                            <td className="p-4">
-                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase border whitespace-nowrap
+                                            <td className="px-2 py-2 text-center">
+                                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border whitespace-nowrap
                                                     ${order.priorityLevel === 'rush' ? 'bg-red-50 text-red-700 border-red-100' :
                                                         'bg-emerald-50 text-emerald-700 border-emerald-100'
                                                     }`}>
                                                     {order.priorityLevel || 'regular'}
                                                 </span>
                                             </td>
-                                            <td className="p-4">
-                                                <div className="flex flex-col">
-                                                    <span className={`text-xs font-bold tracking-wider whitespace-nowrap ${order.paymentStatus === 'fully-paid' ? 'text-green-600' :
-                                                        order.paymentStatus === 'downpayment' ? 'text-yellow-600' : 'text-red-600'
-                                                        }`}>
-                                                        {order.paymentStatus === 'fully-paid' ? 'FULLY PAID' : order.paymentStatus === 'downpayment' ? 'DOWNPAYMENT' : order.paymentStatus ? order.paymentStatus.toUpperCase() : '-'}
-                                                    </span>
-                                                    {order.paymentMethod && (
-                                                        <>
-                                                            <span className="text-[9px] text-gray-400 font-medium uppercase tracking-wider mt-0.5 whitespace-nowrap">
-                                                                {order.paymentMethod}
+                                            <td className="px-2 py-2 text-center">
+                                                {(() => {
+                                                    const isCancelled = order.status === 'cancelled' || (order.status as string)?.toLowerCase() === 'cancelled' || (order.status as string)?.toLowerCase() === 'canceled';
+                                                    if (isCancelled) {
+                                                        const isRefunded = order.refundStatus === 'refunded';
+                                                        return (
+                                                            <div className="flex flex-col items-center">
+                                                                <span className={`text-xs font-black tracking-wider whitespace-nowrap ${isRefunded ? 'text-emerald-700' : 'text-rose-700'}`}>
+                                                                    {isRefunded ? 'REFUND ISSUED' : 'DEPOSIT RETAINED'}
+                                                                </span>
+                                                                <span className="text-[10px] text-gray-500 font-semibold mt-0.5 whitespace-nowrap">
+                                                                    {isRefunded ? `Less from Sales: -${formatPeso(order.refundAmount || order.amountReceived || 0)}` : `Retained: ${formatPeso(order.depositAmount || order.amountReceived || 0)}`}
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    }
+                                                    return (
+                                                        <div className="flex flex-col items-center justify-center">
+                                                            <span className={`text-xs font-bold tracking-wider whitespace-nowrap ${order.paymentStatus === 'fully-paid' ? 'text-green-600' :
+                                                                order.paymentStatus === 'downpayment' ? 'text-yellow-600' : 'text-red-600'
+                                                                }`}>
+                                                                {order.paymentStatus === 'fully-paid' ? 'FULLY PAID' : order.paymentStatus === 'downpayment' ? 'DOWNPAYMENT' : order.paymentStatus ? order.paymentStatus.toUpperCase() : '-'}
                                                             </span>
-                                                             {order.paymentStatus === 'downpayment' && (
-                                                                 <span className="text-[10px] text-red-500 font-medium tracking-wider mt-0.5 whitespace-nowrap">
-                                                                     BAL: {formatPeso(Math.max(0, (order.grandTotal || 0) - (order.depositAmount || (order.amountReceived && order.amountReceived < order.grandTotal ? order.amountReceived : 0))))}
-                                                                 </span>
-                                                             )}
-                                                        </>
-                                                    )}
-                                                </div>
+                                                            {order.paymentMethod && (
+                                                                <>
+                                                                    <span className="text-[9px] text-gray-400 font-medium uppercase tracking-wider mt-0.5 whitespace-nowrap">
+                                                                        {order.paymentMethod}
+                                                                    </span>
+                                                                     {order.paymentStatus === 'downpayment' && (
+                                                                         <span className="text-[10px] text-red-500 font-medium tracking-wider mt-0.5 whitespace-nowrap">
+                                                                             BAL: {formatPeso(order.balance !== undefined && order.balance !== null && !isNaN(Number(order.balance)) ? Math.max(0, Number(order.balance)) : Math.max(0, (order.grandTotal || 0) - (order.depositAmount || (order.amountReceived && order.amountReceived < order.grandTotal ? order.amountReceived : 0))))}
+                                                                         </span>
+                                                                     )}
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })()}
                                             </td>
-                                            <td className="p-4 text-right" onClick={e => e.stopPropagation()}>
+                                            <td className="px-2 py-2 text-center whitespace-nowrap" onClick={e => e.stopPropagation()}>
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
                                                         <Button variant="ghost" className="h-8 w-8 p-0">
@@ -451,6 +514,15 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                                                                 toast.success('Order reverted to for release');
                                                             }} className="border border-orange-200 rounded-md px-2.5 py-1.5 text-orange-600 bg-orange-50 hover:bg-orange-100 focus:text-orange-700 focus:bg-orange-100 font-bold mb-1">
                                                                 <RotateCcw className="mr-2 h-4 w-4 text-orange-500" /> Undo to For Release
+                                                            </DropdownMenuItem>
+                                                        )}
+                                                        {(order.status === 'cancelled' || (order.status as string)?.toLowerCase() === 'cancelled' || (order.status as string)?.toLowerCase() === 'canceled') && (
+                                                            <DropdownMenuItem onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setSelectedOrder(order);
+                                                                setIsEditing(false);
+                                                            }} className="border border-gray-200 rounded-md px-2.5 py-1.5 text-gray-700 bg-gray-50 hover:bg-gray-100 focus:text-gray-800 focus:bg-gray-100 font-bold mb-1">
+                                                                <FileText className="mr-2 h-4 w-4 text-gray-600" /> View Details
                                                             </DropdownMenuItem>
                                                         )}
                                                     </DropdownMenuContent>
@@ -648,27 +720,46 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                                 <div className="flex gap-3 pt-2">
                                     <Button
                                         variant="outline"
-                                        className="flex-1 bg-gray-100 border-gray-200 text-gray-700 font-black uppercase text-xs h-10 rounded-xl hover:bg-gray-200"
-                                        onClick={() => setCancelOrderModal(null)}
+                                        disabled={isCancelling}
+                                        className="flex-1 bg-gray-100 border-gray-200 text-gray-700 font-black uppercase text-xs h-10 rounded-xl hover:bg-gray-200 disabled:opacity-50"
+                                        onClick={() => { if (!isCancelling) setCancelOrderModal(null); }}
                                     >
                                         Do Not Cancel
                                     </Button>
                                     <Button
-                                        className={`flex-1 text-white font-black uppercase text-xs h-10 rounded-xl shadow-lg ${isRefundAllowed ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200' : 'bg-red-600 hover:bg-red-700 shadow-red-200'}`}
+                                        disabled={isCancelling}
+                                        className={`flex-1 text-white font-black uppercase text-xs h-10 rounded-xl shadow-lg disabled:opacity-50 flex items-center justify-center gap-1.5 ${isRefundAllowed ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200' : 'bg-red-600 hover:bg-red-700 shadow-red-200'}`}
                                         onClick={async () => {
-                                            if (cancelOrderModal) {
+                                            if (cancelOrderModal && !isCancellingRef.current) {
+                                                isCancellingRef.current = true;
+                                                setIsCancelling(true);
                                                 const orderToCancel = cancelOrderModal;
-                                                setCancelOrderModal(null);
-                                                await deleteOrder(orderToCancel.id);
-                                                if (orderToCancel.status === 'new-order') {
-                                                    toast.success(`Order #${orderToCancel.orderNumber} cancelled. Full refund of ₱${(orderToCancel.amountReceived || 0).toLocaleString()} issued since service had not commenced.`);
-                                                } else {
-                                                    toast.error(`Order #${orderToCancel.orderNumber} cancelled. No refund issued per policy (service already commenced).`);
+                                                try {
+                                                    const isRefund = orderToCancel.status === 'new-order';
+                                                    const depositAmt = orderToCancel.depositAmount || orderToCancel.amountReceived || 0;
+                                                    await updateOrder(orderToCancel.id, {
+                                                        status: 'cancelled',
+                                                        cancellationStage: orderToCancel.status as any,
+                                                        refundStatus: isRefund ? 'refunded' : 'no-refund',
+                                                        refundAmount: isRefund ? depositAmt : 0,
+                                                        refundReason: isRefund ? 'Order cancelled before service commenced (full refund)' : 'Order cancelled during service (deposit forfeited per policy)',
+                                                        cancelledAt: new Date()
+                                                    });
+                                                    setCancelOrderModal(null);
+                                                    if (isRefund) {
+                                                        toast.success(`Order #${orderToCancel.orderNumber} cancelled. Full refund of ₱${depositAmt.toLocaleString()} issued since service had not commenced.`);
+                                                    } else {
+                                                        toast.error(`Order #${orderToCancel.orderNumber} cancelled. No refund issued per policy (service already commenced).`);
+                                                    }
+                                                } finally {
+                                                    isCancellingRef.current = false;
+                                                    setIsCancelling(false);
                                                 }
                                             }
                                         }}
                                     >
-                                        {isRefundAllowed ? "Yes, Cancel & Refund" : "Yes, Cancel (No Refund)"}
+                                        {isCancelling && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                                        {isCancelling ? "Processing..." : (isRefundAllowed ? "Yes, Cancel & Refund" : "Yes, Cancel (No Refund)")}
                                     </Button>
                                 </div>
                             </>

@@ -6,21 +6,24 @@ export const OFFICIAL_DURATION_DAYS: Record<string, number> = {
     'Full Reglue': 25,
     'Color Renewal': 25,
     'Unyellowing': 5,
-    'Minor Retouch': 5,
-    'Minor Restoration': 25,
+    'Sole Unyellowing': 5,
+    'Minor Retouch': 0,
+    'Minor Restoration': 0,
     'Full Restoration': 25,
     'White Paint': 0,
     '2 Colors': 0,
     '3 Colors': 0,
-    'Midsole Full Reglue': 20,
-    'Undersole Full Reglue': 20,
-    'Midsole': 20,
-    'Undersole': 20,
-    'Add Glue Layer': 2,
+    'Midsole Full Reglue': 25,
+    'Undersole Full Reglue': 25,
+    'Full Reglue Midsole': 25,
+    'Full Reglue Undersole': 25,
+    'Midsole': 25,
+    'Undersole': 25,
+    'Add Glue Layer': 0,
 };
 
 export const DEFAULT_RUSH_REDUCTION_DAYS = 9;
-export const MIN_DURATION_DAYS = 3;
+export const MIN_DURATION_DAYS = 1;
 
 export type OfficialShoeInput = {
     baseService?: string[] | string;
@@ -68,12 +71,24 @@ export function officialServiceDays(
     name: string,
     catalogDurations?: Record<string, string | number>,
 ): number {
-    if (catalogDurations && catalogDurations[name] !== undefined && catalogDurations[name] !== '') {
-        return parseDuration(catalogDurations[name]);
+    const trimmedName = (name || '').trim();
+    const lowered = trimmedName.toLowerCase();
+    if (
+        trimmedName === 'Full Reglue Midsole' ||
+        trimmedName === 'Full Reglue Undersole' ||
+        trimmedName === 'Midsole Full Reglue' ||
+        trimmedName === 'Undersole Full Reglue' ||
+        trimmedName === 'Midsole' ||
+        trimmedName === 'Undersole' ||
+        (lowered.includes('reglue') && (lowered.includes('midsole') || lowered.includes('undersole')))
+    ) {
+        return 25;
     }
-    if (name in OFFICIAL_DURATION_DAYS) return OFFICIAL_DURATION_DAYS[name];
-    if (name === 'Basic Cleaning') return 10;
-    const lowered = (name || '').toLowerCase();
+    if (catalogDurations && catalogDurations[trimmedName] !== undefined && catalogDurations[trimmedName] !== '') {
+        return parseDuration(catalogDurations[trimmedName]);
+    }
+    if (trimmedName in OFFICIAL_DURATION_DAYS) return OFFICIAL_DURATION_DAYS[trimmedName];
+    if (trimmedName === 'Basic Cleaning') return 10;
     if (lowered.includes('reglue') || lowered.includes('color renewal')) return 25;
     return 0;
 }
@@ -88,45 +103,7 @@ export function calculateOfficialReleaseBreakdown(
     let addOnDays = 0;
     let priorityDays = 0;
 
-    let hasBasicCleaning = false;
-    let hasMinorReglue = false;
-    let hasFullReglue = false;
-    let hasColorRenewal = false;
-    let hasUnyellowing = false;
-    let hasMinorRestoration = false;
-    let hasFullRestoration = false;
-    let hasMinorRetouch = false;
-
     const safeShoes = Array.isArray(shoes) ? shoes : [];
-    safeShoes.forEach((shoe) => {
-        const names = [
-            ...asNameList(shoe.baseService),
-            ...addonPairs(shoe.addOns).map(([name]) => name),
-        ];
-        if (names.includes('Basic Cleaning')) hasBasicCleaning = true;
-        if (names.includes('Minor Reglue')) hasMinorReglue = true;
-        if (names.includes('Full Reglue')) hasFullReglue = true;
-        if (names.includes('Color Renewal')) hasColorRenewal = true;
-        if (names.includes('Unyellowing')) hasUnyellowing = true;
-        if (names.includes('Minor Restoration') || names.includes('MRES')) hasMinorRestoration = true;
-        if (names.includes('Full Restoration') || names.includes('FR')) hasFullRestoration = true;
-        if (names.includes('Minor Retouch')) hasMinorRetouch = true;
-    });
-
-    let overriddenDays: number | null = null;
-    if (hasBasicCleaning) {
-        if (hasColorRenewal || hasFullReglue) overriddenDays = 25;
-        else if (hasMinorRestoration || hasMinorRetouch) overriddenDays = 20;
-        else if (hasUnyellowing) overriddenDays = 15;
-        else if (hasMinorReglue) overriddenDays = 10;
-    }
-    if (overriddenDays === null) {
-        if ((hasFullRestoration || hasFullReglue) && hasMinorRestoration) {
-            overriddenDays = 25;
-        } else if ((hasFullReglue || hasColorRenewal) && hasUnyellowing) {
-            overriddenDays = 25;
-        }
-    }
 
     let pairBaseDays = 0;
     let pairAddOnDays = 0;
@@ -134,18 +111,50 @@ export function calculateOfficialReleaseBreakdown(
         let shoeBase = 0;
         let shoeAddOn = 0;
         const servicesArr = asNameList(shoe.baseService);
-        const hasDurationInclusive = servicesArr.some((s) =>
-            s.toLowerCase().includes('reglue') || s.toLowerCase().includes('color renewal')
-        );
+        const hasDurationInclusive = servicesArr.some((s) => {
+            const low = (s || '').trim().toLowerCase();
+            return low.includes('reglue') || low.includes('color renewal');
+        });
         const filtered = hasDurationInclusive
-            ? servicesArr.filter((s) => s !== 'Basic Cleaning')
+            ? servicesArr.filter((s) => (s || '').trim() !== 'Basic Cleaning')
             : servicesArr;
         filtered.forEach((serviceName) => {
-            const days = officialServiceDays(serviceName, catalogDurations);
-            shoeBase += days || (serviceName === 'Basic Cleaning' ? 10 : 25);
+            const days = officialServiceDays(serviceName, catalogDurations) || ((serviceName || '').trim() === 'Basic Cleaning' ? 10 : 25);
+            shoeBase = Math.max(shoeBase, days);
         });
+        const hasFullReglueBase = servicesArr.some((s) => {
+            const low = (s || '').trim().toLowerCase();
+            return low === 'full reglue' || low.includes('full reglue');
+        });
+
+        let reglueAddonDaysAccounted = false;
+
         addonPairs(shoe.addOns).forEach(([name, qty]) => {
-            shoeAddOn += officialServiceDays(name, catalogDurations) * qty;
+            const trimmedName = (name || '').trim();
+            const lowered = trimmedName.toLowerCase();
+            const isRegluePart = (
+                trimmedName === 'Full Reglue Midsole' ||
+                trimmedName === 'Full Reglue Undersole' ||
+                trimmedName === 'Midsole Full Reglue' ||
+                trimmedName === 'Undersole Full Reglue' ||
+                trimmedName === 'Midsole' ||
+                trimmedName === 'Undersole' ||
+                (lowered.includes('reglue') && (lowered.includes('midsole') || lowered.includes('undersole')))
+            );
+            if (isRegluePart) {
+                // Full Reglue already encompasses midsole and undersole reglue (25 days total) - do NOT add extra days
+                if (hasFullReglueBase) {
+                    return;
+                }
+                // If Full Reglue is not in base, but midsole/undersole reglue are both selected as add-ons:
+                // they cure concurrently in 25 days total, not 50 days
+                if (!reglueAddonDaysAccounted) {
+                    shoeAddOn += officialServiceDays(trimmedName, catalogDurations);
+                    reglueAddonDaysAccounted = true;
+                }
+                return;
+            }
+            shoeAddOn += officialServiceDays(trimmedName, catalogDurations) * qty;
         });
         if (shoeBase + shoeAddOn > pairBaseDays + pairAddOnDays) {
             pairBaseDays = shoeBase;
@@ -155,7 +164,7 @@ export function calculateOfficialReleaseBreakdown(
     baseDays = pairBaseDays;
     addOnDays = pairAddOnDays;
 
-    if (overriddenDays === null && priorityLevel === 'rush') {
+    if (priorityLevel === 'rush') {
         const rush = Number(rushReductionDays);
         priorityDays = -(Number.isFinite(rush) ? rush : DEFAULT_RUSH_REDUCTION_DAYS);
     }
@@ -165,9 +174,8 @@ export function calculateOfficialReleaseBreakdown(
         const addons = addonPairs(shoe.addOns);
         return base.length > 0 || addons.length > 0;
     });
-    const rawTotal = overriddenDays !== null
-        ? overriddenDays
-        : baseDays + addOnDays + priorityDays;
+    const effectiveDays = baseDays + addOnDays;
+    const rawTotal = effectiveDays + priorityDays;
     const totalDays = hasServices ? Math.max(MIN_DURATION_DAYS, rawTotal) : 0;
     return { baseDays, addOnDays, priorityDays, totalDays };
 }

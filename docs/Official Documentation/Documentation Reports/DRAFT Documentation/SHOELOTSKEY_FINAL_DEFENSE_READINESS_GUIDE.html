@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SHOELOTSKEY FINAL DEFENSE READINESS GUIDE</title>
+  <style>
+    :root {
+      --primary: #38bdf8; --bg: #0f172a; --card: #1e293b; --border: #334155; --text: #f8fafc; --muted: #94a3b8;
+      --success: #10b981; --warning: #f59e0b; --danger: #ef4444;
+    }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; margin:0; padding: 20px; }
+    .container { max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; height: 95vh; background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .header { padding: 30px; background: linear-gradient(135deg, #450a0a, #0c4a6e); border-bottom: 4px solid var(--warning); flex-shrink: 0; }
+    h1 { margin: 0 0 10px 0; color: #fff; font-size: 2rem; }
+    .subtitle { color: #cbd5e1; margin: 0; }
+    .layout { display: flex; flex: 1; overflow: hidden; }
+    .sidebar { width: 340px; background: #0f172a; border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+    .search-box { padding: 15px; border-bottom: 1px solid var(--border); }
+    .search-box input { width: 100%; padding: 10px; background: var(--card); border: 1px solid var(--border); color: #fff; border-radius: 6px; box-sizing: border-box; }
+    .nav { flex: 1; overflow-y: auto; padding: 15px 0; }
+    .nav-link { display: block; padding: 8px 20px; color: #cbd5e1; text-decoration: none; border-left: 3px solid transparent; cursor: pointer; }
+    .nav-link:hover, .nav-link.active { background: #334155; color: var(--primary); border-left-color: var(--primary); font-weight: bold; }
+    .content { flex: 1; padding: 40px; overflow-y: auto; }
+    .section { display: none; }
+    .section.active { display: block; animation: fadeIn 0.3s; }
+    @keyframes fadeIn { from {opacity:0; transform:translateY(10px);} to {opacity:1; transform:translateY(0);} }
+    h2 { color: var(--primary); border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 0.95rem; }
+    th, td { padding: 12px; border: 1px solid var(--border); text-align: left; }
+    th { background: #0f172a; }
+    .status { padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 0.75rem; text-transform: uppercase; }
+    .s-ver { background: rgba(14, 165, 233, 0.2); color: #7dd3fc; border: 1px solid #0284c7; }
+    .s-eval { background: rgba(139, 92, 246, 0.2); color: #c4b5fd; border: 1px solid #7c3aed; }
+    .s-pend { background: rgba(245, 158, 11, 0.2); color: #fcd34d; border: 1px solid #d97706; }
+    .callout { padding: 15px; border-radius: 8px; border-left: 4px solid var(--danger); background: rgba(239, 68, 68, 0.1); margin: 20px 0; }
+    .accordion { background: #0f172a; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; }
+    .acc-head { padding: 15px; cursor: pointer; font-weight: bold; }
+    .acc-body { padding: 0 15px 15px 15px; display: none; }
+    .accordion.open .acc-body { display: block; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Final Defense & Readiness Guide</h1>
+      <p class="subtitle">18-Section Strategic Question Bank & Evidence Map</p>
+    </div>
+    <div class="layout">
+      <div class="sidebar">
+        <div class="search-box"><input type="text" id="searchInput" placeholder="Search playbook..." onkeyup="search()"></div>
+        <div class="nav" id="nav">
+          <!-- Navigation built by JS -->
+        </div>
+      </div>
+      <div class="content" id="content">
+        <!-- Sections built by JS -->
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const sections = [
+      {
+        title: "1. Executive Defense Summary",
+        html: "<p><strong>Goal:</strong> Defend the academic and technical integrity of the Shoelotskey Service Management System.</p><p><strong>Core Strategy:</strong> Honesty, traceability, and evidence. Acknowledge the ML dataset limitations (n=35) as mature data science awareness rather than hiding them. Emphasize the strong software engineering fundamentals (3NF, JWT, OWASP compliance, ISO 3.71 score). Do not invent testing counts; rely on the verified 89 Manual Functional Verification Scenarios.</p>"
+      },
+      {
+        title: "2. Do Not Claim List",
+        html: "<div class='callout'><strong>CRITICAL: AVOID THESE STATEMENTS</strong><ul><li><strong>Do NOT claim 85% ML accuracy.</strong> State: 'We evaluated continuous regression metrics: MAE is 7.61 days and R² is 0.1959.'</li><li><strong>Do NOT claim automatic ML retraining.</strong> State: 'The system uses an administrative batch retraining workflow.'</li><li><strong>Do NOT call the ML date the official release date.</strong> State: 'ML is advisory; business rules provide the official commitment.'</li><li><strong>Do NOT claim offline capability.</strong> State: 'The architecture is a cloud-hosted web application dependent on Heroku.'</li><li><strong>Do NOT claim 100% security.</strong> State: 'We mitigated OWASP Top 10 risks via JWT, bcrypt, and parameterized queries, but lack MFA.'</li><li><strong>Do NOT call TAM an ISO framework.</strong> ISO has 9 characteristics; TAM has 4 constructs.</li><li><strong>Do NOT fabricate the Owner TAM score.</strong> State: 'Staff 1 and Staff 2 evaluated the system at 4.00; the Owner score is pending.'</li></ul></div>"
+      },
+      {
+        title: "3. Defense Evidence Map",
+        html: "<table><tr><th>Panel Question</th><th>Defensive Answer</th><th>System Evidence</th></tr><tr><td>Is the database truly normalized to 3NF?</td><td>Yes. Surrogate primary keys. No repeating arrays. Customer data isolated.</td><td>`models.py` relationships.</td></tr><tr><td>How is security enforced?</td><td>Stateless JWT RBAC on backend.</td><td>`Depends(require_role)` in `auth.py`.</td></tr><tr><td>Why is the ML prediction advisory?</td><td>Because regression metrics (MAE 7.61) on 35 records show high variance.</td><td>Green [OFFICIAL] vs Blue [ADVISORY] UI tags.</td></tr></table>"
+      },
+      {
+        title: "4. Objective Alignment",
+        html: "<table><tr><th>Objective</th><th>System Evidence</th><th>Status</th></tr><tr><td>1. Centralized Job Orders</td><td>React Job Order Module `POST /api/orders`</td><td><span class='status s-ver'>VERIFIED</span></td></tr><tr><td>2. ML Prediction</td><td>RandomForestRegressor (18 features)</td><td><span class='status s-ver'>VERIFIED</span></td></tr><tr><td>3. Analytics</td><td>Sales/ROI charts & PDF generation</td><td><span class='status s-ver'>VERIFIED</span></td></tr><tr><td>4. ISO 25010 Quality</td><td>45-statement evaluation by 3 IT Experts (3.71)</td><td><span class='status s-eval'>EVALUATED</span></td></tr><tr><td>5. TAM Acceptance</td><td>20-statement survey by Staff 1 & Staff 2 (4.00)</td><td><span class='status s-pend'>PARTIALLY EVALUATED</span></td></tr></table>"
+      },
+      {
+        title: "5. General System Q&A",
+        html: "<div class='accordion'><div class='acc-head' onclick='this.parentElement.classList.toggle(\"open\")'>Why this project?</div><div class='acc-body'>Shoelotskey suffered from inefficient manual logbooks resulting in 15-30 minute customer record retrievals, subjective turnaround dates, and a lack of business analytics.</div></div><div class='accordion'><div class='acc-head' onclick='this.parentElement.classList.toggle(\"open\")'>What happens when the internet fails?</div><div class='acc-body'>The system is entirely cloud-hosted on Heroku. If the internet fails, the system is inaccessible. We do not claim offline functionality.</div></div>"
+      },
+      {
+        title: "6. Machine Learning Q&A",
+        html: "<div class='accordion'><div class='acc-head' onclick='this.parentElement.classList.toggle(\"open\")'>Why Random Forest Regressor?</div><div class='acc-body'>Random Forest handles non-linear relationships and avoids overfitting on small datasets better than neural networks or linear regression.</div></div><div class='accordion'><div class='acc-head' onclick='this.parentElement.classList.toggle(\"open\")'>Why only 35 ML records?</div><div class='acc-body'>The shop provided 676 scanned logbooks, but after strict human validation, only 48 records were structurally sound, resulting in 35 eligible records.</div></div>"
+      },
+      {
+        title: "7. Architecture & Security Q&A",
+        html: "<div class='accordion'><div class='acc-head' onclick='this.parentElement.classList.toggle(\"open\")'>How is security enforced?</div><div class='acc-body'>Authentication uses bcrypt hashing. Authorization uses stateless JWTs via FastAPI dependencies to block Staff from Owner routes. 100% of queries use SQLAlchemy ORM to prevent SQL Injection.</div></div>"
+      },
+      {
+        title: "8. Database & 3NF Q&A",
+        html: "<div class='accordion'><div class='acc-head' onclick='this.parentElement.classList.toggle(\"open\")'>Prove that your database is in 3NF.</div><div class='acc-body'>1NF: All values atomic. 2NF: Surrogate primary keys (no partial dependencies). 3NF: No transitive dependencies (e.g., job_orders holds customer_id but does not duplicate phone numbers).</div></div>"
+      },
+      {
+        title: "9. ISO 25010 & TAM Q&A",
+        html: "<div class='accordion'><div class='acc-head' onclick='this.parentElement.classList.toggle(\"open\")'>Why is TAM reported as partially evaluated?</div><div class='acc-body'>Two Staff respondents have completed the signed TAM evaluation, both obtaining a 4.00 mean across the four constructs. The Owner evaluation is still pending, so we report the TAM evaluation as partially evaluated rather than claiming a completed overall TAM result.</div></div>"
+      },
+      {
+        title: "10. Live Demonstration Sequence",
+        html: "<ol><li>Login as Owner. Mention bcrypt and JWT.</li><li>Create Job Order. Point out autocomplete.</li><li>Show distinct Green Business Rules (Official) vs Blue ML Prediction (Advisory).</li><li>Show Inventory page for atomic transactional deduction.</li><li>Generate Analytics PDF.</li><li>Attempt unauthorized access as Staff.</li></ol>"
+      },
+      {
+        title: "11. Final 30-60 Second Answers",
+        html: "<ul><li><strong>Why this system?</strong> Eliminates 30-minute logbook searches, provides objective rules vs ML forecasts, and grants real-time sales visibility.</li><li><strong>What is the biggest limitation?</strong> The ML prediction is highly constrained by the small 35-record dataset, making it strictly Advisory.</li></ul>"
+      },
+      {
+        title: "12. IT Expert Comments & Remediation",
+        html: "<table><tr><th>Comment</th><th>Remediation Action</th></tr><tr><td>Clarify AI vs Business Rules.</td><td>Added distinct [OFFICIAL] and [ADVISORY] tags.</td></tr><tr><td>Ensure DB URL cannot fallback to SQLite in Prod.</td><td>Hardened `database.py`.</td></tr><tr><td>Implement inactivity timeouts.</td><td>Added 30-minute frontend session wipe.</td></tr></table>"
+      },
+      {
+        title: "13. Panel Comments Revision Matrix",
+        html: "<table><tr><th>Required Revision</th><th>Implementation</th><th>Status</th></tr><tr><td>Inventory module</td><td>Created 4 KPI cards and stock alerts.</td><td><span class='status s-ver'>VERIFIED</span></td></tr><tr><td>Sales/ROI reports</td><td>Enhanced Dashboard with PDF preview.</td><td><span class='status s-ver'>VERIFIED</span></td></tr><tr><td>Detail ML dataset</td><td>Documented 18 features, n=35 dataset.</td><td><span class='status s-ver'>VERIFIED</span></td></tr></table>"
+      },
+      {
+        title: "14. Critical Issues & Blockers",
+        html: "<table><tr><th>Issue</th><th>Status / Action</th></tr><tr><td>Demo Data in Production</td><td>Must purge dummy accounts before handover.</td></tr><tr><td>Owner TAM Pending</td><td>Requires Owner's signature to finalize Chapter 4.</td></tr></table>"
+      },
+      {
+        title: "15. Final Go / No-Go Checklist",
+        html: "<ul><li>System & Core Modules: <span class='status s-ver'>GO</span> (89 Manual Scenarios Verified)</li><li>Security (OWASP): <span class='status s-ver'>GO</span></li><li>Database (3NF): <span class='status s-ver'>GO</span></li><li>ISO 25010: <span class='status s-ver'>GO</span> (3.71/4.00)</li><li>TAM Deployment: <span class='status s-pend'>NO-GO</span> (Awaiting Owner)</li></ul>"
+      },
+      {
+        title: "16. Manuscript & Chapter Alignment",
+        html: "<p>Chapters 1-4 explicitly verified against the codebase. Unverified claims (e.g., 5-point Likert, 85% accuracy, 5 TAM employees) have been identified and formally corrected in the Contradiction Register to match the true 4-point scale, continuous ML metrics, and Owner+2 Staff population.</p>"
+      },
+      {
+        title: "17. Evidence & Artifact Index",
+        html: "<table><tr><th>Claim</th><th>Evidence Artifact</th><th>Status</th></tr><tr><td>JWT Authentication</td><td>`auth_utils.py`</td><td><span class='status s-ver'>VERIFIED</span></td></tr><tr><td>18 ML Features</td><td>`historical_ml_engine.py`</td><td><span class='status s-ver'>VERIFIED</span></td></tr><tr><td>Staff TAM</td><td>Signed PDFs (Joy & Unnamed, 08/31/26)</td><td><span class='status s-eval'>EVALUATED</span></td></tr><tr><td>ISO 3.71</td><td>Signed IT Expert Rubrics</td><td><span class='status s-eval'>EVALUATED</span></td></tr></table>"
+      },
+      {
+        title: "18. Final Defense Day Checklist",
+        html: "<ul><li>Production URL verified active.</li><li>Local fallback server running via `uvicorn` in case of internet failure.</li><li>Hardcopies of signed ISO forms and Staff TAM forms printed.</li><li>No hardcoded passwords; Owner/Staff credentials memorized.</li><li>Live demonstration script rehearsed.</li></ul>"
+      }
+    ];
+
+    const nav = document.getElementById('nav');
+    const content = document.getElementById('content');
+
+    sections.forEach((sec, i) => {
+      // Add Nav Link
+      const a = document.createElement('a');
+      a.className = 'nav-link' + (i === 0 ? ' active' : '');
+      a.innerText = sec.title;
+      a.onclick = () => show(i);
+      nav.appendChild(a);
+
+      // Add Content Section
+      const div = document.createElement('div');
+      div.className = 'section' + (i === 0 ? ' active' : '');
+      div.id = 'sec-' + i;
+      div.innerHTML = `<h2>${sec.title}</h2>${sec.html}`;
+      content.appendChild(div);
+    });
+
+    function show(index) {
+      document.querySelectorAll('.section').forEach(e => e.classList.remove('active'));
+      document.querySelectorAll('.nav-link').forEach(e => e.classList.remove('active'));
+      document.getElementById('sec-' + index).classList.add('active');
+      document.querySelectorAll('.nav-link')[index].classList.add('active');
+      document.getElementById('content').scrollTop = 0;
+    }
+
+    function search() {
+      const q = document.getElementById('searchInput').value.toLowerCase();
+      document.querySelectorAll('.nav-link').forEach((link, i) => {
+        const text = sections[i].title.toLowerCase() + " " + sections[i].html.toLowerCase();
+        link.style.display = text.includes(q) ? 'block' : 'none';
+      });
+    }
+  </script>
+</body>
+</html>

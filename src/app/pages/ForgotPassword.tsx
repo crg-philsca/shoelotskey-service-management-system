@@ -59,7 +59,6 @@ export default function ForgotPassword() {
               src="/logo.png"
               alt="Shoelotskey logo"
               className="h-24 xs:h-28 sm:h-32 md:h-36 w-auto object-contain mx-auto transform -translate-x-0.5"
-              fetchPriority="high"
               loading="eager"
               decoding="async"
             />

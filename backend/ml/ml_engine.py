@@ -17,6 +17,69 @@ from ml.historical_ml_engine import (
 )
 from ml.business_rules import calculate_official_release_days, collect_service_flags, combo_override_days
 
+import time
+
+# In-memory service & condition catalog cache (5-minute TTL) to make /api/predict sub-millisecond
+_CATALOG_CACHE: Dict[str, Any] = {
+    "timestamp": 0.0,
+    "duration_map": {},
+    "service_by_name": {},
+    "service_by_id": {},
+    "condition_by_name": {},
+}
+
+def _parse_duration_days_helper(val) -> int:
+    if val is None:
+        return 0
+    if isinstance(val, (int, float)):
+        return int(val)
+    text = str(val).strip()
+    if "-" in text:
+        parts = [int(p.strip()) for p in text.split("-") if p.strip().lstrip("-").isdigit()]
+        return max(parts) if parts else 0
+    try:
+        return int(float(text))
+    except (TypeError, ValueError):
+        return 0
+
+def _get_cached_catalog(db: Session) -> Dict[str, Any]:
+    now = time.time()
+    if now - _CATALOG_CACHE["timestamp"] < 300.0 and _CATALOG_CACHE["duration_map"]:
+        return _CATALOG_CACHE
+    try:
+        rows = db.query(Service.service_id, Service.service_name, Service.duration_days).all()
+        dur_map = {}
+        svc_by_name = {}
+        svc_by_id = {}
+        for sid, name, days in rows:
+            if name:
+                d = _parse_duration_days_helper(days)
+                dur_map[name] = d
+                svc_by_name[name] = sid
+                svc_by_id[sid] = d
+
+        c_rows = db.query(Condition.condition_id, Condition.condition_name).all()
+        cond_by_name = {}
+        for cid, cname in c_rows:
+            if cname:
+                cond_by_name[cname.strip().lower()] = cid
+
+        _CATALOG_CACHE["timestamp"] = now
+        _CATALOG_CACHE["duration_map"] = dur_map
+        _CATALOG_CACHE["service_by_name"] = svc_by_name
+        _CATALOG_CACHE["service_by_id"] = svc_by_id
+        _CATALOG_CACHE["condition_by_name"] = cond_by_name
+    except Exception as e:
+        if not _CATALOG_CACHE["duration_map"]:
+            _CATALOG_CACHE["duration_map"] = {
+                "Basic Cleaning": 10,
+                "Minor Reglue": 25,
+                "Full Reglue": 25,
+                "Color Renewal": 25,
+                "Unyellowing": 5,
+            }
+    return _CATALOG_CACHE
+
 # ==========================================
 # SHOELOTSKEY SMART PREDICTION ENGINE (SPE)
 # ==========================================
@@ -25,22 +88,10 @@ from ml.business_rules import calculate_official_release_days, collect_service_f
 # 2. ML Adjustment: Forest-based regression for workload/material complexity.
 
 class ShoelotskeyPredictor:
-    # P1-13 / HIGH-8 FIX: The old default `model_path="backend/completion_model.pkl"` was
-    # resolved relative to the process CURRENT WORKING DIRECTORY, not this file's location.
-    # The Procfile runs gunicorn with `--chdir backend`, so on Heroku the effective lookup
-    # path was `backend/backend/completion_model.pkl` — always wrong. Locally, `npm run
-    # server` also `cd`s into backend/ first, so the same doubling bug applied locally too.
-    # Resolving relative to __file__ makes this correct regardless of CWD, matching the
-    # convention already used by ml/historical_ml_engine.py's HISTORICAL_MODEL_PATH.
     DEFAULT_MODEL_PATH = LIVE_COMPLETION_MODEL_PATH
 
     def __init__(self, model_path=None):
         self.model_path = model_path or self.DEFAULT_MODEL_PATH
-        # P0-4: Metadata describing how the on-disk model was produced/evaluated, so callers
-        # (the /api/predict response, the Job Order Form UI) can honestly report whether a
-        # prediction came from a genuinely trained, quality-gated Random Forest model or the
-        # rule/heuristic fallback — this must never be silently presented as "trained ML" when
-        # it is not. Loaded BEFORE the model itself so the activation gate below can consult it.
         self.metadata = self._load_metadata()
         self.model = self._load_model()
         self.last_prediction_source = "heuristic_fallback" if self.model is None else "random_forest"
@@ -105,7 +156,6 @@ class ShoelotskeyPredictor:
             "model_path": self.model_path,
             "algorithm": "Random Forest Regressor" if is_rf else "Heuristic (rule-based) fallback",
             "model_type": type(self.model).__name__ if self.model is not None else None,
-            # Availability of a loaded RF artifact — not a claim that the last live call used it.
             "prediction_mode": "random_forest" if is_rf else "heuristic_fallback",
             "last_prediction_source": self.last_prediction_source,
             "last_fallback_reason": self.last_fallback_reason,
@@ -118,10 +168,9 @@ class ShoelotskeyPredictor:
         if not service_ids:
             return 7 # Standard fallback
             
-        # Get maximum duration from the services selected
-        max_duration = db.query(func.max(Service.duration_days)).filter(
-            Service.service_id.in_(service_ids)
-        ).scalar() or 0
+        cat = _get_cached_catalog(db)
+        svc_by_id = cat.get("service_by_id", {})
+        max_duration = max([svc_by_id.get(sid, 0) for sid in service_ids], default=0)
         
         # Adjust for material complexity
         material_delay = 0
@@ -135,12 +184,14 @@ class ShoelotskeyPredictor:
         # e.g., Sole Separation or Rips take longer
         condition_delay = 0
         if condition_ids:
-            # We look for 'Sole Separation' or 'Rips' in condition names
-            complex_conds = db.query(Condition).filter(
-                Condition.condition_id.in_(condition_ids),
-                func.lower(Condition.condition_name).in_(['sole separation', 'rips/holes', 'deep stains'])
-            ).count()
-            condition_delay = complex_conds * 2
+            cond_by_name = cat.get("condition_by_name", {})
+            target_ids = {
+                cond_by_name.get("sole separation"),
+                cond_by_name.get("rips/holes"),
+                cond_by_name.get("deep stains"),
+            } - {None}
+            complex_count = sum(1 for cid in condition_ids if cid in target_ids)
+            condition_delay = complex_count * 2
             
         return max(3, max_duration + material_delay + condition_delay)
 
@@ -235,8 +286,8 @@ class ShoelotskeyPredictor:
         return flags, normalized_items
 
     def _service_duration_map(self, db: Session) -> Dict[str, int]:
-        rows = db.query(Service.service_name, Service.duration_days).all()
-        return {name: self._parse_duration_days(days) for name, days in rows if name}
+        cat = _get_cached_catalog(db)
+        return cat.get("duration_map", {})
 
     def calculate_business_rule_days(self, db: Session, order_data: dict) -> int:
         """
@@ -268,6 +319,10 @@ class ShoelotskeyPredictor:
             self.last_ml_reason = result["ml_reason"]
             return result
 
+        cat = _get_cached_catalog(db)
+        svc_by_name = cat.get("service_by_name", {})
+        cond_by_name = cat.get("condition_by_name", {})
+
         all_service_ids = []
         all_condition_ids = []
         primary_material = "Unknown"
@@ -276,26 +331,36 @@ class ShoelotskeyPredictor:
             if i == 0:
                 primary_material = item.get("shoeMaterial", "Unknown")
             b_srvs = item.get("baseService") or []
+            if isinstance(b_srvs, str):
+                b_srvs = [s.strip() for s in b_srvs.split(",") if s.strip()]
+            elif not isinstance(b_srvs, list):
+                b_srvs = []
             a_srvs = item.get("addOns") or []
-            s_names = b_srvs + [a.get("name") if isinstance(a, dict) else a for a in a_srvs if a]
+            if isinstance(a_srvs, str):
+                a_srvs = [s.strip() for s in a_srvs.split(",") if s.strip()]
+            elif not isinstance(a_srvs, list):
+                a_srvs = []
+            s_names = list(b_srvs) + [a.get("name") if isinstance(a, dict) else a for a in a_srvs if a]
             s_names = [s for s in s_names if s]
-            if s_names:
-                srvs = db.query(Service.service_id).filter(Service.service_name.in_(s_names)).all()
-                all_service_ids.extend([s[0] for s in srvs])
+            for sname in s_names:
+                sid = svc_by_name.get(sname)
+                if sid:
+                    all_service_ids.append(sid)
             c_data = item.get("condition") or {}
             if isinstance(c_data, dict):
                 c_map = {
-                    "scratches": "Scratches",
-                    "yellowing": "Yellowing",
-                    "ripsHoles": "Rips/Holes",
-                    "deepStains": "Deep Stains",
-                    "soleSeparation": "Sole Separation",
-                    "wornOut": "Worn Out",
+                    "scratches": "scratches",
+                    "yellowing": "yellowing",
+                    "ripsHoles": "rips/holes",
+                    "deepStains": "deep stains",
+                    "soleSeparation": "sole separation",
+                    "wornOut": "worn out",
                 }
-                active_c_names = [v for k, v in c_map.items() if c_data.get(k)]
-                if active_c_names:
-                    conds = db.query(Condition.condition_id).filter(Condition.condition_name.in_(active_c_names)).all()
-                    all_condition_ids.extend([c[0] for c in conds])
+                for k, target_key in c_map.items():
+                    if c_data.get(k):
+                        cid = cond_by_name.get(target_key)
+                        if cid:
+                            all_condition_ids.append(cid)
 
         heuristic_days = self.calculate_heuristic_days(
             db, list(set(all_service_ids)), list(set(all_condition_ids)), primary_material
@@ -303,6 +368,10 @@ class ShoelotskeyPredictor:
         features = build_features_from_live_order(order_data)
         row = [features.get(col, 0) for col in HISTORICAL_FEATURE_COLS]
         rf_days = float(self.model.predict([row])[0])
+        priority = str(order_data.get("priorityLevel") or "").lower()
+        if priority == "rush":
+            rush_red = float(order_data.get("rushReductionDays") or 9)
+            rf_days = max(1.0, rf_days - rush_red)
         # Locked methodology: PredictedDays = max(1, round(ŷ)); never 0/negative.
         predicted_days = max(1, int(round(rf_days)))
         upper_bound = max(heuristic_days * 4, heuristic_days + 30, 60)

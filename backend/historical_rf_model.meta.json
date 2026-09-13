@@ -4,7 +4,7 @@
   "algorithm": "RandomForestRegressor",
   "model_type": "RandomForestRegressor",
   "model_version": "1.2",
-  "dataset_version": "2026-09-10 08:42",
+  "dataset_version": "2026-09-11 10:52",
   "dataset_size": 48,
   "train_count": 38,
   "test_count": 10,
@@ -32,7 +32,7 @@
   "r2_score": 0.3031,
   "mae": 6.11,
   "rmse": 7.89,
-  "trained_at": "2026-09-10 08:42",
+  "trained_at": "2026-09-11 10:52",
   "evaluation_note": null,
   "data_source": "VALIDATED + ML-eligible historical_orders only",
   "max_completion_days": 60

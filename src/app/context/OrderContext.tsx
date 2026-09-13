@@ -50,10 +50,11 @@ const OrderContext = createContext<OrderContextType | undefined>(undefined);
  */
 export function OrderProvider({ children, user }: { children: ReactNode, user: { id?: number, username: string, token: string } }) {
     const syncNotificationShown = useRef(false);
+    const inFlightOrderUpdates = useRef<Set<string>>(new Set());
     const { addActivity } = useActivities();
     const [orders, setOrders] = useState<JobOrder[]>(() => {
         if (typeof window === 'undefined') return [];
-        const saved = localStorage.getItem('jobOrders_v19_cache');
+        const saved = localStorage.getItem('jobOrders_v20_cache') || localStorage.getItem('jobOrders_v19_cache');
         let initialOrders: JobOrder[] = [];
         if (saved) {
             try {
@@ -64,6 +65,9 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                     transactionDate: new Date(o.transactionDate || o.createdAt),
                     predictedCompletionDate: o.predictedCompletionDate ? new Date(o.predictedCompletionDate) : undefined,
                     actualCompletionDate: o.actualCompletionDate ? new Date(o.actualCompletionDate) : undefined,
+                    balance: o.balance != null && !isNaN(Number(o.balance))
+                        ? Number(o.balance)
+                        : Math.max(0, (Number(o.grandTotal) || 0) - (Number(o.depositAmount) || (Number(o.amountReceived) && Number(o.amountReceived) < Number(o.grandTotal) ? Number(o.amountReceived) : 0))),
                     statusHistory: o.statusHistory?.map((sl: any) => ({
                         ...sl,
                         timestamp: new Date(sl.timestamp)
@@ -265,7 +269,7 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                                 id: 'pay-1',
                                 paymentType: dpAmt > 0 || (p.p_status?.status_name || '').toLowerCase() === 'downpayment' ? 'downpayment' : 'full-payment',
                                 method: (p.method?.method_name || 'cash').toLowerCase(),
-                                amount: totalRecv,
+                                amount: dpAmt > 0 ? dpAmt : totalRecv,
                                 referenceNo: p.reference_no || undefined,
                                 date: p.created_at ? parseUTC(p.created_at) : parseUTC(bo.created_at),
                                 processedBy: bo.processor?.username || 'Staff',
@@ -296,6 +300,9 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                     change: Math.max(0, totalReceived - (parseFloat(bo.grand_total) || 0)),
                     referenceNo: bo.payments?.[0]?.reference_no || paymentHistory.find(p => p.referenceNo)?.referenceNo || '',
                     depositAmount: parseFloat(bo.payments?.[0]?.deposit_amount) || (paymentHistory.find(p => p.paymentType === 'downpayment')?.amount || 0),
+                    balance: bo.payments?.[0]?.balance != null && !isNaN(parseFloat(bo.payments[0].balance))
+                        ? parseFloat(bo.payments[0].balance)
+                        : Math.max(0, (parseFloat(bo.grand_total) || 0) - (parseFloat(bo.payments?.[0]?.deposit_amount) || totalReceived)),
                     paymentHistory
                 };
             })(),
@@ -310,11 +317,18 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
 
             // Status Mapping
             status: mapBackendStatus(bo.status?.status_name),
+            cancellationStage: bo.cancellation_stage || bo.cancellationStage || undefined,
+            refundStatus: bo.refund_status || bo.refundStatus || undefined,
+            refundAmount: bo.refund_amount != null ? parseFloat(bo.refund_amount) : (bo.refundAmount != null ? parseFloat(bo.refundAmount) : 0),
+            refundReason: bo.refund_reason || bo.refundReason || undefined,
+            cancelledAt: bo.cancelled_at ? parseUTC(bo.cancelled_at) : (bo.cancelledAt ? parseUTC(bo.cancelledAt) : undefined),
 
             createdAt: parseUTC(bo.created_at),
             updatedAt: parseUTC(bo.updated_at || bo.created_at),
             transactionDate: parseUTC(bo.created_at),
             predictedCompletionDate: bo.expected_at ? parseUTC(bo.expected_at) : undefined,
+            predictedAt: bo.predicted_at ? parseUTC(bo.predicted_at) : undefined,
+            predictedDays: bo.predicted_days != null ? Number(bo.predicted_days) : undefined,
             actualReleaseDate: bo.released_at ? parseUTC(bo.released_at) : (() => {
                 const currentStatus = mapBackendStatus(bo.status?.status_name);
                 if (currentStatus !== 'for-release' && currentStatus !== 'claimed') return undefined;
@@ -481,12 +495,15 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
             'on-going': 'on-going',
             'for-release': 'for-release',
             'claimed': 'claimed',
-            'cancelled': 'claimed', // fallback - treat cancelled as claimed for display
+            'cancelled': 'cancelled',
+            'canceled': 'cancelled',
             // Legacy mappings in case old DB data exists
             'Pending': 'new-order',
             'In Progress': 'on-going',
             'Completed': 'for-release',
             'Claimed': 'claimed',
+            'Cancelled': 'cancelled',
+            'Canceled': 'cancelled',
         };
         // [FIX] Only fall back to 'new-order' if the statusName itself is empty/null.
         if (!statusName) return 'new-order';
@@ -535,13 +552,13 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                             return { ...order, ...pending, updatedAt: order.updatedAt };
                         });
                         setOrders(merged);
-                        localStorage.setItem('jobOrders_v19_cache', JSON.stringify(merged));
+                        localStorage.setItem('jobOrders_v20_cache', JSON.stringify(merged));
                         return;
                     } catch (_) { /* fall through to plain set */ }
                 }
 
                 setOrders(withPending);
-                localStorage.setItem('jobOrders_v19_cache', JSON.stringify(withPending));
+                localStorage.setItem('jobOrders_v20_cache', JSON.stringify(withPending));
             }
         } catch (err) {
             console.error('[DEBUG] OrderProvider: Refresh failed.', err);
@@ -567,7 +584,7 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
     // Persist to cache whenever orders change
     useEffect(() => {
         if (orders.length > 0) {
-            localStorage.setItem('jobOrders_v19_cache', JSON.stringify(orders));
+            localStorage.setItem('jobOrders_v20_cache', JSON.stringify(orders));
         }
     }, [orders]);
 
@@ -710,21 +727,39 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
             }
 
             const saved = await response.json().catch(() => null);
-            if (saved?.expected_at) {
-                const persistedDate = parseServerDate(saved.expected_at);
+            if (saved) {
+                const persistedDate = saved.expected_at ? parseServerDate(saved.expected_at) : undefined;
+                const persistedPredAt = saved.predicted_at ? parseServerDate(saved.predicted_at) : (order.predictedAt || persistedDate);
+                const persistedPredDays = saved.predicted_days != null ? Number(saved.predicted_days) : order.predictedDays;
                 setOrders((prev) => prev.map((o) =>
                     o.orderNumber === (saved.order_number || order.orderNumber)
                         ? {
                             ...o,
                             id: saved.order_id != null ? String(saved.order_id) : o.id,
                             predictedCompletionDate: persistedDate,
+                            predictedAt: persistedPredAt,
+                            predictedDays: persistedPredDays,
                         }
                         : o
                 ));
             }
+            addActivity({
+                user: user.username || 'System',
+                action: 'CREATE',
+                actionRaw: 'CREATE',
+                type: 'order',
+                table: 'orders',
+                module: 'Job Orders',
+                recordId: saved?.order_id != null ? String(saved.order_id) : order.id,
+                details: `Created new Job Order #${order.orderNumber} for ${order.customerName}`,
+                newValues: {
+                    order_number: order.orderNumber,
+                    customer_name: order.customerName,
+                    grand_total: order.grandTotal,
+                    status: order.status
+                }
+            });
             refreshOrders();
-            // P1-7 FIX: genuinely confirmed by the backend — safe for the caller to treat
-            // this as a real success (show success toast, reset the form for next entry).
             return true;
         } catch (err: any) {
             console.error('[CRITICAL] OrderProvider: Sync failed.', err);
@@ -756,9 +791,14 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
     };
 
     const updateOrder = async (id: string, updates: Partial<JobOrder>, statusUser?: string) => {
-        const targetOrder = orders.find(o => o.id === id);
-        const oldStatus = targetOrder?.status ? targetOrder.status.replace('-', ' ') : 'unknown';
-        const newStatus = updates.status ? updates.status.replace('-', ' ') : 'unknown';
+        const orderKey = String(id);
+        if (inFlightOrderUpdates.current.has(orderKey)) {
+            console.warn(`[DUPLICATE PREVENTED] Order update already in progress for #${orderKey}`);
+            return;
+        }
+        inFlightOrderUpdates.current.add(orderKey);
+
+        const targetOrder = orders.find(o => o.id === id || o.orderNumber === id);
         const effectiveReleasedBy = statusUser || user.username || 'staff';
         const now = new Date();
         const finalUpdates: any = {
@@ -772,6 +812,13 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
             ...(updates.status === 'claimed' ? {
                 actualCompletionDate: updates.actualCompletionDate || now,
                 releasedBy: updates.releasedBy || effectiveReleasedBy
+            } : {}),
+            ...(updates.status === 'cancelled' ? {
+                cancelledAt: updates.cancelledAt || now,
+                cancellationStage: updates.cancellationStage,
+                refundStatus: updates.refundStatus,
+                refundAmount: updates.refundAmount,
+                refundReason: updates.refundReason,
             } : {}),
             ...(updates.status === 'on-going' || updates.status === 'new-order' ? {
                 actualReleaseDate: null,
@@ -791,99 +838,64 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
 
         const payload = { ...finalUpdates, updater_id: user.id };
 
+        let apiLookupId: string | number = id;
+        const parsedId = parseInt(id);
+        if (!isNaN(parsedId)) {
+            apiLookupId = parsedId;
+        } else if (targetOrder) {
+            const targetDbId = parseInt(targetOrder.id);
+            if (!isNaN(targetDbId)) {
+                apiLookupId = targetDbId;
+            } else if (targetOrder.orderNumber) {
+                apiLookupId = targetOrder.orderNumber;
+            }
+        }
+
         try {
-            const dbId = parseInt(id);
-            if (!isNaN(dbId)) {
-                const response = await fetch(`${API_BASE}/orders/${dbId}`, {
-                    method: 'PUT',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${user.token}`
-                    },
-                    body: JSON.stringify(payload)
-                });
-
-                // [SAFETY NET] Handle concurrent deletion by another staff member
-                if (response.status === 404) {
-                    console.warn(`[DEBUG] OrderProvider: Order ${id} not found. Likely deleted.`);
-                    const { toast } = await import('sonner');
-                    toast.error("Resource Unavailable", {
-                        description: "This order needs a 'Full Reglue' (it might have been deleted by another staff member).",
-                        duration: 5000
-                    });
-                    refreshOrders(); // Remove the "ghost" order from UI
-                    return;
-                }
-
-                if (response.status === 400 || response.status === 401 || response.status === 403) {
-                    throw new Error(`HTTP_${response.status}`);
-                }
-                if (!response.ok) throw new Error('API update failed');
-                const saved = await response.json().catch(() => null);
-                if (saved?.expected_at) {
-                    const persistedDate = parseServerDate(saved.expected_at);
-                    setOrders((prev) => prev.map((order) =>
-                        order.id === id
-                            ? { ...order, ...finalUpdates, predictedCompletionDate: persistedDate, updatedAt: new Date() }
-                            : order
-                    ));
-                }
-            } else {
-                // If it doesn't have a valid ID yet, it was likely created offline recently
-                throw new Error('Unsynced temporary ID');
-            }
-
-            // Log Activity with complete change details
-            const oldDiff: Record<string, any> = {};
-            const newDiff: Record<string, any> = {};
-            const changesList: string[] = [];
-
-            if (updates.status && targetOrder?.status !== updates.status) {
-                oldDiff['status'] = oldStatus;
-                newDiff['status'] = newStatus;
-                changesList.push(`Status: "${oldStatus}" → "${newStatus}"`);
-            }
-            if (updates.customerName && targetOrder?.customerName !== updates.customerName) {
-                oldDiff['customer'] = targetOrder?.customerName || 'N/A';
-                newDiff['customer'] = updates.customerName;
-                changesList.push(`Customer: "${targetOrder?.customerName}" → "${updates.customerName}"`);
-            }
-            if (updates.predictedCompletionDate && targetOrder?.predictedCompletionDate !== updates.predictedCompletionDate) {
-                const oldDateStr = targetOrder?.predictedCompletionDate ? new Date(targetOrder.predictedCompletionDate).toLocaleDateString() : 'N/A';
-                const newDateStr = new Date(updates.predictedCompletionDate).toLocaleDateString();
-                oldDiff['promised_release_date'] = oldDateStr;
-                newDiff['promised_release_date'] = newDateStr;
-                changesList.push(`Release Date: ${oldDateStr} → ${newDateStr}`);
-            }
-            if (updates.priorityLevel && targetOrder?.priorityLevel !== updates.priorityLevel) {
-                oldDiff['priority'] = targetOrder?.priorityLevel || 'regular';
-                newDiff['priority'] = updates.priorityLevel;
-                changesList.push(`Priority: ${targetOrder?.priorityLevel} → ${updates.priorityLevel}`);
-            }
-            if (updates.grandTotal !== undefined && targetOrder?.grandTotal !== updates.grandTotal) {
-                oldDiff['grand_total'] = targetOrder?.grandTotal || 0;
-                newDiff['grand_total'] = updates.grandTotal;
-                changesList.push(`Total: ₱${(targetOrder?.grandTotal || 0).toFixed(2)} → ₱${updates.grandTotal.toFixed(2)}`);
-            }
-            if (updates.paymentStatus && targetOrder?.paymentStatus !== updates.paymentStatus) {
-                oldDiff['payment_status'] = targetOrder?.paymentStatus || 'Pending';
-                newDiff['payment_status'] = updates.paymentStatus;
-                changesList.push(`Payment Status: ${targetOrder?.paymentStatus} → ${updates.paymentStatus}`);
-            }
-
-            const diffSummary = changesList.length > 0 ? changesList.join(' | ') : `Updated order specifications for #${targetOrder?.orderNumber || id}`;
-            const actionLabel = updates.status && oldStatus !== newStatus ? 'Status Change' : 'Update Order';
-
-            addActivity({
-                user: statusUser || user.username || 'System',
-                action: actionLabel,
-                details: `Order #${targetOrder?.orderNumber || id}: ${diffSummary}`,
-                type: 'order',
-                table: 'orders',
-                recordId: id,
-                oldValues: Object.keys(oldDiff).length > 0 ? oldDiff : { status: oldStatus },
-                newValues: Object.keys(newDiff).length > 0 ? newDiff : { status: newStatus }
+            const response = await fetch(`${API_BASE}/orders/${encodeURIComponent(String(apiLookupId))}`, {
+                method: 'PUT',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${user.token}`
+                },
+                body: JSON.stringify(payload)
             });
+
+            // [SAFETY NET] Handle concurrent deletion by another staff member
+            if (response.status === 404) {
+                console.warn(`[DEBUG] OrderProvider: Order ${id} not found. Likely deleted.`);
+                const { toast } = await import('sonner');
+                toast.error("Resource Unavailable", {
+                    description: "This order needs a 'Full Reglue' (it might have been deleted by another staff member).",
+                    duration: 5000
+                });
+                refreshOrders(); // Remove the "ghost" order from UI
+                return;
+            }
+
+            if (response.status === 400 || response.status === 401 || response.status === 403) {
+                throw new Error(`HTTP_${response.status}`);
+            }
+            if (!response.ok) throw new Error('API update failed');
+            const saved = await response.json().catch(() => null);
+            if (saved) {
+                const persistedDate = saved.expected_at ? parseServerDate(saved.expected_at) : undefined;
+                const persistedPredAt = saved.predicted_at ? parseServerDate(saved.predicted_at) : finalUpdates.predictedAt;
+                const persistedPredDays = saved.predicted_days != null ? Number(saved.predicted_days) : finalUpdates.predictedDays;
+                setOrders((prev) => prev.map((order) =>
+                    order.id === id || order.orderNumber === id
+                        ? {
+                            ...order,
+                            ...finalUpdates,
+                            ...(persistedDate ? { predictedCompletionDate: persistedDate } : {}),
+                            ...(persistedPredAt !== undefined ? { predictedAt: persistedPredAt } : {}),
+                            ...(persistedPredDays != null ? { predictedDays: persistedPredDays } : {}),
+                            updatedAt: new Date(),
+                        }
+                        : order
+                ));
+            }
+            // Note: Backend /api/orders/{id} automatically performs atomic log_audit inside the DB transaction.
         } catch (err: any) {
             console.error('[DEBUG] OrderProvider: Update failed or sync pending.', err);
             if (err?.message && err.message.startsWith('HTTP_')) {
@@ -892,6 +904,8 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                 return;
             }
             queueSyncTask({ type: 'UPDATE', id, payload });
+        } finally {
+            inFlightOrderUpdates.current.delete(orderKey);
         }
     };
     

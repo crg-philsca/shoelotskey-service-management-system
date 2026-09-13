@@ -25,6 +25,19 @@ echo [INFO] Terminating existing services...
 taskkill /F /IM python.exe /T 2>nul
 taskkill /F /IM node.exe /T 2>nul
 
+set LOCAL_IP=localhost
+for /f "tokens=*" %%i in ('venv\Scripts\python.exe -c "import socket; ips = [ip for ip in socket.gethostbyname_ex(socket.gethostname())[2] if not ip.startswith('127.') and not ip.startswith('169.254.')]; print(ips[0] if ips else 'localhost')" 2^>nul') do set LOCAL_IP=%%i
+
+echo ====================================================
+echo   ACCESS URLS (Works locally and on local Wi-Fi/LAN):
+echo   * Local PC:    http://localhost:5173
+echo   * Other Device: http://%LOCAL_IP%:5173
+echo   * Backend API:  http://%LOCAL_IP%:8000
+echo   (Connect any phone/tablet/PC to the same Wi-Fi
+echo    to open the system even without internet access!)
+echo ====================================================
+echo.
+
 echo [INFO] Starting Backend (FastAPI in background)...
 start /B cmd /c "npm run server"
 

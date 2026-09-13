@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from decimal import Decimal
@@ -115,7 +115,7 @@ class UserUpdateSchema(BaseModel):
 
 class CustomerSchema(BaseModel):
     customer_id: Optional[int] = None
-    customer_name: str
+    customer_name: str = Field(..., min_length=2, max_length=60)
     contact_number: str
     created_at: Optional[datetime] = None
     class Config:
@@ -135,6 +135,7 @@ class ServiceSchema(BaseModel):
     service_code: Optional[str] = None
     is_active: bool = True
     sort_order: int = 0
+    connected_addons: Optional[Any] = None
     
     category: Optional[ServiceCategorySchema] = None
     class Config:
@@ -218,6 +219,8 @@ class OrderSchema(BaseModel):
     rush_reduction_days: Optional[int] = None
     
     expected_at: datetime
+    predicted_at: Optional[datetime] = None
+    predicted_days: Optional[int] = None
     released_at: Optional[datetime] = None
     claimed_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
@@ -225,6 +228,11 @@ class OrderSchema(BaseModel):
     user_id: int
     inventory_applied: bool = False
     inventory_used: Optional[Any] = None
+    cancellation_stage: Optional[str] = None
+    refund_status: Optional[str] = None
+    refund_amount: Optional[Decimal] = Decimal('0.0')
+    refund_reason: Optional[str] = None
+    cancelled_at: Optional[datetime] = None
     
     customer: Optional[CustomerSchema] = None
     status: Optional[StatusSchema] = None
@@ -303,12 +311,15 @@ class InventorySchema(BaseModel):
     item_id: Optional[int] = None
     item_name: str
     inventory_number: Optional[str] = None
+    sync_uuid: Optional[str] = None
     category: Optional[str] = None
     stock_quantity: float = 0.0
     unit: Optional[str] = None
     unit_price: Decimal = 0.0
     status: Optional[str] = None
     is_active: bool = True
+    deleted_at: Optional[datetime] = None
+    deleted_by: Optional[str] = None
     
     # Automated consumption fields
     auto_deduct: bool = False
@@ -346,12 +357,15 @@ class InventorySchema(BaseModel):
 class InventoryUpdateSchema(BaseModel):
     item_name: Optional[str] = None
     inventory_number: Optional[str] = None
+    sync_uuid: Optional[str] = None
     category: Optional[str] = None
     stock_quantity: Optional[float] = None
     unit: Optional[str] = None
     unit_price: Optional[Decimal] = None
     status: Optional[str] = None
     is_active: Optional[bool] = None
+    deleted_at: Optional[datetime] = None
+    deleted_by: Optional[str] = None
     
     # Automated consumption fields
     auto_deduct: Optional[bool] = None
@@ -443,7 +457,7 @@ class HistoricalOrderSchema(BaseModel):
 
 class HistoricalOrderCreateSchema(BaseModel):
     order_id: str
-    customer_name: str
+    customer_name: str = Field(..., min_length=2, max_length=60)
     contact_number: str
     branch: Optional[str] = "Villamor"
     date_received: datetime

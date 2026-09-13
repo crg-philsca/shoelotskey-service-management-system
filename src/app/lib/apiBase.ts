@@ -20,18 +20,10 @@ export function resolveApiBase(): string {
     const envOverride = (import.meta as any)?.env?.VITE_API_URL;
     if (envOverride) return envOverride;
 
-    if (typeof window !== 'undefined') {
-        const { hostname, port, protocol } = window.location;
-        const isLocalDev =
-            hostname === 'localhost' ||
-            hostname === '127.0.0.1' ||
-            /^517\d$/.test(port) ||
-            hostname.startsWith('192.');
-        if (isLocalDev) {
-            const host = hostname === '127.0.0.1' ? 'localhost' : hostname;
-            return `${protocol}//${host}:8000/api`;
-        }
-    }
+    // By default, use relative '/api'. In local development (port 5173 on localhost or LAN IP),
+    // Vite's reverse proxy forwards all /api calls to http://127.0.0.1:8000.
+    // This allows mobile phones and other devices on the LAN to communicate with the backend
+    // on port 5173 without being blocked by Windows Firewall on port 8000.
     return '/api';
 }
 

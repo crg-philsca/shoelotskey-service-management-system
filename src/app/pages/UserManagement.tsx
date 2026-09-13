@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/ca
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { Input } from '@/app/components/ui/input';
-import { PlusCircle, Edit, Trash, Search, Filter, ChevronLeft, ChevronRight, History as HistoryIcon, Activity, AlertTriangle } from 'lucide-react';
+import { PlusCircle, Edit, Trash, Search, Filter, ChevronLeft, ChevronRight, History as HistoryIcon, Activity, AlertTriangle, Lock } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import React from 'react';
@@ -79,7 +79,6 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
         });
         if (response.ok) {
           const data = await response.json();
-          // Map backend UserSchema to frontend User type
           const mappedUsers = data.map((u: any) => ({
             id: u.user_id.toString(),
             username: u.username,
@@ -249,6 +248,10 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
 
     const handleDeleteUser = (id: string) => {
       const uToDelete = users.find(u => u.id === id);
+      if (uToDelete?.username?.toLowerCase() === 'admin' || uToDelete?.role?.toLowerCase() === 'admin') {
+        toast.error('System account cannot be deleted.');
+        return;
+      }
       if (uToDelete) {
         setDeleteTarget(uToDelete);
       }
@@ -291,6 +294,10 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
     };
 
     const handleEditClick = (user: User) => {
+      if (user.username?.toLowerCase() === 'admin' || user.role?.toLowerCase() === 'admin') {
+        toast.error('System account cannot be modified.');
+        return;
+      }
       setEditingUser(user);
       setServerError('');
       setUserModalOpen(true);
@@ -358,8 +365,8 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
                     <SelectContent>
                       <SelectItem value="all">All Roles</SelectItem>
                       <SelectItem value="owner">Owner</SelectItem>
-                      <SelectItem value="admin">Admin</SelectItem>
                       <SelectItem value="staff">Staff</SelectItem>
+                      <SelectItem value="admin">System</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -398,15 +405,22 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
           </Dialog>
 
           {/* Table Section */}
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-red-50 border-y border-red-100">
+          <div className="overflow-x-auto w-full">
+            <table className="w-full table-fixed min-w-[640px]">
+              <colgroup>
+                <col className="w-[24%]" />
+                <col className="w-[28%]" />
+                <col className="w-[16%]" />
+                <col className="w-[16%]" />
+                <col className="w-[16%]" />
+              </colgroup>
+              <thead className="bg-red-50/60 border-y border-red-100">
                 <tr>
-                  <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-800 uppercase tracking-widest">Username</th>
-                  <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-800 uppercase tracking-widest">Email</th>
-                  <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-800 uppercase tracking-widest">Role</th>
-                  <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-800 uppercase tracking-widest">Status</th>
-                  <th className="px-4 py-3 text-center text-[11px] font-bold text-slate-800 uppercase tracking-widest">Actions</th>
+                  <th className="px-3 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Username</th>
+                  <th className="px-3 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Email</th>
+                  <th className="px-3 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Role</th>
+                  <th className="px-3 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Status</th>
+                  <th className="px-3 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -425,16 +439,33 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
                     </td>
                   </tr>
                 ) : (
-                  paginatedUsers.map((user) => (
-                    <tr key={user.id} className="hover:bg-gray-50 animate-in fade-in duration-500">
-                      <td className="px-4 py-3 text-sm font-medium">{user.username}</td>
-                      <td className="px-4 py-3 text-sm">{user.email}</td>
-                      <td className="px-4 py-3">
-                        <Badge className="bg-blue-50 text-blue-700 border-blue-100 text-[10px] font-black uppercase">
-                          {user.role}
-                        </Badge>
+                  paginatedUsers.map((user) => {
+                    const isSystemAdmin = user.username?.toLowerCase() === 'admin' || user.role?.toLowerCase() === 'admin';
+                    return (
+                    <tr key={user.id} className="hover:bg-gray-50/80 transition-colors animate-in fade-in duration-500">
+                      <td className="px-3 py-2 text-xs font-medium text-center">
+                        <div className="flex items-center justify-center gap-1.5 text-center">
+                          <span className="font-semibold text-gray-900 truncate max-w-full">{user.username}</span>
+                          {isSystemAdmin && (
+                            <span title="System Protected Account" className="inline-flex items-center text-gray-400 shrink-0">
+                              <Lock size={13} className="text-gray-400" />
+                            </span>
+                          )}
+                        </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-2 text-xs text-gray-600 text-center truncate">{user.email}</td>
+                      <td className="px-3 py-2 text-center">
+                        {isSystemAdmin ? (
+                          <Badge className="bg-gray-200 text-gray-700 border-gray-300 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 shadow-none hover:bg-gray-200">
+                            SYSTEM
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-blue-50 text-blue-700 border-blue-100 text-[10px] font-bold uppercase px-2 py-0.5 shadow-none hover:bg-blue-50">
+                            {user.role}
+                          </Badge>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-center">
                         <Badge className={`
                           ${user.active ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-gray-100 text-gray-500 border-gray-200'}
                           text-[10px] font-black uppercase
@@ -442,28 +473,56 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
                           {user.active ? 'Active' : 'Inactive'}
                         </Badge>
                       </td>
-                      <td className="px-4 py-3 text-sm text-center">
+                      <td className="px-3 py-2 text-xs text-center">
                         <div className="flex justify-center gap-2">
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="h-8 w-8 p-0 rounded-lg border border-amber-500 text-amber-600 hover:bg-amber-50 transition-colors bg-white shadow-none" 
-                            onClick={() => handleEditClick(user)}
-                          >
-                            <Edit size={14} strokeWidth={2.5} />
-                          </Button>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="h-8 w-8 p-0 rounded-lg border border-red-500 text-red-600 hover:bg-red-50 transition-colors bg-white shadow-none" 
-                            onClick={() => handleDeleteUser(user.id)}
-                          >
-                            <Trash size={14} strokeWidth={2.5} />
-                          </Button>
+                          {isSystemAdmin ? (
+                            <>
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                disabled
+                                className="h-8 w-8 p-0 rounded-lg border border-gray-200 text-gray-300 bg-gray-50 opacity-40 cursor-not-allowed shadow-none" 
+                                title="System account cannot be edited"
+                              >
+                                <Edit size={14} strokeWidth={2.5} />
+                              </Button>
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                disabled
+                                className="h-8 w-8 p-0 rounded-lg border border-gray-200 text-gray-300 bg-gray-50 opacity-40 cursor-not-allowed shadow-none" 
+                                title="System account cannot be deleted"
+                              >
+                                <Trash size={14} strokeWidth={2.5} />
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="h-8 w-8 p-0 rounded-lg border border-amber-500 text-amber-600 hover:bg-amber-50 transition-colors bg-white shadow-none" 
+                                onClick={() => handleEditClick(user)}
+                                title="Edit user"
+                              >
+                                <Edit size={14} strokeWidth={2.5} />
+                              </Button>
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="h-8 w-8 p-0 rounded-lg border border-red-500 text-red-600 hover:bg-red-50 transition-colors bg-white shadow-none" 
+                                onClick={() => handleDeleteUser(user.id)}
+                                title="Delete user"
+                              >
+                                <Trash size={14} strokeWidth={2.5} />
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>

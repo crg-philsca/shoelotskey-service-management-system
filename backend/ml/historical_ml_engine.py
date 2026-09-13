@@ -389,7 +389,10 @@ class HistoricalMLEngine:
             }
 
         row = [features.get(col, 0) for col in FEATURE_COLS]
-        predicted_days = max(1, int(round(float(self.model.predict([row])[0]))))
+        raw_pred = float(self.model.predict([row])[0])
+        if features.get("priority_encoded") == 1:
+            raw_pred = max(1.0, raw_pred - 9.0)
+        predicted_days = max(1, int(round(raw_pred)))
         ref_date = date_received or datetime.now()
         return {
             "predicted_completion_days": predicted_days,
@@ -405,7 +408,11 @@ class HistoricalMLEngine:
             return None
         features = build_features_from_live_order(order_data)
         row = [features.get(col, 0) for col in FEATURE_COLS]
-        return max(1.0, float(self.model.predict([row])[0]))
+        raw_pred = float(self.model.predict([row])[0])
+        if features.get("priority_encoded") == 1:
+            rush_red = float(order_data.get("rushReductionDays") or 9)
+            raw_pred = max(1.0, raw_pred - rush_red)
+        return max(1.0, raw_pred)
 
     def get_model_info(self) -> Dict[str, Any]:
         model_exists = os.path.exists(self.model_path)

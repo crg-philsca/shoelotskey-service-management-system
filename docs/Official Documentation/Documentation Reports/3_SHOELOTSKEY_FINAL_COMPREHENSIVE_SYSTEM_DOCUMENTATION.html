@@ -1,0 +1,1008 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SHOELOTSKEY FINAL COMPREHENSIVE SYSTEM DOCUMENTATION</title>
+  <style>
+    :root {
+      --primary: #0284c7; --primary-dark: #0369a1; --primary-light: #e0f2fe;
+      --accent: #f59e0b; --accent-light: #fef3c7; --success: #10b981;
+      --success-light: #dcfce7; --danger: #ef4444; --danger-light: #fee2e2;
+      --purple: #8b5cf6; --purple-light: #ede9fe; --text-dark: #0f172a;
+      --text-muted: #64748b; --bg-light: #f8fafc; --card-bg: #ffffff;
+      --border-color: #e2e8f0; --radius-sm: 8px; --radius-md: 12px;
+      --radius-lg: 16px; --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+      background-color: var(--bg-light); color: var(--text-dark);
+      line-height: 1.65; padding: 0;
+    }
+    .container { max-width: 1280px; margin: 40px auto; background: var(--card-bg);
+      border-radius: var(--radius-lg); box-shadow: var(--shadow-md);
+      border: 1px solid var(--border-color); overflow: hidden; }
+    .header-banner { background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0369a1 100%);
+      color: #ffffff; padding: 40px 36px; border-bottom: 4px solid var(--accent); }
+    .badge-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px;
+      border-radius: 9999px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; }
+    .badge-iso { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); }
+    .badge-domain { background: rgba(56, 189, 248, 0.2); color: #7dd3fc; border: 1px solid rgba(56, 189, 248, 0.4); }
+    .header-title { font-size: 2.2rem; font-weight: 800; margin: 16px 0 10px 0; }
+    .header-subtitle { font-size: 1.05rem; color: #cbd5e1; max-width: 960px; margin-bottom: 24px; }
+    
+    .search-container { padding: 16px; background: #f1f5f9; border-bottom: 1px solid var(--border-color); }
+    .search-input { width: 100%; padding: 12px 16px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: 1rem; }
+    
+    .layout-wrapper { display: flex; flex-direction: row; }
+    .sidebar { width: 300px; background: #f8fafc; border-right: 1px solid var(--border-color); padding: 20px 0; height: 80vh; overflow-y: auto; position: sticky; top: 0; }
+    .nav-group { margin-bottom: 24px; }
+    .nav-group-title { padding: 0 20px; font-size: 0.8rem; text-transform: uppercase; font-weight: 700; color: var(--text-muted); margin-bottom: 8px; letter-spacing: 0.05em; }
+    .nav-link { display: block; padding: 8px 20px; color: #334155; text-decoration: none; font-size: 0.95rem; font-weight: 500; border-left: 3px solid transparent; cursor: pointer; }
+    .nav-link:hover { background: #e2e8f0; color: #0f172a; }
+    .nav-link.active { background: var(--primary-light); color: var(--primary-dark); border-left-color: var(--primary); font-weight: 700; }
+    
+    .content-body { flex: 1; padding: 40px; height: 80vh; overflow-y: auto; }
+    .section-block { display: none; animation: fadeIn 0.3s; }
+    .section-block.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    
+    h2 { font-size: 1.8rem; font-weight: 700; color: #0f172a; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid var(--border-color); }
+    h3 { font-size: 1.3rem; font-weight: 600; color: #1e293b; margin: 24px 0 12px 0; }
+    p { margin-bottom: 16px; color: #334155; }
+    ul { margin-left: 24px; margin-bottom: 16px; color: #334155; }
+    li { margin-bottom: 8px; }
+    
+    .status-badge { display: inline-flex; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; }
+    .status-implemented { background: var(--success-light); color: #065f46; border: 1px solid #a7f3d0; }
+    .status-verified { background: var(--primary-light); color: var(--primary-dark); border: 1px solid #bae6fd; }
+    .status-partial { background: var(--accent-light); color: #92400e; border: 1px solid #fde68a; }
+    .status-future { background: var(--purple-light); color: #5b21b6; border: 1px solid #ddd6fe; }
+    .status-verify { background: var(--danger-light); color: #991b1b; border: 1px solid #fecaca; }
+    
+    table { width: 100%; border-collapse: collapse; margin: 24px 0; font-size: 0.95rem; }
+    th { background: #f1f5f9; padding: 12px 16px; text-align: left; border: 1px solid var(--border-color); font-weight: 600; }
+    td { padding: 12px 16px; border: 1px solid var(--border-color); vertical-align: top; }
+    tr:nth-child(even) { background: #f8fafc; }
+    
+    .callout { padding: 16px 20px; border-radius: var(--radius-sm); margin: 24px 0; border-left: 4px solid; }
+    .callout-warning { background: #fffbeb; border-color: #f59e0b; }
+    .callout-info { background: #eff6ff; border-color: #3b82f6; }
+    .callout-success { background: #ecfdf5; border-color: #10b981; }
+    
+    code { font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; color: #be123c; }
+    pre { background: #1e293b; color: #f8fafc; padding: 16px; border-radius: var(--radius-sm); overflow-x: auto; font-family: 'Cascadia Code', Consolas, monospace; font-size: 0.9em; margin: 16px 0; }
+    pre code { background: none; color: inherit; padding: 0; }
+    
+    .matrix-box { border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 20px; margin-bottom: 20px; background: #fff; box-shadow: var(--shadow-sm); }
+    .matrix-title { font-weight: 700; color: var(--primary-dark); margin-bottom: 12px; font-size: 1.1rem; }
+    .checklist { list-style: none; margin-left: 0; }
+    .check-icon { color: var(--success); font-weight: bold; margin-right: 8px; }
+    .pending-icon { color: var(--accent); font-weight: bold; margin-right: 8px; }
+    
+    .accordion { background: #f8fafc; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-bottom: 12px; overflow: hidden; }
+    .accordion-header { padding: 16px; cursor: pointer; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+    .accordion-header:hover { background: #f1f5f9; }
+    .accordion-content { padding: 0 16px 16px 16px; display: none; }
+    .accordion.open .accordion-content { display: block; }
+    .accordion.open .accordion-header { border-bottom: 1px solid var(--border-color); }
+    
+    @media (max-width: 768px) {
+      .layout-wrapper { flex-direction: column; }
+      .sidebar { width: 100%; height: auto; border-right: none; border-bottom: 1px solid var(--border-color); }
+      .content-body { height: auto; }
+    }
+    @media print {
+      .sidebar, .search-container { display: none; }
+      .content-body { height: auto; overflow: visible; padding: 0; }
+      .section-block { display: block !important; page-break-after: always; }
+      .container { box-shadow: none; border: none; margin: 0; max-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="header-banner">
+      <div style="display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;">
+        <span class="badge-pill badge-iso">ISO/IEC 25010:2023 Evaluated</span>
+        <span class="badge-pill badge-domain">Production: shoelotskey-villamor-pasay.app</span>
+      </div>
+      <h1 class="header-title">Final Comprehensive System Documentation</h1>
+      <p class="header-subtitle">A Web-Based Service Management System with Data Analytics Using Machine Learning Algorithms for Shoelotskey Villamor-Pasay</p>
+    </header>
+    
+    <div class="search-container">
+      <input type="text" id="searchInput" class="search-input" placeholder="Search documentation..." onkeyup="searchDocs()">
+    </div>
+
+    <div class="layout-wrapper">
+      <nav class="sidebar" id="sidebar">
+        <!-- GROUP 1: EXECUTIVE SUMMARY -->
+        <div class="nav-group">
+          <div class="nav-group-title">Executive Summary</div>
+          <a class="nav-link active" onclick="showSection('sec-01', this)">01. Executive Summary</a>
+          <a class="nav-link" onclick="showSection('sec-02', this)">02. Project Overview</a>
+          <a class="nav-link" onclick="showSection('sec-03', this)">03. Project Objectives</a>
+          <a class="nav-link" onclick="showSection('sec-04', this)">04. Scope and Limitations</a>
+        </div>
+        
+        <!-- GROUP 2: ARCHITECTURE -->
+        <div class="nav-group">
+          <div class="nav-group-title">Architecture</div>
+          <a class="nav-link" onclick="showSection('sec-05', this)">05. System Overview</a>
+          <a class="nav-link" onclick="showSection('sec-06', this)">06. Technology Stack</a>
+          <a class="nav-link" onclick="showSection('sec-07', this)">07. System Architecture</a>
+          <a class="nav-link" onclick="showSection('sec-08', this)">08. Application Architecture</a>
+          <a class="nav-link" onclick="showSection('sec-09', this)">09. Frontend Architecture</a>
+          <a class="nav-link" onclick="showSection('sec-10', this)">10. Backend Architecture</a>
+        </div>
+
+        <!-- GROUP 3: DATABASE -->
+        <div class="nav-group">
+          <div class="nav-group-title">Database</div>
+          <a class="nav-link" onclick="showSection('sec-11', this)">11. Database Architecture</a>
+          <a class="nav-link" onclick="showSection('sec-12', this)">12. Database Design and Data Model</a>
+          <a class="nav-link" onclick="showSection('sec-13', this)">13. Database Administration</a>
+        </div>
+
+        <!-- GROUP 4: MODULES -->
+        <div class="nav-group">
+          <div class="nav-group-title">Modules</div>
+          <a class="nav-link" onclick="showSection('sec-14', this)">14. System Modules and Features</a>
+          <a class="nav-link" onclick="showSection('sec-15', this)">15. Job Order Management Workflow</a>
+          <a class="nav-link" onclick="showSection('sec-16', this)">16. Service Management</a>
+          <a class="nav-link" onclick="showSection('sec-17', this)">17. Inventory Management</a>
+          <a class="nav-link" onclick="showSection('sec-18', this)">18. Sales and Expense Management</a>
+          <a class="nav-link" onclick="showSection('sec-19', this)">19. Analytics and Reporting</a>
+          <a class="nav-link" onclick="showSection('sec-20', this)">20. User Management and RBAC</a>
+        </div>
+
+        <!-- GROUP 5: ML & OCR -->
+        <div class="nav-group">
+          <div class="nav-group-title">ML & OCR</div>
+          <a class="nav-link" onclick="showSection('sec-21', this)">21. Business Rules</a>
+          <a class="nav-link" onclick="showSection('sec-22', this)">22. Machine Learning System</a>
+          <a class="nav-link" onclick="showSection('sec-23', this)">23. ML Dataset and Features</a>
+          <a class="nav-link" onclick="showSection('sec-24', this)">24. ML Training and Evaluation</a>
+          <a class="nav-link" onclick="showSection('sec-25', this)">25. ML Limitations and Interpretation</a>
+          <a class="nav-link" onclick="showSection('sec-26', this)">26. OCR and Historical Data</a>
+          <a class="nav-link" onclick="showSection('sec-27', this)">27. Data Validation and Human Review</a>
+        </div>
+
+        <!-- GROUP 6: SECURITY -->
+        <div class="nav-group">
+          <div class="nav-group-title">Security</div>
+          <a class="nav-link" onclick="showSection('sec-28', this)">28. Authentication and Authorization</a>
+          <a class="nav-link" onclick="showSection('sec-29', this)">29. Security Architecture</a>
+          <a class="nav-link" onclick="showSection('sec-30', this)">30. OWASP Security Review</a>
+          <a class="nav-link" onclick="showSection('sec-31', this)">31. NIST Cybersecurity Review</a>
+          <a class="nav-link" onclick="showSection('sec-32', this)">32. Error Handling</a>
+          <a class="nav-link" onclick="showSection('sec-33', this)">33. Reliability and Failures</a>
+        </div>
+
+        <!-- GROUP 7: INFRA & SYNC -->
+        <div class="nav-group">
+          <div class="nav-group-title">Infra & Sync</div>
+          <a class="nav-link" onclick="showSection('sec-34', this)">34. Data Synchronization</a>
+          <a class="nav-link" onclick="showSection('sec-35', this)">35. Internet Interruption / Offline</a>
+          <a class="nav-link" onclick="showSection('sec-36', this)">36. Backup and Recovery</a>
+          <a class="nav-link" onclick="showSection('sec-37', this)">37. Maintainability and Code Quality</a>
+          <a class="nav-link" onclick="showSection('sec-38', this)">38. SOLID / DRY / OOP Practices</a>
+        </div>
+
+        <!-- GROUP 8: TESTING -->
+        <div class="nav-group">
+          <div class="nav-group-title">Testing</div>
+          <a class="nav-link" onclick="showSection('sec-39', this)">39. Testing and Verification</a>
+          <a class="nav-link" onclick="showSection('sec-40', this)">40. Use-Case Testing</a>
+        </div>
+
+        <!-- GROUP 9: EVALUATION -->
+        <div class="nav-group">
+          <div class="nav-group-title">Evaluation</div>
+          <a class="nav-link" onclick="showSection('sec-41', this)">41. ISO/IEC 25010 Evaluation</a>
+          <a class="nav-link" onclick="showSection('sec-42', this)">42. IT Expert Evaluators</a>
+          <a class="nav-link" onclick="showSection('sec-43', this)">43. IT Expert Findings</a>
+          <a class="nav-link" onclick="showSection('sec-44', this)">44. TAM Evaluation</a>
+          <a class="nav-link" onclick="showSection('sec-45', this)">45. TAM Deployment</a>
+          <a class="nav-link" onclick="showSection('sec-46', this)">46. Questionnaire Validation</a>
+          <a class="nav-link" onclick="showSection('sec-47', this)">47. Panel Revisions</a>
+        </div>
+
+        <!-- GROUP 10: MANUSCRIPT ALIGNMENT -->
+        <div class="nav-group">
+          <div class="nav-group-title">Manuscript Alignment</div>
+          <a class="nav-link" onclick="showSection('sec-48', this)">48. Manuscript Alignment</a>
+          <a class="nav-link" onclick="showSection('sec-49', this)">49. Objective → Evidence Matrix</a>
+          <a class="nav-link" onclick="showSection('sec-50', this)">50. Findings and Interpretation</a>
+          <a class="nav-link" onclick="showSection('sec-51', this)">51. Known Limitations</a>
+          <a class="nav-link" onclick="showSection('sec-52', this)">52. Future Enhancements</a>
+        </div>
+
+        <!-- GROUP 11: DEPLOYMENT -->
+        <div class="nav-group">
+          <div class="nav-group-title">Deployment</div>
+          <a class="nav-link" onclick="showSection('sec-53', this)">53. Deployment Architecture</a>
+          <a class="nav-link" onclick="showSection('sec-54', this)">54. Heroku Deployment</a>
+          <a class="nav-link" onclick="showSection('sec-55', this)">55. Domain and SSL</a>
+          <a class="nav-link" onclick="showSection('sec-56', this)">56. Production Readiness</a>
+          <a class="nav-link" onclick="showSection('sec-57', this)">57. Maintenance and Handover</a>
+        </div>
+
+        <!-- GROUP 12: DEFENSE -->
+        <div class="nav-group">
+          <div class="nav-group-title">Defense Q&A</div>
+          <a class="nav-link" onclick="showSection('sec-58', this)">58. Defense Preparation</a>
+          <a class="nav-link" onclick="showSection('sec-59', this)">59. Defense Q&A Bank</a>
+          <a class="nav-link" onclick="showSection('sec-60', this)">60. Final Go / No-Go Checklist</a>
+          <a class="nav-link" onclick="showSection('sec-61', this)">61. Appendices</a>
+          <a class="nav-link" onclick="showSection('sec-62', this)">62. Document Control</a>
+        </div>
+
+      </nav>
+
+      <main class="content-body" id="content">
+
+        <!-- SECTION 01 -->
+        <div id="sec-01" class="section-block active">
+          <h2>01. Executive Summary</h2>
+          <span class="status-badge status-verified">Verified</span>
+          <p><strong>Project Identity:</strong> A Web-Based Service Management System with Data Analytics Using Machine Learning Algorithms for Shoelotskey Villamor-Pasay.</p>
+          <p><strong>Business Context & Problem:</strong> Shoelotskey Villamor-Pasay faced operational inefficiencies in manual job order tracking, manual status updates, inventory desynchronization, and subjective estimations of service completion dates. The lack of a centralized system hindered scalability and accurate reporting.</p>
+          <p><strong>Major System Functions:</strong> The deployed system provides centralized job order management, service catalog control, inventory tracking, and automated sales reporting.</p>
+          <p><strong>ML Purpose:</strong> An advisory Machine Learning model (Random Forest Regressor) supplements authoritative business rules by predicting service completion dates based on historical order-to-claim data, providing data-driven turnaround time estimates.</p>
+          <p><strong>Evaluation Approach:</strong> System software quality was formally evaluated against 9 characteristics of ISO/IEC 25010:2023 using a 45-statement instrument. User acceptance is measured via the Technology Acceptance Model (TAM) containing 4 constructs and 20 statements.</p>
+          <p><strong>Major Limitations:</strong> The ML model relies on a small historical dataset (35 eligible records) yielding modest predictive metrics (R²=0.1959). Consequently, ML serves as an advisory tool, while official release dates remain strictly governed by business rules. The system relies entirely on internet connectivity and PostgreSQL availability.</p>
+        </div>
+
+        <!-- SECTION 02 -->
+        <div id="sec-02" class="section-block">
+          <h2>02. Project Overview</h2>
+          <span class="status-badge status-implemented">Implemented</span>
+          <p>The system is specifically engineered for the operational workflows of Shoelotskey Villamor-Pasay. It targets the core business flow: receiving footwear, assessing condition, establishing required services (cleaning, reglue, restoration), providing quotes, and tracking progress through to final claim.</p>
+          <p><strong>Intended Users:</strong></p>
+          <ul>
+              <li><strong>Owner:</strong> Full system access, financial reporting, employee management, service configuration.</li>
+              <li><strong>Staff/Technicians:</strong> Job order creation, status updating, basic inventory deduction.</li>
+          </ul>
+        </div>
+
+        <!-- SECTION 03 -->
+        <div id="sec-03" class="section-block">
+          <h2>03. Project Objectives</h2>
+          <span class="status-badge status-verified">Verified</span>
+          <p>The project adheres to five strictly documented objectives:</p>
+          <ul>
+              <li><strong>Objective 1:</strong> To develop a centralized digital job order management system for tracking shoe restoration services.</li>
+              <li><strong>Objective 2:</strong> To integrate a machine learning algorithm (Random Forest Regressor) for predicting service completion dates.</li>
+              <li><strong>Objective 3:</strong> To implement analytics and reporting modules for sales, services, and inventory tracking.</li>
+              <li><strong>Objective 4:</strong> To evaluate the software quality of the system using the ISO/IEC 25010:2023 framework.</li>
+              <li><strong>Objective 5:</strong> To evaluate user acceptance using the Technology Acceptance Model (TAM).</li>
+          </ul>
+          <div class="callout callout-warning">
+              <strong>Traceability Note:</strong> All system features, evaluations, and manuscript findings trace directly back to these five approved objectives. Unrelated or unverified goals (such as 100% accuracy guarantees) are not part of the project objectives.
+          </div>
+        </div>
+
+        <!-- SECTION 04 -->
+        <div id="sec-04" class="section-block">
+          <h2>04. Scope and Limitations</h2>
+          <span class="status-badge status-verified">Verified</span>
+          <p><strong>Included Scope:</strong> Job order creation, role-based access control (Owner/Staff), inventory deduction upon service completion, payment tracking, basic analytics dashboard, and advisory ML completion predictions.</p>
+          <p><strong>System Limitations:</strong></p>
+          <ul>
+              <li><strong>No Offline Capability:</strong> The system requires an active internet connection. There is no local caching or offline queueing implemented.</li>
+              <li><strong>ML Dataset Constraints:</strong> The ML model is constrained by a small validated historical dataset (35 records), limiting its predictive power.</li>
+              <li><strong>No Customer Portal:</strong> Customers cannot log in to track orders themselves; status tracking relies on SMS/external communication or direct inquiry.</li>
+              <li><strong>No Automatic Retraining:</strong> The Random Forest model must be manually retrained by an administrator when new historical data is validated; it does not retrain automatically on the fly.</li>
+              <li><strong>Single Branch:</strong> The architecture and database are designed for a single branch (Villamor-Pasay) and do not support multi-tenant or multi-branch franchising out of the box.</li>
+          </ul>
+        </div>
+
+        <!-- SECTION 05 -->
+        <div id="sec-05" class="section-block">
+          <h2>05. System Overview</h2>
+          <span class="status-badge status-implemented">Implemented</span>
+          <p>The Shoelotskey Service Management System operates on a classic 3-tier web architecture:</p>
+          <ul>
+              <li><strong>Presentation Layer:</strong> A React.js Single Page Application (SPA) providing responsive UI for Staff and Owners.</li>
+              <li><strong>Application Layer:</strong> A Python FastAPI backend handling business logic, authentication, and serving the scikit-learn ML model.</li>
+              <li><strong>Data Layer:</strong> A PostgreSQL relational database managing 3NF-normalized state, connected via SQLAlchemy ORM.</li>
+          </ul>
+          <p>Data flows from the browser via REST API (JSON) over HTTPS to the FastAPI backend. The backend validates tokens, enforces RBAC, interacts with PostgreSQL, and invokes the ML engine synchronously during job order estimation.</p>
+        </div>
+
+        <!-- SECTION 06 -->
+        <div id="sec-06" class="section-block">
+          <h2>06. Technology Stack</h2>
+          <span class="status-badge status-verified">Verified</span>
+          <table>
+              <tr><th>Layer</th><th>Technology</th><th>Purpose</th></tr>
+              <tr><td>Frontend</td><td>React 18 + TypeScript + Vite</td><td>UI rendering, state management, routing</td></tr>
+              <tr><td>Styling</td><td>Vanilla CSS</td><td>Responsive design without heavy framework lock-in</td></tr>
+              <tr><td>Backend API</td><td>Python 3.12 + FastAPI</td><td>High-performance async REST API, Pydantic validation</td></tr>
+              <tr><td>ORM</td><td>SQLAlchemy 2.0</td><td>Database abstraction, session management, schema modeling</td></tr>
+              <tr><td>Machine Learning</td><td>scikit-learn 1.5+</td><td>RandomForestRegressor for completion prediction</td></tr>
+              <tr><td>Database (Prod)</td><td>PostgreSQL 16</td><td>Relational data persistence, ACID compliance</td></tr>
+              <tr><td>Security</td><td>JWT + bcrypt</td><td>Stateless session tokens and password hashing</td></tr>
+              <tr><td>Deployment</td><td>Heroku (Gunicorn/Uvicorn)</td><td>Production cloud hosting and process management</td></tr>
+          </table>
+        </div>
+
+        <!-- SECTION 07 -->
+        <div id="sec-07" class="section-block">
+          <h2>07. System Architecture</h2>
+          <span class="status-badge status-implemented">Implemented</span>
+          <pre>
+[ Browser / Client ]
+      │
+      ▼ (HTTPS / REST JSON)
+[ Heroku Web Dyno (Gunicorn + Uvicorn) ]
+      │
+      ├──► [ FastAPI Routing & Validation ]
+      │          │
+      │          ├──► [ Auth Middleware (JWT) ]
+      │          │
+      │          ├──► [ Business Logic Services ] ◄──► [ scikit-learn ML Engine (.pkl) ]
+      │          │
+      │          └──► [ SQLAlchemy ORM ]
+      │
+      ▼ (TCP / SSL)
+[ PostgreSQL Database (Heroku Postgres) ]
+          </pre>
+        </div>
+
+        <!-- SECTION 08 -->
+        <div id="sec-08" class="section-block">
+          <h2>08. Application Architecture</h2>
+          <span class="status-badge status-verified">Verified</span>
+          <p>The application architecture enforces strict separation of concerns:</p>
+          <ul>
+              <li><strong>Routers (<code>routers/</code>):</strong> Define API endpoints (e.g., <code>/auth</code>, <code>/orders</code>). They handle HTTP requests, responses, and dependency injection (DB sessions, current user).</li>
+              <li><strong>Schemas (<code>schemas.py</code>):</strong> Pydantic models define strict input/output data shapes, ensuring invalid data is rejected before hitting business logic.</li>
+              <li><strong>Models (<code>models.py</code>):</strong> SQLAlchemy classes map to PostgreSQL tables, defining relationships and constraints.</li>
+              <li><strong>ML Engine (<code>ml_engine.py</code>):</strong> Encapsulates model loading, feature extraction, and inference. The application layer calls this service without needing to know scikit-learn internals.</li>
+          </ul>
+        </div>
+
+        <!-- SECTION 09 -->
+        <div id="sec-09" class="section-block">
+          <h2>09. Frontend Architecture</h2>
+          <span class="status-badge status-implemented">Implemented</span>
+          <p>The React frontend is built as a modular Single Page Application:</p>
+          <ul>
+              <li><strong>Routing:</strong> <code>react-router-dom</code> handles navigation between 20+ views (Dashboard, Job Orders, Inventory, etc.) without page reloads.</li>
+              <li><strong>Components:</strong> Reusable UI elements (modals, tables, buttons) exist in <code>src/app/components/</code>.</li>
+              <li><strong>State Management:</strong> Context API (e.g., <code>OrderProvider</code>, <code>InventoryProvider</code>) manages global state, while local component state uses <code>useState</code>.</li>
+              <li><strong>API Integration:</strong> Standard <code>fetch</code> API calls are centralized or handled within contexts, attaching the JWT Bearer token to authenticated requests.</li>
+              <li><strong>Protection:</strong> A <code>ProtectedRoute</code> wrapper component enforces role-based rendering (Owner vs Staff).</li>
+          </ul>
+        </div>
+
+        <!-- SECTION 10 -->
+        <div id="sec-10" class="section-block">
+          <h2>10. Backend Architecture</h2>
+          <span class="status-badge status-implemented">Implemented</span>
+          <p>The FastAPI backend utilizes dependency injection for database sessions and authentication. Every protected endpoint injects <code>get_current_user</code> or <code>require_role</code> to verify JWT validity and permissions. Business logic (e.g., inventory deduction upon job order completion) is handled within transaction blocks to ensure atomicity—if deduction fails, the order status update rolls back.</p>
+        </div>
+
+        <!-- SECTION 11 -->
+        <div id="sec-11" class="section-block">
+          <h2>11. Database Architecture</h2>
+          <span class="status-badge status-verified">Verified</span>
+          <p><strong>Production:</strong> The system strictly utilizes PostgreSQL on Heroku. PostgreSQL provides robust concurrency control, JSONB support (if needed), and automated Heroku backups.</p>
+          <p><strong>Local Development:</strong> A local SQLite fallback (<code>shoelotskey.db</code>) is configured purely for offline development and local disaster recovery testing. </p>
+          <div class="callout callout-warning">
+              <strong>Production Guard:</strong> The <code>database.py</code> configuration explicitly prevents silent fallback to SQLite in production. If the Heroku <code>DATABASE_URL</code> is unreachable, the system will fail safely (503 Service Unavailable) rather than serving an isolated, empty local SQLite file.
+          </div>
+        </div>
+
+        <!-- SECTION 12 -->
+        <div id="sec-12" class="section-block">
+          <h2>12. Database Design and Data Model</h2>
+          <span class="status-badge status-implemented">Implemented</span>
+          <p>The schema adheres to Third Normal Form (3NF) to eliminate data redundancy and anomalies.</p>
+          <ul>
+              <li><strong>Core Entities:</strong> <code>users</code>, <code>customers</code>, <code>orders</code>, <code>items</code>, <code>services</code>, <code>inventory</code>.</li>
+              <li><strong>Lookup Tables:</strong> <code>roles</code>, <code>status</code>, <code>service_categories</code>, <code>conditions</code>, <code>payment_methods</code>.</li>
+              <li><strong>Mapping Tables:</strong> <code>item_service_mapping</code>, <code>item_condition_mapping</code> to resolve many-to-many relationships.</li>
+              <li><strong>Historical/ML Data:</strong> <code>historical_orders</code>, <code>historical_predictions</code> to isolate training data from live transactional data.</li>
+          </ul>
+          <p>Foreign keys enforce referential integrity (e.g., an order cannot belong to a non-existent customer; an item cannot reference a deleted service without cascading or nullifying appropriately based on audit requirements).</p>
+        </div>
+
+        <!-- SECTION 13 -->
+        <div id="sec-13" class="section-block">
+          <h2>13. Database Administration</h2>
+          <span class="status-badge status-verified">Verified</span>
+          <p>Database administration is managed through Heroku Postgres dashboards and SQLAlchemy. Migrations are handled via initialization scripts (<code>setup.sql</code>) during deployment. Audit logs are maintained in <code>audit_logs</code> and <code>status_log</code> tables to track critical business events (who changed an order status, when, and from what to what).</p>
+        </div>
+
+        <!-- SECTION 14 -->
+        <div id="sec-14" class="section-block">
+          <h2>14. System Modules and Features</h2>
+          <span class="status-badge status-implemented">Implemented</span>
+          <p>The system is divided into functional modules aligning with Shoelotskey's operations:</p>
+          <ul>
+              <li>Dashboard (KPIs, pending tasks)</li>
+              <li>Job Order Management (Creation, tracking, updating)</li>
+              <li>Release Calendar (Visualizing deadlines)</li>
+              <li>Service Management (Catalog and pricing control)</li>
+              <li>Inventory Management (Stock levels, item consumption)</li>
+              <li>Sales & Expenses (Financial tracking)</li>
+              <li>Analytics & Reporting (Charts and data export)</li>
+              <li>User Management (RBAC administration)</li>
+          </ul>
+        </div>
+
+        <!-- SECTION 15 -->
+        <div id="sec-15" class="section-block">
+          <h2>15. Job Order Management Workflow</h2>
+          <span class="status-badge status-implemented">Implemented</span>
+          <p>The core business workflow:</p>
+          <ol>
+              <li><strong>Creation:</strong> Staff inputs customer details, selects shoe items, conditions, and required services.</li>
+              <li><strong>Estimation:</strong> System calculates the <strong>Official Release Date</strong> via Business Rules, and provides an advisory <strong>ML Prediction</strong>.</li>
+              <li><strong>Payment:</strong> Downpayment or full payment is recorded.</li>
+              <li><strong>Processing:</strong> Status moves from <code>new-order</code> to <code>on-going</code>.</li>
+              <li><strong>Completion:</strong> Status moves to <code>for-release</code>. Inventory is automatically deducted based on services performed.</li>
+              <li><strong>Claiming:</strong> Status moves to <code>claimed</code>. The total duration (Claimed Date - Date Received) becomes eligible for future ML training if validated.</li>
+          </ol>
+        </div>
+
+        <!-- SECTION 16 -->
+        <div id="sec-16" class="section-block">
+          <h2>16. Service Management</h2>
+          <span class="status-badge status-implemented">Implemented</span>
+          <p>Owners manage the service catalog. Each service includes a base price and a baseline <code>duration_days</code>. The official Business Rules engine uses these duration values, along with combination logic (e.g., performing a Full Reglue + Restoration overrides standard additive timelines), to compute the official customer commitment date.</p>
+        </div>
+
+        <!-- SECTION 17 -->
+        <div id="sec-17" class="section-block">
+          <h2>17. Inventory Management</h2>
+          <span class="status-badge status-implemented">Implemented</span>
+          <p>Tracks physical consumables (glues, cleaners, paints). Items have current quantities and low-stock thresholds. When a job order is marked <code>for-release</code>, the system triggers business logic to deduct relevant inventory items associated with the performed services. Transactions are logged in <code>inventory_logs</code> for auditability.</p>
+          <p><em>Limitation:</em> Concurrent inventory deductions rely on standard PostgreSQL transactions. Extremely high concurrency could cause lock contention, though this is negligible at current operational volumes.</p>
+        </div>
+
+        <!-- SECTION 18 -->
+        <div id="sec-18" class="section-block">
+          <h2>18. Sales and Expense Management</h2>
+          <span class="status-badge status-implemented">Implemented</span>
+          <p>Records all incoming revenue (payments against job orders or direct POS sales) and outgoing shop expenses. Calculates gross and net totals over selected periods. Permissions ensure only Owners can modify historical financial records.</p>
+        </div>
+
+        <!-- SECTION 19 -->
+        <div id="sec-19" class="section-block">
+          <h2>19. Analytics and Reporting</h2>
+          <span class="status-badge status-implemented">Implemented</span>
+          <p>Aggregates data for the Dashboard. Provides visualizations for monthly revenue, popular services, and pending job order distribution. Allows exporting data for external accounting. Filtering is supported by date ranges and status.</p>
+        </div>
+
+        <!-- SECTION 20 -->
+        <div id="sec-20" class="section-block">
+          <h2>20. User Management and RBAC</h2>
+          <span class="status-badge status-implemented">Implemented</span>
+          <p>Enforces strict separation of duties:</p>
+          <ul>
+              <li><strong>Owner:</strong> Can access Analytics, Financials, User Management, Service Configuration, and Historical Data validation.</li>
+              <li><strong>Staff:</strong> Restricted to Job Orders, basic Inventory views, and daily operational tasks. Backend routes explicitly reject requests from Staff tokens attempting to access Owner endpoints.</li>
+          </ul>
+        </div>
+
+        <!-- SECTION 21 -->
+        <div id="sec-21" class="section-block">
+          <h2>21. Business Rules</h2>
+          <span class="status-badge status-verified">Verified</span>
+          <div class="callout callout-info">
+              <strong>Crucial Distinction:</strong> The <strong>Official Release Date</strong> is calculated by a deterministic Business Rules engine based on the service catalog (e.g., Service A takes 3 days, Service B takes 2 days). This provides the legally committed date to the customer.
+          </div>
+          <p>The ML model acts strictly as an <strong>advisory</strong> overlay to indicate if historical trends suggest the order will take longer or shorter than the official rule.</p>
+        </div>
+
+        <!-- SECTION 22 -->
+        <div id="sec-22" class="section-block">
+          <h2>22. Machine Learning System</h2>
+          <span class="status-badge status-implemented">Implemented</span>
+          <p>The system integrates a <code>RandomForestRegressor</code> trained via scikit-learn. It predicts <code>CompletionDays</code> (the number of days from order receipt to claim). The trained model is serialized as <code>completion_model.pkl</code> and loaded into memory by the FastAPI backend on startup.</p>
+        </div>
+
+        <!-- SECTION 23 -->
+        <div id="sec-23" class="section-block">
+          <h2>23. ML Dataset and Features</h2>
+          <span class="status-badge status-verified">Verified</span>
+          <p>The canonical deployed feature vector strictly contains <strong>18 features</strong> extracted from the job order:</p>
+          <code>total_pairs</code>, <code>basic_cleaning_qty</code>, <code>full_reglue_qty</code>, <code>minor_reglue_qty</code>, <code>full_restoration_qty</code>, <code>minor_restoration_qty</code>, <code>color_renewal_qty</code>, <code>unyellowing_qty</code>, <code>priority_encoded</code>, <code>grand_total</code>, <code>day_of_week_received</code>, <code>month_received</code>, <code>scratches_count</code>, <code>yellowing_count</code>, <code>sole_separation_count</code>, <code>deep_stains_count</code>, <code>rips_holes_count</code>, <code>worn_out_count</code>.
+          <p>The model does <em>not</em> currently use real-time technician workload, queue volume, or weather latency, as these features are not present in the historical dataset.</p>
+        </div>
+
+        <!-- SECTION 24 -->
+        <div id="sec-24" class="section-block">
+          <h2>24. ML Training and Evaluation</h2>
+          <span class="status-badge status-verified">Verified</span>
+          <p><strong>Parameters:</strong> <code>n_estimators=150</code>, <code>max_depth=10</code>, <code>random_state=42</code>.</p>
+          <p><strong>Target Variable:</strong> <code>CompletionDays = ClaimedDate - DateReceived</code> (filtered to valid ranges of 1-60 days).</p>
+          <p><strong>Documented Dataset & Metrics:</strong></p>
+          <ul>
+              <li>Eligible Records: 35</li>
+              <li>Training Split: 28 records</li>
+              <li>Testing Split: 7 records</li>
+              <li><strong>MAE (Mean Absolute Error):</strong> 7.61 days</li>
+              <li><strong>RMSE:</strong> 8.93 days</li>
+              <li><strong>R² Score:</strong> 0.1959</li>
+          </ul>
+          <div class="callout callout-warning">
+              <strong>Honest Reporting:</strong> The R² score of 0.1959 indicates modest predictive power, largely due to the extremely small dataset size (35 records). The system does not claim 85% or 92% accuracy. This mathematical reality is why the ML is explicitly classified as an advisory feature, not a replacement for business rules.
+          </div>
+        </div>
+
+        <!-- SECTION 25 -->
+        <div id="sec-25" class="section-block">
+          <h2>25. ML Limitations and Interpretation</h2>
+          <span class="status-badge status-verified">Verified</span>
+          <p>The primary limitation is data volume. Machine learning requires hundreds to thousands of records to identify robust patterns. With only 35 eligible records, the model is highly susceptible to variance. Furthermore, the target variable (Order to Claim) includes the customer's delay in picking up the shoes, introducing noise unrelated to the actual repair time. Future enhancements require separating "Repair Completed Date" from "Claimed Date" in the data model.</p>
+        </div>
+
+        <!-- SECTION 26 -->
+        <div id="sec-26" class="section-block">
+          <h2>26. OCR and Historical Data</h2>
+          <span class="status-badge status-partial">Partially Implemented</span>
+          <p>Historical paper records are processed via OCR to build the ML dataset. The preferred production workflow involves scanning physical tickets, preprocessing, and structured extraction (e.g., using Gemini Vision or local fallbacks like Tesseract). Heavy local OCR models (like EasyOCR or TrOCR) are strictly excluded from the Heroku production deployment due to slug size limitations (500MB max) and memory constraints.</p>
+        </div>
+
+        <!-- SECTION 27 -->
+        <div id="sec-27" class="section-block">
+          <h2>27. Data Validation and Human Review</h2>
+          <span class="status-badge status-implemented">Implemented</span>
+          <p><strong>Crucial Rule:</strong> OCR output is never automatically trusted. Extracted data enters a <code>PENDING REVIEW</code> state. A human administrator must structurally validate dates, quantities, and services. Only after explicit human correction and approval does a record become <code>VALIDATED</code> and eligible for ML training.</p>
+        </div>
+
+        <!-- SECTION 28 -->
+        <div id="sec-28" class="section-block">
+          <h2>28. Authentication and Authorization</h2>
+          <span class="status-badge status-implemented">Implemented</span>
+          <p>Authentication utilizes stateless JSON Web Tokens (JWT). Passwords are securely hashed using <code>bcrypt</code> with salting. The FastAPI backend employs dependency injection (<code>oauth2_scheme</code>) to extract and validate tokens on every protected route. Authorization is enforced by checking the <code>role</code> claim embedded in the JWT payload against endpoint requirements.</p>
+        </div>
+
+        <!-- SECTION 29 -->
+        <div id="sec-29" class="section-block">
+          <h2>29. Security Architecture</h2>
+          <span class="status-badge status-implemented">Implemented</span>
+          <p>Security is implemented in depth:</p>
+          <ul>
+              <li><strong>Network:</strong> HTTPS enforcement via Heroku ACM.</li>
+              <li><strong>Application:</strong> Input validation via Pydantic schemas prevents malformed payloads. SQLAlchemy ORM inherently parameterizes queries, preventing SQL Injection.</li>
+              <li><strong>Session:</strong> A 30-minute inactivity timeout is implemented in the React frontend (<code>App.tsx</code>), automatically clearing tokens and terminating sessions.</li>
+              <li><strong>Secrets:</strong> JWT secret keys and database URLs are managed via Heroku Config Vars, never hardcoded in source.</li>
+          </ul>
+        </div>
+
+        <!-- SECTION 30 -->
+        <div id="sec-30" class="section-block">
+          <h2>30. OWASP Security Review</h2>
+          <span class="status-badge status-verified">Verified</span>
+          <p>Review against OWASP Top 10:</p>
+          <ul>
+              <li><strong>A01: Broken Access Control:</strong> Mitigated via strict backend route protection and RBAC.</li>
+              <li><strong>A02: Cryptographic Failures:</strong> Mitigated via bcrypt hashing and HTTPS transit.</li>
+              <li><strong>A03: Injection:</strong> Mitigated via SQLAlchemy ORM parameterization.</li>
+              <li><strong>A07: Identification and Authentication Failures:</strong> Mitigated via strong JWT validation and 30-minute inactivity timeouts.</li>
+          </ul>
+          <p><em>Remaining Risk:</em> Lack of multi-factor authentication (MFA) and aggressive rate limiting on login endpoints.</p>
+        </div>
+
+        <!-- SECTION 31 -->
+        <div id="sec-31" class="section-block">
+          <h2>31. NIST Cybersecurity Review</h2>
+          <span class="status-badge status-verified">Verified</span>
+          <p>Aligned with NIST CSF 2.0:</p>
+          <ul>
+              <li><strong>Identify/Protect:</strong> RBAC, password hashing, environment variable isolation.</li>
+              <li><strong>Detect:</strong> Status logs and audit trails capture critical state changes.</li>
+              <li><strong>Respond/Recover:</strong> Automated Heroku Postgres backups ensure data recovery in disaster scenarios.</li>
+          </ul>
+        </div>
+
+        <!-- SECTION 32 -->
+        <div id="sec-32" class="section-block">
+          <h2>32. Error Handling</h2>
+          <span class="status-badge status-implemented">Implemented</span>
+          <p>The backend sanitizes error responses. Database connection failures or internal exceptions return generic 500 Internal Server Error messages to the client, preventing stack trace or infrastructure disclosure. Pydantic validation errors return structured 422 Unprocessable Entity responses detailing exactly which field failed.</p>
+        </div>
+
+        <!-- SECTION 33 -->
+        <div id="sec-33" class="section-block">
+          <h2>33. Reliability and Failures</h2>
+          <span class="status-badge status-verified">Verified</span>
+          <p>If the ML service fails (e.g., model file corrupted), the API gracefully falls back to heuristic business rules, appending a <code>"fallback_reason"</code> to the response. If the database is unreachable, the system fails safely, returning 503 errors rather than attempting unauthorized local caching. Invalid JWTs immediately return 401 Unauthorized, triggering frontend redirection to login.</p>
+        </div>
+
+        <!-- SECTION 34 -->
+        <div id="sec-34" class="section-block">
+          <h2>34. Data Synchronization</h2>
+          <span class="status-badge status-verified">Verified</span>
+          <p>As a purely web-based application, data synchronization is synchronous. Clients read and write directly to the central PostgreSQL database via the API. There is no complex multi-master synchronization or edge caching implemented.</p>
+        </div>
+
+        <!-- SECTION 35 -->
+        <div id="sec-35" class="section-block">
+          <h2>35. Internet Interruption / Offline</h2>
+          <span class="status-badge status-verified">Verified</span>
+          <p>The system is <strong>not offline-capable</strong>. If internet connectivity is lost, frontend API calls will fail, and the UI will display generic network error messages. State changes cannot be queued locally for later synchronization. The business must rely on manual paper ticketing during internet outages, transcribing them into the system once connectivity is restored.</p>
+        </div>
+
+        <!-- SECTION 36 -->
+        <div id="sec-36" class="section-block">
+          <h2>36. Backup and Recovery</h2>
+          <span class="status-badge status-implemented">Implemented</span>
+          <p>Heroku Postgres provides automated daily backups and continuous protection (WAL archiving). In the event of catastrophic data corruption, administrators can restore the database to a specific point in time using Heroku CLI tools. Local SQLite backups are not used for production data recovery.</p>
+        </div>
+
+        <!-- SECTION 37 -->
+        <div id="sec-37" class="section-block">
+          <h2>37. Maintainability and Code Quality</h2>
+          <span class="status-badge status-verified">Verified</span>
+          <p>The codebase is organized into distinct domain boundaries (routers, services, models). Type hints are used throughout the Python backend, and TypeScript interfaces define strict contracts on the frontend. This significantly reduces cognitive load during maintenance.</p>
+        </div>
+
+        <!-- SECTION 38 -->
+        <div id="sec-38" class="section-block">
+          <h2>38. SOLID / DRY / OOP Practices</h2>
+          <span class="status-badge status-verified">Verified</span>
+          <p><strong>Single Responsibility:</strong> Routes handle HTTP, schemas handle validation, services handle logic. <strong>DRY:</strong> Common database lookup logic and JWT verification are abstracted into reusable dependencies. <strong>OOP/Functional:</strong> The React frontend heavily utilizes functional components and hooks, while the backend utilizes OOP for ORM models and ML class encapsulation.</p>
+        </div>
+
+        <!-- SECTION 39 -->
+        <div id="sec-39" class="section-block">
+          <h2>39. Testing and Verification</h2>
+          <span class="status-badge status-implemented">Implemented</span>
+          <p>Testing encompasses API endpoint verification (Postman/curl), frontend component rendering, and ML inference validation. Authentication boundaries were rigorously tested to ensure Staff tokens cannot perform Owner actions (e.g., deleting historical records).</p>
+        </div>
+
+        <!-- SECTION 40 -->
+        <div id="sec-40" class="section-block">
+          <h2>40. Use-Case Testing</h2>
+          <span class="status-badge status-verified">Verified</span>
+          <p>Functional use cases demonstrated during evaluation include:</p>
+          <ul>
+              <li>UC-01: Secure Login/Logout (Pass)</li>
+              <li>UC-02: Create Job Order with complex services (Pass)</li>
+              <li>UC-03: System calculates Official Release Date (Pass)</li>
+              <li>UC-04: System provides ML Advisory Date (Pass)</li>
+              <li>UC-05: Complete order and verify inventory deduction (Pass)</li>
+              <li>UC-06: Attempt unauthorized endpoint access as Staff (Rejected safely - Pass)</li>
+          </ul>
+        </div>
+
+        <!-- SECTION 41 -->
+        <div id="sec-41" class="section-block">
+          <h2>41. ISO/IEC 25010 Evaluation</h2>
+          <span class="status-badge status-verified">Verified</span>
+          <p>Software quality was formally evaluated using the ISO/IEC 25010:2023 framework.</p>
+          <ul>
+              <li><strong>Characteristics:</strong> Functional Suitability, Performance Efficiency, Compatibility, Interaction Capability, Reliability, Security, Maintainability, Flexibility, Safety (9 total).</li>
+              <li><strong>Instrument:</strong> 45 statements (5 per characteristic).</li>
+              <li><strong>Scale:</strong> 4-point Likert (4=Highly Acceptable, 3=Acceptable, 2=Less Acceptable, 1=Not Acceptable).</li>
+              <li><strong>Composite Score:</strong> 3.71 / 4.00 (Highly Acceptable).</li>
+          </ul>
+        </div>
+
+        <!-- SECTION 42 -->
+        <div id="sec-42" class="section-block">
+          <h2>42. IT Expert Evaluators</h2>
+          <span class="status-badge status-verified">Verified</span>
+          <p>Evaluations were conducted by three independent IT practitioners:</p>
+          <ol>
+              <li><strong>Evaluator 1:</strong> Senior Software Engineer, 8+ years experience.</li>
+              <li><strong>Evaluator 2:</strong> Systems Analyst, 5+ years experience.</li>
+              <li><strong>Evaluator 3:</strong> Quality Assurance Lead, 6+ years experience.</li>
+          </ol>
+          <p><em>(Note: Actual names and signatures are held in the physical/archived Official Documentation folder to preserve privacy).</em></p>
+        </div>
+
+        <!-- SECTION 43 -->
+        <div id="sec-43" class="section-block">
+          <h2>43. IT Expert Findings</h2>
+          <span class="status-badge status-verified">Verified</span>
+          <p>Key findings and post-evaluation remediations:</p>
+          <table>
+              <tr><th>Evaluator Comment</th><th>Impact Area</th><th>Remediation Status</th></tr>
+              <tr><td>"Clarify the role of AI vs Business Rules in the UI."</td><td>Interaction Capability</td><td><span class="status-implemented">Implemented</span> Added explicit UI tags differentiating Official vs Advisory dates.</td></tr>
+              <tr><td>"Implement inactivity timeouts for security."</td><td>Security</td><td><span class="status-implemented">Implemented</span> 30-minute frontend inactivity logout added to App.tsx.</td></tr>
+              <tr><td>"Ensure database URL cannot fallback to SQLite in Prod."</td><td>Reliability</td><td><span class="status-implemented">Implemented</span> Hardened environment checks in database.py.</td></tr>
+          </table>
+          <div class="callout callout-info">
+              Post-evaluation fixes improve the system for deployment but do <strong>not</strong> retroactively alter the signed 3.71/4.00 evaluation score.
+          </div>
+        </div>
+
+        <!-- SECTION 44 -->
+        <div id="sec-44" class="section-block">
+          <h2>44. TAM Evaluation</h2>
+          <span class="status-badge status-verify">Requires Verification</span>
+          <p>User acceptance is measured using the Technology Acceptance Model (TAM).</p>
+          <ul>
+              <li><strong>Respondents:</strong> Shoelotskey Owner + 2 Staff members.</li>
+              <li><strong>Constructs:</strong> Perceived Usefulness, Perceived Ease of Use, Behavioral Intention, Actual System Use.</li>
+              <li><strong>Instrument:</strong> 20 statements on a 4-point Likert scale.</li>
+          </ul>
+          <p><em>Note: Final TAM scores are pending the completion of the formal two-week deployment period.</em></p>
+        </div>
+
+        <!-- SECTION 45 -->
+        <div id="sec-45" class="section-block">
+          <h2>45. TAM Deployment</h2>
+          <span class="status-badge status-verify">Requires Verification</span>
+          <div class="callout callout-warning">
+              <strong>Deployment Distinction:</strong> Migrating historical July-August 2026 data into the database is a technical data initialization step. It does <strong>not</strong> constitute the required 2-week operational TAM deployment.
+          </div>
+          <p>The formal TAM deployment requires the client (Owner + 2 Staff) to actively use the system in their daily operations for approximately two weeks. Only after this period of actual use will the TAM questionnaires be administered and tallied to complete Chapter 4.</p>
+        </div>
+
+        <!-- SECTION 46 -->
+        <div id="sec-46" class="section-block">
+          <h2>46. Questionnaire Validation</h2>
+          <span class="status-badge status-verified">Verified</span>
+          <p>Prior to evaluation, the ISO and TAM questionnaires were validated by a panel of four PhilSCA Institute of Computer Studies faculty members. They verified content validity, clarity, relevance, and alignment with the 4-point scale, resulting in an approved instrument ready for deployment.</p>
+        </div>
+
+        <!-- SECTION 47 -->
+        <div id="sec-47" class="section-block">
+          <h2>47. Panel Revisions</h2>
+          <span class="status-badge status-implemented">Implemented</span>
+          <p>All pre-defense panel recommendations regarding architecture clarity, ML transparency, and security enforcement have been documented and addressed in the final codebase and this master documentation.</p>
+        </div>
+
+        <!-- SECTION 48 -->
+        <div id="sec-48" class="section-block">
+          <h2>48. Manuscript Alignment</h2>
+          <span class="status-badge status-verified">Verified</span>
+          <p>This documentation strictly aligns with the final manuscript structure:</p>
+          <ul>
+              <li><strong>Objectives:</strong> Mapped directly to system capabilities.</li>
+              <li><strong>ML Claims:</strong> Reverted unsupported "85% accuracy" claims to honest, evidence-based metrics (MAE 7.61, R² 0.1959).</li>
+              <li><strong>Respondents:</strong> Corrected from outdated "5 employees" to the actual "Owner + 2 Staff".</li>
+              <li><strong>Scale:</strong> Enforces the actual 4-point Likert scale used in signed documents, rejecting outdated references to 5-point scales.</li>
+          </ul>
+        </div>
+
+        <!-- SECTION 49 -->
+        <div id="sec-49" class="section-block">
+          <h2>49. Objective → Evidence Matrix</h2>
+          <span class="status-badge status-verified">Verified</span>
+          <table>
+              <tr><th>Objective</th><th>System Feature</th><th>Evidence / Metric</th></tr>
+              <tr><td>1. Centralized Job Orders</td><td>Job Order Module</td><td>Functional CRUD, Status tracking, Heroku DB</td></tr>
+              <tr><td>2. ML Prediction</td><td>ml_engine.py (RF)</td><td>18 features, MAE=7.61, Advisory UI tags</td></tr>
+              <tr><td>3. Analytics</td><td>Dashboard</td><td>Sales/Inventory charts, Date filtering</td></tr>
+              <tr><td>4. ISO 25010 Quality</td><td>System Audit</td><td>3.71/4.00 Score from 3 IT Experts</td></tr>
+              <tr><td>5. TAM Acceptance</td><td>User Deployment</td><td>Pending 2-week usage and signed forms</td></tr>
+          </table>
+        </div>
+
+        <!-- SECTION 50 -->
+        <div id="sec-50" class="section-block">
+          <h2>50. Findings and Interpretation</h2>
+          <span class="status-badge status-verified">Verified</span>
+          <p><strong>Finding 1:</strong> Centralized data management significantly reduces manual tracking errors and provides immediate visibility into shop operations.</p>
+          <p><strong>Finding 2:</strong> Machine Learning on small historical datasets (n=35) provides high variance (MAE 7.61 days). Therefore, ML is most safely deployed as an advisory tool alongside deterministic business rules, rather than a standalone automated decision-maker.</p>
+          <p><strong>Finding 3:</strong> IT Experts highly accept the system architecture and security (3.71/4.00), validating the FastAPI/React/PostgreSQL stack choice.</p>
+        </div>
+
+        <!-- SECTION 51 -->
+        <div id="sec-51" class="section-block">
+          <h2>51. Known Limitations</h2>
+          <span class="status-badge status-verified">Verified</span>
+          <p>Honest disclosure of system limitations:</p>
+          <ul>
+              <li><strong>ML Dataset Size:</strong> 35 records is insufficient for robust ML generalization.</li>
+              <li><strong>Label Noise:</strong> "Claimed Date" includes customer delay, skewing actual "Repair Time" predictions.</li>
+              <li><strong>Offline Incapability:</strong> Total reliance on internet and Heroku availability.</li>
+              <li><strong>Concurrency:</strong> Inventory deductions lack advanced distributed lock mechanisms, relying on standard DB transactions.</li>
+          </ul>
+        </div>
+
+        <!-- SECTION 52 -->
+        <div id="sec-52" class="section-block">
+          <h2>52. Future Enhancements</h2>
+          <span class="status-badge status-verified">Verified</span>
+          <ul>
+              <li><strong>Data Collection:</strong> Accumulate 500+ validated records to enable model retraining and improved R² scores.</li>
+              <li><strong>Data Model Update:</strong> Separate "Repair Finished Date" from "Customer Claimed Date" to remove noise from the ML target variable.</li>
+              <li><strong>Customer Notifications:</strong> Implement automated SMS/Email alerts when orders reach <code>for-release</code>.</li>
+              <li><strong>Offline PWA:</strong> Implement Service Workers and local IndexedDB queuing to allow offline job order entry.</li>
+          </ul>
+        </div>
+
+        <!-- SECTION 53 -->
+        <div id="sec-53" class="section-block">
+          <h2>53. Deployment Architecture</h2>
+          <span class="status-badge status-implemented">Implemented</span>
+          <p>The system runs entirely on Heroku Platform-as-a-Service.</p>
+          <ul>
+              <li><strong>Web Dyno:</strong> Runs the Python backend using Gunicorn with Uvicorn async workers. The React frontend is built as static files and served by the FastAPI application routing. There is no separate frontend server.</li>
+              <li><strong>Database:</strong> Heroku Postgres Essential-0 tier.</li>
+          </ul>
+        </div>
+
+        <!-- SECTION 54 -->
+        <div id="sec-54" class="section-block">
+          <h2>54. Heroku Deployment</h2>
+          <span class="status-badge status-implemented">Implemented</span>
+          <p>Deployment is managed via Heroku Git or GitHub integration. A push to the <code>main</code> branch triggers the Heroku buildpack pipeline (installing Python dependencies via <code>requirements.txt</code>, building React via Node.js if configured, and launching the Procfile commands). Configuration variables (DATABASE_URL, JWT_SECRET, CORS_ORIGINS) are securely injected via the Heroku Dashboard.</p>
+        </div>
+
+        <!-- SECTION 55 -->
+        <div id="sec-55" class="section-block">
+          <h2>55. Domain and SSL</h2>
+          <span class="status-badge status-implemented">Implemented</span>
+          <p>The application is accessible at <code>https://shoelotskey-villamor-pasay.app</code>. DNS is managed via Name.com, pointing to Heroku's DNS targets. Heroku Automated Certificate Management (ACM) provisions and auto-renews the Let's Encrypt SSL certificate, ensuring all transit is encrypted.</p>
+        </div>
+
+        <!-- SECTION 56 -->
+        <div id="sec-56" class="section-block">
+          <h2>56. Production Readiness</h2>
+          <span class="status-badge status-partial">Conditional Go</span>
+          <p><strong>System/Security:</strong> GO. Architecture is solid, protected, and 3NF compliant.</p>
+          <p><strong>Evaluation:</strong> CONDITIONAL GO. ISO is completed and signed. TAM requires the completion of the 2-week real-world deployment.</p>
+          <p><strong>Data:</strong> CONDITIONAL GO. Demo data must be purged and actual authorized historical data must be migrated before handing credentials to the client.</p>
+        </div>
+
+        <!-- SECTION 57 -->
+        <div id="sec-57" class="section-block">
+          <h2>57. Maintenance and Handover</h2>
+          <span class="status-badge status-planned">Planned</span>
+          <p>Post-defense handover requires:</p>
+          <ol>
+              <li>Transferring Heroku App ownership or billing configuration to the client.</li>
+              <li>Transferring Name.com domain control.</li>
+              <li>Providing the Owner with a generated, secure admin password (and destroying developer access).</li>
+              <li>Delivering this standalone documentation file for future IT reference.</li>
+          </ol>
+        </div>
+
+        <!-- SECTION 58 -->
+        <div id="sec-58" class="section-block">
+          <h2>58. Defense Preparation</h2>
+          <span class="status-badge status-verified">Verified</span>
+          <p>This section provides critical alignment for the Capstone Final Defense. The primary defense strategy relies on <strong>Honesty, Traceability, and Evidence</strong>. Do not claim the system is flawless; acknowledge limitations (e.g., ML dataset size, offline incapability) as mature engineering awareness.</p>
+        </div>
+
+        <!-- SECTION 59 -->
+        <div id="sec-59" class="section-block">
+          <h2>59. Defense Q&A Bank</h2>
+          <div class="accordion">
+              <div class="accordion-header" onclick="this.parentElement.classList.toggle('open')">Why Random Forest? Why not Linear Regression or Deep Learning? <span>▼</span></div>
+              <div class="accordion-content">
+                  <p>Random Forest Regressor was chosen because it handles non-linear relationships well, is robust to outliers, and requires less data scaling than neural networks. Deep learning requires thousands of records, which we do not have. Linear Regression assumes linear relationships, which shoe repair timelines rarely follow (e.g., adding a service doesn't scale time linearly; it involves parallel drying times).</p>
+              </div>
+          </div>
+          <div class="accordion">
+              <div class="accordion-header" onclick="this.parentElement.classList.toggle('open')">Why is the ML R² score only 0.1959, and MAE 7.61? <span>▼</span></div>
+              <div class="accordion-content">
+                  <p>Machine learning requires volume. We only have 35 eligible, human-validated historical records. With n=35, the model struggles to generalize, leading to high variance (MAE 7.61 days). Furthermore, our target variable is "Claimed Date" minus "Date Received". Customers often delay picking up their shoes days after the repair is finished, injecting random noise into the data. This mathematically proves why our ML is strictly an <em>advisory</em> feature, while <em>Business Rules</em> dictate the official release date.</p>
+              </div>
+          </div>
+          <div class="accordion">
+              <div class="accordion-header" onclick="this.parentElement.classList.toggle('open')">What is the difference between Official Release Date and ML Prediction? <span>▼</span></div>
+              <div class="accordion-content">
+                  <p>The <strong>Official Release Date</strong> is deterministic—it is calculated by our Business Rules engine based on the defined service catalog (e.g., cleaning takes 3 days). This is the legally committed date given to the customer. The <strong>ML Prediction</strong> is advisory—it looks at historical trends to warn the staff "historically, similar orders took 5 days longer to actually be claimed."</p>
+              </div>
+          </div>
+          <div class="accordion">
+              <div class="accordion-header" onclick="this.parentElement.classList.toggle('open')">Why use ISO/IEC 25010 instead of 9126? Why 9 characteristics? <span>▼</span></div>
+              <div class="accordion-content">
+                  <p>ISO/IEC 25010:2023 is the modern, current international standard for software quality, replacing the obsolete 9126. It specifically addresses modern concerns like Security and Compatibility, which are critical for a web-based, cloud-hosted system.</p>
+              </div>
+          </div>
+          <div class="accordion">
+              <div class="accordion-header" onclick="this.parentElement.classList.toggle('open')">How is security and RBAC enforced? Can Staff access Owner functions? <span>▼</span></div>
+              <div class="accordion-content">
+                  <p>Security is enforced via stateless JWT (JSON Web Tokens). When a user logs in, the backend cryptographically signs a token containing their role. Every API request must include this token. The FastAPI backend extracts the role and explicitly rejects (403 Forbidden) any Staff token attempting to hit an Owner-only route (like Sales Analytics or User Management). Modifying the frontend UI cannot bypass this backend protection.</p>
+              </div>
+          </div>
+          <div class="accordion">
+              <div class="accordion-header" onclick="this.parentElement.classList.toggle('open')">What happens when the internet goes down? <span>▼</span></div>
+              <div class="accordion-content">
+                  <p>The system is a cloud-hosted web application and requires an active internet connection to communicate with the Heroku servers. If the internet goes down, the system cannot be used. The shop must revert to manual paper ticketing and encode the data later. We do not claim offline capabilities.</p>
+              </div>
+          </div>
+        </div>
+
+        <!-- SECTION 60 -->
+        <div id="sec-60" class="section-block">
+          <h2>60. Final Go / No-Go Checklist</h2>
+          <div class="matrix-box">
+              <h4 class="matrix-title">System & Security</h4>
+              <ul class="checklist">
+                  <li><span class="check-icon">✓</span> Core modules working & deployed</li>
+                  <li><span class="check-icon">✓</span> JWT Authentication & RBAC verified</li>
+                  <li><span class="check-icon">✓</span> PostgreSQL 3NF Database verified</li>
+                  <li><span class="check-icon">✓</span> 30-min Inactivity Timeout implemented</li>
+              </ul>
+              <h4 class="matrix-title">ML & OCR</h4>
+              <ul class="checklist">
+                  <li><span class="check-icon">✓</span> Random Forest (18 features) implemented</li>
+                  <li><span class="check-icon">✓</span> Advisory vs Official Date clearly distinguished</li>
+                  <li><span class="check-icon">✓</span> OCR Human-Validation gate implemented</li>
+                  <li><span class="check-icon">✓</span> No unsupported accuracy claims</li>
+              </ul>
+              <h4 class="matrix-title">Evaluation & Deployment</h4>
+              <ul class="checklist">
+                  <li><span class="check-icon">✓</span> ISO 25010 (9 chars, 45 items) signed & tallied</li>
+                  <li><span class="pending-icon">⚠</span> TAM 2-Week Deployment pending completion</li>
+                  <li><span class="pending-icon">⚠</span> Demo data purged & real data migrated</li>
+                  <li><span class="check-icon">✓</span> Heroku HTTPS Domain Active</li>
+              </ul>
+          </div>
+        </div>
+
+        <!-- SECTION 61 -->
+        <div id="sec-61" class="section-block">
+          <h2>61. Appendices</h2>
+          <span class="status-badge status-verified">Verified</span>
+          <p>Supporting physical documents (Signed Evaluator Credentials, Raw TAM/ISO Questionnaires, Certificate of Originality, Grammarly Reports, Plagiarism Scans) are maintained in the physical capstone binder and the archived <code>Official Documentation</code> folder. They are omitted from this HTML file to preserve respondent privacy and credential security.</p>
+        </div>
+
+        <!-- SECTION 62 -->
+        <div id="sec-62" class="section-block">
+          <h2>62. Document Control</h2>
+          <div class="callout callout-success">
+              <strong>Audit Conclusion:</strong> This document represents the consolidated, verified, single source of truth for the Shoelotskey Service Management System as of September 2026.
+          </div>
+          <ul>
+              <li><strong>Files Reviewed:</strong> Entire repository (FastAPI backend, React frontend, SQLite/PG configs, ML models).</li>
+              <li><strong>Official Documentation Coverage:</strong> Old 2,742-line HTML report audited and superseded by this structured 62-section master artifact.</li>
+              <li><strong>Contradictions Resolved:</strong> Outdated references to "5 employees" for TAM corrected to "Owner + 2 Staff". Unsupported claims of 85% ML accuracy replaced with honest metrics (R²=0.1959, MAE=7.61) derived directly from the 35-record dataset constraint.</li>
+              <li><strong>Final Status:</strong> Codebase is frozen and defense-ready. Remaining action is the execution of the 2-week client deployment for final TAM scoring.</li>
+          </ul>
+        </div>
+
+      </main>
+    </div>
+  </div>
+  
+  <script>
+    function showSection(id, element) {
+      document.querySelectorAll('.section-block').forEach(el => el.classList.remove('active'));
+      let targetSection = document.getElementById(id);
+      if(targetSection) targetSection.classList.add('active');
+      
+      document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+      if(element) {
+          element.classList.add('active');
+      } else {
+          let navLink = document.querySelector(`a[onclick*="${id}"]`);
+          if(navLink) navLink.classList.add('active');
+      }
+      
+      let contentDiv = document.getElementById('content');
+      if(contentDiv) contentDiv.scrollTop = 0;
+    }
+    
+    function searchDocs() {
+      let input = document.getElementById('searchInput').value.toLowerCase();
+      let links = document.querySelectorAll('.nav-link');
+      
+      links.forEach(link => {
+        if (link.innerText.toLowerCase().includes(input)) {
+          link.style.display = "block";
+        } else {
+          link.style.display = "none";
+        }
+      });
+    }
+    
+    window.onload = function() {
+      if(window.location.hash) {
+        let id = window.location.hash.substring(1);
+        if(document.getElementById(id)) {
+          showSection(id);
+        }
+      }
+    }
+  </script>
+</body>
+</html>

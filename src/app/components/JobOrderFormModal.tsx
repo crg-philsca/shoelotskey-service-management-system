@@ -19,8 +19,8 @@ export default function JobOrderFormModal({ user }: JobOrderFormModalProps) {
                     <span className="hidden sm:inline font-bold">New Job Order Form</span>
                 </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-[#F8F9FA] p-0 gap-0 rounded-2xl border-none shadow-2xl">
-                <div className="p-6">
+            <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-4xl max-h-[92vh] overflow-y-auto bg-[#F8F9FA] p-0 gap-0 rounded-2xl border-none shadow-2xl">
+                <div className="p-2 sm:p-6">
                     <JobOrderFormComponent user={user} onSuccess={() => setOpen(false)} onCancel={() => setOpen(false)} />
                 </div>
             </DialogContent>

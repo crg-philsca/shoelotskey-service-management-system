@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/app/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/app/components/ui/dialog';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
@@ -9,6 +9,7 @@ import { useInventory } from '@/app/context/InventoryContext';
 import { useExpenses } from '@/app/context/ExpenseContext';
 import { CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { getInventoryExpenseCategory } from '@/app/lib/expenseCategories';
 
 interface RestockModalProps {
     open: boolean;
@@ -78,12 +79,19 @@ export default function RestockModal({ open, onOpenChange }: RestockModalProps) 
 
         // 2. Log Expense if enabled
         if (recordExpense && effectiveCost > 0) {
+            const expenseCat = getInventoryExpenseCategory(selectedItem.category);
+            const formattedPrice = effectiveCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const breakdownHeader = `[${expenseCat.toUpperCase()} ITEMS BREAKDOWN]`;
+            const itemLine = `• ${selectedItem.name}: ₱${formattedPrice}`;
+            const restockRemark = `Restock: ${selectedItem.name} (+${qtyNum} ${packageUnit})${notes ? ` - ${notes}` : ''}`;
+            const fullNotes = `${breakdownHeader}\n${itemLine}\n\n[ADDITIONAL NOTES]\n${restockRemark}`;
+
             addExpense({
                 id: `exp_${Date.now()}`,
                 amount: effectiveCost,
-                category: 'INVENTORY',
-                notes: `Restock: ${selectedItem.name} (+${qtyNum} ${packageUnit})${notes ? ` - ${notes}` : ''}`,
-                frequency: 'Variable / Restock',
+                category: expenseCat,
+                notes: fullNotes,
+                frequency: 'Restock',
                 date: new Date(restockDate).toISOString()
             });
         }
@@ -94,16 +102,16 @@ export default function RestockModal({ open, onOpenChange }: RestockModalProps) 
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[520px] p-0 rounded-2xl border-0 shadow-2xl bg-white overflow-hidden flex flex-col max-h-[85vh]">
+            <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-[520px] p-0 rounded-2xl border-0 shadow-2xl bg-white overflow-hidden flex flex-col max-h-[85vh]">
                 <DialogHeader className="border-b border-gray-100 p-6 pb-4 shrink-0">
                     <div className="flex items-center gap-3">
                         <div className="w-full text-center">
                             <DialogTitle className="text-xl font-bold uppercase text-red-600 text-center">
                                 Restock Whole Product
                             </DialogTitle>
-                            <p className="text-xs text-gray-500 font-medium text-center mt-1">
+                            <DialogDescription className="text-xs text-gray-500 font-medium text-center mt-1">
                                 Purchase and add whole containers directly to inventory stock
-                            </p>
+                            </DialogDescription>
                         </div>
                     </div>
                 </DialogHeader>

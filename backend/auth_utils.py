@@ -44,10 +44,22 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
+import time
+
+_USER_CACHE: Dict[str, Any] = {}
+
+def invalidate_user_cache(username: Optional[str] = None):
+    """Safeguard: Invalidate user auth cache when status, role, or permissions change."""
+    if username:
+        _USER_CACHE.pop(str(username).strip().lower(), None)
+    else:
+        _USER_CACHE.clear()
+
 def get_current_user(credentials: HTTPAuthorizationCredentials = Security(security), db: Session = Depends(get_db)) -> User:
     """
     OWASP A01: BROKEN ACCESS CONTROL PREVENTION
     Middleware to verify token and extract user identity.
+    Always performs cryptographic JWT signature validation.
     """
     token = credentials.credentials
     try:
@@ -92,6 +104,15 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Security(securi
         raise HTTPException(status_code=401, detail="Could not validate credentials")
 
     target = str(username).strip().lower()
+    cached = _USER_CACHE.get(target)
+    # 30-second TTL to avoid database latency during interactive sessions without delaying security changes
+    if cached and (time.time() - cached["time"] < 30.0):
+        u = cached["user"]
+        if not u.is_active:
+            _USER_CACHE.pop(target, None)
+            raise HTTPException(status_code=403, detail="Account is deactivated")
+        return u
+
     try:
         user = db.query(User).filter(
             or_(
@@ -101,6 +122,8 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Security(securi
         ).first()
         if not user and str(username).isdigit():
             user = db.query(User).filter(User.user_id == int(username)).first()
+        if user:
+            _USER_CACHE[target] = {"user": user, "time": time.time()}
     except Exception as query_err:
         import db.database as db_mod
         # P0-5 (CRIT-5): Production PostgreSQL outages must fail safely — never

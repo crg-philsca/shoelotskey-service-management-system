@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 // P1-10 FIX: centralized API base resolution (see src/app/lib/apiBase.ts).
 import { API_BASE } from '@/app/lib/apiBase';
+import { useActivities } from './ActivityContext';
 
 
 export interface InventoryItem {
@@ -29,15 +30,17 @@ interface InventoryContextType {
     inventoryData: InventoryItem[];
     setInventoryData: React.Dispatch<React.SetStateAction<InventoryItem[]>>;
     updateStock: (itemId: number, usedQuantity: number, orderId?: number) => void;
-    addItem: (item: Omit<InventoryItem, 'id' | 'status'>) => void;
+    addItem: (item: Omit<InventoryItem, 'id' | 'status'>) => Promise<boolean>;
     updateItem: (item: InventoryItem) => void;
     deleteItem: (id: number) => void;
 }
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
 
-export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: string } }> = ({ children, user }) => {
+export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: string; username?: string } }> = ({ children, user }) => {
+    const { refreshActivities } = useActivities();
     const [inventoryData, setInventoryData] = useState<InventoryItem[]>([]);
+    const inFlightActions = useRef<Set<string>>(new Set());
 
     // [FIX] Use per-item low_stock_threshold. Fall back to package_size, then 1.
     const calculateStatus = (stock: number, threshold?: number, packageSize?: number) => {
@@ -142,6 +145,7 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
                 throw new Error(`HTTP_${res.status}`);
             }
             if (!res.ok) throw new Error('Stock adjustment failed');
+            refreshActivities().catch(() => {});
         } catch (err: any) {
             console.error("Inventory sync failed:", err);
             if (err?.message && err.message.startsWith('HTTP_')) {
@@ -201,7 +205,13 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
         return () => window.removeEventListener('online', processInventorySyncQueue);
     }, [user.token]);
 
-    const addItem = async (item: Omit<InventoryItem, 'id' | 'status'>) => {
+    const addItem = async (item: Omit<InventoryItem, 'id' | 'status'>): Promise<boolean> => {
+        const itemKey = `add-${item.name.trim().toLowerCase()}`;
+        if (inFlightActions.current.has(itemKey)) {
+            console.warn(`[DUPLICATE PREVENTED] Add already in progress for ${item.name}`);
+            return false;
+        }
+        inFlightActions.current.add(itemKey);
         const oldData = [...inventoryData];
         const tempId = Date.now();
         const optimisticItem: InventoryItem = {
@@ -237,36 +247,77 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
                     trigger_service: item.trigger_service || 'All',
                     consumption_qty: item.consumption_qty || 0.0,
                     consumption_unit: item.consumption_unit || '',
-                    package_size: item.package_size || 0.0,
+                    package_size: item.package_size || 1.0,
                     package_unit: item.package_unit || '',
                     low_stock_threshold: item.low_stock_threshold || 0.0,
                     is_retail: Boolean(item.is_retail),
                     retail_price: item.is_retail ? Number(item.retail_price || 0) : 0
                 })
             });
-            if (res.status === 400 || res.status === 401 || res.status === 403) {
+            if (!res.ok) {
                 let detail = 'Action denied.';
-                try { detail = (await res.json())?.detail || detail; } catch { /* ignore */ }
-                throw new Error(`HTTP_${res.status}::${detail}`);
-            }
-            if (res.ok) {
-                fetchInventory();
-            } else {
-                throw new Error(await res.text());
-            }
-        } catch (err: any) {
-            console.error("[CRITICAL] Inventory Add failed:", err);
-            if (err?.message && err.message.startsWith('HTTP_')) {
+                try { 
+                    const errData = await res.json();
+                    detail = errData?.detail || detail; 
+                } catch { 
+                    try { detail = await res.text(); } catch {}
+                }
                 setInventoryData(oldData);
                 localStorage.setItem('inventory_cache', JSON.stringify(oldData));
-                const detail = err.message.split('::')[1] || 'Action denied (400/401/403).';
-                import('sonner').then(({ toast }) => toast.error(detail));
-                return;
+                const { toast } = await import('sonner');
+                toast.error(detail || 'Could not save inventory item.');
+                return false;
             }
+
+            const savedItem = await res.json();
+            const realItem: InventoryItem = {
+                id: savedItem.item_id,
+                inventory_number: savedItem.inventory_number || undefined,
+                name: savedItem.item_name,
+                category: savedItem.category,
+                stock: savedItem.stock_quantity,
+                unit: savedItem.unit,
+                price: parseFloat(savedItem.unit_price),
+                status: calculateStatus(savedItem.stock_quantity, savedItem.low_stock_threshold, savedItem.package_size),
+                isActive: savedItem.is_active,
+                auto_deduct: savedItem.auto_deduct,
+                auto_deduct_trigger: savedItem.auto_deduct_trigger,
+                trigger_service: savedItem.trigger_service,
+                consumption_qty: savedItem.consumption_qty,
+                consumption_unit: savedItem.consumption_unit,
+                package_size: savedItem.package_size,
+                package_unit: savedItem.package_unit,
+                low_stock_threshold: savedItem.low_stock_threshold,
+                is_retail: Boolean(savedItem.is_retail),
+                retail_price: parseFloat(savedItem.retail_price || 0)
+            };
+
+            setInventoryData(prev => {
+                const updated = prev.map(i => i.id === tempId ? realItem : i);
+                localStorage.setItem('inventory_cache', JSON.stringify(updated));
+                return updated;
+            });
+
+            return true;
+        } catch (err: any) {
+            console.error("[CRITICAL] Inventory Add failed:", err);
+            setInventoryData(oldData);
+            localStorage.setItem('inventory_cache', JSON.stringify(oldData));
+            const { toast } = await import('sonner');
+            toast.error(err.message || 'Could not connect to inventory server.');
+            return false;
+        } finally {
+            inFlightActions.current.delete(itemKey);
         }
     };
 
     const updateItem = async (updatedItem: InventoryItem) => {
+        const updateKey = `update-${updatedItem.id}`;
+        if (inFlightActions.current.has(updateKey)) {
+            console.warn(`[DUPLICATE PREVENTED] Update already in progress for item #${updatedItem.id}`);
+            return;
+        }
+        inFlightActions.current.add(updateKey);
         const oldData = [...inventoryData];
         const normalizedItem: InventoryItem = {
             ...updatedItem,
@@ -342,7 +393,6 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
                     localStorage.setItem('inventory_cache', JSON.stringify(updated));
                     return updated;
                 });
-                fetchInventory();
             } else {
                 throw new Error("Update failed");
             }
@@ -360,6 +410,8 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
                 const cache = JSON.parse(saved).map((i: any) => i.id === normalizedItem.id ? normalizedItem : i);
                 localStorage.setItem('inventory_cache', JSON.stringify(cache));
             }
+        } finally {
+            inFlightActions.current.delete(updateKey);
         }
     };
 
@@ -383,7 +435,8 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
                 import('sonner').then(({ toast }) => toast.error('Delete failed. Item was restored.'));
                 return;
             }
-            // Confirm server state so soft-deleted rows stay hidden after sync/refetch.
+
+            refreshActivities().catch(() => {});
             await fetchInventory();
         } catch(e) {
             console.error("Failed to delete from server", e);

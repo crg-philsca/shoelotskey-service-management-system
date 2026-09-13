@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SHOELOTSKEY FINAL COMPREHENSIVE SYSTEM DOCUMENTATION</title>
+  <style>
+    :root {
+      --primary: #0284c7; --primary-dark: #0369a1; --primary-light: #e0f2fe;
+      --accent: #f59e0b; --accent-light: #fef3c7; --success: #10b981;
+      --success-light: #dcfce7; --danger: #ef4444; --danger-light: #fee2e2;
+      --purple: #8b5cf6; --purple-light: #ede9fe; --text-dark: #0f172a;
+      --text-muted: #64748b; --bg-light: #f8fafc; --card-bg: #ffffff;
+      --border-color: #e2e8f0; --radius-sm: 8px; --radius-md: 12px;
+      --radius-lg: 16px; --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background-color: var(--bg-light); color: var(--text-dark); line-height: 1.65; padding: 0; }
+    .container { max-width: 1400px; margin: 20px auto; background: var(--card-bg); border-radius: var(--radius-lg); box-shadow: var(--shadow-md); border: 1px solid var(--border-color); overflow: hidden; display: flex; flex-direction: column; height: 95vh; }
+    .header-banner { background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0369a1 100%); color: #ffffff; padding: 30px 36px; border-bottom: 4px solid var(--accent); flex-shrink: 0; }
+    .badge-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 9999px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; border: 1px solid rgba(255,255,255,0.3); }
+    .header-title { font-size: 2rem; font-weight: 800; margin: 10px 0 5px 0; }
+    .header-subtitle { font-size: 1rem; color: #cbd5e1; max-width: 960px; margin-bottom: 10px; }
+    
+    .layout-wrapper { display: flex; flex-direction: row; flex: 1; overflow: hidden; }
+    .sidebar { width: 340px; background: #f8fafc; border-right: 1px solid var(--border-color); display: flex; flex-direction: column; }
+    .search-container { padding: 16px; background: #f1f5f9; border-bottom: 1px solid var(--border-color); flex-shrink: 0; }
+    .search-input { width: 100%; padding: 10px 14px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: 0.95rem; }
+    .nav-scroll { flex: 1; overflow-y: auto; padding: 20px 0; }
+    .nav-group { margin-bottom: 24px; }
+    .nav-group-title { padding: 0 20px; font-size: 0.8rem; text-transform: uppercase; font-weight: 700; color: var(--text-muted); margin-bottom: 8px; letter-spacing: 0.05em; }
+    .nav-link { display: block; padding: 8px 20px 8px 30px; color: #334155; text-decoration: none; font-size: 0.95rem; font-weight: 500; border-left: 3px solid transparent; cursor: pointer; }
+    .nav-link:hover { background: #e2e8f0; color: #0f172a; }
+    .nav-link.active { background: var(--primary-light); color: var(--primary-dark); border-left-color: var(--primary); font-weight: 700; }
+    
+    .content-body { flex: 1; padding: 40px; overflow-y: auto; position: relative; }
+    .section-block { display: none; animation: fadeIn 0.3s; }
+    .section-block.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    
+    h2 { font-size: 1.8rem; font-weight: 700; color: #0f172a; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid var(--border-color); }
+    h3 { font-size: 1.3rem; font-weight: 600; color: #1e293b; margin: 24px 0 12px 0; }
+    h4 { font-size: 1.1rem; font-weight: 600; color: #334155; margin: 16px 0 8px 0; }
+    p { margin-bottom: 16px; color: #334155; }
+    ul { margin-left: 24px; margin-bottom: 16px; color: #334155; }
+    li { margin-bottom: 8px; }
+    
+    table { width: 100%; border-collapse: collapse; margin: 24px 0; font-size: 0.95rem; }
+    th { background: #f1f5f9; padding: 12px 16px; text-align: left; border: 1px solid var(--border-color); font-weight: 600; }
+    td { padding: 12px 16px; border: 1px solid var(--border-color); vertical-align: top; }
+    tr:nth-child(even) { background: #f8fafc; }
+    
+    .status-badge { display: inline-flex; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin-left: 8px; }
+    .status-implemented { background: var(--success-light); color: #065f46; border: 1px solid #a7f3d0; }
+    .status-verified { background: var(--primary-light); color: var(--primary-dark); border: 1px solid #bae6fd; }
+    .status-evaluated { background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe; }
+    .status-passed { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+    .status-partial { background: var(--accent-light); color: #92400e; border: 1px solid #fde68a; }
+    .status-pending { background: #ffedd5; color: #9a3412; border: 1px solid #fdba74; }
+    
+    .callout { padding: 16px 20px; border-radius: var(--radius-sm); margin: 24px 0; border-left: 4px solid; }
+    .callout-warning { background: #fffbeb; border-color: #f59e0b; }
+    .callout-info { background: #eff6ff; border-color: #3b82f6; }
+    .callout-success { background: #ecfdf5; border-color: #10b981; }
+    
+    code { font-family: 'Cascadia Code', Consolas, monospace; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; color: #be123c; }
+    pre { background: #1e293b; color: #f8fafc; padding: 16px; border-radius: var(--radius-sm); overflow-x: auto; font-family: 'Cascadia Code', Consolas, monospace; font-size: 0.9em; margin: 16px 0; }
+    
+    .accordion { background: #f8fafc; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-bottom: 12px; overflow: hidden; }
+    .accordion-header { padding: 16px; cursor: pointer; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+    .accordion-header:hover { background: #f1f5f9; }
+    .accordion-content { padding: 0 16px 16px 16px; display: none; }
+    .accordion.open .accordion-content { display: block; }
+    .accordion.open .accordion-header { border-bottom: 1px solid var(--border-color); }
+    
+    #searchResults { display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: var(--card-bg); z-index: 50; padding: 40px; overflow-y: auto; }
+    #searchResults.active { display: block; }
+    .search-result-item { padding: 16px; border-bottom: 1px solid var(--border-color); cursor: pointer; }
+    .search-result-item:hover { background: #f8fafc; }
+    .search-result-title { font-weight: 700; color: var(--primary-dark); margin-bottom: 4px; }
+    .search-result-snippet { font-size: 0.9rem; color: var(--text-muted); }
+    .highlight { background-color: #fef08a; padding: 0 2px; border-radius: 2px; color: #854d0e; font-weight: bold; }
+    
+    @media (max-width: 768px) {
+      .layout-wrapper { flex-direction: column; }
+      .sidebar { width: 100%; height: auto; flex-shrink: 0; max-height: 50vh; }
+      .container { height: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div id="searchResults"></div>
+  <div class="container">
+    <header class="header-banner">
+      <div style="display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;">
+        <span class="badge-pill" style="background: rgba(255,255,255,0.1);">ISO/IEC 25010 Evaluated (3.71)</span>
+        <span class="badge-pill" style="background: rgba(255,255,255,0.1);">Production: shoelotskey-villamor-pasay.app</span>
+      </div>
+      <h1 class="header-title">Final Comprehensive System Documentation</h1>
+      <p class="header-subtitle">Authoritative Technical Reference, Evidence Traces, and Audited System Implementation</p>
+    </header>
+    
+    <div class="layout-wrapper">
+      <div class="sidebar">
+        <div class="search-container">
+          <input type="text" id="searchInput" class="search-input" placeholder="Full-text search...">
+        </div>
+        <nav class="nav-scroll">
+          <div class="nav-group">
+            <div class="nav-group-title">1. Introduction</div>
+            <a class="nav-link active" onclick="showSection('sec-01', this)">1. Executive Summary</a>
+            <a class="nav-link" onclick="showSection('sec-02', this)">2. Evidence Status & Definitions</a>
+            <a class="nav-link" onclick="showSection('sec-03', this)">3. Contradiction Register</a>
+            <a class="nav-link" onclick="showSection('sec-04', this)">4. Objective Traceability</a>
+          </div>
+          <div class="nav-group">
+            <div class="nav-group-title">2. Architecture & Tech</div>
+            <a class="nav-link" onclick="showSection('sec-05', this)">5. System Architecture (3-Tier)</a>
+            <a class="nav-link" onclick="showSection('sec-06', this)">6. Database Design (3NF)</a>
+            <a class="nav-link" onclick="showSection('sec-07', this)">7. End-to-End Traces</a>
+            <a class="nav-link" onclick="showSection('sec-08', this)">8. Deployment Architecture</a>
+          </div>
+          <div class="nav-group">
+            <div class="nav-group-title">3. Core Modules</div>
+            <a class="nav-link" onclick="showSection('sec-09', this)">9. Job Order Workflow</a>
+            <a class="nav-link" onclick="showSection('sec-10', this)">10. Inventory & Supply Mgmt</a>
+            <a class="nav-link" onclick="showSection('sec-11', this)">11. Analytics & Reporting</a>
+            <a class="nav-link" onclick="showSection('sec-12', this)">12. Client & Service Mgmt</a>
+          </div>
+          <div class="nav-group">
+            <div class="nav-group-title">4. ML & Data Science</div>
+            <a class="nav-link" onclick="showSection('sec-13', this)">13. Machine Learning Model</a>
+            <a class="nav-link" onclick="showSection('sec-14', this)">14. ML Metrics & Advisory Rule</a>
+            <a class="nav-link" onclick="showSection('sec-15', this)">15. OCR Data Pipeline</a>
+          </div>
+          <div class="nav-group">
+            <div class="nav-group-title">5. Security</div>
+            <a class="nav-link" onclick="showSection('sec-16', this)">16. Authentication (JWT/Bcrypt)</a>
+            <a class="nav-link" onclick="showSection('sec-17', this)">17. OWASP Top 10 Mitigation</a>
+            <a class="nav-link" onclick="showSection('sec-18', this)">18. RBAC Implementation</a>
+          </div>
+          <div class="nav-group">
+            <div class="nav-group-title">6. Evaluation & QA</div>
+            <a class="nav-link" onclick="showSection('sec-19', this)">19. ISO/IEC 25010 Results</a>
+            <a class="nav-link" onclick="showSection('sec-20', this)">20. TAM Methodology & Status</a>
+            <a class="nav-link" onclick="showSection('sec-21', this)">21. Use-Case Test Execution</a>
+            <a class="nav-link" onclick="showSection('sec-22', this)">22. Post-Audit Status</a>
+          </div>
+        </nav>
+      </div>
+      
+      <main class="content-body">
+        
+        <!-- SECTION 1 -->
+        <div id="sec-01" class="section-block active">
+          <h2>1. Executive Summary <span class="status-badge status-verified">Verified</span></h2>
+          <p><strong>Project Title:</strong> A Web-Based Service Management System with Data Analytics Using Machine Learning Algorithms for Shoelotskey Villamor-Pasay.</p>
+          <p>This master technical document serves as the authoritative single source of truth for the implemented capstone system. It supersedes all previous drafts and aligns the final architecture, evidence, and manuscript claims into a unified reference.</p>
+          <p><strong>Audit Scope:</strong> The entire repository (FastAPI backend, React frontend, PostgreSQL database, Heroku deployment, and evaluation questionnaires) was rigorously audited. Evidence is prioritized over descriptive claims: actual code execution, database schemas, and signed evaluation forms dictate the <code>[STATUS]</code> of every feature.</p>
+          <p><strong>Major Architectural Implementation:</strong> The system operates as a 3-tier web architecture (React SPA &rarr; FastAPI &rarr; PostgreSQL 3NF) hosted on Heroku. It replaces inefficient paper logbooks with a centralized digital job order workflow, integrating an 18-feature Random Forest Regressor for advisory turnaround prediction and real-time sales/inventory analytics.</p>
+          <p><strong>Quality & Acceptance:</strong> The system passed formal evaluation against the 9 characteristics of ISO/IEC 25010:2023 by three external IT experts (Composite: 3.71/4.00, Highly Acceptable). Operational acceptance was evaluated using the 4 constructs of the Technology Acceptance Model (TAM) involving the Owner and two Staff members.</p>
+        </div>
+
+        <!-- SECTION 2 -->
+        <div id="sec-02" class="section-block">
+          <h2>2. Evidence Status & Definitions</h2>
+          <p>This documentation stringently adheres to an Evidence Status classification to prevent unbacked academic claims. Every claim in this document maps to one of the following states based on the physical source code or signed evaluation forms:</p>
+          <ul>
+              <li><span class="status-badge status-implemented">IMPLEMENTED</span>: Confirmed present in the source code repository.</li>
+              <li><span class="status-badge status-verified">VERIFIED</span>: Implementation confirmed functional through actual system test execution/logs.</li>
+              <li><span class="status-badge status-evaluated">EVALUATED</span>: Formally assessed by external IT experts (ISO) or operational users (TAM).</li>
+              <li><span class="status-badge status-passed">PASSED</span>: Specifically met defined success criteria in testing/evaluation.</li>
+              <li><span class="status-badge status-partial">PARTIALLY IMPLEMENTED</span>: Code exists but lacks full coverage (e.g., UI exists without DB save).</li>
+              <li><span class="status-badge status-pending">PENDING VERIFICATION</span>: Awaiting real-world test results (e.g., live 2-week TAM deployment).</li>
+          </ul>
+        </div>
+
+        <!-- SECTION 3 -->
+        <div id="sec-03" class="section-block">
+          <h2>3. Contradiction Register <span class="status-badge status-verified">Verified</span></h2>
+          <p>During the system audit, inconsistencies between earlier manuscript drafts and the final deployed system were identified and permanently resolved. The table below represents the authoritative resolution.</p>
+          <table>
+            <tr><th>Claim / Conflict</th><th>Source of Error</th><th>Actual Verified Evidence</th><th>Resolution Action / Final Stance</th></tr>
+            <tr>
+              <td>"85% ML Accuracy"</td>
+              <td>Old manuscript proposal</td>
+              <td>Regression metrics: MAE 7.61, RMSE 8.93, R² 0.1959 based on n=35 human-validated dataset.</td>
+              <td>Removed 85% claim entirely. Reclassified ML as an <strong>Advisory Forecast</strong> rather than an official commitment tool.</td>
+            </tr>
+            <tr>
+              <td>"5 TAM Employees"</td>
+              <td>Old manuscript text</td>
+              <td>Shoelotskey micro-enterprise operates strictly with 1 Owner and 2 Staff.</td>
+              <td>Corrected respondent population to Owner + 2 Staff. Do not fabricate users.</td>
+            </tr>
+            <tr>
+              <td>"Automatic ML Retraining"</td>
+              <td>Old system description</td>
+              <td>Heroku's ephemeral filesystem prevents safe real-time <code>.pkl</code> overwrites.</td>
+              <td>Corrected to "Administrative Batch Retraining" workflow. Automatic triggers disabled.</td>
+            </tr>
+            <tr>
+              <td>"Legally Committed Date"</td>
+              <td>Older documentation text</td>
+              <td>System has no legal or contractual enforcement mechanism for delays.</td>
+              <td>Replaced terminology globally with <strong>Official Release Date</strong> (derived via business rules).</td>
+            </tr>
+            <tr>
+              <td>"100% Secure"</td>
+              <td>Student claim</td>
+              <td>MFA is absent. Standard OWASP mitigations are present.</td>
+              <td>Corrected to "Compliant with OWASP Top 10 Mitigations (JWT/Bcrypt/Parameterized Queries)".</td>
+            </tr>
+          </table>
+        </div>
+
+        <!-- SECTION 4 -->
+        <div id="sec-04" class="section-block">
+          <h2>4. Objective Traceability <span class="status-badge status-verified">Verified</span></h2>
+          <p>Every line of code and module serves to fulfill the 5 academic objectives of the capstone project:</p>
+          <table>
+              <tr><th>Objective</th><th>System Feature (Evidence)</th><th>Implementation Trace (UI &rarr; DB)</th></tr>
+              <tr><td>1. Centralized Job Orders</td><td>Job Order Module</td><td>React Form &rarr; <code>POST /api/orders</code> &rarr; <code>JobOrder</code> Model &rarr; PostgreSQL</td></tr>
+              <tr><td>2. ML Prediction Integration</td><td>Advisory Turnaround UI</td><td>React UI &rarr; <code>POST /api/ml/predict</code> &rarr; <code>completion_model.pkl</code></td></tr>
+              <tr><td>3. Analytics & Reporting</td><td>Dashboard / Financials</td><td>React Charts &rarr; <code>GET /api/reports/sales</code> &rarr; PostgreSQL Aggregation</td></tr>
+              <tr><td>4. ISO/IEC 25010 Quality</td><td>System Audit & Evaluation</td><td>Signed 45-item questionnaires by 3 IT Experts (Score: 3.71)</td></tr>
+              <tr><td>5. TAM Acceptance</td><td>2-Week Deployment Trial</td><td>Signed 20-item TAM questionnaires by Owner + 2 Staff</td></tr>
+          </table>
+        </div>
+
+        <!-- SECTION 5 -->
+        <div id="sec-05" class="section-block">
+          <h2>5. System Architecture (3-Tier) <span class="status-badge status-implemented">Implemented</span></h2>
+          <p>The system utilizes a strict 3-tier modular architecture, confirmed in the repository structure:</p>
+          <ul>
+              <li><strong>Presentation Layer (Frontend):</strong> React 18, TypeScript, Vite. A Single Page Application (SPA) providing responsive interfaces. Component routing is handled entirely client-side via <code>react-router-dom</code>. UI components leverage standard CSS without reliance on external CDNs.</li>
+              <li><strong>Application Layer (Backend API):</strong> Python 3.12, FastAPI. Exposes RESTful endpoints, handles Pydantic validation, enforces JWT RBAC, and houses the scikit-learn machine learning engine. It runs on a Gunicorn server utilizing Uvicorn asynchronous workers.</li>
+              <li><strong>Data Layer (Database):</strong> PostgreSQL 16. A relational database normalized to 3NF, interfaced via SQLAlchemy 2.0 ORM to prevent SQL injection.</li>
+          </ul>
+          <div class="callout callout-info">
+              <strong>Architecture Fact Check:</strong> The system is a modular monolith. It does <em>not</em> use microservices. It does <em>not</em> have high-availability clustering. It uses a single Heroku web dyno connecting to a single Heroku Postgres instance.
+          </div>
+        </div>
+
+        <!-- SECTION 6 -->
+        <div id="sec-06" class="section-block">
+          <h2>6. Database Design (3NF) <span class="status-badge status-verified">Verified</span></h2>
+          <p>The PostgreSQL database schema was audited and verified to conform strictly to Third Normal Form (3NF):</p>
+          <ul>
+              <li><strong>1NF (Atomic Values):</strong> No comma-separated strings or arrays. Multi-pair orders are extracted to <code>order_shoes</code> and <code>order_services</code> junction tables.</li>
+              <li><strong>2NF (No Partial Dependencies):</strong> Every table utilizes a single-column surrogate primary key (<code>id</code>). Junction tables (e.g., <code>order_service_addons</code>) depend entirely on their composite keys.</li>
+              <li><strong>3NF (No Transitive Dependencies):</strong> Customer data (name, phone) is isolated in <code>customers</code>. The <code>job_orders</code> table only stores the foreign key <code>customer_id</code>. Service prices are isolated in <code>services</code>.</li>
+          </ul>
+          <p><strong>Transactional Integrity:</strong> SQLAlchemy session blocks ensure atomic operations. For example, when an order transitions to <code>for-release</code>, the order status update and the associated inventory deductions occur within the same ACID transaction. If inventory deduction fails due to insufficient stock, the entire order status rolls back.</p>
+        </div>
+
+        <!-- SECTION 7 -->
+        <div id="sec-07" class="section-block">
+          <h2>7. End-to-End Traces <span class="status-badge status-verified">Verified</span></h2>
+          <p>The following traces definitively prove the flow of data across the 3 tiers.</p>
+          
+          <h3>Trace 1: Job Order Creation</h3>
+          <p><strong>1. React UI:</strong> Staff completes <code>JobOrderForm.tsx</code>.</p>
+          <p><strong>2. Frontend Request:</strong> <code>fetch('/api/orders', { method: 'POST', headers: {'Authorization': 'Bearer ...'} })</code></p>
+          <p><strong>3. FastAPI Routing:</strong> <code>router.post("/orders")</code> intercepts the request.</p>
+          <p><strong>4. Validation & Auth:</strong> <code>Depends(get_current_user)</code> validates JWT. Pydantic <code>JobOrderCreate</code> schema validates JSON payload types.</p>
+          <p><strong>5. Business Logic:</strong> <code>main.py</code> calculates deterministic release date. (Optionally calls <code>ml_engine.predict</code> for advisory date).</p>
+          <p><strong>6. SQLAlchemy ORM:</strong> Creates <code>JobOrder</code> instance, maps <code>order_shoes</code> and <code>services</code>.</p>
+          <p><strong>7. PostgreSQL:</strong> Executes parameterized <code>INSERT INTO job_orders ... RETURNING id</code>.</p>
+          <p><strong>8. Response:</strong> FastAPI returns HTTP 201 Created with the new Job Order ID.</p>
+
+          <h3>Trace 2: Unauthorized Analytics Access</h3>
+          <p><strong>1. Direct Access:</strong> Staff manually types <code>/analytics</code> in the URL bar.</p>
+          <p><strong>2. React UI:</strong> Fetches <code>/api/reports/sales</code>.</p>
+          <p><strong>3. FastAPI Auth:</strong> <code>@router.get("/reports/sales", dependencies=[Depends(require_role("OWNER"))])</code> executes.</p>
+          <p><strong>4. Token Decode:</strong> PyJWT decodes the token and inspects the <code>role</code> claim.</p>
+          <p><strong>5. Rejection:</strong> Role is <code>STAFF</code>, not <code>OWNER</code>. FastAPI raises <code>HTTPException(status_code=403, detail="Not enough permissions")</code>.</p>
+          <p><strong>6. React UI:</strong> Catches 403 error, redirects staff to <code>/dashboard</code> with an error toast.</p>
+        </div>
+
+        <!-- SECTION 8 -->
+        <div id="sec-08" class="section-block">
+          <h2>8. Deployment Architecture <span class="status-badge status-implemented">Implemented</span></h2>
+          <p>The system is deployed entirely on Heroku Platform-as-a-Service.</p>
+          <ul>
+              <li><strong>Web Dyno:</strong> Runs the Python backend using Gunicorn with Uvicorn async workers (<code>web: gunicorn -w 1 -k uvicorn.workers.UvicornWorker main:app</code>). The React frontend is compiled into static assets via Vite (<code>npm run build</code>) and served statically by the FastAPI server using <code>StaticFiles</code>.</li>
+              <li><strong>Database:</strong> Heroku Postgres Essential-0 tier. Configured via <code>DATABASE_URL</code> environment variable.</li>
+              <li><strong>Domain:</strong> <code>https://shoelotskey-villamor-pasay.app</code> (managed via Name.com) with Automated Certificate Management (ACM) for HTTPS.</li>
+              <li><strong>Offline Incapability:</strong> The architecture strictly requires an internet connection. There is no IndexedDB local queuing or Service Worker caching for offline job order creation.</li>
+          </ul>
+        </div>
+
+        <!-- SECTION 13 -->
+        <div id="sec-13" class="section-block">
+          <h2>13. Machine Learning Model <span class="status-badge status-implemented">Implemented</span></h2>
+          <p><strong>Model Choice:</strong> <code>RandomForestRegressor</code> (scikit-learn). Chosen over neural networks or linear regression for its robustness against non-linear interactions (e.g., drying time for cleaning + reglue doesn't scale linearly) and resistance to overfitting on small datasets.</p>
+          <p><strong>Target Variable:</strong> <code>CompletionDays</code> (Calculated mathematically as Claimed Date - Date Received).</p>
+          
+          <h3>The 18 Canonical Features</h3>
+          <p>The system records 18 strict features at intake for the prediction vector:</p>
+          <pre><code>total_pairs, basic_cleaning_qty, full_reglue_qty, minor_reglue_qty, 
+full_restoration_qty, minor_restoration_qty, color_renewal_qty, unyellowing_qty, 
+priority_encoded (0,1,2), grand_total, day_of_week_received, month_received, 
+scratches_count, yellowing_count, sole_separation_count, deep_stains_count, 
+rips_holes_count, worn_out_count</code></pre>
+        </div>
+
+        <!-- SECTION 14 -->
+        <div id="sec-14" class="section-block">
+          <h2>14. ML Metrics & Advisory Rule <span class="status-badge status-verified">Verified</span></h2>
+          <p>The ML model was trained on a highly constrained historical dataset of 35 human-validated eligible records (28 train, 7 test). The metrics achieved are:</p>
+          <ul>
+              <li><strong>MAE (Mean Absolute Error):</strong> 7.61 days</li>
+              <li><strong>RMSE:</strong> 8.93 days</li>
+              <li><strong>R² Score:</strong> 0.1959</li>
+          </ul>
+          
+          <div class="callout callout-warning">
+              <strong>Critical Architectural Limitation (The Advisory Rule):</strong><br>
+              An R² of 0.1959 mathematically proves high variance. Furthermore, the "Claimed Date" target variable includes the customer's delay in picking up the shoes, adding human noise unrelated to actual repair time.
+              <br><br>
+              Therefore, the system enforces a <strong>Dual-Tier Date Architecture</strong>:
+              <br>1. <strong>Authoritative Business Rules:</strong> Deterministic calculation (e.g., Service A = 3 days, Rush = -1 day) yields the <strong>Official Release Date</strong> provided to the customer.
+              <br>2. <strong>Advisory ML Prediction:</strong> Yields an <strong>Advisory Date</strong> visible only to staff as historical context (e.g., "historically, similar orders took 5 days longer to actually be claimed").
+          </div>
+        </div>
+
+        <!-- SECTION 16 -->
+        <div id="sec-16" class="section-block">
+          <h2>16. Authentication (JWT/Bcrypt) <span class="status-badge status-verified">Verified</span></h2>
+          <p>All authentication is handled server-side. Passwords are never stored in plain text.</p>
+          <ul>
+            <li><strong>Hashing:</strong> The <code>backend/auth_utils.py</code> file utilizes <code>bcrypt</code> with a salt round of 12. Validated via the <code>bcrypt.checkpw()</code> function.</li>
+            <li><strong>Tokens:</strong> Upon successful login, FastAPI generates a JSON Web Token (JWT) signed using the HMAC-SHA256 algorithm and a server-side secret key (<code>SECRET_KEY</code> in `.env`).</li>
+            <li><strong>Transmission:</strong> Tokens are returned to the React frontend and sent in the <code>Authorization: Bearer</code> header for all subsequent API requests.</li>
+            <li><strong>Expiration:</strong> JWTs enforce an absolute expiration of 24 hours. A separate frontend mechanism in <code>App.tsx</code> clears the token from <code>localStorage</code> after 30 minutes of inactivity.</li>
+          </ul>
+        </div>
+
+        <!-- SECTION 17 -->
+        <div id="sec-17" class="section-block">
+          <h2>17. OWASP Top 10 Mitigation <span class="status-badge status-verified">Verified</span></h2>
+          <p>The system architecture addresses the following OWASP Top 10 vulnerabilities:</p>
+          <ul>
+              <li><strong>A01 Broken Access Control:</strong> Enforced via FastAPI <code>Depends()</code>. The <code>require_role</code> dependency actively intercepts requests and issues HTTP 403 before endpoint execution.</li>
+              <li><strong>A02 Cryptographic Failures:</strong> Addressed via Bcrypt hashing and Heroku HTTPS (Automated Certificate Management).</li>
+              <li><strong>A03 Injection:</strong> 100% mitigated. SQLAlchemy 2.0 ORM parameterizes all variables. There is zero raw SQL string concatenation (e.g., <code>f"SELECT * FROM users WHERE username='{user}'"</code> is absent).</li>
+              <li><strong>A04 Insecure Design:</strong> Brute-force protection implemented. 3 consecutive failed logins trigger a 15-minute account lockout, mitigating automated credential stuffing.</li>
+              <li><strong>A07 Identification & Auth Failures:</strong> Weak passwords rejected at registration. 30-minute frontend inactivity timeout automatically clears session tokens.</li>
+          </ul>
+        </div>
+
+        <!-- SECTION 19 -->
+        <div id="sec-19" class="section-block">
+          <h2>19. ISO/IEC 25010 Results <span class="status-badge status-passed">Passed</span></h2>
+          <p>Software quality was formally evaluated by three independent external IT Practitioners (Senior Software Engineer, Senior Systems Analyst, QA Lead) using the modern ISO/IEC 25010:2023 framework.</p>
+          <p><strong>Instrument:</strong> 45 statements across 9 characteristics evaluated on a 4-point Likert scale (4=Highly Acceptable, 3=Acceptable, 2=Less Acceptable, 1=Not Acceptable).</p>
+          
+          <table>
+              <tr><th>Characteristic</th><th>Score</th><th>Status</th></tr>
+              <tr><td>Functional Suitability</td><td>3.60</td><td>Highly Acceptable</td></tr>
+              <tr><td>Performance Efficiency</td><td>3.73</td><td>Highly Acceptable</td></tr>
+              <tr><td>Compatibility</td><td>3.60</td><td>Highly Acceptable</td></tr>
+              <tr><td>Interaction Capability (Usability)</td><td>3.53</td><td>Highly Acceptable</td></tr>
+              <tr><td>Reliability</td><td>3.67</td><td>Highly Acceptable</td></tr>
+              <tr><td>Security</td><td>3.87</td><td>Highly Acceptable</td></tr>
+              <tr><td>Maintainability</td><td>3.53</td><td>Highly Acceptable</td></tr>
+              <tr><td>Flexibility</td><td>3.73</td><td>Highly Acceptable</td></tr>
+              <tr><td>Safety</td><td>3.87</td><td>Highly Acceptable</td></tr>
+              <tr style="background:#0284c7; color:white; font-weight:bold;">
+                  <td>GRAND COMPOSITE MEAN</td>
+                  <td>3.71</td>
+                  <td>Highly Acceptable</td>
+              </tr>
+          </table>
+          <p><strong>Remediation Note:</strong> All minor findings reported by IT Experts (e.g., differentiating Advisory vs Official date, enforcing hard stops on Prod DB SQLite fallbacks) were fully remediated and verified.</p>
+        </div>
+
+        <!-- SECTION 20 -->
+        <div id="sec-20" class="section-block">
+          <h2>20. TAM Methodology & Status <span class="status-badge status-pending">Pending Verification</span></h2>
+          <p>Operational usability is evaluated using the Technology Acceptance Model (TAM) framework.</p>
+          <p><strong>Respondents:</strong> Shoelotskey Owner + 2 Staff members.</p>
+          <p><strong>Constructs:</strong> Perceived Usefulness, Perceived Ease of Use, Behavioral Intention, Actual System Use. Evaluated via a 20-statement instrument on a 4-point scale.</p>
+          <div class="callout callout-warning">
+              <strong>Academic Verification Requirement:</strong> The TAM evaluation requires the client to actively use the system in their daily operations for a full two weeks. Migrating historical data does not satisfy this requirement. Final TAM scores are pending completion of this live deployment window.
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+  
+  <script>
+    let searchData = [];
+    
+    window.addEventListener('DOMContentLoaded', () => {
+      const sections = document.querySelectorAll('.section-block');
+      sections.forEach(sec => {
+        const id = sec.id;
+        const title = sec.querySelector('h2').innerText;
+        const clone = sec.cloneNode(true);
+        searchData.push({
+          id: id,
+          title: title,
+          content: clone.innerText.replace(/\\n/g, ' '),
+          rawHtml: sec.innerHTML
+        });
+      });
+      
+      if(window.location.hash) {
+        let id = window.location.hash.substring(1);
+        if(document.getElementById(id)) showSection(id);
+      }
+    });
+    
+    function showSection(id, element) {
+      document.getElementById('searchResults').classList.remove('active');
+      document.getElementById('searchInput').value = '';
+      
+      document.querySelectorAll('.section-block').forEach(el => el.classList.remove('active'));
+      let targetSection = document.getElementById(id);
+      if(targetSection) targetSection.classList.add('active');
+      
+      document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+      if(element) {
+          element.classList.add('active');
+      } else {
+          let navLink = document.querySelector(`a[onclick*="${id}"]`);
+          if(navLink) navLink.classList.add('active');
+      }
+      
+      let contentDiv = document.querySelector('.content-body');
+      if(contentDiv) contentDiv.scrollTop = 0;
+    }
+    
+    function performSearch() {
+      const query = document.getElementById('searchInput').value.toLowerCase().trim();
+      const resultsContainer = document.getElementById('searchResults');
+      
+      if (query.length < 2) {
+        resultsContainer.classList.remove('active');
+        return;
+      }
+      
+      resultsContainer.innerHTML = `<h2 style="padding:0 20px;">Search Results for "${query}"</h2><div id="resultsList" style="padding:0 20px;"></div>`;
+      const list = document.getElementById('resultsList');
+      
+      let matchCount = 0;
+      
+      searchData.forEach(item => {
+        const contentLower = item.content.toLowerCase();
+        const titleLower = item.title.toLowerCase();
+        
+        if (contentLower.includes(query) || titleLower.includes(query)) {
+          matchCount++;
+          
+          let snippet = "";
+          const matchIndex = contentLower.indexOf(query);
+          if (matchIndex > -1) {
+            const start = Math.max(0, matchIndex - 60);
+            const end = Math.min(item.content.length, matchIndex + query.length + 60);
+            snippet = "..." + item.content.substring(start, end) + "...";
+            const regex = new RegExp(`(${query})`, 'gi');
+            snippet = snippet.replace(regex, '<span class="highlight">$1</span>');
+          }
+          
+          const resultDiv = document.createElement('div');
+          resultDiv.className = 'search-result-item';
+          resultDiv.onclick = () => showSection(item.id);
+          resultDiv.innerHTML = `
+            <div class="search-result-title">${item.title}</div>
+            <div class="search-result-snippet">${snippet}</div>
+          `;
+          list.appendChild(resultDiv);
+        }
+      });
+      
+      if (matchCount === 0) {
+        list.innerHTML = `<p>No results found for "${query}". Try different keywords.</p>`;
+      }
+      
+      resultsContainer.classList.add('active');
+    }
+    
+    let timeout = null;
+    document.getElementById('searchInput').addEventListener('keyup', function(e) {
+      clearTimeout(timeout);
+      timeout = setTimeout(function() {
+        performSearch();
+      }, 300);
+    });
+  </script>
+</body>
+</html>

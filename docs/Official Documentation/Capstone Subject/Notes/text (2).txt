@@ -1,0 +1,222 @@
+
+IT 326_CAPSTONE 1 
+
+📍THURSDAY 
+Group by 3 
+1/4 individual index card 
+Individual 1x1
+Development Project 
+- by end of sem and documents
+Chapter 1,2,3
+- Possible title projects 
+
+4th Year 1st Sem - Full Finished System 
+□ Survey for Chapters 4 & 5 
+
+As possible, wala pang existing studies 
+
+PPT na more on demographics for on information part na image para di magbabasa 
+🎈🎈🎈🎈🎈🎈🎈🎈🎈🎈
+
+Defense 3 Title (Different Studies and Different System/Outcome)
+□ AR
+□ BR
+□ ML
+
+- Kung ano gusto, the panel will check kung saan mahihirapan 
+
+- Data Science, Data Analytics, Cybersecurity of Network, New Application of Security 
+- Basta may development and not in the line of assessment lang
+
+To be sent in the Group Chat aligned to the study agenda 
+
+- Marshaling an aircraft (patent) 
+- Scheduling of Consultation (Monitor progress of student, identify the student emotions) (for patent)
+- Look for recommendations if it is feasible and can be done 
+- Cite studies, authors, etc. 
+- Floor Plan (for approval in airport)
+ 
+Cloud base
+Mobile Phone
+Machine Learning
+
+Look for existing 
+Look for recommendations 
+Enhancements 
+
+Ilalapit sa mga authorities if they have need for improvement,  development, Enhancements.
+
+For employee 
+System for pilot (take off and touchdown) checklist, 
+For calibration (mobile app)
+
+If it is web-based dapat nakahost
+—————
+SOFTWARE ENGINEERING 
+
+Ms. Hazel Villarita 
+No Extension 
+No Excuses 
+1-passed  0-failed
+
+Project Timeline
+3 Aviation Title 
+Suggestion: Web based 
+
+Recommendation if the system needs for hardware (laptop, scanner)
+
+THURSDAY 
+- GROUP INDEX ¼
+- Software Eng - more on development 
+- Presentation of Title & Objective 
+- PPT 
+- School 
+- C#
+- Optum company 
+
+COS
+
+Depend on Project and Scoping 
+
+Development and ano ng Capstone
+3-4 Panel 
+
+Within business /school hours 
+
+Ethics 
+- Deadline
+- Time Management 
+- Life of Corporate 
+
+Pen Testing 
+Top10noas - security application 
+No checking of code 
+
+Kapag nanghingi magdebug, idedebug mo infront 
+VGS/VJS 
+Kaylangan us may gawa 
+
+DOCUMENTATION ALIGN SA SYSTEM
+Cost benefit analysis
+
+PROJECT MANAGER 
+PROGRAMMER/ DEVELOPER
+TESTER & QA/ QUALITY ASSURANCE
+
+□ Until next week 
+Title 
+Purpose
+Object 
+
+Ifofollow ang capstone 1
+
+————
+
+IT 323 - Application Development and Emerging Technologies 
+
+Update for schedule 
+
+Developing 
+- Web Base system
+- Database, hosting 
+
+7 COL
+Android App Interfaces (UI, principle 
+Application function
+Integrating API
+CLOUD base server, test debuging
+
+PROJECT: SYSTEM 
+CASE ANALYSIS 
+Kung ano gagawin sa capstone, yun na rin gagamitin for this course
+
+Project management
+□Prelim 
+- User Interfaces (Ano layout)
+□Midterm
+- User Experience (Paano gumagana)
+□Finals
+- Final Output based on the presentation 
+- 70% partially working during finals 
+
+MOBILE, WEB BASE, STAND ALONE SYSTEM 
+
+PARA SAAN GAGAMITIN
+TARGET PARTICIPANTS
+
+1: Introductory 
+2: Concept Structure 
+- Conceptual of member (Programmer, Project Manager)
+3: System Interface Design 
+4: Life Cycle (Flowchart)
+5: Introduction of Features Capabilities (GeoLocation, API)
+6: Prelim Written / Lab
+
+BEFORE APRIL 
+
+FINAL DEFENSE 
+LIST OF ADVISER FOR SYSTEM
+(DI PWEDE SIR PAZ)
+GANTT CHART (STRICT)
+
+Nakakapagregister and partially functional 
+
+Dummy account for the admin or main of the projects
+
+Final examination will be conducted before or after defense 
+
+COMPACT SOURCE CODE 
+PAANO SIYA GUMAGANA
+
+
+14: METHODOLOGIES 
+15: USER MANUAL (REQUIREMENT) & PROJECT REPORTS 
+16: 1 DAY DEPLOYMENT AND TESTING (IDENTIFY WHAT NEED FOR IMPROVEMENT)
+17: FINAL EXAMINATION 
+
+Paano gumagana, ginagamit
+
+Scope and Limitation - Like capabilities ng mga students
+
+LECTURE: 70% 
+Assignment 
+Activity 
+Quiz 
+Examination 
+
+LAB: 30% 
+Exercise 
+Lab Quiz
+Output
+Hands on
+Practicum
+
+Prof Name: Mr. Alvin John M. Paz 
+
+If absences can not be avoided 
+Medical
+Letter, I'd, Signed by Coor
+
+15 mins grace period 
+Log for Late and Absences 
+
+AI TOOLS: 
+- Using of ai is not permitted 
+- once caught, failed. 
+- use it as assistant 
+
+Plagiarism and Academic Dishonesty
+
+Concept for the Essays 
+Saan icoconnect 
+
+Emerging Technologies
+- brackets from present updates 
+- choose from the present related in aviation 
+
+Wala inside the campus 
+Sequential for Facial Recognition 
+
+HATID: Airport community application 
+- how does the bus near the area 
+- real time traffic

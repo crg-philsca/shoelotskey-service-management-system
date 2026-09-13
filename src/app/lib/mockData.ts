@@ -10,15 +10,16 @@ export const mockServices: Service[] = [
 
   // Add-ons
   { id: '6', name: 'Unyellowing', price: 125, category: 'addon', active: true, durationDays: 5, code: 'UNY' },
-  { id: '12', name: 'White Paint', price: 150, category: 'addon', active: true, durationDays: 2, code: 'WPT' },
-  { id: '7', name: 'Minor Retouch', price: 125, category: 'addon', active: true, durationDays: 5, code: 'MRT' },
-  { id: '8', name: 'Add Glue Layer', price: 150, category: 'addon', active: true, durationDays: 1, code: 'AGL' },
-  { id: '9', name: 'Minor Restoration', price: 225, category: 'addon', active: true, durationDays: 5, code: 'MRS' },
+  { id: '12', name: 'White Paint', price: 150, category: 'addon', active: true, durationDays: 0, code: 'WPT' },
+  { id: '7', name: 'Minor Retouch', price: 125, category: 'addon', active: true, durationDays: 0, code: 'MRT' },
+  { id: '8', name: 'Add Glue Layer', price: 150, category: 'addon', active: true, durationDays: 0, code: 'AGL' },
+  { id: '9', name: 'Minor Restoration', price: 225, category: 'addon', active: true, durationDays: 0, code: 'MRS' },
   { id: '10', name: '2 Colors', price: 375, category: 'addon', active: true, durationDays: 25, code: 'CR2' },
   { id: '11', name: '3 Colors', price: 475, category: 'addon', active: true, durationDays: 25, code: 'CR3' },
-  { id: '17', name: 'Premium Glue', price: 1530, category: 'addon', active: true, durationDays: 25, code: 'PMG' },
-  { id: '18', name: 'Midsole', price: 150, category: 'addon', active: true, durationDays: 25, code: 'FMG' },
-  { id: '19', name: 'Undersole', price: 150, category: 'addon', active: true, durationDays: 25, code: 'FUG' },
+  { id: '18', name: 'Full Reglue Midsole', price: 150, category: 'addon', active: true, durationDays: 25, code: 'FRM' },
+  { id: '19', name: 'Full Reglue Undersole', price: 150, category: 'addon', active: true, durationDays: 25, code: 'FRU' },
+  { id: '20', name: 'Midsole', price: 150, category: 'addon', active: true, durationDays: 25, code: 'FRM' },
+  { id: '21', name: 'Undersole', price: 150, category: 'addon', active: true, durationDays: 25, code: 'FRU' },
 
   // Priority
   { id: '13', name: 'Rush Fee (Basic Cleaning)', price: 150, category: 'priority', active: true, durationDays: -9 },
@@ -156,8 +157,9 @@ export function getStatusColor(status: JobStatus): string {
     'on-going': 'bg-blue-100 text-blue-800 border-blue-300',
     'for-release': 'bg-orange-100 text-orange-800 border-orange-300',
     'claimed': 'bg-gray-100 text-gray-800 border-gray-300',
+    'cancelled': 'bg-red-100 text-red-800 border-red-300',
   };
-  return colors[status];
+  return colors[status] || 'bg-gray-100 text-gray-800 border-gray-300';
 }
 
 export function getPriorityBadgeColor(priority: string): string {

@@ -1,5 +1,17 @@
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FileText, Calendar, Activity, Wrench, Users, LogOut, ChevronLeft, ChevronRight, Menu, Package } from 'lucide-react';
+import {
+  LayoutDashboard,
+  FileText,
+  Users,
+  Activity,
+  Package,
+  Wrench,
+  ChevronLeft,
+  ChevronRight,
+  Menu,
+  Calendar,
+  LogOut,
+} from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/app/components/ui/tooltip';
 import { Sheet, SheetContent, SheetTrigger } from '@/app/components/ui/sheet';
@@ -10,10 +22,11 @@ interface LayoutProps {
   user: { username: string; email?: string; role: 'owner' | 'staff' | 'admin' };
   onLogout: () => void;
   headerAction?: React.ReactNode;
+  headerCenter?: React.ReactNode;
   headerActionLeft?: React.ReactNode;
 }
 
-export default function Layout({ children, user, onLogout, headerAction, headerActionLeft }: LayoutProps) {
+export default function Layout({ children, user, onLogout, headerAction, headerCenter, headerActionLeft }: LayoutProps) {
   const location = useLocation();
 
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -54,8 +67,10 @@ export default function Layout({ children, user, onLogout, headerAction, headerA
     '/sales-report': 'Sales Report',
     '/service-management': 'Service Management',
     '/user-management': 'User Management',
+    '/backup': 'Backup & Recovery',
     '/total-sales': 'Total Sales',
     '/total-orders': 'Total Orders',
+    '/payments-received': 'Payments Received',
     '/expenses': 'Expenses',
     '/claim-record': 'Claim Record',
     '/activity-history': 'Activity History',
@@ -65,25 +80,53 @@ export default function Layout({ children, user, onLogout, headerAction, headerA
   };
 
   const menuItems = user.role === 'admin' ? adminMenuItems : (user.role === 'owner' ? ownerMenuItems : staffMenuItems);
+  const canAccessBackup = user.role === 'owner' || user.role === 'admin';
 
   const SidebarContent = ({ collapsed }: { collapsed: boolean }) => (
     <>
-      <div className="px-2 h-16 shrink-0 border-b border-red-500 flex items-center">
-        <div className={collapsed ? 'flex justify-center w-full' : 'flex items-center gap-10 pl-4'}>
-          <div className="h-12 w-12 rounded-full bg-white flex items-center justify-center flex-shrink-0">
-            <img
-              src="/logo.png"
-              alt="Shoelotskey logo"
-              className="h-10 w-10 object-contain"
-              fetchPriority="high"
-              loading="eager"
-              decoding="async"
-            />
-          </div>
+      <div className="px-3 h-16 shrink-0 border-b border-red-500 flex items-center">
+        <div className={collapsed ? 'flex justify-center w-full' : 'flex items-center w-full pl-2'}>
+          {canAccessBackup ? (
+            <TooltipProvider>
+              <Tooltip delayDuration={300}>
+                <TooltipTrigger asChild>
+                  <Link
+                    to="/backup"
+                    aria-label="Backup & Recovery"
+                    className="h-12 w-12 rounded-full bg-white flex items-center justify-center flex-shrink-0 shadow-xs ring-2 ring-white/20 hover:ring-white/60 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                  >
+                    <img
+                      src="/logo.png"
+                      alt="Shoelotskey logo"
+                      className="h-9 w-9 object-contain pointer-events-none"
+                      loading="eager"
+                      decoding="async"
+                    />
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="bg-red-800 text-white border-red-600 font-bold text-xs">
+                  Backup & Recovery
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ) : (
+            <div
+              className="h-12 w-12 rounded-full bg-white flex items-center justify-center flex-shrink-0 shadow-xs ring-2 ring-white/20 cursor-default select-none"
+              title="Shoelotskey"
+            >
+              <img
+                src="/logo.png"
+                alt="Shoelotskey logo"
+                className="h-9 w-9 object-contain pointer-events-none"
+                loading="eager"
+                decoding="async"
+              />
+            </div>
+          )}
           {!collapsed && (
-            <div className="text-center space-y-1">
-              <h1 className="text-base font-bold leading-tight">Shoelotskey</h1>
-              <p className="text-xs text-red-200">{user.role === 'admin' ? 'Developer' : (user.role === 'owner' ? 'Owner' : 'Staff')}</p>
+            <div className="flex-1 text-center space-y-0.5 min-w-0 ml-4 pr-2">
+              <h1 className="text-base font-bold leading-tight tracking-wide text-white truncate">Shoelotskey</h1>
+              <p className="text-xs text-red-200 font-medium truncate">{user.role === 'admin' ? 'Developer' : (user.role === 'owner' ? 'Owner' : 'Staff')}</p>
             </div>
           )}
         </div>
@@ -157,7 +200,7 @@ export default function Layout({ children, user, onLogout, headerAction, headerA
   return (
     <div className={`flex h-[100dvh] md:h-screen bg-gray-50 ${isCollapsed ? 'sidebar-collapsed' : 'sidebar-expanded'}`}>
       {/* Desktop Sidebar */}
-      <div className={`${isCollapsed ? 'w-20' : 'w-64'} bg-red-700 text-white hidden md:flex flex-col transition-all duration-300 relative`}>
+      <div className={`${isCollapsed ? 'w-20' : 'w-64'} bg-red-700 text-white hidden md:flex flex-col transition-all duration-300 relative print:hidden`}>
         <SidebarContent collapsed={isCollapsed} />
 
         {/* Collapse/Expand Button */}
@@ -172,7 +215,7 @@ export default function Layout({ children, user, onLogout, headerAction, headerA
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden min-h-0">
-        <header className="bg-white border-b border-gray-200 px-3 md:px-6 h-16 shrink-0 flex items-center relative overflow-visible sticky top-0 z-30 shadow-xs">
+        <header className="bg-white border-b border-gray-200 px-3 md:px-6 h-16 shrink-0 flex items-center relative overflow-visible sticky top-0 z-30 shadow-xs print:hidden">
           {/* Mobile Menu Toggle */}
           <div className="md:hidden mr-3">
             <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
@@ -181,7 +224,7 @@ export default function Layout({ children, user, onLogout, headerAction, headerA
                   <Menu className="h-6 w-6" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="p-0 bg-red-700 border-red-800 w-64 z-[1000] overflow-y-auto max-h-[100dvh]">
+              <SheetContent side="left" closeClassName="bg-red-800 hover:bg-red-900 text-white border-red-500/50 shadow-sm" className="p-0 bg-red-700 border-red-800 w-64 z-[1000] overflow-y-auto max-h-[100dvh]">
                 <div className="h-full flex flex-col text-white">
                   <SidebarContent collapsed={false} />
                 </div>
@@ -189,16 +232,24 @@ export default function Layout({ children, user, onLogout, headerAction, headerA
             </Sheet>
           </div>
 
-          <div className="flex items-center flex-grow min-w-0">
+          <div className="flex items-center min-w-0 shrink-0">
             {headerActionLeft && (
-              <div className="flex items-center mr-3" style={{ zIndex: 20 }}>
+              <div className="flex items-center mr-2 sm:mr-3" style={{ zIndex: 20 }}>
                 {headerActionLeft}
               </div>
             )}
-            <h2 className="text-base md:text-2xl font-bold text-red-600 uppercase truncate">
+            <h2 className="text-sm sm:text-base md:text-2xl font-bold text-red-600 uppercase truncate">
               {pageTitles[location.pathname] || 'PAGE NOT FOUND'}
             </h2>
           </div>
+
+          {headerCenter ? (
+            <div className="flex-1 flex items-center justify-center px-2 min-w-0">
+              {headerCenter}
+            </div>
+          ) : (
+            <div className="flex-grow" />
+          )}
 
           {headerAction && (
             <div className="ml-2 md:ml-4 flex-shrink-0">

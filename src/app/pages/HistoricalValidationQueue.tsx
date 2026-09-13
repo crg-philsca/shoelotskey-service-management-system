@@ -911,6 +911,13 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
             next.claimed_date = iso;
           }
         }
+        if (field === 'date_received' && received) {
+          const currentOid = String(next.order_id || prev.order_id || '');
+          const match = currentOid.match(/^ORD-\d{4}-\d{2}-\d{2}-(\d{3})$/);
+          if (match) {
+            next.order_id = `ORD-${received}-${match[1]}`;
+          }
+        }
       }
       if (field === 'downpayment') {
         return syncBalanceFromGrand(next);
@@ -1257,10 +1264,29 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
 
   return (
     <Box sx={{ p: 3, height: 'calc(100vh - 100px)', display: 'flex', flexDirection: 'column' }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2, gap: 2, flexWrap: 'wrap' }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2, gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
-          <IconButton onClick={() => onBack ? onBack() : navigate('/job-order-form/historical-records')}><ArrowBack /></IconButton>
-          <Typography variant="h5" component="div" sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<ArrowBack />}
+            onClick={() => onBack ? onBack() : navigate('/service-management')}
+            sx={{
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              fontSize: '0.75rem',
+              borderColor: 'error.light',
+              color: 'error.main',
+              bgcolor: 'white',
+              '&:hover': { bgcolor: 'error.50', borderColor: 'error.main' },
+              borderRadius: 2,
+              px: 1.5,
+              py: 0.5,
+            }}
+          >
+            Back to Services
+          </Button>
+          <Typography variant="h5" component="div" sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', fontWeight: 800 }}>
             Needs Human Review
             <Box
               component="span"
@@ -1306,37 +1332,6 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
             title="Jump to the first pending record"
           >
             First
-          </Button>
-          {currentItem?.historical_image_id && (
-            ocrRunning ? (
-              <Button
-                variant="contained"
-                color="error"
-                startIcon={<Cancel />}
-                onClick={() => { void handleCancelReocr(); }}
-              >
-                Cancel OCR
-              </Button>
-            ) : (
-              <Button
-                variant="contained"
-                color="secondary"
-                startIcon={<DocumentScanner />}
-                onClick={() => { void handleReocr(); }}
-                disabled={busy}
-              >
-                Re-run OCR
-              </Button>
-            )
-          )}
-          <Button
-            variant="outlined"
-            startIcon={<Refresh />}
-            onClick={() => fetchQueue({ keepPosition: true })}
-            disabled={busy}
-            title="Reload queue but stay on this scan"
-          >
-            Refresh Queue
           </Button>
         </Box>
       </Box>
@@ -1404,9 +1399,22 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
         {/* Right Side: Extracted Data (55%) */}
         <Grid size={{ xs: 12, md: 6.6 }} sx={{ display: 'flex', flexDirection: 'column', height: { xs: 'auto', md: '100%' } }}>
           <Paper variant="outlined" sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <Box sx={{ p: 1.5, bgcolor: 'primary.main', color: 'primary.contrastText', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="subtitle1" fontWeight="bold">Extracted Data</Typography>
-              <Typography variant="body2">Confidence: {(currentItem.ocr_confidence * 100).toFixed(1)}%</Typography>
+            <Box sx={{ p: 1.5, bgcolor: 'primary.main', color: 'primary.contrastText', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <IconButton
+                  size="small"
+                  onClick={() => fetchQueue({ keepPosition: true })}
+                  disabled={busy}
+                  title="Refresh Queue"
+                  sx={{ color: 'primary.contrastText', bgcolor: 'rgba(255,255,255,0.15)', '&:hover': { bgcolor: 'rgba(255,255,255,0.25)' }, p: 0.75 }}
+                >
+                  <Refresh fontSize="small" />
+                </IconButton>
+              </Box>
+              <Typography variant="subtitle1" fontWeight="bold" sx={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', textAlign: 'center' }}>
+                Extracted Data
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>Confidence: {(currentItem.ocr_confidence * 100).toFixed(1)}%</Typography>
             </Box>
 
             <Box sx={{ p: 2, flex: 1, overflowY: 'auto' }}>
@@ -1712,8 +1720,9 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
                     fullWidth size="small"
                     label="Customer Name" 
                     value={editMode ? editedData?.customer?.name : currentItem.order?.customer?.name} 
-                    onChange={(e) => handleEditChange('customer', { ...editedData?.customer, name: e.target.value })}
+                    onChange={(e) => handleEditChange('customer', { ...editedData?.customer, name: e.target.value.slice(0, 60) })}
                     InputProps={{ readOnly: !editMode }}
+                    inputProps={{ maxLength: 60 }}
                     variant={editMode ? "outlined" : "filled"}
                   />
                 </Grid>
@@ -2320,33 +2329,30 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
                   <Button 
                     variant="contained" 
                     color="success" 
-                    size="medium"
                     startIcon={<CheckCircle />}
                     onClick={() => handleAction('approve')}
                     disabled={busy}
-                    sx={{ flex: 1, py: 1, width: { xs: '100%', sm: 'auto' } }}
+                    sx={{ flex: 1, minHeight: 46, height: 46, fontSize: '0.8125rem', fontWeight: 800, letterSpacing: '0.05em', width: { xs: '100%', sm: 'auto' }, borderRadius: 2 }}
                   >
                     VALIDATE & SAVE
                   </Button>
                   <Button 
                     variant="contained" 
                     color="primary" 
-                    size="medium"
                     startIcon={<Edit />}
                     onClick={startEdit}
                     disabled={busy}
-                    sx={{ flex: 1, py: 1, width: { xs: '100%', sm: 'auto' } }}
+                    sx={{ flex: 1, minHeight: 46, height: 46, fontSize: '0.8125rem', fontWeight: 800, letterSpacing: '0.05em', width: { xs: '100%', sm: 'auto' }, borderRadius: 2 }}
                   >
                     EDIT DATA
                   </Button>
                   <Button 
                     variant="contained" 
                     color="error" 
-                    size="medium"
                     startIcon={<Cancel />}
                     onClick={() => handleAction('reject')}
                     disabled={busy}
-                    sx={{ flex: 1, py: 1, width: { xs: '100%', sm: 'auto' } }}
+                    sx={{ flex: 1, minHeight: 46, height: 46, fontSize: '0.8125rem', fontWeight: 800, letterSpacing: '0.05em', width: { xs: '100%', sm: 'auto' }, borderRadius: 2 }}
                   >
                     REJECT / FLAG
                   </Button>
@@ -2356,21 +2362,19 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
                   <Button 
                     variant="contained" 
                     color="primary" 
-                    size="medium"
                     startIcon={<CheckCircle />}
                     onClick={() => handleAction('save')}
                     disabled={busy}
-                    sx={{ flex: 1, py: 1, width: { xs: '100%', sm: 'auto' } }}
+                    sx={{ flex: 1, minHeight: 46, height: 46, fontSize: '0.8125rem', fontWeight: 800, letterSpacing: '0.05em', width: { xs: '100%', sm: 'auto' }, borderRadius: 2 }}
                   >
                     {busy ? 'Saving…' : 'Save Corrections'}
                   </Button>
                   <Button 
                     variant="contained" 
                     color="inherit" 
-                    size="medium"
                     onClick={() => setEditMode(false)}
                     disabled={busy}
-                    sx={{ flex: 1, py: 1, width: { xs: '100%', sm: 'auto' } }}
+                    sx={{ flex: 1, minHeight: 46, height: 46, fontSize: '0.8125rem', fontWeight: 800, letterSpacing: '0.05em', width: { xs: '100%', sm: 'auto' }, borderRadius: 2, bgcolor: 'grey.300', '&:hover': { bgcolor: 'grey.400' } }}
                   >
                     Cancel Edit
                   </Button>

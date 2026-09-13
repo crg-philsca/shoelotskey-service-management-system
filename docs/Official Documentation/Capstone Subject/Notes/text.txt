@@ -1,0 +1,86 @@
+
+Must Atleast satisfy the condition from the 7 requirements agenda
+
+R&D Agenda of the
+Institute of Computer Studies (ICS)
+	1.	   Aviation Program Enhancement Program Enhancement of Aviation Information Techny and Management thes Studies on Improved Service Delivery and Innovative Pedayjes
+	2.	   Augmented Reality Development of Augmented Reality Technologies for Aviation Echucation and Maintenance and Repair Operations (MROs)
+	3.	   Information and Communication Technology (ICT) Application of ICT in Aviation Education
+	4.	Internet of Thinge (loT)
+Development of loT Platfoms for Enhanced Air Passenger Service
+	5.	Artificial Intelligence- Development of Artificial Intelligence Software for Aviation Centic Services, Training, and Cortifcation with Quality Management Systems (QMS)
+	6.	   Information Management System Development of Inforation Management System for Airport Administration and Air Traffic Management
+	7.	   Data Analytics Development of Data Anulytics System for Real-Time Flight and Airport
+
+Wireframe same output from the content for the system deadline next Tuesday Jan 13
+
+Need:
+	1.	Research Agenda
+	2.	Objectives
+	3.	Wireframe 
+
+Defense After Prelim [Finals?](Enhancement of features, objectives and title)
+
+Prepare in the future:
+DFD (Rules)
+ERD
+FLOWCHART
+WIREFRAME 
+* Features is based on wireframe
+
+4 Types - Entity, Process ?
+Data analytics - Forecasting
+
+Machine Learning using Natural Language Processing
+
+Automated Shoes Cleaning Service Tracking Management System
+
+Shoe cleaning schedule and order tracking
+Track shoe orders, cleaning status, shoe availability (dashboard)
+
+Automate order shoe service and tracking process
+
+Advanced statistical analysis to handle cleaning orders and track shoe release schedule with color coding. Data reports daily, weekly, monthly, yearly. Profits 
+
+Lessen manual workload minimize errors and provide real time insights on shoe release status
+
+Development of integrated machine  learning system that automates and simplifies order process enhances scheduling and streamline tracking of shoe order
+
+NLP parse and understand shoe order directly from various records reducing need for manual data entry
+
+Machine learning to predict release schedules categorize shoes based on type of service and prioritize cleaning tasks
+
+Real time tracking dashboard for monitoring shoe order and schedule status updates
+
+Color coded system for quick virtual identification of shoe release  deadlines and condition (red-release, yellow- close to deadline, blue- within acceptable date range orange -rush order need to release fast)
+
+Receive (IN)
+Release (OUT)
+
+The current order and administrative system for Shoelotsky, while functional, presents several challenges including inefficient manual data entry, reliance on paper records, and a lack of real-time tracking and analytics. These limitations hinder growth and cause operational inefficiencies. This capstone project addresses these challenges through the development of an integrated machine learning system that automates and simplifies the order process, enhances scheduling capabilities, and streamlines tracking of shoe releases.
+
+To develop the system
+Web based and compatible to mobile
+
+Shoelotsky cleaning services. 
+
+If we can’t do that. I need a system because I’m doing manually. Actually I already bought an excel with template but I can’t incorporate it because I have to edit it. But I haven’t got time to handle it because I’m busy. I have a record book where there’s a date that I shoe order is IN and OUT for released.
+
+I need the timeline. 
+Visualize the booking process today, the employee will fill up the form manually ung schedule ng shoes, when it could be digitalized so it’s automatically on the system you don’t have to input manually on the system. Because when approve direct to the system. Not doubled workload. I want to see the status of the shoes, if for release because it has a deadline. 
+
+Must be color-coded, red for release, yellow if near deadline, if the status of shoes is fine color blue. It’s more organized. It’s critical because I don’t have a system where I can see everything. If I multi-tasked, it’s jumbled up. I want to see release for today, tomorrow or the data. You can filter out the priority. There’s also a counter or number how many shoes is scheduled for release tomorrow. It will show up on the system how many shoe orders are scheduled for releasing.  when clicked on the system the order is out for claiming, the numbers are automatically lessen that says claimed. 
+
+For example when you order from Jollibee or any fast food restaurant. There’s a monitor outside in the counter that you can see the queue. Queuing number the concept is like that and there’s also a separate for claiming. The monitoring of that one is for IN and OUT of the shoes.  How many is IN  and out for this day . There’s also a masterlist that you can see the total for this month, for the week and for the whole year. Also wants because in excel you can see the price, total price and total profit. Want to see data analytics.  
+
+Aileen Rosales Old Faculty Instructor of Philsca. English Teacher now Airforce and has 2 businesses. Also has website.
+
+It looks complicated but from excel, want to make it a system. Because client has template but she doesn’t use it hasn’t set up yet. She wants to automate the process of shoe service order and to visualize the schedule of release and the records of orders and prioritization of order. 
+
+Meaning to say, paperless. I can see in the dashboard, how many orders have been received today. Quantity of in and out. In Home, there’s a dashboard. That’s what I visualized for the concept. At ghe bottom, there’s a summary of total of profits. Order in and out daily, weekly, monthly, yearly can be filtered out. Also can see service type and how many shoe service is for reglue. Like it’s categorized by its type of service. How many are for basic cleaning. You know what type of work you need to do, because it’s summarized and organized. I mean what I want to see is the status for each. For example for unyellowing. There’s also a status for rush. There’s a priority order. There’s also schedule. There’s also search function, alert for deadlines. 
+
+The main branch, the client discovered it on GMA. On 2019/2020 Pera Paraan. When the main branch sees that it’s working, we can sell it on the main branch. 
+
+Shoelotsky is a franchise, has other branches in the SM Mall. They also have a plan to parnership/business partner with well-known brand such as Vans Philippines and Crocs Philippines. 
+
+Create the objectives, purpose, features and how machine learning is applied, benefits, gaps/limitations, wire-framing, sdlc (planning, development, timeline, testing, deployment) include requirements, project conclusion and recommendation.

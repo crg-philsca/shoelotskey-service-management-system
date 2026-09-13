@@ -1,18 +1,18 @@
-import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/app/components/ui/dialog';
+import { useState, useEffect, useRef } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/app/components/ui/dialog';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { Switch } from '@/app/components/ui/switch';
 import { User } from '@/app/types';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
 
 interface UserModalProps {
     isOpen: boolean;
     onClose: () => void;
     user: User | null;
-    onSave: (userData: Partial<User> & { password?: string }) => void;
+    onSave: (userData: Partial<User> & { password?: string }) => void | Promise<void>;
     serverError?: string;
 }
 
@@ -24,6 +24,8 @@ export default function UserModal({ isOpen, onClose, user, onSave, serverError }
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [passwordError, setPasswordError] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const isSubmittingRef = useRef(false);
 
     useEffect(() => {
         if (user) {
@@ -42,8 +44,9 @@ export default function UserModal({ isOpen, onClose, user, onSave, serverError }
         setPasswordError('');
     }, [user, isOpen]); // Reset when checking new vs edit
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (isSubmitting || isSubmittingRef.current) return;
         setPasswordError('');
 
         if (!user || password) {
@@ -53,22 +56,30 @@ export default function UserModal({ isOpen, onClose, user, onSave, serverError }
             }
         }
 
-        onSave({
-            username,
-            email,
-            role,
-            active,
-            ...(password ? { password } : {}) // Only include password if set
-        });
+        isSubmittingRef.current = true;
+        setIsSubmitting(true);
+        try {
+            await onSave({
+                username,
+                email,
+                role,
+                active,
+                ...(password ? { password } : {})
+            });
+        } finally {
+            isSubmittingRef.current = false;
+            setIsSubmitting(false);
+        }
     };
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-md">
+            <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="text-xl font-bold uppercase text-red-600 text-center">
                         {user ? 'Edit User' : 'New User'}
                     </DialogTitle>
+                    <DialogDescription className="sr-only">Create or edit system account credentials</DialogDescription>
                 </DialogHeader>
 
                 <form onSubmit={handleSubmit} className="space-y-4 mt-2">
@@ -162,8 +173,9 @@ export default function UserModal({ isOpen, onClose, user, onSave, serverError }
                         <Button type="button" variant="outline" onClick={onClose} className="flex-1 h-9 font-bold text-xs border border-gray-300 bg-gray-200 hover:bg-gray-700 text-gray-700 hover:text-white transition-all">
                             Cancel
                         </Button>
-                        <Button type="submit" className="bg-red-600 hover:bg-red-700 text-white font-bold flex-1 h-9 text-xs uppercase tracking-widest">
-                            {user ? 'Save' : 'Create'}
+                        <Button type="submit" disabled={isSubmitting} className="bg-red-600 hover:bg-red-700 text-white font-bold flex-1 h-9 text-xs uppercase tracking-widest disabled:opacity-50 flex items-center justify-center gap-1.5">
+                            {isSubmitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                            <span>{isSubmitting ? 'Saving...' : user ? 'Save' : 'Create'}</span>
                         </Button>
                     </DialogFooter>
                 </form>

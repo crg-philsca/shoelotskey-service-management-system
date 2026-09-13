@@ -364,12 +364,22 @@ def apply_extraction_to_order(
         order.downpayment = _as_money(extracted["downpayment"])
     if extracted.get("balance") is not None and extracted.get("balance") != "":
         order.balance = _as_money(extracted["balance"])
-    if is_placeholder_order_id(order.order_id) and extracted.get("date_received"):
+    dr_val = extracted.get("date_received")
+    needs_reorder_id = False
+    if dr_val:
+        from order_numbering import parse_order_date, date_prefix
+        parsed_dr = parse_order_date(dr_val)
+        if parsed_dr:
+            prefix = date_prefix(parsed_dr)
+            if is_placeholder_order_id(order.order_id) or not str(order.order_id).startswith(prefix):
+                needs_reorder_id = True
+
+    if needs_reorder_id:
         order.order_id = resolve_historical_order_id(
             db,
-            date_value=extracted.get("date_received") or order.date_received,
+            date_value=dr_val or order.date_received,
             extracted_order_id=extracted.get("order_id"),
-            current_order_id=order.order_id,
+            current_order_id=None,
             exclude_historical_order_id=order.historical_order_id,
         )
     if extracted.get("branch"):

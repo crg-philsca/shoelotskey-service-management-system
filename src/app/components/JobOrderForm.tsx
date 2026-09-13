@@ -7,24 +7,28 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/app/components/ui/checkbox';
 import { Textarea } from '@/app/components/ui/textarea';
 import { toast } from 'sonner';
-import { Plus, X, User, Hash, ClipboardList, RotateCcw, Calendar as CalendarIcon, Clock, Sparkles } from 'lucide-react';
+import { Plus, X, User, Hash, ClipboardList, RotateCcw, Calendar as CalendarIcon, Clock, Sparkles, Info, Search, Check, ChevronDown, Loader2 } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/app/components/ui/popover';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/app/components/ui/dialog';
 import { useOrders } from '../context/OrderContext';
 import { useServices } from '../context/ServiceContext';
 import type { ShippingPreference, PaymentMethod, PaymentStatus, Priority } from '@/app/types';
 import { format as dateFnsFormat } from 'date-fns';
 import { CreatableCombobox } from './ui/creatable-combobox';
+import { CUSTOM_OPTION_KEYS, seedCustomOptionsFromOrders, saveStoredCustomOption } from '@/app/lib/customOptions';
 import { useActivities } from '@/app/context/ActivityContext';
 import { useInventory } from '../context/InventoryContext';
 import { getInventoryPresentation } from '@/app/lib/inventoryPresentation';
 import { API_BASE } from '@/app/lib/apiBase';
 import { isAddonVisibleForBaseServices, applyColorCountExclusive, syncColorRenewalAddons, shoeHasBothColorCounts, isColorCountAddon } from '@/app/lib/serviceCompatibility';
 import { nextOrderId } from '@/app/lib/orderNumber';
-import { calculateOfficialReleaseBreakdown, formatBusinessRuleLabel } from '@/app/lib/businessRules';
+import { calculateOfficialReleaseBreakdown } from '@/app/lib/businessRules';
+import { validateCustomerName, CUSTOMER_NAME_MAX_LENGTH } from '@/app/lib/customerValidation';
 
 function formatMlModelName(name?: string | null): string {
-    if (!name) return 'Random Forest Regression';
+    if (!name) return 'Random Forest';
     if (/heuristic|fallback/i.test(name)) return name;
-    if (/random forest/i.test(name)) return 'Random Forest Regression';
+    if (/random forest/i.test(name)) return 'Random Forest';
     return name;
 }
 
@@ -193,7 +197,7 @@ const INPUT_STYLE = "bg-white border-gray-100 h-9 text-xs focus:ring-red-50 focu
 const CARD_HEADER_STYLE = "bg-red-50/50 py-2 px-6 border-b border-red-100/50";
 const CARD_TITLE_STYLE = "text-gray-600 font-black text-[14px] uppercase tracking-widest flex items-center gap-2";
 
-function ClearableInput({ id, value, onChange, placeholder, className, required, type = "text", inputMode }: any) {
+function ClearableInput({ id, value, onChange, placeholder, className, required, type = "text", inputMode, maxLength, ...rest }: any) {
     return (
         <div className="relative group/input">
             <Input
@@ -205,6 +209,8 @@ function ClearableInput({ id, value, onChange, placeholder, className, required,
                 required={required}
                 type={type}
                 inputMode={inputMode}
+                maxLength={maxLength}
+                {...rest}
             />
             {value && (
                 <button
@@ -361,6 +367,158 @@ function shoeColorValue(shoe: { color?: string | string[]; otherColor?: string }
     return String(raw || '').trim();
 }
 
+export function getItemRetailPrice(item: any): number {
+    if (!item) return 0;
+    const isRetail = Boolean(item.is_retail ?? item.isRetail);
+    if (!isRetail) return 0;
+    const price = Number(item.retail_price ?? item.retailPrice ?? 0);
+    return isNaN(price) || price < 0 ? 0 : price;
+}
+
+function formatPesoValue(amount: number | string): string {
+    const num = typeof amount === 'string' ? parseFloat(amount.replace(/,/g, '')) : amount;
+    if (isNaN(num)) return '\u20B10.00';
+    return '\u20B1' + num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function InventorySearchSelect({
+    value,
+    onValueChange,
+    inventoryData,
+}: {
+    value: number | string;
+    onValueChange: (val: string) => void;
+    inventoryData: any[];
+}) {
+    const [open, setOpen] = useState(false);
+    const [search, setSearch] = useState("");
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    const selectedItem = useMemo(() => {
+        return inventoryData.find((i: any) => i.id?.toString() === value?.toString());
+    }, [inventoryData, value]);
+
+    const selectedPresentation = useMemo(() => {
+        return selectedItem ? getInventoryPresentation(selectedItem) : null;
+    }, [selectedItem]);
+
+    const filteredItems = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        if (!q) return inventoryData;
+        return inventoryData.filter((inv: any) => {
+            const pres = getInventoryPresentation(inv);
+            const name = (inv.name || '').toLowerCase();
+            const cat = (inv.category || '').toLowerCase();
+            const unit = (inv.unit || '').toLowerCase();
+            const label = (pres?.dropdownLabel || '').toLowerCase();
+            return name.includes(q) || cat.includes(q) || unit.includes(q) || label.includes(q);
+        });
+    }, [inventoryData, search]);
+
+    useEffect(() => {
+        if (open) {
+            const timer = setTimeout(() => {
+                inputRef.current?.focus();
+            }, 60);
+            return () => clearTimeout(timer);
+        } else {
+            setSearch("");
+        }
+    }, [open]);
+
+    return (
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <button
+                    type="button"
+                    className="h-8 text-[11px] font-bold border border-transparent hover:border-gray-200 shadow-none flex-1 flex items-center justify-between px-2 bg-transparent hover:bg-gray-50/80 rounded-md transition-colors text-left truncate gap-2 cursor-pointer group"
+                >
+                    <span className="truncate text-gray-800">
+                        {selectedItem && selectedPresentation ? (
+                            `${selectedItem.name} - ${selectedPresentation.dropdownLabel}`
+                        ) : (
+                            <span className="text-gray-400 font-normal">Select supply or material...</span>
+                        )}
+                    </span>
+                    <ChevronDown size={13} className="text-gray-400 group-hover:text-gray-600 shrink-0 transition-transform duration-200" style={{ transform: open ? 'rotate(180deg)' : 'none' }} />
+                </button>
+            </PopoverTrigger>
+            <PopoverContent
+                className="w-[300px] sm:w-[360px] p-2 bg-white rounded-xl shadow-xl border border-gray-200/80 z-50"
+                align="start"
+                sideOffset={4}
+            >
+                <div className="relative mb-2">
+                    <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                    <input
+                        ref={inputRef}
+                        type="text"
+                        placeholder="Search supplies, volume, container..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="w-full h-8 pl-8 pr-7 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-100 focus:border-red-200 transition-all font-medium text-gray-800 placeholder:text-gray-400"
+                    />
+                    {search && (
+                        <button
+                            type="button"
+                            onClick={() => setSearch("")}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-200 transition-colors"
+                        >
+                            <X size={12} />
+                        </button>
+                    )}
+                </div>
+
+                <div className="max-h-[220px] overflow-y-auto space-y-0.5 pr-0.5 custom-scrollbar">
+                    {filteredItems.length === 0 ? (
+                        <div className="py-6 text-center text-xs text-gray-400 font-medium">
+                            No supplies found matching <span className="font-semibold text-gray-600">"{search}"</span>
+                        </div>
+                    ) : (
+                        filteredItems.map((inv: any) => {
+                            const pres = getInventoryPresentation(inv);
+                            const invRetPrice = getItemRetailPrice(inv);
+                            const isSelected = inv.id?.toString() === value?.toString();
+
+                            return (
+                                <button
+                                    key={inv.id}
+                                    type="button"
+                                    onClick={() => {
+                                        onValueChange(inv.id?.toString() || "");
+                                        setOpen(false);
+                                    }}
+                                    className={`w-full text-left px-2.5 py-2 text-[11px] rounded-lg transition-colors flex items-center justify-between gap-2 cursor-pointer ${
+                                        isSelected
+                                            ? "bg-red-50 text-red-700 font-bold"
+                                            : "hover:bg-gray-50 text-gray-700 font-medium"
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-2 truncate flex-1 min-w-0">
+                                        {isSelected ? (
+                                            <Check size={12} className="text-red-600 shrink-0" />
+                                        ) : (
+                                            <span className="w-3 shrink-0" />
+                                        )}
+                                        <span className="truncate">
+                                            {inv.name} - {pres.dropdownLabel}
+                                        </span>
+                                    </div>
+                                    {invRetPrice > 0 && (
+                                        <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 shrink-0">
+                                            Retail: {formatPesoValue(invRetPrice)}
+                                        </span>
+                                    )}
+                                </button>
+                            );
+                        })
+                    )}
+                </div>
+            </PopoverContent>
+        </Popover>
+    );
+}
+
 export default function JobOrderFormComponent({ user, onSuccess, onCancel, initialOrder, mode = 'create' }: JobOrderFormProps) {
     const { addOrder, orders } = useOrders();
     const { services } = useServices();
@@ -371,6 +529,13 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
     // State for Shipping Preference
     const [shippingPreference, setShippingPreference] = useState<string>("pickup");
     const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
+
+    // Automatically seed stored custom options from past orders so they appear in dropdowns
+    useEffect(() => {
+        if (orders && orders.length > 0) {
+            seedCustomOptionsFromOrders(orders);
+        }
+    }, [orders]);
 
     // [REQUIREMENT 9] Smarter Search: Match any partial word across previous customer names (e.g. "John" finds "John Michael", "John Dela Cruz")
     const customerSuggestions = useMemo(() => {
@@ -447,7 +612,8 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
     const [releaseTime, setReleaseTime] = useState('');
     const [serverPrediction, setServerPrediction] = useState<ServerPrediction | null>(null);
     const [predictionLoading, setPredictionLoading] = useState(false);
-    const [predictionError, setPredictionError] = useState<string | null>(null);
+    const [predictionError, setPredictionError] = useState(false);
+    const [isMlModalOpen, setIsMlModalOpen] = useState(false);
 
     useEffect(() => {
         if (initialOrder) {
@@ -471,6 +637,33 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                     setDeliveryAddress({ houseNo: '', street: initialOrder.deliveryAddress, province: '', city: '', barangay: '', zipCode: '' });
                 }
             }
+            setPriorityLevel(initialOrder.priorityLevel || 'regular');
+            setShoes(initialOrder.items?.map((item: any) => ({
+                id: item.id || Date.now().toString(),
+                brand: item.brand || '',
+                shoeModel: item.shoeModel || '',
+                shoeMaterial: item.shoeMaterial || '',
+                shoeSize: item.shoeSize || '',
+                color: item.color || '',
+                quantity: item.quantity || 1,
+                condition: item.condition || {
+                    scratches: false,
+                    yellowing: false,
+                    ripsHoles: false,
+                    deepStains: false,
+                    soleSeparation: false,
+                    wornOut: false,
+                    others: ''
+                },
+                baseService: item.baseService || [],
+                addOns: item.addOns || [],
+                inventoryUsed: item.inventoryUsed || []
+            })) || []);
+            setPaymentMethod(initialOrder.paymentMethod || 'cash');
+            setPaymentStatus(initialOrder.paymentStatus || 'unpaid');
+            setDepositAmount(initialOrder.depositAmount ? initialOrder.depositAmount.toString() : '');
+            setManualReleaseDate(initialOrder.manualReleaseDate || '');
+            setReleaseTime(initialOrder.releaseTime || '');
             if (initialOrder.deliveryCourier) {
                 setDeliveryCourier(initialOrder.deliveryCourier);
             }
@@ -596,6 +789,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
     };
     const [generatedOrderNumber, setGeneratedOrderNumber] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const isSubmittingRef = useRef(false);
 
     useEffect(() => {
         const today = new Date();
@@ -608,14 +802,20 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
 
     const isRushEligible = useMemo(() => {
         if (shoes.length === 0) return false;
-        // Rush is ONLY eligible if:
-        // Across all shoes in the order:
-        // 1. The ONLY service selected is 'Basic Cleaning'
-        // 2. There are no add-on services selected
+        // Rush is eligible if across all shoes:
+        // 1. Base service is strictly 'Basic Cleaning'
+        // 2. Any add-on services are strictly among: Minor Retouch, Minor Restoration, or White Paint (or no add-ons)
+        const ALLOWED_RUSH_ADDONS = ['minor retouch', 'minor restoration', 'restoration', 'white paint'];
         return shoes.every(shoe => {
             const baseServices = Array.isArray(shoe.baseService) ? shoe.baseService : [];
+            if (!baseServices.includes('Basic Cleaning')) return false;
+            if (baseServices.some(s => s !== 'Basic Cleaning')) return false;
+
             const addOns = Array.isArray(shoe.addOns) ? shoe.addOns : [];
-            return baseServices.length === 1 && baseServices[0] === 'Basic Cleaning' && addOns.length === 0;
+            return addOns.every(a => {
+                const name = (typeof a === 'string' ? a : (a?.name || '')).trim().toLowerCase();
+                return ALLOWED_RUSH_ADDONS.some(allowed => name.includes(allowed));
+            });
         });
     }, [shoes]);
 
@@ -664,9 +864,12 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
         ),
         [shoes, priorityLevel, basicCleaningRushReduction, catalogDurations],
     );
+    const hasSelectedServices = useMemo(() => {
+        return shoes.some(shoe => (Array.isArray(shoe.baseService) ? shoe.baseService : []).length > 0 || (shoe.addOns || []).length > 0);
+    }, [shoes]);
+
     const calculatePredictedDays = () => {
-        const hasServices = shoes.some(shoe => (Array.isArray(shoe.baseService) ? shoe.baseService : []).length > 0 || shoe.addOns.length > 0);
-        if (!hasServices) return 0;
+        if (!hasSelectedServices) return 0;
         return mlBreakdown.totalDays;
     };
 
@@ -683,6 +886,15 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
             total += getAddonTotal(addon.name, addon.quantity || 1);
         });
 
+        // Add retail items from supplies used
+        (shoe.inventoryUsed || []).forEach(usage => {
+            const item = inventoryData.find((i: any) => i.id === usage.itemId);
+            const retPrice = getItemRetailPrice(item);
+            if (retPrice > 0) {
+                total += retPrice * (Number(usage.amount) || 0);
+            }
+        });
+
         // Add rush fee to unit total if applicable (Only for BC)
         if (priorityLevel === 'rush' && servicesArr.includes('Basic Cleaning')) {
             total += 150;
@@ -695,6 +907,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
         let baseTotal = 0;
         let addOnsTotal = 0;
         let rushFee = 0;
+        let retailTotal = 0;
 
         shoes.forEach((shoe: ShoeEntry) => {
             const servicesArr = Array.isArray(shoe.baseService) ? shoe.baseService : [];
@@ -711,13 +924,22 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                 addOnsTotal += getAddonTotal(addon.name, addonQuantity) * shoe.quantity;
             });
 
+            // Calculate retail supplies total
+            (shoe.inventoryUsed || []).forEach((u) => {
+                const item = inventoryData.find((i: any) => i.id === u.itemId);
+                const retPrice = getItemRetailPrice(item);
+                if (retPrice > 0) {
+                    retailTotal += retPrice * (Number(u.amount) || 0) * shoe.quantity;
+                }
+            });
+
             // Rush Fee only for Basic Cleaning
             if (priorityLevel === 'rush' && servicesArr.includes('Basic Cleaning')) {
                 rushFee += 150 * shoe.quantity;
             }
         });
 
-        const grandTotal = baseTotal + addOnsTotal + rushFee;
+        const grandTotal = baseTotal + addOnsTotal + rushFee + retailTotal;
         const amountReceivedNum = amountReceived ? parseFloat(amountReceived.replace(/,/g, '')) : 0;
 
         // Dynamic exact halves (50%) for deposit
@@ -729,10 +951,10 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
         // Remaining Balance
         const remainingBalance = Math.max(0, grandTotal - depositAmt);
 
-        return { baseTotal, addOnsTotal, rushFee, grandTotal, amountReceivedNum, remainingBalance, change };
-    }, [shoes, baseServices, addOnServices, priorityLevel, amountReceived, paymentStatus]);
+        return { baseTotal, addOnsTotal, rushFee, retailTotal, grandTotal, amountReceivedNum, remainingBalance, change };
+    }, [shoes, baseServices, addOnServices, priorityLevel, amountReceived, paymentStatus, inventoryData]);
 
-    const { baseTotal, addOnsTotal, rushFee, grandTotal } = totals;
+    const { baseTotal, addOnsTotal, rushFee, retailTotal, grandTotal } = totals;
 
     const [isAmountReceivedTyped, setIsAmountReceivedTyped] = useState(false);
 
@@ -762,25 +984,53 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
     const serverOfficialYmd = serverPrediction?.authoritative === 'business_rule'
         ? (serverPrediction.business_rule_date || serverPrediction.predicted_date_ymd || '')
         : '';
-    const previewReleaseYmd = manualReleaseDate || officialReleaseYmd || serverOfficialYmd;
+    const previewReleaseYmd = manualReleaseDate || (hasSelectedServices ? (officialReleaseYmd || serverOfficialYmd) : '');
+
+    const officialDateDisplay = previewReleaseYmd
+        ? dateFnsFormat(new Date(previewReleaseYmd), 'MM/dd/yyyy')
+        : (officialReleaseYmd ? dateFnsFormat(new Date(officialReleaseYmd), 'MM/dd/yyyy') : '—');
+
+    const predictedDateDisplay = (() => {
+        if (serverPrediction?.ml_predicted_date) {
+            const d = new Date(serverPrediction.ml_predicted_date);
+            return isNaN(d.getTime()) ? '—' : dateFnsFormat(d, 'MM/dd/yyyy');
+        }
+        if (serverPrediction?.ml_predicted_days != null) {
+            const d = new Date(new Date(orderDate).getTime() + serverPrediction.ml_predicted_days * 24 * 60 * 60 * 1000);
+            return isNaN(d.getTime()) ? '—' : dateFnsFormat(d, 'MM/dd/yyyy');
+        }
+        if (hasSelectedServices && officialReleaseYmd) {
+            return `${dateFnsFormat(new Date(officialReleaseYmd), 'MM/dd/yyyy')} (Est.)`;
+        }
+        return '—';
+    })();
 
     useEffect(() => {
-        const hasServices = shoes.some(shoe =>
-            (Array.isArray(shoe.baseService) ? shoe.baseService : []).length > 0
-            || (Array.isArray(shoe.addOns) ? shoe.addOns : []).length > 0
-        );
+        const hasServices = shoes.some(shoe => {
+            const b = Array.isArray(shoe.baseService) ? shoe.baseService : (shoe.baseService ? [shoe.baseService] : []);
+            const a = Array.isArray(shoe.addOns) ? shoe.addOns : (shoe.addOns ? [shoe.addOns] : []);
+            return b.length > 0 || a.length > 0;
+        });
         if (!hasServices || manualReleaseDate) {
             if (!hasServices) setServerPrediction(null);
-            setPredictionError(null);
             setPredictionLoading(false);
+            setPredictionError(false);
             return;
         }
 
         const controller = new AbortController();
         const timer = window.setTimeout(async () => {
             setPredictionLoading(true);
-            setPredictionError(null);
+            setPredictionError(false);
             try {
+                let authToken = user?.token || '';
+                if (!authToken && typeof window !== 'undefined') {
+                    try {
+                        const stored = localStorage.getItem('user') || sessionStorage.getItem('user');
+                        authToken = stored ? (JSON.parse(stored)?.token || '') : '';
+                    } catch {}
+                }
+
                 const createdDate = new Date(`${orderDate}T${orderTime || '00:00'}:00`);
                 const payload = {
                     items: shoes.map((shoe) => ({
@@ -789,8 +1039,8 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                         shoeMaterial: shoe.shoeMaterial === 'Other' ? (shoe.otherMaterial || 'Other') : (shoe.shoeMaterial || 'Other'),
                         quantity: shoe.quantity,
                         condition: shoe.condition,
-                        baseService: shoe.baseService,
-                        addOns: shoe.addOns,
+                        baseService: Array.isArray(shoe.baseService) ? shoe.baseService : (shoe.baseService ? [shoe.baseService] : []),
+                        addOns: Array.isArray(shoe.addOns) ? shoe.addOns : (shoe.addOns ? [shoe.addOns] : []),
                     })),
                     priorityLevel,
                     rushReductionDays: priorityLevel === 'rush' ? parseInt(basicCleaningRushReduction, 10) || 9 : undefined,
@@ -801,7 +1051,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        ...(user?.token ? { Authorization: `Bearer ${user.token}` } : {}),
+                        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
                     },
                     body: JSON.stringify(payload),
                     signal: controller.signal,
@@ -811,17 +1061,17 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                 setServerPrediction(data);
             } catch (err: any) {
                 if (err?.name === 'AbortError') return;
-                setPredictionError('Using catalog estimate until the server prediction is available.');
+                setPredictionError(true);
             } finally {
                 setPredictionLoading(false);
             }
-        }, 350);
+        }, 100);
 
         return () => {
             window.clearTimeout(timer);
             controller.abort();
         };
-    }, [shoes, priorityLevel, orderDate, orderTime, totals.grandTotal, manualReleaseDate, user?.token]);
+    }, [shoes, priorityLevel, orderDate, orderTime, totals.grandTotal, manualReleaseDate, user?.token, basicCleaningRushReduction]);
 
 
     const addShoe = () => {
@@ -866,18 +1116,20 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
      */
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (isSubmitting) return;
+        if (isSubmitting || isSubmittingRef.current) return;
+        isSubmittingRef.current = true;
         setIsSubmitting(true);
         try {
-            const finalCustomerName = customerName.trim().replace(/\s+/g, ' ');
-            const finalContactNumber = contactNumber.trim();
-
-            if (!finalCustomerName) {
-                toast.error('Please enter customer name (required)');
+            const validation = validateCustomerName(customerName);
+            if (!validation.isValid) {
+                toast.error(validation.error || 'Please enter a valid customer name');
                 setIsSubmitting(false);
+                isSubmittingRef.current = false;
                 return;
             }
+            const finalCustomerName = validation.sanitized;
             setCustomerName(finalCustomerName);
+            const finalContactNumber = contactNumber.trim();
 
             const contactDigits = finalContactNumber ? finalContactNumber.replace(/\D/g, '') : '';
             if (contactDigits.length !== 11) {
@@ -938,9 +1190,13 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
         const amtReceived = parseFloat(amountReceived.replace(/,/g, '')) || 0;
         if (amtReceived < depositAmt && paymentStatus !== 'downpayment') {
             toast.error('Amount received is less than the required amount');
+            isSubmittingRef.current = false;
+            setIsSubmitting(false);
             return;
         } else if (amtReceived < depositAmt && paymentStatus === 'downpayment') {
             toast.error('Amount received is less than the required 50% downpayment');
+            isSubmittingRef.current = false;
+            setIsSubmitting(false);
             return;
         }
 
@@ -1021,6 +1277,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
             rushReductionDays: priorityLevel === 'rush' ? basicCleaningRushReduction : undefined,
             baseServiceFee: totals.baseTotal,
             addOnsTotal: totals.addOnsTotal,
+            retailTotal: totals.retailTotal,
             grandTotal: totals.grandTotal,
             shippingPreference,
             deliveryAddress: formatAddress(),
@@ -1081,6 +1338,19 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                 }
                 return date;
             })(),
+            predictedAt: (() => {
+                if (serverPrediction?.ml_predicted_date) {
+                    const d = new Date(serverPrediction.ml_predicted_date);
+                    if (!isNaN(d.getTime())) return d;
+                }
+                if (serverPrediction?.ml_predicted_days != null) {
+                    return new Date(createdDate.getTime() + serverPrediction.ml_predicted_days * 24 * 60 * 60 * 1000);
+                }
+                return undefined;
+            })(),
+            predictedDays: serverPrediction?.ml_predicted_days != null
+                ? serverPrediction.ml_predicted_days
+                : (serverPrediction?.predicted_days != null ? serverPrediction.predicted_days : undefined),
             createdAt: createdDate,
             updatedAt: createdDate,
             statusHistory: [{
@@ -1102,6 +1372,28 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
             setIsSubmitting(false);
             return;
         }
+
+        // Persist any custom-typed options so they appear in future job orders
+        if (shippingPreference === 'delivery') {
+            const finalCourier = deliveryCourier === 'Other' ? otherCourier : deliveryCourier;
+            if (finalCourier) saveStoredCustomOption(CUSTOM_OPTION_KEYS.COURIERS, finalCourier);
+        }
+        shoes.forEach((shoe) => {
+            const b = shoe.brand === 'Other' ? shoe.otherBrand : shoe.brand;
+            if (b) saveStoredCustomOption(CUSTOM_OPTION_KEYS.BRANDS, b);
+            const m = shoe.shoeModel === 'Other' ? shoe.otherModel : shoe.shoeModel;
+            if (m) saveStoredCustomOption(CUSTOM_OPTION_KEYS.MODELS, m);
+            const mat = shoe.shoeMaterial === 'Other' ? shoe.otherMaterial : shoe.shoeMaterial;
+            if (mat) saveStoredCustomOption(CUSTOM_OPTION_KEYS.MATERIALS, mat);
+            if (shoe.shoeSize) saveStoredCustomOption(CUSTOM_OPTION_KEYS.SIZES, shoe.shoeSize);
+            const c = shoeColorValue(shoe);
+            if (c) {
+                c.split(',').forEach((col: string) => {
+                    const trimmed = col.trim();
+                    if (trimmed) saveStoredCustomOption(CUSTOM_OPTION_KEYS.COLORS, trimmed);
+                });
+            }
+        });
 
         const shoeSummaryStr = shoes.map((s, idx) => {
             const bServices = (Array.isArray(s.baseService) ? s.baseService : []).join(', ');
@@ -1193,6 +1485,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
             console.error('Error submitting form:', error);
             toast.error('An error occurred while creating the order.');
         } finally {
+            isSubmittingRef.current = false;
             setIsSubmitting(false);
         }
     };
@@ -1274,24 +1567,31 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                 <CardContent className="px-6 pt-0 pb-4 space-y-4">
                     <div className={`grid gap-3 md:gap-4 -mt-1 ${shippingPreference === 'pickup' ? 'grid-cols-1 md:grid-cols-3' : 'grid-cols-1 md:grid-cols-12 mb-2.5'}`}>
                         <div className={`relative ${shippingPreference === 'pickup' ? 'col-span-1' : 'col-span-1 md:col-span-6'}`}>
-                            <Label htmlFor="customerName" className={LABEL_STYLE}>Customer Name</Label>
+                            <div className="flex items-center justify-between">
+                                <Label htmlFor="customerName" className={LABEL_STYLE}>Customer Name</Label>
+                                <span className={`text-[10px] font-bold ${customerName.length >= CUSTOMER_NAME_MAX_LENGTH ? 'text-red-600' : 'text-gray-400'}`}>
+                                    {customerName.length}/{CUSTOMER_NAME_MAX_LENGTH}
+                                </span>
+                            </div>
                             <ClearableInput
                                 id="customerName"
                                 autoComplete="new-password"
                                 spellCheck={false}
                                 value={customerName}
+                                maxLength={CUSTOMER_NAME_MAX_LENGTH}
                                 onChange={(e: any) => {
-                                    setCustomerName(e.target.value);
+                                    const val = e.target.value.slice(0, CUSTOMER_NAME_MAX_LENGTH);
+                                    setCustomerName(val);
                                     setShowCustomerSuggestions(true);
                                 }}
                                 onFocus={() => setShowCustomerSuggestions(true)}
                                 onBlur={() => {
                                     setTimeout(() => {
                                         setShowCustomerSuggestions(false);
-                                        setCustomerName(prev => prev.trim().replace(/\s+/g, ' '));
+                                        setCustomerName(prev => prev.trim().replace(/\s+/g, ' ').slice(0, CUSTOMER_NAME_MAX_LENGTH));
                                     }, 200);
                                 }}
-                                placeholder="Enter name (or search past customer...)"
+                                placeholder="Enter name (e.g. Juan Carlos Dela Cruz)"
                                 className={INPUT_STYLE}
                                 required
                             />
@@ -1375,8 +1675,9 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                         options={DELIVERY_COURIERS}
                                         value={deliveryCourier}
                                         onChange={setDeliveryCourier}
-                                        placeholder="Select Courier"
-                                        searchPlaceholder="Search courier..."
+                                        placeholder="Select or type Courier"
+                                        searchPlaceholder="Type custom courier (e.g. Lalamove, Grab)..."
+                                        storageKey={CUSTOM_OPTION_KEYS.COURIERS}
                                     />
                                 </div>
                             </div>
@@ -1480,9 +1781,10 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                             variant="ghost"
                                             size="icon"
                                             onClick={() => removeShoe(shoe.id)}
-                                            className="h-5 w-5 text-red-500 hover:text-white hover:bg-red-700 transition-all p-0 rounded-full"
+                                            className="h-5 w-5 bg-red-50 border border-red-200 text-red-500 hover:bg-red-600 hover:text-white hover:border-red-600 transition-all p-0 rounded-full flex items-center justify-center shadow-2xs"
+                                            title="Remove shoe"
                                         >
-                                            <X size={14} />
+                                            <X size={12} strokeWidth={2.5} />
                                         </Button>
                                     )}
                                 </div>
@@ -1502,8 +1804,9 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                             options={SHOE_BRANDS}
                                                             value={shoe.brand}
                                                             onChange={(val) => updateShoe(shoe.id, { brand: val })}
-                                                            placeholder="Type for custom"
-                                                            searchPlaceholder="Search brand..."
+                                                            placeholder="Select or type Brand"
+                                                            searchPlaceholder="Type custom brand..."
+                                                            storageKey={CUSTOM_OPTION_KEYS.BRANDS}
                                                         />
                                                         {shoe.brand === 'Other' && (
                                                             <Input
@@ -1541,8 +1844,9 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                                 }
                                                                 updateShoe(shoe.id, updates);
                                                             }}
-                                                            placeholder="Type for custom"
-                                                            searchPlaceholder="Type model name (e.g. Air Force 1)"
+                                                            placeholder="Select or type Model"
+                                                            searchPlaceholder="Type model (e.g. Air Force 1)..."
+                                                            storageKey={CUSTOM_OPTION_KEYS.MODELS}
                                                         />
                                                         {shoe.shoeModel === 'Other' && (
                                                             <Input
@@ -1559,8 +1863,9 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                             options={SHOE_MATERIALS}
                                                             value={shoe.shoeMaterial}
                                                             onChange={(val) => updateShoe(shoe.id, { shoeMaterial: val })}
-                                                            placeholder="Type for custom"
-                                                            searchPlaceholder="Search material..."
+                                                            placeholder="Select or type Material"
+                                                            searchPlaceholder="Type custom material..."
+                                                            storageKey={CUSTOM_OPTION_KEYS.MATERIALS}
                                                         />
                                                         {shoe.shoeMaterial === 'Other' && (
                                                             <Input
@@ -1579,19 +1884,21 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                             options={SHOE_SIZES}
                                                             value={shoe.shoeSize || ''}
                                                             onChange={(val) => updateShoe(shoe.id, { shoeSize: val })}
-                                                            placeholder="Type for custom"
-                                                            searchPlaceholder="Type a size..."
+                                                            placeholder="Select or type Size"
+                                                            searchPlaceholder="Type custom size (e.g. 9.5)..."
+                                                            storageKey={CUSTOM_OPTION_KEYS.SIZES}
                                                         />
                                                     </div>
                                                     <div style={{ flex: 28 }}>
-                                                        <Label className={LABEL_STYLE}>Color</Label>
+                                                        <Label className={LABEL_STYLE} title="Multiple colors allowed (e.g. Black, Blue)">Color</Label>
                                                         <CreatableCombobox
                                                             options={SHOE_COLORS}
                                                             value={Array.isArray(shoe.color) ? shoe.color.filter(Boolean).join(', ') : (shoe.color || '')}
                                                             onChange={(val) => updateShoe(shoe.id, { color: val })}
-                                                            placeholder="Select Color"
-                                                            searchPlaceholder="Type color (e.g. White, Black)"
+                                                            placeholder="Select or type Color"
+                                                            searchPlaceholder="Type color (e.g. Black, Blue or White/Red)..."
                                                             multiple={true}
+                                                            storageKey={CUSTOM_OPTION_KEYS.COLORS}
                                                         />
                                                         {shoe.color === 'Other' && (
                                                             <Input
@@ -1603,17 +1910,22 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                         )}
                                                     </div>
                                                     <div style={{ flex: priorityLevel === 'rush' && (Array.isArray(shoe.baseService) ? shoe.baseService : []).includes('Basic Cleaning') ? 26 : 48 }}>
-                                                        <Label className={LABEL_STYLE}>Priority Level</Label>
+                                                        <div className="flex items-center justify-between">
+                                                            <Label className={LABEL_STYLE}>Priority Level</Label>
+                                                        </div>
                                                         <div className="relative group/select">
                                                             <Select value={priorityLevel} onValueChange={(val: any) => setPriorityLevel(val)}>
                                                                 <SelectTrigger className={`${INPUT_STYLE} font-normal`}>
                                                                     <SelectValue placeholder="Regular" />
                                                                 </SelectTrigger>
-                                                                <SelectContent align="start" side="bottom" position="popper" sideOffset={5}>
+                                                                <SelectContent align="start" side="bottom" position="popper" sideOffset={5} className="pb-0 overflow-hidden">
                                                                     <SelectItem value="regular">Regular</SelectItem>
                                                                     {isRushEligible && (
                                                                         <SelectItem value="rush">Rush</SelectItem>
                                                                     )}
+                                                                    <div className="sticky bottom-0 z-10 p-1.5 border-t border-gray-100 bg-gray-50/95 backdrop-blur-xs text-[10px] text-gray-500 font-semibold flex items-center justify-center select-none text-center">
+                                                                        <span>Rush: Basic Cleaning only</span>
+                                                                    </div>
                                                                 </SelectContent>
                                                             </Select>
                                                             {priorityLevel !== 'regular' && (
@@ -1739,7 +2051,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                         <RotateCcw className="h-3 w-3" />
                                                     </Button>
                                                 </div>
-                                                {shoe.baseService && shoe.baseService.length > 0 ? (
+                                                {(shoe.baseService && shoe.baseService.length > 0) || getShoeTotal(shoe) > 0 ? (
                                                     <span className="text-xs font-black text-red-600 bg-red-50/50 px-2.5 py-1 rounded uppercase flex items-center gap-1.5">
                                                         <span className="text-[10px] opacity-70">Unit Total:</span> {formatPeso(getShoeTotal(shoe))}
                                                     </span>
@@ -1756,57 +2068,75 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                         <div className="w-full">
                                                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                                                 {baseServices.map(service => {
-                                                                    const isChecked = (Array.isArray(shoe.baseService) ? shoe.baseService : []).includes(service.name);
-                                                                    return (
-                                                                        <label key={service.id} className={`flex items-center space-x-2 p-2.5 rounded-lg border transition-all cursor-pointer shadow-sm ${isChecked ? 'border-red-100 bg-red-50/10' : 'bg-white border-gray-100 hover:border-red-100'}`}>
-                                                                            <Checkbox
-                                                                                type="button"
-                                                                                id={`shoe-${shoe.id}-service-${service.id}`}
-                                                                                checked={isChecked}
-                                                                                onCheckedChange={(checked) => {
-                                                                                    const currentServices = Array.isArray(shoe.baseService) ? shoe.baseService : [];
-                                                                                    let newServices = checked
-                                                                                        ? [...currentServices, service.name]
-                                                                                        : currentServices.filter(s => s !== service.name);
+                                                                     const isChecked = (Array.isArray(shoe.baseService) ? shoe.baseService : []).includes(service.name);
+                                                                     return (
+                                                                         <label key={service.id} className={`flex ${isChecked ? 'items-start' : 'items-center'} space-x-2 p-2.5 rounded-lg border transition-all cursor-pointer shadow-sm ${isChecked ? 'border-red-100 bg-red-50/10' : 'bg-white border-gray-100 hover:border-red-100'}`}>
+                                                                             <Checkbox
+                                                                                 type="button"
+                                                                                 id={`shoe-${shoe.id}-service-${service.id}`}
+                                                                                 checked={isChecked}
+                                                                                 onCheckedChange={(checked) => {
+                                                                                     const currentServices = Array.isArray(shoe.baseService) ? shoe.baseService : [];
+                                                                                     let newServices = checked
+                                                                                         ? [...currentServices, service.name]
+                                                                                         : currentServices.filter(s => s !== service.name);
 
-                                                                                    // Auto-select Basic Cleaning if Minor/Full Reglue or Color Renewal is selected
-                                                                                    const requiresCleaning = ['Minor Reglue', 'Full Reglue', 'Color Renewal'];
-                                                                                    if (checked && requiresCleaning.includes(service.name)) {
-                                                                                        if (!newServices.includes('Basic Cleaning')) {
-                                                                                            newServices.push('Basic Cleaning');
-                                                                                        }
-                                                                                    }
+                                                                                     // Minor Reglue and Full Reglue are mutually exclusive
+                                                                                     if (checked && service.name === 'Minor Reglue') {
+                                                                                         newServices = newServices.filter(s => s !== 'Full Reglue');
+                                                                                     } else if (checked && service.name === 'Full Reglue') {
+                                                                                         newServices = newServices.filter(s => s !== 'Minor Reglue');
+                                                                                     }
 
-                                                                                    // If Basic Cleaning is unchecked, also uncheck services that require it
-                                                                                    if (!checked && service.name === 'Basic Cleaning') {
-                                                                                        newServices = newServices.filter(s => !requiresCleaning.includes(s));
-                                                                                    }
+                                                                                     // Auto-select Basic Cleaning if Minor/Full Reglue or Color Renewal is selected
+                                                                                     const requiresCleaning = ['Minor Reglue', 'Full Reglue', 'Color Renewal'];
+                                                                                     if (checked && requiresCleaning.includes(service.name)) {
+                                                                                         if (!newServices.includes('Basic Cleaning')) {
+                                                                                             newServices.push('Basic Cleaning');
+                                                                                         }
+                                                                                     }
 
-                                                                                    const nextAddOns = syncColorRenewalAddons(shoe.addOns || [], newServices);
-                                                                                    updateShoe(shoe.id, { baseService: newServices, addOns: nextAddOns });
-                                                                                }}
-                                                                                className="h-4 w-4 data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600"
-                                                                            />
-                                                                            <div className="flex items-center justify-between flex-1 min-w-0">
-                                                                                <div className="flex flex-col min-w-0">
-                                                                                    <span className="text-[11px] font-bold leading-tight text-gray-700 truncate">
-                                                                                        {service.name}
-                                                                                    </span>
-                                                                                    <div className="flex items-center gap-1.5 mt-0.5 whitespace-nowrap">
-                                                                                        {service.code && (
-                                                                                            <span className="text-[8px] font-black text-gray-400 bg-gray-100 px-1 rounded uppercase tracking-wider">
-                                                                                                {service.code}
-                                                                                            </span>
-                                                                                        )}
-                                                                                    </div>
-                                                                                </div>
-                                                                                {isChecked && (
-                                                                                    <span className="text-[11px] font-black text-red-600 shrink-0 ml-2">{formatPeso(service.price)}</span>
-                                                                                )}
-                                                                            </div>
-                                                                        </label>
-                                                                    );
-                                                                })}
+                                                                                     // If Basic Cleaning is unchecked, also uncheck services that require it
+                                                                                     if (!checked && service.name === 'Basic Cleaning') {
+                                                                                         newServices = newServices.filter(s => !requiresCleaning.includes(s));
+                                                                                     }
+
+                                                                                     const nextAddOns = syncColorRenewalAddons(shoe.addOns || [], newServices).filter(a => isAddonVisibleForBaseServices(a.name, newServices, services));
+                                                                                     updateShoe(shoe.id, { baseService: newServices, addOns: nextAddOns });
+                                                                                 }}
+                                                                                 className={`h-4 w-4 shrink-0 ${isChecked ? 'self-start mt-0.5' : ''} data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600`}
+                                                                             />
+                                                                             {isChecked ? (
+                                                                                 <div className="flex flex-col min-w-0 flex-1">
+                                                                                     <div className="flex items-center justify-between gap-1 min-w-0">
+                                                                                         <span className="text-[11px] font-bold leading-tight text-gray-700 whitespace-nowrap truncate">
+                                                                                             {service.name}
+                                                                                         </span>
+                                                                                         {service.code && (
+                                                                                             <span className="text-[8px] font-black text-gray-400 bg-gray-100 px-1 py-0.5 rounded uppercase tracking-wider shrink-0 ml-auto">
+                                                                                                 {service.code}
+                                                                                             </span>
+                                                                                         )}
+                                                                                     </div>
+                                                                                     <div className="flex items-center justify-end mt-1 min-w-0">
+                                                                                         <span className="text-[11px] font-black text-red-600 shrink-0 ml-auto">{formatPeso(service.price)}</span>
+                                                                                     </div>
+                                                                                 </div>
+                                                                             ) : (
+                                                                                 <div className="flex items-center justify-between gap-1.5 min-w-0 flex-1 overflow-hidden">
+                                                                                     <span className="text-[11px] font-bold leading-tight text-gray-700 whitespace-nowrap truncate min-w-0" title={service.name}>
+                                                                                         {service.name}
+                                                                                     </span>
+                                                                                     {service.code && (
+                                                                                         <span className="text-[8px] font-black text-gray-400 bg-gray-100 px-1 py-0.5 rounded uppercase tracking-wider shrink-0 ml-auto">
+                                                                                             {service.code}
+                                                                                         </span>
+                                                                                     )}
+                                                                                 </div>
+                                                                             )}
+                                                                         </label>
+                                                                     );
+                                                                 })}
                                                             </div>
                                                         </div>
                                                     </div>
@@ -1821,7 +2151,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                         ) : (
                                                             <div className="max-h-[160px] overflow-y-auto pr-1 custom-scrollbar">
                                                                 <div className="grid grid-cols-2 gap-2">
-                                                                    {addOnServices.filter(addon => isAddonVisibleForBaseServices(addon.name, shoe.baseService || [])).sort((a, b) => {
+                                                                    {addOnServices.filter(addon => isAddonVisibleForBaseServices(addon.name, shoe.baseService || [], services)).sort((a, b) => {
                                                                         const order: Record<string, number> = {
                                                                             'Unyellowing': 1,
                                                                             'Minor Retouch': 2,
@@ -1831,6 +2161,10 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                                             '3 Colors': 6,
                                                                             'Add Glue Layer': 7,
                                                                             'Premium Glue': 8,
+                                                                            'Full Reglue Midsole': 9,
+                                                                            'Full Reglue Undersole': 10,
+                                                                            'Midsole Full Reglue': 9,
+                                                                            'Undersole Full Reglue': 10,
                                                                             'Midsole': 9,
                                                                             'Undersole': 10
                                                                         };
@@ -1840,63 +2174,153 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                                         const addonItem = shoe.addOns.find(a => a.name === addon.name);
                                                                         const quantity = addonItem?.quantity || 1;
                                                                         return (
-                                                                            <div key={addon.id} className={`flex items-center justify-between p-2 rounded-lg border bg-white transition-all ${isChecked ? 'border-red-100 bg-red-50/10' : 'border-gray-50'} gap-4`}>
-                                                                                <div className="flex items-center space-x-2 min-w-0 flex-1">
-                                                                                    <Checkbox
-                                                                                        type="button"
-                                                                                        id={`addon-${shoe.id}-${addon.id}`}
-                                                                                        checked={isChecked}
-                                                                                        onCheckedChange={(checked) => {
-                                                                                            let newAddOns = shoe.addOns || [];
-                                                                                            if (isColorCountAddon(addon.name)) {
-                                                                                                newAddOns = applyColorCountExclusive(
-                                                                                                    newAddOns,
-                                                                                                    addon.name,
-                                                                                                    Boolean(checked),
-                                                                                                    shoe.baseService || [],
-                                                                                                );
-                                                                                            } else {
-                                                                                                newAddOns = checked
-                                                                                                    ? [...newAddOns, { name: addon.name, quantity: 1 }]
-                                                                                                    : newAddOns.filter(a => a.name !== addon.name);
-                                                                                                if (addon.name === 'Unyellowing' && !checked) {
-                                                                                                    newAddOns = newAddOns.filter(a => a.name !== 'White Paint');
+                                                                            <div key={addon.id} className={`p-2 rounded-lg border bg-white transition-all ${isChecked ? 'border-red-100 bg-red-50/10' : 'border-gray-50'}`}>
+                                                                                {isChecked ? (
+                                                                                    <div className="flex items-start space-x-2 min-w-0 w-full">
+                                                                                        <Checkbox
+                                                                                            type="button"
+                                                                                            id={`addon-${shoe.id}-${addon.id}`}
+                                                                                            checked={isChecked}
+                                                                                            onCheckedChange={(checked) => {
+                                                                                                let newAddOns = shoe.addOns || [];
+                                                                                                if (isColorCountAddon(addon.name)) {
+                                                                                                    newAddOns = applyColorCountExclusive(
+                                                                                                        newAddOns,
+                                                                                                        addon.name,
+                                                                                                        Boolean(checked),
+                                                                                                        shoe.baseService || [],
+                                                                                                    );
+                                                                                                } else {
+                                                                                                    newAddOns = checked
+                                                                                                        ? [...newAddOns, { name: addon.name, quantity: 1 }]
+                                                                                                        : newAddOns.filter(a => a.name !== addon.name);
+                                                                                                    if (addon.name === 'Unyellowing' && !checked) {
+                                                                                                        newAddOns = newAddOns.filter(a => a.name !== 'White Paint');
+                                                                                                    }
                                                                                                 }
-                                                                                            }
-                                                                                            updateShoe(shoe.id, { addOns: newAddOns });
-                                                                                        }}
-                                                                                        className="h-4 w-4 shrink-0 data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600"
-                                                                                    />
-                                                                                    <div className="flex flex-col min-w-0">
-                                                                                        <label htmlFor={`addon-${shoe.id}-${addon.id}`} className="text-[11px] font-bold text-gray-600 cursor-pointer leading-tight truncate">
-                                                                                            {addon.name}
-                                                                                        </label>
-                                                                                        <div className="flex items-center gap-1.5 mt-0.5 whitespace-nowrap">
+
+                                                                                                let newBaseServices = Array.isArray(shoe.baseService) ? [...shoe.baseService] : [];
+                                                                                                const isReglueSoleAddon = (name: string) => {
+                                                                                                    const l = (name || '').toLowerCase();
+                                                                                                    return (
+                                                                                                        name === 'Full Reglue Midsole' ||
+                                                                                                        name === 'Full Reglue Undersole' ||
+                                                                                                        name === 'Midsole Full Reglue' ||
+                                                                                                        name === 'Undersole Full Reglue' ||
+                                                                                                        name === 'Midsole' ||
+                                                                                                        name === 'Undersole' ||
+                                                                                                        (l.includes('reglue') && (l.includes('midsole') || l.includes('undersole')))
+                                                                                                    );
+                                                                                                };
+
+                                                                                                if (checked && isReglueSoleAddon(addon.name)) {
+                                                                                                    if (!newBaseServices.includes('Full Reglue')) {
+                                                                                                        newBaseServices.push('Full Reglue');
+                                                                                                    }
+                                                                                                    if (!newBaseServices.includes('Basic Cleaning')) {
+                                                                                                        newBaseServices.push('Basic Cleaning');
+                                                                                                    }
+                                                                                                }
+
+                                                                                                const nextAddOns = syncColorRenewalAddons(newAddOns, newBaseServices).filter(a => isAddonVisibleForBaseServices(a.name, newBaseServices, services));
+                                                                                                updateShoe(shoe.id, { baseService: newBaseServices, addOns: nextAddOns });
+                                                                                            }}
+                                                                                            className="h-4 w-4 shrink-0 self-start mt-0.5 data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600"
+                                                                                        />
+                                                                                        <div className="flex flex-col min-w-0 flex-1">
+                                                                                            <div className="flex items-center justify-between gap-1 min-w-0">
+                                                                                                <label htmlFor={`addon-${shoe.id}-${addon.id}`} className="text-[11px] font-bold text-gray-700 cursor-pointer leading-tight whitespace-nowrap truncate">
+                                                                                                    {addon.name}
+                                                                                                </label>
+                                                                                                {addon.code && (
+                                                                                                    <span className="text-[8px] font-black text-gray-400 bg-gray-100 px-1 py-0.5 rounded uppercase tracking-wider shrink-0 ml-auto">
+                                                                                                        {addon.code}
+                                                                                                    </span>
+                                                                                                )}
+                                                                                            </div>
+                                                                                            <div className="flex items-center justify-between gap-2 mt-1.5 min-w-0">
+                                                                                                <div className="flex items-center shrink-0">
+                                                                                                    <input
+                                                                                                        type="number"
+                                                                                                        min="1"
+                                                                                                        value={quantity}
+                                                                                                        onChange={(e) => {
+                                                                                                            const val = e.target.value;
+                                                                                                            const newQuantity = val === '' ? 1 : Math.max(1, parseInt(val));
+                                                                                                            const newAddOns = shoe.addOns.map(a =>
+                                                                                                                a.name === addon.name ? { ...a, quantity: newQuantity } : a
+                                                                                                            );
+                                                                                                            updateShoe(shoe.id, { addOns: newAddOns });
+                                                                                                        }}
+                                                                                                        className="w-9 h-5 border border-gray-200 rounded text-[10px] font-bold text-center focus:outline-none focus:border-red-500 bg-white [&::-webkit-inner-spin-button]:opacity-100 [&::-webkit-inner-spin-button]:h-[16px] [&::-webkit-inner-spin-button]:my-auto px-0"
+                                                                                                    />
+                                                                                                </div>
+                                                                                                <span className="text-[11px] font-black text-red-600 shrink-0 ml-auto">{formatPeso(getAddonTotal(addon.name, quantity))}</span>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <div className="flex items-center space-x-2 min-w-0 w-full">
+                                                                                        <Checkbox
+                                                                                            type="button"
+                                                                                            id={`addon-${shoe.id}-${addon.id}`}
+                                                                                            checked={isChecked}
+                                                                                            className="h-4 w-4 shrink-0 data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600"
+                                                                                            onCheckedChange={(checked) => {
+                                                                                                let newAddOns = shoe.addOns || [];
+                                                                                                if (isColorCountAddon(addon.name)) {
+                                                                                                    newAddOns = applyColorCountExclusive(
+                                                                                                        newAddOns,
+                                                                                                        addon.name,
+                                                                                                        Boolean(checked),
+                                                                                                        shoe.baseService || [],
+                                                                                                    );
+                                                                                                } else {
+                                                                                                    newAddOns = checked
+                                                                                                        ? [...newAddOns, { name: addon.name, quantity: 1 }]
+                                                                                                        : newAddOns.filter(a => a.name !== addon.name);
+                                                                                                    if (addon.name === 'Unyellowing' && !checked) {
+                                                                                                        newAddOns = newAddOns.filter(a => a.name !== 'White Paint');
+                                                                                                    }
+                                                                                                }
+
+                                                                                                let newBaseServices = Array.isArray(shoe.baseService) ? [...shoe.baseService] : [];
+                                                                                                const isReglueSoleAddon = (name: string) => {
+                                                                                                    const l = (name || '').toLowerCase();
+                                                                                                    return (
+                                                                                                        name === 'Full Reglue Midsole' ||
+                                                                                                        name === 'Full Reglue Undersole' ||
+                                                                                                        name === 'Midsole Full Reglue' ||
+                                                                                                        name === 'Undersole Full Reglue' ||
+                                                                                                        name === 'Midsole' ||
+                                                                                                        name === 'Undersole' ||
+                                                                                                        (l.includes('reglue') && (l.includes('midsole' ) || l.includes('undersole')))
+                                                                                                    );
+                                                                                                };
+
+                                                                                                if (checked && isReglueSoleAddon(addon.name)) {
+                                                                                                    if (!newBaseServices.includes('Full Reglue')) {
+                                                                                                        newBaseServices.push('Full Reglue');
+                                                                                                    }
+                                                                                                    if (!newBaseServices.includes('Basic Cleaning')) {
+                                                                                                        newBaseServices.push('Basic Cleaning');
+                                                                                                    }
+                                                                                                }
+
+                                                                                                const nextAddOns = syncColorRenewalAddons(newAddOns, newBaseServices);
+                                                                                                updateShoe(shoe.id, { baseService: newBaseServices, addOns: nextAddOns });
+                                                                                            }}
+                                                                                        />
+                                                                                        <div className="flex items-center justify-between gap-1.5 min-w-0 flex-1">
+                                                                                            <label htmlFor={`addon-${shoe.id}-${addon.id}`} className="text-[11px] font-bold text-gray-600 cursor-pointer leading-tight whitespace-nowrap truncate">
+                                                                                                {addon.name}
+                                                                                            </label>
                                                                                             {addon.code && (
-                                                                                                <span className="text-[8px] font-black text-gray-400 bg-gray-100 px-1 rounded uppercase tracking-wider">
+                                                                                                <span className="text-[8px] font-black text-gray-400 bg-gray-100 px-1 py-0.5 rounded uppercase tracking-wider shrink-0 ml-auto">
                                                                                                     {addon.code}
                                                                                                 </span>
                                                                                             )}
                                                                                         </div>
-                                                                                    </div>
-                                                                                </div>
-                                                                                {isChecked && (
-                                                                                    <div className="flex items-center gap-3 ml-auto shrink-0">
-                                                                                        <input
-                                                                                            type="number"
-                                                                                            min="1"
-                                                                                            value={quantity}
-                                                                                            onChange={(e) => {
-                                                                                                const val = e.target.value;
-                                                                                                const newQuantity = val === '' ? 1 : Math.max(1, parseInt(val));
-                                                                                                const newAddOns = shoe.addOns.map(a =>
-                                                                                                    a.name === addon.name ? { ...a, quantity: newQuantity } : a
-                                                                                                );
-                                                                                                updateShoe(shoe.id, { addOns: newAddOns });
-                                                                                            }}
-                                                                                            className="w-10 h-5 border border-gray-200 rounded text-[10px] font-bold text-center focus:outline-none focus:border-red-500 bg-white [&::-webkit-inner-spin-button]:opacity-100 [&::-webkit-inner-spin-button]:h-[16px] [&::-webkit-inner-spin-button]:my-auto px-0"
-                                                                                        />
-                                                                                        <span className="text-[11px] font-black text-red-600 min-w-[50px] text-right">{formatPeso(getAddonTotal(addon.name, quantity))}</span>
                                                                                     </div>
                                                                                 )}
                                                                             </div>
@@ -1917,35 +2341,46 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                 <div className="space-y-2">
                                                     {shoe.inventoryUsed.map((usage, uIdx) => {
                                                         const item = inventoryData.find((i: any) => i.id === usage.itemId);
+                                                        const retPrice = getItemRetailPrice(item);
+                                                        const isDiscrete = item?.is_retail || item?.unit === 'pairs' || item?.unit === 'pcs' || item?.unit === 'bottle' || item?.unit === 'pair' || item?.unit === 'box';
+                                                        const rowRetailTotal = retPrice * (Number(usage.amount) || 0);
+
                                                         return (
                                                             <div key={uIdx} className="flex items-center gap-2 bg-white p-2 rounded-lg border border-gray-100 shadow-sm animate-in fade-in slide-in-from-left-2 duration-300">
-                                                                 <Select 
-                                                                    value={usage.itemId?.toString() || ""} 
+                                                                 <InventorySearchSelect
+                                                                    value={usage.itemId?.toString() || ""}
+                                                                    inventoryData={inventoryData}
                                                                     onValueChange={(val) => {
                                                                         const newUsage = [...shoe.inventoryUsed];
-                                                                        newUsage[uIdx].itemId = parseInt(val);
+                                                                        const newId = parseInt(val);
+                                                                        const selectedItem = inventoryData.find((i: any) => i.id === newId);
+                                                                        const isNewDiscrete = selectedItem?.is_retail || selectedItem?.unit === 'pairs' || selectedItem?.unit === 'pcs' || selectedItem?.unit === 'bottle' || selectedItem?.unit === 'pair' || selectedItem?.unit === 'box';
+                                                                        newUsage[uIdx].itemId = newId;
+                                                                        if (isNewDiscrete && (newUsage[uIdx].amount < 1 || newUsage[uIdx].amount % 1 !== 0)) {
+                                                                            newUsage[uIdx].amount = Math.max(1, Math.round(newUsage[uIdx].amount));
+                                                                        }
                                                                         updateShoe(shoe.id, { inventoryUsed: newUsage });
                                                                     }}
-                                                                >
-                                                                    <SelectTrigger className="h-8 text-[11px] font-bold border-none shadow-none flex-1">
-                                                                        <SelectValue />
-                                                                    </SelectTrigger>
-                                                                    <SelectContent>
-                                                                        {inventoryData.map((inv: any) => {
-                                                                            const pres = getInventoryPresentation(inv);
-                                                                            return (
-                                                                                <SelectItem key={inv.id} value={inv.id?.toString() || ""} className="text-[11px] font-medium">
-                                                                                    {inv.name} - {pres.dropdownLabel}
-                                                                                </SelectItem>
-                                                                            );
-                                                                        })}
-                                                                    </SelectContent>
-                                                                </Select>
+                                                                />
+
+                                                                {retPrice > 0 && (
+                                                                    <div className="flex items-center gap-1 shrink-0 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-200">
+                                                                        <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-tight">
+                                                                            Retail: {formatPeso(retPrice)}
+                                                                        </span>
+                                                                        {Number(usage.amount) > 1 && (
+                                                                            <span className="text-[10px] font-black text-emerald-950">
+                                                                                ({formatPeso(rowRetailTotal)})
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+
                                                                 <div className="flex items-center gap-1 shrink-0 bg-gray-50 px-2 py-1 rounded-md border border-gray-100">
                                                                     <input
                                                                         type="number"
-                                                                        step="0.1"
-                                                                        min="0.1"
+                                                                        step={isDiscrete ? "1" : "0.1"}
+                                                                        min={isDiscrete ? "1" : "0.01"}
                                                                         value={usage.amount}
                                                                         onChange={(e) => {
                                                                             const newUsage = [...shoe.inventoryUsed];
@@ -1979,7 +2414,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                             const firstAvailable = inventoryData[0]?.id;
                                                             if (firstAvailable) {
                                                                 updateShoe(shoe.id, {
-                                                                    inventoryUsed: [...shoe.inventoryUsed, { itemId: firstAvailable, amount: 0.1 }]
+                                                                    inventoryUsed: [...shoe.inventoryUsed, { itemId: firstAvailable, amount: 1 }]
                                                                 });
                                                             } else {
                                                                 toast.error("Inventory list is empty.");
@@ -2094,42 +2529,101 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                 />
                                             </div>
                                             <div className="col-span-2 md:col-span-12 space-y-2 mt-1">
-                                                <div className="bg-emerald-50 border border-emerald-100/70 rounded-lg p-2 flex items-center justify-between gap-3 text-[10px] text-emerald-900 shadow-sm">
-                                                    <div className="flex items-center gap-2 min-w-0">
-                                                        <ClipboardList size={12} className="text-emerald-600 shrink-0" />
-                                                        <span className="font-bold shrink-0 uppercase tracking-wider">
-                                                            BUSINESS RULES:
-                                                        </span>
-                                                        <span>
-                                                            {manualReleaseDate
-                                                                ? `Manual date ${manualReleaseDate}`
-                                                                : officialDays > 0
-                                                                    ? formatBusinessRuleLabel(mlBreakdown)
-                                                                    : 'Select a service to estimate the release date'}
-                                                        </span>
+                                                {/* Card 1: Business Rules (Official) */}
+                                                <div 
+                                                    className="bg-emerald-50/70 border border-emerald-200/90 rounded-xl p-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-800 shadow-2xs hover:border-emerald-300 transition-colors"
+                                                    title="Standard deterministic calculation based on service duration, add-ons, and rush order reduction."
+                                                >
+                                                    <div className="flex items-center gap-2 flex-wrap min-w-0">
+                                                        <div className="flex items-center gap-1.5 shrink-0">
+                                                            <ClipboardList size={14} className="text-emerald-700 shrink-0" />
+                                                            <span className="font-bold uppercase tracking-wider text-[11px] text-emerald-950">
+                                                                BUSINESS RULES:
+                                                            </span>
+                                                            <span className="inline-flex items-center bg-emerald-700 text-white text-[8.5px] font-bold uppercase px-2 py-0.5 rounded tracking-wide shadow-2xs shrink-0">
+                                                                STANDARD
+                                                            </span>
+                                                        </div>
+                                                        {hasSelectedServices ? (
+                                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                                <span className="text-emerald-800/80 font-medium">Official Release Date:</span>
+                                                                <span className="font-bold text-slate-900 text-xs">{officialDateDisplay}</span>
+                                                                {releaseTime && <span className="text-emerald-700/80 text-[11px]">({releaseTime})</span>}
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                                <span className="text-emerald-800/80 font-medium">Select a service for official release date</span>
+                                                                <span className="text-[10px] text-emerald-600/80 font-semibold hidden md:inline">(Standard duration & queue rules)</span>
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                    <span className="font-black bg-emerald-100 px-2 py-0.5 rounded text-[10px] uppercase tracking-wider shrink-0">
-                                                        {manualReleaseDate ? 'Manual' : officialDays > 0 ? `TOTAL: ${officialDays} DAYS` : 'TOTAL: —'}
-                                                    </span>
+                                                    <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0 pt-1 sm:pt-0 border-t sm:border-t-0 border-emerald-200/60">
+                                                        <div className="w-[140px] inline-flex items-center justify-between bg-white border border-emerald-300/90 px-2.5 py-1 rounded-lg shadow-2xs shrink-0">
+                                                            <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-800 whitespace-nowrap">TOTAL DAYS</span>
+                                                            <span className="h-3 w-px bg-emerald-200 shrink-0" />
+                                                            <span className="font-black text-slate-900 text-[11px] tabular-nums w-14 text-center shrink-0 flex items-center justify-center">
+                                                                {manualReleaseDate ? 'MANUAL' : (hasSelectedServices && officialDays > 0) ? `${officialDays} ${officialDays === 1 ? 'DAY' : 'DAYS'}` : '—'}
+                                                            </span>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                                <div className="bg-blue-50 border border-blue-100/50 rounded-lg p-2 flex items-center justify-between gap-3 text-[10px] text-blue-800 shadow-sm">
-                                                    <div className="flex items-center gap-2 min-w-0">
-                                                        <Sparkles size={12} className="text-amber-500 shrink-0" />
-                                                        <span className="font-bold shrink-0 uppercase tracking-wider">
-                                                            ML PREDICTION:
-                                                        </span>
-                                                        <span>
-                                                            {predictionLoading
-                                                                ? 'Calculating…'
-                                                                : predictionError
-                                                                    || formatMlModelName(serverPrediction?.ml_model)}
-                                                        </span>
+
+                                                {/* Card 2: ML Prediction (Advisory) */}
+                                                <div 
+                                                    className="bg-blue-50/70 border border-blue-200/90 rounded-xl p-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-800 shadow-2xs hover:border-blue-300 transition-colors"
+                                                    title="Advisory operational prediction based on historical workshop order records."
+                                                >
+                                                    <div className="flex items-center gap-2 flex-wrap min-w-0">
+                                                        <div className="flex items-center gap-1.5 shrink-0">
+                                                            <Sparkles size={14} className="text-amber-500 shrink-0" />
+                                                            <span className="font-bold uppercase tracking-wider text-[11px] text-blue-950">
+                                                                ML PREDICTION:
+                                                            </span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setIsMlModalOpen(true)}
+                                                                className="group inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-[8.5px] font-bold uppercase px-2 py-0.5 rounded-full tracking-wider transition-all duration-150 cursor-pointer shadow-2xs hover:scale-105 active:scale-95 shrink-0"
+                                                                title="Click to view standard business rules vs ML prediction details"
+                                                            >
+                                                                <span>ADVISORY</span>
+                                                                <Info size={10} className="text-indigo-200 group-hover:text-white transition-colors" />
+                                                            </button>
+                                                        </div>
+                                                        {hasSelectedServices ? (
+                                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                                <span className="text-blue-800/80 font-medium">Predicted Release Date:</span>
+                                                                <span className="font-bold text-slate-900 text-xs inline-flex items-center gap-1.5">
+                                                                    {predictionLoading ? (
+                                                                        <Loader2 className="w-3 h-3 animate-spin text-blue-500 shrink-0" />
+                                                                    ) : (
+                                                                        predictedDateDisplay
+                                                                    )}
+                                                                </span>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                                <span className="text-blue-800/80 font-medium">Predicted release date based on historical data</span>
+                                                                <span className="text-[10px] text-blue-600/80 font-semibold hidden md:inline">(AI model trained on past orders)</span>
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                    <span className="font-black text-blue-900 bg-blue-100 px-2 py-0.5 rounded text-[10px] uppercase tracking-wider shrink-0">
-                                                        {serverPrediction?.ml_predicted_days != null
-                                                            ? `TOTAL: ${serverPrediction.ml_predicted_days} DAYS`
-                                                            : 'TOTAL: —'}
-                                                    </span>
+                                                    <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0 pt-1 sm:pt-0 border-t sm:border-t-0 border-blue-200/60">
+                                                        <div className="w-[140px] inline-flex items-center justify-between bg-white border border-blue-300/90 px-2.5 py-1 rounded-lg shadow-2xs shrink-0">
+                                                            <span className="text-[9px] font-bold uppercase tracking-wider text-blue-800 whitespace-nowrap">TOTAL DAYS</span>
+                                                            <span className="h-3 w-px bg-blue-200 shrink-0" />
+                                                            <span className="font-black text-slate-900 text-[11px] tabular-nums w-14 text-center shrink-0 flex items-center justify-center">
+                                                                {predictionLoading ? (
+                                                                    <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500 shrink-0" />
+                                                                ) : hasSelectedServices && serverPrediction?.ml_predicted_days != null ? (
+                                                                    `${serverPrediction.ml_predicted_days} ${serverPrediction.ml_predicted_days === 1 ? 'DAY' : 'DAYS'}`
+                                                                ) : hasSelectedServices && officialDays > 0 ? (
+                                                                    `${officialDays} ${officialDays === 1 ? 'DAY' : 'DAYS'}`
+                                                                ) : (
+                                                                    '—'
+                                                                )}
+                                                            </span>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
                                             {/* Row 2: Order ID, Processed By */}
@@ -2327,6 +2821,12 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                         <span className="text-gray-500 font-medium">Add-ons Subtotal</span>
                                         <span className="font-bold text-gray-800">{formatPeso(addOnsTotal)}</span>
                                     </div>
+                                    {retailTotal > 0 && (
+                                        <div className="flex justify-between items-center text-[13px]">
+                                            <span className="text-gray-500 font-medium">Retail Items Total</span>
+                                            <span className="font-bold text-emerald-700">{formatPeso(retailTotal)}</span>
+                                        </div>
+                                    )}
                                     <div className="flex justify-between items-center text-[13px] pt-2 border-t border-gray-100">
                                         <span className="text-gray-500 font-medium">Total Quantity (Per Unit)</span>
                                         <span className="font-bold text-gray-800">{shoes.reduce((sum, s) => sum + s.quantity, 0)} {shoes.reduce((sum, s) => sum + s.quantity, 0) === 1 ? 'Pair' : 'Pairs'}</span>
@@ -2357,12 +2857,223 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                             {/* P1-7 FIX: visually disable + relabel Submit while the request is
                                 in flight, so the user gets clear feedback and cannot fire a
                                 duplicate submission by clicking again before confirmation. */}
-                            {isSubmitting ? 'Submitting...' : (mode === 'create' ? 'Submit' : 'Save Changes')}
+                            {isSubmitting ? 'Submitting...' : (mode === 'create' ? 'Submit' : 'Save')}
                         </Button>
                     </div>
                 </CardContent>
             </Card>
 
+            {/* View ML Details Modal */}
+            <Dialog open={isMlModalOpen} onOpenChange={setIsMlModalOpen}>
+                <DialogContent className="max-w-xl w-full max-h-[88vh] flex flex-col p-6 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden">
+                    <DialogHeader className="pb-3 border-b border-gray-100 shrink-0">
+                        <div className="flex items-center gap-2 text-blue-700 mb-1">
+                            <Sparkles className="w-5 h-5 text-amber-500" />
+                            <DialogTitle className="text-base font-black text-gray-900 tracking-tight">
+                                Official Release Date & ML Prediction Details
+                            </DialogTitle>
+                        </div>
+                        <DialogDescription className="text-[11px] sm:text-xs text-gray-500">
+                            Comparison between standard shop business rules and advisory ML operational prediction.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-3 text-xs overflow-y-auto overflow-x-hidden pr-1.5 flex-1 custom-scrollbar">
+                        {/* Side-by-Side Comparison */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {/* Business Rules Card */}
+                            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 space-y-2.5 shadow-2xs">
+                                <div className="flex items-center gap-1.5">
+                                    <ClipboardList className="w-4 h-4 text-emerald-700 shrink-0" />
+                                    <span className="font-bold uppercase tracking-wider text-[11px] text-slate-900">
+                                        Business Rules
+                                    </span>
+                                </div>
+                                <div className="p-2.5 rounded-lg bg-white border border-emerald-200/80 space-y-1.5 shadow-2xs">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800/90 block">
+                                        Official Release Date
+                                    </span>
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="text-xs font-bold text-slate-800 tabular-nums bg-emerald-50/60 px-2 py-0.5 rounded border border-emerald-200 shadow-2xs">
+                                            {officialDateDisplay}
+                                        </span>
+                                        <span className="inline-flex items-center bg-emerald-700 text-white text-[8px] font-bold uppercase px-2 py-0.5 rounded tracking-wide shadow-2xs shrink-0">
+                                            <span>STANDARD</span>
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="space-y-1 pt-1 border-t border-slate-200/60 text-[11px] text-slate-700">
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-500">Base Service:</span>
+                                        <span className="font-bold text-slate-900">{mlBreakdown.baseDays} days</span>
+                                    </div>
+                                    {mlBreakdown.addOnDays > 0 && (
+                                        <div className="flex justify-between">
+                                            <span className="text-slate-500">Add-ons:</span>
+                                            <span className="font-bold text-slate-900">+{mlBreakdown.addOnDays} days</span>
+                                        </div>
+                                    )}
+                                    {mlBreakdown.priorityDays < 0 && (
+                                        <div className="flex justify-between text-emerald-700">
+                                            <span className="font-medium">Rush Reduction:</span>
+                                            <span className="font-black">{mlBreakdown.priorityDays} days</span>
+                                        </div>
+                                    )}
+                                    <div className="flex justify-between pt-1 border-t border-slate-200/60 font-black text-slate-950">
+                                        <span>Total Duration:</span>
+                                        <span>{officialDays} {officialDays === 1 ? 'Day' : 'Days'}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* ML Prediction Card */}
+                            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 space-y-2.5 shadow-2xs">
+                                <div className="flex items-center gap-1.5">
+                                    <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+                                    <span className="font-bold uppercase tracking-wider text-[11px] text-slate-900">
+                                        ML Prediction
+                                    </span>
+                                </div>
+                                <div className="p-2.5 rounded-lg bg-white border border-blue-200/80 space-y-1.5 shadow-2xs">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-blue-800/90 block">
+                                        Predicted Release Date
+                                    </span>
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="text-xs font-bold text-slate-800 tabular-nums bg-blue-50/60 px-2 py-0.5 rounded border border-blue-200 shadow-2xs">
+                                            {predictionLoading ? (
+                                                <span className="inline-flex items-center gap-1.5 text-blue-600 font-medium">
+                                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                                    <span>Calculating…</span>
+                                                </span>
+                                            ) : predictionError && !serverPrediction?.ml_predicted_date ? (
+                                                <span className="text-slate-400 font-medium">Unable to calculate</span>
+                                            ) : (
+                                                predictedDateDisplay
+                                            )}
+                                        </span>
+                                        <span className="inline-flex items-center gap-1 bg-indigo-600 text-white text-[8px] font-bold uppercase px-2.5 py-0.5 rounded-full tracking-wider shadow-2xs shrink-0">
+                                            <span>ADVISORY</span>
+                                            <Info size={9} className="text-indigo-200" />
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="space-y-1 pt-1 border-t border-slate-100 text-[11px] text-slate-700">
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-500">Algorithm:</span>
+                                        <span className="font-bold text-slate-900">{formatMlModelName(serverPrediction?.ml_model)}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-500">Training Base:</span>
+                                        <span className="font-bold text-slate-900">Historical Orders</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-500">Model Status:</span>
+                                        <span className="font-bold text-blue-700">
+                                            {predictionLoading ? (
+                                                <span className="inline-flex items-center gap-1 text-blue-600">
+                                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                                    <span>Predicting…</span>
+                                                </span>
+                                            ) : predictionError && !serverPrediction?.ml_status ? (
+                                                <span className="text-amber-600 font-medium">Prediction unavailable</span>
+                                            ) : (serverPrediction?.ml_status ? (serverPrediction.ml_status.charAt(0).toUpperCase() + serverPrediction.ml_status.slice(1).toLowerCase()) : 'Ready')}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between pt-1 border-t border-slate-100 font-black text-slate-950">
+                                        <span>Predicted Duration:</span>
+                                        <span>
+                                            {predictionLoading ? (
+                                                <span className="inline-flex items-center gap-1.5 text-blue-600 font-bold">
+                                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                                    <span>Calculating…</span>
+                                                </span>
+                                            ) : predictionError && serverPrediction?.ml_predicted_days == null ? (
+                                                <span className="text-slate-400 font-medium">Unable to calculate</span>
+                                            ) : serverPrediction?.ml_predicted_days != null ? (
+                                                `${serverPrediction.ml_predicted_days} Days`
+                                            ) : (
+                                                '—'
+                                            )}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Why Dates Differ Explanation */}
+                        <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 space-y-2.5 text-slate-800">
+                            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
+                                <Info className="w-4 h-4 text-slate-600 shrink-0" />
+                                <span>How Official Release Dates & ML Predictions Work</span>
+                            </div>
+                            <div className="space-y-2 text-[11px] leading-relaxed">
+                                <div className="p-2.5 bg-white rounded-lg border border-slate-200/80 border-l-4 border-l-emerald-500 shadow-2xs space-y-1.5">
+                                    <strong className="text-emerald-950 font-bold block">
+                                        1. Business Rules
+                                    </strong>
+                                    <p className="text-[10.5px] text-slate-600 leading-relaxed">
+                                        The official release date is calculated using the shop's standard service policy:
+                                    </p>
+                                    <div className="py-1 flex justify-center">
+                                        <code className="bg-emerald-50 text-emerald-900 border border-emerald-200/70 px-2.5 py-1 rounded font-mono text-[10px] font-bold inline-block text-center shadow-2xs">
+                                            Base Service Days + Add-on Days − Rush Days Reduction
+                                        </code>
+                                    </div>
+                                    <p className="text-[10.5px] text-slate-600 leading-relaxed">
+                                        The calculation determines the official release date shown on the customer's claim stub. It follows the standard number of days assigned to the selected service and add-ons, with the applicable days reduction for rush orders.
+                                    </p>
+                                </div>
+
+                                <div className="p-2.5 bg-white rounded-lg border border-slate-200/80 border-l-4 border-l-blue-500 shadow-2xs space-y-1.5">
+                                    <strong className="text-blue-950 font-bold block">
+                                        2. ML Prediction
+                                    </strong>
+                                    <p className="text-[10.5px] text-slate-600 leading-relaxed">
+                                        The ML prediction is generated using a Random Forest Regressor trained on validated historical job orders. The model evaluates 18 features from job-order data, including service types, add-on quantities, pair volume, grand total, order date, priority level (Regular/Rush), and six shoe-condition severity factors: scratches, yellowing, deep stains, sole separation, rips/holes, and worn out. The resulting duration and date are advisory estimates based on historical job-order data. They serve as an internal operational reference and do not replace the official release date.
+                                    </p>
+                                </div>
+
+                                <div className="p-2.5 bg-white rounded-lg border border-slate-200/80 border-l-4 border-l-amber-500 shadow-2xs space-y-1.5">
+                                    <strong className="text-amber-950 font-bold block">
+                                        3. Why Can the Dates Differ?
+                                    </strong>
+                                    <p className="text-[10.5px] text-slate-600 leading-relaxed">
+                                        The two methods serve different purposes. Business Rules calculate the official release date using the shop's standard service policy. ML Prediction estimates a possible completion duration using relationships identified from validated historical job-order data. Because the two methods use different calculations and information, their results may differ. The Business Rules date remains the official release date, while the ML prediction serves as an advisory estimate.
+                                    </p>
+                                </div>
+
+                                <div className="p-2.5 bg-white rounded-lg border border-slate-200/80 border-l-4 border-l-purple-500 shadow-2xs space-y-1.5">
+                                    <strong className="text-purple-950 font-bold block">
+                                        4. Operational Safeguard
+                                    </strong>
+                                    <p className="text-[10.5px] text-slate-600 leading-relaxed">
+                                        The ML prediction is intended for internal use by the owner and staff as a decision-support reference. It can assist in reviewing expected completion times, planning work schedules, and monitoring job-order progress. When an order is completed, staff can update its status and inform the customer when it is ready for pickup. The ML prediction does not override, shorten, or change the official release date.
+                                    </p>
+                                </div>
+
+                                <div className="p-2.5 bg-white rounded-lg border border-slate-200/80 border-l-4 border-l-rose-500 shadow-2xs space-y-1.5">
+                                    <strong className="text-rose-950 font-bold block">
+                                        5. Machine Learning in Data Analytics
+                                    </strong>
+                                    <p className="text-[10.5px] text-slate-600 leading-relaxed">
+                                        Machine learning is used as the predictive analytics component of the system. The Random Forest Regressor analyzes relationships between validated historical job-order features and actual completion durations, then estimates the completion duration and predicted release date for a new job order. This complements the system's descriptive analytics, presented through the dashboard and sales reports.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <DialogFooter className="pt-3 border-t border-gray-100 shrink-0">
+                        <Button
+                            type="button"
+                            onClick={() => setIsMlModalOpen(false)}
+                            className="w-full bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-widest h-10 rounded-xl shadow-md shadow-red-200 cursor-pointer transition-all"
+                        >
+                            Understood
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
         </form>
     );

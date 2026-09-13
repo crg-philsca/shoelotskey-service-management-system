@@ -737,9 +737,15 @@ def assign_display_order_ids(db: Session, results: List[Dict[str, Any]]) -> None
         order = item.get("order") or {}
         current_id = order.get("order_id")
         persisted = order.get("persisted_order_id") or current_id
-        if is_canonical_order_id(current_id):
-            # Keep Control No optional — do not force OCR / paper ref into the field.
+        dt = parse_order_date(order.get("date_received"))
+        prefix = date_prefix(dt) if dt else None
+
+        # Check if current_id is already canonical and matches the received date prefix and not already reserved
+        if dt and prefix and is_canonical_order_id(current_id) and current_id.startswith(prefix) and current_id not in reserved:
+            reserved.append(current_id)
+            existing_by_prefix[prefix].add(current_id)
             continue
+
         paper_ref = (
             item.get("source_document_ref")
             or source_document_ref(persisted)
@@ -747,10 +753,8 @@ def assign_display_order_ids(db: Session, results: List[Dict[str, Any]]) -> None
         )
         if paper_ref:
             item["source_document_ref"] = paper_ref
-        dt = parse_order_date(order.get("date_received"))
         if dt is None:
             continue
-        prefix = date_prefix(dt)
         suggested = next_canonical_order_id(dt, list(existing_by_prefix[prefix]), reserved)
         reserved.append(suggested)
         existing_by_prefix[prefix].add(suggested)

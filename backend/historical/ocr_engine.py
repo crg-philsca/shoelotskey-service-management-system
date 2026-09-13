@@ -134,15 +134,15 @@ def _get_client():
 
 
 def _model_name() -> str:
-    val = os.getenv("GEMINI_MODEL_NAME", "gemini-2.0-flash").strip()
-    if val in ("gemini-3.5-flash", "gemini-3.6-flash", ""):
-        return "gemini-2.0-flash"
+    val = os.getenv("GEMINI_MODEL_NAME", "gemini-3.6-flash").strip()
+    if not val or val in ("gemini-2.0-flash", "gemini-2.5-flash", "gemini-3.5-flash"):
+        return "gemini-3.6-flash"
     return val
 
 
 def _fallback_models() -> List[str]:
     primary = _model_name()
-    fallbacks = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-lite", "gemini-1.5-pro"]
+    fallbacks = ["gemini-3.6-flash", "gemini-2.5-flash", "gemini-1.5-flash"]
     seen = {primary}
     ordered = [primary]
     for m in fallbacks:

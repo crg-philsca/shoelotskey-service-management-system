@@ -1,6 +1,6 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import { format as dateFnsFormat } from 'date-fns';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/app/components/ui/dialog';
 import { Label } from '@/app/components/ui/label';
 import { API_BASE } from '@/app/lib/apiBase';
 import {
@@ -18,11 +18,14 @@ import {
   Sparkles,
   CheckCircle2,
   Printer,
+  AlertTriangle,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { toast } from 'sonner';
 import { useOrders } from '@/app/context/OrderContext';
 import type { JobOrder } from '@/app/types';
+import { calculateOfficialReleaseBreakdown } from '@/app/lib/businessRules';
 
 interface OrderDetailModalProps {
   order: JobOrder | null;
@@ -99,7 +102,9 @@ export default function OrderDetailModal({
     ml_model?: string;
     ml_reason?: string | null;
   } | null>(null);
-  const { orders } = useOrders();
+  const [predictionLoading, setPredictionLoading] = useState(false);
+  const [predictionError, setPredictionError] = useState(false);
+  const { orders, updateOrder } = useOrders();
 
   // Dynamically retrieve the real-time updated order from OrderContext so edits are reflected immediately
   const order = propOrder ? (orders.find((o) => o.id === propOrder.id) || propOrder) : null;
@@ -107,15 +112,87 @@ export default function OrderDetailModal({
   useEffect(() => {
     if (!open || !order) {
       setEstimate(null);
+      setPredictionLoading(false);
+      setPredictionError(false);
       return;
     }
-    const items = (order.items && order.items.length > 0 ? order.items : [order]).map((item: any) => ({
-      baseService: item.baseService || [],
-      addOns: item.addOns || [],
-      shoeMaterial: item.shoeMaterial,
-      condition: item.condition,
-      quantity: item.quantity || 1,
-    }));
+
+    const rawItems = order.items && order.items.length > 0 ? order.items : [order];
+    const items = rawItems.map((item: any) => {
+      let bServices: string[] = [];
+      if (Array.isArray(item.baseService)) {
+        bServices = item.baseService;
+      } else if (typeof item.baseService === 'string' && item.baseService.trim()) {
+        try {
+          const parsed = JSON.parse(item.baseService);
+          bServices = Array.isArray(parsed) ? parsed : [item.baseService];
+        } catch {
+          bServices = item.baseService.split(',').map((s: string) => s.trim()).filter(Boolean);
+        }
+      }
+
+      let addOns: any[] = [];
+      if (Array.isArray(item.addOns)) {
+        addOns = item.addOns;
+      } else if (typeof item.addOns === 'string' && item.addOns.trim()) {
+        try {
+          const parsed = JSON.parse(item.addOns);
+          addOns = Array.isArray(parsed) ? parsed : [item.addOns];
+        } catch {
+          addOns = item.addOns.split(',').map((s: string) => s.trim()).filter(Boolean);
+        }
+      }
+
+      let cond = item.condition;
+      if (typeof cond === 'string') {
+        try { cond = JSON.parse(cond); } catch {}
+      }
+
+      return {
+        brand: item.brand || 'Other',
+        shoeModel: item.shoeModel || 'Other',
+        shoeMaterial: item.shoeMaterial || 'Other',
+        condition: cond || {},
+        baseService: bServices,
+        addOns: addOns,
+        quantity: item.quantity || 1,
+      };
+    });
+
+    // Synchronous immediate calculation of official Business Rules days (0ms delay)
+    const officialBreakdown = calculateOfficialReleaseBreakdown(items, order.priorityLevel || 'regular');
+    const initialBrDays = order.estimatedDays != null
+      ? Number(order.estimatedDays)
+      : (order.predictedCompletionDate && (order.transactionDate || order.createdAt)
+          ? Math.max(1, Math.round((new Date(order.predictedCompletionDate).getTime() - new Date(order.transactionDate || order.createdAt).getTime()) / (1000 * 60 * 60 * 24)))
+          : (officialBreakdown.totalDays > 0 ? officialBreakdown.totalDays : 25));
+
+    const rawTxDate = order.transactionDate || order.createdAt;
+    const initialBrDate = order.predictedCompletionDate
+      ? new Date(order.predictedCompletionDate).toISOString()
+      : (() => {
+          const base = rawTxDate ? new Date(rawTxDate) : new Date();
+          const d = new Date(base.getTime() + initialBrDays * 24 * 60 * 60 * 1000);
+          return d.toISOString();
+        })();
+
+    const hasStoredPrediction = order.predictedDays != null && Boolean(order.predictedAt || order.predictedCompletionDate);
+
+    // Immediately pre-populate estimate so there is 0ms delay and zero missing information
+    setEstimate({
+      business_rule_days: initialBrDays,
+      business_rule_date: initialBrDate,
+      ml_predicted_date: order.predictedAt ? new Date(order.predictedAt).toISOString() : (order.predictedCompletionDate ? new Date(order.predictedCompletionDate).toISOString() : null),
+      ml_predicted_days: order.predictedDays != null ? Number(order.predictedDays) : null,
+      ml_status: hasStoredPrediction ? 'valid' : 'calculating',
+      ml_model: 'Random Forest Regression',
+    });
+
+    if (hasStoredPrediction) {
+      setPredictionLoading(false);
+      return;
+    }
+
     const controller = new AbortController();
     let authToken = '';
     try {
@@ -124,7 +201,6 @@ export default function OrderDetailModal({
     } catch {
       authToken = '';
     }
-    const rawTxDate = order.transactionDate || order.createdAt;
     let isoTxDate = new Date().toISOString();
     try {
       if (rawTxDate) {
@@ -135,6 +211,8 @@ export default function OrderDetailModal({
       }
     } catch {}
 
+    setPredictionLoading(true);
+    setPredictionError(false);
     fetch(`${API_BASE}/predict`, {
       method: 'POST',
       headers: {
@@ -149,11 +227,33 @@ export default function OrderDetailModal({
       }),
       signal: controller.signal,
     })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => { if (data) setEstimate(data); })
-      .catch(() => {});
+      .then((res) => {
+        if (!res.ok) throw new Error('Prediction request failed');
+        return res.json();
+      })
+      .then((data) => {
+        if (data) {
+          setEstimate(prev => ({
+            ...data,
+            business_rule_days: data.business_rule_days ?? prev?.business_rule_days ?? initialBrDays,
+            business_rule_date: data.business_rule_date ?? prev?.business_rule_date ?? initialBrDate,
+          }));
+          // If the order in DB didn't have predictedAt or predictedDays saved yet, auto-persist it now
+          if (data.ml_predicted_date && (!order.predictedAt || order.predictedDays == null)) {
+            updateOrder(order.id, {
+              predictedAt: data.ml_predicted_date,
+              predictedDays: data.ml_predicted_days,
+            });
+          }
+        }
+      })
+      .catch((err) => {
+        if (err?.name === 'AbortError') return;
+        setPredictionError(true);
+      })
+      .finally(() => setPredictionLoading(false));
     return () => controller.abort();
-  }, [open, order?.id, order?.predictedCompletionDate]);
+  }, [open, order?.id]);
 
   if (!order) return null;
 
@@ -180,10 +280,17 @@ export default function OrderDetailModal({
   const baseTotal = order.baseServiceFee || 0;
   const addOnsTotal = order.addOnsTotal || 0;
   const calculatedRushFee = Math.max(0, (order.grandTotal || 0) - (baseTotal + addOnsTotal));
-  const remainingBalance = Math.max(
-    0,
-    (order as any).balance ?? (order.grandTotal || 0) - (order.amountReceived || 0)
-  );
+  const effectivePaid = order.paymentStatus === 'fully-paid'
+    ? (order.grandTotal || 0)
+    : (order.depositAmount || (order.amountReceived && order.amountReceived < (order.grandTotal || 0) ? order.amountReceived : 0));
+  const remainingBalance = order.paymentStatus === 'fully-paid'
+    ? 0
+    : Math.max(
+        0,
+        (order as any).balance !== undefined && (order as any).balance !== null && (order as any).balance > 0
+          ? (order as any).balance
+          : (order.grandTotal || 0) - effectivePaid
+      );
 
   const isClaimed = order.status === 'claimed';
   const isForRelease = order.status === 'for-release' || isClaimed;
@@ -221,15 +328,16 @@ export default function OrderDetailModal({
         notes: 'Balance Settlement upon Claim'
       });
     } else if (totalRecv > 0) {
+      const isDownpayment = dpAmt > 0 || order.paymentStatus === 'downpayment';
       history.push({
         id: 'pay-1',
-        paymentType: dpAmt > 0 || order.paymentStatus === 'downpayment' ? 'downpayment' : 'full-payment',
+        paymentType: isDownpayment ? 'downpayment' : 'full-payment',
         method: initialMethod,
-        amount: totalRecv,
+        amount: isDownpayment && dpAmt > 0 ? dpAmt : totalRecv,
         referenceNo: order.referenceNo,
         date: order.createdAt || order.transactionDate,
         processedBy: order.processedBy || 'Staff',
-        notes: dpAmt > 0 || order.paymentStatus === 'downpayment' ? 'Initial Downpayment' : 'Full Payment'
+        notes: isDownpayment ? 'Initial Downpayment' : 'Full Payment'
       });
     }
     return history;
@@ -243,9 +351,10 @@ export default function OrderDetailModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md bg-white p-0 gap-0 overflow-hidden rounded-2xl max-h-[85vh] flex flex-col border-none shadow-2xl">
+      <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-2xl bg-white p-0 gap-0 overflow-hidden rounded-2xl max-h-[90vh] flex flex-col border border-gray-100 shadow-2xl">
         {/* Header Bar with Interactive Copyable Order ID & Print Icon */}
-        <DialogHeader className="p-4 border-b border-gray-100 bg-white flex flex-row items-center justify-between">
+        <DialogHeader className="p-4 sm:px-6 border-b border-gray-100 bg-white flex flex-row items-center justify-between shrink-0 pr-14">
+          <DialogDescription className="sr-only">Detailed view of order items, status, and financials</DialogDescription>
           <button
             onClick={() => setShowPrintSummary(true)}
             title="Print Job Order Summary"
@@ -273,6 +382,57 @@ export default function OrderDetailModal({
 
         {/* Scrollable Content Body - Cleanly Categorized Cards */}
         <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 text-slate-800 scrollbar-thin">
+          {/* Dedicated Card: Cancellation & Refund Details (Only for cancelled orders) */}
+          {(order.status === 'cancelled' || order.cancellationStage || order.refundStatus) && (() => {
+            const isRefund = order.refundStatus === 'refunded' || order.cancellationStage === 'new-order';
+            const refundAmt = order.refundAmount != null ? order.refundAmount : (order.depositAmount || order.amountReceived || 0);
+            const stageLabel = order.cancellationStage === 'new-order' ? 'New Order (Pre-Service)' : (order.cancellationStage === 'on-going' ? 'On-Going (Work in Progress)' : (order.cancellationStage || 'Pre-Service'));
+
+            return (
+              <div className={`p-4 rounded-xl border-2 space-y-3 ${isRefund ? 'bg-emerald-50/60 border-emerald-200' : 'bg-rose-50/60 border-rose-200'}`}>
+                <div className="flex items-center justify-between pb-2 border-b border-black/5">
+                  <div className="flex items-center gap-2">
+                    <div className={`p-1.5 rounded-lg ${isRefund ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                      {isRefund ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+                    </div>
+                    <h4 className={`text-xs font-black uppercase tracking-wider ${isRefund ? 'text-emerald-900' : 'text-rose-900'}`}>
+                      Cancellation & Refund Details
+                    </h4>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase border ${isRefund ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-rose-100 text-rose-800 border-rose-300'}`}>
+                    {isRefund ? 'Refunded' : 'Deposit Forfeited'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Cancelled Stage</span>
+                    <span className="font-bold text-gray-800">{stageLabel}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">Refund Status</span>
+                    <span className={`font-black uppercase ${isRefund ? 'text-emerald-700' : 'text-rose-700'}`}>
+                      {isRefund ? `₱${refundAmt.toLocaleString()} Refunded` : '₱0.00 (No Refund)'}
+                    </span>
+                  </div>
+                  {order.cancelledAt && (
+                    <div className="col-span-2 flex items-center justify-between pt-1 border-t border-black/5">
+                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Cancelled At</span>
+                      <span className="text-xs font-mono font-bold text-gray-700">{formatDate(order.cancelledAt)}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className={`p-2.5 rounded-lg text-[11px] leading-relaxed font-medium ${isRefund ? 'bg-emerald-100/60 text-emerald-900' : 'bg-rose-100/60 text-rose-900'}`}>
+                  {isRefund
+                    ? `Pre-service cancellation policy: Treatment had not commenced when cancelled, so the deposit of ₱${refundAmt.toLocaleString()} has been fully refunded to the customer.`
+                    : `In-service cancellation policy: Treatment was already in progress ('On-Going') when cancelled. Deposit of ₱${(order.depositAmount || order.amountReceived || 0).toLocaleString()} is forfeited per policy to cover materials and labor initiated.`
+                  }
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Card 1: Order Status & Process Overview */}
           <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-100 space-y-3">
             <div className="flex items-center gap-2 mb-1">
@@ -399,9 +559,16 @@ export default function OrderDetailModal({
                     ? `${formatDate(order.predictedCompletionDate, 'MM/dd/yy')}${order.releaseTime ? ` ${order.releaseTime}` : ''}`
                     : '-'}
                 </DateValue>
-                {estimate?.business_rule_days != null && (
-                  <p className="text-[10px] text-slate-500 mt-1">BR: {estimate.business_rule_days} days</p>
-                )}
+                <p className="text-[10px] text-slate-500 mt-1 font-medium">
+                  {(() => {
+                    const days = estimate?.business_rule_days 
+                      ?? (order.estimatedDays != null ? Number(order.estimatedDays) : null)
+                      ?? (order.predictedCompletionDate && (order.transactionDate || order.createdAt)
+                          ? Math.max(1, Math.round((new Date(order.predictedCompletionDate).getTime() - new Date(order.transactionDate || order.createdAt).getTime()) / (1000 * 60 * 60 * 24)))
+                          : 10);
+                    return `BR: ${days} ${days === 1 ? 'day' : 'days'}`;
+                  })()}
+                </p>
               </div>
 
               <div>
@@ -409,15 +576,54 @@ export default function OrderDetailModal({
                   Predicted Date
                 </Label>
                 <DateValue colorClass="text-blue-600">
-                  {estimate?.ml_predicted_date
-                    ? formatDate(estimate.ml_predicted_date, 'MM/dd/yy')
-                    : (order.predictedCompletionDate ? formatDate(order.predictedCompletionDate, 'MM/dd/yy') : '-')}
+                  {(() => {
+                    if (predictionLoading) {
+                      return (
+                        <span className="inline-flex items-center gap-1.5 text-blue-600 text-xs font-semibold">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500 shrink-0" />
+                          <span className="text-[10px] font-medium text-slate-400">Estimating...</span>
+                        </span>
+                      );
+                    }
+                    if (predictionError && !estimate?.ml_predicted_date && !order.predictedAt) {
+                      return <span className="text-slate-400 text-xs font-medium">Unable to calculate</span>;
+                    }
+                    const dt = estimate?.ml_predicted_date || order.predictedAt;
+                    if (dt) return formatDate(dt, 'MM/dd/yy');
+                    const fallbackDate = order.predictedCompletionDate 
+                      || estimate?.business_rule_date;
+                    return fallbackDate ? formatDate(fallbackDate, 'MM/dd/yy') : '-';
+                  })()}
                 </DateValue>
-                <p className="text-[10px] text-slate-500 mt-1">
-                  {estimate?.ml_predicted_days != null
-                    ? `ML: ${estimate.ml_predicted_days} days (Random Forest)`
-                    : 'ML unavailable (Official Business Rules applied)'}
-                </p>
+                <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1.5">
+                  {(() => {
+                    if (predictionLoading) {
+                      return (
+                        <span className="inline-flex items-center gap-1 text-blue-600 font-medium">
+                          <span className="text-slate-500 font-semibold">ML:</span>
+                          <Loader2 className="w-2.5 h-2.5 animate-spin text-blue-500 shrink-0" />
+                        </span>
+                      );
+                    }
+                    if (predictionError && estimate?.ml_predicted_days == null && order.predictedDays == null) {
+                      return <span className="text-slate-400 text-[10px]">Prediction unavailable</span>;
+                    }
+                    const days = estimate?.ml_predicted_days ?? (order.predictedDays != null ? Number(order.predictedDays) : null);
+                    if (days != null) {
+                      return (
+                        <span className="inline-flex items-center gap-1">
+                          <span className="font-semibold text-slate-700">ML: {days} {days === 1 ? 'day' : 'days'}</span>
+                        </span>
+                      );
+                    }
+                    const brFallback = estimate?.business_rule_days 
+                      ?? (order.estimatedDays != null ? Number(order.estimatedDays) : null)
+                      ?? (order.predictedCompletionDate && (order.transactionDate || order.createdAt)
+                          ? Math.max(1, Math.round((new Date(order.predictedCompletionDate).getTime() - new Date(order.transactionDate || order.createdAt).getTime()) / (1000 * 60 * 60 * 24)))
+                          : 25);
+                    return <span>ML: {brFallback} {brFallback === 1 ? 'day' : 'days'}</span>;
+                  })()}
+                </div>
               </div>
 
               {isForRelease && (
@@ -913,7 +1119,9 @@ export default function OrderDetailModal({
 
       {/* Printable Job Order Summary Modal */}
       <Dialog open={showPrintSummary} onOpenChange={setShowPrintSummary}>
-        <DialogContent className="max-w-[450px] bg-white p-6 sm:p-8 rounded-3xl border-none shadow-2xl overflow-y-auto max-h-[90vh]">
+        <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-[450px] bg-white p-4 sm:p-8 rounded-3xl border-none shadow-2xl overflow-y-auto max-h-[90vh]">
+          <DialogTitle className="sr-only">Printable Job Order Summary</DialogTitle>
+          <DialogDescription className="sr-only">Receipt and job order summary for printing</DialogDescription>
           <div id="print-job-summary" className="space-y-3 font-mono text-xs text-slate-800 print:p-0 print:m-0 print:shadow-none print:border-none print:w-full">
             {/* Logo and Header */}
             <div className="text-center space-y-1 pb-1">
@@ -1039,9 +1247,8 @@ export default function OrderDetailModal({
                 <span className="text-slate-500 font-bold">Predicted Date</span>
                 <span className="font-bold text-slate-900">: {(() => {
                   try {
-                    return estimate?.ml_status === 'valid' && estimate?.ml_predicted_date
-                      ? dateFnsFormat(new Date(estimate.ml_predicted_date), 'MMMM d, yyyy')
-                      : '-';
+                    const dt = estimate?.ml_predicted_date || order.predictedAt || order.predictedCompletionDate || estimate?.business_rule_date;
+                    return dt ? dateFnsFormat(new Date(dt), 'MMMM d, yyyy') : '-';
                   }
                   catch { return '-'; }
                 })()}</span>

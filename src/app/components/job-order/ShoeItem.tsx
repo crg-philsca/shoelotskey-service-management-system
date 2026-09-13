@@ -5,7 +5,7 @@ import { Label } from '@/app/components/ui/label';
 import { Button } from '@/app/components/ui/button';
 import { Checkbox } from '@/app/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
-import { Trash2, ShoppingBag, X, Plus } from 'lucide-react';
+import { ShoppingBag, X, Plus } from 'lucide-react';
 import { formatPeso } from '@/app/lib/utils';
 import { useServices } from '@/app/context/ServiceContext';
 import { useInventory } from '@/app/context/InventoryContext';
@@ -49,9 +49,10 @@ export const ShoeItem: React.FC<ShoeItemProps> = ({ shoe, index, updateShoe, rem
                         variant="ghost"
                         size="icon"
                         onClick={() => removeShoe(shoe.id)}
-                        className="h-8 w-8 text-red-400 hover:text-red-700 hover:bg-red-50 rounded-xl"
+                        className="h-6 w-6 bg-red-50 border border-red-200 text-red-500 hover:bg-red-600 hover:text-white hover:border-red-600 transition-all rounded-full p-0 flex items-center justify-center shadow-2xs"
+                        title="Remove shoe"
                     >
-                        <Trash2 size={16} />
+                        <X size={12} strokeWidth={2.5} />
                     </Button>
                 )}
             </CardHeader>
@@ -136,7 +137,7 @@ export const ShoeItem: React.FC<ShoeItemProps> = ({ shoe, index, updateShoe, rem
                                         {baseServices.map((service) => {
                                             const isChecked = (Array.isArray(shoe.baseService) ? shoe.baseService : []).includes(service.name);
                                             return (
-                                                <label key={service.id} className={`flex items-center space-x-2 p-2.5 rounded-lg border transition-all cursor-pointer shadow-sm ${isChecked ? 'border-red-100 bg-red-50/10' : 'bg-white border-gray-100 hover:border-red-100'}`}>
+                                                <label key={service.id} className={`flex ${isChecked ? 'items-start' : 'items-center'} space-x-2 p-2.5 rounded-lg border transition-all cursor-pointer shadow-sm ${isChecked ? 'border-red-100 bg-red-50/10' : 'bg-white border-gray-100 hover:border-red-100'}`}>
                                                     <Checkbox
                                                         checked={isChecked}
                                                         onCheckedChange={(checked) => {
@@ -164,7 +165,7 @@ export const ShoeItem: React.FC<ShoeItemProps> = ({ shoe, index, updateShoe, rem
                                                             }
 
                                                             let currentAddOns = shoe.addOns ? [...shoe.addOns] : [];
-                                                            currentAddOns = syncColorRenewalAddons(currentAddOns, newServices);
+                                                            currentAddOns = syncColorRenewalAddons(currentAddOns, newServices).filter((a: any) => isAddonVisibleForBaseServices(a.name, newServices, services));
 
                                                             // [DYNAMIC INVENTORY] Auto-suggest chemicals based on service
                                                             let newInventory = [...(shoe.inventoryUsed || [])];
@@ -191,7 +192,7 @@ export const ShoeItem: React.FC<ShoeItemProps> = ({ shoe, index, updateShoe, rem
                                                                 addOns: currentAddOns
                                                             });
                                                         }}
-                                                        className="h-4 w-4 data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600"
+                                                        className={`h-4 w-4 shrink-0 ${isChecked ? 'self-start mt-0.5' : ''} data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600`}
                                                     />
                                                     <div className="flex items-center justify-between flex-1 min-w-0">
                                                         <div className="flex flex-col min-w-0">
@@ -217,7 +218,7 @@ export const ShoeItem: React.FC<ShoeItemProps> = ({ shoe, index, updateShoe, rem
                                         </div>
                                     ) : (
                                         <div className="grid grid-cols-2 gap-2 flex-grow overflow-y-auto max-h-[220px] pr-1 custom-scrollbar">
-                                            {addOnServices.filter(addon => isAddonVisibleForBaseServices(addon.name, shoe.baseService || [])).sort((a, b) => {
+                                            {addOnServices.filter(addon => isAddonVisibleForBaseServices(addon.name, shoe.baseService || [], services)).sort((a, b) => {
                                                 const baseServicesArr = shoe.baseService || [];
                                                 const hasColorRenewal = baseServicesArr.some((s: string) => s.includes('Color Renewal'));
                                                 const hasReglue = baseServicesArr.some((s: string) => s.toLowerCase().includes('reglue'));

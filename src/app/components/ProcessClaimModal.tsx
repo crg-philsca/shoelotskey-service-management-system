@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/app/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/app/components/ui/dialog";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
@@ -470,12 +470,13 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
     return (
         <>
             <Dialog open={open && !showReceipt} onOpenChange={onOpenChange}>
-                <DialogContent className="max-w-[500px] w-full h-[85vh] max-h-[700px] flex flex-col bg-white p-0 gap-0 overflow-hidden border-none shadow-2xl rounded-2xl">
-                    <DialogHeader className="px-5 py-3.5 bg-white border-b border-gray-100 flex flex-row items-center justify-between shrink-0">
+                <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-[500px] h-[85vh] max-h-[700px] flex flex-col bg-white p-0 gap-0 overflow-hidden border-none shadow-2xl rounded-2xl">
+                    <DialogHeader className="px-5 py-3.5 bg-white border-b border-gray-100 flex flex-row items-center justify-between shrink-0 pr-14">
                         <DialogTitle className="text-[14px] font-black uppercase tracking-tight text-gray-800 flex items-center gap-1.5">
                             <CheckCircle2 className="w-4 h-4 text-red-600" />
                             Process Claim & Finalize Inventory
                         </DialogTitle>
+                        <DialogDescription className="sr-only">Process customer claim and inventory deduction</DialogDescription>
                     </DialogHeader>
 
                     <div className="p-4 space-y-3.5 overflow-y-auto flex-1 min-h-0 custom-scrollbar">
@@ -951,7 +952,9 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
 
             {/* [REQUIREMENT 5] Customer Claim & Purchase Receipt Modal */}
             <Dialog open={showReceipt} onOpenChange={(val) => { if (!val) { setShowReceipt(false); onOpenChange(false); } }}>
-                <DialogContent className="max-w-[440px] w-full h-[85vh] max-h-[700px] flex flex-col bg-white p-0 gap-0 overflow-hidden rounded-3xl border-none shadow-2xl">
+                <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-[440px] h-[85vh] max-h-[700px] flex flex-col bg-white p-0 gap-0 overflow-hidden rounded-3xl border-none shadow-2xl">
+                    <DialogTitle className="sr-only">Claim Receipt</DialogTitle>
+                    <DialogDescription className="sr-only">Customer payment and claim receipt</DialogDescription>
                     <div className="p-6 overflow-y-auto flex-1 min-h-0 custom-scrollbar">
                         <div id="print-receipt-content" className="space-y-5 text-gray-800 print:p-0 print:m-0 print:shadow-none print:border-none">
                         {/* Receipt Header */}

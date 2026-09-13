@@ -204,7 +204,19 @@ export function ActivityProvider({ children, user }: { children: ReactNode, user
         }
     };
 
-    const visibleActivities = useMemo(() => withoutResolvedPilErrors(activities), [activities]);
+    const visibleActivities = useMemo(() => {
+        const cleaned = withoutResolvedPilErrors(activities);
+        const seen = new Set<string>();
+        const deduped: ActivityLog[] = [];
+        for (const act of cleaned) {
+            const key = `${act.user || ''}_${act.actionRaw || act.action || ''}_${act.module || ''}_${act.table || ''}_${act.recordId || ''}_${act.timestamp || ''}`;
+            if (!seen.has(key)) {
+                seen.add(key);
+                deduped.push(act);
+            }
+        }
+        return deduped;
+    }, [activities]);
     const contextValue = useMemo(
         () => ({ activities: visibleActivities, addActivity, refreshActivities }),
         [visibleActivities, addActivity, refreshActivities],

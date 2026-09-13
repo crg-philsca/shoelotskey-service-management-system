@@ -132,6 +132,7 @@ class Service(Base):
     service_code = Column(String(20), nullable=True)
     is_active = Column(Boolean, default=True)
     sort_order = Column(Integer, default=0)
+    connected_addons = Column(JSON, nullable=True)
 
     category = relationship("ServiceCategory", back_populates="services")
 
@@ -166,12 +167,19 @@ class Order(Base):
     rush_reduction_days = Column(Integer, nullable=True)
     
     expected_at = Column(DateTime, nullable=False)
+    predicted_at = Column(DateTime, nullable=True)
+    predicted_days = Column(Integer, nullable=True)
     released_at = Column(DateTime, nullable=True)
     claimed_at = Column(DateTime, nullable=True)
     
     user_id = Column(Integer, ForeignKey("users.user_id"), nullable=False)
     inventory_applied = Column(Boolean, default=False)
     inventory_used = Column(JSON, nullable=True)
+    cancellation_stage = Column(String(30), nullable=True)
+    refund_status = Column(String(30), nullable=True)
+    refund_amount = Column(DECIMAL(10, 2), default=0.0)
+    refund_reason = Column(String(255), nullable=True)
+    cancelled_at = Column(DateTime, nullable=True)
     created_at = Column(TIMESTAMP, default=datetime.now)
     updated_at = Column(TIMESTAMP, default=datetime.now, onupdate=datetime.now)
     
@@ -328,12 +336,15 @@ class Inventory(Base):
     item_id = Column(Integer, primary_key=True, autoincrement=True)
     item_name = Column(String(100), nullable=False, unique=True)
     inventory_number = Column(String(50), nullable=True, unique=True)
+    sync_uuid = Column(String(64), nullable=True, unique=True, index=True)
     category = Column(String(50), index=True)
     stock_quantity = Column(Float, default=0.0)
     unit = Column(String(20))
     unit_price = Column(DECIMAL(10, 2), default=0.0)
     status = Column(String(30)) # e.g., 'In Stock', 'Low Stock', 'Critical'
     is_active = Column(Boolean, default=True)
+    deleted_at = Column(TIMESTAMP, nullable=True)
+    deleted_by = Column(String(50), nullable=True)
     
     # Automated consumption fields
     auto_deduct = Column(Boolean, default=False)
