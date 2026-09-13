@@ -404,8 +404,8 @@ class ShoelotskeyPredictor:
         """
         base_date = self._parse_base_date(order_data)
         official_days = self.calculate_business_rule_days(db, order_data)
-        if official_days <= 0:
-            official_days = 10
+        if official_days < 0:
+            official_days = 0
         official_date = base_date + timedelta(days=official_days)
         ml = self.calculate_ml_prediction(db, order_data)
         ml_days = ml.get("ml_predicted_days")

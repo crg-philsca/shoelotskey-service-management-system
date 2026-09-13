@@ -245,16 +245,16 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
 
                     {/* Table */}
                     <div className="overflow-x-auto w-full rounded-xl border">
-                        <table className="w-full table-fixed min-w-[760px] text-sm">
+                        <table className="w-full table-fixed min-w-0 text-sm">
                             <colgroup>
                                 <col className="w-[4%]" />
+                                <col className="w-[13%]" />
+                                <col className="w-[16%]" />
+                                <col className="w-[16%]" />
+                                <col className="w-[5%]" />
                                 <col className="w-[11%]" />
-                                <col className="w-[16%]" />
-                                <col className="w-[16%]" />
-                                <col className="w-[6%]" />
-                                <col className="w-[12%]" />
-                                <col className="w-[9%]" />
-                                <col className="w-[16%]" />
+                                <col className="w-[8%]" />
+                                <col className="w-[17%]" />
                                 <col className="w-[10%]" />
                             </colgroup>
                             <thead className="bg-red-50/50 border-b border-red-100">
@@ -321,11 +321,13 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                                                     onCheckedChange={(checked) => handleSelectOrder(order.id, checked as boolean)}
                                                 />
                                             </td>
-                                            <td className="px-2 py-2 text-center text-xs font-medium whitespace-nowrap">{order.orderNumber}</td>
-                                            <td className="px-2 py-2 text-center">
-                                                <div className="flex flex-col items-center justify-center text-center">
-                                                    <div className="font-medium text-gray-900 leading-tight truncate max-w-full text-xs" title={order.customerName}>{order.customerName}</div>
-                                                    <div className="text-[10px] text-gray-500 mt-0.5 whitespace-nowrap truncate max-w-full">{order.contactNumber}</div>
+                                            <td className="px-1.5 py-2 text-center text-xs font-medium text-gray-800 max-w-0 truncate" title={order.orderNumber}>{order.orderNumber}</td>
+                                            <td className="px-1.5 py-2 text-center max-w-0">
+                                                <div className="flex flex-col items-center justify-center text-center w-full min-w-0">
+                                                    <div className="font-medium text-gray-900 leading-tight truncate w-full max-w-full text-xs" title={order.customerName}>{order.customerName}</div>
+                                                    {order.contactNumber && (
+                                                        <div className="text-[10px] text-gray-500 mt-0.5 whitespace-nowrap truncate w-full max-w-full">{order.contactNumber}</div>
+                                                    )}
                                                 </div>
                                             </td>
                                             <td className="px-2 py-2 text-xs font-medium text-gray-700 text-center whitespace-normal break-words">
@@ -517,13 +519,31 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                                                             </DropdownMenuItem>
                                                         )}
                                                         {(order.status === 'cancelled' || (order.status as string)?.toLowerCase() === 'cancelled' || (order.status as string)?.toLowerCase() === 'canceled') && (
-                                                            <DropdownMenuItem onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setSelectedOrder(order);
-                                                                setIsEditing(false);
-                                                            }} className="border border-gray-200 rounded-md px-2.5 py-1.5 text-gray-700 bg-gray-50 hover:bg-gray-100 focus:text-gray-800 focus:bg-gray-100 font-bold mb-1">
-                                                                <FileText className="mr-2 h-4 w-4 text-gray-600" /> View Details
-                                                            </DropdownMenuItem>
+                                                            <>
+                                                                <DropdownMenuItem onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    const targetStage = order.cancellationStage || 'new-order';
+                                                                    updateOrder(order.id, {
+                                                                        status: targetStage as any,
+                                                                        cancellationStage: null as any,
+                                                                        refundStatus: null as any,
+                                                                        refundAmount: 0,
+                                                                        refundReason: null as any,
+                                                                        cancelledAt: null as any,
+                                                                        updatedAt: new Date()
+                                                                    }, user.username);
+                                                                    toast.success(`Order #${order.orderNumber} restored to ${targetStage.replace('-', ' ')}`);
+                                                                }} className="border border-purple-200 rounded-md px-2.5 py-1.5 text-purple-600 bg-purple-50 hover:bg-purple-100 focus:text-purple-700 focus:bg-purple-100 font-bold mb-1 cursor-pointer">
+                                                                    <RotateCcw className="mr-2 h-4 w-4 text-purple-500" /> Undo Cancel Order
+                                                                </DropdownMenuItem>
+                                                                <DropdownMenuItem onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setSelectedOrder(order);
+                                                                    setIsEditing(false);
+                                                                }} className="border border-gray-200 rounded-md px-2.5 py-1.5 text-gray-700 bg-gray-50 hover:bg-gray-100 focus:text-gray-800 focus:bg-gray-100 font-bold mb-1">
+                                                                    <FileText className="mr-2 h-4 w-4 text-gray-600" /> View Details
+                                                                </DropdownMenuItem>
+                                                            </>
                                                         )}
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>

@@ -2,10 +2,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/ca
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { Input } from '@/app/components/ui/input';
-import { PlusCircle, Edit, Trash, Search, Filter, ChevronLeft, ChevronRight, History as HistoryIcon, Activity, AlertTriangle, Lock } from 'lucide-react';
+import { PlusCircle, Edit, Trash, Search, Filter, ChevronLeft, ChevronRight, History as HistoryIcon, Activity, AlertTriangle, Lock, MoreVertical } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import React from 'react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu';
 import {
   Select,
   SelectContent,
@@ -406,13 +407,13 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
 
           {/* Table Section */}
           <div className="overflow-x-auto w-full">
-            <table className="w-full table-fixed min-w-[640px]">
+            <table className="w-full table-fixed min-w-0">
               <colgroup>
-                <col className="w-[24%]" />
                 <col className="w-[28%]" />
+                <col className="w-[34%]" />
                 <col className="w-[16%]" />
-                <col className="w-[16%]" />
-                <col className="w-[16%]" />
+                <col className="w-[14%]" />
+                <col className="w-[8%]" />
               </colgroup>
               <thead className="bg-red-50/60 border-y border-red-100">
                 <tr>
@@ -443,82 +444,90 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
                     const isSystemAdmin = user.username?.toLowerCase() === 'admin' || user.role?.toLowerCase() === 'admin';
                     return (
                     <tr key={user.id} className="hover:bg-gray-50/80 transition-colors animate-in fade-in duration-500">
-                      <td className="px-3 py-2 text-xs font-medium text-center">
-                        <div className="flex items-center justify-center gap-1.5 text-center">
-                          <span className="font-semibold text-gray-900 truncate max-w-full">{user.username}</span>
-                          {isSystemAdmin && (
-                            <span title="System Protected Account" className="inline-flex items-center text-gray-400 shrink-0">
-                              <Lock size={13} className="text-gray-400" />
-                            </span>
-                          )}
+                      <td className="px-3 py-2 text-xs font-medium max-w-0">
+                        <div className="flex justify-center w-full">
+                          <div className="w-[180px] max-w-full flex items-center gap-1.5 text-left min-w-0">
+                            <span className="font-semibold text-gray-900 truncate" title={user.username}>{user.username}</span>
+                            {isSystemAdmin && (
+                              <span title="System Protected Account" className="inline-flex items-center text-gray-400 shrink-0">
+                                <Lock size={13} className="text-gray-400" />
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </td>
-                      <td className="px-3 py-2 text-xs text-gray-600 text-center truncate">{user.email}</td>
-                      <td className="px-3 py-2 text-center">
+                      <td className="px-3 py-2 text-xs text-gray-600 max-w-0">
+                        <div className="flex justify-center w-full">
+                          <div className="w-[260px] max-w-full text-left min-w-0">
+                            <span className="truncate block" title={user.email}>{user.email || <span className="text-gray-400 italic">—</span>}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-center max-w-0">
                         {isSystemAdmin ? (
-                          <Badge className="bg-gray-200 text-gray-700 border-gray-300 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 shadow-none hover:bg-gray-200">
+                          <Badge className="bg-gray-200 text-gray-700 border-gray-300 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 shadow-none hover:bg-gray-200 whitespace-nowrap">
                             SYSTEM
                           </Badge>
                         ) : (
-                          <Badge className="bg-blue-50 text-blue-700 border-blue-100 text-[10px] font-bold uppercase px-2 py-0.5 shadow-none hover:bg-blue-50">
+                          <Badge className="bg-blue-50 text-blue-700 border-blue-100 text-[10px] font-bold uppercase px-2 py-0.5 shadow-none hover:bg-blue-50 whitespace-nowrap">
                             {user.role}
                           </Badge>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-center">
+                      <td className="px-3 py-2 text-center max-w-0">
                         <Badge className={`
                           ${user.active ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-gray-100 text-gray-500 border-gray-200'}
-                          text-[10px] font-black uppercase
+                          text-[10px] font-black uppercase whitespace-nowrap
                         `}>
                           {user.active ? 'Active' : 'Inactive'}
                         </Badge>
                       </td>
-                      <td className="px-3 py-2 text-xs text-center">
-                        <div className="flex justify-center gap-2">
-                          {isSystemAdmin ? (
-                            <>
+                      <td className="px-2 py-2 text-xs text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        {isSystemAdmin ? (
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            disabled
+                            className="h-7 w-7 p-0 rounded-md border border-gray-200 text-gray-300 bg-gray-50 opacity-40 cursor-not-allowed shadow-none inline-flex items-center justify-center" 
+                            title="System account protected"
+                          >
+                            <MoreVertical className="h-3.5 w-3.5 text-gray-400" />
+                          </Button>
+                        ) : (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
                               <Button 
                                 variant="outline" 
-                                size="sm" 
-                                disabled
-                                className="h-8 w-8 p-0 rounded-lg border border-gray-200 text-gray-300 bg-gray-50 opacity-40 cursor-not-allowed shadow-none" 
-                                title="System account cannot be edited"
+                                className="h-7 w-7 p-0 border-red-200 text-red-700 bg-red-50 hover:bg-red-100 font-bold rounded-md inline-flex items-center justify-center" 
+                                title="Actions"
                               >
-                                <Edit size={14} strokeWidth={2.5} />
+                                <MoreVertical className="h-3.5 w-3.5 text-red-500" />
                               </Button>
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                disabled
-                                className="h-8 w-8 p-0 rounded-lg border border-gray-200 text-gray-300 bg-gray-50 opacity-40 cursor-not-allowed shadow-none" 
-                                title="System account cannot be deleted"
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-44 p-1.5 space-y-1">
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEditClick(user);
+                                }}
+                                className="border border-yellow-200 rounded-md px-2.5 py-1.5 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:text-yellow-800 focus:bg-yellow-100 font-bold cursor-pointer"
                               >
-                                <Trash size={14} strokeWidth={2.5} />
-                              </Button>
-                            </>
-                          ) : (
-                            <>
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                className="h-8 w-8 p-0 rounded-lg border border-amber-500 text-amber-600 hover:bg-amber-50 transition-colors bg-white shadow-none" 
-                                onClick={() => handleEditClick(user)}
-                                title="Edit user"
+                                <Edit className="h-4 w-4 mr-2 text-yellow-600" />
+                                Edit User
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteUser(user.id);
+                                }}
+                                className="border border-red-200 rounded-md px-2.5 py-1.5 text-red-700 bg-red-50 hover:bg-red-100 focus:text-red-800 focus:bg-red-100 font-bold cursor-pointer"
                               >
-                                <Edit size={14} strokeWidth={2.5} />
-                              </Button>
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                className="h-8 w-8 p-0 rounded-lg border border-red-500 text-red-600 hover:bg-red-50 transition-colors bg-white shadow-none" 
-                                onClick={() => handleDeleteUser(user.id)}
-                                title="Delete user"
-                              >
-                                <Trash size={14} strokeWidth={2.5} />
-                              </Button>
-                            </>
-                          )}
-                        </div>
+                                <Trash className="h-4 w-4 mr-2 text-red-600" />
+                                Delete User
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                       </td>
                     </tr>
                     );

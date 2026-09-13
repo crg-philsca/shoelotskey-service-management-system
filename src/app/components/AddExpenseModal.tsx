@@ -354,7 +354,7 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditE
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-[560px] max-h-[90vh] flex flex-col p-0 rounded-2xl border-0 shadow-2xl bg-white overflow-hidden">
+            <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-[500px] max-h-[90vh] flex flex-col p-0 rounded-2xl border-0 shadow-2xl bg-white overflow-hidden">
                 <DialogHeader className="p-6 pb-3 border-b border-gray-100 shrink-0">
                     <DialogTitle className="text-xl font-bold text-red-600 uppercase text-center w-full">
                         {initialData ? 'Edit Expense' : 'Log New Expense'}

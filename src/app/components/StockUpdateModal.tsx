@@ -263,7 +263,7 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave, on
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent 
                 closeClassName="top-4 right-4 bg-white/20 text-white hover:bg-white/30 border-white/30 hover:border-white/50 shadow-none"
-                className="w-[calc(100vw-1.5rem)] sm:max-w-[540px] max-h-[85vh] p-0 gap-0 flex flex-col overflow-hidden rounded-2xl border border-gray-100 shadow-2xl bg-white"
+                className="w-[calc(100vw-1.5rem)] sm:max-w-[480px] max-h-[85vh] p-0 gap-0 flex flex-col overflow-hidden rounded-2xl border border-gray-100 shadow-2xl bg-white"
             >
                 <DialogHeader className="shrink-0 bg-emerald-600 px-6 py-5 text-white text-center">
                     <div className="mx-auto w-10 h-10 bg-white/20 rounded-full flex items-center justify-center mb-2">

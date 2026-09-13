@@ -14,10 +14,10 @@ import {
     Wallet,
     Clock3,
     Ban,
-    Eye,
     Trash2,
     MoreVertical,
     Edit,
+    RotateCcw,
 } from 'lucide-react';
 import { format as dateFnsFormat } from 'date-fns';
 import { Button } from '@/app/components/ui/button';
@@ -32,7 +32,7 @@ import EditOrderModal from '@/app/components/EditOrderModal';
 import OrderDetailModal from '@/app/components/OrderDetailModal';
 import { toast } from 'sonner';
 import type { JobOrder } from '@/app/types';
-import { isDateInRange, orderEventDate, type ReportRange } from '@/app/lib/salesAnalytics';
+import { isCancelledOrder, isDateInRange, orderEventDate, type ReportRange } from '@/app/lib/salesAnalytics';
 
 type TotalOrdersProps = {
     onSetHeaderActionRight?: (action: ReactNode | null) => void;
@@ -153,8 +153,24 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
         return (location.state as any)?.customEndDate || '';
     });
     const [cardFilter, setCardFilter] = useState<'all' | 'fully-paid' | 'downpayment' | 'active' | 'cancelled'>(() => {
-        return (location.state as any)?.filterCard || 'all';
+        return (location.state as any)?.filterCard || (location.state as any)?.cardFilter || 'all';
     });
+
+    useEffect(() => {
+        const state = location.state as any;
+        if (state?.dateRange) {
+            setProfitRange(state.dateRange);
+        }
+        if (state?.customStartDate !== undefined) {
+            setCustomStartDate(state.customStartDate || '');
+        }
+        if (state?.customEndDate !== undefined) {
+            setCustomEndDate(state.customEndDate || '');
+        }
+        if (state?.filterCard || state?.cardFilter) {
+            setCardFilter(state.filterCard || state.cardFilter);
+        }
+    }, [location.state]);
     const [searchQuery, setSearchQuery] = useState('');
     const [filterService, setFilterService] = useState<string>('all');
     const [filterPriority, setFilterPriority] = useState<string>('all');
@@ -256,7 +272,11 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
         }
 
         if (filterPaymentStatus !== 'all') {
-            filtered = filtered.filter((order) => order.paymentStatus === filterPaymentStatus);
+            if (filterPaymentStatus === 'refunded') {
+                filtered = filtered.filter((order) => order.refundStatus === 'refunded' || (isCancelledOrder(order) && Number(order.refundAmount || 0) > 0));
+            } else {
+                filtered = filtered.filter((order) => order.paymentStatus === filterPaymentStatus && !isCancelledOrder(order));
+            }
         }
 
         if (filterOrderStatus !== 'all') {
@@ -301,22 +321,45 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
     const activeOrdersCount = baseFilteredOrders.filter((order) => 
         order.status !== 'claimed' && (order.status as string)?.toLowerCase() !== 'cancelled' && (order.status as string)?.toLowerCase() !== 'canceled'
     ).length;
-    const cancelledOrdersCount = baseFilteredOrders.filter((order) => 
-        order.status === 'cancelled' || (order.status as string)?.toLowerCase() === 'cancelled' || (order.status as string)?.toLowerCase() === 'canceled'
-    ).length;
+    const allCancelledOrders = useMemo(() => {
+        return (orders || []).filter(isCancelledOrder);
+    }, [orders]);
+
+    const cancelledOrdersCount = useMemo(() => {
+        const inPeriod = baseFilteredOrders.filter(isCancelledOrder).length;
+        return inPeriod > 0 ? inPeriod : allCancelledOrders.length;
+    }, [baseFilteredOrders, allCancelledOrders]);
 
     // Table orders filtered by the active card filter
     const filteredOrders = useMemo(() => {
         let filtered = [...baseFilteredOrders];
 
         if (cardFilter === 'fully-paid') {
-            filtered = filtered.filter((order) => order.paymentStatus === 'fully-paid');
+            filtered = filtered.filter((order) => order.paymentStatus === 'fully-paid' && !isCancelledOrder(order));
         } else if (cardFilter === 'downpayment') {
-            filtered = filtered.filter((order) => order.paymentStatus === 'downpayment');
+            filtered = filtered.filter((order) => order.paymentStatus === 'downpayment' && !isCancelledOrder(order));
         } else if (cardFilter === 'active') {
-            filtered = filtered.filter((order) => order.status !== 'claimed' && (order.status as string)?.toLowerCase() !== 'cancelled' && (order.status as string)?.toLowerCase() !== 'canceled');
+            filtered = filtered.filter((order) => order.status !== 'claimed' && !isCancelledOrder(order));
         } else if (cardFilter === 'cancelled') {
-            filtered = filtered.filter((order) => order.status === 'cancelled' || (order.status as string)?.toLowerCase() === 'cancelled' || (order.status as string)?.toLowerCase() === 'canceled');
+            const inPeriod = baseFilteredOrders.filter(isCancelledOrder);
+            if (inPeriod.length > 0) {
+                filtered = inPeriod;
+            } else {
+                filtered = (orders || []).filter((order) => {
+                    if (!isCancelledOrder(order)) return false;
+                    if (filterService !== 'all') {
+                        if (Array.isArray(order.baseService)) return order.baseService.some(s => String(s || '').toLowerCase().includes(filterService.toLowerCase()));
+                        if (typeof order.baseService === 'string') return (order.baseService as string).toLowerCase().includes(filterService.toLowerCase());
+                        return false;
+                    }
+                    if (filterPriority !== 'all' && order.priorityLevel !== filterPriority) return false;
+                    if (searchQuery) {
+                        const q = searchQuery.toLowerCase();
+                        return String(order.customerName || '').toLowerCase().includes(q) || String(order.orderNumber || order.id || '').toLowerCase().includes(q);
+                    }
+                    return true;
+                });
+            }
         }
 
         // Sort: Recently updated/created first, then by priority, then by Order Number descending
@@ -413,35 +456,35 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
 
                 <Card 
                     onClick={() => { setCardFilter(cardFilter === 'downpayment' ? 'all' : 'downpayment'); setCurrentPage(1); }}
-                    className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-red-50 to-white hover:shadow-md ${
-                        cardFilter === 'downpayment' ? 'border-red-600 ring-2 ring-red-600/20' : 'border-transparent hover:border-red-200'
-                    }`}
-                >
-                    <CardContent className="pt-4 pb-3.5 px-3 sm:px-3.5">
-                        <div className="flex items-center gap-1.5 mb-1.5">
-                            <div className="p-1.5 rounded-lg bg-red-100 text-red-700 shrink-0">
-                                <Wallet className="h-4 w-4" />
-                            </div>
-                            <p className="text-[9.5px] 2xl:text-[10px] font-black uppercase tracking-tight text-gray-500 whitespace-nowrap">Downpayment Orders</p>
-                        </div>
-                        <p className="text-2xl font-black text-red-700 tracking-tight">{downpaymentOrdersCount}</p>
-                    </CardContent>
-                </Card>
-
-                <Card 
-                    onClick={() => { setCardFilter(cardFilter === 'active' ? 'all' : 'active'); setCurrentPage(1); }}
                     className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-amber-50 to-white hover:shadow-md ${
-                        cardFilter === 'active' ? 'border-amber-600 ring-2 ring-amber-600/20' : 'border-transparent hover:border-amber-200'
+                        cardFilter === 'downpayment' ? 'border-amber-600 ring-2 ring-amber-600/20' : 'border-transparent hover:border-amber-200'
                     }`}
                 >
                     <CardContent className="pt-4 pb-3.5 px-3 sm:px-3.5">
                         <div className="flex items-center gap-1.5 mb-1.5">
                             <div className="p-1.5 rounded-lg bg-amber-100 text-amber-700 shrink-0">
+                                <Wallet className="h-4 w-4" />
+                            </div>
+                            <p className="text-[9.5px] 2xl:text-[10px] font-black uppercase tracking-tight text-gray-500 whitespace-nowrap">Downpayment Orders</p>
+                        </div>
+                        <p className="text-2xl font-black text-amber-700 tracking-tight">{downpaymentOrdersCount}</p>
+                    </CardContent>
+                </Card>
+
+                <Card 
+                    onClick={() => { setCardFilter(cardFilter === 'active' ? 'all' : 'active'); setCurrentPage(1); }}
+                    className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-violet-50 to-white hover:shadow-md ${
+                        cardFilter === 'active' ? 'border-violet-600 ring-2 ring-violet-600/20' : 'border-transparent hover:border-violet-200'
+                    }`}
+                >
+                    <CardContent className="pt-4 pb-3.5 px-3 sm:px-3.5">
+                        <div className="flex items-center gap-1.5 mb-1.5">
+                            <div className="p-1.5 rounded-lg bg-violet-100 text-violet-700 shrink-0">
                                 <Clock3 className="h-4 w-4" />
                             </div>
                             <p className="text-[9.5px] 2xl:text-[10px] font-black uppercase tracking-tight text-gray-500 whitespace-nowrap">Active Orders</p>
                         </div>
-                        <p className="text-2xl font-black text-amber-700 tracking-tight">{activeOrdersCount}</p>
+                        <p className="text-2xl font-black text-violet-700 tracking-tight">{activeOrdersCount}</p>
                     </CardContent>
                 </Card>
 
@@ -515,39 +558,37 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                 </CardHeader>
                 <CardContent className="pt-0 px-2 sm:px-4 md:px-6">
                     <div className="overflow-x-auto w-full">
-                        <Table className="w-full table-fixed min-w-[800px] text-xs">
+                        <Table className="w-full table-fixed min-w-0 text-xs">
                             <colgroup>
-                                <col className="w-[9%]" />
-                                <col className="w-[13%]" />
+                                <col className="w-[12%]" />
+                                <col className="w-[15%]" />
                                 <col className="w-[15%]" />
                                 <col className="w-[5%]" />
-                                <col className="w-[8%]" />
-                                <col className="w-[8%]" />
-                                <col className="w-[8%]" />
                                 <col className="w-[9%]" />
-                                <col className="w-[11%]" />
+                                <col className="w-[8%]" />
+                                <col className="w-[10%]" />
+                                <col className="w-[12%]" />
                                 <col className="w-[8%]" />
                                 <col className="w-[6%]" />
                             </colgroup>
                             <TableHeader className="bg-red-50/50 border-b border-red-100">
                                 <TableRow className="border-b border-red-100 hover:bg-transparent">
-                                    <TableHead className="h-9 px-1.5 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Order #</TableHead>
-                                    <TableHead className="h-9 px-1.5 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Customer</TableHead>
-                                    <TableHead className="h-9 px-1.5 text-center font-black text-gray-700 uppercase tracking-wider text-[10px]">Services</TableHead>
-                                    <TableHead className="h-9 px-1 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">QTY</TableHead>
-                                    <TableHead className="h-9 px-1.5 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Order Date</TableHead>
-                                    <TableHead className="h-9 px-1.5 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Est. Date</TableHead>
-                                    <TableHead className="h-9 px-1 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Priority</TableHead>
-                                    <TableHead className="h-9 px-1.5 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Status</TableHead>
-                                    <TableHead className="h-9 px-1.5 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Payment</TableHead>
-                                    <TableHead className="h-9 px-1.5 text-right font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Total</TableHead>
-                                    <TableHead className="h-9 px-1 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Actions</TableHead>
+                                    <TableHead className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Order #</TableHead>
+                                    <TableHead className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Customer</TableHead>
+                                    <TableHead className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px]">Services</TableHead>
+                                    <TableHead className="h-9 px-1 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">QTY</TableHead>
+                                    <TableHead className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Order Date</TableHead>
+                                    <TableHead className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Priority</TableHead>
+                                    <TableHead className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Status</TableHead>
+                                    <TableHead className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Payment</TableHead>
+                                    <TableHead className="h-9 px-2 text-right font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Total</TableHead>
+                                    <TableHead className="h-9 px-1 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody className="divide-y divide-gray-100">
                                 {paginatedOrders.length === 0 ? (
                                     <TableRow className="hover:bg-transparent">
-                                        <TableCell colSpan={11} className="px-6 py-20 text-center">
+                                        <TableCell colSpan={10} className="px-6 py-20 text-center">
                                             <div className="flex flex-col items-center justify-center space-y-3 opacity-40">
                                                 <ShoppingBag size={48} className="text-gray-300" />
                                                 <p className="text-sm font-black text-gray-400 uppercase tracking-[0.2em]">
@@ -571,16 +612,16 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
 
                                         return (
                                         <TableRow key={order.id} onClick={() => setViewingOrder(order)} className="border-b border-gray-100 hover:bg-gray-50/80 transition-all cursor-pointer">
-                                            <TableCell className="px-1.5 py-1.5 text-center text-[11px] font-semibold whitespace-nowrap text-gray-800">{order.orderNumber || order.id || '-'}</TableCell>
-                                            <TableCell className="px-1.5 py-1.5 text-center">
-                                                <div className="flex flex-col items-center justify-center text-center">
+                                            <TableCell className="px-2 py-2 text-center text-[11px] font-semibold whitespace-nowrap text-gray-800" title={order.orderNumber || order.id || '-'}>{order.orderNumber || order.id || '-'}</TableCell>
+                                            <TableCell className="px-2 py-2 text-center">
+                                                <div className="flex flex-col items-center justify-center text-center w-full min-w-0">
                                                     <div className="text-xs font-bold text-gray-900 leading-tight truncate max-w-full" title={order.customerName || 'Walk-In'}>{order.customerName || 'Walk-In'}</div>
                                                     {order.contactNumber && (
-                                                        <div className="text-[9.5px] text-gray-500 mt-0.5 whitespace-nowrap truncate max-w-full">{order.contactNumber}</div>
+                                                        <div className="text-[10px] text-gray-500 font-medium mt-0.5 whitespace-nowrap truncate max-w-full">{order.contactNumber}</div>
                                                     )}
                                                 </div>
                                             </TableCell>
-                                            <TableCell className="px-1.5 py-1.5 text-center text-[11px] font-semibold text-gray-800 whitespace-normal break-words">
+                                            <TableCell className="px-2 py-2 text-center text-[11px] font-semibold text-gray-800 whitespace-normal break-words">
                                                 {servicesList.length > 0 ? (
                                                     <div className="flex flex-col items-center justify-center text-center text-[10.5px] font-semibold text-gray-800 leading-tight" title={servicesList.join(', ')}>
                                                         {servicesList.slice(0, 3).map((srv, idx) => (
@@ -593,32 +634,19 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                                                     <span className="text-gray-400 italic font-normal text-center block">-</span>
                                                 )}
                                             </TableCell>
-                                            <TableCell className="px-1 py-1.5 text-center text-xs font-semibold text-gray-700 whitespace-nowrap">
+                                            <TableCell className="px-1 py-2 text-center text-xs font-semibold text-gray-700 whitespace-nowrap">
                                                 {order.quantity || 1} PR
                                             </TableCell>
-                                            <TableCell className="px-1.5 py-1.5 text-center text-xs font-medium text-gray-700 whitespace-nowrap">
+                                            <TableCell className="px-2 py-2 text-center text-xs font-medium text-gray-700 whitespace-nowrap">
                                                 {isNaN(orderDate.getTime()) ? '-' : (
                                                     <div className="inline-flex items-center justify-center gap-1">
-                                                        <CalendarIcon size={11} className="text-purple-600 shrink-0" />
+                                                        <CalendarIcon size={12} className="text-purple-600 shrink-0" />
                                                         <span>{dateFnsFormat(orderDate, 'MM/dd/yy')}</span>
                                                     </div>
                                                 )}
                                             </TableCell>
-                                            <TableCell className="px-1.5 py-1.5 text-center text-xs font-medium text-gray-700 whitespace-nowrap">
-                                                {(() => {
-                                                    if (!order.predictedCompletionDate) return <span className="text-gray-400">-</span>;
-                                                    const d = new Date(order.predictedCompletionDate);
-                                                    if (isNaN(d.getTime())) return <span className="text-gray-400">-</span>;
-                                                    return (
-                                                        <div className="inline-flex items-center justify-center gap-1">
-                                                            <CalendarIcon size={11} className="text-emerald-600 shrink-0" />
-                                                            <span>{dateFnsFormat(d, 'MM/dd/yy')}</span>
-                                                        </div>
-                                                    );
-                                                })()}
-                                            </TableCell>
-                                            <TableCell className="px-1 py-1.5 text-center whitespace-nowrap">
-                                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[8.5px] font-bold uppercase border whitespace-nowrap ${
+                                            <TableCell className="px-1 py-2 text-center whitespace-nowrap">
+                                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase border whitespace-nowrap ${
                                                     order.priorityLevel === 'rush'
                                                         ? 'bg-red-50 text-red-700 border-red-100'
                                                         : 'bg-emerald-50 text-emerald-700 border-emerald-100'
@@ -626,18 +654,18 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                                                     {order.priorityLevel === 'rush' ? 'Rush' : order.priorityLevel === 'regular' ? 'Regular' : (order.priorityLevel || 'Regular')}
                                                 </span>
                                             </TableCell>
-                                            <TableCell className="px-1.5 py-1.5 text-center whitespace-nowrap">
+                                            <TableCell className="px-2 py-2 text-center whitespace-nowrap">
                                                 {(() => {
                                                     const isCancelled = order.status === 'cancelled' || (order.status as string)?.toLowerCase() === 'cancelled' || (order.status as string)?.toLowerCase() === 'canceled';
                                                     if (isCancelled) {
                                                         return (
-                                                            <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[8.5px] font-bold uppercase border whitespace-nowrap bg-red-50 text-red-700 border-red-200">
+                                                            <span className="inline-flex items-center justify-center px-2 py-0.5 rounded text-[9px] font-bold uppercase border whitespace-nowrap bg-red-50 text-red-700 border-red-200">
                                                                 CANCELLED
                                                             </span>
                                                         );
                                                     }
                                                     return (
-                                                        <span className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[8.5px] font-bold uppercase border whitespace-nowrap ${
+                                                        <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded text-[9px] font-bold uppercase border whitespace-nowrap ${
                                                             order.status === 'new-order' ? 'bg-purple-50 text-purple-700 border-purple-200' :
                                                             order.status === 'on-going' ? 'bg-blue-50 text-blue-700 border-blue-200' :
                                                             order.status === 'for-release' ? 'bg-orange-50 text-orange-700 border-orange-200' :
@@ -649,7 +677,7 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                                                     );
                                                 })()}
                                             </TableCell>
-                                            <TableCell className="px-1.5 py-1.5 whitespace-nowrap">
+                                            <TableCell className="px-2 py-2 whitespace-nowrap">
                                                  <div className="flex flex-col items-center justify-center text-center">
                                                      {isCancelled ? (
                                                          order.refundStatus === 'refunded' ? (
@@ -657,7 +685,7 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                                                                  <span className="text-[10px] font-bold tracking-wider text-rose-600">
                                                                      REFUNDED
                                                                  </span>
-                                                                 <span className="text-[8.5px] text-rose-600 font-bold tracking-wider mt-0.5">
+                                                                 <span className="text-[9px] text-rose-600 font-medium tracking-wider mt-0.5">
                                                                      Refund: {formatPeso(Number(order.refundAmount || order.grandTotal || 0))}
                                                                  </span>
                                                              </>
@@ -666,7 +694,7 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                                                                  <span className="text-[10px] font-bold tracking-wider text-amber-700">
                                                                      NO REFUND
                                                                  </span>
-                                                                 <span className="text-[8.5px] text-amber-700 font-bold tracking-wider mt-0.5">
+                                                                 <span className="text-[9px] text-amber-700 font-medium tracking-wider mt-0.5">
                                                                      Retained: {formatPeso(Number(order.amountReceived || order.depositAmount || 0))}
                                                                  </span>
                                                              </>
@@ -681,11 +709,11 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                                                              </span>
                                                              {order.paymentMethod && (
                                                                  <>
-                                                                     <span className="text-[8px] text-gray-400 font-semibold uppercase tracking-wider mt-0.5">
+                                                                     <span className="text-[8.5px] text-gray-400 font-semibold uppercase tracking-wider mt-0.5">
                                                                          {order.paymentMethod}
                                                                      </span>
                                                                      {pStatus === 'downpayment' && (
-                                                                         <span className="text-[8.5px] text-red-500 font-bold tracking-wider mt-0.5">
+                                                                         <span className="text-[9px] text-red-500 font-bold tracking-wider mt-0.5">
                                                                              BAL: {formatPeso(order.balance !== undefined && order.balance !== null && !isNaN(Number(order.balance)) ? Math.max(0, Number(order.balance)) : Math.max(0, (Number(order.grandTotal) || 0) - (Number(order.depositAmount) || (Number(order.amountReceived) && Number(order.amountReceived) < Number(order.grandTotal) ? Number(order.amountReceived) : 0))))}
                                                                          </span>
                                                                      )}
@@ -695,10 +723,10 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                                                      )}
                                                  </div>
                                              </TableCell>
-                                             <TableCell className="px-1.5 py-1.5 text-right whitespace-nowrap">
+                                             <TableCell className="px-2 py-2 text-right whitespace-nowrap">
                                                   <span className="font-bold text-gray-900 text-xs">₱{(Number(order.grandTotal) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                               </TableCell>
-                                              <TableCell className="px-1 py-1.5 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                              <TableCell className="px-1 py-2 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                                   <DropdownMenu>
                                                       <DropdownMenuTrigger asChild>
                                                           <Button
@@ -710,16 +738,28 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                                                           </Button>
                                                       </DropdownMenuTrigger>
                                                       <DropdownMenuContent align="end" className="w-52 p-1.5 space-y-1">
-                                                          <DropdownMenuItem
-                                                              onClick={(e) => {
-                                                                  e.stopPropagation();
-                                                                  setViewingOrder(order);
-                                                              }}
-                                                              className="border border-blue-200 rounded-md px-2.5 py-1.5 text-blue-700 bg-blue-50 hover:bg-blue-100 focus:text-blue-800 focus:bg-blue-100 font-bold cursor-pointer"
-                                                          >
-                                                              <Eye className="h-4 w-4 mr-2 text-blue-600" />
-                                                              View Details
-                                                          </DropdownMenuItem>
+                                                           {isCancelled && (
+                                                               <DropdownMenuItem
+                                                                   onClick={(e) => {
+                                                                       e.stopPropagation();
+                                                                       const targetStage = order.cancellationStage || 'new-order';
+                                                                       updateOrder(order.id, {
+                                                                           status: targetStage as any,
+                                                                           cancellationStage: null as any,
+                                                                           refundStatus: null as any,
+                                                                           refundAmount: 0,
+                                                                           refundReason: null as any,
+                                                                           cancelledAt: null as any,
+                                                                           updatedAt: new Date()
+                                                                       }, user.username);
+                                                                       toast.success(`Order #${order.orderNumber} restored to ${targetStage.replace('-', ' ')}`);
+                                                                   }}
+                                                                   className="border border-purple-200 rounded-md px-2.5 py-1.5 text-purple-700 bg-purple-50 hover:bg-purple-100 focus:text-purple-800 focus:bg-purple-100 font-bold cursor-pointer"
+                                                               >
+                                                                   <RotateCcw className="h-4 w-4 mr-2 text-purple-600" />
+                                                                   Undo Cancel Order
+                                                               </DropdownMenuItem>
+                                                           )}
                                                           <DropdownMenuItem
                                                               onClick={(e) => {
                                                                   e.stopPropagation();
@@ -854,6 +894,7 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                                     <SelectItem value="all" className="text-xs focus:bg-red-50 focus:text-red-700">All Payment Status</SelectItem>
                                     <SelectItem value="fully-paid" className="text-xs hover:bg-red-50 focus:bg-red-50 focus:text-red-700">Fully Paid</SelectItem>
                                     <SelectItem value="downpayment" className="text-xs hover:bg-red-50 focus:bg-red-50 focus:text-red-700">Downpayment</SelectItem>
+                                    <SelectItem value="refunded" className="text-xs hover:bg-red-50 focus:bg-red-50 focus:text-red-700">Refunded</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>

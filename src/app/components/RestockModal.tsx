@@ -102,7 +102,7 @@ export default function RestockModal({ open, onOpenChange }: RestockModalProps) 
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-[520px] p-0 rounded-2xl border-0 shadow-2xl bg-white overflow-hidden flex flex-col max-h-[85vh]">
+            <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-[480px] p-0 rounded-2xl border-0 shadow-2xl bg-white overflow-hidden flex flex-col max-h-[85vh]">
                 <DialogHeader className="border-b border-gray-100 p-6 pb-4 shrink-0">
                     <div className="flex items-center gap-3">
                         <div className="w-full text-center">

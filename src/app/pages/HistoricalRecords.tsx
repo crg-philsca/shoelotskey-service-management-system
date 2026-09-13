@@ -1086,26 +1086,26 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
             </div>
           )}
           {/* Table */}
-          <div className="overflow-x-auto w-full">
-        <table className="w-full table-fixed min-w-[900px]">
+          <div className="overflow-x-auto w-full rounded-xl border border-gray-200 shadow-sm bg-white">
+        <table className="w-full table-fixed min-w-[1150px] text-xs">
           <colgroup>
-            <col className="w-[10%]" />
-            <col className="w-[14%]" />
-            <col className="w-[7%]" />
-            <col className="w-[9%]" />
-            <col className="w-[12%]" />
-            <col className="w-[8%]" />
-            <col className="w-[8%]" />
-            <col className="w-[8%]" />
+            <col className="w-[11%]" />
+            <col className="w-[13%]" />
             <col className="w-[6%]" />
+            <col className="w-[9%]" />
+            <col className="w-[11%]" />
+            <col className="w-[8%]" />
+            <col className="w-[9%]" />
+            <col className="w-[9%]" />
+            <col className="w-[7%]" />
             <col className="w-[8%]" />
             <col className="w-[4%]" />
-            <col className="w-[6%]" />
+            <col className="w-[5%]" />
           </colgroup>
           <thead>
-            <tr className="bg-red-50">
+            <tr className="bg-red-50/60 border-b border-red-100">
               {['Order ID','Customer','Priority','Shoes','Services','Order Date','Expected Date','Claimed Date','Total Days','Grand Total','View','Actions'].map(h => (
-                <th key={h} className="px-2 py-3 text-[10px] font-black uppercase text-gray-500 text-center whitespace-nowrap">{h}</th>
+                <th key={h} className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-gray-600 text-center whitespace-nowrap">{h}</th>
               ))}
             </tr>
           </thead>
@@ -1196,10 +1196,6 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
                         className="text-xs font-bold flex items-center gap-2 rounded-md px-2 py-1.5 text-gray-700">
                         <FileText className="h-3.5 w-3.5" />View Form Photo
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setViewRecord(r)}
-                        className="text-xs font-bold flex items-center gap-2 rounded-md px-2 py-1.5 text-gray-700">
-                        <Eye className="h-3.5 w-3.5" />View Details
-                      </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => setShoeDetailRecord(r)}
                         className="text-xs font-bold flex items-center gap-2 rounded-md px-2 py-1.5 text-gray-700">
                         <Package className="h-3.5 w-3.5" />Shoe Details
@@ -1260,7 +1256,7 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
       {/* View Dialog */}
       {viewRecord && (
         <Dialog open onOpenChange={() => setViewRecord(null)}>
-          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="font-black uppercase text-sm tracking-widest flex items-center gap-2">
                 <Archive className="h-4 w-4 text-red-600" />{viewRecord.order_id}

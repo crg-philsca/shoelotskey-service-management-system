@@ -312,9 +312,9 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
     });
   }, [orders, profitRange, customStartDate, customEndDate]);
 
-  // Use the range-filtered 'analyticsOrders' for Status Summary cards to respect date filters
+  // Use the global 'orders' for Status Summary cards so all active/cancelled orders are represented
   const statusCounts = useMemo(() => {
-    const all = analyticsOrders || [];
+    const all = orders || [];
     return {
       new: all.filter(o => o.status === 'new-order').length,
       ongoing: all.filter(o => o.status === 'on-going').length,
@@ -322,7 +322,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
       claimed: all.filter(o => o.status === 'claimed').length,
       cancelled: all.filter(o => o.status === 'cancelled' || (o.status as any) === 'canceled').length,
     };
-  }, [analyticsOrders]);
+  }, [orders]);
 
   /**
    * MEMO: overviewOrders
@@ -853,7 +853,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                 {/* Orders Table */}
                 <div>
                   {(() => {
-                    let filtered = (analyticsOrders || []).filter(order => order?.status === selectedStatus || (selectedStatus === 'cancelled' && (order?.status === 'cancelled' || (order?.status as any) === 'canceled')));
+                    let filtered = [...overviewOrders];
 
                     if (filterService !== 'all') {
                       filtered = filtered.filter(order => (order?.baseService || []).includes(filterService));
@@ -911,21 +911,33 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                     return (
                       <>
                         <div className="overflow-x-auto -mx-1 px-1 overflow-y-hidden no-scrollbar">
-                          <table className="w-full text-xs">
+                          <table className="w-full table-fixed text-xs">
+                            <colgroup>
+                               <col className="w-[11%]" />
+                               <col className="w-[13%]" />
+                               <col className="w-[13%]" />
+                               <col className="w-[5%]" />
+                               <col className="w-[10%]" />
+                               <col className="w-[12%]" />
+                               <col className="w-[9%]" />
+                               <col className="w-[12%]" />
+                               <col className="w-[8%]" />
+                               <col className="w-[7%]" />
+                            </colgroup>
                             <thead className="bg-red-50/50 border-b border-red-100">
                               <tr>
-                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap w-[110px]">Order #</th>
-                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap w-[140px]">Customer</th>
-                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] min-w-[140px]">Services</th>
-                                <th className="h-9 px-1.5 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap w-[50px]">QTY</th>
-                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap w-[90px]">Order Date</th>
-                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap w-[95px]">
+                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Order #</th>
+                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Customer</th>
+                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px]">Services</th>
+                                <th className="h-9 px-1 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">QTY</th>
+                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Order Date</th>
+                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">
                                   {selectedStatus === 'for-release' ? 'Release Date' : selectedStatus === 'claimed' ? 'Claimed Date' : selectedStatus === 'cancelled' ? 'Cancelled Date' : 'Estimated Date'}
                                 </th>
-                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap w-[75px]">Priority</th>
-                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap w-[130px]">Payment</th>
-                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap hidden md:table-cell w-[95px]">Total</th>
-                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap w-[60px]">Actions</th>
+                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Priority</th>
+                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Payment</th>
+                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Total</th>
+                                <th className="h-9 px-1 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Actions</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -961,16 +973,24 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                       setIsEditing(false);
                                     }}
                                   >
-                                    <td className="px-2 py-2.5 text-center text-[11px] font-semibold whitespace-nowrap text-gray-800 w-[110px]">{order.orderNumber || order.id || '-'}</td>
-                                    <td className="px-2 py-2.5 text-center w-[140px]">
-                                      <div className="flex flex-col items-center justify-center text-center">
-                                        <div className="text-xs font-bold text-gray-900 leading-tight max-w-[130px] truncate" title={order.customerName || 'Walk-In'}>{order.customerName || 'Walk-In'}</div>
+                                    <td className="px-1.5 py-2.5 text-center text-[11px] font-semibold text-gray-800 max-w-0">
+                                      <span className="block truncate w-full" title={order.orderNumber || String(order.id) || '-'}>
+                                        {order.orderNumber || order.id || '-'}
+                                      </span>
+                                    </td>
+                                    <td className="px-1.5 py-2.5 text-center max-w-0">
+                                      <div className="flex flex-col items-center justify-center text-center w-full min-w-0">
+                                        <div className="text-xs font-bold text-gray-900 leading-tight truncate w-full max-w-full" title={order.customerName || 'Walk-In'}>
+                                          {order.customerName || 'Walk-In'}
+                                        </div>
                                         {order.contactNumber && (
-                                          <div className="text-[10px] text-gray-500 mt-0.5 whitespace-nowrap">{order.contactNumber}</div>
+                                          <div className="text-[10px] text-gray-500 mt-0.5 truncate w-full max-w-full whitespace-nowrap" title={order.contactNumber}>
+                                            {order.contactNumber}
+                                          </div>
                                         )}
                                       </div>
                                     </td>
-                                    <td className="px-2 py-2 text-center text-[11px] font-semibold text-gray-800 min-w-[140px]">
+                                    <td className="px-1.5 py-2 text-center max-w-0">
                                       {(() => {
                                         const servicesList = (Array.isArray(order.baseService)
                                           ? order.baseService
@@ -980,9 +1000,9 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                           .map((s) => String(s || '').trim().replace(' (with basic cleaning)', ''))
                                           .filter(Boolean);
                                         return servicesList.length > 0 ? (
-                                          <div className="flex flex-col items-center justify-center text-center text-[11px] font-semibold text-gray-800 leading-snug" title={servicesList.join(', ')}>
+                                          <div className="flex flex-col items-center justify-center text-center text-[11px] font-semibold text-gray-800 leading-snug w-full min-w-0" title={servicesList.join(', ')}>
                                             {servicesList.slice(0, 3).map((srv, idx) => (
-                                              <span key={idx} className="block text-[11px] font-semibold text-gray-800 leading-tight">
+                                              <span key={idx} className="block text-[11px] font-semibold text-gray-800 leading-tight truncate w-full max-w-full">
                                                 {srv}{idx < servicesList.length - 1 ? ',' : ''}
                                               </span>
                                             ))}
@@ -992,29 +1012,31 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                         );
                                       })()}
                                     </td>
-                                    <td className="px-1.5 py-2.5 text-center text-xs font-semibold text-gray-700 whitespace-nowrap w-[50px]">{order.quantity || 1} PR</td>
-                                    <td className="px-2 py-2.5 text-center text-xs font-medium text-gray-700 whitespace-nowrap w-[90px]">
+                                    <td className="px-1 py-2.5 text-center text-xs font-semibold text-gray-700 whitespace-nowrap max-w-0">
+                                      <span className="block truncate">{order.quantity || 1} PR</span>
+                                    </td>
+                                    <td className="px-1.5 py-2.5 text-center text-xs font-medium text-gray-700 whitespace-nowrap max-w-0">
                                       {(() => {
                                         const d = new Date(order.createdAt);
                                         if (isNaN(d.getTime())) return '-';
                                         return (
-                                          <div className="inline-flex items-center justify-center gap-1">
+                                          <div className="inline-flex items-center justify-center gap-1 max-w-full">
                                             <CalendarIcon size={12} className="text-purple-600 shrink-0" />
-                                            <span>{dateFnsFormat(d, 'MM/dd/yy')}</span>
+                                            <span className="truncate">{dateFnsFormat(d, 'MM/dd/yy')}</span>
                                           </div>
                                         );
                                       })()}
                                     </td>
-                                    <td className="px-2 py-2.5 text-center text-xs font-medium text-gray-700 whitespace-nowrap w-[90px]">
+                                    <td className="px-1.5 py-2.5 text-center text-xs font-medium text-gray-700 whitespace-nowrap max-w-0">
                                         {(() => {
                                           if (selectedStatus === 'cancelled') {
                                             const cDate = order.cancelledAt || (order as any).updatedAt || order.createdAt;
                                             if (!cDate) return '-';
                                             const d = new Date(cDate);
                                             return (
-                                              <div className="inline-flex items-center justify-center gap-1">
+                                              <div className="inline-flex items-center justify-center gap-1 max-w-full">
                                                 <CalendarIcon size={12} className="text-rose-600 shrink-0" />
-                                                <span>{isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy')}</span>
+                                                <span className="truncate">{isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy')}</span>
                                               </div>
                                             );
                                           }
@@ -1024,12 +1046,12 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                             const d = new Date(claimDate);
                                             const formattedDate = isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy');
                                             return (
-                                              <div className="flex flex-col items-center">
-                                                <div className="inline-flex items-center justify-center gap-1">
+                                              <div className="flex flex-col items-center w-full min-w-0">
+                                                <div className="inline-flex items-center justify-center gap-1 max-w-full">
                                                   <CalendarIcon size={12} className="text-slate-500 shrink-0" />
-                                                  <span>{formattedDate}</span>
+                                                  <span className="truncate">{formattedDate}</span>
                                                 </div>
-                                                <span className="text-[10px] text-gray-400 font-medium tracking-wider mt-0.5 whitespace-nowrap truncate max-w-[120px]" title={order.claimedBy || order.customerName || '-'}>
+                                                <span className="text-[10px] text-gray-400 font-medium tracking-wider mt-0.5 whitespace-nowrap truncate w-full max-w-full" title={order.claimedBy || order.customerName || '-'}>
                                                   by {order.claimedBy || order.customerName || '-'}
                                                 </span>
                                               </div>
@@ -1043,9 +1065,9 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                             const d = new Date(released);
                                             if (isNaN(d.getTime())) return '-';
                                             return (
-                                              <div className="inline-flex items-center justify-center gap-1">
+                                              <div className="inline-flex items-center justify-center gap-1 max-w-full">
                                                 <CalendarIcon size={12} className="text-orange-600 shrink-0" />
-                                                <span>{dateFnsFormat(d, 'MM/dd/yy')}</span>
+                                                <span className="truncate">{dateFnsFormat(d, 'MM/dd/yy')}</span>
                                               </div>
                                             );
                                           }
@@ -1053,57 +1075,57 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                           const d = new Date(order.predictedCompletionDate);
                                           if (isNaN(d.getTime())) return '-';
                                           return (
-                                            <div className="inline-flex items-center justify-center gap-1">
+                                            <div className="inline-flex items-center justify-center gap-1 max-w-full">
                                               <CalendarIcon size={12} className="text-emerald-600 shrink-0" />
-                                              <span>{dateFnsFormat(d, 'MM/dd/yy')}</span>
+                                              <span className="truncate">{dateFnsFormat(d, 'MM/dd/yy')}</span>
                                             </div>
                                           );
                                         })()}
                                     </td>
-                                    <td className="px-2 py-2.5 text-center whitespace-nowrap w-[75px]">
-                                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase border whitespace-nowrap ${order.priorityLevel === 'rush'
+                                    <td className="px-1 py-2.5 text-center whitespace-nowrap max-w-0">
+                                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[8.5px] font-bold uppercase border whitespace-nowrap ${order.priorityLevel === 'rush'
                                         ? 'bg-red-50 text-red-700 border-red-100'
                                         : 'bg-emerald-50 text-emerald-700 border-emerald-100'
                                         }`}>
                                         {order.priorityLevel}
                                       </span>
                                     </td>
-                                    <td className="px-2 py-2.5 whitespace-nowrap w-[130px]">
-                                      <div className="flex flex-col items-center justify-center text-center">
+                                    <td className="px-1.5 py-2.5 whitespace-nowrap max-w-0">
+                                      <div className="flex flex-col items-center justify-center text-center w-full min-w-0">
                                         {isCancelledOrder(order) ? (
                                           order.refundStatus === 'refunded' ? (
                                             <>
-                                              <span className="text-[11px] font-bold text-rose-600 tracking-wider whitespace-nowrap">
+                                              <span className="text-[10px] font-bold text-rose-600 tracking-wider whitespace-nowrap truncate max-w-full">
                                                 REFUNDED
                                               </span>
-                                              <span className="text-[9px] text-rose-600 font-bold tracking-wider mt-0.5 whitespace-nowrap">
+                                              <span className="text-[8.5px] text-rose-600 font-bold tracking-wider mt-0.5 whitespace-nowrap truncate max-w-full">
                                                 Refund: {formatPeso(Number(order.refundAmount || order.grandTotal || 0))}
                                               </span>
                                             </>
                                           ) : (
                                             <>
-                                              <span className="text-[11px] font-bold text-amber-700 tracking-wider whitespace-nowrap">
+                                              <span className="text-[10px] font-bold text-amber-700 tracking-wider whitespace-nowrap truncate max-w-full">
                                                 NO REFUND
                                               </span>
-                                              <span className="text-[9px] text-amber-700 font-bold tracking-wider mt-0.5 whitespace-nowrap">
+                                              <span className="text-[8.5px] text-amber-700 font-bold tracking-wider mt-0.5 whitespace-nowrap truncate max-w-full">
                                                 Retained: {formatPeso(Number(order.amountReceived || order.depositAmount || 0))}
                                               </span>
                                             </>
                                           )
                                         ) : (
                                           <>
-                                            <span className={`text-[11px] font-bold tracking-wider whitespace-nowrap ${order.paymentStatus === 'fully-paid' ? 'text-green-600' :
+                                            <span className={`text-[10px] font-bold tracking-wider whitespace-nowrap truncate max-w-full ${order.paymentStatus === 'fully-paid' ? 'text-green-600' :
                                                 order.paymentStatus === 'downpayment' ? 'text-yellow-600' : 'text-red-600'
                                                 }`}>
                                                 {order.paymentStatus === 'fully-paid' ? 'FULLY PAID' : order.paymentStatus === 'downpayment' ? 'DOWNPAYMENT' : order.paymentStatus ? order.paymentStatus.toUpperCase() : '-'}
                                             </span>
                                             {order.paymentMethod && (
                                                 <>
-                                                    <span className="text-[9px] text-gray-400 font-medium uppercase tracking-wider mt-0.5 whitespace-nowrap">
+                                                    <span className="text-[8.5px] text-gray-400 font-medium uppercase tracking-wider mt-0.5 whitespace-nowrap truncate max-w-full">
                                                       {order.paymentMethod}
                                                     </span>
                                                       {order.paymentStatus === 'downpayment' && (
-                                                        <span className="text-[10px] text-red-500 font-medium tracking-wider mt-0.5 whitespace-nowrap">
+                                                        <span className="text-[9px] text-red-500 font-medium tracking-wider mt-0.5 whitespace-nowrap truncate max-w-full">
                                                           BAL: {formatPeso(order.balance !== undefined && order.balance !== null && !isNaN(Number(order.balance)) ? Math.max(0, Number(order.balance)) : Math.max(0, (order.grandTotal || 0) - (order.depositAmount || (order.amountReceived && order.amountReceived < order.grandTotal ? order.amountReceived : 0))))}
                                                         </span>
                                                       )}
@@ -1113,10 +1135,12 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                         )}
                                       </div>
                                     </td>
-                                    <td className="px-2 py-2.5 text-center font-medium text-gray-900 whitespace-nowrap hidden md:table-cell w-[95px]">
-                                      {'\u20B1'}{(order.grandTotal || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    <td className="px-1.5 py-2.5 text-center font-medium text-gray-900 whitespace-nowrap max-w-0">
+                                      <span className="text-xs font-bold block truncate">
+                                        {'\u20B1'}{(order.grandTotal || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                      </span>
                                     </td>
-                                    <td className="px-2 py-2.5 text-center whitespace-nowrap w-[60px]" onClick={(e) => e.stopPropagation()}>
+                                    <td className="px-1 py-2.5 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                       <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
                                           <Button variant="outline" className="h-7 w-7 p-0 border-red-200 text-red-700 bg-red-50 hover:bg-red-100 font-bold rounded-md inline-flex items-center justify-center" title="Actions">
@@ -1228,14 +1252,36 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                             </DropdownMenuItem>
                                           )}
                                           {(order.status === 'cancelled' || (order.status as any) === 'canceled') && (
-                                            <DropdownMenuItem onClick={(e) => {
-                                              e.stopPropagation();
-                                              if (order) setSelectedOrder({...order});
-                                              setIsEditing(false);
-                                            }} className="border border-gray-200 rounded-md px-2.5 py-1.5 text-gray-700 bg-gray-50 hover:bg-gray-100 focus:text-gray-800 focus:bg-gray-100 font-bold mb-1">
-                                              <FileText className="h-4 w-4 mr-2 text-gray-600" />
-                                              View Details
-                                            </DropdownMenuItem>
+                                            <>
+                                              <DropdownMenuItem
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  const targetStage = order.cancellationStage || 'new-order';
+                                                  updateOrder(order.id, {
+                                                    status: targetStage as any,
+                                                    cancellationStage: null as any,
+                                                    refundStatus: null as any,
+                                                    refundAmount: 0,
+                                                    refundReason: null as any,
+                                                    cancelledAt: null as any,
+                                                    updatedAt: new Date()
+                                                  }, user.username);
+                                                  toast.success(`Order #${order.orderNumber} restored to ${targetStage.replace('-', ' ')}`);
+                                                }}
+                                                className="border border-purple-200 rounded-md px-2.5 py-1.5 text-purple-600 bg-purple-50 hover:bg-purple-100 focus:text-purple-700 focus:bg-purple-100 font-bold mb-1 cursor-pointer"
+                                              >
+                                                <RotateCcw className="h-4 w-4 mr-2 text-purple-500" />
+                                                Undo Cancel Order
+                                              </DropdownMenuItem>
+                                              <DropdownMenuItem onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (order) setSelectedOrder({...order});
+                                                setIsEditing(false);
+                                              }} className="border border-gray-200 rounded-md px-2.5 py-1.5 text-gray-700 bg-gray-50 hover:bg-gray-100 focus:text-gray-800 focus:bg-gray-100 font-bold mb-1">
+                                                <FileText className="h-4 w-4 mr-2 text-gray-600" />
+                                                View Details
+                                              </DropdownMenuItem>
+                                            </>
                                           )}
                                         </DropdownMenuContent>
                                       </DropdownMenu>

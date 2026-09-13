@@ -64,6 +64,8 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                     updatedAt: new Date(o.updatedAt),
                     transactionDate: new Date(o.transactionDate || o.createdAt),
                     predictedCompletionDate: o.predictedCompletionDate ? new Date(o.predictedCompletionDate) : undefined,
+                    predictedAt: o.predictedAt ? new Date(o.predictedAt) : undefined,
+                    predictedDays: o.predictedDays != null ? Number(o.predictedDays) : undefined,
                     actualCompletionDate: o.actualCompletionDate ? new Date(o.actualCompletionDate) : undefined,
                     balance: o.balance != null && !isNaN(Number(o.balance))
                         ? Number(o.balance)
@@ -388,7 +390,10 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                     ).map((s: any) => s.service_name) || [],
                     addOns: bi.services?.filter((s: any) =>
                         (s.category?.category_name || s.category) === 'addon'
-                    ).map((s: any) => ({ name: s.service_name, quantity: 1 })) || []
+                    ).map((s: any) => ({ name: s.service_name, quantity: 1 })) || [],
+                    status: bi.status ? mapBackendStatus(bi.status) : undefined,
+                    actualReleaseDate: bi.released_at ? parseUTC(bi.released_at) : (bi.actualReleaseDate ? parseUTC(bi.actualReleaseDate) : undefined),
+                    actualCompletionDate: bi.claimed_at ? parseUTC(bi.claimed_at) : (bi.actualCompletionDate ? parseUTC(bi.actualCompletionDate) : undefined),
                 };
             }) || [],
 
@@ -819,6 +824,13 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                 refundStatus: updates.refundStatus,
                 refundAmount: updates.refundAmount,
                 refundReason: updates.refundReason,
+            } : {}),
+            ...(updates.status && updates.status !== 'cancelled' ? {
+                cancelledAt: null,
+                cancellationStage: null,
+                refundStatus: null,
+                refundAmount: 0,
+                refundReason: null,
             } : {}),
             ...(updates.status === 'on-going' || updates.status === 'new-order' ? {
                 actualReleaseDate: null,

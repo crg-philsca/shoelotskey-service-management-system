@@ -807,17 +807,17 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                         return (
                             <div key={sectionTitle} className="space-y-2 mb-4">
                                 <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 pb-1 block w-full">{sectionTitle}</span>
-                                <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm space-y-3">
+                                <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm space-y-3 min-w-0 overflow-hidden">
                                     {items.map(({ label, oldVal, newVal }) => (
-                                        <div key={label} className="flex flex-col gap-1 pb-2.5 border-b border-gray-100 last:border-0 last:pb-0">
+                                        <div key={label} className="flex flex-col gap-1 pb-2.5 border-b border-gray-100 last:border-0 last:pb-0 min-w-0">
                                             <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">{mapBusinessLabel(label)}</span>
-                                            <div className="flex flex-col gap-0.5 mt-0.5">
-                                                <span className="text-[13px] font-black text-rose-700/80 line-through decoration-rose-300 decoration-2">
+                                            <div className="flex flex-col gap-0.5 mt-0.5 min-w-0">
+                                                <span className="text-[13px] font-black text-rose-700/80 line-through decoration-rose-300 decoration-2 break-all break-words">
                                                     {mapBusinessValue(label, oldVal)}
                                                 </span>
-                                                <div className="flex items-center gap-2 text-[13px] font-black text-gray-900">
-                                                    <span className="text-gray-300">↳</span>
-                                                    <span className="text-emerald-700">{mapBusinessValue(label, newVal)}</span>
+                                                <div className="flex items-center gap-2 text-[13px] font-black text-gray-900 min-w-0">
+                                                    <span className="text-gray-300 shrink-0">↳</span>
+                                                    <span className="text-emerald-700 break-all break-words">{mapBusinessValue(label, newVal)}</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -1736,9 +1736,9 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
 
             {/* Audit Log Detail Modal */}
             <Dialog open={isLogModalOpen} onOpenChange={setIsLogModalOpen}>
-                <DialogContent className="max-w-[500px] bg-white rounded-[2rem] border-none shadow-2xl p-0 overflow-hidden">
+                <DialogContent className="max-w-[520px] bg-white rounded-2xl border-none shadow-2xl p-0 overflow-hidden flex flex-col max-h-[85vh]">
                     {/* Header - RED STORED THEME */}
-                    <div className="bg-[#D92D20] px-6 py-5 flex items-center justify-between">
+                    <div className="bg-[#D92D20] px-6 py-4 flex items-center justify-between shrink-0">
                         <div className="flex items-center gap-3 text-white">
                             <div className="p-1.5 bg-white/20 rounded-xl border border-white/20">
                                 {getActionIcon(selectedLog ? getBusinessActionTitle(selectedLog) : '')}
@@ -1753,94 +1753,105 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                     </div>
 
                     {selectedLog && (
-                        <div className="p-5 space-y-5 max-h-[75vh] overflow-y-auto custom-scrollbar">
-                            {/* Summary Banner */}
-                            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-3">
-                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block border-b border-slate-200 pb-2">Activity Summary</span>
-                                <div className="grid grid-cols-2 gap-4 mt-1">
-                                    <div className="flex flex-col gap-1">
-                                        <span className="font-extrabold text-slate-400 uppercase text-[9px] tracking-widest">Performed By</span>
-                                        <span className="text-[13px] font-bold text-slate-800 leading-tight">
-                                            <span className="text-red-600 font-black">{selectedLog.user}</span> <span className="text-slate-500 font-medium">({(selectedLog.role || (selectedLog.user.toLowerCase() === 'owner' ? 'owner' : 'staff')).replace(/^\w/, (c) => c.toUpperCase())})</span>
-                                        </span>
+                        <>
+                            <div className="p-5 space-y-4 overflow-y-auto custom-scrollbar flex-1 min-h-0">
+                                {/* Summary Banner */}
+                                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-3 min-w-0">
+                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block border-b border-slate-200 pb-2">Activity Summary</span>
+                                    <div className="grid grid-cols-2 gap-4 mt-1">
+                                        <div className="flex flex-col gap-1 min-w-0">
+                                            <span className="font-extrabold text-slate-400 uppercase text-[9px] tracking-widest">Performed By</span>
+                                            <span className="text-[13px] font-bold text-slate-800 leading-tight truncate">
+                                                <span className="text-red-600 font-black">{selectedLog.user}</span> <span className="text-slate-500 font-medium">({(selectedLog.role || (selectedLog.user.toLowerCase() === 'owner' ? 'owner' : 'staff')).replace(/^\w/, (c) => c.toUpperCase())})</span>
+                                            </span>
+                                        </div>
+                                        <div className="flex flex-col gap-1 min-w-0">
+                                            <span className="font-extrabold text-slate-400 uppercase text-[9px] tracking-widest">Date & Time</span>
+                                            <span className="text-[13px] font-bold text-slate-800 leading-tight">
+                                                {selectedLog.timestamp}
+                                            </span>
+                                        </div>
+                                        <div className="flex flex-col gap-1 mt-2 border-t border-slate-100 pt-3 min-w-0">
+                                            <span className="font-extrabold text-slate-400 uppercase text-[9px] tracking-widest">Action</span>
+                                            <span className="text-[13px] font-black text-slate-800 leading-tight">
+                                                {getBusinessActionTitle(selectedLog)}
+                                            </span>
+                                        </div>
+                                        <div className="flex flex-col gap-1 mt-2 border-t border-slate-100 pt-3 min-w-0">
+                                            <span className="font-extrabold text-slate-400 uppercase text-[9px] tracking-widest">Affected Record</span>
+                                            <span className="text-[13px] font-black text-slate-800 leading-tight break-all break-words">
+                                                {getAffectedRecordLabel(selectedLog)}
+                                            </span>
+                                        </div>
                                     </div>
-                                    <div className="flex flex-col gap-1">
-                                        <span className="font-extrabold text-slate-400 uppercase text-[9px] tracking-widest">Date & Time</span>
-                                        <span className="text-[13px] font-bold text-slate-800 leading-tight">
-                                            {selectedLog.timestamp}
-                                        </span>
-                                    </div>
-                                    <div className="flex flex-col gap-1 mt-2 border-t border-slate-100 pt-3">
-                                        <span className="font-extrabold text-slate-400 uppercase text-[9px] tracking-widest">Action</span>
-                                        <span className="text-[13px] font-black text-slate-800 leading-tight">
-                                            {getBusinessActionTitle(selectedLog)}
-                                        </span>
-                                    </div>
-                                    <div className="flex flex-col gap-1 mt-2 border-t border-slate-100 pt-3">
-                                        <span className="font-extrabold text-slate-400 uppercase text-[9px] tracking-widest">Affected Record</span>
-                                        <span className="text-[13px] font-black text-slate-800 leading-tight">
-                                            {getAffectedRecordLabel(selectedLog)}
-                                        </span>
-                                    </div>
+
+                                    {/* Activity Details & Notes INSIDE View Activity History Logs Modal */}
+                                    {(() => {
+                                        const rawDetails = selectedLog.details || 
+                                            (selectedLog.newValues && typeof selectedLog.newValues === 'object' && selectedLog.newValues.details) || 
+                                            (selectedLog.oldValues && typeof selectedLog.oldValues === 'object' && selectedLog.oldValues.details) || '';
+                                        if (!rawDetails) return null;
+                                        return (
+                                            <div className="mt-1 pt-3 border-t border-slate-200 flex flex-col gap-1.5 min-w-0">
+                                                <span className="font-extrabold text-slate-500 uppercase text-[9px] tracking-widest flex items-center gap-1.5">
+                                                    <FileText size={12} className="text-red-500" /> Activity Details & Notes
+                                                </span>
+                                                <div className="p-3 bg-white rounded-lg border border-slate-200 text-xs font-semibold text-slate-800 leading-relaxed shadow-2xs break-all break-words">
+                                                    {String(rawDetails)}
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
 
-                                {/* Activity Details & Notes INSIDE View Activity History Logs Modal */}
-                                {(() => {
-                                    const rawDetails = selectedLog.details || 
-                                        (selectedLog.newValues && typeof selectedLog.newValues === 'object' && selectedLog.newValues.details) || 
-                                        (selectedLog.oldValues && typeof selectedLog.oldValues === 'object' && selectedLog.oldValues.details) || '';
-                                    if (!rawDetails) return null;
-                                    return (
-                                        <div className="mt-1 pt-3 border-t border-slate-200 flex flex-col gap-1.5">
-                                            <span className="font-extrabold text-slate-500 uppercase text-[9px] tracking-widest flex items-center gap-1.5">
-                                                <FileText size={12} className="text-red-500" /> Activity Details & Notes
+                                {/* Changes Section */}
+                                {renderBusinessLayout(selectedLog)}
+
+                                {/* Technical Information Collapsible */}
+                                <div className="pt-2">
+                                    <details className="group [&_summary::-webkit-details-marker]:hidden bg-gray-50 rounded-xl border border-gray-100">
+                                        <summary className="flex items-center gap-2 px-4 py-3 cursor-pointer text-[10px] font-black text-gray-500 uppercase tracking-widest hover:text-gray-700 transition-colors">
+                                            <span className="transition group-open:rotate-90">
+                                                <ChevronRight className="w-3.5 h-3.5" />
                                             </span>
-                                            <div className="p-3 bg-white rounded-lg border border-slate-200 text-xs font-semibold text-slate-800 leading-relaxed shadow-2xs">
-                                                {String(rawDetails)}
+                                            Technical Information (For IT Auditors)
+                                        </summary>
+                                        <div className="px-4 pb-4 pt-1 space-y-2 border-t border-gray-100">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-[9px] font-extrabold text-gray-400 uppercase">Target Table</span>
+                                                <span className="text-[10px] font-bold text-gray-800">{selectedLog.table || 'System'}</span>
                                             </div>
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-[9px] font-extrabold text-gray-400 uppercase">Reference ID</span>
+                                                <span className="text-[10px] font-bold text-gray-800 break-all">{selectedLog.recordId || selectedLog.id || 'N/A'}</span>
+                                            </div>
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-[9px] font-extrabold text-gray-400 uppercase">Audit ID</span>
+                                                <span className="text-[10px] font-bold text-gray-800">{selectedLog.id}</span>
+                                            </div>
+                                            {selectedLog.details &&
+                                             !selectedLog.details.includes('Updated item') &&
+                                             !selectedLog.details.includes('Restocked') &&
+                                             !/logged (in|out)|signed (in|out)|password|session timed|server error/i.test(selectedLog.details) && (
+                                                <div className="pt-2 border-t border-gray-200/50 mt-2">
+                                                    <span className="text-[9px] font-extrabold text-gray-400 uppercase block mb-1">Raw Trace</span>
+                                                    <span className="text-[10px] font-medium text-gray-600 block leading-tight break-all break-words">{selectedLog.details}</span>
+                                                </div>
+                                            )}
                                         </div>
-                                    );
-                                })()}
+                                    </details>
+                                </div>
                             </div>
 
-                            {/* Changes Section */}
-                            {renderBusinessLayout(selectedLog)}
-
-                            {/* Technical Information Collapsible */}
-                            <div className="pt-2">
-                                <details className="group [&_summary::-webkit-details-marker]:hidden bg-gray-50 rounded-xl border border-gray-100">
-                                    <summary className="flex items-center gap-2 px-4 py-3 cursor-pointer text-[10px] font-black text-gray-500 uppercase tracking-widest hover:text-gray-700 transition-colors">
-                                        <span className="transition group-open:rotate-90">
-                                            <ChevronRight className="w-3.5 h-3.5" />
-                                        </span>
-                                        Technical Information (For IT Auditors)
-                                    </summary>
-                                    <div className="px-4 pb-4 pt-1 space-y-2 border-t border-gray-100">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-[9px] font-extrabold text-gray-400 uppercase">Target Table</span>
-                                            <span className="text-[10px] font-bold text-gray-800">{selectedLog.table || 'System'}</span>
-                                        </div>
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-[9px] font-extrabold text-gray-400 uppercase">Reference ID</span>
-                                            <span className="text-[10px] font-bold text-gray-800">{selectedLog.recordId || selectedLog.id || 'N/A'}</span>
-                                        </div>
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-[9px] font-extrabold text-gray-400 uppercase">Audit ID</span>
-                                            <span className="text-[10px] font-bold text-gray-800">{selectedLog.id}</span>
-                                        </div>
-                                        {selectedLog.details &&
-                                         !selectedLog.details.includes('Updated item') &&
-                                         !selectedLog.details.includes('Restocked') &&
-                                         !/logged (in|out)|signed (in|out)|password|session timed|server error/i.test(selectedLog.details) && (
-                                            <div className="pt-2 border-t border-gray-200/50 mt-2">
-                                                <span className="text-[9px] font-extrabold text-gray-400 uppercase block mb-1">Raw Trace</span>
-                                                <span className="text-[10px] font-medium text-gray-600 block leading-tight">{selectedLog.details}</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                </details>
+                            <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex justify-end shrink-0">
+                                <Button
+                                    onClick={() => setIsLogModalOpen(false)}
+                                    className="h-8 px-4 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs uppercase tracking-wider rounded-lg transition-all"
+                                >
+                                    Close
+                                </Button>
                             </div>
-                        </div>
+                        </>
                     )}
                 </DialogContent>
             </Dialog>

@@ -77,23 +77,23 @@ DB_UNAVAILABLE = False
 
 try:
     if PG_URL:
-        # 1. Fast Offline Check: Check TCP reachability within 3.5s so offline boot at school is fast while allowing normal US-East network latency
+        # 1. Fast Offline Check: Check TCP reachability within 8.0s so offline boot at school is fast while allowing normal US-East network latency
         import socket
         try:
             parsed_url = urllib.parse.urlparse(PG_URL)
             host = parsed_url.hostname
             port = parsed_url.port or 5432
             if host:
-                sock = socket.create_connection((host, port), timeout=3.5)
+                sock = socket.create_connection((host, port), timeout=8.0)
                 sock.close()
         except Exception as sock_err:
-            raise RuntimeError(f"Network offline or server unreachable in 3.5s ({sock_err}). Switching directly to offline fallback.")
+            raise RuntimeError(f"Network offline or server unreachable in 8.0s ({sock_err}). Switching directly to offline fallback.")
 
         from sqlalchemy.pool import NullPool
         primary_engine = create_engine(
             PG_URL, 
             connect_args={
-                "connect_timeout": 5,
+                "connect_timeout": 15,
                 "keepalives": 1,
                 "keepalives_idle": 30,
                 "keepalives_interval": 10,

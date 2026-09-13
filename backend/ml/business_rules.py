@@ -195,8 +195,8 @@ def calculate_official_release_days(order_data: dict, duration_map: Optional[Dic
             for s in services_arr
         )
         filtered = [s for s in services_arr if (s or "").strip() != "Basic Cleaning"] if has_duration_inclusive else services_arr
-        has_full_reglue_base = any(
-            "full reglue" in (s or "").lower()
+        has_reglue_base = any(
+            "reglue" in (s or "").lower()
             for s in services_arr
         )
         pair_base_days = 0
@@ -216,10 +216,10 @@ def calculate_official_release_days(order_data: dict, duration_map: Optional[Dic
                 or ("reglue" in lowered_addon and ("midsole" in lowered_addon or "undersole" in lowered_addon))
             )
             if is_reglue_part:
-                if has_full_reglue_base:
+                if has_reglue_base:
                     continue
                 if not reglue_addon_accounted:
-                    pair_days += official_service_days(cleaned_addon, duration_map)
+                    pair_days = max(pair_days, official_service_days(cleaned_addon, duration_map))
                     reglue_addon_accounted = True
                 continue
             pair_days += official_service_days(cleaned_addon, duration_map) * int(qty or 1)

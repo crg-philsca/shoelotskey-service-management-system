@@ -80,6 +80,10 @@ export function isSalesEligible(order: JobOrder): boolean {
 }
 
 export function orderEventDate(order: JobOrder): Date {
+  if (isCancelledOrder(order) && order?.cancelledAt) {
+    const c = new Date(order.cancelledAt as any);
+    if (!isNaN(c.getTime())) return c;
+  }
   const raw = order?.transactionDate || order?.createdAt;
   return raw ? new Date(raw as any) : new Date(NaN);
 }

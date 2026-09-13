@@ -117,14 +117,14 @@ export default function ServiceManagement({ onSetHeaderActionRight, user }: Serv
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
+        <div className="flex flex-col justify-between gap-4 h-full">
           <Card className="border-none shadow-md">
             <CardHeader className="pt-3 pb-0 px-4">
               <CardTitle className="text-base font-black text-gray-900 uppercase">Base Services</CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
-              <div className="max-h-[300px] overflow-y-auto pr-1 custom-scrollbar -mt-2">
+              <div className="max-h-[390px] overflow-y-auto pr-1 custom-scrollbar -mt-2">
                 <Reorder.Group axis="y" values={localBase} onReorder={(newOrder) => handleReorder('base', newOrder)} className="space-y-3 list-none p-0">
                   {localBase.map(service => (
                     <Reorder.Item 

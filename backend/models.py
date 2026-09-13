@@ -263,6 +263,9 @@ class Item(Base):
     quantity = Column(Integer, default=1)
     item_notes = Column(Text, nullable=True)
     inventory_used = Column(JSON, nullable=True)
+    status = Column(String(30), nullable=True)
+    released_at = Column(TIMESTAMP, nullable=True)
+    claimed_at = Column(TIMESTAMP, nullable=True)
     
     order = relationship("Order", back_populates="items")
     services = relationship("Service", secondary="item_service_mapping")

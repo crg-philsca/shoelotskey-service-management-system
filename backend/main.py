@@ -14,6 +14,8 @@ import re
 import requests
 import shutil
 from decimal import Decimal
+import time
+
 
 def auto_organize_workspace():
     try:
@@ -577,13 +579,7 @@ if _IS_PRODUCTION:
 # Look in the same directory as main.py for the 'templates' folder
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
 
-# --- AUTOMATIC TABLE GEN (OWASP A03: Integrity Verification) ---
-try:
-    print("[INIT] Syncing Database Schema...")
-    Base.metadata.create_all(bind=engine)
-    print("[INIT] Database Schema OK.")
-except Exception as e:
-    print(f"[INIT] DB ERROR: {e}")
+# Note: Schema migration and table sync are cleanly handled in @app.on_event("startup") startup_sequence().
 
 @app.exception_handler(404)
 async def not_found_exception_handler(request: Request, exc: Exception):
@@ -785,10 +781,33 @@ def startup_sequence():
     DB_TYPE = "SQLite" if is_sqlite else "PostgreSQL"
 
     # 2. Schema Verification & Creation (Active Engine)
-    Base.metadata.create_all(bind=engine)
-    print(f"[DATABASE] Operating in Mode: {'OFFLINE (Local SQLite)' if is_sqlite else 'ONLINE (Cloud PostgreSQL)'}")
-    inspector = inspect(engine)
-    existing_tables = set(inspector.get_table_names())
+    try:
+        Base.metadata.create_all(bind=engine)
+        print(f"[DATABASE] Operating in Mode: {'OFFLINE (Local SQLite)' if is_sqlite else 'ONLINE (Cloud PostgreSQL)'}")
+        inspector = inspect(engine)
+        existing_tables = set(inspector.get_table_names())
+    except Exception as init_err:
+        print(f"[DATABASE] Notice during schema verification: {init_err}")
+        if not is_sqlite and ENV != "Production":
+            print("[DATABASE] Auto-switching to SQLite due to schema verification failure.")
+            if hasattr(db_mod, "switch_to_offline_sqlite"):
+                db_mod.switch_to_offline_sqlite()
+            else:
+                from sqlalchemy.orm import sessionmaker
+                db_mod.is_sqlite = True
+                db_mod.DATABASE_URL = LOCAL_SQLITE
+                db_mod.engine = create_engine(LOCAL_SQLITE, connect_args={"check_same_thread": False})
+                db_mod.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=db_mod.engine)
+            engine = db_mod.engine
+            is_sqlite = db_mod.is_sqlite
+            SessionLocal = db_mod.SessionLocal
+            DATABASE_URL = db_mod.DATABASE_URL
+            DB_TYPE = "SQLite"
+            Base.metadata.create_all(bind=engine)
+            inspector = inspect(engine)
+            existing_tables = set(inspector.get_table_names())
+        else:
+            existing_tables = set()
     
     # 2. Dialect-Safe Migrations (Isolated for resilience)
     # User Table: Reset Tokens
@@ -1153,6 +1172,23 @@ def startup_sequence():
                                 print(f">>> Migration ({engine_label}): Added orders.{col_name}")
                             except Exception as c_err:
                                 print(f">>> Migration Notice (orders.{col_name} on {engine_label}): {c_err}")
+
+                # items individual status, release and claimed dates
+                if "items" in tbl_names:
+                    item_cols = [c['name'] for c in feat_inspector.get_columns("items")]
+                    for col_name, pg_t, sq_t in [
+                        ("status",       "VARCHAR(30)", "VARCHAR(30)"),
+                        ("released_at",  "TIMESTAMP", "TIMESTAMP"),
+                        ("claimed_at",   "TIMESTAMP", "TIMESTAMP"),
+                    ]:
+                        if col_name not in item_cols:
+                            col_type = pg_t if is_pg else sq_t
+                            try:
+                                with sync_engine.begin() as col_conn:
+                                    col_conn.execute(text(f"ALTER TABLE items ADD COLUMN {col_name} {col_type}"))
+                                print(f">>> Migration ({engine_label}): Added items.{col_name}")
+                            except Exception as c_err:
+                                print(f">>> Migration Notice (items.{col_name} on {engine_label}): {c_err}")
             except Exception as feat_mig_err:
                 print(f">>> Feature Migration Notice on {engine_label}: {feat_mig_err}")
     except Exception as al_outer_err:
@@ -1289,11 +1325,11 @@ def seed_lookups(db: Session):
         db.add_all([Condition(condition_name=c) for c in ['Scratches', 'Yellowing', 'Rips/Holes', 'Deep Stains', 'Sole Separation', 'Worn Out']])
         db.commit()
 
-    # Seed Payment Methods — must match frontend: 'cash', 'gcash', 'bank-transfer'
-    if db.query(PaymentMethod).count() == 0:
-        print(">>> Seeding Payment Methods...")
-        db.add_all([PaymentMethod(method_name=m) for m in ['cash', 'gcash', 'bank-transfer']])
-        db.commit()
+    # Seed Payment Methods — must match frontend: 'cash', 'gcash', 'maya', 'bank-transfer'
+    for m in ['cash', 'gcash', 'maya', 'bank-transfer']:
+        if not db.query(PaymentMethod).filter(PaymentMethod.method_name == m).first():
+            db.add(PaymentMethod(method_name=m))
+    db.commit()
 
     # Seed Payment Statuses — must match frontend: 'fully-paid', 'downpayment', 'unpaid'
     if db.query(PaymentStatus).count() == 0:
@@ -2639,6 +2675,7 @@ def get_prediction(
     always the business-rule result. Authenticated staff only.
     """
     import json
+    import time
     memo_key = None
     try:
         memo_key = json.dumps(order_data, sort_keys=True)
@@ -2681,21 +2718,20 @@ def get_prediction(
         import traceback
         print(f"[ML ERROR] Prediction exception: {e}")
         traceback.print_exc()
-        fallback = datetime.now() + timedelta(days=10)
         return {
             "authoritative": "business_rule",
-            "business_rule_days": 10,
-            "business_rule_date": fallback.strftime("%Y-%m-%d"),
+            "business_rule_days": 0,
+            "business_rule_date": None,
             "ml_predicted_days": None,
             "ml_predicted_date": None,
             "ml_model": "Random Forest Regression",
             "ml_status": "unavailable",
             "ml_source": "random_forest",
             "ml_reason": "ML estimation pipeline temporarily unavailable",
-            "predicted_date": fallback.isoformat(),
-            "predicted_date_ymd": fallback.strftime("%Y-%m-%d"),
-            "predicted_days": 10,
-            "status": "fallback",
+            "predicted_date": None,
+            "predicted_date_ymd": None,
+            "predicted_days": None,
+            "status": "error",
             "error": "ML estimation pipeline temporarily unavailable",
             "source": "error_fallback",
             "fallback_reason": "ML estimation pipeline temporarily unavailable",
@@ -3433,9 +3469,10 @@ def update_order(order_id: str, updates: Dict[str, Any], db: Session = Depends(g
                     
                     for item in auto_items:
                         # Check if already deducted for this order to prevent duplicate deductions
+                        int_oid = int(order_id) if str(order_id).isdigit() else getattr(db_order, "order_id", None)
                         existing_log = db.query(InventoryLog).filter(
                             InventoryLog.item_id == item.item_id,
-                            InventoryLog.order_id == order_id,
+                            InventoryLog.order_id == int_oid,
                             InventoryLog.action_type == "deduction"
                         ).first()
                         
@@ -3545,6 +3582,13 @@ def update_order(order_id: str, updates: Dict[str, Any], db: Session = Depends(g
                 db_order.released_at = prev_release.changed_at if prev_release else (db_order.claimed_at or datetime.now())
         else:
             db_order.released_at = None
+
+        if mapped_status != "cancelled":
+            db_order.cancelled_at = None
+            db_order.cancellation_stage = None
+            db_order.refund_status = None
+            db_order.refund_amount = Decimal('0.0')
+            db_order.refund_reason = None
 
     # 2. Handle Priority Level (ML Input)
     if "priorityLevel" in updates:
@@ -3866,6 +3910,13 @@ def update_order(order_id: str, updates: Dict[str, Any], db: Session = Depends(g
                     item_data.get("shoeSize") or item_data.get("size"),
                 )
             if "quantity" in item_data: db_item.quantity = item_data["quantity"]
+            if "status" in item_data: db_item.status = item_data["status"]
+            if "released_at" in item_data or "actualReleaseDate" in item_data:
+                raw_rd = item_data.get("released_at") or item_data.get("actualReleaseDate")
+                db_item.released_at = parse_local_date(str(raw_rd)) if raw_rd else None
+            if "claimed_at" in item_data or "actualCompletionDate" in item_data:
+                raw_cd = item_data.get("claimed_at") or item_data.get("actualCompletionDate")
+                db_item.claimed_at = parse_local_date(str(raw_cd)) if raw_cd else None
             if "condition" in item_data and isinstance(item_data["condition"], dict) and "others" in item_data["condition"]:
                 db_item.item_notes = item_data["condition"]["others"]
 
@@ -3958,7 +4009,9 @@ def delete_order(order_id: int, db: Session = Depends(get_db), current_user: Use
     # Detach any InventoryLog rows referencing this order (preserve inventory audit
     # history rather than deleting it — see business rule: preserve audit logs).
     try:
-        db.query(InventoryLog).filter(InventoryLog.order_id == order_id).update({"order_id": None}, synchronize_session=False)
+        int_oid = int(order_id) if str(order_id).isdigit() else getattr(db_order, "order_id", None)
+        if int_oid is not None:
+            db.query(InventoryLog).filter(InventoryLog.order_id == int_oid).update({"order_id": None}, synchronize_session=False)
     except Exception as cascade_err:
         print(f"[CASCADE WARNING] InventoryLog detach warning during delete: {cascade_err}")
 

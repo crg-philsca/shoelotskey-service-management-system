@@ -442,7 +442,7 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent showCloseButton={false} className="w-[calc(100vw-1.5rem)] sm:max-w-3xl max-h-[90vh] flex flex-col overflow-hidden bg-[#F8F9FA] p-0 gap-0 rounded-2xl border border-gray-200 shadow-2xl">
+            <DialogContent showCloseButton={false} className="w-[calc(100vw-1.5rem)] sm:max-w-[580px] max-h-[90vh] flex flex-col overflow-hidden bg-[#F8F9FA] p-0 gap-0 rounded-2xl border border-gray-200 shadow-2xl">
                 <DialogTitle className="sr-only">Edit Order {order.orderNumber}</DialogTitle>
                 <DialogDescription className="sr-only">Form to update order information and services</DialogDescription>
                 

@@ -172,6 +172,9 @@ class ItemSchema(BaseModel):
     quantity: int = 1
     item_notes: Optional[str] = None
     inventory_used: Optional[Any] = None
+    status: Optional[str] = None
+    released_at: Optional[datetime] = None
+    claimed_at: Optional[datetime] = None
     
     services: List[ServiceSchema] = []
     service_mappings: List[ItemServiceMappingSchema] = []

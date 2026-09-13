@@ -418,7 +418,19 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
         <CardContent className="pt-0 pb-0 mb-0 -mt-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
             {/* Net Sales */}
-            <Card className="border-none shadow-md bg-white overflow-hidden relative group">
+            <Card 
+              role="button"
+              tabIndex={0}
+              aria-label="View Net Sales details in Total Sales"
+              className="border-none shadow-md bg-white overflow-hidden relative group cursor-pointer hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+              onClick={() => navigate('/total-sales', { state: { dateRange, customStartDate, customEndDate, cardFilter: 'net-sales' } })}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  navigate('/total-sales', { state: { dateRange, customStartDate, customEndDate, cardFilter: 'net-sales' } });
+                }
+              }}
+            >
               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                 <TrendingUp size={48} className="text-emerald-600" />
               </div>
@@ -431,7 +443,19 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
             </Card>
 
             {/* Balance Due */}
-            <Card className="border-none shadow-md bg-white overflow-hidden relative group">
+            <Card 
+              role="button"
+              tabIndex={0}
+              aria-label="View Balance Due details in Total Sales"
+              className="border-none shadow-md bg-white overflow-hidden relative group cursor-pointer hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-red-500 transition-all"
+              onClick={() => navigate('/total-sales', { state: { dateRange, customStartDate, customEndDate, cardFilter: 'balance-due' } })}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  navigate('/total-sales', { state: { dateRange, customStartDate, customEndDate, cardFilter: 'balance-due' } });
+                }
+              }}
+            >
               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                 <CircleAlert size={48} className="text-red-600" />
               </div>
@@ -642,49 +666,49 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
               {/* Col 1 */}
               <div className="space-y-1">
                 <div className="flex justify-between">
-                  <span className="text-gray-600 font-medium">Total Sales:</span>
+                  <span className="text-gray-600 font-normal">Total Sales:</span>
                   <span className="font-black text-gray-900">{formatPeso(totalSalesAmount)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600 font-medium">Refunds Issued:</span>
+                  <span className="text-gray-600 font-normal">Refunds Issued:</span>
                   <span className="font-black text-gray-900">{formatPeso(totalRefundsAmount)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-900 font-bold">Net Sales:</span>
+                  <span className="text-gray-600 font-normal">Net Sales:</span>
                   <span className="font-black text-gray-900">{formatPeso(netSalesAmount)}</span>
                 </div>
                 {totalRetainedDepositsAmount > 0 && (
                   <div className="flex justify-between">
-                    <span className="text-gray-600 font-medium">Retained Deposits:</span>
+                    <span className="text-gray-600 font-normal">Retained Deposits:</span>
                     <span className="font-black text-gray-900">{formatPeso(totalRetainedDepositsAmount)}</span>
                   </div>
                 )}
                 <div className="flex justify-between">
-                  <span className="text-gray-600 font-medium">Total Orders:</span>
-                  <span className="font-bold text-gray-800">{totalOrdersCount}</span>
+                  <span className="text-gray-600 font-normal">Total Orders:</span>
+                  <span className="font-black text-gray-800">{totalOrdersCount}</span>
                 </div>
               </div>
 
               {/* Col 2 */}
               <div className="space-y-1">
                 <div className="flex justify-between">
-                  <span className="text-gray-600 font-medium">Payments Received:</span>
+                  <span className="text-gray-600 font-normal">Payments Received:</span>
                   <span className="font-black text-gray-900">{formatPeso(totalPaymentsReceived)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600 font-medium">Balance Due:</span>
+                  <span className="text-gray-600 font-normal">Balance Due:</span>
                   <span className="font-black text-gray-900">{formatPeso(totalBalanceDue)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600 font-medium">Total Expenses:</span>
+                  <span className="text-gray-600 font-normal">Total Expenses:</span>
                   <span className="font-black text-gray-900">{formatPeso(totalExpensesAmount)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-900 font-bold">Net Profit:</span>
+                  <span className="text-gray-600 font-normal">Net Profit:</span>
                   <span className="font-black text-gray-900">{formatPeso(profit)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-900 font-bold">Return on Investment (ROI):</span>
+                  <span className="text-gray-600 font-normal">Return on Investment (ROI):</span>
                   <span className="font-black text-gray-900">{roiSummary.display}</span>
                 </div>
               </div>
@@ -695,16 +719,26 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
           <div className="mb-2">
             <h3 className="text-[10px] font-black uppercase tracking-wider text-red-600 mb-2">Sales Records</h3>
             <table className="w-full border-collapse border border-gray-200 text-[9px]">
+              <colgroup>
+                <col style={{width:'15%'}} />
+                <col style={{width:'11%'}} />
+                <col style={{width:'18%'}} />
+                <col style={{width:'20%'}} />
+                <col style={{width:'8%'}} />
+                <col style={{width:'9%'}} />
+                <col style={{width:'9%'}} />
+                <col style={{width:'10%'}} />
+              </colgroup>
               <thead>
                 <tr className="bg-red-600 text-white font-bold uppercase text-[8.5px]">
-                  <th className="px-2 py-1.5 text-center w-[16%]">Order #</th>
-                  <th className="px-2 py-1.5 text-center w-[12%]">Date</th>
-                  <th className="px-2 py-1.5 text-center w-[20%]">Customer</th>
-                  <th className="px-2 py-1.5 text-center w-[18%]">Shoe Details</th>
-                  <th className="px-2 py-1.5 text-center w-[9%]">Priority</th>
-                  <th className="px-2 py-1.5 text-center w-[8%]">Total</th>
-                  <th className="px-2 py-1.5 text-center w-[8%]">Paid</th>
-                  <th className="px-2 py-1.5 text-center w-[9%]">Balance</th>
+                  <th className="px-2 py-1.5 text-left">Order #</th>
+                  <th className="px-2 py-1.5 text-center">Date</th>
+                  <th className="px-2 py-1.5 text-left">Customer</th>
+                  <th className="px-2 py-1.5 text-left">Shoe / Services</th>
+                  <th className="px-2 py-1.5 text-center">Priority</th>
+                  <th className="px-2 py-1.5 text-right">Total</th>
+                  <th className="px-2 py-1.5 text-right">Paid</th>
+                  <th className="px-2 py-1.5 text-right">Balance</th>
                 </tr>
               </thead>
               <tbody>
@@ -727,28 +761,20 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
 
                     return (
                       <tr key={order.id || idx} className={`border-b border-gray-200 ${isEven ? 'bg-gray-50/70' : 'bg-white'}`}>
-                        <td colSpan={8} className="p-0">
-                          {/* Row Line 1 */}
-                          <div className="flex items-center px-2 pt-1.5 pb-0.5">
-                            <div className="w-[16%] font-black text-gray-900 truncate">{order.orderNumber}</div>
-                            <div className="w-[12%] text-center text-gray-600">
-                              {new Date(order.transactionDate || order.createdAt).toLocaleDateString()}
-                            </div>
-                            <div className="w-[20%] font-bold text-gray-900 truncate">{order.customerName}</div>
-                            <div className="w-[18%] text-gray-700 truncate">{shoeStr}</div>
-                            <div className="w-[9%] text-center text-gray-600 capitalize">{order.priorityLevel || 'Regular'}</div>
-                            <div className="w-[8%] text-right font-black text-gray-900">{formatPeso(order.grandTotal || 0)}</div>
-                            <div className="w-[8%] text-right text-gray-700">{formatPeso(paidAmt)}</div>
-                            <div className="w-[9%] text-right font-black text-gray-900">{formatPeso(balAmt)}</div>
-                          </div>
-                          {/* Row Line 2 (Sub-line) */}
-                          <div className="flex items-center justify-between px-2 pt-0.5 pb-1.5 text-[7.8px] text-gray-500 border-t border-gray-100">
-                            <div className="w-[22%] truncate font-medium">Status: <span className="font-bold text-gray-700 capitalize">{order.status || 'New Order'}</span></div>
-                            <div className="w-[18%] truncate"><span className="font-semibold text-gray-700">{order.contactNumber || 'N/A'}</span></div>
-                            <div className="w-[36%] truncate">Services: <span className="text-gray-700">{svcStr}</span></div>
-                            <div className="w-[24%] text-right truncate"><span className="font-semibold text-gray-700 uppercase">{order.paymentMethod || 'Cash'} • {order.paymentStatus || 'Unpaid'}</span></div>
-                          </div>
+                        {/* Main data row — one cell per column */}
+                        <td className="px-2 pt-1.5 pb-0.5 font-black text-gray-900 truncate align-top">{order.orderNumber}</td>
+                        <td className="px-2 pt-1.5 pb-0.5 text-center text-gray-600 align-top whitespace-nowrap">
+                          {new Date(order.transactionDate || order.createdAt).toLocaleDateString()}
                         </td>
+                        <td className="px-2 pt-1.5 pb-0.5 font-bold text-gray-900 truncate align-top">{order.customerName}</td>
+                        <td className="px-2 pt-1.5 pb-0.5 align-top">
+                          <div className="font-semibold text-gray-800 truncate">{shoeStr}</div>
+                          <div className="text-[7.8px] text-gray-500 truncate mt-0.5">{svcStr}</div>
+                        </td>
+                        <td className="px-2 pt-1.5 pb-0.5 text-center text-gray-600 capitalize align-top">{order.priorityLevel || 'Regular'}</td>
+                        <td className="px-2 pt-1.5 pb-0.5 text-right font-black text-gray-900 align-top">{formatPeso(order.grandTotal || 0)}</td>
+                        <td className="px-2 pt-1.5 pb-0.5 text-right font-black text-gray-900 align-top">{formatPeso(paidAmt)}</td>
+                        <td className="px-2 pt-1.5 pb-0.5 text-right font-black text-gray-900 align-top">{formatPeso(balAmt)}</td>
                       </tr>
                     );
                   })
@@ -758,6 +784,7 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
           </div>
         </section>
       )}
+
 
       {/* EXPENSES REPORT PRINT CONTENT */}
       {(printMode === 'Expenses') && (
@@ -849,7 +876,7 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
                   <span className="font-black text-gray-900">{formatPeso(totalRefundsAmount)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-900 font-bold">Net Sales:</span>
+                  <span className="text-gray-600 font-normal">Net Sales:</span>
                   <span className="font-black text-gray-900">{formatPeso(netSalesAmount)}</span>
                 </div>
                 {totalRetainedDepositsAmount > 0 && (
@@ -859,8 +886,8 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
                   </div>
                 )}
                 <div className="flex justify-between">
-                  <span className="text-gray-600 font-medium">Total Orders:</span>
-                  <span className="font-bold text-gray-800">{totalOrdersCount}</span>
+                  <span className="text-gray-600 font-normal">Total Orders:</span>
+                  <span className="font-black text-gray-800">{totalOrdersCount}</span>
                 </div>
               </div>
 
@@ -878,11 +905,11 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
                   <span className="font-black text-gray-900">{formatPeso(totalExpensesAmount)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-900 font-bold">Net Profit:</span>
+                  <span className="text-gray-600 font-normal">Net Profit:</span>
                   <span className="font-black text-gray-900">{formatPeso(profit)}</span>
                 </div>
                 <div className="flex justify-between pt-1 border-t border-gray-100">
-                  <span className="text-gray-900 font-bold">Return on Investment (ROI):</span>
+                  <span className="text-gray-600 font-normal">Return on Investment (ROI):</span>
                   <span className="font-black text-gray-900 text-xs">{roiSummary.display}</span>
                 </div>
               </div>

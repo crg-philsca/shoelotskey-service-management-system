@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, useMemo, type ReactNode } from 'react';
 import { format as dateFnsFormat } from 'date-fns';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/app/components/ui/dialog';
 import { Label } from '@/app/components/ui/label';
@@ -20,8 +20,17 @@ import {
   Printer,
   AlertTriangle,
   Loader2,
+  RotateCcw,
+  Edit3,
 } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/app/components/ui/select';
 import { toast } from 'sonner';
 import { useOrders } from '@/app/context/OrderContext';
 import type { JobOrder } from '@/app/types';
@@ -31,6 +40,7 @@ interface OrderDetailModalProps {
   order: JobOrder | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  user?: any;
 }
 
 function displayItemSize(item: any, order?: any) {
@@ -90,6 +100,7 @@ export default function OrderDetailModal({
   order: propOrder,
   open,
   onOpenChange,
+  user,
 }: OrderDetailModalProps) {
   const [copied, setCopied] = useState(false);
   const [showPrintSummary, setShowPrintSummary] = useState(false);
@@ -104,17 +115,30 @@ export default function OrderDetailModal({
   } | null>(null);
   const [predictionLoading, setPredictionLoading] = useState(false);
   const [predictionError, setPredictionError] = useState(false);
+  const [editingPairIndex, setEditingPairIndex] = useState<number | null>(null);
+  const [pairStatus, setPairStatus] = useState<string>('pending');
+  const [pairReleaseDate, setPairReleaseDate] = useState<string>('');
+  const [pairClaimedDate, setPairClaimedDate] = useState<string>('');
+  const [isUpdatingPair, setIsUpdatingPair] = useState(false);
   const { orders, updateOrder } = useOrders();
 
   // Dynamically retrieve the real-time updated order from OrderContext so edits are reflected immediately
   const order = propOrder ? (orders.find((o) => o.id === propOrder.id) || propOrder) : null;
 
-  useEffect(() => {
-    if (!open || !order) {
-      setEstimate(null);
-      setPredictionLoading(false);
-      setPredictionError(false);
-      return;
+  const toDateTimeLocal = (dateVal: any) => {
+    if (!dateVal) return '';
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return '';
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  const { normalizedItems, officialBreakdown } = useMemo(() => {
+    if (!order) {
+      return {
+        normalizedItems: [],
+        officialBreakdown: { baseDays: 0, addOnDays: 0, priorityDays: 0, totalDays: 0 },
+      };
     }
 
     const rawItems = order.items && order.items.length > 0 ? order.items : [order];
@@ -130,6 +154,16 @@ export default function OrderDetailModal({
           bServices = item.baseService.split(',').map((s: string) => s.trim()).filter(Boolean);
         }
       }
+      if (bServices.length === 0 && Array.isArray(item.services)) {
+        bServices = item.services
+          .filter((s: any) => (s?.category?.category_name || s?.category) === 'base' || !s?.category)
+          .map((s: any) => s?.service_name || s?.name || String(s))
+          .filter(Boolean);
+      }
+      if (bServices.length === 0 && order.baseService) {
+        if (Array.isArray(order.baseService)) bServices = order.baseService;
+        else if (typeof order.baseService === 'string') bServices = [order.baseService];
+      }
 
       let addOns: any[] = [];
       if (Array.isArray(item.addOns)) {
@@ -142,6 +176,14 @@ export default function OrderDetailModal({
           addOns = item.addOns.split(',').map((s: string) => s.trim()).filter(Boolean);
         }
       }
+      if (addOns.length === 0 && Array.isArray(item.services)) {
+        addOns = item.services
+          .filter((s: any) => (s?.category?.category_name || s?.category) === 'addon')
+          .map((s: any) => ({ name: s?.service_name || s?.name || String(s), quantity: 1 }));
+      }
+      if (addOns.length === 0 && order.addOns) {
+        if (Array.isArray(order.addOns)) addOns = order.addOns;
+      }
 
       let cond = item.condition;
       if (typeof cond === 'string') {
@@ -149,6 +191,7 @@ export default function OrderDetailModal({
       }
 
       return {
+        id: item.id,
         brand: item.brand || 'Other',
         shoeModel: item.shoeModel || 'Other',
         shoeMaterial: item.shoeMaterial || 'Other',
@@ -156,51 +199,82 @@ export default function OrderDetailModal({
         baseService: bServices,
         addOns: addOns,
         quantity: item.quantity || 1,
+        status: item.status,
+        actualReleaseDate: item.actualReleaseDate,
+        actualCompletionDate: item.actualCompletionDate,
       };
     });
 
+    const breakdown = calculateOfficialReleaseBreakdown(items, order.priorityLevel || 'regular');
+    return { normalizedItems: items, officialBreakdown: breakdown };
+  }, [order]);
+
+  useEffect(() => {
+    if (!open || !order) {
+      setEstimate(null);
+      setPredictionLoading(false);
+      setPredictionError(false);
+      return;
+    }
+
+    const items = normalizedItems;
+
     // Synchronous immediate calculation of official Business Rules days (0ms delay)
-    const officialBreakdown = calculateOfficialReleaseBreakdown(items, order.priorityLevel || 'regular');
-    const initialBrDays = order.estimatedDays != null
-      ? Number(order.estimatedDays)
-      : (order.predictedCompletionDate && (order.transactionDate || order.createdAt)
-          ? Math.max(1, Math.round((new Date(order.predictedCompletionDate).getTime() - new Date(order.transactionDate || order.createdAt).getTime()) / (1000 * 60 * 60 * 24)))
-          : (officialBreakdown.totalDays > 0 ? officialBreakdown.totalDays : 25));
+    const initialBrDays = officialBreakdown.totalDays > 0
+      ? officialBreakdown.totalDays
+      : (order.estimatedDays != null
+          ? Number(order.estimatedDays)
+          : (order.predictedCompletionDate && (order.transactionDate || order.createdAt)
+              ? Math.max(1, Math.round((new Date(order.predictedCompletionDate).getTime() - new Date(order.transactionDate || order.createdAt).getTime()) / (1000 * 60 * 60 * 24)))
+              : 25));
 
     const rawTxDate = order.transactionDate || order.createdAt;
-    const initialBrDate = order.predictedCompletionDate
-      ? new Date(order.predictedCompletionDate).toISOString()
-      : (() => {
-          const base = rawTxDate ? new Date(rawTxDate) : new Date();
-          const d = new Date(base.getTime() + initialBrDays * 24 * 60 * 60 * 1000);
-          return d.toISOString();
-        })();
+    const initialBrDate = (() => {
+        const base = rawTxDate ? new Date(rawTxDate) : new Date();
+        const d = new Date(base.getTime() + initialBrDays * 24 * 60 * 60 * 1000);
+        return d.toISOString();
+    })();
 
-    const hasStoredPrediction = order.predictedDays != null && Boolean(order.predictedAt || order.predictedCompletionDate);
+    const initialStoredDays = order.predictedDays != null ? Number(order.predictedDays) : null;
+    const initialStoredDate = order.predictedAt
+      ? new Date(order.predictedAt).toISOString()
+      : (initialStoredDays != null && rawTxDate
+          ? new Date(new Date(rawTxDate).getTime() + initialStoredDays * 24 * 60 * 60 * 1000).toISOString()
+          : null);
+    const hasStoredPrediction = initialStoredDays != null && Boolean(initialStoredDate);
 
     // Immediately pre-populate estimate so there is 0ms delay and zero missing information
     setEstimate({
       business_rule_days: initialBrDays,
       business_rule_date: initialBrDate,
-      ml_predicted_date: order.predictedAt ? new Date(order.predictedAt).toISOString() : (order.predictedCompletionDate ? new Date(order.predictedCompletionDate).toISOString() : null),
-      ml_predicted_days: order.predictedDays != null ? Number(order.predictedDays) : null,
+      ml_predicted_date: initialStoredDate,
+      ml_predicted_days: initialStoredDays,
       ml_status: hasStoredPrediction ? 'valid' : 'calculating',
       ml_model: 'Random Forest Regression',
     });
 
-    if (hasStoredPrediction) {
-      setPredictionLoading(false);
-      return;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    let authToken = user?.token || user?.access_token || '';
+    if (!authToken && typeof window !== 'undefined') {
+      try {
+        const storedUser = localStorage.getItem('user') || sessionStorage.getItem('user');
+        if (storedUser) {
+          const parsed = JSON.parse(storedUser);
+          authToken = parsed.token || parsed.access_token || '';
+        }
+      } catch {}
+    }
+    if (!authToken && typeof window !== 'undefined') {
+      try {
+        const offlineAuth = localStorage.getItem('shoelotskey_offline_auth') || sessionStorage.getItem('shoelotskey_offline_auth');
+        if (offlineAuth) {
+          const parsed = JSON.parse(offlineAuth);
+          authToken = parsed.token || parsed.access_token || '';
+        }
+      } catch {}
     }
 
-    const controller = new AbortController();
-    let authToken = '';
-    try {
-      const storedUser = typeof window !== 'undefined' ? (localStorage.getItem('user') || sessionStorage.getItem('user')) : null;
-      authToken = storedUser ? (JSON.parse(storedUser)?.token || '') : '';
-    } catch {
-      authToken = '';
-    }
     let isoTxDate = new Date().toISOString();
     try {
       if (rawTxDate) {
@@ -222,6 +296,7 @@ export default function OrderDetailModal({
       body: JSON.stringify({
         items,
         priorityLevel: order.priorityLevel || 'regular',
+        rushReductionDays: (order.priorityLevel || 'regular').toLowerCase() === 'rush' ? 9 : undefined,
         grandTotal: order.grandTotal || 0,
         transactionDate: isoTxDate,
       }),
@@ -237,6 +312,9 @@ export default function OrderDetailModal({
             ...data,
             business_rule_days: data.business_rule_days ?? prev?.business_rule_days ?? initialBrDays,
             business_rule_date: data.business_rule_date ?? prev?.business_rule_date ?? initialBrDate,
+            ml_predicted_days: data.ml_predicted_days ?? prev?.ml_predicted_days,
+            ml_predicted_date: data.ml_predicted_date ?? prev?.ml_predicted_date,
+            ml_status: data.ml_status ?? prev?.ml_status,
           }));
           // If the order in DB didn't have predictedAt or predictedDays saved yet, auto-persist it now
           if (data.ml_predicted_date && (!order.predictedAt || order.predictedDays == null)) {
@@ -252,8 +330,76 @@ export default function OrderDetailModal({
         setPredictionError(true);
       })
       .finally(() => setPredictionLoading(false));
-    return () => controller.abort();
+    return () => {
+      clearTimeout(timeoutId);
+      controller.abort();
+    };
   }, [open, order?.id]);
+
+  const handleOpenUpdatePair = (item: any, idx: number) => {
+    setEditingPairIndex(idx);
+    const effectiveStatus = (item.status || order?.status || 'pending').toLowerCase();
+    setPairStatus(effectiveStatus);
+    setPairReleaseDate(toDateTimeLocal(item.actualReleaseDate || (effectiveStatus === 'for-release' || effectiveStatus === 'claimed' ? order?.actualReleaseDate : '')));
+    setPairClaimedDate(toDateTimeLocal(item.actualCompletionDate || (effectiveStatus === 'claimed' ? order?.actualCompletionDate : '')));
+  };
+
+  const handlePairStatusChange = (newStatus: string) => {
+    setPairStatus(newStatus);
+    if (newStatus === 'for-release' && !pairReleaseDate) {
+      setPairReleaseDate(toDateTimeLocal(new Date()));
+    } else if (newStatus === 'claimed') {
+      if (!pairClaimedDate) setPairClaimedDate(toDateTimeLocal(new Date()));
+      if (!pairReleaseDate) setPairReleaseDate(toDateTimeLocal(new Date()));
+    }
+  };
+
+  const handleSavePairUpdate = async () => {
+    if (editingPairIndex === null || !order) return;
+    setIsUpdatingPair(true);
+    try {
+      const rawItems = order.items && order.items.length > 0 ? [...order.items] : [{ ...order }];
+      const targetItem = rawItems[editingPairIndex];
+      if (!targetItem) throw new Error("Pair not found");
+
+      const releaseIso = pairReleaseDate ? new Date(pairReleaseDate).toISOString() : undefined;
+      const claimedIso = pairClaimedDate ? new Date(pairClaimedDate).toISOString() : undefined;
+
+      const updatedItem = {
+        ...targetItem,
+        status: pairStatus as any,
+        actualReleaseDate: releaseIso,
+        actualCompletionDate: claimedIso,
+      };
+      rawItems[editingPairIndex] = updatedItem;
+
+      // Check if multi-pair status synchronization applies
+      const allClaimed = rawItems.length > 0 && rawItems.every(it => (it.status || '').toLowerCase() === 'claimed');
+      const allForRelease = rawItems.length > 0 && rawItems.every(it => ['for-release', 'claimed'].includes((it.status || '').toLowerCase()));
+
+      const updates: Partial<JobOrder> = {
+        items: rawItems,
+      };
+
+      if (allClaimed && order.status !== 'claimed') {
+        updates.status = 'claimed';
+        if (!order.actualCompletionDate) updates.actualCompletionDate = claimedIso ? new Date(claimedIso) : new Date();
+        if (!order.actualReleaseDate) updates.actualReleaseDate = releaseIso ? new Date(releaseIso) : new Date();
+      } else if (allForRelease && ['pending', 'in-progress'].includes(order.status)) {
+        updates.status = 'for-release';
+        if (!order.actualReleaseDate) updates.actualReleaseDate = releaseIso ? new Date(releaseIso) : new Date();
+      }
+
+      await updateOrder(order.id, updates, user?.username || 'Staff');
+      toast.success(`Pair #${editingPairIndex + 1} status updated to ${pairStatus.toUpperCase()}`);
+      setEditingPairIndex(null);
+    } catch (err: any) {
+      console.error("Failed to update pair:", err);
+      toast.error("Failed to update pair: " + (err?.message || "Unknown error"));
+    } finally {
+      setIsUpdatingPair(false);
+    }
+  };
 
   if (!order) return null;
 
@@ -351,7 +497,7 @@ export default function OrderDetailModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-2xl bg-white p-0 gap-0 overflow-hidden rounded-2xl max-h-[90vh] flex flex-col border border-gray-100 shadow-2xl">
+      <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-[540px] bg-white p-0 gap-0 overflow-hidden rounded-2xl max-h-[90vh] flex flex-col border border-gray-100 shadow-2xl">
         {/* Header Bar with Interactive Copyable Order ID & Print Icon */}
         <DialogHeader className="p-4 sm:px-6 border-b border-gray-100 bg-white flex flex-row items-center justify-between shrink-0 pr-14">
           <DialogDescription className="sr-only">Detailed view of order items, status, and financials</DialogDescription>
@@ -399,9 +545,33 @@ export default function OrderDetailModal({
                       Cancellation & Refund Details
                     </h4>
                   </div>
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase border ${isRefund ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-rose-100 text-rose-800 border-rose-300'}`}>
-                    {isRefund ? 'Refunded' : 'Deposit Forfeited'}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        const targetStage = order.cancellationStage || 'new-order';
+                        updateOrder(order.id, {
+                          status: targetStage as any,
+                          cancellationStage: null as any,
+                          refundStatus: null as any,
+                          refundAmount: 0,
+                          refundReason: null as any,
+                          cancelledAt: null as any,
+                          updatedAt: new Date()
+                        }, user?.username || 'Staff');
+                        toast.success(`Order #${order.orderNumber} restored to ${targetStage.replace('-', ' ')}`);
+                        onOpenChange(false);
+                      }}
+                      className="h-6 px-2 text-[11px] font-bold text-purple-700 border-purple-300 bg-white hover:bg-purple-50 shadow-xs flex items-center gap-1 cursor-pointer"
+                    >
+                      <RotateCcw size={11} />
+                      Undo Cancellation
+                    </Button>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase border ${isRefund ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-rose-100 text-rose-800 border-rose-300'}`}>
+                      {isRefund ? 'Refunded' : 'Deposit Forfeited'}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 text-xs">
@@ -539,8 +709,8 @@ export default function OrderDetailModal({
               </h4>
             </div>
 
-            {/* Order Date, Estimated Date, Predicted Date, Release Date */}
-            <div className={`grid gap-4 ${isForRelease ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 sm:grid-cols-3'}`}>
+            {/* Order Date, Estimated Date, Predicted Date, Total Days, Release Date */}
+            <div className={`grid gap-4 ${isForRelease ? 'grid-cols-2 lg:grid-cols-5' : 'grid-cols-2 sm:grid-cols-4'}`}>
               <div>
                 <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block">
                   Order Date
@@ -548,24 +718,30 @@ export default function OrderDetailModal({
                 <DateValue colorClass="text-purple-600">
                   {formatDate(order.transactionDate || order.createdAt)}
                 </DateValue>
+                <p className="text-[10px] text-slate-500 mt-1 font-medium">Received Date</p>
               </div>
 
               <div>
                 <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block">
-                  Estimated Date
+                  Expected Date
                 </Label>
                 <DateValue colorClass="text-emerald-600">
-                  {order.predictedCompletionDate
-                    ? `${formatDate(order.predictedCompletionDate, 'MM/dd/yy')}${order.releaseTime ? ` ${order.releaseTime}` : ''}`
-                    : '-'}
+                  {(() => {
+                    const dt = estimate?.business_rule_date 
+                      || (officialBreakdown.totalDays > 0 && (order.transactionDate || order.createdAt)
+                          ? new Date(new Date(order.transactionDate || order.createdAt).getTime() + officialBreakdown.totalDays * 24 * 60 * 60 * 1000).toISOString()
+                          : null)
+                      || order.predictedCompletionDate;
+                    if (!dt) return '-';
+                    return `${formatDate(dt, 'MM/dd/yy')}${order.releaseTime ? ` ${order.releaseTime}` : ''}`;
+                  })()}
                 </DateValue>
                 <p className="text-[10px] text-slate-500 mt-1 font-medium">
                   {(() => {
-                    const days = estimate?.business_rule_days 
+                    const days = (officialBreakdown.totalDays > 0 ? officialBreakdown.totalDays : null)
+                      ?? estimate?.business_rule_days 
                       ?? (order.estimatedDays != null ? Number(order.estimatedDays) : null)
-                      ?? (order.predictedCompletionDate && (order.transactionDate || order.createdAt)
-                          ? Math.max(1, Math.round((new Date(order.predictedCompletionDate).getTime() - new Date(order.transactionDate || order.createdAt).getTime()) / (1000 * 60 * 60 * 24)))
-                          : 10);
+                      ?? 25;
                     return `BR: ${days} ${days === 1 ? 'day' : 'days'}`;
                   })()}
                 </p>
@@ -579,51 +755,75 @@ export default function OrderDetailModal({
                   {(() => {
                     if (predictionLoading) {
                       return (
-                        <span className="inline-flex items-center gap-1.5 text-blue-600 text-xs font-semibold">
-                          <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500 shrink-0" />
-                          <span className="text-[10px] font-medium text-slate-400">Estimating...</span>
+                        <span className="inline-flex items-center gap-1.5 text-red-600 text-xs font-semibold">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-red-500 shrink-0" />
+                          <span className="text-[11px] font-semibold text-red-500">Predicting...</span>
                         </span>
                       );
                     }
-                    if (predictionError && !estimate?.ml_predicted_date && !order.predictedAt) {
-                      return <span className="text-slate-400 text-xs font-medium">Unable to calculate</span>;
-                    }
-                    const dt = estimate?.ml_predicted_date || order.predictedAt;
+                    const mlDays = estimate?.ml_predicted_days ?? (order.predictedDays != null ? Number(order.predictedDays) : null);
+                    const baseDate = order.transactionDate || order.createdAt;
+                    const dt = estimate?.ml_predicted_date
+                      || (order.predictedAt ? order.predictedAt : null)
+                      || (mlDays != null && baseDate ? new Date(new Date(baseDate).getTime() + mlDays * 24 * 60 * 60 * 1000) : null);
                     if (dt) return formatDate(dt, 'MM/dd/yy');
-                    const fallbackDate = order.predictedCompletionDate 
-                      || estimate?.business_rule_date;
-                    return fallbackDate ? formatDate(fallbackDate, 'MM/dd/yy') : '-';
+                    if (predictionError && !estimate?.ml_predicted_date && !order.predictedAt && mlDays == null) {
+                      return <span className="text-slate-400 text-xs font-medium">Unavailable</span>;
+                    }
+                    return <span className="text-slate-400 text-xs font-medium">Unavailable</span>;
                   })()}
                 </DateValue>
                 <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1.5">
                   {(() => {
                     if (predictionLoading) {
                       return (
-                        <span className="inline-flex items-center gap-1 text-blue-600 font-medium">
+                        <span className="inline-flex items-center gap-1 text-red-600 font-medium">
                           <span className="text-slate-500 font-semibold">ML:</span>
-                          <Loader2 className="w-2.5 h-2.5 animate-spin text-blue-500 shrink-0" />
+                          <Loader2 className="w-2.5 h-2.5 animate-spin text-red-500 shrink-0" />
                         </span>
                       );
                     }
-                    if (predictionError && estimate?.ml_predicted_days == null && order.predictedDays == null) {
-                      return <span className="text-slate-400 text-[10px]">Prediction unavailable</span>;
-                    }
                     const days = estimate?.ml_predicted_days ?? (order.predictedDays != null ? Number(order.predictedDays) : null);
-                    if (days != null) {
+                    if (days != null && days > 0) {
                       return (
                         <span className="inline-flex items-center gap-1">
                           <span className="font-semibold text-slate-700">ML: {days} {days === 1 ? 'day' : 'days'}</span>
                         </span>
                       );
                     }
-                    const brFallback = estimate?.business_rule_days 
-                      ?? (order.estimatedDays != null ? Number(order.estimatedDays) : null)
-                      ?? (order.predictedCompletionDate && (order.transactionDate || order.createdAt)
-                          ? Math.max(1, Math.round((new Date(order.predictedCompletionDate).getTime() - new Date(order.transactionDate || order.createdAt).getTime()) / (1000 * 60 * 60 * 24)))
-                          : 25);
-                    return <span>ML: {brFallback} {brFallback === 1 ? 'day' : 'days'}</span>;
+                    return <span className="text-slate-400 text-[10px]">ML: Unavailable</span>;
                   })()}
                 </div>
+              </div>
+
+              <div>
+                <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block">
+                  Total Days
+                </Label>
+                {(() => {
+                  const completedDate = order.actualCompletionDate || (order as any).claimedAt || (order.statusHistory?.find((s: any) => s.status === 'claimed')?.timestamp);
+                  const receivedDate = order.transactionDate || order.createdAt;
+                  if (isClaimed && completedDate && receivedDate) {
+                    const diffMs = new Date(completedDate).getTime() - new Date(receivedDate).getTime();
+                    const totalDays = Math.max(1, Math.round(diffMs / (1000 * 60 * 60 * 24)));
+                    return (
+                      <>
+                        <DateValue colorClass="text-slate-900">
+                          {totalDays} {totalDays === 1 ? 'day' : 'days'}
+                        </DateValue>
+                        <p className="text-[10px] text-slate-500 mt-1 font-medium">Actual service duration</p>
+                      </>
+                    );
+                  }
+                  return (
+                    <>
+                      <DateValue colorClass="text-slate-400 text-xs">
+                        Not yet completed
+                      </DateValue>
+                      <p className="text-[10px] text-slate-400 mt-1 font-medium">Order in progress</p>
+                    </>
+                  );
+                })()}
               </div>
 
               {isForRelease && (
@@ -896,6 +1096,82 @@ export default function OrderDetailModal({
                           </div>
                         ) : (
                           <p className="text-xs font-medium text-slate-400 italic">None</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Pair Status & Dates Tracking Card */}
+                  <div className="mt-3 pt-3 border-t border-slate-200/80 bg-white/70 p-3 rounded-xl border border-slate-100 shadow-2xs">
+                    <div className="flex items-center justify-between gap-2 flex-wrap mb-2.5">
+                      <div className="flex items-center gap-2">
+                        <Package size={14} className="text-red-500" />
+                        <span className="text-xs font-black uppercase tracking-wider text-slate-700">
+                          {itemsToDisplay.length > 1 ? `Pair #${index + 1} Status & Tracking` : 'Pair Status & Tracking'}
+                        </span>
+                        {(() => {
+                          const itemSt = (item.status || order.status || 'pending').toLowerCase();
+                          const badgeStyles: Record<string, string> = {
+                            'pending': 'bg-amber-100 text-amber-800 border-amber-200',
+                            'in-progress': 'bg-blue-100 text-blue-800 border-blue-200',
+                            'for-release': 'bg-emerald-100 text-emerald-800 border-emerald-200',
+                            'claimed': 'bg-slate-900 text-white border-slate-900',
+                            'cancelled': 'bg-red-100 text-red-800 border-red-200',
+                          };
+                          const badgeStyle = badgeStyles[itemSt] || 'bg-gray-100 text-gray-800 border-gray-200';
+                          return (
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${badgeStyle}`}>
+                              {itemSt.replace('-', ' ')}
+                            </span>
+                          );
+                        })()}
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleOpenUpdatePair(item, index)}
+                        className="h-7 text-xs font-bold border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 gap-1.5 shadow-2xs"
+                      >
+                        <Edit3 size={12} />
+                        Update Pair
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                      <div className="bg-slate-50/80 p-2.5 rounded-lg border border-slate-100">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                          Release Date
+                        </span>
+                        {item.actualReleaseDate ? (
+                          <div className="flex items-center gap-1.5 text-emerald-700 font-mono font-bold text-xs">
+                            <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
+                            <span>{formatDate(item.actualReleaseDate, 'MM/dd/yy hh:mm a')}</span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 font-medium italic text-[11px]">
+                            {['for-release', 'claimed'].includes((item.status || order.status || '').toLowerCase()) && releaseTimestamp(order)
+                              ? `${formatDate(releaseTimestamp(order), 'MM/dd/yy hh:mm a')} (Order Batch)`
+                              : 'Pending completion'}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="bg-slate-50/80 p-2.5 rounded-lg border border-slate-100">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                          Claimed Date
+                        </span>
+                        {item.actualCompletionDate ? (
+                          <div className="flex items-center gap-1.5 text-slate-900 font-mono font-bold text-xs">
+                            <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
+                            <span>{formatDate(item.actualCompletionDate, 'MM/dd/yy hh:mm a')}</span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 font-medium italic text-[11px]">
+                            {(item.status || order.status || '').toLowerCase() === 'claimed' && order.actualCompletionDate
+                              ? `${formatDate(order.actualCompletionDate, 'MM/dd/yy hh:mm a')} (Order Batch)`
+                              : 'Pending customer claim'}
+                          </span>
                         )}
                       </div>
                     </div>
@@ -1240,17 +1516,35 @@ export default function OrderDetailModal({
                 <span className="font-bold text-slate-900">: {(() => {
                   try {
                     const raw = order.predictedCompletionDate || (order as any).estimatedReleaseDate || (order as any).releaseDate;
-                    return raw ? dateFnsFormat(new Date(raw), 'MMMM d, yyyy') : '-';
+                    const brDays = estimate?.business_rule_days ?? (order.estimatedDays != null ? Number(order.estimatedDays) : null);
+                    const formatted = raw ? dateFnsFormat(new Date(raw), 'MMMM d, yyyy') : '-';
+                    return brDays != null ? `${formatted} (BR: ${brDays} ${brDays === 1 ? 'day' : 'days'})` : formatted;
                   }
                   catch { return '-'; }
                 })()}</span>
                 <span className="text-slate-500 font-bold">Predicted Date</span>
                 <span className="font-bold text-slate-900">: {(() => {
                   try {
-                    const dt = estimate?.ml_predicted_date || order.predictedAt || order.predictedCompletionDate || estimate?.business_rule_date;
-                    return dt ? dateFnsFormat(new Date(dt), 'MMMM d, yyyy') : '-';
+                    const mlDays = estimate?.ml_predicted_days ?? (order.predictedDays != null ? Number(order.predictedDays) : null);
+                    const baseDate = order.transactionDate || order.createdAt;
+                    const dt = estimate?.ml_predicted_date || order.predictedAt || (mlDays != null && baseDate ? new Date(new Date(baseDate).getTime() + mlDays * 24 * 60 * 60 * 1000) : null);
+                    const formatted = dt ? dateFnsFormat(new Date(dt), 'MMMM d, yyyy') : 'Unavailable';
+                    return mlDays != null ? `${formatted} (ML: ${mlDays} ${mlDays === 1 ? 'day' : 'days'})` : formatted;
                   }
                   catch { return '-'; }
+                })()}</span>
+                <span className="text-slate-500 font-bold">Total Days</span>
+                <span className="font-bold text-slate-900">: {(() => {
+                  try {
+                    const completedDate = order.actualCompletionDate || (order as any).claimedAt || (order.statusHistory?.find((s: any) => s.status === 'claimed')?.timestamp);
+                    const receivedDate = order.transactionDate || order.createdAt;
+                    if (isClaimed && completedDate && receivedDate) {
+                      const diffMs = new Date(completedDate).getTime() - new Date(receivedDate).getTime();
+                      const totalDays = Math.max(1, Math.round(diffMs / (1000 * 60 * 60 * 24)));
+                      return `${totalDays} ${totalDays === 1 ? 'day' : 'days'} (Completed)`;
+                    }
+                    return 'Not yet completed';
+                  } catch { return 'Not yet completed'; }
                 })()}</span>
                 {isForRelease && (
                   <>
@@ -1383,12 +1677,137 @@ export default function OrderDetailModal({
             <Button variant="outline" onClick={() => setShowPrintSummary(false)} className="flex-1 h-11 rounded-2xl font-bold text-xs uppercase tracking-widest border-slate-200 text-gray-700 hover:bg-slate-100 transition-all justify-center">
               Close
             </Button>
-            <Button onClick={() => window.print()} className="flex-1 h-11 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-widest rounded-2xl flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all">
+            <Button
+              onClick={() => {
+                document.body.classList.add('printing-job-summary');
+                const scrollParent = document.getElementById('print-job-summary')?.parentElement;
+                if (scrollParent) scrollParent.scrollTop = 0;
+                window.print();
+                setTimeout(() => {
+                  document.body.classList.remove('printing-job-summary');
+                }, 1000);
+              }}
+              className="flex-1 h-11 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-widest rounded-2xl flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all"
+            >
               <Printer size={16} strokeWidth={2.5} /> Print Summary
             </Button>
           </div>
         </DialogContent>
       </Dialog>
+
+      {editingPairIndex !== null && (() => {
+        const currentItem = itemsToDisplay[editingPairIndex];
+        return (
+          <Dialog open={editingPairIndex !== null} onOpenChange={(isOpen) => !isOpen && setEditingPairIndex(null)}>
+            <DialogContent className="max-w-md bg-white border border-slate-200 shadow-xl rounded-2xl z-[100]">
+              <DialogHeader>
+                <DialogTitle className="text-sm font-black uppercase tracking-tight flex items-center gap-2 text-slate-900">
+                  <Package size={16} className="text-red-600" />
+                  Update Pair #{editingPairIndex + 1} Status
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-500">
+                  {currentItem?.brand || 'Shoe'} - {currentItem?.shoeModel || 'Item'} ({displayItemColor(currentItem, order)})
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4 py-2">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Pair Status
+                  </Label>
+                  <Select value={pairStatus === 'in-progress' ? 'on-going' : pairStatus} onValueChange={handlePairStatusChange}>
+                    <SelectTrigger className="h-10 text-xs border border-slate-300 bg-white shadow-sm font-semibold rounded-lg focus:ring-1 focus:ring-red-500">
+                      <SelectValue placeholder="Select Status" />
+                    </SelectTrigger>
+                    <SelectContent className="z-[110]">
+                      <SelectItem value="pending" className="text-xs">Pending</SelectItem>
+                      <SelectItem value="on-going" className="text-xs">On-Going (In Progress)</SelectItem>
+                      <SelectItem value="for-release" className="text-xs">For Release (Done)</SelectItem>
+                      <SelectItem value="claimed" className="text-xs">Claimed (Collected)</SelectItem>
+                      <SelectItem value="cancelled" className="text-xs">Cancelled</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                      Release Date & Time
+                    </Label>
+                    <button
+                      type="button"
+                      onClick={() => setPairReleaseDate(toDateTimeLocal(new Date()))}
+                      className="text-[10px] font-bold text-red-600 hover:underline"
+                    >
+                      Set to Now
+                    </button>
+                  </div>
+                  <input
+                    type="datetime-local"
+                    value={pairReleaseDate}
+                    onChange={(e) => setPairReleaseDate(e.target.value)}
+                    className="w-full h-9 px-3 border border-gray-200 rounded-md text-xs font-mono bg-white focus:outline-none focus:ring-1 focus:ring-red-500"
+                  />
+                  <p className="text-[10px] text-slate-400">
+                    When this pair was completed and ready for pickup/delivery.
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                      Claimed Date & Time
+                    </Label>
+                    <button
+                      type="button"
+                      onClick={() => setPairClaimedDate(toDateTimeLocal(new Date()))}
+                      className="text-[10px] font-bold text-red-600 hover:underline"
+                    >
+                      Set to Now
+                    </button>
+                  </div>
+                  <input
+                    type="datetime-local"
+                    value={pairClaimedDate}
+                    onChange={(e) => setPairClaimedDate(e.target.value)}
+                    className="w-full h-9 px-3 border border-gray-200 rounded-md text-xs font-mono bg-white focus:outline-none focus:ring-1 focus:ring-red-500"
+                  />
+                  <p className="text-[10px] text-slate-400">
+                    When the customer picked up or received this specific pair.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setEditingPairIndex(null)}
+                  disabled={isUpdatingPair}
+                  className="min-w-[130px] sm:min-w-[140px] h-10 px-6 text-xs font-bold uppercase tracking-wider text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 shadow-md shadow-slate-300/50 hover:shadow-lg rounded-xl active:scale-[0.98] transition-all"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleSavePairUpdate}
+                  disabled={isUpdatingPair}
+                  className="min-w-[130px] sm:min-w-[140px] h-10 px-6 bg-red-600 hover:bg-red-700 text-white font-bold text-xs uppercase tracking-wider gap-2 shadow-md shadow-red-500/30 hover:shadow-lg rounded-xl active:scale-[0.98] transition-all"
+                >
+                  {isUpdatingPair ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    'Save'
+                  )}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
     </Dialog>
   );
 }

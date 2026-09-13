@@ -45,7 +45,7 @@ export default function InventoryDetailModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-xl bg-white p-0 gap-0 overflow-hidden rounded-2xl max-h-[85vh] flex flex-col border-none shadow-2xl">
+      <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-[460px] bg-white p-0 gap-0 overflow-hidden rounded-2xl max-h-[85vh] flex flex-col border-none shadow-2xl">
         {/* Header Bar with Copyable Inventory ID */}
         <DialogHeader className="p-4 border-b border-gray-100 bg-white flex flex-row items-center justify-between">
           <DialogDescription className="sr-only">Detailed view of inventory item stock and usage</DialogDescription>

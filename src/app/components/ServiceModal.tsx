@@ -89,7 +89,7 @@ export default function ServiceModal({ isOpen, onClose, service, onSave }: Servi
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-lg max-h-[90vh] overflow-hidden p-0 gap-0 flex flex-col rounded-2xl bg-white border border-gray-100 shadow-2xl">
+            <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-[460px] max-h-[90vh] overflow-hidden p-0 gap-0 flex flex-col rounded-2xl bg-white border border-gray-100 shadow-2xl">
                 <DialogHeader className="shrink-0 bg-white px-6 pt-5 pb-3.5 border-b border-gray-100">
                     <DialogTitle className="text-xl font-bold uppercase text-red-600 text-center">
                         {service ? 'Edit Service' : 'Add New Service'}

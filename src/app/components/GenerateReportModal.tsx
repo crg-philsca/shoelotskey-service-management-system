@@ -140,7 +140,7 @@ export default function GenerateReportModal({
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: 'Failed to generate Excel (.xlsx).' }));
+        const errorData = await response.json().catch(() => ({ detail: 'Failed to generate Excel report.' }));
         throw new Error(errorData.detail || 'Unable to generate Excel report.');
       }
 
@@ -259,9 +259,9 @@ export default function GenerateReportModal({
     {
       id: 'xlsx',
       emoji: '📊',
-      label: 'Download Excel (.xlsx)',
+      label: 'Download Excel',
       sublabel: 'Official live Excel formulas',
-      badge: 'Live Formulas',
+      badge: 'XLSX',
       badgeColor: 'bg-emerald-100 text-emerald-700 border-emerald-200'
     },
     {

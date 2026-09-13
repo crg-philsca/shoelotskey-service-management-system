@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from fastapi import HTTPException, Depends, Security
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, or_
 from models import User, Role
 from database import get_db
@@ -105,23 +105,27 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Security(securi
 
     target = str(username).strip().lower()
     cached = _USER_CACHE.get(target)
-    # 30-second TTL to avoid database latency during interactive sessions without delaying security changes
-    if cached and (time.time() - cached["time"] < 30.0):
+    # 120-second TTL to eliminate database roundtrip latency during interactive sessions without delaying security changes
+    if cached and (time.time() - cached["time"] < 120.0):
         u = cached["user"]
+        try:
+            u = db.merge(u, load=False)
+        except Exception:
+            pass
         if not u.is_active:
             _USER_CACHE.pop(target, None)
             raise HTTPException(status_code=403, detail="Account is deactivated")
         return u
 
     try:
-        user = db.query(User).filter(
+        user = db.query(User).options(joinedload(User.role)).filter(
             or_(
                 func.lower(User.username) == target,
                 func.lower(User.email) == target
             )
         ).first()
         if not user and str(username).isdigit():
-            user = db.query(User).filter(User.user_id == int(username)).first()
+            user = db.query(User).options(joinedload(User.role)).filter(User.user_id == int(username)).first()
         if user:
             _USER_CACHE[target] = {"user": user, "time": time.time()}
     except Exception as query_err:

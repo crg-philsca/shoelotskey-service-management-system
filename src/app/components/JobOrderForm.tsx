@@ -1023,11 +1023,23 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
             setPredictionLoading(true);
             setPredictionError(false);
             try {
-                let authToken = user?.token || '';
+                let authToken = user?.token || (user as any)?.access_token || '';
                 if (!authToken && typeof window !== 'undefined') {
                     try {
                         const stored = localStorage.getItem('user') || sessionStorage.getItem('user');
-                        authToken = stored ? (JSON.parse(stored)?.token || '') : '';
+                        if (stored) {
+                            const parsed = JSON.parse(stored);
+                            authToken = parsed.token || parsed.access_token || '';
+                        }
+                    } catch {}
+                }
+                if (!authToken && typeof window !== 'undefined') {
+                    try {
+                        const offline = localStorage.getItem('shoelotskey_offline_auth') || sessionStorage.getItem('shoelotskey_offline_auth');
+                        if (offline) {
+                            const parsed = JSON.parse(offline);
+                            authToken = parsed.token || parsed.access_token || '';
+                        }
                     } catch {}
                 }
 
@@ -2594,15 +2606,20 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                                 <span className="text-blue-800/80 font-medium">Predicted Release Date:</span>
                                                                 <span className="font-bold text-slate-900 text-xs inline-flex items-center gap-1.5">
                                                                     {predictionLoading ? (
-                                                                        <Loader2 className="w-3 h-3 animate-spin text-blue-500 shrink-0" />
-                                                                    ) : (
+                                                                        <span className="inline-flex items-center gap-1 text-red-600 font-medium">
+                                                                            <Loader2 className="w-3 h-3 animate-spin text-red-500 shrink-0" />
+                                                                            <span>Predicting…</span>
+                                                                        </span>
+                                                                    ) : (serverPrediction?.ml_predicted_date || serverPrediction?.ml_predicted_days != null) ? (
                                                                         predictedDateDisplay
+                                                                    ) : (
+                                                                        <span className="text-slate-400 font-normal">Predicting…</span>
                                                                     )}
                                                                 </span>
                                                             </div>
                                                         ) : (
                                                             <div className="flex items-center gap-1.5 flex-wrap">
-                                                                <span className="text-blue-800/80 font-medium">Predicted release date based on historical data</span>
+                                                                <span className="text-blue-800/80 font-medium">Select a service for ML predicted release date</span>
                                                                 <span className="text-[10px] text-blue-600/80 font-semibold hidden md:inline">(AI model trained on past orders)</span>
                                                             </div>
                                                         )}
@@ -2613,11 +2630,11 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                             <span className="h-3 w-px bg-blue-200 shrink-0" />
                                                             <span className="font-black text-slate-900 text-[11px] tabular-nums w-14 text-center shrink-0 flex items-center justify-center">
                                                                 {predictionLoading ? (
-                                                                    <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500 shrink-0" />
-                                                                ) : hasSelectedServices && serverPrediction?.ml_predicted_days != null ? (
+                                                                    <Loader2 className="w-3.5 h-3.5 animate-spin text-red-500 shrink-0" />
+                                                                ) : !hasSelectedServices ? (
+                                                                    '—'
+                                                                ) : serverPrediction?.ml_predicted_days != null && serverPrediction.ml_predicted_days > 0 ? (
                                                                     `${serverPrediction.ml_predicted_days} ${serverPrediction.ml_predicted_days === 1 ? 'DAY' : 'DAYS'}`
-                                                                ) : hasSelectedServices && officialDays > 0 ? (
-                                                                    `${officialDays} ${officialDays === 1 ? 'DAY' : 'DAYS'}`
                                                                 ) : (
                                                                     '—'
                                                                 )}
@@ -2943,12 +2960,16 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                             {predictionLoading ? (
                                                 <span className="inline-flex items-center gap-1.5 text-blue-600 font-medium">
                                                     <Loader2 className="w-3 h-3 animate-spin" />
-                                                    <span>Calculating…</span>
+                                                    <span>Predicting…</span>
                                                 </span>
+                                            ) : !hasSelectedServices ? (
+                                                <span className="text-slate-400 font-medium">Select service</span>
                                             ) : predictionError && !serverPrediction?.ml_predicted_date ? (
                                                 <span className="text-slate-400 font-medium">Unable to calculate</span>
-                                            ) : (
+                                            ) : serverPrediction?.ml_predicted_date ? (
                                                 predictedDateDisplay
+                                            ) : (
+                                                <span className="text-slate-400 font-medium">Predicting…</span>
                                             )}
                                         </span>
                                         <span className="inline-flex items-center gap-1 bg-indigo-600 text-white text-[8px] font-bold uppercase px-2.5 py-0.5 rounded-full tracking-wider shadow-2xs shrink-0">
@@ -2968,15 +2989,23 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                     </div>
                                     <div className="flex justify-between">
                                         <span className="text-slate-500">Model Status:</span>
-                                        <span className="font-bold text-blue-700">
+                                        <span className="font-bold text-slate-900">
                                             {predictionLoading ? (
                                                 <span className="inline-flex items-center gap-1 text-blue-600">
                                                     <Loader2 className="w-3 h-3 animate-spin" />
                                                     <span>Predicting…</span>
                                                 </span>
+                                            ) : !hasSelectedServices ? (
+                                                <span className="text-slate-400 font-medium text-[11px]">Ready</span>
                                             ) : predictionError && !serverPrediction?.ml_status ? (
                                                 <span className="text-amber-600 font-medium">Prediction unavailable</span>
-                                            ) : (serverPrediction?.ml_status ? (serverPrediction.ml_status.charAt(0).toUpperCase() + serverPrediction.ml_status.slice(1).toLowerCase()) : 'Ready')}
+                                            ) : serverPrediction?.ml_status === 'valid' ? (
+                                                <span className="text-emerald-600 font-bold">Valid ✓</span>
+                                            ) : serverPrediction?.ml_status ? (
+                                                serverPrediction.ml_status.charAt(0).toUpperCase() + serverPrediction.ml_status.slice(1).toLowerCase()
+                                            ) : (
+                                                <span className="text-slate-400 font-medium">Predicting…</span>
+                                            )}
                                         </span>
                                     </div>
                                     <div className="flex justify-between pt-1 border-t border-slate-100 font-black text-slate-950">
@@ -2985,14 +3014,16 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                             {predictionLoading ? (
                                                 <span className="inline-flex items-center gap-1.5 text-blue-600 font-bold">
                                                     <Loader2 className="w-3 h-3 animate-spin" />
-                                                    <span>Calculating…</span>
+                                                    <span>Predicting…</span>
                                                 </span>
+                                            ) : !hasSelectedServices ? (
+                                                <span className="text-slate-400 font-medium text-[11px]">Select service</span>
                                             ) : predictionError && serverPrediction?.ml_predicted_days == null ? (
                                                 <span className="text-slate-400 font-medium">Unable to calculate</span>
-                                            ) : serverPrediction?.ml_predicted_days != null ? (
-                                                `${serverPrediction.ml_predicted_days} Days`
+                                            ) : serverPrediction?.ml_predicted_days != null && serverPrediction.ml_predicted_days > 0 ? (
+                                                `${serverPrediction.ml_predicted_days} ${serverPrediction.ml_predicted_days === 1 ? 'Day' : 'Days'}`
                                             ) : (
-                                                '—'
+                                                <span className="text-slate-400 font-medium text-[11px]">Predicting…</span>
                                             )}
                                         </span>
                                     </div>

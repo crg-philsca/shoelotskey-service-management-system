@@ -15,7 +15,6 @@ import {
     LineChart,
     TrendingUp,
     Trash2,
-    Eye,
     MoreVertical,
     Edit,
     Clock,
@@ -180,6 +179,9 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
         if (state?.customEndDate !== undefined) {
             setCustomEndDate(state.customEndDate || '');
         }
+        if (state?.filterCard || state?.cardFilter) {
+            setCardFilter(state.filterCard || state.cardFilter);
+        }
     }, [location.state]);
 
     const [searchQuery, setSearchQuery] = useState('');
@@ -257,10 +259,13 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
 
     const salesOrders = useMemo(() => {
         const now = new Date();
-        return orders
-            .filter((order: JobOrder) => isSalesEligible(order))
-            .filter((order: JobOrder) => isDateInRange(orderEventDate(order), profitRange, now, customStartDate, customEndDate));
-    }, [orders, profitRange, customStartDate, customEndDate]);
+        return (orders || [])
+            .filter((order: JobOrder) => isSalesEligible(order) || (isCancelledOrder(order) && (order.refundStatus === 'refunded' || Number(order.refundAmount || 0) > 0 || Number(order.amountReceived || order.depositAmount || 0) > 0)))
+            .filter((order: JobOrder) => {
+                if (filterPaymentStatus === 'refunded') return true;
+                return isDateInRange(orderEventDate(order), profitRange, now, customStartDate, customEndDate);
+            });
+    }, [orders, profitRange, customStartDate, customEndDate, filterPaymentStatus]);
 
     // Base filtered orders for date range, search, service, priority, and payment status (independent of card payment method filter)
     const baseFilteredOrders = useMemo(() => {
@@ -275,7 +280,11 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
         }
 
         if (filterPaymentStatus !== 'all') {
-            filtered = filtered.filter((order) => order.paymentStatus === filterPaymentStatus);
+            if (filterPaymentStatus === 'refunded') {
+                filtered = filtered.filter((order) => order.refundStatus === 'refunded' || Number(order.refundAmount || 0) > 0 || isCancelledOrder(order));
+            } else {
+                filtered = filtered.filter((order) => order.paymentStatus === filterPaymentStatus && !isCancelledOrder(order));
+            }
         }
 
         if (startDate) {
@@ -301,7 +310,9 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
 
 
     const grossTotalSales = useMemo(() => {
-        return baseFilteredOrders.reduce((sum: number, order: JobOrder) => sum + (Number(order.grandTotal) || 0), 0);
+        return baseFilteredOrders
+            .filter(o => !isCancelledOrder(o))
+            .reduce((sum: number, order: JobOrder) => sum + (Number(order.grandTotal) || 0), 0);
     }, [baseFilteredOrders]);
 
     const cancellationStats = useMemo(() => {
@@ -318,6 +329,7 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
 
     const totalBalanceDue = useMemo(() => {
         return baseFilteredOrders.reduce((sum: number, order: JobOrder) => {
+            if (isCancelledOrder(order)) return sum;
             const billed = Number(order.grandTotal) || 0;
             const isDP = String(order.paymentStatus || '').toLowerCase() === 'downpayment';
             const collected = (isDP && order.depositAmount != null && Number(order.depositAmount) > 0)
@@ -334,6 +346,7 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
 
         if (cardFilter === 'balance-due') {
             filtered = filtered.filter((order) => {
+                if (isCancelledOrder(order)) return false;
                 const billed = Number(order.grandTotal) || 0;
                 const isDP = String(order.paymentStatus || '').toLowerCase() === 'downpayment';
                 const collected = (isDP && order.depositAmount != null && Number(order.depositAmount) > 0)
@@ -342,12 +355,29 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                 return Math.max(0, billed - collected) > 0;
             });
         } else if (cardFilter === 'refunds') {
-            filtered = filtered.filter((order) => {
+            const periodRefunds = filtered.filter((order) => {
                 const rf = Number(order.refundAmount || 0);
                 const isCancelled = isCancelledOrder(order);
                 const hasRefund = rf > 0 || (isCancelled && (order.refundStatus === 'refunded' || Number(order.amountReceived || order.depositAmount || 0) > 0));
                 return hasRefund;
             });
+            // If current date period has matching refunds, show them; otherwise fallback to all-time refunds matching active filters
+            if (periodRefunds.length > 0) {
+                filtered = periodRefunds;
+            } else {
+                filtered = (orders || []).filter((order) => {
+                    const rf = Number(order.refundAmount || 0);
+                    const isCancelled = isCancelledOrder(order);
+                    const hasRefund = rf > 0 || (isCancelled && (order.refundStatus === 'refunded' || Number(order.amountReceived || order.depositAmount || 0) > 0));
+                    if (!hasRefund) return false;
+                    if (searchQuery) {
+                        const query = searchQuery.toLowerCase();
+                        if (!order.customerName.toLowerCase().includes(query) && !order.orderNumber.toLowerCase().includes(query)) return false;
+                    }
+                    if (filterService !== 'all' && !order.baseService.includes(filterService)) return false;
+                    return true;
+                });
+            }
         } else if (cardFilter === 'net-sales') {
             filtered = filtered.filter((order) => {
                 if (isCancelledOrder(order)) {
@@ -357,6 +387,8 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                 }
                 return (Number(order.grandTotal) || 0) > 0;
             });
+        } else if (cardFilter === 'all' && filterPaymentStatus !== 'refunded') {
+            filtered = filtered.filter(order => !isCancelledOrder(order));
         }
 
         if (filterPaymentMethod !== 'all') {
@@ -443,27 +475,6 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                     </button>
                 </div>
             )}
-
-            {/* Top Financial Banner: Total Sales Header */}
-            <div className="bg-white rounded-2xl p-5 sm:p-6 shadow-xs border border-gray-200/80 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                <div>
-                    <div className="flex items-center gap-2 mb-1.5">
-                        <span className="h-2 w-2 rounded-full bg-red-600"></span>
-                        <span className="text-[11px] font-black uppercase tracking-widest text-red-700">
-                            Total Sales Overview ({profitRange === 'Annually' ? 'Annual' : profitRange})
-                        </span>
-                    </div>
-                    <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-gray-900">{formatPeso(grossTotalSales)}</h1>
-                </div>
-                <div className="text-xs font-semibold text-gray-500">
-                    Showing <span className="font-bold text-gray-900">{filteredOrders.length}</span> of {baseFilteredOrders.length} orders
-                    {cardFilter !== 'all' && (
-                        <span className="ml-1.5 inline-flex items-center text-xs font-bold text-red-600 cursor-pointer hover:underline" onClick={() => { setCardFilter('all'); setCurrentPage(1); }}>
-                            (Clear filter)
-                        </span>
-                    )}
-                </div>
-            </div>
 
             {/* TOTAL SALES — 4 Interactive Outcome Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -609,37 +620,35 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
 
                 <CardContent className="pt-0">
                     <div className="overflow-x-auto w-full">
-                        <Table className="w-full table-fixed min-w-[760px] text-xs">
+                        <Table className="w-full table-fixed min-w-0 text-xs">
                             <colgroup>
-                                <col className="w-[9%]" />
-                                <col className="w-[14%]" />
+                                <col className="w-[12%]" />
+                                <col className="w-[16%]" />
                                 <col className="w-[16%]" />
                                 <col className="w-[5%]" />
-                                <col className="w-[8%]" />
-                                <col className="w-[8%]" />
-                                <col className="w-[8%]" />
-                                <col className="w-[14%]" />
                                 <col className="w-[10%]" />
-                                <col className="w-[8%]" />
+                                <col className="w-[9%]" />
+                                <col className="w-[14%]" />
+                                <col className="w-[11%]" />
+                                <col className="w-[7%]" />
                             </colgroup>
                             <TableHeader className="bg-red-50/50 border-b border-red-100">
                                 <TableRow className="border-b border-red-100 hover:bg-transparent">
-                                    <TableHead className="h-8 px-1.5 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Order #</TableHead>
-                                    <TableHead className="h-8 px-1.5 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Customer</TableHead>
-                                    <TableHead className="h-8 px-1.5 text-center font-black text-gray-700 uppercase tracking-wider text-[10px]">Services</TableHead>
-                                    <TableHead className="h-8 px-1 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">QTY</TableHead>
-                                    <TableHead className="h-8 px-1 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Order Date</TableHead>
-                                    <TableHead className="h-8 px-1 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Est. Date</TableHead>
-                                    <TableHead className="h-8 px-1 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Priority</TableHead>
-                                    <TableHead className="h-8 px-1 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Payment</TableHead>
-                                    <TableHead className="h-8 px-1.5 text-right font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Total</TableHead>
-                                    <TableHead className="h-8 px-1 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">Actions</TableHead>
+                                    <TableHead className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Order #</TableHead>
+                                    <TableHead className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Customer</TableHead>
+                                    <TableHead className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px]">Services</TableHead>
+                                    <TableHead className="h-9 px-1 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">QTY</TableHead>
+                                    <TableHead className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Order Date</TableHead>
+                                    <TableHead className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Priority</TableHead>
+                                    <TableHead className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Payment</TableHead>
+                                    <TableHead className="h-9 px-2 text-right font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Total</TableHead>
+                                    <TableHead className="h-9 px-1 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody className="divide-y divide-gray-100">
                                 {paginatedOrders.length === 0 ? (
                                     <TableRow className="hover:bg-transparent">
-                                        <TableCell colSpan={10} className="px-6 py-20 text-center">
+                                        <TableCell colSpan={9} className="px-6 py-20 text-center">
                                             <div className="flex flex-col items-center justify-center space-y-3 opacity-40">
                                                 <TrendingUp size={48} className="text-gray-300" />
                                                 <p className="text-sm font-black text-gray-400 uppercase tracking-[0.2em]">No sales transactions found</p>
@@ -659,21 +668,22 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                                             .map((s) => s.trim().replace(' (with basic cleaning)', ''))
                                             .filter(Boolean);
 
-                                        return (                                             <TableRow key={order.id} onClick={() => setViewingOrder(order)} className="border-b border-gray-100 hover:bg-gray-50/80 transition-all cursor-pointer">
-                                                <TableCell className="px-1.5 py-1.5 text-center text-[11px] font-semibold whitespace-nowrap text-gray-800">{order.orderNumber || order.id || '-'}</TableCell>
-                                                <TableCell className="px-1.5 py-1.5 text-center">
-                                                    <div className="flex flex-col items-center justify-center text-center">
-                                                        <div className="text-xs font-bold text-gray-900 leading-tight truncate max-w-full" title={order.customerName || 'Walk-In'}>{order.customerName || 'Walk-In'}</div>
+                                        return (
+                                            <TableRow key={order.id} onClick={() => setViewingOrder(order)} className="border-b border-gray-100 hover:bg-gray-50/80 transition-all cursor-pointer">
+                                                <TableCell className="px-2 py-2 text-center text-[11px] font-semibold text-gray-800 whitespace-nowrap" title={order.orderNumber || order.id || '-'}>{order.orderNumber || order.id || '-'}</TableCell>
+                                                <TableCell className="px-2 py-2 text-center max-w-0">
+                                                    <div className="flex flex-col items-center justify-center text-center w-full min-w-0">
+                                                        <div className="text-xs font-bold text-gray-900 leading-tight truncate w-full max-w-full" title={order.customerName || 'Walk-In'}>{order.customerName || 'Walk-In'}</div>
                                                         {order.contactNumber && (
-                                                            <div className="text-[10px] text-gray-500 mt-0.5 whitespace-nowrap truncate max-w-full">{order.contactNumber}</div>
+                                                            <div className="text-[10px] text-gray-500 font-medium mt-0.5 whitespace-nowrap truncate w-full max-w-full">{order.contactNumber}</div>
                                                         )}
                                                     </div>
                                                 </TableCell>
-                                                <TableCell className="px-1.5 py-1.5 text-center text-[11px] font-semibold text-gray-800 whitespace-normal break-words">
+                                                <TableCell className="px-2 py-2 text-center text-[11px] font-semibold text-gray-800 whitespace-normal break-words max-w-0">
                                                     {servicesList.length > 0 ? (
-                                                        <div className="flex flex-col items-center justify-center text-center text-[11px] font-semibold text-gray-800 leading-snug" title={servicesList.join(', ')}>
+                                                        <div className="flex flex-col items-center justify-center text-center text-[11px] font-semibold text-gray-800 leading-snug w-full min-w-0" title={servicesList.join(', ')}>
                                                             {servicesList.slice(0, 3).map((srv, idx) => (
-                                                                <span key={idx} className="block text-[11px] font-semibold text-gray-800 leading-tight">
+                                                                <span key={idx} className="block text-[11px] font-semibold text-gray-800 leading-tight truncate w-full max-w-full">
                                                                     {srv}{idx < servicesList.length - 1 ? ',' : ''}
                                                                 </span>
                                                             ))}
@@ -682,61 +692,72 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                                                         <span className="text-gray-400 italic font-normal text-center block">-</span>
                                                     )}
                                                 </TableCell>
-                                                <TableCell className="px-1 py-1.5 text-center text-xs font-semibold text-gray-700 whitespace-nowrap">
+                                                <TableCell className="px-1 py-2 text-center text-xs font-semibold text-gray-700 whitespace-nowrap">
                                                     {order.quantity || 1}
                                                 </TableCell>
-                                                <TableCell className="px-1 py-1.5 text-center text-xs font-medium text-gray-700 whitespace-nowrap">
+                                                <TableCell className="px-2 py-2 text-center text-xs font-medium text-gray-700 whitespace-nowrap">
                                                     {isNaN(orderDate.getTime()) ? '-' : (
                                                         <div className="inline-flex items-center justify-center gap-1">
-                                                            <CalendarIcon size={11} className="text-purple-600 shrink-0" />
+                                                            <CalendarIcon size={12} className="text-purple-600 shrink-0" />
                                                             <span>{dateFnsFormat(orderDate, 'MM/dd/yy')}</span>
                                                         </div>
                                                     )}
                                                 </TableCell>
-                                                <TableCell className="px-1 py-1.5 text-center text-xs font-medium text-gray-700 whitespace-nowrap">
-                                                    {(() => {
-                                                        if (!order.predictedCompletionDate) return <span className="text-gray-400">-</span>;
-                                                        const d = new Date(order.predictedCompletionDate);
-                                                        if (isNaN(d.getTime())) return <span className="text-gray-400">-</span>;
-                                                        return (
-                                                            <div className="inline-flex items-center justify-center gap-1">
-                                                                <CalendarIcon size={11} className="text-emerald-600 shrink-0" />
-                                                                <span>{dateFnsFormat(d, 'MM/dd/yy')}</span>
-                                                            </div>
-                                                        );
-                                                    })()}
-                                                </TableCell>
-                                                <TableCell className="px-1 py-1.5 text-center whitespace-nowrap">
-                                                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase border ${
+                                                <TableCell className="px-1 py-2 text-center whitespace-nowrap">
+                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase border whitespace-nowrap ${
                                                         order.priorityLevel === 'rush' ? 'bg-red-50 text-red-700 border-red-100' :
                                                         'bg-emerald-50 text-emerald-700 border-emerald-100'
                                                     }`}>
                                                         {order.priorityLevel || 'regular'}
                                                     </span>
                                                 </TableCell>
-                                                <TableCell className="px-1 py-1.5 whitespace-nowrap">
+                                                <TableCell className="px-2 py-2 whitespace-nowrap">
                                                     <div className="flex flex-col items-center justify-center text-center">
-                                                        <span className={`text-[11px] font-bold tracking-wider ${
-                                                            pStatus === 'fully-paid' ? 'text-green-600' :
-                                                            pStatus === 'downpayment' ? 'text-yellow-600' : 'text-red-600'
-                                                        }`}>
-                                                            {pStatus === 'fully-paid' ? 'FULLY PAID' : pStatus === 'downpayment' ? 'DOWNPAYMENT' : pStatus ? pStatus.toUpperCase() : '-'}
-                                                        </span>
-                                                        {order.paymentMethod && (
-                                                            <>
-                                                                <span className="text-[8.5px] text-gray-400 font-semibold uppercase tracking-wider mt-0.5">
-                                                                    {order.paymentMethod}
-                                                                </span>
-                                                                {pStatus === 'downpayment' && (
-                                                                    <span className="text-[9px] text-red-500 font-bold tracking-wider mt-0.5">
-                                                                        BAL: {formatPeso(order.balance !== undefined && order.balance !== null && !isNaN(Number(order.balance)) ? Math.max(0, Number(order.balance)) : Math.max(0, (Number(order.grandTotal) || 0) - (Number(order.depositAmount) || (Number(order.amountReceived) && Number(order.amountReceived) < Number(order.grandTotal) ? Number(order.amountReceived) : 0))))}
+                                                        {isCancelledOrder(order) ? (
+                                                            order.refundStatus === 'refunded' ? (
+                                                                <>
+                                                                    <span className="text-[10px] font-bold tracking-wider text-rose-600">
+                                                                        REFUNDED
                                                                     </span>
+                                                                    <span className="text-[9px] text-rose-600 font-medium tracking-wider mt-0.5">
+                                                                        Refund: {formatPeso(Number(order.refundAmount || order.grandTotal || 0))}
+                                                                    </span>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <span className="text-[10px] font-bold tracking-wider text-amber-700">
+                                                                        NO REFUND
+                                                                    </span>
+                                                                    <span className="text-[9px] text-amber-700 font-medium tracking-wider mt-0.5">
+                                                                        Retained: {formatPeso(Number(order.amountReceived || order.depositAmount || 0))}
+                                                                    </span>
+                                                                </>
+                                                            )
+                                                        ) : (
+                                                            <>
+                                                                <span className={`text-[10px] font-bold tracking-wider ${
+                                                                    pStatus === 'fully-paid' ? 'text-green-600' :
+                                                                    pStatus === 'downpayment' ? 'text-yellow-600' : 'text-red-600'
+                                                                }`}>
+                                                                    {pStatus === 'fully-paid' ? 'FULLY PAID' : pStatus === 'downpayment' ? 'DOWNPAYMENT' : pStatus ? pStatus.toUpperCase() : '-'}
+                                                                </span>
+                                                                {order.paymentMethod && (
+                                                                    <>
+                                                                        <span className="text-[8.5px] text-gray-400 font-semibold uppercase tracking-wider mt-0.5">
+                                                                            {order.paymentMethod}
+                                                                        </span>
+                                                                        {pStatus === 'downpayment' && (
+                                                                            <span className="text-[9px] text-red-500 font-bold tracking-wider mt-0.5">
+                                                                                BAL: {formatPeso(order.balance !== undefined && order.balance !== null && !isNaN(Number(order.balance)) ? Math.max(0, Number(order.balance)) : Math.max(0, (Number(order.grandTotal) || 0) - (Number(order.depositAmount) || (Number(order.amountReceived) && Number(order.amountReceived) < Number(order.grandTotal) ? Number(order.amountReceived) : 0))))}
+                                                                            </span>
+                                                                        )}
+                                                                    </>
                                                                 )}
                                                             </>
                                                         )}
                                                     </div>
                                                 </TableCell>
-                                                <TableCell className="px-1.5 py-1.5 text-right whitespace-nowrap">
+                                                <TableCell className="px-2 py-2 text-right whitespace-nowrap">
                                                     <span className="font-bold text-gray-900 text-xs">₱{(Number(order.grandTotal) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                                 </TableCell>
                                                 <TableCell className="px-1 py-1.5 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
@@ -751,16 +772,6 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                                                             </Button>
                                                         </DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end" className="w-52 p-1.5 space-y-1">
-                                                            <DropdownMenuItem
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setViewingOrder(order);
-                                                                }}
-                                                                className="border border-blue-200 rounded-md px-2.5 py-1.5 text-blue-700 bg-blue-50 hover:bg-blue-100 focus:text-blue-800 focus:bg-blue-100 font-bold cursor-pointer"
-                                                            >
-                                                                <Eye className="h-4 w-4 mr-2 text-blue-600" />
-                                                                View Details
-                                                            </DropdownMenuItem>
                                                             <DropdownMenuItem
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
@@ -895,6 +906,7 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                                     <SelectItem value="all" className="text-xs focus:bg-red-50 focus:text-red-700">All Status</SelectItem>
                                     <SelectItem value="fully-paid" className="text-xs hover:bg-red-50 focus:bg-red-50 focus:text-red-700">Fully Paid</SelectItem>
                                     <SelectItem value="downpayment" className="text-xs hover:bg-red-50 focus:bg-red-50 focus:text-red-700">Downpayment</SelectItem>
+                                    <SelectItem value="refunded" className="text-xs hover:bg-red-50 focus:bg-red-50 focus:text-red-700">Refunded</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>

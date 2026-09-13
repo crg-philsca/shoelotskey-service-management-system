@@ -12,7 +12,6 @@ import {
   ChevronDown,
   Wallet,
   Receipt,
-  Eye,
   MoreVertical,
   Edit,
   Trash2,
@@ -175,6 +174,9 @@ export default function PaymentsReceived({ onSetHeaderActionRight, user }: Payme
     }
     if (state?.customEndDate !== undefined) {
       setCustomEndDate(state.customEndDate || '');
+    }
+    if (state?.filterCard || state?.cardFilter) {
+      setCardFilter(state.filterCard || state.cardFilter);
     }
   }, [location.state]);
 
@@ -492,27 +494,27 @@ export default function PaymentsReceived({ onSetHeaderActionRight, user }: Payme
         </div>
       )}
 
-      {/* PAYMENTS RECEIVED — 5 Interactive Filter Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
-        {/* Total Payments Received */}
+      {/* 5 Top Summary Metric Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5 sm:gap-4">
+        {/* Total Payments */}
         <Card
           role="button"
           tabIndex={0}
-          aria-label="Filter by all payments received"
-          onClick={() => { setCardFilter('all'); setCurrentPage(1); }}
+          aria-label="Filter by all payments"
+          onClick={() => { setCardFilter(cardFilter === 'all' ? 'all' : 'all'); setCurrentPage(1); }}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCardFilter('all'); setCurrentPage(1); } }}
-          className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-emerald-50 to-white hover:shadow-md ${
-            cardFilter === 'all' ? 'border-emerald-600 ring-2 ring-emerald-600/20' : 'border-transparent hover:border-emerald-200'
+          className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-indigo-50 to-white hover:shadow-md ${
+            cardFilter === 'all' ? 'border-indigo-600 ring-2 ring-indigo-600/20' : 'border-transparent hover:border-indigo-200'
           }`}
         >
           <CardContent className="pt-4 pb-3 px-3 sm:px-3.5">
             <div className="flex items-center gap-1.5 mb-1">
-              <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-700 shrink-0">
+              <div className="p-1.5 rounded-lg bg-indigo-100 text-indigo-700 shrink-0">
                 <Receipt className="h-3.5 w-3.5" />
               </div>
               <p className="text-[9.5px] 2xl:text-[10px] font-black uppercase tracking-tight text-gray-500 whitespace-nowrap">Total Payments</p>
             </div>
-            <p className="text-xl sm:text-2xl font-black text-emerald-700 tracking-tight">
+            <p className="text-xl sm:text-2xl font-black text-indigo-700 tracking-tight">
               {formatPeso(paymentStats.total)}
             </p>
           </CardContent>
@@ -525,18 +527,18 @@ export default function PaymentsReceived({ onSetHeaderActionRight, user }: Payme
           aria-label="Filter by fully paid received"
           onClick={() => { setCardFilter(cardFilter === 'fully-paid' ? 'all' : 'fully-paid'); setCurrentPage(1); }}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCardFilter(cardFilter === 'fully-paid' ? 'all' : 'fully-paid'); setCurrentPage(1); } }}
-          className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-green-50 to-white hover:shadow-md ${
-            cardFilter === 'fully-paid' ? 'border-green-600 ring-2 ring-green-600/20' : 'border-transparent hover:border-green-200'
+          className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-emerald-50 to-white hover:shadow-md ${
+            cardFilter === 'fully-paid' ? 'border-emerald-600 ring-2 ring-emerald-600/20' : 'border-transparent hover:border-emerald-200'
           }`}
         >
           <CardContent className="pt-4 pb-3 px-3 sm:px-3.5">
             <div className="flex items-center gap-1.5 mb-1">
-              <div className="p-1.5 rounded-lg bg-green-100 text-green-700 shrink-0">
+              <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-700 shrink-0">
                 <Wallet className="h-3.5 w-3.5" />
               </div>
-              <p className="text-[9.5px] 2xl:text-[10px] font-black uppercase tracking-tight text-gray-500 whitespace-nowrap">Fully Paid</p>
+              <p className="text-[9.5px] 2xl:text-[10px] font-black uppercase tracking-tight text-gray-500 whitespace-nowrap">Fully Paid Payments</p>
             </div>
-            <p className="text-xl sm:text-2xl font-black text-green-700 tracking-tight">
+            <p className="text-xl sm:text-2xl font-black text-emerald-700 tracking-tight">
               {formatPeso(paymentStats.fullyPaid)}
             </p>
           </CardContent>
@@ -549,18 +551,18 @@ export default function PaymentsReceived({ onSetHeaderActionRight, user }: Payme
           aria-label="Filter by downpayments received"
           onClick={() => { setCardFilter(cardFilter === 'downpayment' ? 'all' : 'downpayment'); setCurrentPage(1); }}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCardFilter(cardFilter === 'downpayment' ? 'all' : 'downpayment'); setCurrentPage(1); } }}
-          className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-red-50 to-white hover:shadow-md ${
-            cardFilter === 'downpayment' ? 'border-red-600 ring-2 ring-red-600/20' : 'border-transparent hover:border-red-200'
+          className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-amber-50 to-white hover:shadow-md ${
+            cardFilter === 'downpayment' ? 'border-amber-600 ring-2 ring-amber-600/20' : 'border-transparent hover:border-amber-200'
           }`}
         >
           <CardContent className="pt-4 pb-3 px-3 sm:px-3.5">
             <div className="flex items-center gap-1.5 mb-1">
-              <div className="p-1.5 rounded-lg bg-red-100 text-red-700 shrink-0">
+              <div className="p-1.5 rounded-lg bg-amber-100 text-amber-700 shrink-0">
                 <Clock3 className="h-3.5 w-3.5" />
               </div>
               <p className="text-[9.5px] 2xl:text-[10px] font-black uppercase tracking-tight text-gray-500 whitespace-nowrap">Downpayments</p>
             </div>
-            <p className="text-xl sm:text-2xl font-black text-red-700 tracking-tight">
+            <p className="text-xl sm:text-2xl font-black text-amber-700 tracking-tight">
               {formatPeso(paymentStats.downpayment)}
             </p>
           </CardContent>
@@ -573,18 +575,18 @@ export default function PaymentsReceived({ onSetHeaderActionRight, user }: Payme
           aria-label="Filter by cash payments"
           onClick={() => { setCardFilter(cardFilter === 'cash' ? 'all' : 'cash'); setCurrentPage(1); }}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCardFilter(cardFilter === 'cash' ? 'all' : 'cash'); setCurrentPage(1); } }}
-          className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-amber-50 to-white hover:shadow-md ${
-            cardFilter === 'cash' ? 'border-amber-600 ring-2 ring-amber-600/20' : 'border-transparent hover:border-amber-200'
+          className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-sky-50 to-white hover:shadow-md ${
+            cardFilter === 'cash' ? 'border-sky-600 ring-2 ring-sky-600/20' : 'border-transparent hover:border-sky-200'
           }`}
         >
           <CardContent className="pt-4 pb-3 px-3 sm:px-3.5">
             <div className="flex items-center gap-1.5 mb-1">
-              <div className="p-1.5 rounded-lg bg-amber-100 text-amber-700 shrink-0">
+              <div className="p-1.5 rounded-lg bg-sky-100 text-sky-700 shrink-0">
                 <Wallet className="h-3.5 w-3.5" />
               </div>
               <p className="text-[9.5px] 2xl:text-[10px] font-black uppercase tracking-tight text-gray-500 whitespace-nowrap">Cash Payments</p>
             </div>
-            <p className="text-xl sm:text-2xl font-black text-amber-700 tracking-tight">
+            <p className="text-xl sm:text-2xl font-black text-sky-700 tracking-tight">
               {formatPeso(paymentStats.cash)}
             </p>
           </CardContent>
@@ -597,18 +599,18 @@ export default function PaymentsReceived({ onSetHeaderActionRight, user }: Payme
           aria-label="Filter by digital payments"
           onClick={() => { setCardFilter(cardFilter === 'digital' ? 'all' : 'digital'); setCurrentPage(1); }}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCardFilter(cardFilter === 'digital' ? 'all' : 'digital'); setCurrentPage(1); } }}
-          className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-cyan-50 to-white hover:shadow-md ${
-            cardFilter === 'digital' ? 'border-cyan-600 ring-2 ring-cyan-600/20' : 'border-transparent hover:border-cyan-200'
+          className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-purple-50 to-white hover:shadow-md ${
+            cardFilter === 'digital' ? 'border-purple-600 ring-2 ring-purple-600/20' : 'border-transparent hover:border-purple-200'
           }`}
         >
           <CardContent className="pt-4 pb-3 px-3 sm:px-3.5">
             <div className="flex items-center gap-1.5 mb-1">
-              <div className="p-1.5 rounded-lg bg-cyan-100 text-cyan-700 shrink-0">
+              <div className="p-1.5 rounded-lg bg-purple-100 text-purple-700 shrink-0">
                 <Smartphone className="h-3.5 w-3.5" />
               </div>
               <p className="text-[9.5px] 2xl:text-[10px] font-black uppercase tracking-tight text-gray-500 whitespace-nowrap">Digital Payments</p>
             </div>
-            <p className="text-xl sm:text-2xl font-black text-cyan-700 tracking-tight">
+            <p className="text-xl sm:text-2xl font-black text-purple-700 tracking-tight">
               {formatPeso(paymentStats.digital)}
             </p>
           </CardContent>
@@ -726,27 +728,26 @@ export default function PaymentsReceived({ onSetHeaderActionRight, user }: Payme
 
         <CardContent className="pt-0 px-2 sm:px-4 md:px-6">
           <div className="overflow-x-auto w-full">
-            <Table className="w-full table-fixed min-w-[760px] text-xs">
+            <Table className="w-full table-fixed min-w-0 text-xs">
               <colgroup>
-                <col className="w-[14%]" />
-                <col className="w-[11%]" />
                 <col className="w-[16%]" />
-                <col className="w-[12%]" />
-                <col className="w-[12%]" />
-                <col className="w-[12%]" />
+                <col className="w-[20%]" />
+                <col className="w-[17%]" />
                 <col className="w-[15%]" />
-                <col className="w-[8%]" />
+                <col className="w-[13%]" />
+                <col className="w-[12%]" />
+                <col className="w-[7%]" />
               </colgroup>
               <TableHeader className="bg-red-50/50 border-b border-red-100">
                 <TableRow className="border-b border-red-100 hover:bg-transparent">
-                  <TableHead className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">
-                    Payment Date
-                  </TableHead>
                   <TableHead className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">
                     Order #
                   </TableHead>
                   <TableHead className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">
                     Customer
+                  </TableHead>
+                  <TableHead className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">
+                    Payment Date
                   </TableHead>
                   <TableHead className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">
                     Payment Method
@@ -757,9 +758,6 @@ export default function PaymentsReceived({ onSetHeaderActionRight, user }: Payme
                   <TableHead className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">
                     Payment Status
                   </TableHead>
-                  <TableHead className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px]">
-                    Notes
-                  </TableHead>
                   <TableHead className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">
                     Actions
                   </TableHead>
@@ -768,7 +766,7 @@ export default function PaymentsReceived({ onSetHeaderActionRight, user }: Payme
               <TableBody className="divide-y divide-gray-100">
                 {paginatedOrders.length === 0 ? (
                   <TableRow className="hover:bg-transparent">
-                    <TableCell colSpan={8} className="px-6 py-20 text-center">
+                    <TableCell colSpan={7} className="px-6 py-20 text-center">
                       <div className="flex flex-col items-center justify-center space-y-3 opacity-40">
                         <Receipt size={48} className="text-gray-300" />
                         <p className="text-sm font-black text-gray-400 uppercase tracking-[0.2em]">No payment transactions found</p>
@@ -780,16 +778,27 @@ export default function PaymentsReceived({ onSetHeaderActionRight, user }: Payme
                     const collected = collectedSales(order);
                     const dateVal = order.transactionDate || order.createdAt;
                     const dateStr = dateVal ? dateFnsFormat(new Date(dateVal), 'MM/dd/yy hh:mm a') : '—';
-                    const methodStr = (order.paymentMethod || 'cash').toUpperCase();
+                    let methodStr = (order.paymentMethod || 'cash').toUpperCase();
+                    // Detect GCash/Maya from referenceNo when stored as CASH
+                    if (methodStr === 'CASH' && order.referenceNo && order.referenceNo.trim()) {
+                      const cleanRef = order.referenceNo.replace(/\D/g, '');
+                      methodStr = cleanRef.length === 13 ? 'GCASH' : 'MAYA';
+                    }
+                    // Split combined methods (e.g. "GCASH, CASH" or "MAYA, CASH") into separate tokens
+                    const methodTokens: string[] = methodStr
+                      .split(/[,/]+/)
+                      .map((m: string) => m.trim())
+                      .filter(Boolean);
+
+                    const getBadgeStyle = (m: string) => {
+                      if (m === 'GCASH') return 'bg-teal-50 text-teal-700 border-teal-300';
+                      if (m === 'MAYA') return 'bg-purple-50 text-purple-700 border-purple-300';
+                      return 'bg-sky-50 text-sky-700 border-sky-300'; // CASH
+                    };
                     const isDP = String(order.paymentStatus || '').toLowerCase() === 'downpayment';
                     const isPaid = String(order.paymentStatus || '').toLowerCase() === 'fully-paid';
                     const isCancelled = String(order.status || '').toLowerCase().includes('cancel');
 
-                    const notesText = order.referenceNo
-                      ? `Ref: ${order.referenceNo}`
-                      : (order.refundReason
-                          ? `Refund: ${order.refundReason}`
-                          : ((order as any).notes || order.paymentHistory?.find(p => p.notes)?.notes || '—'));
 
                     return (
                       <TableRow
@@ -797,17 +806,11 @@ export default function PaymentsReceived({ onSetHeaderActionRight, user }: Payme
                         onClick={() => setViewingOrder(order)}
                         className="border-b border-gray-100 hover:bg-gray-50/80 transition-all cursor-pointer"
                       >
-                        <TableCell className="px-2 py-2 text-center text-xs font-medium text-gray-700 whitespace-nowrap">
-                          <div className="inline-flex items-center justify-center gap-1">
-                            <CalendarIcon size={11} className="text-purple-600 shrink-0" />
-                            <span>{dateStr}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="px-2 py-2 text-center text-[11px] font-semibold whitespace-nowrap text-gray-800">
+                        <TableCell className="px-2 py-2 text-center text-xs font-black font-mono text-gray-900 whitespace-nowrap" title={order.orderNumber}>
                           {order.orderNumber}
                         </TableCell>
-                        <TableCell className="px-2 py-2 text-center">
-                          <div className="flex flex-col items-center justify-center text-center">
+                        <TableCell className="px-2 py-2 text-center max-w-0">
+                          <div className="flex flex-col items-center justify-center text-center w-full min-w-0">
                             <div className="text-xs font-bold text-gray-900 leading-tight truncate max-w-full" title={order.customerName}>
                               {order.customerName}
                             </div>
@@ -816,18 +819,23 @@ export default function PaymentsReceived({ onSetHeaderActionRight, user }: Payme
                             )}
                           </div>
                         </TableCell>
+                        <TableCell className="px-2 py-2 text-center text-xs font-medium text-gray-700 whitespace-nowrap">
+                          <div className="inline-flex items-center justify-center gap-1">
+                            <CalendarIcon size={11} className="text-slate-400 shrink-0" />
+                            <span className="whitespace-nowrap font-medium">{dateStr}</span>
+                          </div>
+                        </TableCell>
                         <TableCell className="px-2 py-2 text-center whitespace-nowrap">
-                          <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase border whitespace-nowrap ${
-                              methodStr.includes('GCASH')
-                                ? 'bg-cyan-50 text-cyan-700 border-cyan-200'
-                                : methodStr.includes('MAYA')
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                : 'bg-amber-50 text-amber-700 border-amber-200'
-                            }`}
-                          >
-                            {methodStr}
-                          </span>
+                          <div className="inline-flex items-center justify-center gap-1 flex-wrap">
+                            {methodTokens.map((m, i) => (
+                              <span
+                                key={i}
+                                className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase border whitespace-nowrap ${getBadgeStyle(m)}`}
+                              >
+                                {m}
+                              </span>
+                            ))}
+                          </div>
                         </TableCell>
                         <TableCell className="px-2 py-2 text-xs font-bold text-emerald-700 text-center whitespace-nowrap">
                           {formatPeso(collected)}
@@ -836,20 +844,15 @@ export default function PaymentsReceived({ onSetHeaderActionRight, user }: Payme
                           <span
                             className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase border whitespace-nowrap ${
                               isCancelled
-                                ? 'bg-red-50 text-red-700 border-red-200'
+                                ? 'bg-rose-50 text-rose-700 border-rose-300'
                                 : isPaid
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
                                 : isDP
-                                ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
-                                : 'bg-gray-50 text-gray-600 border-gray-200'
+                                ? 'bg-amber-50 text-amber-700 border-amber-300'
+                                : 'bg-gray-50 text-gray-600 border-gray-300'
                             }`}
                           >
                             {isCancelled ? 'Cancelled' : isPaid ? 'Fully Paid' : isDP ? 'Downpayment' : order.paymentStatus || 'Pending'}
-                          </span>
-                        </TableCell>
-                        <TableCell className="px-2 py-2 text-center text-xs text-gray-600">
-                          <span className="truncate block max-w-full mx-auto text-[11px] text-center" title={notesText}>
-                            {notesText}
                           </span>
                         </TableCell>
                         <TableCell className="px-2 py-2 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
@@ -864,16 +867,6 @@ export default function PaymentsReceived({ onSetHeaderActionRight, user }: Payme
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-52 p-1.5 space-y-1">
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setViewingOrder(order);
-                                }}
-                                className="border border-blue-200 rounded-md px-2.5 py-1.5 text-blue-700 bg-blue-50 hover:bg-blue-100 focus:text-blue-800 focus:bg-blue-100 font-bold cursor-pointer"
-                              >
-                                <Eye className="h-4 w-4 mr-2 text-blue-600" />
-                                View Details
-                              </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -970,6 +963,7 @@ export default function PaymentsReceived({ onSetHeaderActionRight, user }: Payme
             if (!open) setViewingOrder(null);
           }}
           order={viewingOrder}
+          user={user}
         />
       )}
 

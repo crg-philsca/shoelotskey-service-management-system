@@ -151,7 +151,26 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [isFilterOpen, setIsFilterOpen] = useState(false);
-    const [cardFilter, setCardFilter] = useState<'all' | 'inventory' | 'operating' | 'other'>('all');
+    const [cardFilter, setCardFilter] = useState<'all' | 'inventory' | 'operating' | 'other'>(() => {
+        return (location.state as any)?.filterCard || (location.state as any)?.cardFilter || 'all';
+    });
+
+    useEffect(() => {
+        const state = location.state as any;
+        if (state?.dateRange) {
+            setProfitRange(state.dateRange);
+        }
+        if (state?.customStartDate !== undefined) {
+            setCustomStartDate(state.customStartDate || '');
+        }
+        if (state?.customEndDate !== undefined) {
+            setCustomEndDate(state.customEndDate || '');
+        }
+        if (state?.filterCard || state?.cardFilter) {
+            setCardFilter(state.filterCard || state.cardFilter);
+        }
+    }, [location.state]);
+
     const [categorySearch, setCategorySearch] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 15;
@@ -614,7 +633,7 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
 
                 <CardContent className="pt-0">
                     <div className="overflow-x-auto w-full">
-                        <Table className="w-full table-fixed min-w-[700px] text-sm">
+                        <Table className="w-full table-fixed min-w-0 text-sm">
                             <colgroup>
                                 <col className="w-[15%]" />
                                 <col className="w-[20%]" />
@@ -687,8 +706,21 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
                                                     })()}
                                                 </span>
                                             </TableCell>
-                                            <TableCell className="px-3 py-2 text-xs font-medium text-gray-700 whitespace-normal break-words text-center">
-                                                {expense.notes || <span className="text-gray-400 italic">-</span>}
+                                            <TableCell className="px-3 py-2 text-xs font-medium text-gray-700 text-center">
+                                                {(() => {
+                                                    const raw = expense.notes || '';
+                                                    if (!raw.trim()) return <span className="text-gray-400 italic">—</span>;
+                                                    // Extract only the [ADDITIONAL NOTES] section if present
+                                                    const addlMatch = raw.match(/\[ADDITIONAL NOTES\]\s*\n?([\s\S]*)/i);
+                                                    if (addlMatch) {
+                                                        const clean = addlMatch[1].trim();
+                                                        return clean || <span className="text-gray-400 italic">—</span>;
+                                                    }
+                                                    // If no bracket markup at all, show raw
+                                                    if (!/^\[/.test(raw.trim())) return raw;
+                                                    // Has bracket header but no ADDITIONAL NOTES → no user notes
+                                                    return <span className="text-gray-400 italic">—</span>;
+                                                })()}
                                             </TableCell>
                                             <TableCell className="px-3 py-2 text-center font-bold text-xs text-red-700 whitespace-nowrap">
                                                 ₱{Number(expense.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}

@@ -122,9 +122,9 @@ export function calculateOfficialReleaseBreakdown(
             const days = officialServiceDays(serviceName, catalogDurations) || ((serviceName || '').trim() === 'Basic Cleaning' ? 10 : 25);
             shoeBase = Math.max(shoeBase, days);
         });
-        const hasFullReglueBase = servicesArr.some((s) => {
+        const hasReglueBase = servicesArr.some((s) => {
             const low = (s || '').trim().toLowerCase();
-            return low === 'full reglue' || low.includes('full reglue');
+            return low.includes('reglue');
         });
 
         let reglueAddonDaysAccounted = false;
@@ -142,14 +142,14 @@ export function calculateOfficialReleaseBreakdown(
                 (lowered.includes('reglue') && (lowered.includes('midsole') || lowered.includes('undersole')))
             );
             if (isRegluePart) {
-                // Full Reglue already encompasses midsole and undersole reglue (25 days total) - do NOT add extra days
-                if (hasFullReglueBase) {
+                // Base reglue (Minor or Full) already encompasses reglue curing (25 days total) - do NOT add extra days
+                if (hasReglueBase) {
                     return;
                 }
-                // If Full Reglue is not in base, but midsole/undersole reglue are both selected as add-ons:
+                // If no reglue in base, but midsole/undersole reglue are both selected as add-ons:
                 // they cure concurrently in 25 days total, not 50 days
                 if (!reglueAddonDaysAccounted) {
-                    shoeAddOn += officialServiceDays(trimmedName, catalogDurations);
+                    shoeAddOn = Math.max(shoeAddOn, officialServiceDays(trimmedName, catalogDurations));
                     reglueAddonDaysAccounted = true;
                 }
                 return;

@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/ca
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { Input } from '@/app/components/ui/input';
-import { Package, PlusCircle, PackagePlus, Search, Filter, AlertTriangle, ArrowUpRight, ChevronLeft, ChevronRight, Edit, Trash2, XCircle, X, ShieldCheck, Loader2 } from 'lucide-react';
+import { Package, PlusCircle, PackagePlus, Search, Filter, AlertTriangle, ArrowUpRight, ChevronLeft, ChevronRight, Edit, Trash2, XCircle, X, ShieldCheck, Loader2, MoreVertical } from 'lucide-react';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import RestockModal from '@/app/components/RestockModal';
 import InventoryDetailModal from '@/app/components/InventoryDetailModal';
@@ -15,6 +15,7 @@ import {
     DialogDescription,
     DialogTrigger
 } from '@/app/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { toast } from 'sonner';
 import { useInventory } from '@/app/context/InventoryContext';
@@ -590,29 +591,29 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                     </div>
 
                     <div className="overflow-x-auto w-full min-h-[380px]">
-                        <table className="w-full table-fixed min-w-[760px] border-t border-gray-100">
+                        <table className="w-full table-fixed min-w-0 border-t border-gray-100">
                             <colgroup>
-                                <col className="w-[18%]" />
-                                <col className="w-[13%]" />
-                                <col className="w-[12%]" />
-                                <col className="w-[10%]" />
+                                <col className="w-[19%]" />
                                 <col className="w-[11%]" />
-                                <col className="w-[13%]" />
+                                <col className="w-[11%]" />
+                                <col className="w-[9%]" />
+                                <col className="w-[11%]" />
+                                <col className="w-[14%]" />
                                 <col className="w-[10%]" />
-                                <col className="w-[7%]" />
+                                <col className="w-[9%]" />
                                 <col className="w-[6%]" />
                             </colgroup>
                             <thead className="bg-red-50/60 border-y border-red-100">
                                 <tr>
-                                    <th className="px-2.5 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Item Name</th>
-                                    <th className="px-2.5 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Category</th>
-                                    <th className="px-2.5 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Package</th>
-                                    <th className="px-2.5 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Unit Price</th>
-                                    <th className="px-2.5 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Retail Price</th>
-                                    <th className="px-2.5 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Stock Level</th>
-                                    <th className="px-2.5 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Stock Status</th>
-                                    <th className="px-2.5 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Status</th>
-                                    <th className="px-2.5 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap no-print">Action</th>
+                                    <th className="px-2 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Item Name</th>
+                                    <th className="px-1.5 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Category</th>
+                                    <th className="px-1.5 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Package</th>
+                                    <th className="px-1.5 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Unit Price</th>
+                                    <th className="px-1.5 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Retail Price</th>
+                                    <th className="px-1.5 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Stock Level</th>
+                                    <th className="px-1 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Stock Status</th>
+                                    <th className="px-1 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Status</th>
+                                    <th className="px-1 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap no-print">Action</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -636,37 +637,49 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                         onClick={() => setSelectedItem(item)}
                                         className="hover:bg-gray-50/80 transition-colors cursor-pointer"
                                     >
-                                        <td className="px-2.5 py-2 text-center">
-                                            <p className="text-xs font-bold text-gray-900 leading-none truncate max-w-full">{item.name}</p>
-                                            <p className="text-[9.5px] text-gray-400 mt-1 uppercase font-semibold truncate max-w-full">{item.inventory_number || `INV-${item.id.toString().padStart(4, '0')}`}</p>
+                                        <td className="px-2 py-2 max-w-0">
+                                            <div className="flex justify-center w-full">
+                                              <div className="w-[180px] max-w-full text-left min-w-0">
+                                                <p className="text-xs font-bold text-gray-900 leading-snug truncate" title={item.name}>{item.name}</p>
+                                                <p className="text-[9.5px] text-gray-400 mt-0.5 uppercase font-semibold truncate">{item.inventory_number || `INV-${item.id.toString().padStart(4, '0')}`}</p>
+                                              </div>
+                                            </div>
                                         </td>
-                                        <td className="px-2.5 py-2 text-center text-xs font-bold text-gray-600 uppercase whitespace-nowrap">
-                                            {item.category}
+                                        <td className="px-1.5 py-2 text-center max-w-0">
+                                            <span className="block text-xs font-bold text-gray-600 uppercase truncate max-w-full" title={item.category}>
+                                                {item.category}
+                                            </span>
                                         </td>
-                                        <td className="px-2.5 py-2 text-center">
+                                        <td className="px-1.5 py-2 text-center max-w-0">
                                             {(() => {
                                                 const pres = getInventoryPresentation(item);
                                                 return pres.isPackaged ? (
-                                                    <div className="flex flex-col items-center justify-center text-center gap-0.5">
-                                                        <span className="text-xs font-bold text-gray-800 whitespace-nowrap truncate max-w-full">{pres.packageLabel.split(' (')[0]}</span>
-                                                        <span className="text-[10px] text-gray-400 font-semibold whitespace-nowrap">{item.package_size?.toLocaleString()} {item.unit}</span>
+                                                    <div className="flex flex-col items-center justify-center text-center gap-0.5 min-w-0 max-w-full">
+                                                        <span className="text-xs font-bold text-gray-800 whitespace-nowrap truncate max-w-full" title={pres.packageLabel}>
+                                                            {pres.packageLabel.split(' (')[0]}
+                                                        </span>
+                                                        <span className="text-[10px] text-gray-400 font-semibold whitespace-nowrap truncate max-w-full">
+                                                            {item.package_size?.toLocaleString()} {item.unit}
+                                                        </span>
                                                     </div>
                                                 ) : (
                                                     <span className="text-xs font-bold text-gray-400 italic">Bulk</span>
                                                 );
                                             })()}
                                         </td>
-                                        <td className="px-2.5 py-2 text-center font-black text-xs text-gray-900 whitespace-nowrap">{formatPeso(item.price || 0)}</td>
-                                        <td className="px-2.5 py-2 text-center font-black text-xs whitespace-nowrap">
+                                        <td className="px-1.5 py-2 text-center font-black text-xs text-gray-900 whitespace-nowrap max-w-0">
+                                            <span className="block truncate max-w-full">{formatPeso(item.price || 0)}</span>
+                                        </td>
+                                        <td className="px-1.5 py-2 text-center font-black text-xs whitespace-nowrap max-w-0">
                                             {Boolean(item.is_retail) && Number(item.retail_price || 0) > 0 ? (
-                                                <span className="text-emerald-700 font-black">{formatPeso(item.retail_price)}</span>
+                                                <span className="text-emerald-700 font-black block truncate max-w-full">{formatPeso(item.retail_price)}</span>
                                             ) : (
-                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[8.5px] font-extrabold uppercase tracking-wider bg-gray-100 text-gray-500 border border-gray-200 whitespace-nowrap">
+                                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] sm:text-[8.5px] font-extrabold uppercase tracking-wider bg-gray-100 text-gray-500 border border-gray-200 whitespace-nowrap">
                                                     NOT FOR SALE
                                                 </span>
                                             )}
                                         </td>
-                                        <td className="px-2.5 py-2 text-center">
+                                        <td className="px-1.5 py-2 text-center max-w-0">
                                             {(() => {
                                                 const pres = getInventoryPresentation(item);
                                                 const isLow = pres.stockStatus === 'Low Stock';
@@ -680,20 +693,20 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                                     : 'text-gray-500';
                                                 const barColor = isCrit ? 'bg-red-500' : isLow ? 'bg-amber-400' : 'bg-blue-500';
                                                 return (
-                                                    <div className="flex flex-col items-center justify-center gap-1">
+                                                    <div className="flex flex-col items-center justify-center gap-1 min-w-0 max-w-full">
                                                         {/* Primary: raw stock */}
-                                                        <div className="flex items-center justify-center gap-1.5">
-                                                             <span className="text-xs font-black text-gray-900">{(item.stock || 0).toLocaleString()}</span>
-                                                            <span className="text-[9.5px] font-extrabold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded uppercase">{item.unit || ''}</span>
+                                                        <div className="flex items-center justify-center gap-1.5 max-w-full">
+                                                             <span className="text-xs font-black text-gray-900 truncate">{(item.stock || 0).toLocaleString()}</span>
+                                                            <span className="text-[9.5px] font-extrabold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded uppercase shrink-0">{item.unit || ''}</span>
                                                         </div>
                                                         {pres.isPackaged && (
                                                             <>
                                                                 {/* Equivalent line */}
-                                                                <span className={`text-[9.5px] font-bold leading-tight text-center ${equivalentColor}`}>
+                                                                <span className={`text-[9.5px] font-bold leading-tight text-center truncate max-w-full ${equivalentColor}`} title={pres.equivalentLabel}>
                                                                     {pres.equivalentLabel}
                                                                 </span>
                                                                 {/* Proportion bar */}
-                                                                <div className="w-20 h-1.5 bg-gray-100 rounded-full overflow-hidden border border-gray-200">
+                                                                <div className="w-16 sm:w-20 max-w-full h-1.5 bg-gray-100 rounded-full overflow-hidden border border-gray-200">
                                                                     <div
                                                                         className={`h-full rounded-full ${barColor}`}
                                                                         style={{ width: `${Math.min(pres.progressBarValue, 100)}%` }}
@@ -705,7 +718,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                                 );
                                             })()}
                                         </td>
-                                        <td className="px-2.5 py-2 text-center">
+                                        <td className="px-1 py-2 text-center max-w-0">
                                             {(() => {
                                                 const pres = getInventoryPresentation(item);
                                                 const status = pres.stockStatus;
@@ -714,54 +727,61 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                                         ${status === 'In Stock' ? 'bg-blue-50 text-blue-700 border-blue-100' : ''}
                                                         ${status === 'Low Stock' ? 'bg-amber-50 text-amber-700 border-amber-100' : ''}
                                                         ${status === 'No Stock' ? 'bg-red-50 text-red-700 border-red-100' : ''}
-                                                        text-[10px] font-black uppercase
+                                                        text-[9.5px] font-black uppercase whitespace-nowrap px-1.5 py-0.5
                                                     `} title={pres.reorderRecommendation}>
                                                         {status}
                                                     </Badge>
                                                 );
                                             })()}
                                         </td>
-                                        <td className="px-2.5 py-2 text-center">
+                                        <td className="px-1 py-2 text-center max-w-0">
                                             <div className="flex justify-center">
                                                 <Badge className={`
                                                     ${item.isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-gray-100 text-gray-500 border-gray-200'}
-                                                    text-[10px] font-black uppercase
+                                                    text-[9.5px] font-black uppercase whitespace-nowrap px-1.5 py-0.5
                                                 `}>
                                                     {item.isActive ? 'Active' : 'Inactive'}
                                                 </Badge>
                                             </div>
                                         </td>
-                                        <td className="px-2.5 py-2 text-center no-print" onClick={(e) => e.stopPropagation()}>
-                                            <div className="flex items-center justify-center gap-2">
-                                                {/* P1-5 FIX: PUT /api/inventory/{id} requires Depends(require_role(["owner"]))
-                                                    on the backend. Previously Edit was shown to every role, letting Staff
-                                                    fill out changes and only find out on Update that the save was rejected.
-                                                    Gate visibility to match backend RBAC, same as Delete/New Item/Restock. */}
-                                                {['owner', 'admin', 'staff'].includes(user.role?.toLowerCase() || '') && (
-                                                <Button 
-                                                    variant="ghost" 
-                                                    className="h-8 w-8 p-0 rounded-lg border border-amber-500 text-amber-600 hover:bg-amber-50 transition-colors"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleEditItem(item);
-                                                    }}
-                                                >
-                                                    <Edit size={14} strokeWidth={2.5} />
-                                                </Button>
-                                                )}
-                                                {['owner', 'admin', 'staff'].includes(user.role?.toLowerCase() || '') && (
+                                        <td className="px-1 py-2 text-center whitespace-nowrap no-print" onClick={(e) => e.stopPropagation()}>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
                                                     <Button 
-                                                        variant="ghost" 
-                                                        className="h-8 w-8 p-0 rounded-lg border border-red-500 text-red-600 hover:bg-red-50 transition-colors"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleDeleteItem(item.id);
-                                                        }}
+                                                        variant="outline" 
+                                                        className="h-7 w-7 p-0 border-red-200 text-red-700 bg-red-50 hover:bg-red-100 font-bold rounded-md inline-flex items-center justify-center" 
+                                                        title="Actions"
                                                     >
-                                                        <Trash2 size={14} strokeWidth={2.5} />
+                                                        <MoreVertical className="h-3.5 w-3.5 text-red-500" />
                                                     </Button>
-                                                )}
-                                            </div>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="w-48 p-1.5 space-y-1">
+                                                    {['owner', 'admin', 'staff'].includes(user.role?.toLowerCase() || '') && (
+                                                        <DropdownMenuItem
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleEditItem(item);
+                                                            }}
+                                                            className="border border-yellow-200 rounded-md px-2.5 py-1.5 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:text-yellow-800 focus:bg-yellow-100 font-bold cursor-pointer"
+                                                        >
+                                                            <Edit className="h-4 w-4 mr-2 text-yellow-600" />
+                                                            Edit Item Detail
+                                                        </DropdownMenuItem>
+                                                    )}
+                                                    {['owner', 'admin', 'staff'].includes(user.role?.toLowerCase() || '') && (
+                                                        <DropdownMenuItem
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleDeleteItem(item.id);
+                                                            }}
+                                                            className="border border-red-200 rounded-md px-2.5 py-1.5 text-red-700 bg-red-50 hover:bg-red-100 focus:text-red-800 focus:bg-red-100 font-bold cursor-pointer"
+                                                        >
+                                                            <Trash2 className="h-4 w-4 mr-2 text-red-600" />
+                                                            Delete Item
+                                                        </DropdownMenuItem>
+                                                    )}
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
                                         </td>
                                     </tr>
                                  )))}
@@ -828,7 +848,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                 </CardContent>
             </Card>
             <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-                <DialogContent showCloseButton={false} className="w-[calc(100vw-1.5rem)] sm:max-w-xl max-h-[90vh] overflow-hidden flex flex-col gap-0 p-0">
+                <DialogContent showCloseButton={false} className="w-[calc(100vw-1.5rem)] sm:max-w-[500px] max-h-[90vh] overflow-hidden flex flex-col gap-0 p-0">
                     <DialogHeader className="shrink-0 sticky top-0 z-10 bg-white px-4 sm:px-6 py-4 border-b border-gray-100 relative flex items-center justify-center">
                         {editingItem && (
                             <div className="absolute left-6 top-1/2 -translate-y-1/2 flex items-center">

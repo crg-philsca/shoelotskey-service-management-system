@@ -28,6 +28,11 @@ export interface ShoeEntry {
      * Used for historical financial integrity to prevent old prices from changing.
      */
     historicalAddOnPrices?: { name: string; price: number }[];
+    status?: JobStatus;
+    actualReleaseDate?: Date | string;
+    actualCompletionDate?: Date | string;
+    releasedBy?: string;
+    claimedBy?: string;
 }
 
 export interface InventoryUsed {
@@ -128,6 +133,8 @@ export interface BaseJobOrderData {
   releaseTime?: string;
   refundAmount?: number;
   refundReason?: string;
+  cancellationReason?: string;
+  forfeitedDeposit?: number;
   initialPaymentMethod?: PaymentMethod | string;
   finalPaymentMethod?: PaymentMethod | string;
   claimReferenceNo?: string;
@@ -178,6 +185,11 @@ export interface ShoeItem {
    * Used for historical financial integrity to prevent old prices from changing.
    */
   historicalAddOnPrices?: { name: string; price: number }[];
+  status?: JobStatus;
+  actualReleaseDate?: Date | string;
+  actualCompletionDate?: Date | string;
+  releasedBy?: string;
+  claimedBy?: string;
 }
 
 export interface JobOrder extends BaseJobOrderData {
@@ -204,8 +216,11 @@ export interface JobOrder extends BaseJobOrderData {
   }>;
   inventoryUsed?: InventoryUsed[];
   inventoryApplied?: boolean;
-  cancellationStage?: 'new-order' | 'on-going';
-  refundStatus?: 'refunded' | 'no-refund';
+  cancellationStage?: 'new-order' | 'on-going' | string;
+  cancellationReason?: string;
+  refundStatus?: 'refunded' | 'no-refund' | string;
+  refundAmount?: number;
+  forfeitedDeposit?: number;
   cancelledAt?: Date | string;
 }
 
