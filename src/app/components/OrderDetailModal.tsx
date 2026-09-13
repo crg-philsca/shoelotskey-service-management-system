@@ -562,13 +562,13 @@ export default function OrderDetailModal({
                           cancelledAt: null as any,
                           updatedAt: new Date()
                         }, user?.username || 'Staff');
-                        toast.success(`Order #${order.orderNumber} restored to ${targetStage.replace('-', ' ')}`);
+                        toast.success(`Order #${order.orderNumber} restored to ${targetStage.replace('-', ' ')} (${isRefund ? 'Refund Undone' : 'Cancellation Undone'})`);
                         onOpenChange(false);
                       }}
                       className="h-6 px-2 text-[11px] font-bold text-purple-700 border-purple-300 bg-white hover:bg-purple-50 shadow-xs flex items-center gap-1 cursor-pointer"
                     >
                       <RotateCcw size={11} />
-                      Undo Cancellation
+                      {isRefund ? 'Undo Refund' : 'Undo Cancellation'}
                     </Button>
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase border ${isRefund ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-rose-100 text-rose-800 border-rose-300'}`}>
                       {isRefund ? 'Refunded' : 'Deposit Forfeited'}

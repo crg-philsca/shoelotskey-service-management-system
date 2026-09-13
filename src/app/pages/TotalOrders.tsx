@@ -752,12 +752,13 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                                                                            cancelledAt: null as any,
                                                                            updatedAt: new Date()
                                                                        }, user.username);
-                                                                       toast.success(`Order #${order.orderNumber} restored to ${targetStage.replace('-', ' ')}`);
+                                                                       const wasRefunded = order.refundStatus === 'refunded';
+                                                                       toast.success(`Order #${order.orderNumber} restored to ${targetStage.replace('-', ' ')} (${wasRefunded ? 'Refund Undone' : 'Cancellation Undone'})`);
                                                                    }}
                                                                    className="border border-purple-200 rounded-md px-2.5 py-1.5 text-purple-700 bg-purple-50 hover:bg-purple-100 focus:text-purple-800 focus:bg-purple-100 font-bold cursor-pointer"
                                                                >
                                                                    <RotateCcw className="h-4 w-4 mr-2 text-purple-600" />
-                                                                   Undo Cancel Order
+                                                                   {order.refundStatus === 'refunded' ? 'Undo Refund' : 'Undo Cancel Order'}
                                                                </DropdownMenuItem>
                                                            )}
                                                           <DropdownMenuItem

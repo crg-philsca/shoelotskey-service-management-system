@@ -442,6 +442,21 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
+    const handleUndoRefund = (order: JobOrder) => {
+        const targetStage = order.cancellationStage || 'new-order';
+        const wasRefunded = order.refundStatus === 'refunded';
+        updateOrder(order.id, {
+            status: targetStage as any,
+            cancellationStage: null as any,
+            refundStatus: null as any,
+            refundAmount: 0,
+            refundReason: null as any,
+            cancelledAt: null as any,
+            updatedAt: new Date()
+        }, user?.username || 'Staff');
+        toast.success(`Order #${order.orderNumber} restored to ${targetStage.replace('-', ' ')} (${wasRefunded ? 'Refund Undone' : 'Cancellation Undone'})`);
+    };
+
     return (
         <div className="space-y-6 pb-10">
             {profitRange === 'Custom' && (
@@ -761,40 +776,69 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                                                     <span className="font-bold text-gray-900 text-xs">₱{(Number(order.grandTotal) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                                 </TableCell>
                                                 <TableCell className="px-1 py-1.5 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild>
+                                                    <div className="flex items-center justify-center gap-1.5">
+                                                        {(order.refundStatus === 'refunded' || isCancelledOrder(order) || order.status === 'cancelled') && (
                                                             <Button
                                                                 variant="outline"
-                                                                className="h-7 w-7 p-0 border-red-200 text-red-700 bg-red-50 hover:bg-red-100 font-bold rounded-md inline-flex items-center justify-center"
-                                                                title="Actions"
+                                                                size="sm"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleUndoRefund(order);
+                                                                }}
+                                                                className="h-7 px-2 text-[11px] font-bold border-purple-200 text-purple-700 bg-purple-50 hover:bg-purple-100 shadow-xs inline-flex items-center gap-1 cursor-pointer transition-all"
+                                                                title={order.refundStatus === 'refunded' ? "Undo Refund" : "Undo Cancel Order"}
                                                             >
-                                                                <MoreVertical className="h-3.5 w-3.5 text-red-500" />
+                                                                <RotateCcw className="h-3.5 w-3.5 text-purple-600" />
+                                                                <span>{order.refundStatus === 'refunded' ? 'Undo Refund' : 'Undo Cancel'}</span>
                                                             </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end" className="w-52 p-1.5 space-y-1">
-                                                            <DropdownMenuItem
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setSelectedOrder(order);
-                                                                    setIsEditing(true);
-                                                                }}
-                                                                className="border border-yellow-200 rounded-md px-2.5 py-1.5 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:text-yellow-800 focus:bg-yellow-100 font-bold cursor-pointer"
-                                                            >
-                                                                <Edit className="h-4 w-4 mr-2 text-yellow-600" />
-                                                                Edit Order Detail
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setOrderToDelete(order);
-                                                                }}
-                                                                className="border border-red-200 rounded-md px-2.5 py-1.5 text-red-700 bg-red-50 hover:bg-red-100 focus:text-red-800 focus:bg-red-100 font-bold cursor-pointer"
-                                                            >
-                                                                <Trash2 className="h-4 w-4 mr-2 text-red-600" />
-                                                                Delete Order
-                                                            </DropdownMenuItem>
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
+                                                        )}
+                                                        <DropdownMenu>
+                                                            <DropdownMenuTrigger asChild>
+                                                                <Button
+                                                                    variant="outline"
+                                                                    className="h-7 w-7 p-0 border-red-200 text-red-700 bg-red-50 hover:bg-red-100 font-bold rounded-md inline-flex items-center justify-center"
+                                                                    title="Actions"
+                                                                >
+                                                                    <MoreVertical className="h-3.5 w-3.5 text-red-500" />
+                                                                </Button>
+                                                            </DropdownMenuTrigger>
+                                                            <DropdownMenuContent align="end" className="w-52 p-1.5 space-y-1">
+                                                                {(order.refundStatus === 'refunded' || isCancelledOrder(order) || order.status === 'cancelled') && (
+                                                                    <DropdownMenuItem
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleUndoRefund(order);
+                                                                        }}
+                                                                        className="border border-purple-200 rounded-md px-2.5 py-1.5 text-purple-700 bg-purple-50 hover:bg-purple-100 focus:text-purple-800 focus:bg-purple-100 font-bold cursor-pointer"
+                                                                    >
+                                                                        <RotateCcw className="h-4 w-4 mr-2 text-purple-600" />
+                                                                        {order.refundStatus === 'refunded' ? 'Undo Refund' : 'Undo Cancel Order'}
+                                                                    </DropdownMenuItem>
+                                                                )}
+                                                                <DropdownMenuItem
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setSelectedOrder(order);
+                                                                        setIsEditing(true);
+                                                                    }}
+                                                                    className="border border-yellow-200 rounded-md px-2.5 py-1.5 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:text-yellow-800 focus:bg-yellow-100 font-bold cursor-pointer"
+                                                                >
+                                                                    <Edit className="h-4 w-4 mr-2 text-yellow-600" />
+                                                                    Edit Order Detail
+                                                                </DropdownMenuItem>
+                                                                <DropdownMenuItem
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setOrderToDelete(order);
+                                                                    }}
+                                                                    className="border border-red-200 rounded-md px-2.5 py-1.5 text-red-700 bg-red-50 hover:bg-red-100 focus:text-red-800 focus:bg-red-100 font-bold cursor-pointer"
+                                                                >
+                                                                    <Trash2 className="h-4 w-4 mr-2 text-red-600" />
+                                                                    Delete Order
+                                                                </DropdownMenuItem>
+                                                            </DropdownMenuContent>
+                                                        </DropdownMenu>
+                                                    </div>
                                                 </TableCell>
                                             </TableRow>
                                         );
