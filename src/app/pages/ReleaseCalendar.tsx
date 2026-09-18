@@ -563,7 +563,7 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5 align-start content-start">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-2.5 align-start content-start">
                   {paginatedJobs.map(job => {
                     const isOverdue = isJobOverdue(job);
                     const daysOverdue = getDaysOverdue(job);
@@ -615,7 +615,7 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
                     return (
                     <div
                       key={job.id}
-                      className={`group border rounded-xl p-2 sm:p-2.5 hover:shadow-md transition-all duration-200 bg-white relative overflow-hidden flex flex-col justify-between h-full ring-1 ring-transparent cursor-pointer ${
+                      className={`group border rounded-xl p-2 sm:p-2.5 hover:shadow-md transition-all duration-200 bg-white relative overflow-hidden flex flex-col justify-between h-full min-h-[158px] sm:min-h-[160px] ring-1 ring-transparent cursor-pointer ${
                         isOverdue 
                           ? 'border-rose-200 hover:border-rose-400 hover:ring-rose-50' 
                           : 'border-blue-200 hover:border-blue-400 hover:ring-blue-50'
