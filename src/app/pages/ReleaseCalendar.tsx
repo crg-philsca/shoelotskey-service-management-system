@@ -625,9 +625,7 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
                       <div>
                         {/* Header: Order Number + Badges */}
                         <div className="flex items-center justify-between gap-1.5 mb-1">
-                          <span className={`text-xs sm:text-[13px] font-black tracking-tight truncate ${
-                            isOverdue ? 'text-rose-900' : 'text-blue-950'
-                          }`} title={job.orderNumber}>
+                          <span className="text-xs sm:text-[13px] font-black tracking-tight truncate text-black" title={job.orderNumber}>
                             {job.orderNumber}
                           </span>
                           <div className="flex items-center gap-1 shrink-0">
