@@ -1,8 +1,13 @@
 import { createContext, useContext, useState, ReactNode, useEffect, useRef, useMemo } from 'react';
+import { format as dateFnsFormat } from 'date-fns';
 import { JobOrder, PaymentRecord } from '@/app/types';
 import { useActivities } from './ActivityContext';
+import { toast } from 'sonner';
 // P1-10 FIX: centralized API base resolution (see src/app/lib/apiBase.ts).
 import { API_BASE } from '@/app/lib/apiBase';
+import { parseDateFromOrderId } from '@/app/lib/orderNumber';
+import { resolvePaymentMethod } from '@/app/lib/salesAnalytics';
+import { saveOrderAttachments, enrichOrderWithAttachments } from '@/app/lib/imageUtils';
 
 function parseServerDate(dateStr: any): Date {
     if (!dateStr) return new Date();
@@ -10,6 +15,19 @@ function parseServerDate(dateStr: any): Date {
         return new Date(dateStr.replace(' ', 'T'));
     }
     return new Date(dateStr);
+}
+
+function parseOrderDateWithId(rawDate: any, orderNumber?: string): Date {
+    const idDate = parseDateFromOrderId(orderNumber);
+    const base = parseServerDate(rawDate);
+    if (idDate && !isNaN(idDate.getTime())) {
+        const combined = new Date(idDate);
+        if (!isNaN(base.getTime())) {
+            combined.setHours(base.getHours(), base.getMinutes(), base.getSeconds(), base.getMilliseconds());
+        }
+        return combined;
+    }
+    return base;
 }
 
 // Resilience Check: Verifies if the backend is actually reachable
@@ -52,29 +70,98 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
     const syncNotificationShown = useRef(false);
     const inFlightOrderUpdates = useRef<Set<string>>(new Set());
     const { addActivity } = useActivities();
+    const CACHE_KEY = 'jobOrders_v23_cache';
+
+    // Safe cache saver with quota overflow eviction and stripping heavy base64 strings
+    const safeSaveCachedOrders = (ordersToCache: JobOrder[]) => {
+        if (typeof window === 'undefined' || !ordersToCache) return;
+        try {
+            // Strip heavy base64 strings (signatures, photos) from order cache to stay well under 5MB quota
+            const lightOrders = ordersToCache.map(o => {
+                const { beforeImage, afterImage, customerSignature, staffSignature, ...rest } = o as any;
+                return rest;
+            });
+            const serialized = JSON.stringify(lightOrders);
+            try {
+                localStorage.setItem(CACHE_KEY, serialized);
+            } catch (e: any) {
+                if (e?.name === 'QuotaExceededError' || e?.code === 22 || String(e).includes('quota')) {
+                    console.warn('[OrderContext] LocalStorage quota exceeded. Purging stale keys...');
+                    try {
+                        localStorage.removeItem('jobOrders_v19_cache');
+                        localStorage.removeItem('jobOrders_v20_cache');
+                        localStorage.removeItem('jobOrders_v21_cache');
+                        localStorage.removeItem('jobOrders_v22_cache');
+                        localStorage.removeItem('shoelotskey_job_orders');
+                        localStorage.removeItem('jobOrders_cache');
+                    } catch (_) {}
+                    try {
+                        localStorage.setItem(CACHE_KEY, serialized);
+                    } catch (_) {
+                        try {
+                            localStorage.setItem(CACHE_KEY, JSON.stringify(lightOrders.slice(0, 50)));
+                        } catch (finalErr) {
+                            console.warn('[OrderContext] LocalStorage quota exhausted. Skipping cache write.', finalErr);
+                        }
+                    }
+                }
+            }
+        } catch (err) {
+            console.warn('[OrderContext] Failed to serialize orders for cache:', err);
+        }
+    };
+
     const [orders, setOrders] = useState<JobOrder[]>(() => {
         if (typeof window === 'undefined') return [];
-        const saved = localStorage.getItem('jobOrders_v20_cache') || localStorage.getItem('jobOrders_v19_cache');
+        try {
+            localStorage.removeItem('jobOrders_v19_cache');
+            localStorage.removeItem('jobOrders_v20_cache');
+            localStorage.removeItem('jobOrders_v21_cache');
+            localStorage.removeItem('jobOrders_v22_cache');
+            localStorage.removeItem('shoelotskey_job_orders');
+        } catch (_) {}
+
+        const saved = localStorage.getItem(CACHE_KEY);
         let initialOrders: JobOrder[] = [];
         if (saved) {
             try {
-                initialOrders = JSON.parse(saved).map((o: any) => ({
-                    ...o,
-                    createdAt: new Date(o.createdAt),
-                    updatedAt: new Date(o.updatedAt),
-                    transactionDate: new Date(o.transactionDate || o.createdAt),
-                    predictedCompletionDate: o.predictedCompletionDate ? new Date(o.predictedCompletionDate) : undefined,
-                    predictedAt: o.predictedAt ? new Date(o.predictedAt) : undefined,
-                    predictedDays: o.predictedDays != null ? Number(o.predictedDays) : undefined,
-                    actualCompletionDate: o.actualCompletionDate ? new Date(o.actualCompletionDate) : undefined,
-                    balance: o.balance != null && !isNaN(Number(o.balance))
-                        ? Number(o.balance)
-                        : Math.max(0, (Number(o.grandTotal) || 0) - (Number(o.depositAmount) || (Number(o.amountReceived) && Number(o.amountReceived) < Number(o.grandTotal) ? Number(o.amountReceived) : 0))),
-                    statusHistory: o.statusHistory?.map((sl: any) => ({
-                        ...sl,
-                        timestamp: new Date(sl.timestamp)
-                    })) || []
-                }));
+                initialOrders = JSON.parse(saved).map((o: any) => {
+                    const isClaimed = o.status === 'claimed';
+                    let history: PaymentRecord[] = Array.isArray(o.paymentHistory) ? o.paymentHistory : [];
+                    if (!isClaimed) {
+                        history = history.filter(p => p.paymentType !== 'final-payment' && !String(p.notes || '').toLowerCase().includes('claim'));
+                    }
+                    const gt = Number(o.grandTotal || 0);
+                    const dp = Number(o.depositAmount || 0);
+                    const totalPaid = history.length > 0
+                        ? history.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
+                        : (o.paymentStatus === 'downpayment' ? (dp > 0 ? dp : gt / 2) : gt);
+                    const rawTendered = Number(o.amountReceived || 0);
+                    const changeAmt = rawTendered > totalPaid ? rawTendered - totalPaid : (Number(o.change) || 0);
+
+                    return {
+                        ...o,
+                        paymentHistory: history,
+                        change: changeAmt,
+                        paymentMethod: history.length > 1
+                            ? history.map(p => p.method).filter((v, i, a) => a.indexOf(v) === i).join(', ')
+                            : (history[0]?.method || o.initialPaymentMethod || o.paymentMethod || 'cash'),
+                        createdAt: parseOrderDateWithId(o.createdAt, o.orderNumber),
+                        updatedAt: new Date(o.updatedAt),
+                        transactionDate: parseOrderDateWithId(o.transactionDate || o.createdAt, o.orderNumber),
+                        predictedCompletionDate: o.predictedCompletionDate ? new Date(o.predictedCompletionDate) : undefined,
+                        predictedAt: o.predictedAt ? new Date(o.predictedAt) : undefined,
+                        predictedDays: o.predictedDays != null ? Number(o.predictedDays) : undefined,
+                        actualCompletionDate: o.actualCompletionDate ? new Date(o.actualCompletionDate) : undefined,
+                        balance: o.balance != null && !isNaN(Number(o.balance))
+                            ? Number(o.balance)
+                            : Math.max(0, gt - totalPaid),
+                        statusHistory: o.statusHistory?.map((sl: any) => ({
+                            ...sl,
+                            timestamp: new Date(sl.timestamp)
+                        })) || []
+                    };
+                });
             } catch (e) {
                 console.error("Failed to parse cached orders", e);
             }
@@ -158,7 +245,6 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                         headers: { 'Authorization': `Bearer ${user.token}` }
                     }).then(r => r.json()).then(syncData => {
                         if (syncData.status === 'success') {
-                            const { toast } = require('sonner');
                             toast.success("Database Restored", {
                                 description: `Successfully synced ${syncData.synced_records} orders from local backup to Cloud Database.`,
                                 duration: 10000
@@ -181,8 +267,13 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
         const parseUTC = (dateStr: any): Date => {
             if (!dateStr) return new Date();
             if (typeof dateStr === 'string') {
+                const trimmed = dateStr.trim();
+                if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+                    const [y, m, d] = trimmed.split('-').map(Number);
+                    return new Date(y, m - 1, d, 0, 0, 0, 0);
+                }
                 // Replace space with T for valid local parsing (e.g. "2026-08-11 23:00:40" -> "2026-08-11T23:00:40")
-                const normalizedStr = dateStr.replace(' ', 'T');
+                const normalizedStr = trimmed.replace(' ', 'T');
                 return new Date(normalizedStr);
             }
             return new Date(dateStr);
@@ -202,7 +293,7 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
             return [];
         };
 
-        return {
+        return enrichOrderWithAttachments({
             id: bo.order_id.toString(),
             orderNumber: bo.order_number,
             customerName: bo.customer?.customer_name || 'Guest',
@@ -220,17 +311,25 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                 , 0) || 0,
             priorityLevel: (bo.priority?.priority_name || bo.priority || 'regular').toLowerCase() as any,
             ...(() => {
-                const paymentsList: any[] = bo.payments || [];
+                // Always sort payments ascending by payment_id so payment 0 is the initial intake payment
+                const paymentsList: any[] = (bo.payments || []).slice().sort((a: any, b: any) => (Number(a.payment_id) || 0) - (Number(b.payment_id) || 0));
                 let paymentHistory: PaymentRecord[] = [];
+
+                const grandTotal = parseFloat(bo.grand_total) || 0;
+                const isOrderClaimed = (bo.status?.status_name || '').toLowerCase() === 'claimed';
 
                 if (paymentsList.length > 1) {
                     paymentHistory = paymentsList.map((p: any, idx: number) => {
                         const isDP = idx === 0 && ((parseFloat(p.deposit_amount) || 0) > 0 || (p.p_status?.status_name || '').toLowerCase() === 'downpayment');
+                        const dpAmt = parseFloat(p.deposit_amount) || 0;
+                        const rawAmt = parseFloat(p.amount_received) || 0;
+                        // For downpayment row, actual credited payment is dpAmt if valid, else rawAmt
+                        const actualRowAmount = isDP && dpAmt > 0 ? dpAmt : (isDP && rawAmt > 0 && rawAmt < grandTotal ? rawAmt : rawAmt);
                         return {
                             id: p.payment_id ? String(p.payment_id) : `pay-${idx + 1}`,
                             paymentType: isDP ? 'downpayment' : 'final-payment',
-                            method: (p.method?.method_name || 'cash').toLowerCase(),
-                            amount: parseFloat(p.amount_received) || 0,
+                            method: resolvePaymentMethod(p.method?.method_name, p.reference_no || bo.payments?.[0]?.reference_no),
+                            amount: actualRowAmount,
                             referenceNo: p.reference_no || undefined,
                             date: p.created_at ? parseUTC(p.created_at) : parseUTC(bo.created_at),
                             processedBy: idx === 0 ? (bo.processor?.username || 'Staff') : (bo.status_logs?.find((sl: any) => (sl.status?.status_name || '').toLowerCase() === 'claimed')?.user?.username || 'Staff'),
@@ -240,15 +339,19 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                 } else if (paymentsList.length === 1) {
                     const p = paymentsList[0];
                     const dpAmt = parseFloat(p.deposit_amount) || 0;
-                    const totalRecv = parseFloat(p.amount_received) || 0;
-                    const isClaimedOrFull = (bo.status?.status_name || '').toLowerCase() === 'claimed' || (p.p_status?.status_name || '').toLowerCase() === 'fully-paid';
+                    const rawRecv = parseFloat(p.amount_received) || 0;
+                    const pStatusName = (p.p_status?.status_name || '').toLowerCase();
+                    const isDP = pStatusName === 'downpayment' || (dpAmt > 0 && dpAmt < grandTotal && !isOrderClaimed);
 
-                    if (dpAmt > 0 && isClaimedOrFull && totalRecv > dpAmt) {
+                    // ONLY synthesize a second payment if the order was ACTUALLY CLAIMED,
+                    // had an initial downpayment, and there is an actual remaining balance that was settled upon claim.
+                    if (isOrderClaimed && dpAmt > 0 && dpAmt < grandTotal && bo.claimed_at) {
+                        const remainingBalanceSettled = Math.max(0, grandTotal - dpAmt);
                         paymentHistory = [
                             {
                                 id: 'pay-1',
                                 paymentType: 'downpayment',
-                                method: (p.method?.method_name || 'cash').toLowerCase(),
+                                method: resolvePaymentMethod(p.method?.method_name, p.reference_no),
                                 amount: dpAmt,
                                 referenceNo: p.reference_no || undefined,
                                 date: p.created_at ? parseUTC(p.created_at) : parseUTC(bo.created_at),
@@ -259,52 +362,90 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                                 id: 'pay-2',
                                 paymentType: 'final-payment',
                                 method: 'cash',
-                                amount: Math.max(0, totalRecv - dpAmt),
-                                date: bo.claimed_at ? parseUTC(bo.claimed_at) : parseUTC(bo.updated_at || bo.created_at),
+                                amount: remainingBalanceSettled,
+                                date: parseUTC(bo.claimed_at),
                                 processedBy: bo.status_logs?.find((sl: any) => (sl.status?.status_name || '').toLowerCase() === 'claimed')?.user?.username || 'Staff',
                                 notes: 'Balance Settlement upon Claim'
                             }
                         ];
-                    } else {
+                    } else if (isDP) {
+                        // Downpayment only - order is NOT claimed!
+                        const actualDownpayment = dpAmt > 0 ? dpAmt : (rawRecv > 0 && rawRecv < grandTotal ? rawRecv : Math.min(grandTotal, grandTotal / 2));
                         paymentHistory = [
                             {
                                 id: 'pay-1',
-                                paymentType: dpAmt > 0 || (p.p_status?.status_name || '').toLowerCase() === 'downpayment' ? 'downpayment' : 'full-payment',
-                                method: (p.method?.method_name || 'cash').toLowerCase(),
-                                amount: dpAmt > 0 ? dpAmt : totalRecv,
+                                paymentType: 'downpayment',
+                                method: resolvePaymentMethod(p.method?.method_name, p.reference_no),
+                                amount: actualDownpayment,
                                 referenceNo: p.reference_no || undefined,
                                 date: p.created_at ? parseUTC(p.created_at) : parseUTC(bo.created_at),
                                 processedBy: bo.processor?.username || 'Staff',
-                                notes: dpAmt > 0 ? 'Initial Downpayment' : 'Full Payment'
+                                notes: 'Initial Downpayment'
+                            }
+                        ];
+                    } else {
+                        // Single full payment (e.g. fully-paid at intake)
+                        paymentHistory = [
+                            {
+                                id: 'pay-1',
+                                paymentType: 'full-payment',
+                                method: resolvePaymentMethod(p.method?.method_name, p.reference_no),
+                                amount: grandTotal > 0 ? grandTotal : rawRecv,
+                                referenceNo: p.reference_no || undefined,
+                                date: p.created_at ? parseUTC(p.created_at) : parseUTC(bo.created_at),
+                                processedBy: bo.processor?.username || 'Staff',
+                                notes: 'Full Payment'
                             }
                         ];
                     }
                 }
 
-                const initialMethod = paymentHistory.length > 0 ? paymentHistory[0].method : (bo.payments?.[0]?.method?.method_name || 'cash').toLowerCase();
+                const initialMethod = paymentHistory.length > 0 ? paymentHistory[0].method : resolvePaymentMethod(paymentsList[0]?.method?.method_name, paymentsList[0]?.reference_no);
                 const finalMethod = paymentHistory.length > 1 ? paymentHistory[paymentHistory.length - 1].method : undefined;
-                const totalReceived = paymentHistory.length > 0
-                    ? paymentHistory.reduce((sum, p) => sum + (p.amount || 0), 0)
-                    : (parseFloat(bo.payments?.[0]?.amount_received) || 0);
                 const combinedMethod = finalMethod && finalMethod !== initialMethod
                     ? `${initialMethod}, ${finalMethod}`
                     : initialMethod;
                 const latestStatus = paymentsList.length > 1
                     ? (paymentsList[paymentsList.length - 1]?.p_status?.status_name || 'fully-paid').toLowerCase()
-                    : (bo.payments?.[0]?.p_status?.status_name || 'fully-paid').toLowerCase();
+                    : (paymentsList[0]?.p_status?.status_name || (paymentHistory[0]?.paymentType === 'downpayment' ? 'downpayment' : 'fully-paid')).toLowerCase();
+
+                // Find initial downpayment payment object
+                const dpPayment = paymentsList.find((p: any) => ((parseFloat(p.deposit_amount) || 0) > 0 || (p.p_status?.status_name || '').toLowerCase() === 'downpayment')) || paymentsList[0];
+
+                // Physical cash bill / tendered amount from customer
+                const rawTendered = parseFloat(dpPayment?.amount_received) || parseFloat(paymentsList[0]?.amount_received) || 0;
+                
+                // Actual money collected towards the order
+                const totalPaidTowardsOrder = paymentHistory.length > 0
+                    ? paymentHistory.reduce((sum, p) => sum + (p.amount || 0), 0)
+                    : (latestStatus === 'downpayment' ? (parseFloat(dpPayment?.deposit_amount) || grandTotal / 2) : grandTotal);
+
+                const actualDeposit = parseFloat(dpPayment?.deposit_amount) 
+                    || (paymentHistory.find(p => p.paymentType === 'downpayment')?.amount)
+                    || (rawTendered > 0 && rawTendered < grandTotal ? rawTendered : undefined)
+                    || (latestStatus === 'downpayment' ? totalPaidTowardsOrder : grandTotal);
+
+                // Change given to customer at downpayment intake
+                const changeAmount = rawTendered > actualDeposit
+                    ? rawTendered - actualDeposit
+                    : 0;
+
+                const remainingBalance = (!isOrderClaimed && latestStatus === 'downpayment')
+                    ? (dpPayment?.balance != null && !isNaN(parseFloat(dpPayment.balance))
+                        ? parseFloat(dpPayment.balance)
+                        : Math.max(0, grandTotal - actualDeposit))
+                    : (isOrderClaimed ? 0 : Math.max(0, grandTotal - totalPaidTowardsOrder));
 
                 return {
                     paymentStatus: latestStatus as any,
                     paymentMethod: combinedMethod as any,
                     initialPaymentMethod: initialMethod,
                     finalPaymentMethod: finalMethod,
-                    amountReceived: totalReceived,
-                    change: Math.max(0, totalReceived - (parseFloat(bo.grand_total) || 0)),
-                    referenceNo: bo.payments?.[0]?.reference_no || paymentHistory.find(p => p.referenceNo)?.referenceNo || '',
-                    depositAmount: parseFloat(bo.payments?.[0]?.deposit_amount) || (paymentHistory.find(p => p.paymentType === 'downpayment')?.amount || 0),
-                    balance: bo.payments?.[0]?.balance != null && !isNaN(parseFloat(bo.payments[0].balance))
-                        ? parseFloat(bo.payments[0].balance)
-                        : Math.max(0, (parseFloat(bo.grand_total) || 0) - (parseFloat(bo.payments?.[0]?.deposit_amount) || totalReceived)),
+                    amountReceived: rawTendered > 0 ? rawTendered : actualDeposit,
+                    change: changeAmount,
+                    referenceNo: paymentsList[0]?.reference_no || paymentHistory.find(p => p.referenceNo)?.referenceNo || '',
+                    depositAmount: actualDeposit,
+                    balance: remainingBalance,
                     paymentHistory
                 };
             })(),
@@ -320,14 +461,16 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
             // Status Mapping
             status: mapBackendStatus(bo.status?.status_name),
             cancellationStage: bo.cancellation_stage || bo.cancellationStage || undefined,
+            cancellationReason: bo.cancellation_reason || bo.cancellationReason || bo.refund_reason || bo.refundReason || undefined,
             refundStatus: bo.refund_status || bo.refundStatus || undefined,
             refundAmount: bo.refund_amount != null ? parseFloat(bo.refund_amount) : (bo.refundAmount != null ? parseFloat(bo.refundAmount) : 0),
             refundReason: bo.refund_reason || bo.refundReason || undefined,
             cancelledAt: bo.cancelled_at ? parseUTC(bo.cancelled_at) : (bo.cancelledAt ? parseUTC(bo.cancelledAt) : undefined),
+            preCancellationState: bo.pre_cancellation_state || bo.preCancellationState || undefined,
 
-            createdAt: parseUTC(bo.created_at),
+            createdAt: parseOrderDateWithId(bo.created_at, bo.order_number),
             updatedAt: parseUTC(bo.updated_at || bo.created_at),
-            transactionDate: parseUTC(bo.created_at),
+            transactionDate: parseOrderDateWithId(bo.created_at, bo.order_number),
             predictedCompletionDate: bo.expected_at ? parseUTC(bo.expected_at) : undefined,
             predictedAt: bo.predicted_at ? parseUTC(bo.predicted_at) : undefined,
             predictedDays: bo.predicted_days != null ? Number(bo.predicted_days) : undefined,
@@ -362,9 +505,9 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
 
                 return {
                     id: bi.item_id?.toString() || Math.random().toString(),
-                    brand: bi.brand || 'Other',
-                    shoeModel: bi.shoe_model || 'Other',
-                    shoeMaterial: bi.material || 'Other',
+                    brand: bi.brand || '',
+                    shoeModel: bi.shoe_model || '',
+                    shoeMaterial: bi.material || '',
                     shoeSize: bi.shoe_size || bi.shoeSize || bi.size || '',
                     color: Array.isArray(bi.color) ? bi.color.filter(Boolean).join(', ') : (bi.color || ''),
                     quantity: bi.quantity || 1,
@@ -398,9 +541,9 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
             }) || [],
 
             // Fallback fields
-            brand: bo.items?.map((i: any) => i.brand).filter(Boolean).join(', ') || 'Unknown',
-            shoeModel: firstItem.shoe_model || firstItem.shoeModel || 'Unknown',
-            shoeMaterial: bo.items?.map((i: any) => i.material || i.shoeMaterial).filter(Boolean).join(', ') || 'Unknown',
+            brand: bo.items?.map((i: any) => i.brand).filter(Boolean).join(', ') || '',
+            shoeModel: firstItem.shoe_model || firstItem.shoeModel || '',
+            shoeMaterial: bo.items?.map((i: any) => i.material || i.shoeMaterial).filter(Boolean).join(', ') || '',
             shoeSize: firstItem.shoe_size || firstItem.shoeSize || firstItem.size || '',
             color: firstItem.color || '',
             quantity: bo.items?.reduce((acc: number, item: any) => acc + (item.quantity || 1), 0) || 1,
@@ -442,7 +585,7 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                 timestamp: new Date(sl.changed_at),
                 user: sl.user?.username || 'System'
             })) || []
-        };
+        });
     };
 
 
@@ -463,7 +606,7 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                     const finalOrders = mergePendingOrders(mappedOrders);
 
                     setOrders(finalOrders);
-                    localStorage.setItem('jobOrders_v19_cache', JSON.stringify(finalOrders));
+                    safeSaveCachedOrders(finalOrders);
                 } else {
                     throw new Error('API unreachable');
                 }
@@ -491,6 +634,13 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
 
         loadInitialData();
     }, []);
+
+    // Real-time synchronization: Mirror active orders state to localStorage cache whenever changed
+    useEffect(() => {
+        if (orders.length > 0) {
+            safeSaveCachedOrders(orders);
+        }
+    }, [orders]);
 
     // Maps DB status_name to frontend JobStatus type
     // DB values now match frontend: 'new-order', 'on-going', 'for-release', 'claimed', 'cancelled'
@@ -557,13 +707,13 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                             return { ...order, ...pending, updatedAt: order.updatedAt };
                         });
                         setOrders(merged);
-                        localStorage.setItem('jobOrders_v20_cache', JSON.stringify(merged));
+                        safeSaveCachedOrders(merged);
                         return;
                     } catch (_) { /* fall through to plain set */ }
                 }
 
                 setOrders(withPending);
-                localStorage.setItem('jobOrders_v20_cache', JSON.stringify(withPending));
+                safeSaveCachedOrders(withPending);
             }
         } catch (err) {
             console.error('[DEBUG] OrderProvider: Refresh failed.', err);
@@ -586,12 +736,7 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
         }
     };
 
-    // Persist to cache whenever orders change
-    useEffect(() => {
-        if (orders.length > 0) {
-            localStorage.setItem('jobOrders_v20_cache', JSON.stringify(orders));
-        }
-    }, [orders]);
+
 
     useEffect(() => {
         const processSyncQueue = async () => {
@@ -708,6 +853,42 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
     // -------------------------------
 
     const addOrder = async (order: JobOrder): Promise<boolean> => {
+        // Persist before/after images and signatures
+        const firstBefore = order.beforeImage || order.items?.[0]?.beforeImage;
+        const firstAfter = order.afterImage || order.items?.[0]?.afterImage;
+        const itemAttachments: Record<string, { beforeImage?: string; afterImage?: string }> = {};
+        order.items?.forEach((it, idx) => {
+            if (it.beforeImage || it.afterImage) {
+                itemAttachments[String(idx)] = {
+                    ...(it.beforeImage ? { beforeImage: it.beforeImage } : {}),
+                    ...(it.afterImage ? { afterImage: it.afterImage } : {}),
+                };
+                if (it.id) {
+                    itemAttachments[String(it.id)] = {
+                        ...(it.beforeImage ? { beforeImage: it.beforeImage } : {}),
+                        ...(it.afterImage ? { afterImage: it.afterImage } : {}),
+                    };
+                }
+            }
+        });
+
+        if (firstBefore || firstAfter || Object.keys(itemAttachments).length > 0) {
+            if (order.orderNumber) {
+                saveOrderAttachments(order.orderNumber, {
+                    ...(firstBefore ? { beforeImage: firstBefore } : {}),
+                    ...(firstAfter ? { afterImage: firstAfter } : {}),
+                    items: itemAttachments,
+                });
+            }
+            if (order.id) {
+                saveOrderAttachments(String(order.id), {
+                    ...(firstBefore ? { beforeImage: firstBefore } : {}),
+                    ...(firstAfter ? { afterImage: firstAfter } : {}),
+                    items: itemAttachments,
+                });
+            }
+        }
+
         // OPTIMISTIC UPDATE: Update UI immediately to ensure zero-latency response for the user
         setOrders((prev) => [{ ...order, updatedAt: new Date() }, ...prev]);
 
@@ -733,6 +914,32 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
 
             const saved = await response.json().catch(() => null);
             if (saved) {
+                if (firstBefore || firstAfter || Object.keys(itemAttachments).length > 0) {
+                    const enrichedItemAttachments = { ...itemAttachments };
+                    if (Array.isArray(saved.items)) {
+                        saved.items.forEach((si: any, sIdx: number) => {
+                            const att = itemAttachments[String(sIdx)];
+                            if (att && si.item_id) {
+                                enrichedItemAttachments[String(si.item_id)] = att;
+                            }
+                        });
+                    }
+                    if (saved.order_number) {
+                        saveOrderAttachments(saved.order_number, {
+                            ...(firstBefore ? { beforeImage: firstBefore } : {}),
+                            ...(firstAfter ? { afterImage: firstAfter } : {}),
+                            items: enrichedItemAttachments,
+                        });
+                    }
+                    if (saved.order_id != null) {
+                        saveOrderAttachments(String(saved.order_id), {
+                            ...(firstBefore ? { beforeImage: firstBefore } : {}),
+                            ...(firstAfter ? { afterImage: firstAfter } : {}),
+                            items: enrichedItemAttachments,
+                        });
+                    }
+                }
+
                 const persistedDate = saved.expected_at ? parseServerDate(saved.expected_at) : undefined;
                 const persistedPredAt = saved.predicted_at ? parseServerDate(saved.predicted_at) : (order.predictedAt || persistedDate);
                 const persistedPredDays = saved.predicted_days != null ? Number(saved.predicted_days) : order.predictedDays;
@@ -748,7 +955,14 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                         : o
                 ));
             }
+            const auditTimestamp = order.transactionDate || order.createdAt;
+            const formattedAuditTimestamp = auditTimestamp ? dateFnsFormat(new Date(auditTimestamp), 'MM/dd/yyyy, HH:mm') : undefined;
+            const durationNote = order.formDurationFormatted
+                ? ` [Creation Time: ${order.formDurationFormatted} | Paper-based Manual Baseline: ~5–10m]`
+                : '';
+
             addActivity({
+                timestamp: formattedAuditTimestamp,
                 user: user.username || 'System',
                 action: 'CREATE',
                 actionRaw: 'CREATE',
@@ -756,12 +970,23 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                 table: 'orders',
                 module: 'Job Orders',
                 recordId: saved?.order_id != null ? String(saved.order_id) : order.id,
-                details: `Created new Job Order #${order.orderNumber} for ${order.customerName}`,
+                details: `Created new Job Order #${order.orderNumber} for ${order.customerName}${durationNote}`,
                 newValues: {
                     order_number: order.orderNumber,
                     customer_name: order.customerName,
                     grand_total: order.grandTotal,
-                    status: order.status
+                    status: order.status,
+                    order_date: order.orderDate,
+                    order_time: order.orderTime,
+                    encoding_time: order.formDurationFormatted,
+                    encoding_seconds: order.formDurationSeconds,
+                    efficiency_vs_paper: order.efficiencyMetric,
+                    paymentMethod: order.paymentMethod,
+                    paymentStatus: order.paymentStatus,
+                    amountReceived: order.amountReceived,
+                    balance: order.balance,
+                    referenceNo: order.referenceNo,
+                    depositAmount: order.depositAmount
                 }
             });
             refreshOrders();
@@ -806,10 +1031,51 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
         const targetOrder = orders.find(o => o.id === id || o.orderNumber === id);
         const effectiveReleasedBy = statusUser || user.username || 'staff';
         const now = new Date();
+
+        // Persist any updated attachments locally
+        const firstBefore = updates.beforeImage || updates.items?.[0]?.beforeImage;
+        const firstAfter = updates.afterImage || updates.items?.[0]?.afterImage;
+        const hasSigUpdate = updates.customerSignature !== undefined || updates.staffSignature !== undefined;
+        if (firstBefore || firstAfter || updates.items?.some(i => i.beforeImage || i.afterImage) || hasSigUpdate) {
+            const itemAtts: Record<string, { beforeImage?: string; afterImage?: string }> = {};
+            updates.items?.forEach((it, idx) => {
+                if (it.beforeImage || it.afterImage) {
+                    itemAtts[String(idx)] = {
+                        ...(it.beforeImage ? { beforeImage: it.beforeImage } : {}),
+                        ...(it.afterImage ? { afterImage: it.afterImage } : {}),
+                    };
+                    if (it.id) {
+                        itemAtts[String(it.id)] = {
+                            ...(it.beforeImage ? { beforeImage: it.beforeImage } : {}),
+                            ...(it.afterImage ? { afterImage: it.afterImage } : {}),
+                        };
+                    }
+                }
+            });
+            if (targetOrder?.orderNumber) {
+                saveOrderAttachments(targetOrder.orderNumber, {
+                    ...(firstBefore ? { beforeImage: firstBefore } : {}),
+                    ...(firstAfter ? { afterImage: firstAfter } : {}),
+                    ...(updates.customerSignature !== undefined ? { customerSignature: updates.customerSignature || '' } : {}),
+                    ...(updates.staffSignature !== undefined ? { staffSignature: updates.staffSignature || '' } : {}),
+                    items: itemAtts,
+                });
+            }
+            saveOrderAttachments(String(id), {
+                ...(firstBefore ? { beforeImage: firstBefore } : {}),
+                ...(firstAfter ? { afterImage: firstAfter } : {}),
+                ...(updates.customerSignature !== undefined ? { customerSignature: updates.customerSignature || '' } : {}),
+                ...(updates.staffSignature !== undefined ? { staffSignature: updates.staffSignature || '' } : {}),
+                items: itemAtts,
+            });
+        }
         const finalUpdates: any = {
             ...updates,
+            // Strictly preserve immutable intake dates
+            createdAt: targetOrder?.createdAt || updates.createdAt,
+            transactionDate: targetOrder?.transactionDate || targetOrder?.createdAt || updates.transactionDate,
             ...(updates.status === 'for-release' ? {
-                actualReleaseDate: updates.actualReleaseDate || now,
+                actualReleaseDate: updates.actualReleaseDate || targetOrder?.actualReleaseDate || now,
                 actualCompletionDate: undefined,
                 claimedBy: undefined,
                 releasedBy: undefined,
@@ -821,16 +1087,20 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
             ...(updates.status === 'cancelled' ? {
                 cancelledAt: updates.cancelledAt || now,
                 cancellationStage: updates.cancellationStage,
+                cancellationReason: updates.cancellationReason,
                 refundStatus: updates.refundStatus,
                 refundAmount: updates.refundAmount,
                 refundReason: updates.refundReason,
+                preCancellationState: updates.preCancellationState !== undefined ? updates.preCancellationState : targetOrder?.preCancellationState,
             } : {}),
             ...(updates.status && updates.status !== 'cancelled' ? {
                 cancelledAt: null,
                 cancellationStage: null,
+                cancellationReason: null,
                 refundStatus: null,
                 refundAmount: 0,
                 refundReason: null,
+                preCancellationState: null,
             } : {}),
             ...(updates.status === 'on-going' || updates.status === 'new-order' ? {
                 actualReleaseDate: null,
@@ -840,13 +1110,58 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
             } : {})
         };
 
+        // Target identification helper (matches by numeric id, string id, or ORD- string)
+        const isTarget = (order: JobOrder) =>
+            order.id === id ||
+            order.orderNumber === id ||
+            (targetOrder && (order.id === targetOrder.id || order.orderNumber === targetOrder.orderNumber));
+
         // Optimistic Update
-        setOrders((prev) => prev.map((order) => {
-            if (order.id === id) {
-                return { ...order, ...finalUpdates, updatedAt: new Date() };
+        const optimisticUpdatedOrders = orders.map((order) => {
+            if (isTarget(order)) {
+                return { 
+                    ...order, 
+                    ...finalUpdates, 
+                    createdAt: order.createdAt || finalUpdates.createdAt,
+                    transactionDate: order.transactionDate || order.createdAt || finalUpdates.transactionDate,
+                    updatedAt: new Date() 
+                };
             }
             return order;
-        }));
+        });
+        setOrders(optimisticUpdatedOrders);
+
+        // Immediate write to localStorage so customer tracking and other tabs see it with 0ms latency
+        safeSaveCachedOrders(optimisticUpdatedOrders);
+
+        // Real-time broadcast to all open tabs, windows, and customer tracking portals
+        const broadcastUpdate = (statusToEmit?: string) => {
+            const st = statusToEmit || finalUpdates.status;
+            if (!st) return;
+            const targetNum = targetOrder?.orderNumber || (id.startsWith('ORD-') ? id : undefined);
+            const detail = {
+                type: 'ORDER_STATUS_CHANGED',
+                orderId: id,
+                orderNumber: targetNum,
+                status: st,
+                updatedAt: new Date().toISOString(),
+                timestamp: Date.now()
+            };
+            try {
+                if (typeof window !== 'undefined') {
+                    if (typeof BroadcastChannel !== 'undefined') {
+                        const bc = new BroadcastChannel('shoelotskey_orders_channel');
+                        bc.postMessage(detail);
+                        bc.close();
+                    }
+                    window.dispatchEvent(new CustomEvent('shoelotskey:order-status-updated', { detail }));
+                }
+            } catch (e) {
+                console.warn('[BROADCAST] Status broadcast failed', e);
+            }
+        };
+
+        broadcastUpdate();
 
         const payload = { ...finalUpdates, updater_id: user.id };
 
@@ -894,18 +1209,25 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                 const persistedDate = saved.expected_at ? parseServerDate(saved.expected_at) : undefined;
                 const persistedPredAt = saved.predicted_at ? parseServerDate(saved.predicted_at) : finalUpdates.predictedAt;
                 const persistedPredDays = saved.predicted_days != null ? Number(saved.predicted_days) : finalUpdates.predictedDays;
-                setOrders((prev) => prev.map((order) =>
-                    order.id === id || order.orderNumber === id
-                        ? {
-                            ...order,
-                            ...finalUpdates,
-                            ...(persistedDate ? { predictedCompletionDate: persistedDate } : {}),
-                            ...(persistedPredAt !== undefined ? { predictedAt: persistedPredAt } : {}),
-                            ...(persistedPredDays != null ? { predictedDays: persistedPredDays } : {}),
-                            updatedAt: new Date(),
-                        }
-                        : order
-                ));
+                setOrders((prev) => {
+                    const nextOrders = prev.map((order) =>
+                        isTarget(order)
+                            ? {
+                                ...order,
+                                ...finalUpdates,
+                                createdAt: order.createdAt || (saved.created_at ? parseServerDate(saved.created_at) : order.createdAt),
+                                transactionDate: order.transactionDate || order.createdAt || (saved.created_at ? parseServerDate(saved.created_at) : order.transactionDate),
+                                ...(persistedDate ? { predictedCompletionDate: persistedDate } : {}),
+                                ...(persistedPredAt !== undefined ? { predictedAt: persistedPredAt } : {}),
+                                ...(persistedPredDays != null ? { predictedDays: persistedPredDays } : {}),
+                                updatedAt: new Date(),
+                            }
+                            : order
+                    );
+                    safeSaveCachedOrders(nextOrders);
+                    return nextOrders;
+                });
+                broadcastUpdate(finalUpdates.status);
             }
             // Note: Backend /api/orders/{id} automatically performs atomic log_audit inside the DB transaction.
         } catch (err: any) {

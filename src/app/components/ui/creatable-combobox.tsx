@@ -201,8 +201,11 @@ export function CreatableCombobox({
                 </div>
             </PopoverAnchor>
             <PopoverContent
-                className="w-[max(var(--radix-popover-trigger-width),240px)] min-w-[240px] p-0 shadow-xl border border-gray-200 z-50 overflow-hidden"
+                className="w-[var(--radix-popover-trigger-width)] min-w-[200px] max-w-[var(--radix-popover-trigger-width)] p-0 shadow-xl border border-gray-200 z-50 overflow-hidden"
                 align="start"
+                side="bottom"
+                sideOffset={4}
+                avoidCollisions={true}
                 onOpenAutoFocus={(e) => e.preventDefault()}
                 onInteractOutside={(e) => {
                     const target = e.target as HTMLElement;
@@ -216,8 +219,8 @@ export function CreatableCombobox({
                     setSearchValue("")
                 }}
             >
-                <Command className="w-full flex flex-col max-h-[320px] overflow-hidden">
-                    <CommandList className="max-h-[240px] overflow-y-auto pb-4 overscroll-contain">
+                <Command className="w-full flex flex-col max-h-[300px] overflow-hidden">
+                    <CommandList className="flex-1 min-h-0 overflow-y-auto overscroll-contain no-scrollbar">
                         <CommandEmpty className="py-2 px-2 text-xs">
                             {searchValue ? (
                                 <div

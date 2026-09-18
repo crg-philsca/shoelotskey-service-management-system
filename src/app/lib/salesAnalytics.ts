@@ -1,5 +1,6 @@
 import { format as dateFnsFormat } from 'date-fns';
 import type { JobOrder, ShoeItem } from '@/app/types';
+import { parseDateFromOrderId } from './orderNumber';
 
 export type ReportRange = 'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Annually' | 'Custom';
 
@@ -13,20 +14,59 @@ export const CANONICAL_SERVICE_COLORS: Record<CanonicalBaseService, string> = {
   'Color Renewal': '#F5CD93',
 };
 
-const BC_BREAKDOWN_KEYS = ['Basic Cleaning', 'Unyellowing', 'Minor Retouch', 'Minor Restoration'] as const;
+export const BC_BREAKDOWN_KEYS = ['Unyellowing', 'White Paint', 'Minor Retouch', 'Minor Restoration'] as const;
+export const FR_BREAKDOWN_KEYS = ['Full Reglue Midsole', 'Full Reglue Undersole'] as const;
+export const CR_BREAKDOWN_KEYS = ['2 Colors', '3 Colors'] as const;
 
 export function isCancelledOrder(order: JobOrder): boolean {
   const st = String(order?.status || '').toLowerCase().trim();
   return st === 'cancelled' || st === 'canceled';
 }
 
+export function getOrderPaidAmount(order: JobOrder): number {
+  if (!order) return 0;
+  const gt = Number(order.grandTotal || 0);
+  const status = String(order.paymentStatus || '').toLowerCase();
+
+  // If order has paymentHistory with valid transactions, sum them (capped at grandTotal)
+  if (Array.isArray(order.paymentHistory) && order.paymentHistory.length > 0) {
+    const historyTotal = order.paymentHistory.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    if (historyTotal > 0) return Math.min(gt > 0 ? gt : historyTotal, historyTotal);
+  }
+
+  if (status === 'downpayment') {
+    const dp = Number(order.depositAmount);
+    if (Number.isFinite(dp) && dp > 0) return Math.min(gt > 0 ? gt : dp, dp);
+    const recv = Number(order.amountReceived);
+    if (Number.isFinite(recv) && recv > 0 && recv < gt) return recv;
+    return gt > 0 ? gt / 2 : 0;
+  }
+
+  if (status === 'fully-paid') {
+    return gt > 0 ? gt : Number(order.amountReceived || 0);
+  }
+
+  return 0;
+}
+
+export function getOrderRetainedAmount(order: JobOrder): number {
+  if (!order || !isCancelledOrder(order)) return 0;
+  const paid = getOrderPaidAmount(order);
+  const isRefunded = String(order.refundStatus || '').toLowerCase() === 'refunded';
+  const rf = Number(order.refundAmount || 0);
+  const refunded = isRefunded ? (rf > 0 ? rf : paid) : rf;
+  return Math.max(0, paid - refunded);
+}
+
 export function totalRefundsIssued(orders: JobOrder[]): number {
   return (orders || []).reduce((sum, o) => {
-    if (isCancelledOrder(o)) {
-      const rf = Number(o.refundAmount || 0);
+    const rf = Number(o.refundAmount || 0);
+    const isCancelled = isCancelledOrder(o);
+    const isRefunded = String(o?.refundStatus || '').toLowerCase() === 'refunded';
+    if (isCancelled || isRefunded || rf > 0) {
       if (rf > 0) return sum + rf;
-      if (o.refundStatus === 'refunded') {
-        const paid = Number(o.amountReceived || o.depositAmount || 0);
+      if (isRefunded) {
+        const paid = getOrderPaidAmount(o);
         return sum + paid;
       }
     }
@@ -34,30 +74,47 @@ export function totalRefundsIssued(orders: JobOrder[]): number {
   }, 0);
 }
 
-export function totalRetainedDeposits(orders: JobOrder[]): number {
+export function totalRetainedPayments(orders: JobOrder[]): number {
   return (orders || []).reduce((sum, o) => {
     if (isCancelledOrder(o)) {
-      const paid = Number(o.amountReceived || o.depositAmount || 0);
-      const refunded = Number(o.refundAmount || (o.refundStatus === 'refunded' ? paid : 0));
-      const retained = Math.max(0, paid - refunded);
-      return sum + retained;
+      return sum + getOrderRetainedAmount(o);
     }
     return sum;
   }, 0);
 }
 
+// Retained Deposit alias maintained for backwards compatibility
+export const totalRetainedDeposits = totalRetainedPayments;
+
+/**
+ * Authoritative single-definition formula:
+ * Net Sales = Active Order Sales + Retained Payments from Cancelled Orders
+ *
+ * - Active Order Sales: Grand total of active, non-cancelled orders recognized in the order-date cohort.
+ * - Retained Payments: Actual retained amount paid on cancelled orders under cancellation policy.
+ * - Fully refunded cancelled orders contribute ₱0.
+ * - Refunds are NEVER added to sales.
+ */
+export function calculateNetSales(orders: JobOrder[]): number {
+  const activeSales = (orders || [])
+    .filter(isSalesEligible)
+    .reduce((sum, o) => sum + (Number(o.grandTotal) || 0), 0);
+  const retained = totalRetainedPayments(orders);
+  return Math.max(0, activeSales + retained);
+}
+
 export function cancelledOrdersBreakdown(orders: JobOrder[]) {
   const cancelled = (orders || []).filter(isCancelledOrder);
   const totalRefunded = totalRefundsIssued(cancelled);
-  const totalRetained = totalRetainedDeposits(cancelled);
-  const totalPaid = cancelled.reduce((sum, o) => sum + Number(o.amountReceived || o.depositAmount || 0), 0);
+  const totalRetained = totalRetainedPayments(cancelled);
+  const totalPaid = cancelled.reduce((sum, o) => sum + getOrderPaidAmount(o), 0);
   return {
     count: cancelled.length,
     totalPaid,
     totalRefunded,
     totalRetained,
     refundedCount: cancelled.filter(o => o.refundStatus === 'refunded' || Number(o.refundAmount || 0) > 0).length,
-    retainedCount: cancelled.filter(o => o.refundStatus === 'no-refund' || (Number(o.amountReceived || o.depositAmount || 0) > Number(o.refundAmount || 0))).length,
+    retainedCount: cancelled.filter(o => o.refundStatus === 'no-refund' || getOrderRetainedAmount(o) > 0).length,
   };
 }
 
@@ -80,45 +137,19 @@ export function isSalesEligible(order: JobOrder): boolean {
 }
 
 export function orderEventDate(order: JobOrder): Date {
-  if (isCancelledOrder(order)) {
-    if (order?.cancelledAt) {
-      const c = new Date(order.cancelledAt as any);
-      if (!isNaN(c.getTime())) return c;
+  const idStr = String(order?.orderNumber || (order as any)?.order_number || order?.id || '').trim();
+  const idDate = parseDateFromOrderId(idStr);
+  if (idDate && !isNaN(idDate.getTime())) {
+    const raw = order?.transactionDate || order?.createdAt;
+    if (raw) {
+      const rawDt = new Date(raw as any);
+      if (!isNaN(rawDt.getTime())) {
+        const combined = new Date(idDate);
+        combined.setHours(rawDt.getHours(), rawDt.getMinutes(), rawDt.getSeconds(), rawDt.getMilliseconds());
+        return combined;
+      }
     }
-    const cHist = (order as any)?.statusHistory?.find?.((s: any) => s.status === 'cancelled' || s.status === 'canceled');
-    if (cHist?.timestamp) {
-      const c = new Date(cHist.timestamp as any);
-      if (!isNaN(c.getTime())) return c;
-    }
-  }
-  if (order?.status === 'claimed') {
-    if (order?.actualCompletionDate || order?.actualReleaseDate) {
-      const c = new Date((order.actualCompletionDate || order.actualReleaseDate) as any);
-      if (!isNaN(c.getTime())) return c;
-    }
-    const clHist = (order as any)?.statusHistory?.find?.((s: any) => s.status === 'claimed');
-    if (clHist?.timestamp) {
-      const c = new Date(clHist.timestamp as any);
-      if (!isNaN(c.getTime())) return c;
-    }
-  }
-  if (order?.status === 'for-release') {
-    if (order?.actualReleaseDate) {
-      const r = new Date(order.actualReleaseDate as any);
-      if (!isNaN(r.getTime())) return r;
-    }
-    const relHist = (order as any)?.statusHistory?.find?.((s: any) => s.status === 'for-release');
-    if (relHist?.timestamp) {
-      const r = new Date(relHist.timestamp as any);
-      if (!isNaN(r.getTime())) return r;
-    }
-  }
-  if (order?.status === 'on-going') {
-    const ogHist = (order as any)?.statusHistory?.find?.((s: any) => s.status === 'on-going');
-    if (ogHist?.timestamp) {
-      const og = new Date(ogHist.timestamp as any);
-      if (!isNaN(og.getTime())) return og;
-    }
+    return idDate;
   }
   const raw = order?.transactionDate || order?.createdAt;
   return raw ? new Date(raw as any) : new Date(NaN);
@@ -166,8 +197,16 @@ export function isDateInRange(
     return date.getFullYear() === now.getFullYear();
   }
   if (range === 'Custom') {
-    if (!customStartDate || !customEndDate) return false;
-    return dateStr >= customStartDate && dateStr <= customEndDate;
+    if (customStartDate && customEndDate) {
+      return dateStr >= customStartDate && dateStr <= customEndDate;
+    }
+    if (customStartDate) {
+      return dateStr >= customStartDate;
+    }
+    if (customEndDate) {
+      return dateStr <= customEndDate;
+    }
+    return true;
   }
   return false;
 }
@@ -248,12 +287,13 @@ export function classifyBaseService(name: string): CanonicalBaseService | null {
   return null;
 }
 
-function breakdownKey(name: string): (typeof BC_BREAKDOWN_KEYS)[number] {
+export function breakdownKey(name: string): (typeof BC_BREAKDOWN_KEYS)[number] | null {
   const n = String(name || '').toLowerCase();
-  if (n.includes('unyellowing')) return 'Unyellowing';
-  if (n.includes('retouch')) return 'Minor Retouch';
-  if (n.includes('restoration')) return 'Minor Restoration';
-  return 'Basic Cleaning';
+  if (n.includes('white paint') || n === 'wpt') return 'White Paint';
+  if (n.includes('unyellowing') || n === 'uny') return 'Unyellowing';
+  if (n.includes('retouch') || n === 'mrt') return 'Minor Retouch';
+  if (n.includes('restoration') || n === 'mrs') return 'Minor Restoration';
+  return null;
 }
 
 function orderItems(order: JobOrder): Array<Partial<ShoeItem> & { quantity?: number; baseService?: string[] }> {
@@ -346,7 +386,7 @@ export function allocateCollectedToCanonicalServices(order: JobOrder): Record<Ca
         directWeights['Full Reglue'] += rowWeight;
       } else if (hasLine('Minor Reglue') && (addonName.includes('reglue') || addonName.includes('midsole') || addonName.includes('undersole'))) {
         directWeights['Minor Reglue'] += rowWeight;
-      } else if (hasLine('Basic Cleaning') && (addonName.includes('clean') || addonName.includes('unyellowing') || addonName.includes('booster'))) {
+      } else if (hasLine('Basic Cleaning') && (addonName.includes('clean') || addonName.includes('unyellowing') || addonName.includes('booster') || addonName.includes('white paint') || addonName.includes('retouch') || addonName.includes('restoration'))) {
         directWeights['Basic Cleaning'] += rowWeight;
       } else {
         return sum + rowWeight;
@@ -410,16 +450,25 @@ export function salesByCanonicalService(orders: JobOrder[]): Array<{ name: Canon
 
 export function serviceVolumeByCanonical(orders: JobOrder[]) {
   const basicCleaningBreakdown: Record<(typeof BC_BREAKDOWN_KEYS)[number], number> = {
-    'Basic Cleaning': 0,
     'Unyellowing': 0,
+    'White Paint': 0,
     'Minor Retouch': 0,
     'Minor Restoration': 0,
   };
+  const fullReglueBreakdown: Record<(typeof FR_BREAKDOWN_KEYS)[number], number> = {
+    'Full Reglue Midsole': 0,
+    'Full Reglue Undersole': 0,
+  };
+  const colorRenewalBreakdown: Record<(typeof CR_BREAKDOWN_KEYS)[number], number> = {
+    '2 Colors': 0,
+    '3 Colors': 0,
+  };
+
   const result = [
     { name: 'Basic Cleaning' as CanonicalBaseService, value: 0, sales: 0, breakdown: basicCleaningBreakdown },
     { name: 'Minor Reglue' as CanonicalBaseService, value: 0, sales: 0 },
-    { name: 'Full Reglue' as CanonicalBaseService, value: 0, sales: 0 },
-    { name: 'Color Renewal' as CanonicalBaseService, value: 0, sales: 0 },
+    { name: 'Full Reglue' as CanonicalBaseService, value: 0, sales: 0, breakdown: fullReglueBreakdown },
+    { name: 'Color Renewal' as CanonicalBaseService, value: 0, sales: 0, breakdown: colorRenewalBreakdown },
   ];
   const indexOf: Record<CanonicalBaseService, number> = {
     'Basic Cleaning': 0,
@@ -439,19 +488,102 @@ export function serviceVolumeByCanonical(orders: JobOrder[]) {
 
     orderItems(order).forEach((item) => {
       const qty = Number(item.quantity || 1) || 1;
-      const names = Array.isArray(item.baseService) ? item.baseService : item.baseService ? [item.baseService] : [];
+      const baseNames = Array.isArray(item.baseService) ? item.baseService : item.baseService ? [item.baseService] : [];
+      const addOns = Array.isArray(item.addOns) ? item.addOns : [];
+      const addOnNames = addOns.map((a: any) => typeof a === 'string' ? a : a?.name || '').filter(Boolean);
+      const histAddonNames = Array.isArray(item.historicalAddOnPrices) ? item.historicalAddOnPrices.map((h: any) => h?.name || '').filter(Boolean) : [];
+      const allServicesAndAddons = [...baseNames.map(String), ...addOnNames, ...histAddonNames];
+
       const unique = new Set<CanonicalBaseService>();
-      names.forEach((name) => {
+      baseNames.forEach((name) => {
         const canonical = classifyBaseService(String(name));
-        if (!canonical) return;
-        unique.add(canonical);
-        if (canonical === 'Basic Cleaning') {
-          basicCleaningBreakdown[breakdownKey(String(name))] += qty;
-        }
+        if (canonical) unique.add(canonical);
       });
+
+      // Infer canonical if not directly in baseService
+      if (!unique.has('Full Reglue') && allServicesAndAddons.some((s) => {
+        const l = s.toLowerCase();
+        return l.includes('full reglue') || l.includes('midsole') || l.includes('undersole');
+      })) {
+        unique.add('Full Reglue');
+      }
+      if (!unique.has('Color Renewal') && allServicesAndAddons.some((s) => {
+        const l = s.toLowerCase();
+        return l.includes('color renewal') || l.includes('2 color') || l.includes('3 color');
+      })) {
+        unique.add('Color Renewal');
+      }
+      if (!unique.has('Basic Cleaning') && allServicesAndAddons.some((s) => {
+        const l = s.toLowerCase();
+        return l.includes('cleaning') || l.includes('unyellowing') || l.includes('white paint') || l.includes('retouch') || l.includes('restoration');
+      })) {
+        unique.add('Basic Cleaning');
+      }
+
       unique.forEach((canonical) => {
         result[indexOf[canonical]].value += qty;
       });
+
+      // 1. Basic Cleaning Breakdown
+      const itemHasCleaning = unique.has('Basic Cleaning') || allServicesAndAddons.some((s) => {
+        const l = s.toLowerCase();
+        return l.includes('cleaning') || l.includes('unyellowing') || l.includes('white paint') || l.includes('retouch') || l.includes('restoration');
+      });
+
+      if (itemHasCleaning) {
+        if (allServicesAndAddons.some((s) => s.toLowerCase().includes('unyellowing') || s.toLowerCase() === 'uny')) {
+          basicCleaningBreakdown['Unyellowing'] += qty;
+        }
+        if (allServicesAndAddons.some((s) => s.toLowerCase().includes('white paint') || s.toLowerCase() === 'wpt')) {
+          basicCleaningBreakdown['White Paint'] += qty;
+        }
+        if (allServicesAndAddons.some((s) => s.toLowerCase().includes('retouch') || s.toLowerCase() === 'mrt')) {
+          basicCleaningBreakdown['Minor Retouch'] += qty;
+        }
+        if (allServicesAndAddons.some((s) => (s.toLowerCase().includes('restoration') && !s.toLowerCase().includes('color')) || s.toLowerCase() === 'mrs')) {
+          basicCleaningBreakdown['Minor Restoration'] += qty;
+        }
+      }
+
+      // 2. Full Reglue Breakdown (Midsole & Undersole)
+      const itemHasFullReglue = unique.has('Full Reglue') || allServicesAndAddons.some((s) => {
+        const l = s.toLowerCase();
+        return l.includes('full reglue') || l.includes('midsole') || l.includes('undersole');
+      });
+
+      if (itemHasFullReglue) {
+        if (allServicesAndAddons.some((s) => s.toLowerCase().includes('midsole'))) {
+          fullReglueBreakdown['Full Reglue Midsole'] += qty;
+        }
+        if (allServicesAndAddons.some((s) => s.toLowerCase().includes('undersole'))) {
+          fullReglueBreakdown['Full Reglue Undersole'] += qty;
+        }
+      }
+
+      // 3. Color Renewal Breakdown (2 Colors & 3 Colors)
+      const itemHasColorRenewal = unique.has('Color Renewal') || allServicesAndAddons.some((s) => {
+        const l = s.toLowerCase();
+        return l.includes('color renewal') || l.includes('2 color') || l.includes('3 color');
+      });
+
+      if (itemHasColorRenewal) {
+        const has2Colors = allServicesAndAddons.some((s) => {
+          const l = s.toLowerCase().trim();
+          return l === '2 colors' || l.includes('2 color') || l.includes('two color') || l === 'cr2';
+        });
+        const has3Colors = allServicesAndAddons.some((s) => {
+          const l = s.toLowerCase().trim();
+          return l === '3 colors' || l.includes('3 color') || l.includes('three color') || l === 'cr3';
+        });
+
+        if (has2Colors) {
+          colorRenewalBreakdown['2 Colors'] += qty;
+        } else if (has3Colors) {
+          colorRenewalBreakdown['3 Colors'] += qty;
+        } else if (unique.has('Color Renewal')) {
+          colorRenewalBreakdown['2 Colors'] += qty;
+        }
+      }
     });
   });
 
@@ -459,6 +591,28 @@ export function serviceVolumeByCanonical(orders: JobOrder[]) {
     row.sales = money(row.sales);
   });
   return result;
+}
+
+export function resolvePaymentMethod(method?: string, referenceNo?: string, fallbackMethod?: string): 'cash' | 'gcash' | 'maya' {
+  const norm = String(method || '').toLowerCase().trim();
+  const fallbackNorm = String(fallbackMethod || '').toLowerCase().trim();
+
+  // If method or fallback explicitly specifies maya or gcash
+  if (norm.includes('maya') || fallbackNorm.includes('maya')) return 'maya';
+  if (norm.includes('gcash') || fallbackNorm.includes('gcash')) return 'gcash';
+
+  if (referenceNo) {
+    const cleanRef = referenceNo.replace(/\D/g, '');
+    if (cleanRef.length === 13) return 'gcash';
+    const cleanAlnum = referenceNo.replace(/[^a-zA-Z0-9]/g, '');
+    if (cleanAlnum.length === 12) return 'maya';
+    if (/^may/i.test(referenceNo)) return 'maya';
+    if (/^gc/i.test(referenceNo)) return 'gcash';
+  }
+
+  if (norm === 'gcash' || fallbackNorm === 'gcash') return 'gcash';
+  if (norm === 'maya' || fallbackNorm === 'maya') return 'maya';
+  return 'cash';
 }
 
 export function paymentMethodAnalytics(orders: JobOrder[]) {
@@ -469,12 +623,48 @@ export function paymentMethodAnalytics(orders: JobOrder[]) {
   };
 
   orders.forEach((order) => {
-    if (!isSalesEligible(order)) return;
-    const amount = collectedSales(order);
-    const method = String(order.paymentMethod || 'cash').toLowerCase();
-    const key = counts[method] ? method : 'cash';
-    counts[key].count += 1;
-    counts[key].amount += amount;
+    if (!order) return;
+    const isCancelled = isCancelledOrder(order);
+    if (!isSalesEligible(order) && !isCancelled) return;
+
+    // For cancelled orders, only consider retained payment if any
+    const retainedAmt = isCancelled ? getOrderRetainedAmount(order) : 0;
+    if (isCancelled && retainedAmt <= 0) return;
+
+    const validHistory = Array.isArray(order.paymentHistory)
+      ? order.paymentHistory.filter((p) => p && p.paymentType !== 'refund' && Number(p.amount) > 0)
+      : [];
+
+    const orderRef = order.referenceNo || (order as any).paymentReference || (order as any).reference_no || (order as any).claimReferenceNo;
+    const fallbackMethod = order.paymentMethod || order.initialPaymentMethod;
+
+    if (validHistory.length > 0) {
+      if (isCancelled) {
+        // Apportion the retained payment across the payment history methods
+        const totalPaid = validHistory.reduce((s, p) => s + Number(p.amount || 0), 0);
+        validHistory.forEach((p) => {
+          const itemRef = p.referenceNo || (p as any).reference_no || orderRef;
+          const key = resolvePaymentMethod(p.method || (p as any).paymentMethod, itemRef, fallbackMethod);
+          const portion = totalPaid > 0 ? (Number(p.amount) / totalPaid) * retainedAmt : 0;
+          counts[key].count += 1;
+          counts[key].amount += portion;
+        });
+      } else {
+        validHistory.forEach((p) => {
+          const itemRef = p.referenceNo || (p as any).reference_no || orderRef;
+          const key = resolvePaymentMethod(p.method || (p as any).paymentMethod, itemRef, fallbackMethod);
+          counts[key].count += 1;
+          counts[key].amount += Number(p.amount);
+        });
+      }
+    } else {
+      const amount = isCancelled ? retainedAmt : collectedSales(order);
+      if (amount > 0) {
+        const key = resolvePaymentMethod(order.paymentMethod, orderRef, order.initialPaymentMethod);
+        counts[key].count += 1;
+        counts[key].amount += amount;
+      }
+    }
   });
 
   const collectedTotal = money(counts.cash.amount + counts.gcash.amount + counts.maya.amount);
@@ -501,12 +691,14 @@ export function buildOrderActivityTrends(
   customEndDate = '',
   now = new Date(),
 ): ActivityPoint[] {
-  const source = (orders || []).filter((order) => order && !isCancelledOrder(order));
+  const activeOrders = (orders || []).filter((order) => {
+    return order && !isCancelledOrder(order);
+  });
 
   const countIn = (start: Date, end: Date): ActivityPoint => {
     let newOrders = 0;
     let releasedOrders = 0;
-    source.forEach((order) => {
+    activeOrders.forEach((order) => {
       const created = orderEventDate(order);
       if (!isNaN(created.getTime()) && inBucket(created, start, end)) {
         newOrders += 1;

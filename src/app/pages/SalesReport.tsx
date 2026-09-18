@@ -24,6 +24,7 @@ import {
 } from '@/app/lib/salesAnalytics';
 import { formatPeso } from '@/app/lib/currency';
 import { getExpenseGroup } from '@/app/lib/expenseCategories';
+import { toServiceCode, chunkServiceCodesTwoPerRow } from '@/app/lib/businessRules';
 
 interface SalesReportProps {
   onSetHeaderActionRight?: (action: React.ReactNode | null) => void;
@@ -137,10 +138,11 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
   }, [filteredOrdersByDate]);
 
   const totalRefundsAmount = cancellationStats.totalRefunded;
-  const totalRetainedDepositsAmount = cancellationStats.totalRetained;
+  const totalRetainedPaymentsAmount = cancellationStats.totalRetained;
 
-  // Net Sales: Recognized active sales less refunds issued plus retained deposits from cancelled orders
-  const netSalesAmount = Math.max(0, totalSalesAmount - totalRefundsAmount + totalRetainedDepositsAmount);
+  // Authoritative single formula: Active Order Sales + Retained Payments from Cancelled Orders
+  // Refunds on cancelled orders are never added to sales (cancelled orders contribute only actual retained payments)
+  const netSalesAmount = Math.max(0, totalSalesAmount + totalRetainedPaymentsAmount);
 
   // Net profit uses recognized net sales less expenses
   const profit = netSalesAmount - totalExpensesAmount;
@@ -194,6 +196,8 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
 
   // 4. PRINT & EXPORT LOGIC
   const handleExport = (type: 'Sales' | 'Expenses' | 'ROI') => {
+    const t0 = performance.now();
+    const reportTitle = type === 'Sales' ? 'Sales Report' : type === 'Expenses' ? 'Expenses Report' : 'ROI Report';
     addActivity({
       type: 'Reports',
       module: 'Reports',
@@ -205,6 +209,8 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
     setPrintMode(type);
     document.body.classList.add('printing-report');
     setTimeout(() => {
+      const renderDurationMs = Math.round(performance.now() - t0);
+      console.log(`[REPORT GENERATION] Rendered ${reportTitle} for Print/Preview (${periodLabel}) in ${renderDurationMs}ms (${(renderDurationMs / 1000).toFixed(3)}s)`);
       window.print();
       setTimeout(() => {
         document.body.classList.remove('printing-report');
@@ -212,6 +218,14 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
       }, 500);
     }, 250);
   };
+
+  useEffect(() => {
+    if (!loading && allOrders) {
+      const t0 = performance.now();
+      const calcMs = Math.round(performance.now() - t0);
+      console.log(`[REPORT ANALYTICS] Generated on-screen metrics for Sales Report, Expenses Report, and ROI Report (${periodLabel}) in ${calcMs}ms | Orders: ${filteredOrdersByDate.length} | Expenses: ${filteredExpensesByDate.length}`);
+    }
+  }, [dateRange, customStartDate, customEndDate, filteredOrdersByDate.length, filteredExpensesByDate.length, loading, periodLabel]);
 
   useEffect(() => {
     if (onSetHeaderActionRight) {
@@ -606,7 +620,7 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
                           <div className="bg-white p-2.5 rounded-xl border border-gray-100 shadow-xl">
                             <p className="font-bold text-gray-900 text-xs mb-0.5">{data.name}</p>
                             <p className="text-[11px] text-gray-600">Transactions: {data.value}</p>
-                            <p className="text-[11px] text-gray-600">{data.name} Sales: ₱{data.amount.toLocaleString()}</p>
+                            <p className="text-[11px] text-gray-600">{data.name} Sales: {formatPeso(data.amount)}</p>
                           </div>
                         );
                       }
@@ -677,10 +691,10 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
                   <span className="text-gray-600 font-normal">Net Sales:</span>
                   <span className="font-black text-gray-900">{formatPeso(netSalesAmount)}</span>
                 </div>
-                {totalRetainedDepositsAmount > 0 && (
+                {totalRetainedPaymentsAmount > 0 && (
                   <div className="flex justify-between">
-                    <span className="text-gray-600 font-normal">Retained Deposits:</span>
-                    <span className="font-black text-gray-900">{formatPeso(totalRetainedDepositsAmount)}</span>
+                    <span className="text-gray-600 font-normal">Retained Payments:</span>
+                    <span className="font-black text-gray-900">{formatPeso(totalRetainedPaymentsAmount)}</span>
                   </div>
                 )}
                 <div className="flex justify-between">
@@ -751,9 +765,22 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
                 ) : (
                   totalSalesData.map((order: JobOrder, idx: number) => {
                     const shoeStr = [order.brand, order.shoeModel].filter(Boolean).join(' ') || 'Shoes';
-                    const svcStr = (order.baseService && order.baseService.length > 0)
-                      ? order.baseService.join(', ')
-                      : 'Standard Care';
+                    const baseSvcs = (Array.isArray(order.baseService)
+                      ? order.baseService
+                      : String(order.baseService || '').split(',')
+                    ).map(s => String(s || '').trim().replace(' (with basic cleaning)', '')).filter(Boolean);
+
+                    const addonSvcs = (Array.isArray(order.addOns)
+                      ? order.addOns
+                      : String(order.addOns || '').split(',')
+                    ).flatMap((a: any) => {
+                      if (!a) return [];
+                      if (typeof a === 'string') return a.split(',');
+                      return [a.name || a.service_name || a.service_code || ''];
+                    }).map(s => String(s || '').trim()).filter(Boolean);
+
+                    const allSvcs = [...baseSvcs, ...addonSvcs];
+                    const svcLines = chunkServiceCodesTwoPerRow(allSvcs.length > 0 ? allSvcs : baseSvcs);
 
                     const paidAmt = collectedSales(order);
                     const balAmt = Math.max(0, (Number(order.grandTotal) || 0) - paidAmt);
@@ -769,7 +796,15 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
                         <td className="px-2 pt-1.5 pb-0.5 font-bold text-gray-900 truncate align-top">{order.customerName}</td>
                         <td className="px-2 pt-1.5 pb-0.5 align-top">
                           <div className="font-semibold text-gray-800 truncate">{shoeStr}</div>
-                          <div className="text-[7.8px] text-gray-500 truncate mt-0.5">{svcStr}</div>
+                          <div className="text-[7.8px] text-gray-500 mt-0.5 leading-tight">
+                            {svcLines.length > 0 ? (
+                              svcLines.map((line, lIdx) => (
+                                <span key={lIdx} className="block">{line}</span>
+                              ))
+                            ) : (
+                              <span>Standard Care</span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-2 pt-1.5 pb-0.5 text-center text-gray-600 capitalize align-top">{order.priorityLevel || 'Regular'}</td>
                         <td className="px-2 pt-1.5 pb-0.5 text-right font-black text-gray-900 align-top">{formatPeso(order.grandTotal || 0)}</td>
@@ -879,10 +914,10 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
                   <span className="text-gray-600 font-normal">Net Sales:</span>
                   <span className="font-black text-gray-900">{formatPeso(netSalesAmount)}</span>
                 </div>
-                {totalRetainedDepositsAmount > 0 && (
+                {totalRetainedPaymentsAmount > 0 && (
                   <div className="flex justify-between">
-                    <span className="text-gray-600 font-medium">Retained Deposits:</span>
-                    <span className="font-black text-gray-900">{formatPeso(totalRetainedDepositsAmount)}</span>
+                    <span className="text-gray-600 font-medium">Retained Payments:</span>
+                    <span className="font-black text-gray-900">{formatPeso(totalRetainedPaymentsAmount)}</span>
                   </div>
                 )}
                 <div className="flex justify-between">
@@ -951,7 +986,7 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
                     const sharePercent = netSalesAmount > 0 ? ((svc.sales / netSalesAmount) * 100).toFixed(1) : '0.0';
                     return (
                       <tr key={svc.name} className="hover:bg-gray-50/50">
-                        <td className="px-2 py-1 text-left font-bold text-gray-800">{svc.name}</td>
+                        <td className="px-2 py-1 text-left font-bold text-gray-800">{toServiceCode(svc.name)} <span className="font-normal text-gray-500">({svc.name})</span></td>
                         <td className="px-2 py-1 text-center text-gray-600">{svc.value} pairs</td>
                         <td className="px-2 py-1 text-right font-black text-gray-900">{formatPeso(svc.sales)}</td>
                         <td className="px-2 py-1 text-right font-bold text-gray-600">{sharePercent}%</td>

@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/ca
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { Input } from '@/app/components/ui/input';
-import { Package, PlusCircle, PackagePlus, PackageMinus, Search, Filter, AlertTriangle, ArrowUpRight, ChevronLeft, ChevronRight, Edit, Trash2, XCircle, X, ShieldCheck, Loader2, MoreVertical } from 'lucide-react';
+import { Package, PlusCircle, PackageMinus, Search, Filter, AlertTriangle, ArrowUpRight, ChevronLeft, ChevronRight, Edit, Trash2, XCircle, X, ShieldCheck, Loader2, MoreVertical, Lock, Plus } from 'lucide-react';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import RestockModal from '@/app/components/RestockModal';
 import UpdateStockModal from '@/app/components/UpdateStockModal';
@@ -28,7 +28,7 @@ import { CreatableCombobox } from '@/app/components/ui/creatable-combobox';
 import { CUSTOM_OPTION_KEYS } from '@/app/lib/customOptions';
 interface InventoryProps {
     onSetHeaderActionRight?: (action: React.ReactNode) => void;
-    user: { token: string; role?: string };
+    user: { token: string; role?: string; username?: string; id?: number };
 }
 
 function formatPackageUnitPlural(unit?: string): string {
@@ -84,6 +84,21 @@ interface InventoryFormData {
 export default function Inventory({ onSetHeaderActionRight, user }: InventoryProps) {
     const { inventoryData, addItem, updateItem, deleteItem } = useInventory();
     const { services } = useServices();
+
+    const normalizedRole = (user.role || '').toLowerCase().trim();
+    const isStaffOrAbove = ['owner', 'admin', 'staff', 'front staff'].includes(normalizedRole) || 
+                           normalizedRole.includes('staff') || 
+                           ((user as any)?.username || '').toLowerCase().trim() === 'front_staff';
+
+    // Filter out rush fee from service list for materials/stock deduction
+    const eligibleServices = useMemo(() => {
+        return services.filter(s => {
+            const name = (s.name || '').toLowerCase();
+            const cat = ((s as any).category || '').toLowerCase();
+            return !name.includes('rush') && !cat.includes('rush');
+        });
+    }, [services]);
+
     const [searchQuery, setSearchQuery] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -96,6 +111,14 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
     const [categoryFilter, setCategoryFilter] = useState<string>('all');
     const [statusFilter, setStatusFilter] = useState<string>('all');
     const [activeFilter, setActiveFilter] = useState<string>('active');
+
+    const activeFilterCount = useMemo(() => {
+        let count = 0;
+        if (categoryFilter !== 'all') count++;
+        if (statusFilter !== 'all') count++;
+        if (activeFilter !== 'all') count++;
+        return count;
+    }, [categoryFilter, statusFilter, activeFilter]);
     
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
@@ -107,8 +130,15 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
     const [isSubmitting, setIsSubmitting] = useState(false);
     const isSavingRef = useRef(false);
 
+    // Dynamic service consumption config
+    interface ServiceConsumptionRow {
+        service: string;
+        quantity: string;
+    }
+    const [serviceRows, setServiceRows] = useState<ServiceConsumptionRow[]>([]);
+
     const categoryOptions = useMemo(() => {
-        const set = new Set<string>(['Chemical', 'Supplies', 'Tools', 'Equipment']);
+        const set = new Set<string>(['Chemical', 'Supplies', 'Tools', 'Equipment', 'Paints', 'Dyes']);
         inventoryData.forEach(item => {
             if (item.category && item.category.trim()) set.add(item.category.trim());
         });
@@ -117,7 +147,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
 
     const packageTypeOptions = useMemo(() => {
         const set = new Set<string>([
-            'Can', 'Bottle', 'Box', 'Jug', 'Gallon', 'Sachet', 'Tube', 'Tub', 'Pcs', 'Pairs', 'Roll', 'Sheet', 'Pack'
+            'Bottle', 'Can', 'Jug', 'Box', 'Jar', 'Tube', 'Tub', 'Pcs', 'Pairs', 'Roll', 'Sheet', 'Pack', 'Gallon', 'Bucket'
         ]);
         inventoryData.forEach(item => {
             if (item.package_unit && item.package_unit.trim()) set.add(item.package_unit.trim());
@@ -127,7 +157,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
 
     const unitOptions = useMemo(() => {
         const set = new Set<string>([
-            'mL', 'g', 'kg', 'L', 'fl oz', 'pcs', 'pairs', 'meters', 'sets', 'packs', 'rolls', 'sheets', 'tubes', 'cans', 'bottles'
+            'mL', 'g', 'kg', 'L', 'fl oz', 'pcs', 'pairs', 'meters', 'sets', 'packs', 'rolls', 'sheets', 'tubes', 'cans', 'bottles', 'unit'
         ]);
         inventoryData.forEach(item => {
             if (item.unit && item.unit.trim()) set.add(item.unit.trim());
@@ -135,12 +165,10 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
         return Array.from(set);
     }, [inventoryData]);
 
-
-
     const [formData, setFormData] = useState<InventoryFormData>({
         name: '',
         inventory_number: '',
-        category: 'Chemicals',
+        category: 'Chemical',
         stock: 0,
         unit: 'mL',
         price: '',
@@ -151,7 +179,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
         consumptionQty: 0,
         consumptionUnit: '',
         packageSize: '',
-        packageUnit: 'Can',
+        packageUnit: 'Bottle',
         packageQty: '',
         lowStockThreshold: '',
         isRetail: false,
@@ -168,35 +196,22 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
         if (onSetHeaderActionRight) {
             onSetHeaderActionRight(
                 <div className="flex items-center gap-2">
-                    {/* P1-5 FIX: POST /api/inventory/adjust (used by RestockModal) requires
-                        Depends(require_role("owner")) on the backend. Previously this button
-                        was shown to Staff unconditionally, letting them fill out a restock and
-                        only discover it was rejected after submitting. Gate visibility to match
-                        backend RBAC, same as the "New Item"/Delete controls below. */}
-                    {['owner', 'admin', 'staff'].includes(user.role?.toLowerCase() || '') && (
+                    {/* Left: Update Stock (styled like View History) */}
+                    {isStaffOrAbove && (
                         <Button 
-                            className="w-10 h-10 sm:w-36 flex items-center justify-center rounded-md border border-red-200 bg-white px-2 sm:px-3 py-2 hover:bg-red-50 hover:text-red-600 text-sm font-bold uppercase text-red-600 shadow-sm transition focus:outline-none focus:ring-2 focus:ring-red-500"
-                            onClick={() => setIsRestockOpen(true)}
-                            title="Restock Whole Product"
-                        >
-                            <PackagePlus className="h-4 w-4 sm:mr-1.5 shrink-0 text-red-600" />
-                            <span className="hidden sm:inline font-bold text-red-600">Restock</span>
-                        </Button>
-                    )}
-                    {['owner', 'admin', 'staff'].includes(user.role?.toLowerCase() || '') && (
-                        <Button 
-                            className="w-10 h-10 sm:w-40 flex items-center justify-center rounded-md border border-emerald-300 bg-white px-2 sm:px-3 py-2 hover:bg-emerald-50 hover:text-emerald-700 text-sm font-bold uppercase text-emerald-700 shadow-sm transition focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            className="w-10 h-10 sm:w-44 flex items-center justify-center rounded-md border border-red-200 bg-white px-2 sm:px-3 py-2 text-sm font-bold uppercase text-red-600 shadow-sm transition hover:bg-red-50 hover:text-red-600 hover:border-red-300 focus:outline-none focus:ring-2 focus:ring-red-500"
                             onClick={() => {
                                 setSelectedUpdateItem(null);
                                 setIsUpdateStockOpen(true);
                             }}
-                            title="Update Stock Usage"
+                            title="Update Stock"
                         >
-                            <PackageMinus className="h-4 w-4 sm:mr-1.5 shrink-0 text-emerald-600" />
-                            <span className="hidden sm:inline font-bold text-emerald-700">Update Stock</span>
+                            <PackageMinus className="h-4 w-4 sm:mr-2 shrink-0 text-red-600" />
+                            <span className="hidden sm:inline font-bold text-red-600">Update Stock</span>
                         </Button>
                     )}
-                    {['owner', 'admin', 'staff'].includes(user.role?.toLowerCase() || '') && (
+                    {/* Right: Add Item */}
+                    {isStaffOrAbove && (
                         <Button 
                             className="w-10 h-10 sm:w-36 flex items-center justify-center rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-sm font-bold uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500"
                             onClick={() => {
@@ -205,7 +220,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                 setFormData({ 
                                     name: '', 
                                     inventory_number: nextInv,
-                                    category: 'Chemicals', 
+                                    category: 'Chemical', 
                                     stock: 0, 
                                     unit: 'mL', 
                                     price: '', 
@@ -216,12 +231,13 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                     consumptionQty: 0,
                                     consumptionUnit: '',
                                     packageSize: '',
-                                    packageUnit: 'Can',
+                                    packageUnit: 'Bottle',
                                     packageQty: '',
                                     lowStockThreshold: '',
                                     isRetail: false,
                                     retailPrice: ''
                                 });
+                                setServiceRows(eligibleServices.length > 0 ? [{ service: eligibleServices[0].name, quantity: '20' }] : []);
                                 setIsModalOpen(true);
                                 if (user.token) {
                                     fetch('/api/inventory/next-number', {
@@ -236,7 +252,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                     .catch(() => {});
                                 }
                             }}
-                            title="Add New Item"
+                            title="New Inventory Item"
                         >
                             <PlusCircle className="h-4 w-4 sm:mr-1.5 shrink-0" />
                             <span className="hidden sm:inline font-bold">New Item</span>
@@ -248,7 +264,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
         return () => {
             if (onSetHeaderActionRight) onSetHeaderActionRight(null);
         };
-    }, [onSetHeaderActionRight, user.role, setIsRestockOpen]);
+    }, [onSetHeaderActionRight, user.role, isStaffOrAbove, inventoryData, eligibleServices]);
  
     const handleSaveItem = async () => {
         if (isSavingRef.current || isSubmitting) return;
@@ -266,17 +282,39 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
             return;
         }
         if (pkgSize < 0) {
-            toast.error('Volume per Package cannot be negative.');
+            toast.error('Package Size cannot be negative.');
             return;
         }
 
+        // Current stock is strictly preserved in edit mode (managed via Update Stock).
+        // In create mode, stock is calculated from initial packages * package size.
         const saveStock = editingItem 
-            ? (formData.stock === '' ? 0 : Number(formData.stock)) 
+            ? Number(editingItem.stock || 0) 
             : Number((pkgQty * (pkgSize > 0 ? pkgSize : 1)).toFixed(2));
         
         if (saveStock < 0) {
             toast.error('Stock quantity cannot be negative.');
             return;
+        }
+
+        // Format trigger_service as JSON string from dynamic rows if autoDeduct is enabled
+        let triggerServiceVal = '';
+        let firstConsumptionQty = 0;
+        if (formData.autoDeduct) {
+            const validRows = serviceRows.filter(r => {
+                const sName = r.service.trim().toLowerCase();
+                return sName && !sName.includes('rush') && Number(r.quantity) > 0;
+            });
+            if (validRows.length > 0) {
+                triggerServiceVal = JSON.stringify(validRows.map(r => ({
+                    service: r.service.trim(),
+                    quantity: Number(r.quantity)
+                })));
+                firstConsumptionQty = Number(validRows[0].quantity);
+            } else if (eligibleServices.length > 0) {
+                triggerServiceVal = JSON.stringify([{ service: eligibleServices[0].name, quantity: 20 }]);
+                firstConsumptionQty = 20;
+            }
         }
 
         isSavingRef.current = true;
@@ -292,12 +330,12 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                 price: Number(formData.price || 0),
                 isActive: formData.isActive,
                 auto_deduct: formData.autoDeduct,
-                auto_deduct_trigger: formData.autoDeductTrigger,
-                trigger_service: formData.triggerService,
-                consumption_qty: Number(formData.consumptionQty || 0),
-                consumption_unit: formData.consumptionUnit || (formData.unit || 'mL'),
+                auto_deduct_trigger: formData.autoDeductTrigger || 'on-going',
+                trigger_service: triggerServiceVal,
+                consumption_qty: firstConsumptionQty,
+                consumption_unit: formData.unit || 'mL',
                 package_size: pkgSize,
-                package_unit: formData.packageUnit || 'Can',
+                package_unit: formData.packageUnit || 'Bottle',
                 low_stock_threshold: Number(formData.lowStockThreshold || 0),
                 is_retail: formData.isRetail,
                 retail_price: formData.isRetail ? Number(formData.retailPrice || 0) : 0
@@ -352,13 +390,49 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
         const stockVal = Number(item.stock || 0);
         const calcPkgQty = pkgSize > 0 ? Number((stockVal / pkgSize).toFixed(2)) : (stockVal || 0);
 
+        // Parse trigger_service (JSON array, JSON dict, or comma-separated legacy)
+        let parsedRows: ServiceConsumptionRow[] = [];
+        const ts = (item.trigger_service || '').trim();
+        if (ts.startsWith('[') || ts.startsWith('{')) {
+            try {
+                const parsed = JSON.parse(ts);
+                if (Array.isArray(parsed)) {
+                    parsedRows = parsed.map((p: any) => ({
+                        service: p.service || '',
+                        quantity: String(p.quantity ?? p.amount ?? item.consumption_qty ?? '')
+                    })).filter((p: any) => p.service);
+                } else if (typeof parsed === 'object' && parsed !== null) {
+                    parsedRows = Object.entries(parsed).map(([s, q]) => ({
+                        service: s,
+                        quantity: String(q)
+                    }));
+                }
+            } catch {
+                parsedRows = [];
+            }
+        } else if (ts && ts.toLowerCase() !== 'all') {
+            const parts = ts.split(',').map((s: string) => s.trim()).filter(Boolean);
+            parsedRows = parts.map((p: string) => ({
+                service: p,
+                quantity: String(item.consumption_qty || 20)
+            }));
+        }
+
+        // Filter out any rush fees from parsed rows
+        parsedRows = parsedRows.filter(p => !p.service.toLowerCase().includes('rush'));
+
+        if (parsedRows.length === 0 && eligibleServices.length > 0) {
+            parsedRows = [{ service: eligibleServices[0].name, quantity: String(item.consumption_qty || 20) }];
+        }
+        setServiceRows(parsedRows);
+
         setFormData({
             name: item.name,
             inventory_number: item.inventory_number || `INV-${item.id.toString().padStart(4, '0')}`,
             category: item.category,
             stock: stockVal,
             unit: item.unit || 'mL',
-            price: item.price !== undefined && item.price !== null ? Number(item.price).toFixed(2) : '0.00',
+            price: item.price !== undefined && item.price !== null && Number(item.price) > 0 ? Number(item.price).toFixed(2) : '',
             isActive: item.isActive,
             autoDeduct: item.auto_deduct || false,
             autoDeductTrigger: item.auto_deduct_trigger === 'Job Started' ? 'on-going' : 
@@ -368,11 +442,11 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
             consumptionQty: item.consumption_qty || 0,
             consumptionUnit: item.consumption_unit || (item.unit || 'mL'),
             packageSize: pkgSize > 0 ? pkgSize : '',
-            packageUnit: item.package_unit || (item as any).packageUnit || 'Can',
+            packageUnit: item.package_unit || (item as any).packageUnit || 'Bottle',
             packageQty: calcPkgQty,
             lowStockThreshold: item.low_stock_threshold || '',
             isRetail: item.is_retail || false,
-            retailPrice: item.retail_price !== undefined && item.retail_price !== null && Number(item.retail_price) > 0 ? Number(item.retail_price).toFixed(2) : '0.00'
+            retailPrice: item.retail_price !== undefined && item.retail_price !== null && Number(item.retail_price) > 0 ? Number(item.retail_price).toFixed(2) : ''
         });
         setIsModalOpen(true);
     };
@@ -525,7 +599,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                         </div>
                         <Dialog open={isFilterOpen} onOpenChange={setIsFilterOpen}>
                             <DialogTrigger asChild>
-                                <Button variant="outline" className={`h-10 w-10 p-0 rounded-xl border-gray-100 ${(categoryFilter !== 'all' || statusFilter !== 'all' || activeFilter !== 'all') ? 'bg-red-50 text-red-600 border-red-200' : 'text-gray-500 hover:border-red-600 hover:text-red-600 hover:bg-red-50'}`}>
+                                <Button variant="outline" className={`relative h-10 w-10 p-0 rounded-xl border-gray-100 ${activeFilterCount > 0 ? 'bg-red-50 text-red-600 border-red-200' : 'text-gray-500 hover:border-red-600 hover:text-red-600 hover:bg-red-50'}`}>
                                     <Filter size={18} />
                                 </Button>
                             </DialogTrigger>
@@ -606,8 +680,8 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                         </Dialog>
                     </div>
 
-                    <div className="overflow-x-auto w-full min-h-[380px]">
-                        <table className="w-full table-fixed min-w-0 border-t border-gray-100">
+                    <div className="overflow-x-auto w-full min-h-[380px] custom-scrollbar pb-1">
+                        <table className="w-full table-fixed min-w-[950px] border-t border-gray-100">
                             <colgroup>
                                 <col className="w-[19%]" />
                                 <col className="w-[11%]" />
@@ -669,17 +743,38 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                         <td className="px-1.5 py-2 text-center max-w-0">
                                             {(() => {
                                                 const pres = getInventoryPresentation(item);
-                                                return pres.isPackaged ? (
-                                                    <div className="flex flex-col items-center justify-center text-center gap-0.5 min-w-0 max-w-full">
-                                                        <span className="text-xs font-bold text-gray-800 whitespace-nowrap truncate max-w-full" title={pres.packageLabel}>
-                                                            {pres.packageLabel.split(' (')[0]}
-                                                        </span>
-                                                        <span className="text-[10px] text-gray-400 font-semibold whitespace-nowrap truncate max-w-full">
-                                                            {item.package_size?.toLocaleString()} {item.unit}
-                                                        </span>
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-xs font-bold text-gray-400 italic">Bulk</span>
+                                                const pkgUnit = String(item.package_unit || (item as any).packageUnit || '').trim();
+                                                const pkgSize = Number(item.package_size ?? (item as any).packageSize ?? 0);
+                                                const unitStr = String(item.unit || (item as any).stockUnit || '').trim();
+
+                                                if (pkgUnit || pres.isPackaged) {
+                                                    const displayLabel = pkgUnit || pres.packageLabel.split(' (')[0];
+                                                    return (
+                                                        <div className="flex flex-col items-center justify-center text-center gap-0.5 min-w-0 max-w-full">
+                                                            <span className="text-xs font-bold text-gray-800 whitespace-nowrap truncate max-w-full" title={displayLabel}>
+                                                                {displayLabel}
+                                                            </span>
+                                                            {pkgSize > 0 && unitStr && (
+                                                                <span className="text-[10px] text-gray-400 font-semibold whitespace-nowrap truncate max-w-full">
+                                                                    {pkgSize.toLocaleString()} {unitStr}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                }
+
+                                                if (pkgSize > 0 && unitStr) {
+                                                    return (
+                                                        <div className="flex flex-col items-center justify-center text-center gap-0.5 min-w-0 max-w-full">
+                                                            <span className="text-xs font-bold text-gray-800 whitespace-nowrap truncate max-w-full">
+                                                                {pkgSize.toLocaleString()} {unitStr}
+                                                            </span>
+                                                        </div>
+                                                    );
+                                                }
+
+                                                return (
+                                                    <span className="text-xs font-bold text-gray-400">—</span>
                                                 );
                                             })()}
                                         </td>
@@ -768,26 +863,14 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                                     <Button 
                                                         variant="outline" 
                                                         className="h-7 w-7 p-0 border-red-200 text-red-700 bg-red-50 hover:bg-red-100 font-bold rounded-md inline-flex items-center justify-center" 
-                                                        title="Actions"
+                                                        title="More actions"
+                                                        aria-label="More actions"
                                                     >
                                                         <MoreVertical className="h-3.5 w-3.5 text-red-500" />
                                                     </Button>
                                                 </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end" className="w-48 p-1.5 space-y-1">
-                                                    {['owner', 'admin', 'staff'].includes(user.role?.toLowerCase() || '') && (
-                                                        <DropdownMenuItem
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setSelectedUpdateItem(item);
-                                                                setIsUpdateStockOpen(true);
-                                                            }}
-                                                            className="border border-emerald-200 rounded-md px-2.5 py-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 focus:text-emerald-800 focus:bg-emerald-100 font-bold cursor-pointer"
-                                                        >
-                                                            <PackageMinus className="h-4 w-4 mr-2 text-emerald-600" />
-                                                            Update Stock Usage
-                                                        </DropdownMenuItem>
-                                                    )}
-                                                    {['owner', 'admin', 'staff'].includes(user.role?.toLowerCase() || '') && (
+                                                <DropdownMenuContent align="end" className="w-44 p-1.5 space-y-1">
+                                                    {isStaffOrAbove && (
                                                         <DropdownMenuItem
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
@@ -796,10 +879,23 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                                             className="border border-yellow-200 rounded-md px-2.5 py-1.5 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:text-yellow-800 focus:bg-yellow-100 font-bold cursor-pointer"
                                                         >
                                                             <Edit className="h-4 w-4 mr-2 text-yellow-600" />
-                                                            Edit Item Detail
+                                                            Edit Item
                                                         </DropdownMenuItem>
                                                     )}
-                                                    {['owner', 'admin', 'staff'].includes(user.role?.toLowerCase() || '') && (
+                                                    {isStaffOrAbove && (
+                                                        <DropdownMenuItem
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setSelectedUpdateItem(item);
+                                                                setIsUpdateStockOpen(true);
+                                                            }}
+                                                            className="border border-green-200 rounded-md px-2.5 py-1.5 text-green-700 bg-green-50 hover:bg-green-100 focus:text-green-800 focus:bg-green-100 font-bold cursor-pointer"
+                                                        >
+                                                            <PackageMinus className="h-4 w-4 mr-2 text-green-600" />
+                                                            Update Stock
+                                                        </DropdownMenuItem>
+                                                    )}
+                                                    {isStaffOrAbove && (
                                                         <DropdownMenuItem
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
@@ -911,363 +1007,179 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                             <X size={16} />
                         </button>
                     </DialogHeader>
-                    <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-4">
-                    <div className="grid gap-3 py-1">
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase text-gray-400">Item Name</label>
-                            <Input 
-                                className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs" 
-                                placeholder="e.g. Standard Shoe Cleaner" 
-                                value={formData.name}
-                                onChange={(e) => setFormData((prev: any) => ({ ...prev, name: e.target.value }))}
-                            />
-                        </div>
-                        <div className="space-y-1.5">
-                            <div className="flex items-center justify-between">
-                                <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Inventory Number</label>
-                                {editingItem ? (
-                                    <span className="text-[9px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 uppercase tracking-wider inline-flex items-center gap-1">
-                                        <ShieldCheck size={11} className="text-slate-500" /> Verified (Read-Only)
-                                    </span>
-                                ) : (
-                                    <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 uppercase tracking-wider inline-flex items-center gap-1">
-                                        <ShieldCheck size={11} className="text-emerald-600" /> Auto-Generated (Unique)
-                                    </span>
-                                )}
-                            </div>
-                            <Input 
-                                className="h-9 border-slate-200 bg-slate-50 text-slate-800 font-mono font-bold rounded-lg text-xs cursor-not-allowed select-all focus-visible:ring-0 focus-visible:border-slate-300 shadow-none" 
-                                value={formData.inventory_number || ''}
-                                readOnly
-                                title="Auto-generated unique inventory number (read-only to prevent duplicates)"
-                            />
-                            <p className="text-[9.5px] text-gray-400 font-medium">
-                                {editingItem 
-                                    ? 'Permanent verified identifier across local and cloud database.' 
-                                    : 'Automatically assigned fixed format (INV-XXXX) with guaranteed uniqueness.'}
-                            </p>
-                        </div>                        {/* Category and Package Type */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-black uppercase text-gray-400">Category</label>
-                                <CreatableCombobox
-                                    options={categoryOptions}
-                                    value={formData.category}
-                                    onChange={(val) => setFormData((prev: any) => ({ ...prev, category: val }))}
-                                    placeholder="Select or type category..."
-                                    storageKey={CUSTOM_OPTION_KEYS.INVENTORY_CATEGORIES}
-                                />
-                            </div>
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-black uppercase text-gray-400">Package Type</label>
-                                <CreatableCombobox
-                                    options={packageTypeOptions}
-                                    value={formData.packageUnit}
-                                    onChange={(val) => setFormData((prev: any) => ({ ...prev, packageUnit: val }))}
-                                    placeholder="Select or type packaging..."
-                                    storageKey={CUSTOM_OPTION_KEYS.PACKAGE_TYPES}
-                                />
-                            </div>
-                        </div>
+                    <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar px-4 sm:px-6 py-4">
+                        <div className="space-y-4 py-1">
+                            {/* ① Item Information */}
+                            <div className="space-y-3">
+                                <div className="flex items-center gap-2 pb-1.5 border-b border-gray-100">
+                                    <div className="w-5 h-5 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-[10px] font-black">1</div>
+                                    <h3 className="text-xs font-black uppercase text-gray-900 tracking-wider">Item Information</h3>
+                                </div>
 
-                        {editingItem ? (
-                            <>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-1.5">
-                                        <label className="text-[10px] font-black uppercase text-gray-400">Current Stock</label>
-                                        <div className="relative">
-                                            <Input
-                                                className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs pr-14 font-bold"
-                                                type="text"
-                                                inputMode="decimal"
-                                                value={formData.stock ?? ''}
-                                                onFocus={(e) => {
-                                                    if (e.target.value === '0') e.target.select();
-                                                }}
-                                                onChange={(e) => {
-                                                    const val = e.target.value;
-                                                    if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                                                        setFormData((prev: any) => ({ ...prev, stock: val }));
-                                                    }
-                                                }}
-                                            />
-                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 uppercase font-black pointer-events-none">
-                                                {formData.unit || 'mL'}
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-black uppercase text-gray-500">
+                                        Item Name <span className="text-red-500">*</span>
+                                    </label>
+                                    <Input 
+                                        className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs font-medium" 
+                                        placeholder="e.g. Angelus Leather Paint White" 
+                                        value={formData.name}
+                                        onChange={(e) => setFormData((prev: any) => ({ ...prev, name: e.target.value }))}
+                                    />
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-[10px] font-black uppercase text-gray-500 tracking-wider">Inventory Number</label>
+                                        {editingItem ? (
+                                            <span className="text-[9px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 uppercase tracking-wider inline-flex items-center gap-1">
+                                                <ShieldCheck size={11} className="text-slate-500" /> Verified (Read-Only)
                                             </span>
-                                        </div>
+                                        ) : (
+                                            <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 uppercase tracking-wider inline-flex items-center gap-1">
+                                                <ShieldCheck size={11} className="text-emerald-600" /> Auto-Generated
+                                            </span>
+                                        )}
+                                    </div>
+                                    <Input 
+                                        className="h-9 border-slate-200 bg-slate-50 text-slate-800 font-mono font-bold rounded-lg text-xs cursor-not-allowed select-all focus-visible:ring-0 focus-visible:border-slate-300 shadow-none" 
+                                        value={formData.inventory_number || ''}
+                                        readOnly
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-black uppercase text-gray-500">Category</label>
+                                        <CreatableCombobox
+                                            options={categoryOptions}
+                                            value={formData.category}
+                                            onChange={(val) => setFormData((prev: any) => ({ ...prev, category: val }))}
+                                            placeholder="e.g. Paints, Chemical..."
+                                            storageKey={CUSTOM_OPTION_KEYS.INVENTORY_CATEGORIES}
+                                        />
                                     </div>
                                     <div className="space-y-1.5">
-                                        <label className="text-[10px] font-black uppercase text-gray-400">Unit of Measurement</label>
+                                        <label className="text-[10px] font-black uppercase text-gray-500">Package</label>
+                                        <CreatableCombobox
+                                            options={packageTypeOptions}
+                                            value={formData.packageUnit}
+                                            onChange={(val) => setFormData((prev: any) => ({ ...prev, packageUnit: val }))}
+                                            placeholder="e.g. Bottle, Jug, Box..."
+                                            storageKey={CUSTOM_OPTION_KEYS.PACKAGE_TYPES}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-black uppercase text-gray-500">Package Size</label>
+                                        <Input 
+                                            className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs font-semibold" 
+                                            type="text" 
+                                            inputMode="decimal" 
+                                            placeholder="e.g. 90" 
+                                            value={formData.packageSize === '' ? '' : formData.packageSize} 
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                                    setFormData((prev: any) => ({ ...prev, packageSize: val }));
+                                                }
+                                            }}
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-black uppercase text-gray-500">Stock Unit</label>
                                         <CreatableCombobox
                                             options={unitOptions}
                                             value={formData.unit || 'mL'}
                                             onChange={(val) => setFormData((prev: any) => ({ ...prev, unit: val }))}
-                                            placeholder="Select or type unit (mL, g, pcs, pairs...)"
+                                            placeholder="e.g. mL, g, pcs..."
                                             storageKey={CUSTOM_OPTION_KEYS.INVENTORY_UNITS}
                                         />
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-1.5">
-                                        <label className="text-[10px] font-black uppercase text-gray-400">
-                                            Volume / Size per Package
-                                        </label>
-                                        <div className="relative">
-                                            <Input 
-                                                className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs font-semibold pr-14" 
-                                                type="text" 
-                                                inputMode="decimal" 
-                                                placeholder="e.g. 360" 
-                                                value={formData.packageSize === '' ? '' : formData.packageSize} 
-                                                onChange={(e) => {
-                                                    const val = e.target.value;
-                                                    if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                                                        setFormData((prev: any) => ({ ...prev, packageSize: val }));
-                                                    }
-                                                }}
-                                            />
-                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 uppercase font-black pointer-events-none">
-                                                {formData.unit || 'mL'}
+                                {/* Stock Measurement readout */}
+                                <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700">
+                                    <span>Stock is measured in</span>
+                                    <span className="font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded border border-red-200 text-xs">
+                                        {formData.unit || 'mL'}
+                                    </span>
+                                </div>
+
+                                {/* Stock Display: Read-only in Edit, Initial packages in Create */}
+                                {editingItem ? (
+                                    <div className="space-y-1.5 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-[10px] font-black uppercase text-gray-500 tracking-wider">Current Stock</label>
+                                            <span className="text-[9px] font-bold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200 uppercase tracking-wider inline-flex items-center gap-1">
+                                                <Lock size={11} className="text-slate-400" /> Read-Only
                                             </span>
                                         </div>
-                                        <div className="flex flex-wrap items-center gap-1 pt-0.5">
-                                            <span className="text-[9px] text-gray-400 font-bold mr-0.5">Presets:</span>
-                                            {[1, 100, 250, 350, 360, 500].map(val => (
-                                                <button
-                                                    key={val}
-                                                    type="button"
-                                                    onClick={() => setFormData((prev: any) => ({ ...prev, packageSize: val }))}
-                                                    className={`text-[9px] font-bold px-1.5 py-0.5 rounded border transition-colors ${
-                                                        Number(formData.packageSize) === val
-                                                            ? 'bg-red-50 border-red-300 text-red-700 font-black'
-                                                            : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
-                                                    }`}
-                                                >
-                                                    {val}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <label className="text-[10px] font-black uppercase text-gray-400">
-                                            Equivalent Remaining
-                                        </label>
-                                        <div className="h-9 rounded-lg border border-gray-200 bg-gray-50 px-3 text-xs flex items-center font-bold text-gray-700 select-none">
-                                            {formData.packageSize ? getInventoryPresentation(formData).compactLabel : 'N/A'}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-3">
-                                    <div className="space-y-1.5">
-                                        <label className="text-[10px] font-black uppercase text-gray-400">Unit Price (₱)</label>
-                                        <Input 
-                                            className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs font-semibold" 
-                                            type="text" 
-                                            inputMode="decimal"
-                                            placeholder="0.00" 
-                                            value={formData.price ?? ''}
-                                            onFocus={(e) => {
-                                                if (e.target.value === '0' || e.target.value === '0.00') e.target.select();
-                                            }}
-                                            onChange={(e) => {
-                                                const val = e.target.value;
-                                                if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                                                    setFormData((prev: any) => ({ ...prev, price: val }));
-                                                }
-                                            }}
-                                            onBlur={() => {
-                                                if (formData.price !== '' && formData.price !== undefined && formData.price !== null) {
-                                                    const num = parseFloat(String(formData.price));
-                                                    if (!isNaN(num)) {
-                                                        setFormData((prev: any) => ({ ...prev, price: num.toFixed(2) }));
-                                                    }
-                                                }
-                                            }}
-                                        />
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <label className="text-[10px] font-black uppercase text-gray-400">
-                                            Low Stock Threshold
-                                        </label>
-                                        <div className="relative">
-                                            <Input 
-                                                className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs pr-10 font-semibold" 
-                                                type="text" 
-                                                inputMode="decimal" 
-                                                placeholder="e.g. 1000"
-                                                value={formData.lowStockThreshold ?? ''}
-                                                onFocus={(e) => {
-                                                    if (e.target.value === '0') e.target.select();
-                                                }}
-                                                onChange={(e) => {
-                                                    const val = e.target.value;
-                                                    if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                                                        setFormData((prev: any) => ({ ...prev, lowStockThreshold: val }));
-                                                    }
-                                                }}
+                                        <div className="flex items-center gap-2">
+                                            <Input
+                                                className="h-9 border-slate-200 bg-white text-slate-800 font-mono font-bold rounded-lg text-xs cursor-not-allowed select-all"
+                                                value={`${Number(formData.stock).toLocaleString()} ${formData.unit || 'mL'}`}
+                                                readOnly
                                             />
-                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-gray-400 uppercase">{formData.unit || 'mL'}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </>
-                        ) : (
-                            <>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-1.5">
-                                        <label className="text-[10px] font-black uppercase text-gray-400">
-                                            Unit of Measurement
-                                        </label>
-                                        <CreatableCombobox
-                                            options={unitOptions}
-                                            value={formData.unit || 'mL'}
-                                            onChange={(val) => {
-                                                setFormData((prev: any) => ({ ...prev, unit: val }));
-                                            }}
-                                            placeholder="Select or type unit (mL, g, pcs, pairs...)"
-                                            storageKey={CUSTOM_OPTION_KEYS.INVENTORY_UNITS}
-                                        />
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <label className="text-[10px] font-black uppercase text-gray-400">
-                                            Volume / Size per Package
-                                        </label>
-                                        <div className="relative">
-                                            <Input 
-                                                className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs font-semibold pr-14" 
-                                                type="text" 
-                                                inputMode="decimal" 
-                                                placeholder="e.g. 360" 
-                                                value={formData.packageSize === '' ? '' : formData.packageSize} 
-                                                onChange={(e) => {
-                                                    const val = e.target.value;
-                                                    if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                                                        const numQty = Number(formData.packageQty || 0);
-                                                        const numSize = val === '' ? 0 : (parseFloat(val) || 0);
-                                                        const calcStock = Number((numQty * (numSize > 0 ? numSize : 1)).toFixed(2));
-                                                        setFormData((prev: any) => ({ ...prev, packageSize: val, stock: calcStock }));
-                                                    }
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                className="h-9 px-3 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-300 rounded-lg flex items-center gap-1.5 shrink-0"
+                                                onClick={() => {
+                                                    setSelectedUpdateItem(editingItem);
+                                                    setIsModalOpen(false);
+                                                    setIsUpdateStockOpen(true);
                                                 }}
-                                            />
-                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 uppercase font-black pointer-events-none">
-                                                {formData.unit || 'mL'}
-                                            </span>
+                                                title="Adjust stock balance, record purchase, or use stock"
+                                            >
+                                                <PackageMinus className="h-3.5 w-3.5 text-emerald-600" />
+                                                Update Stock
+                                            </Button>
                                         </div>
-                                        <div className="flex flex-wrap items-center gap-1 pt-0.5">
-                                            <span className="text-[9px] text-gray-400 font-bold mr-0.5">Presets:</span>
-                                            {[1, 100, 250, 350, 360, 500].map(val => (
-                                                <button
-                                                    key={val}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        const numQty = Number(formData.packageQty || 0);
-                                                        const calcStock = Number((numQty * val).toFixed(2));
-                                                        setFormData((prev: any) => ({ ...prev, packageSize: val, stock: calcStock }));
-                                                    }}
-                                                    className={`text-[9px] font-bold px-1.5 py-0.5 rounded border transition-colors ${
-                                                        Number(formData.packageSize) === val
-                                                            ? 'bg-red-50 border-red-300 text-red-700 font-black'
-                                                            : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
-                                                    }`}
-                                                >
-                                                    {val}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-1.5">
-                                        <label className="text-[10px] font-black uppercase text-gray-400">
-                                            Initial Packages {formData.packageUnit ? `(${formatPackageUnitPlural(formData.packageUnit)})` : ''}
-                                        </label>
-                                        <Input 
-                                            className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs font-semibold" 
-                                            type="text" 
-                                            inputMode="decimal" 
-                                            placeholder="e.g. 12" 
-                                            value={formData.packageQty ?? ''} 
-                                            onFocus={(e) => {
-                                                if (e.target.value === '0') e.target.select();
-                                            }}
-                                            onChange={(e) => {
-                                                const val = e.target.value;
-                                                if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                                                    const numQty = val === '' ? 0 : (parseFloat(val) || 0);
-                                                    const numSize = Number(formData.packageSize || 0);
-                                                    const calcStock = Number((numQty * (numSize > 0 ? numSize : 1)).toFixed(2));
-                                                    setFormData((prev: any) => ({ ...prev, packageQty: val, stock: calcStock }));
-                                                }
-                                            }}
-                                        />
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <label className="text-[10px] font-black uppercase text-gray-400">Unit Price (₱)</label>
-                                        <Input 
-                                            className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs font-semibold" 
-                                            type="text" 
-                                            inputMode="decimal" 
-                                            placeholder="0.00" 
-                                            value={formData.price ?? ''} 
-                                            onFocus={(e) => {
-                                                if (e.target.value === '0' || e.target.value === '0.00') e.target.select();
-                                            }}
-                                            onChange={(e) => {
-                                                const val = e.target.value;
-                                                if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                                                    setFormData((prev: any) => ({ ...prev, price: val }));
-                                                }
-                                            }}
-                                            onBlur={() => {
-                                                if (formData.price !== '' && formData.price !== undefined && formData.price !== null) {
-                                                    const num = parseFloat(String(formData.price));
-                                                    if (!isNaN(num)) {
-                                                        setFormData((prev: any) => ({ ...prev, price: num.toFixed(2) }));
-                                                    }
-                                                }
-                                            }}
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Calculated Total Stock Banner */}
-                                <div className="p-3 bg-gradient-to-r from-red-50/70 to-amber-50/50 rounded-xl border border-red-100/80 flex items-center justify-between">
-                                    <div>
-                                        <p className="text-[9px] font-black uppercase tracking-wider text-red-600/90">Total Stock in Inventory</p>
-                                        <p className="text-sm font-black text-gray-900 mt-0.5">
-                                            {(Number(formData.stock) || 0).toLocaleString()} <span className="text-xs font-bold text-gray-500 uppercase">{formData.unit || 'mL'}</span>
+                                        <p className="text-[9.5px] text-gray-500 font-medium">
+                                            🔒 Managed through Update Stock to record audited changes.
                                         </p>
                                     </div>
-                                    <div className="text-right text-[10px] font-semibold text-gray-500 bg-white/80 px-2.5 py-1 rounded-lg border border-red-100">
-                                        <span>{Number(formData.packageQty) || 0} {formData.packageUnit ? formatPackageUnitPlural(formData.packageUnit) : 'packages'}</span>
-                                        <span className="mx-1 text-gray-300">×</span>
-                                        <span>{Number(formData.packageSize) || 1} {formData.unit || 'mL'}</span>
+                                ) : (
+                                    <div className="grid grid-cols-2 gap-3 p-3 bg-red-50/40 rounded-xl border border-red-100">
+                                        <div className="space-y-1.5">
+                                            <label className="text-[10px] font-black uppercase text-gray-600">
+                                                Initial Stock ({formData.packageUnit ? formatPackageUnitPlural(formData.packageUnit) : 'Packages'})
+                                            </label>
+                                            <Input 
+                                                className="h-9 border-red-100 bg-white focus:border-red-500 rounded-lg text-xs font-semibold" 
+                                                type="text" 
+                                                inputMode="decimal" 
+                                                placeholder="e.g. 2" 
+                                                value={formData.packageQty ?? ''} 
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                                        setFormData((prev: any) => ({ ...prev, packageQty: val }));
+                                                    }
+                                                }}
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5 flex flex-col justify-end">
+                                            <label className="text-[10px] font-black uppercase text-gray-600">Calculated Stock</label>
+                                            <div className="h-9 rounded-lg border border-red-100 bg-white px-3 text-xs flex items-center font-bold text-gray-800">
+                                                {(Number(formData.packageQty || 0) * (Number(formData.packageSize) || 1)).toLocaleString()} {formData.unit || 'mL'}
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                            </>
-                        )}
+                                )}
 
-                        {/* Stock Management & Behavior */}
-                        {!editingItem && (
-                            <div className="space-y-3 pt-2">
-                                <h4 className="text-[10px] font-black uppercase text-gray-900 tracking-widest border-b border-gray-100 pb-1">Stock Management</h4>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase text-gray-400">
-                                        Low Stock Threshold
-                                    </label>
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-black uppercase text-gray-500">Low Stock Threshold</label>
                                     <div className="relative">
                                         <Input 
-                                            className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs pr-10 font-semibold" 
+                                            className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs pr-12 font-semibold" 
                                             type="text" 
                                             inputMode="decimal" 
-                                            placeholder="e.g. 1000"
-                                            value={formData.lowStockThreshold ?? ''}
-                                            onFocus={(e) => {
-                                                if (e.target.value === '0') e.target.select();
-                                            }}
+                                            placeholder="e.g. 100" 
+                                            value={formData.lowStockThreshold ?? ''} 
                                             onChange={(e) => {
                                                 const val = e.target.value;
                                                 if (val === '' || /^\d*\.?\d*$/.test(val)) {
@@ -1275,46 +1187,107 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                                 }
                                             }}
                                         />
-                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-gray-400 uppercase">{formData.unit || 'mL'}</span>
+                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400 uppercase pointer-events-none">
+                                            {formData.unit || 'mL'}
+                                        </span>
                                     </div>
                                 </div>
                             </div>
-                        )}
 
-                        {/* Collapsible/Expandable Consumption Settings */}
-                        <div className="border border-red-100/60 rounded-xl p-3 bg-red-50/20 space-y-3 mt-4">
-                            <h4 className="text-[10px] font-black uppercase text-red-900 tracking-widest border-b border-red-100 pb-1.5 mb-2">Inventory Behavior</h4>
-                            <div className="space-y-4">
-                                <div className="flex flex-col gap-2 border-b border-red-100/50 pb-3">
-                                    <div className="flex items-center gap-2">
-                                        <input 
-                                            type="checkbox" 
-                                            id="isRetailCheckbox" 
-                                            className="h-4 w-4 rounded border-red-300 text-red-600 focus:ring-red-500 cursor-pointer"
-                                            checked={formData.isRetail}
-                                            onChange={(e) => {
-                                                const checked = e.target.checked;
-                                                setFormData((prev: any) => ({ ...prev, isRetail: checked, retailPrice: checked ? (prev.retailPrice || '') : '' }));
-                                            }}
-                                        />
-                                        <label htmlFor="isRetailCheckbox" className="text-[10px] font-black uppercase text-red-900 cursor-pointer select-none font-bold">
-                                            Allow Item for Retail Sale
+                            {/* ② Pricing */}
+                            <div className="space-y-3 pt-2">
+                                <div className="flex items-center gap-2 pb-1.5 border-b border-gray-100">
+                                    <div className="w-5 h-5 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-[10px] font-black">2</div>
+                                    <h3 className="text-xs font-black uppercase text-gray-900 tracking-wider">Pricing</h3>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-black uppercase text-gray-500">
+                                            Purchase Price (per {formData.packageUnit || 'Package'})
                                         </label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">₱</span>
+                                            <Input 
+                                                className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs font-semibold pl-7" 
+                                                type="text" 
+                                                inputMode="decimal" 
+                                                placeholder="0.00" 
+                                                value={formData.price ?? ''} 
+                                                onFocus={(e) => {
+                                                    e.target.select();
+                                                    if (formData.price === '0.00' || formData.price === '0') {
+                                                        setFormData((prev: any) => ({ ...prev, price: '' }));
+                                                    }
+                                                }}
+                                                onChange={(e) => {
+                                                    let val = e.target.value;
+                                                    if (val.startsWith('0.00') && val.length > 4) {
+                                                        val = val.slice(4);
+                                                    } else if (val.startsWith('0') && val.length > 1 && !val.startsWith('0.')) {
+                                                        val = val.replace(/^0+/, '');
+                                                    }
+                                                    if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                                        setFormData((prev: any) => ({ ...prev, price: val }));
+                                                    }
+                                                }}
+                                                onBlur={() => {
+                                                    if (formData.price !== '' && formData.price !== undefined && formData.price !== null) {
+                                                        const num = parseFloat(String(formData.price));
+                                                        if (!isNaN(num) && num > 0) {
+                                                            setFormData((prev: any) => ({ ...prev, price: num.toFixed(2) }));
+                                                        } else if (num === 0) {
+                                                            setFormData((prev: any) => ({ ...prev, price: '0.00' }));
+                                                        }
+                                                    }
+                                                }}
+                                            />
+                                        </div>
                                     </div>
-                                    {formData.isRetail && (
-                                        <div className="pl-6 max-w-[200px]">
-                                            <div className="relative">
+
+                                    <div className="space-y-1.5">
+                                        <div className="flex items-center justify-between">
+                                            <label htmlFor="isRetailCheckbox" className="text-[10px] font-black uppercase text-gray-500 cursor-pointer">
+                                                Retail Sale
+                                            </label>
+                                            <div className="flex items-center gap-1.5">
                                                 <input 
+                                                    type="checkbox" 
+                                                    id="isRetailCheckbox" 
+                                                    className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer"
+                                                    checked={formData.isRetail}
+                                                    onChange={(e) => {
+                                                        const checked = e.target.checked;
+                                                        setFormData((prev: any) => ({ ...prev, isRetail: checked, retailPrice: checked ? (prev.retailPrice && prev.retailPrice !== '0.00' ? prev.retailPrice : '') : '' }));
+                                                    }}
+                                                />
+                                                <label htmlFor="isRetailCheckbox" className="text-[10px] font-bold text-gray-600 cursor-pointer select-none">
+                                                    Available for Retail
+                                                </label>
+                                            </div>
+                                        </div>
+                                        {formData.isRetail ? (
+                                            <div className="relative">
+                                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">₱</span>
+                                                <Input 
+                                                    className="h-9 border-red-100 focus:border-red-500 rounded-lg text-xs font-semibold pl-7" 
                                                     type="text" 
-                                                    inputMode="decimal"
-                                                    className="w-full h-8 rounded-lg border border-red-200 bg-white px-3 pl-7 text-xs font-semibold focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none"
-                                                    placeholder="0.00"
-                                                    value={formData.retailPrice ?? ''}
+                                                    inputMode="decimal" 
+                                                    placeholder="Selling Price (0.00)" 
+                                                    value={formData.retailPrice ?? ''} 
                                                     onFocus={(e) => {
-                                                        if (e.target.value === '0' || e.target.value === '0.00') e.target.select();
+                                                        e.target.select();
+                                                        if (formData.retailPrice === '0.00' || formData.retailPrice === '0') {
+                                                            setFormData((prev: any) => ({ ...prev, retailPrice: '' }));
+                                                        }
                                                     }}
                                                     onChange={(e) => {
-                                                        const val = e.target.value;
+                                                        let val = e.target.value;
+                                                        if (val.startsWith('0.00') && val.length > 4) {
+                                                            val = val.slice(4);
+                                                        } else if (val.startsWith('0') && val.length > 1 && !val.startsWith('0.')) {
+                                                            val = val.replace(/^0+/, '');
+                                                        }
                                                         if (val === '' || /^\d*\.?\d*$/.test(val)) {
                                                             setFormData((prev: any) => ({ ...prev, retailPrice: val }));
                                                         }
@@ -1322,139 +1295,140 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                                     onBlur={() => {
                                                         if (formData.retailPrice !== '' && formData.retailPrice !== undefined && formData.retailPrice !== null) {
                                                             const num = parseFloat(String(formData.retailPrice));
-                                                            if (!isNaN(num)) {
+                                                            if (!isNaN(num) && num > 0) {
                                                                 setFormData((prev: any) => ({ ...prev, retailPrice: num.toFixed(2) }));
+                                                            } else if (num === 0) {
+                                                                setFormData((prev: any) => ({ ...prev, retailPrice: '0.00' }));
                                                             }
                                                         }
                                                     }}
                                                 />
-                                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-gray-400">₱</span>
+                                            </div>
+                                        ) : (
+                                            <div className="h-9 rounded-lg border border-dashed border-gray-200 bg-gray-50/50 px-3 text-xs flex items-center text-gray-400 select-none">
+                                                Not sold as retail
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* ③ Automatic Stock Usage */}
+                            <div className="space-y-3 pt-2">
+                                <div className="flex items-center gap-2 pb-1.5 border-b border-gray-100">
+                                    <div className="w-5 h-5 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-[10px] font-black">3</div>
+                                    <h3 className="text-xs font-black uppercase text-gray-900 tracking-wider">Automatic Stock Usage</h3>
+                                </div>
+
+                                <div className="border border-red-100 rounded-xl p-3 bg-red-50/20 space-y-3">
+                                    <div className="flex items-center gap-2">
+                                        <input 
+                                            type="checkbox" 
+                                            id="autoDeductCheckbox" 
+                                            className="h-4 w-4 rounded border-red-300 text-red-600 focus:ring-red-500 cursor-pointer"
+                                            checked={formData.autoDeduct}
+                                            onChange={(e) => {
+                                                const checked = e.target.checked;
+                                                setFormData((prev: any) => ({ ...prev, autoDeduct: checked }));
+                                                if (checked && serviceRows.length === 0 && eligibleServices.length > 0) {
+                                                    setServiceRows([{ service: eligibleServices[0].name, quantity: '20' }]);
+                                                }
+                                            }}
+                                        />
+                                        <label htmlFor="autoDeductCheckbox" className="text-xs font-bold text-gray-800 cursor-pointer select-none">
+                                            Automatically deduct when used in a job order
+                                        </label>
+                                    </div>
+
+                                    {formData.autoDeduct && (
+                                        <div className="space-y-3 pt-2 border-t border-red-100/60">
+                                            <p className="text-[10px] text-gray-500 font-medium">
+                                                Configure which services deduct this item and the quantity consumed per order:
+                                            </p>
+
+                                            <div className="space-y-2">
+                                                {serviceRows.map((row, idx) => (
+                                                    <div key={idx} className="flex items-center gap-2 bg-white p-2 rounded-lg border border-red-100 shadow-xs">
+                                                        <select
+                                                            className="flex-1 h-8 rounded-md border border-gray-200 bg-gray-50 px-2 text-xs font-medium focus:ring-1 focus:ring-red-500 focus:bg-white"
+                                                            value={row.service}
+                                                            onChange={(e) => {
+                                                                const updated = [...serviceRows];
+                                                                updated[idx].service = e.target.value;
+                                                                setServiceRows(updated);
+                                                            }}
+                                                        >
+                                                            {eligibleServices.map(s => (
+                                                                <option key={s.id} value={s.name}>{s.name}</option>
+                                                            ))}
+                                                        </select>
+                                                        <div className="relative w-28">
+                                                            <Input
+                                                                type="number"
+                                                                step="any"
+                                                                min="0"
+                                                                className="h-8 text-xs font-semibold pr-10"
+                                                                placeholder="Qty"
+                                                                value={row.quantity}
+                                                                onChange={(e) => {
+                                                                    const updated = [...serviceRows];
+                                                                    updated[idx].quantity = e.target.value;
+                                                                    setServiceRows(updated);
+                                                                }}
+                                                            />
+                                                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 font-bold pointer-events-none">
+                                                                {formData.unit || 'mL'}
+                                                            </span>
+                                                        </div>
+                                                        {serviceRows.length > 1 && (
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-8 w-8 text-gray-400 hover:text-red-600 hover:bg-red-50 shrink-0"
+                                                                onClick={() => {
+                                                                    setServiceRows(serviceRows.filter((_, i) => i !== idx));
+                                                                }}
+                                                            >
+                                                                <Trash2 size={13} />
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                ))}
+
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-7 text-xs font-bold text-red-600 border-red-200 hover:bg-red-50 flex items-center gap-1"
+                                                    onClick={() => {
+                                                        const available = eligibleServices.find(s => !serviceRows.some(r => r.service === s.name));
+                                                        setServiceRows([...serviceRows, { service: available?.name || eligibleServices[0]?.name || '', quantity: '20' }]);
+                                                    }}
+                                                >
+                                                    <Plus size={12} /> Add Service
+                                                </Button>
                                             </div>
                                         </div>
                                     )}
                                 </div>
-                                
-                                <div className="flex items-center gap-2">
-                                    <input 
-                                        type="checkbox" 
-                                        id="autoDeductCheckbox" 
-                                        className="h-4 w-4 rounded border-red-300 text-red-600 focus:ring-red-500 cursor-pointer"
-                                        checked={formData.autoDeduct}
-                                        onChange={(e) => setFormData((prev: any) => ({ ...prev, autoDeduct: e.target.checked }))}
-                                    />
-                                    <label htmlFor="autoDeductCheckbox" className="text-[10px] font-black uppercase text-red-900 cursor-pointer select-none font-bold">
-                                        Automatically deduct during job order
-                                    </label>
-                                </div>
                             </div>
 
-                            {formData.autoDeduct && (
-                                <div className="space-y-3 pt-1.5 border-t border-red-100/50">
-                                    <div className="space-y-3">
-                                        <div className="space-y-1.5">
-                                            <label className="text-[9px] font-black uppercase text-gray-400">Trigger Event</label>
-                                            <select 
-                                                className="w-full h-8 rounded-lg border border-red-100 bg-white px-2 text-xs focus:ring-2 focus:ring-red-500"
-                                                value={formData.autoDeductTrigger}
-                                                onChange={(e) => setFormData((prev: any) => ({ ...prev, autoDeductTrigger: e.target.value }))}
-                                            >
-                                                <option value="on-going">On-Going</option>
-                                                <option value="for-release">For Release</option>
-                                            </select>
-                                        </div>
-                                        <div className="space-y-1.5">
-                                            <label className="text-[9px] font-black uppercase text-gray-400">Trigger Services (Select multiple)</label>
-                                            <div className="border border-red-100 rounded-lg bg-white p-2.5 max-h-[110px] overflow-y-auto space-y-1.5 focus-within:ring-2 focus-within:ring-red-500">
-                                                <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer select-none text-gray-700 hover:text-red-600 transition-colors">
-                                                    <input 
-                                                        type="checkbox"
-                                                        className="rounded text-red-500 focus:ring-red-500 h-3.5 w-3.5 border-red-200 cursor-pointer"
-                                                        checked={formData.triggerService === 'All'}
-                                                        onChange={(e) => {
-                                                            if (e.target.checked) {
-                                                                setFormData((prev: any) => ({ ...prev, triggerService: 'All' }));
-                                                            } else {
-                                                                setFormData((prev: any) => ({ ...prev, triggerService: '' }));
-                                                            }
-                                                        }}
-                                                    />
-                                                    <span>All Services</span>
-                                                </label>
-                                                {services.map((svc: any) => {
-                                                    const currentList = formData.triggerService === 'All'
-                                                        ? services.map((s: any) => s.name)
-                                                        : formData.triggerService.split(',').map((s: string) => s.trim()).filter(Boolean);
-                                                    const isChecked = formData.triggerService === 'All' || currentList.includes(svc.name);
-                                                    return (
-                                                        <label key={svc.id} className="flex items-center gap-2 text-xs font-medium cursor-pointer select-none text-gray-600 hover:text-red-600 transition-colors pl-2 border-l border-red-50/50">
-                                                            <input 
-                                                                type="checkbox"
-                                                                className="rounded text-red-500 focus:ring-red-500 h-3.5 w-3.5 border-red-200 cursor-pointer"
-                                                                checked={isChecked}
-                                                                disabled={formData.triggerService === 'All'}
-                                                                onChange={(e) => {
-                                                                    const current = formData.triggerService.split(',').map((s: string) => s.trim()).filter(Boolean);
-                                                                    let next: string[];
-                                                                    if (e.target.checked) {
-                                                                        next = [...current, svc.name];
-                                                                    } else {
-                                                                        next = current.filter((s: string) => s !== svc.name);
-                                                                    }
-                                                                    const sortedNext = services
-                                                                        .filter((s: any) => next.includes(s.name))
-                                                                        .map((s: any) => s.name);
-                                                                    setFormData((prev: any) => ({ ...prev, triggerService: sortedNext.join(', ') }));
-                                                                }}
-                                                            />
-                                                            <span>{svc.name}</span>
-                                                        </label>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div className="space-y-1.5">
-                                            <label className="text-[9px] font-black uppercase text-gray-400">Consumption Per Use</label>
-                                            <Input 
-                                                className="h-8 border-red-100 focus:border-red-500 rounded-lg text-xs" 
-                                                type="number" 
-                                                step="any"
-                                                placeholder="e.g. 1" 
-                                                value={formData.consumptionQty || ''}
-                                                onChange={(e) => {
-                                                    const val = e.target.value;
-                                                    setFormData((prev: any) => ({ ...prev, consumptionQty: val === '' ? 0 : parseFloat(val) }));
-                                                }}
-                                            />
-                                        </div>
-                                        <div className="space-y-1.5">
-                                            <label className="text-[9px] font-black uppercase text-gray-400">Consumption Unit</label>
-                                            <Input 
-                                                className="h-8 border-red-100 focus:border-red-500 rounded-lg text-xs" 
-                                                placeholder="e.g. mL" 
-                                                value={formData.consumptionUnit || ''}
-                                                onChange={(e) => setFormData((prev: any) => ({ ...prev, consumptionUnit: e.target.value }))}
-                                            />
-                                        </div>
-                                    </div>
+                            {/* Status */}
+                            <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                                <label className="text-[10px] font-black uppercase text-gray-400">Item Status</label>
+                                <div className="flex items-center gap-2 bg-gray-50 px-3 py-1 rounded-full border border-gray-100">
+                                    <Switch 
+                                        checked={formData.isActive}
+                                        onCheckedChange={(checked) => setFormData((prev: any) => ({ ...prev, isActive: checked }))}
+                                        className="data-[state=checked]:bg-emerald-500"
+                                    />
+                                    <span className={`text-[10px] font-black uppercase w-14 text-right ${formData.isActive ? 'text-emerald-600' : 'text-gray-400'}`}>
+                                        {formData.isActive ? 'Active' : 'Inactive'}
+                                    </span>
                                 </div>
-                            )}
-                        </div>
-                        <div className="grid grid-cols-2 items-center gap-4 pt-2">
-                            <label className="text-[10px] font-black uppercase text-gray-400">Status</label>
-                            <div className="flex items-center justify-end gap-2 bg-gray-50/50 px-3 py-1.5 rounded-full border border-gray-100">
-                                <Switch 
-                                    checked={formData.isActive}
-                                    onCheckedChange={(checked) => setFormData((prev: any) => ({ ...prev, isActive: checked }))}
-                                    className="data-[state=checked]:bg-emerald-500"
-                                />
-                                <span className={`text-[10px] font-black uppercase w-14 text-right ${formData.isActive ? 'text-emerald-600' : 'text-gray-400'}`}>
-                                    {formData.isActive ? 'Active' : 'Inactive'}
-                                </span>
                             </div>
                         </div>
-                    </div>
                     </div>
                     <div className="shrink-0 sticky bottom-0 z-10 bg-white px-4 sm:px-6 pb-4 sm:pb-6 pt-3 sm:pt-4 border-t border-gray-100 flex gap-3">
                         <Button variant="outline" className="flex-1 h-9 text-xs font-black uppercase tracking-widest border-gray-200 text-gray-700 hover:bg-gray-100" onClick={() => setIsModalOpen(false)} disabled={isSubmitting}>Cancel</Button>
@@ -1485,9 +1459,8 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                 onOpenChange={(open) => {
                     if (!open) setSelectedItem(null);
                 }}
-                /* P1-5 FIX: only offer the Edit action from the detail modal to roles the
-                   backend actually allows to PUT /api/inventory/{id} (owner/admin). */
-                onEdit={['owner', 'admin'].includes(user.role?.toLowerCase() || '') ? (item) => {
+                /* Offer the Edit action to all authorized staff roles */
+                onEdit={isStaffOrAbove ? (item) => {
                     setSelectedItem(null);
                     handleEditItem(item);
                 } : undefined}

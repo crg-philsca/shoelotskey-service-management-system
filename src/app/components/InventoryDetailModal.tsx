@@ -69,7 +69,7 @@ export default function InventoryDetailModal({
         </DialogHeader>
 
         {/* Scrollable Content Body - Cleanly Categorized Cards */}
-        <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 text-slate-800 scrollbar-thin">
+        <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 text-slate-800 no-scrollbar">
           {/* Card 1: Overview & Status */}
           <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-100 space-y-3">
             <div className="grid grid-cols-2 gap-4 items-center pb-3 border-b border-slate-200/60">
@@ -156,23 +156,22 @@ export default function InventoryDetailModal({
               </div>
               <div className="text-right">
                 <Label className="text-[11px] font-semibold text-blue-400 uppercase tracking-wider mb-0.5 block">
-                  Container Breakdown
+                  {pres.isPackaged ? 'Package Equivalent' : 'Package'}
                 </Label>
                 <p className="text-xs font-bold text-slate-800">
-                  {pres.isPackaged ? pres.containersLabel : 'Bulk / Unpackaged'}
+                  {pres.isPackaged 
+                    ? pres.containersLabel 
+                    : item.package_unit 
+                    ? `${item.package_unit}${item.package_size ? ` (${item.package_size} ${item.unit || 'units'})` : ''}` 
+                    : 'Not applicable'}
                 </p>
-                {pres.containersSubLabel && (
-                  <span className="inline-block mt-0.5 text-[10px] font-black uppercase text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">
-                    {pres.containersSubLabel}
-                  </span>
-                )}
               </div>
             </div>
 
-            {pres.isPackaged && (
+            {(pres.isPackaged || (item.package_unit && item.package_unit !== item.unit)) && (
               <div className="pt-2 border-t border-blue-100 text-xs text-blue-900 flex justify-between items-center">
                 <span className="font-semibold text-blue-600">Package Standard:</span>
-                <span className="font-bold">1 {item.package_unit || item.unit} = {item.package_size} {item.unit}</span>
+                <span className="font-bold">1 {item.package_unit || item.unit} = {Number(item.package_size || 1).toLocaleString()} {item.unit || 'units'}</span>
               </div>
             )}
           </div>
@@ -220,13 +219,13 @@ export default function InventoryDetailModal({
             <div className="flex items-center gap-2 border-b border-purple-200/60 pb-2">
               <Zap size={16} className="text-purple-600" />
               <h4 className="text-xs font-bold text-purple-800 uppercase tracking-wider">
-                Auto-Deduct Settings
+                Automatic Usage
               </h4>
             </div>
 
             <div className="space-y-2 text-xs">
               <div className="flex justify-between items-center">
-                <span className="font-semibold text-slate-500">Automatic Stock Deduction:</span>
+                <span className="font-bold text-slate-600 uppercase text-[11px]">Automatic Usage:</span>
                 <span className={`font-black uppercase px-2 py-0.5 rounded text-[10px] ${
                   item.auto_deduct ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-500'
                 }`}>

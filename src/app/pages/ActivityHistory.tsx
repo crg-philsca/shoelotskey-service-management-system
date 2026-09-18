@@ -9,6 +9,7 @@ import { Dialog, DialogContent } from '@/app/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 
 import { useActivities, type ActivityLog } from '@/app/context/ActivityContext';
+import { parseDateFromOrderId } from '@/app/lib/orderNumber';
 // P1-10 FIX: centralized API base resolution (see src/app/lib/apiBase.ts).
 import { API_BASE } from '@/app/lib/apiBase';
 
@@ -127,7 +128,22 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
         { label: 'Machine Learning', value: 'Machine Learning' }
     ];
 
+    const getFormattedRole = (role?: string, username?: string): string => {
+        const r = (role || '').toLowerCase();
+        const u = (username || '').toLowerCase();
+        if (r === 'admin' || u === 'admin' || r === 'system' || u === 'system') return 'System';
+        if (r === 'owner' || u === 'owner') return 'Owner';
+        if (r === 'staff' || u === 'staff') return 'Staff';
+        if (r) return r.charAt(0).toUpperCase() + r.slice(1);
+        return 'Staff';
+    };
+
     const getModuleBadge = (activity: ActivityLog) => {
+        const desc = (activity.newValues?.description || '').toLowerCase();
+        const det = (activity.details || '').toLowerCase();
+        if (desc.includes('inventory restock') || det.includes('stock addition')) {
+            return 'Inventory';
+        }
         if (activity.module && activity.module !== 'System' && activity.module !== 'Orders') {
             if (activity.module === 'Orders') return 'Job Orders';
             return activity.module;
@@ -212,7 +228,15 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
         if (combined.includes('PASSWORD')) return 'Password Reset';
         if (combined.includes('LOGIN') || combined.includes('LOGGED IN')) return 'User Logged In';
         
-        if (action.includes('RESTOCK') || actionRaw.includes('RESTOCK') || (activity.details || '').toLowerCase().includes('restock')) return 'Inventory Restocked';
+        const descLower = (activity.newValues?.description || '').toLowerCase();
+        const detLower = (activity.details || '').toLowerCase();
+        if (
+            action.includes('RESTOCK') || 
+            actionRaw.includes('RESTOCK') || 
+            detLower.includes('restock') || 
+            detLower.includes('stock addition') ||
+            descLower.includes('inventory restock')
+        ) return 'Inventory Restocked';
         if (action.includes('DEDUCT') || actionRaw.includes('DEDUCT') || (activity.details || '').toLowerCase().includes('deduct')) return 'Inventory Deducted';
         if (action.includes('REACTIVATE') || actionRaw.includes('REACTIVATE') || (activity.details || '').toLowerCase().includes('reactivated')) return 'Inventory Reactivated';
         
@@ -223,7 +247,7 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             return 'Inventory Updated';
         }
         if (isOrder) {
-            if (action.includes('CREATE')) return 'New Job Order';
+            if (action.includes('CREATE') || action.includes('NEW') || actionRaw.includes('NEW') || actionRaw.includes('CREATE')) return 'Job Order Created';
             if (activity.newValues?.status === 'claimed') return 'Order Claimed';
             if (activity.newValues?.status === 'for-release') return 'Order Ready For Release';
             return 'Job Order Updated';
@@ -445,6 +469,12 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
         if (!matchesType && selType === 'sales') {
             matchesType = activityMod === 'job orders' || activityMod === 'reports' || activity.table?.toLowerCase() === 'orders' || activity.type?.toLowerCase() === 'order';
         }
+        if (!matchesType && selType === 'inventory') {
+            matchesType = activityMod === 'inventory' || (activity.newValues?.description || '').toLowerCase().includes('inventory restock') || (activity.details || '').toLowerCase().includes('stock addition');
+        }
+        if (!matchesType && selType === 'expenses') {
+            matchesType = activityMod === 'expenses' || activity.table?.toLowerCase() === 'expenses';
+        }
 
         // Date Range Filter
         let matchesDate = true;
@@ -523,6 +553,12 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             if (lowerKey === 'customer_name' || lowerKey === 'customername') return 'Customer Name';
             if (lowerKey === 'contact_number' || lowerKey === 'contactnumber') return 'Contact Number';
             if (lowerKey === 'delivery_address' || lowerKey === 'deliveryaddress') return 'Delivery Address';
+            if (lowerKey === 'order_date' || lowerKey === 'orderdate') return 'Order Date';
+            if (lowerKey === 'order_time' || lowerKey === 'ordertime') return 'Order Time';
+            if (lowerKey === 'encoding_time' || lowerKey === 'encodingtime') return 'Intake Duration';
+            if (lowerKey === 'encoding_seconds' || lowerKey === 'encodingseconds') return 'Intake Seconds';
+            if (lowerKey === 'efficiency_vs_paper' || lowerKey === 'efficiencyvspaper') return 'Efficiency vs Manual Paper';
+            if (lowerKey === 'total_pairs' || lowerKey === 'totalpairs') return 'Total Pairs';
             return key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ');
         };
 
@@ -551,6 +587,10 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                 'cash': 'Cash',
                 'gcash': 'GCash',
                 'maya': 'Maya',
+                'admin': 'System',
+                'system': 'System',
+                'owner': 'Owner',
+                'staff': 'Staff',
                 'empty': 'None',
                 'null': 'None',
                 'none': 'None',
@@ -588,6 +628,9 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                 return 'None';
             }
 
+            if (lowerKey === 'role' || lowerKey === 'role_name' || lowerKey === 'rolename') {
+                return getFormattedRole(String(val));
+            }
             if (lowerKey === 'is_active' || lowerKey === 'was_active') {
                 if (val === true || val === 'true' || val === 1) return 'Active';
                 if (val === false || val === 'false' || val === 0) return 'Inactive';
@@ -621,7 +664,26 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                 }
             }
             
-            if (lowerKey.includes('price') || lowerKey.includes('total') || lowerKey.includes('amount') || lowerKey.includes('cost')) {
+            // Check if key represents a count / quantity rather than monetary amount:
+            const isCountOrQuantity = 
+                lowerKey.includes('pair') || 
+                lowerKey.includes('qty') || 
+                lowerKey.includes('quantity') || 
+                lowerKey.includes('count') || 
+                lowerKey.includes('item') || 
+                lowerKey.includes('day') || 
+                lowerKey.includes('shoe') ||
+                lowerKey.includes('order');
+
+            if (isCountOrQuantity) {
+                const num = Number(val);
+                if (Number.isFinite(num)) {
+                    return String(Math.round(num));
+                }
+                return String(val);
+            }
+            
+            if (lowerKey.includes('price') || lowerKey.includes('total') || lowerKey.includes('amount') || lowerKey.includes('cost') || lowerKey.includes('fee') || lowerKey.includes('balance') || lowerKey.includes('paid') || lowerKey.includes('revenue') || lowerKey.includes('sales') || lowerKey.includes('refund') || lowerKey.includes('downpayment') || lowerKey.includes('deposit')) {
                 return String(formatCurrency(val));
             }
             if (typeof val === 'number' || (typeof val === 'string' && /^-?\d+(\.\d+)?$/.test(val.trim()))) {
@@ -677,8 +739,6 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             });
 
             const changedItems = Object.values(normMap).filter(item => {
-                if (item.missingInOld) return false;
-                
                 const normalizeValue = (v: any) => {
                     if (v === undefined || v === null || v === '' || v === ' ') return null;
                     if (typeof v === 'boolean') return String(v);
@@ -694,7 +754,7 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                     return v;
                 };
 
-                const normOld = normalizeValue(item.oldVal);
+                const normOld = item.missingInOld ? null : normalizeValue(item.oldVal);
                 const normNew = normalizeValue(item.newVal);
 
                 if (normOld === null && normNew === null) return false;
@@ -767,7 +827,11 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                     'consumptionQty', 'consumption_qty', 'consumptionUnit', 'consumption_unit',
                     'status', 'is_active', 'isActive'
                 ],
-                'Order Information': ['status', 'priorityLevel', 'predictedCompletionDate', 'transactionDate', 'inventoryApplied'],
+                'Order Information': [
+                    'status', 'priorityLevel', 'predictedCompletionDate', 'transactionDate', 'inventoryApplied',
+                    'order_date', 'orderDate', 'order_time', 'orderTime',
+                    'encoding_time', 'encoding_seconds', 'efficiency_vs_paper'
+                ],
                 'Shoe Information': ['brand', 'shoeModel', 'shoeMaterial', 'shoeSize', 'color', 'condition', 'quantity'],
                 'Service Information': ['baseService', 'addOns'],
                 'Customer Information': ['customerName', 'contactNumber'],
@@ -917,7 +981,7 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                     <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Created Account</span>
                     <div className="flex flex-col gap-0.5 bg-purple-50 p-2.5 rounded-xl border border-purple-100 shadow-sm">
                         <span className="text-[13px] font-black text-gray-900">Username: {newVals.username || newVals.user || log.recordId}</span>
-                        <span className="text-[12px] font-bold text-gray-600">Role: {newVals.role || 'Staff'}</span>
+                        <span className="text-[12px] font-bold text-gray-600">Role: {getFormattedRole(newVals.role || 'Staff')}</span>
                     </div>
                 </div>
             );
@@ -1131,21 +1195,46 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             );
         }
 
-        if (module === 'INVENTORY' && actionStr.includes('RESTOCK')) {
-            const added = newVals.stock_added || newVals.quantity || newVals.amount || log.details.match(/added (\d+)/i)?.[1];
-            const itemName = newVals.item_name || newVals.name || log.details.match(/Restocked\s*(.*?)\s*:/)?.[1] || 'Inventory Item';
+        if ((module === 'INVENTORY' || actionStr.includes('RESTOCK')) && (actionStr.includes('RESTOCK') || (log.details || '').toLowerCase().includes('stock addition') || (newVals.description || '').toLowerCase().includes('inventory restock'))) {
+            const added = newVals.stock_added || newVals.quantity || (newVals.action === 'restock' ? newVals.amount : null) || (log.details || '').match(/(?:added|\+\s*)\s*(\d+(?:\.\d+)?)/i)?.[1];
+            const itemName = newVals.item_name || newVals.name || oldVals.item_name || (log.details || '').match(/(?:on|item:?|for)\s*['"]?([^'"]+?)['"]?(?:\s*\(\+|\s*\(| stock|\s*:|$)/i)?.[1] || (newVals.description && newVals.description.includes('of ') ? newVals.description.split('of ').pop() : '') || 'Inventory Item';
+            const unit = newVals.unit || oldVals.unit || '';
+            const expenseAmt = newVals.expense_amount || (newVals.amount && (log.table === 'Expenses' || log.table === 'expenses' || String(newVals.details || '').includes('expense') || String(log.details || '').includes('expense') || String(log.details || '').includes('Stock Addition')) ? newVals.amount : null);
+            const desc = newVals.description || newVals.reason || '';
+            const oldStock = oldVals.stock ?? oldVals.stock_quantity;
+            const newStock = newVals.stock ?? newVals.stock_quantity;
             return (
                 <div className="space-y-2.5 mt-2">
                     <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Restock Details</span>
-                    <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm space-y-3">
+                    <div className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-sm space-y-3">
                         <div className="flex flex-col gap-0.5">
                             <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Item Restocked</span>
-                            <span className="font-black text-gray-900 text-[13px]">{itemName}</span>
+                            <span className="font-black text-gray-900 text-[14px]">{itemName}</span>
                         </div>
-                        <div className="bg-emerald-50 p-2.5 rounded-lg border border-emerald-100 flex items-center justify-between mt-2">
-                            <span className="font-extrabold text-emerald-800 text-[11px] uppercase tracking-wider">Stock Added</span>
-                            <span className="font-black text-emerald-700 text-base">+{added || 'N/A'}</span>
-                        </div>
+                        {added && (
+                            <div className="bg-emerald-50 p-2.5 rounded-lg border border-emerald-100 flex items-center justify-between">
+                                <span className="font-extrabold text-emerald-800 text-[11px] uppercase tracking-wider">Stock Added</span>
+                                <span className="font-black text-emerald-700 text-base">+{added}{unit ? ` ${unit}` : ''}</span>
+                            </div>
+                        )}
+                        {oldStock !== undefined && newStock !== undefined && (
+                            <div className="flex items-center justify-between py-1.5 px-3 bg-gray-50 rounded-lg border border-gray-100 text-xs">
+                                <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Stock Progression</span>
+                                <span className="font-bold text-gray-700">{oldStock} {unit} → <span className="font-black text-emerald-700">{newStock} {unit}</span></span>
+                            </div>
+                        )}
+                        {expenseAmt && (
+                            <div className="flex items-center justify-between py-2 px-3 bg-amber-50/70 rounded-lg border border-amber-100 text-xs">
+                                <span className="font-extrabold text-amber-800 uppercase text-[9px] tracking-widest">Recorded Expense</span>
+                                <span className="font-black text-amber-800 text-sm">₱{Number(expenseAmt).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            </div>
+                        )}
+                        {desc && (
+                            <div className="pt-2 border-t border-gray-100">
+                                <span className="font-extrabold text-gray-400 uppercase text-[9px] tracking-widest block mb-1">Notes / Description</span>
+                                <p className="text-xs font-semibold text-gray-700">{desc}</p>
+                            </div>
+                        )}
                     </div>
                 </div>
             );
@@ -1321,23 +1410,93 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                                     <span className="font-black text-blue-700 text-[12px]">{releaseDt}</span>
                                 </div>
                             </div>
+                            {(newVals.order_date || newVals.order_time || newVals.encoding_time || newVals.efficiency_vs_paper) && (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-gray-100 bg-slate-50/80 p-2.5 rounded-xl border border-slate-200/60">
+                                    {(newVals.order_date || newVals.order_time) && (
+                                        <div className="flex flex-col gap-0.5">
+                                            <span className="font-extrabold text-slate-500 uppercase text-[9px] tracking-widest">Intake Date & Time</span>
+                                            <span className="font-black text-slate-900 text-[12px]">
+                                                {newVals.order_date || '—'} {newVals.order_time ? `@ ${newVals.order_time}` : ''}
+                                            </span>
+                                        </div>
+                                    )}
+                                    {(newVals.encoding_time || newVals.efficiency_vs_paper) && (
+                                        <div className="flex flex-col gap-0.5">
+                                            <span className="font-extrabold text-slate-500 uppercase text-[9px] tracking-widest">Intake Efficiency</span>
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                {newVals.encoding_time && (
+                                                    <span className="font-black text-emerald-700 text-[12px] bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                                                        {newVals.encoding_time}
+                                                    </span>
+                                                )}
+                                                <span className="text-[10.5px] font-bold text-gray-600">
+                                                    vs ~5–10m paper manual
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
 
-                    {(newVals.shoes || newVals.services || newVals.items_count) && (
+                    {(newVals.shoes || newVals.services || newVals.items_count || newVals.items || newVals.discount) && (
                         <div className="space-y-2.5">
                             <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Footwear & Service Details</span>
                             <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm space-y-2.5">
-                                {newVals.shoes && (
+                                {(newVals.shoes || newVals.items) && (
                                     <div className="flex flex-col gap-0.5">
-                                        <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Shoe Items ({newVals.shoes_count || 1} Pair)</span>
-                                        <span className="font-medium text-gray-800 text-[12px] leading-relaxed bg-gray-50 p-2 rounded-lg border border-gray-100">{newVals.shoes}</span>
+                                        <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">
+                                            Shoe Items ({newVals.shoes_count || newVals.items_count || 1} Pair{(newVals.shoes_count || newVals.items_count || 1) > 1 ? 's' : ''})
+                                        </span>
+                                        <div className="font-medium text-gray-800 text-[12px] leading-relaxed bg-gray-50 p-2.5 rounded-lg border border-gray-100 whitespace-pre-line font-sans">
+                                            {typeof newVals.shoes === 'string' ? newVals.shoes : (Array.isArray(newVals.items) ? newVals.items.map((it: any, i: number) => {
+                                                const brand = it.brand || it.brand_name || '';
+                                                const model = it.shoeModel || it.shoe_model || it.model || '';
+                                                const size = it.shoeSize || it.shoe_size || it.size ? `Size: ${it.shoeSize || it.shoe_size || it.size}` : '';
+                                                const color = it.color ? `Color: ${it.color}` : '';
+                                                const srv = it.baseService || it.services ? `Services: ${Array.isArray(it.baseService || it.services) ? (it.baseService || it.services).join(', ') : it.baseService || it.services}` : '';
+                                                return `Pair #${i + 1}: ${[brand, model, size, color, srv].filter(Boolean).join(' • ')}`;
+                                            }).join('\n') : String(newVals.shoes || '—'))}
+                                        </div>
                                     </div>
                                 )}
                                 {newVals.services && (
                                     <div className="flex flex-col gap-0.5">
                                         <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Services Applied</span>
-                                        <span className="font-black text-red-700 text-[12px]">{newVals.services}</span>
+                                        <span className="font-black text-red-700 text-[12px]">{Array.isArray(newVals.services) ? newVals.services.join(', ') : newVals.services}</span>
+                                    </div>
+                                )}
+                                {newVals.discount != null && Number(newVals.discount) > 0 && (
+                                    <div className="flex flex-col gap-0.5">
+                                        <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Discount Applied</span>
+                                        <span className="font-black text-emerald-700 text-[12px]">-₱{formatCurrency(newVals.discount)}</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {(newVals.shipping_preference || newVals.shippingPreference || newVals.delivery_address || newVals.deliveryAddress) && (
+                        <div className="space-y-2.5">
+                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Fulfillment Details</span>
+                            <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm space-y-2">
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div className="flex flex-col gap-0.5">
+                                        <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Fulfillment Type</span>
+                                        <span className="font-black text-gray-800 text-[12px] uppercase">{newVals.shipping_preference || newVals.shippingPreference || 'Pickup'}</span>
+                                    </div>
+                                    {(newVals.delivery_courier || newVals.deliveryCourier) && (
+                                        <div className="flex flex-col gap-0.5">
+                                            <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Courier</span>
+                                            <span className="font-bold text-gray-700 text-[12px]">{newVals.delivery_courier || newVals.deliveryCourier}</span>
+                                        </div>
+                                    )}
+                                </div>
+                                {(newVals.delivery_address || newVals.deliveryAddress) && (
+                                    <div className="flex flex-col gap-0.5 pt-1.5 border-t border-gray-100">
+                                        <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Delivery Address</span>
+                                        <span className="font-medium text-gray-700 text-[12px]">{newVals.delivery_address || newVals.deliveryAddress}</span>
                                     </div>
                                 )}
                             </div>
@@ -1440,8 +1599,8 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
 
                         <Button 
                             variant="outline" 
-                            className={`h-9 w-9 p-0 rounded-xl transition-all flex-shrink-0 flex items-center justify-center shadow-sm relative
-                                ${selectedUser !== 'all' || selectedType !== 'all' || startDate || endDate 
+                            className={`relative h-9 w-9 p-0 rounded-xl transition-all flex-shrink-0 flex items-center justify-center shadow-sm
+                                ${((selectedUser !== 'all' ? 1 : 0) + (selectedType !== 'all' ? 1 : 0) + (startDate ? 1 : 0) + (endDate ? 1 : 0)) > 0 
                                     ? 'border-red-600 text-red-600 bg-red-50 hover:bg-red-100' 
                                     : 'border-gray-200 text-gray-600 hover:border-red-600 hover:text-red-600 hover:bg-red-50'}`}
                             onClick={() => setIsFilterOpen(true)}
@@ -1449,9 +1608,6 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                             aria-label="Open filters"
                         >
                             <Filter className="h-4 w-4 stroke-[2.5]" />
-                            {(selectedUser !== 'all' || selectedType !== 'all' || startDate || endDate) && (
-                                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-600 ring-2 ring-white animate-pulse" />
-                            )}
                         </Button>
                     </div>
 
@@ -1508,7 +1664,7 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                                         };
 
                                         const moduleName = getModuleBadge(activity);
-                                        const roleName = activity.role || (activity.user.toLowerCase() === 'owner' ? 'owner' : 'staff');
+                                        const roleName = getFormattedRole(activity.role, activity.user);
 
                                         return (
                                             <tr 
@@ -1762,11 +1918,11 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                                         <div className="flex flex-col gap-1 min-w-0">
                                             <span className="font-extrabold text-slate-400 uppercase text-[9px] tracking-widest">Performed By</span>
                                             <span className="text-[13px] font-bold text-slate-800 leading-tight truncate">
-                                                <span className="text-red-600 font-black">{selectedLog.user}</span> <span className="text-slate-500 font-medium">({(selectedLog.role || (selectedLog.user.toLowerCase() === 'owner' ? 'owner' : 'staff')).replace(/^\w/, (c) => c.toUpperCase())})</span>
+                                                <span className="text-red-600 font-black">{selectedLog.user}</span> <span className="text-slate-500 font-medium">({getFormattedRole(selectedLog.role, selectedLog.user)})</span>
                                             </span>
                                         </div>
                                         <div className="flex flex-col gap-1 min-w-0">
-                                            <span className="font-extrabold text-slate-400 uppercase text-[9px] tracking-widest">Date & Time</span>
+                                            <span className="font-extrabold text-slate-400 uppercase text-[9px] tracking-widest">Event Timestamp</span>
                                             <span className="text-[13px] font-bold text-slate-800 leading-tight">
                                                 {selectedLog.timestamp}
                                             </span>
@@ -1783,6 +1939,29 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                                                 {getAffectedRecordLabel(selectedLog)}
                                             </span>
                                         </div>
+                                        {(() => {
+                                            const rawId = selectedLog.newValues?.order_number ||
+                                                selectedLog.oldValues?.order_number ||
+                                                selectedLog.newValues?.orderNumber ||
+                                                selectedLog.oldValues?.orderNumber ||
+                                                (String(selectedLog.recordId || '').startsWith('ORD-') ? String(selectedLog.recordId) : null) ||
+                                                (String(selectedLog.details || '').match(/ORD-[A-Za-z0-9-]+/i)?.[0]) ||
+                                                (String(getAffectedRecordLabel(selectedLog)).match(/ORD-[A-Za-z0-9-]+/i)?.[0]);
+                                            if (!rawId) return null;
+                                            const ordDt = parseDateFromOrderId(rawId);
+                                            if (!ordDt || isNaN(ordDt.getTime())) return null;
+                                            return (
+                                                <div className="col-span-2 flex flex-col gap-1 mt-1 border-t border-slate-100 pt-2.5 min-w-0 bg-red-50/50 p-2.5 rounded-lg border border-red-100">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="font-extrabold text-red-600 uppercase text-[9px] tracking-widest">Original Order Date (Authoritative)</span>
+                                                        <span className="font-mono text-xs font-black text-slate-700">{rawId}</span>
+                                                    </div>
+                                                    <span className="text-[13px] font-bold text-slate-900 leading-tight">
+                                                        {ordDt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                                                    </span>
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
 
                                     {/* Activity Details & Notes INSIDE View Activity History Logs Modal */}

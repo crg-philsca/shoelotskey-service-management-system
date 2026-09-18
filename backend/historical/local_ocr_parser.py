@@ -66,14 +66,20 @@ SERVICE_CODE_NAMES = {
     "MR": "Minor Reglue",
     "FR": "Full Reglue",
     "CR": "Color Renewal",
+    "COR": "Color Renewal",
+    "WPT": "White Paint",
     "UNY": "Unyellowing",
     "UY": "Unyellowing",
     "MRET": "Minor Retouch",
     "MRES": "Minor Restoration",
-    "2CR": "2 Colors",
-    "3CR": "3 Colors",
-    "UFR": "Undersole Full Reglue",
-    "MFR": "Midsole Full Reglue",
+    "FRMID": "Full Reglue Midsole",
+    "FRUND": "Full Reglue Undersole",
+    "COR2": "2 Color",
+    "COR3": "3 Color",
+    "2CR": "2 Color",
+    "3CR": "3 Color",
+    "UFR": "Full Reglue Undersole",
+    "MFR": "Full Reglue Midsole",
 }
 
 # Catalog / OCR aliases that should roll up to the same display name in analytics.
@@ -85,8 +91,8 @@ SERVICE_CODE_ALIASES = {
     "CRN": "Color Renewal",
     "MRS": "Minor Restoration",
     "MRT": "Minor Retouch",
-    "2CL": "2 Colors",
-    "3CL": "3 Colors",
+    "2CL": "2 Color",
+    "3CL": "3 Color",
 }
 
 COMBO_SERVICE_SPLIT = {
@@ -98,8 +104,8 @@ COMBO_SERVICE_SPLIT = {
     "BC+UNY": ["BC", "UNY"],
 }
 
-BASE_CODES = {"BC", "MR", "FR", "CR"}
-ADDON_CODES = {"UNY", "UY", "MRET", "MRES", "2CR", "3CR", "2CL", "3CL", "UFR", "MFR"}
+BASE_CODES = {"BC", "MR", "FR", "CR", "COR"}
+ADDON_CODES = {"WPT", "UNY", "UY", "MRET", "MRES", "FRMID", "FRUND", "COR2", "COR3", "2CR", "3CR", "2CL", "3CL", "UFR", "MFR"}
 
 DOWNPAYMENT_LABELS = [
     "DOWN PAYMENT", "DOWNPAYMENT", "DOWN-PAYMENT", "AMOUNT PAID",
@@ -567,22 +573,90 @@ def classify_shoe_fields(
     return model or None, color or None, material or None
 
 
+OFFICIAL_SERVICE_CODES = {
+    "BASIC CLEANING": "BC",
+    "BASICCLEANING": "BC",
+    "BC": "BC",
+    "BCN": "BC",
+    "FULL REGLUE": "FR",
+    "FULLREGLUE": "FR",
+    "FR": "FR",
+    "FRG": "FR",
+    "MINOR REGLUE": "MR",
+    "MINORREGLUE": "MR",
+    "MR": "MR",
+    "MRG": "MR",
+    "COLOR RENEWAL": "COR",
+    "COLORRENEWAL": "COR",
+    "COLOR RESTORATION": "COR",
+    "COR": "COR",
+    "CR": "COR",
+    "CRN": "COR",
+    "WHITE PAINT": "WPT",
+    "WHITEPAINT": "WPT",
+    "WPT": "WPT",
+    "UNYELLOWING": "UNY",
+    "SOLE UNYELLOWING": "UNY",
+    "UNY": "UNY",
+    "UY": "UNY",
+    "MINOR RESTORATION": "MRES",
+    "MINORRESTORATION": "MRES",
+    "MRES": "MRES",
+    "MRS": "MRES",
+    "MINOR RETOUCH": "MRET",
+    "MINORRETOUCH": "MRET",
+    "MRET": "MRET",
+    "MRT": "MRET",
+    "FULL REGLUE MIDSOLE": "FRMID",
+    "FULLREGLUEMIDSOLE": "FRMID",
+    "MIDSOLE FULL REGLUE": "FRMID",
+    "MIDSOLEFULLREGLUE": "FRMID",
+    "MIDSOLE": "FRMID",
+    "FRMID": "FRMID",
+    "MFR": "FRMID",
+    "FRM": "FRMID",
+    "FULL REGLUE UNDERSOLE": "FRUND",
+    "FULLREGLUEUNDERSOLE": "FRUND",
+    "UNDERSOLE FULL REGLUE": "FRUND",
+    "UNDERSOLEFULLREGLUE": "FRUND",
+    "UNDERSOLE": "FRUND",
+    "FRUND": "FRUND",
+    "UFR": "FRUND",
+    "FRU": "FRUND",
+    "2 COLOR": "COR2",
+    "2 COLORS": "COR2",
+    "TWO COLOR": "COR2",
+    "TWO COLORS": "COR2",
+    "2COLOR": "COR2",
+    "2COLORS": "COR2",
+    "COR2": "COR2",
+    "2CR": "COR2",
+    "2CL": "COR2",
+    "3 COLOR": "COR3",
+    "3 COLORS": "COR3",
+    "THREE COLOR": "COR3",
+    "THREE COLORS": "COR3",
+    "3COLOR": "COR3",
+    "3COLORS": "COR3",
+    "COR3": "COR3",
+    "3CR": "COR3",
+    "3CL": "COR3",
+}
+
+
 def service_code_label(name: str) -> str:
     raw = str(name or "").strip()
     if not raw:
         return ""
     upper = raw.upper()
-    if upper in {"UY", "UNY"}:
-        return "UNY"
-    if upper in SERVICE_CODE_NAMES:
-        return upper
+    if upper in OFFICIAL_SERVICE_CODES:
+        return OFFICIAL_SERVICE_CODES[upper]
+    compact = re.sub(r"[\s\-_]+", "", upper)
+    if compact in OFFICIAL_SERVICE_CODES:
+        return OFFICIAL_SERVICE_CODES[compact]
     mapped = _NAME_TO_CODE.get(raw.lower(), upper)
-    if mapped == "UY":
-        return "UNY"
-    if mapped in {"2CL", "2CR"}:
-        return "2CR"
-    if mapped in {"3CL", "3CR"}:
-        return "3CR"
+    if mapped in OFFICIAL_SERVICE_CODES:
+        return OFFICIAL_SERVICE_CODES[mapped]
     return mapped
 
 

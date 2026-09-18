@@ -32,10 +32,26 @@
   };
 
   window.fetch = async (...args) => {
+    const url = typeof args[0] === 'string' ? args[0] : (args[0] as Request)?.url || '';
+    const isPublicTracking = window.location.pathname.startsWith('/track') || 
+                             window.location.pathname.startsWith('/portal') ||
+                             window.location.pathname.startsWith('/customer-portal');
+    const isExcludedFromSystemError = 
+      isPublicTracking ||
+      url.includes('/orders/track') ||
+      url.includes('/verify-token') || 
+      url.includes('/health-check') || 
+      url.includes('limit=1');
+
     try {
       const response = await originalFetch(...args);
-      // Only intercept global 500s. 401s are handled individually by App.tsx.
-      if (response.status >= 500) {
+      // Intercept 401 unauthenticated responses from protected APIs
+      if (response.status === 401) {
+        const isAuthEndpoint = url.includes('/login') || url.includes('/forgot-password') || url.includes('/reset-password') || isPublicTracking;
+        if (!isAuthEndpoint) {
+          window.dispatchEvent(new CustomEvent('SHOELOTSKEY_AUTH_EXPIRED', { detail: 'Your session has expired. Please log in again.' }));
+        }
+      } else if (response.status >= 500 && !isExcludedFromSystemError) {
         reportPossibleSystemFailure('500');
       } else if (response.ok) {
         // A successful request proves the backend is currently reachable — clear any
@@ -45,7 +61,8 @@
       return response;
     } catch (error) {
       // TypeError on fetch usually means network offline / server completely unreachable
-      if (error instanceof TypeError) {
+      // Do not escalate background session heartbeats, tracking queries, or health pings to full-screen system errors
+      if (error instanceof TypeError && !isExcludedFromSystemError) {
         reportPossibleSystemFailure('network');
       }
       throw error;

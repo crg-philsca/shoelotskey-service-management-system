@@ -205,38 +205,23 @@ def extract_local_from_bytes(
     engine: str = "auto",
 ) -> Tuple[dict, float, str]:
     """
-    Run local OCR tier(s). engine: auto | easyocr | tesseract
+    Run local deep learning OCR (EasyOCR).
+    Tesseract is intentionally disabled for handwritten extraction to avoid garbled text.
     """
     raw_text = ""
     best_conf = 0.0
     best_data = None
     best_engine = "none"
 
-    if engine in ("auto", "easyocr") and easyocr_available():
+    if easyocr_available():
         try:
             raw_text, conf = run_easyocr_ocr(image_bytes)
             data, conf = parse_raw_ocr_text(raw_text, EASYOCR_VERSION)
-            if conf >= 0.15 or engine == "easyocr":
-                data["_raw_ocr_response"] = raw_text[:8000]
-                return data, conf, EASYOCR_VERSION
-            best_data, best_conf, best_engine = data, conf, EASYOCR_VERSION
+            data["_raw_ocr_response"] = raw_text[:8000]
+            return data, conf, EASYOCR_VERSION
         except Exception:
             if engine == "easyocr":
                 raise
-
-    if engine in ("auto", "tesseract") and tesseract_available():
-        try:
-            raw_text, conf = run_tesseract_ocr(image_bytes)
-            data, conf = parse_raw_ocr_text(raw_text, TESSERACT_VERSION)
-            if conf > best_conf or engine == "tesseract":
-                data["_raw_ocr_response"] = raw_text[:8000]
-                return data, conf, TESSERACT_VERSION
-        except Exception:
-            if engine == "tesseract":
-                raise
-
-    if best_data:
-        return best_data, best_conf, best_engine
 
     empty, conf = parse_raw_ocr_text("", "none")
     return empty, conf, "none"

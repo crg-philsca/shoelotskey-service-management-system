@@ -19,7 +19,7 @@ interface UserModalProps {
 export default function UserModal({ isOpen, onClose, user, onSave, serverError }: UserModalProps) {
     const [username, setUsername] = useState('');
     const [email, setEmail] = useState('');
-    const [role, setRole] = useState<'owner' | 'staff' | 'admin'>('staff');
+    const [role, setRole] = useState<'owner' | 'staff' | 'front staff' | 'admin'>('staff');
     const [active, setActive] = useState(true);
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -148,12 +148,13 @@ export default function UserModal({ isOpen, onClose, user, onSave, serverError }
 
                     <div className="space-y-2">
                         <Label htmlFor="role" className="text-xs font-bold uppercase tracking-widest text-gray-500">Role</Label>
-                        <Select value={role} onValueChange={(value: 'owner' | 'staff' | 'admin') => setRole(value)}>
+                        <Select value={role} onValueChange={(value: 'owner' | 'staff' | 'front staff' | 'admin') => setRole(value)}>
                             <SelectTrigger className="font-medium border-red-200 focus:ring-0 focus:border-red-600">
                                 <SelectValue placeholder="Select role" />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="staff">Staff</SelectItem>
+                                <SelectItem value="front staff">Front Staff</SelectItem>
                                 <SelectItem value="owner">Owner</SelectItem>
                             </SelectContent>
                         </Select>

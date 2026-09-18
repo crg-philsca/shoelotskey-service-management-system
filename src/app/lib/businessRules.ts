@@ -1,14 +1,16 @@
-/** Official Job Order release durations from the deployed Shoelotskey form. */
+/** Official Job Order release durations from the authoritative Shoelotskey Business Rules.
+ * Decoupled from editable service codes and strictly non-additive.
+ */
 
 export const OFFICIAL_DURATION_DAYS: Record<string, number> = {
     'Basic Cleaning': 10,
-    'Minor Reglue': 25,
+    'Minor Reglue': 10,
     'Full Reglue': 25,
     'Color Renewal': 25,
-    'Unyellowing': 5,
-    'Sole Unyellowing': 5,
-    'Minor Retouch': 0,
-    'Minor Restoration': 0,
+    'Unyellowing': 20,
+    'Sole Unyellowing': 20,
+    'Minor Retouch': 20,
+    'Minor Restoration': 20,
     'Full Restoration': 25,
     'White Paint': 0,
     '2 Colors': 0,
@@ -19,15 +21,17 @@ export const OFFICIAL_DURATION_DAYS: Record<string, number> = {
     'Full Reglue Undersole': 25,
     'Midsole': 25,
     'Undersole': 25,
-    'Add Glue Layer': 0,
+    'Add Glue Layer': 2,
 };
 
+export const NORMAL_MAX_DAYS = 25;
+export const SAFETY_CEILING_DAYS = 30;
 export const DEFAULT_RUSH_REDUCTION_DAYS = 9;
 export const MIN_DURATION_DAYS = 1;
 
 export type OfficialShoeInput = {
-    baseService?: string[] | string;
-    addOns?: Array<string | { name?: string; quantity?: number }>;
+    baseService?: string[] | string | Array<{ id?: number | string; name?: string; service_id?: number | string; service_name?: string }>;
+    addOns?: Array<string | { id?: number | string; name?: string; service_id?: number | string; service_name?: string; quantity?: number }>;
 };
 
 export type OfficialBreakdown = {
@@ -36,6 +40,184 @@ export type OfficialBreakdown = {
     priorityDays: number;
     totalDays: number;
 };
+
+// Canonical identities
+export const CANONICAL_BC = 'BC';
+export const CANONICAL_MR = 'MR';
+export const CANONICAL_FR = 'FR';
+export const CANONICAL_COR = 'COR';
+export const CANONICAL_UNY = 'UNY';
+export const CANONICAL_MRES = 'MRES';
+export const CANONICAL_MRET = 'MRET';
+
+// Stable service_id to canonical identity mapping
+export const STABLE_ID_TO_CANONICAL: Record<number, string> = {
+    1: CANONICAL_BC,    // Basic Cleaning
+    3: CANONICAL_FR,    // Full Reglue
+    4: CANONICAL_MR,    // Minor Reglue
+    6: CANONICAL_UNY,   // Unyellowing
+    10: CANONICAL_MRET, // Minor Retouch
+    41: CANONICAL_MRES, // Minor Restoration
+    67: CANONICAL_COR,  // Color Renewal
+    166: CANONICAL_FR,  // Full Reglue Midsole
+    167: CANONICAL_FR,  // Full Reglue Undersole
+    39: CANONICAL_FR,   // Undersole Full Reglue
+    40: CANONICAL_FR,   // Midsole Full Reglue
+};
+
+export function resolveCanonicalService(serviceRef: any): string | null {
+    if (serviceRef === undefined || serviceRef === null) return null;
+
+    if (typeof serviceRef === 'object') {
+        const sid = serviceRef.service_id ?? serviceRef.id;
+        if (sid !== undefined && sid !== null) {
+            const sidNum = Number(sid);
+            if (!isNaN(sidNum) && STABLE_ID_TO_CANONICAL[sidNum]) {
+                return STABLE_ID_TO_CANONICAL[sidNum];
+            }
+        }
+        const name = serviceRef.name || serviceRef.service_name || serviceRef.service_code;
+        if (name) return resolveCanonicalService(String(name));
+        return null;
+    }
+
+    if (typeof serviceRef === 'number') {
+        return STABLE_ID_TO_CANONICAL[serviceRef] || null;
+    }
+
+    const text = String(serviceRef).trim();
+    if (!text) return null;
+
+    const num = Number(text);
+    if (!isNaN(num) && STABLE_ID_TO_CANONICAL[num]) {
+        return STABLE_ID_TO_CANONICAL[num];
+    }
+
+    const lowered = text.toLowerCase();
+
+    if (
+        lowered.includes('full reglue') ||
+        (lowered.includes('reglue') && (lowered.includes('midsole') || lowered.includes('undersole'))) ||
+        lowered.includes('full restoration') ||
+        lowered === 'fr'
+    ) {
+        return CANONICAL_FR;
+    }
+    if (lowered.includes('minor reglue') || lowered === 'mr') {
+        return CANONICAL_MR;
+    }
+    if (lowered.includes('color renewal') || lowered.includes('color restoration') || lowered === 'cor' || lowered === 'cr') {
+        return CANONICAL_COR;
+    }
+    if (lowered.includes('unyellowing') || lowered === 'uny') {
+        return CANONICAL_UNY;
+    }
+    if (lowered.includes('minor restoration') || lowered === 'mres') {
+        return CANONICAL_MRES;
+    }
+    if (lowered.includes('minor retouch') || lowered === 'mret') {
+        return CANONICAL_MRET;
+    }
+    if (lowered.includes('basic cleaning') || lowered === 'bc') {
+        return CANONICAL_BC;
+    }
+
+    return null;
+}
+
+export function toServiceCode(nameOrCode: string): string {
+    if (!nameOrCode) return '';
+    const trimmed = String(nameOrCode).trim();
+    if (!trimmed) return '';
+    const upper = trimmed.toUpperCase();
+    if (['BC', 'FR', 'MR', 'COR', 'WPT', 'UNY', 'MRES', 'MRET', 'FRMID', 'FRUND', 'COR2', 'COR3'].includes(upper)) {
+        return upper;
+    }
+    if (upper === 'CR') return 'COR';
+    if (upper === 'UY') return 'UNY';
+    if (upper === 'FRUS') return 'FRUND';
+
+    const lower = trimmed.toLowerCase()
+        .replace(/\s*\(\d+(?:\.\d+)?\)\s*$/, '')
+        .replace(/[\s\-]+rush(?:\s*service)?$/i, '')
+        .trim();
+
+    if (lower.includes('midsole') || lower === 'fr mid' || lower === 'frmid') return 'FRMID';
+    if (lower.includes('undersole') || lower === 'frunder' || lower === 'frund' || lower === 'frus') return 'FRUND';
+    if (lower.includes('3 color') || lower.includes('3 colors')) return 'COR3';
+    if (lower.includes('2 color') || lower.includes('2 colors')) return 'COR2';
+    if (lower.includes('color renewal') || lower.includes('color restoration') || lower === 'cor' || lower === 'cr') return 'COR';
+    if (lower.includes('white paint') || lower === 'wpt') return 'WPT';
+    if (lower.includes('unyellowing') || lower === 'uny' || lower === 'uy') return 'UNY';
+    if (lower.includes('minor restoration') || lower === 'mres') return 'MRES';
+    if (lower.includes('minor retouch') || lower === 'mret') return 'MRET';
+    if (lower.includes('minor reglue') || lower === 'mr') return 'MR';
+    if (lower.includes('full reglue') || lower.includes('full restoration') || lower === 'fr') return 'FR';
+    if (lower.includes('basic cleaning') || lower.includes('cleaning') || lower === 'bc') return 'BC';
+
+    const canon = resolveCanonicalService(trimmed);
+    if (canon) return canon;
+
+    return upper;
+}
+
+/**
+ * Chunks service names/codes into lines with up to 2 service codes per row.
+ * E.g. ['BC'] -> ['BC']
+ * E.g. ['BC', 'FR'] -> ['BC, FR']
+ * E.g. ['BC', 'COR', 'COR2'] -> ['BC, COR,', 'COR2']
+ * E.g. ['BC', 'FR', 'UNY', 'WPT'] -> ['BC, FR,', 'UNY, WPT']
+ */
+export function chunkServiceCodesTwoPerRow(services: string[]): string[] {
+    let codes = services.map((s) => toServiceCode(s)).filter(Boolean);
+    if (codes.length === 0) return [];
+
+    // Remove redundant base 'COR' if multi-color 'COR2' or 'COR3' is already present
+    if (codes.includes('COR') && (codes.includes('COR2') || codes.includes('COR3'))) {
+        codes = codes.filter((c) => c !== 'COR');
+    }
+
+    const rows: string[] = [];
+    for (let i = 0; i < codes.length; i += 2) {
+        const chunk = codes.slice(i, i + 2);
+        const isLastChunk = i + 2 >= codes.length;
+        rows.push(chunk.join(', ') + (isLastChunk ? '' : ','));
+    }
+    return rows;
+}
+
+export function formatServiceBadge(service: { service_name?: string; display_label?: string; price?: number } | string | null | undefined): string {
+    if (!service) return '';
+    if (typeof service === 'string') {
+        const raw = service.trim();
+        const match = raw.match(/^([^(]+)(?:\(([^)]+)\))?$/);
+        if (match) {
+            const namePart = match[1].trim();
+            const pricePart = match[2];
+            const code = toServiceCode(namePart);
+            return pricePart !== undefined ? `${code}(${pricePart})` : code;
+        }
+        return toServiceCode(raw);
+    }
+
+    const rawLabel = (service.display_label || '').trim();
+    if (rawLabel) {
+        const match = rawLabel.match(/^([^(]+)(?:\(([^)]+)\))?$/);
+        if (match) {
+            const namePart = match[1].trim();
+            const pricePart = match[2];
+            const code = toServiceCode(namePart || service.service_name || '');
+            return pricePart !== undefined ? `${code}(${pricePart})` : (service.price && service.price > 0 ? `${code}(${Math.round(service.price)})` : code);
+        }
+    }
+
+    const name = service.service_name || '';
+    const code = toServiceCode(name);
+    if (service.price && service.price > 0) {
+        return `${code}(${Math.round(service.price)})`;
+    }
+    return code || name;
+}
 
 export function parseDuration(val: string | number | undefined | null): number {
     if (val === undefined || val === null || val === '') return 0;
@@ -50,17 +232,30 @@ export function parseDuration(val: string | number | undefined | null): number {
 
 function asNameList(value: OfficialShoeInput['baseService']): string[] {
     if (!value) return [];
-    if (typeof value === 'string') return value ? [value] : [];
-    return Array.isArray(value) ? value.filter(Boolean) : [];
+    if (typeof value === 'string') {
+        if (value.includes(',')) {
+            return value.split(',').map((s) => s.trim()).filter(Boolean);
+        }
+        return value ? [value.trim()] : [];
+    }
+    if (Array.isArray(value)) {
+        return value.map((item) => {
+            if (typeof item === 'string') return item.trim();
+            if (item && typeof item === 'object') return (item.name || item.service_name || '').trim();
+            return '';
+        }).filter(Boolean);
+    }
+    return [];
 }
 
 function addonPairs(value: OfficialShoeInput['addOns']): Array<[string, number]> {
-    if (!value) return [];
-    if (!Array.isArray(value)) return [];
+    if (!value || !Array.isArray(value)) return [];
     return value
         .map((item) => {
-            if (typeof item === 'string') return [item, 1] as [string, number];
-            const name = item?.name || '';
+            if (typeof item === 'string') {
+                return [item.trim(), 1] as [string, number];
+            }
+            const name = (item?.name || item?.service_name || '').trim();
             const qty = item?.quantity || 1;
             return [name, qty] as [string, number];
         })
@@ -72,25 +267,80 @@ export function officialServiceDays(
     catalogDurations?: Record<string, string | number>,
 ): number {
     const trimmedName = (name || '').trim();
-    const lowered = trimmedName.toLowerCase();
-    if (
-        trimmedName === 'Full Reglue Midsole' ||
-        trimmedName === 'Full Reglue Undersole' ||
-        trimmedName === 'Midsole Full Reglue' ||
-        trimmedName === 'Undersole Full Reglue' ||
-        trimmedName === 'Midsole' ||
-        trimmedName === 'Undersole' ||
-        (lowered.includes('reglue') && (lowered.includes('midsole') || lowered.includes('undersole')))
-    ) {
-        return 25;
-    }
+    const c = resolveCanonicalService(trimmedName);
+    if (c === CANONICAL_FR) return 25;
+    if (c === CANONICAL_COR) return 25;
+    if (c === CANONICAL_MR) return 10;
+    if (c === CANONICAL_UNY) return 20;
+    if (c === CANONICAL_MRES) return 20;
+    if (c === CANONICAL_BC) return 10;
+    if (c === CANONICAL_MRET) return 20;
+
     if (catalogDurations && catalogDurations[trimmedName] !== undefined && catalogDurations[trimmedName] !== '') {
         return parseDuration(catalogDurations[trimmedName]);
     }
     if (trimmedName in OFFICIAL_DURATION_DAYS) return OFFICIAL_DURATION_DAYS[trimmedName];
-    if (trimmedName === 'Basic Cleaning') return 10;
-    if (lowered.includes('reglue') || lowered.includes('color renewal')) return 25;
     return 0;
+}
+
+export function calculatePairDuration(
+    canonicalServices: Set<string>,
+    rawServices: string[],
+    catalogDurations?: Record<string, string | number>,
+): number {
+    if (canonicalServices.size === 0 && rawServices.length === 0) {
+        return 0;
+    }
+
+    // 1. Any combination containing Full Reglue (FR Dominant)
+    if (canonicalServices.has(CANONICAL_FR)) {
+        return 25;
+    }
+
+    // 2. Color Renewal Dominant (without FR)
+    if (canonicalServices.has(CANONICAL_COR)) {
+        return 25;
+    }
+
+    // 3. Minor Restoration Dominant (without FR/COR)
+    if (canonicalServices.has(CANONICAL_MRES)) {
+        return 20;
+    }
+
+    // 4. Unyellowing Dominant (without FR/COR/MRES)
+    if (canonicalServices.has(CANONICAL_UNY)) {
+        return 20;
+    }
+
+    // 5. Minor Retouch Dominant (without FR/COR)
+    if (canonicalServices.has(CANONICAL_MRET)) {
+        return 20;
+    }
+
+    // 6. BC + MR Combination
+    if (canonicalServices.has(CANONICAL_MR) && canonicalServices.has(CANONICAL_BC)) {
+        return 10;
+    }
+
+    // 6. Minor Reglue Standalone (without BC)
+    if (canonicalServices.has(CANONICAL_MR)) {
+        return 10;
+    }
+
+    // 7. Basic Cleaning Standalone
+    if (canonicalServices.has(CANONICAL_BC)) {
+        return 10;
+    }
+
+    // 8. Custom / unrecognized service: maximum catalog duration
+    let maxD = 0;
+    for (const s of rawServices) {
+        const d = officialServiceDays(s, catalogDurations);
+        if (d > maxD) maxD = d;
+    }
+
+    const capped = Math.min(maxD > 0 ? maxD : 10, NORMAL_MAX_DAYS);
+    return Math.min(capped, SAFETY_CEILING_DAYS);
 }
 
 export function calculateOfficialReleaseBreakdown(
@@ -99,92 +349,75 @@ export function calculateOfficialReleaseBreakdown(
     rushReductionDays = DEFAULT_RUSH_REDUCTION_DAYS,
     catalogDurations?: Record<string, string | number>,
 ): OfficialBreakdown {
-    let baseDays = 0;
-    let addOnDays = 0;
-    let priorityDays = 0;
-
     const safeShoes = Array.isArray(shoes) ? shoes : [];
+    let longestPairWithoutRush = 0;
+    let longestPairWithRush = 0;
+    let hasAnyService = false;
+    let anyRush = false;
 
-    let pairBaseDays = 0;
-    let pairAddOnDays = 0;
     safeShoes.forEach((shoe) => {
-        let shoeBase = 0;
-        let shoeAddOn = 0;
-        const servicesArr = asNameList(shoe.baseService);
-        const hasDurationInclusive = servicesArr.some((s) => {
-            const low = (s || '').trim().toLowerCase();
-            return low.includes('reglue') || low.includes('color renewal');
-        });
-        const filtered = hasDurationInclusive
-            ? servicesArr.filter((s) => (s || '').trim() !== 'Basic Cleaning')
-            : servicesArr;
-        filtered.forEach((serviceName) => {
-            const days = officialServiceDays(serviceName, catalogDurations) || ((serviceName || '').trim() === 'Basic Cleaning' ? 10 : 25);
-            shoeBase = Math.max(shoeBase, days);
-        });
-        const hasReglueBase = servicesArr.some((s) => {
-            const low = (s || '').trim().toLowerCase();
-            return low.includes('reglue');
+        const canonicalSet = new Set<string>();
+        const rawServices: string[] = [];
+
+        const baseList = asNameList(shoe.baseService);
+        baseList.forEach((s) => {
+            rawServices.push(s);
+            const c = resolveCanonicalService(s);
+            if (c) canonicalSet.add(c);
         });
 
-        let reglueAddonDaysAccounted = false;
+        const addons = addonPairs(shoe.addOns);
+        addons.forEach(([name]) => {
+            rawServices.push(name);
+            const c = resolveCanonicalService(name);
+            if (c) canonicalSet.add(c);
+        });
 
-        addonPairs(shoe.addOns).forEach(([name, qty]) => {
-            const trimmedName = (name || '').trim();
-            const lowered = trimmedName.toLowerCase();
-            const isRegluePart = (
-                trimmedName === 'Full Reglue Midsole' ||
-                trimmedName === 'Full Reglue Undersole' ||
-                trimmedName === 'Midsole Full Reglue' ||
-                trimmedName === 'Undersole Full Reglue' ||
-                trimmedName === 'Midsole' ||
-                trimmedName === 'Undersole' ||
-                (lowered.includes('reglue') && (lowered.includes('midsole') || lowered.includes('undersole')))
-            );
-            if (isRegluePart) {
-                // Base reglue (Minor or Full) already encompasses reglue curing (25 days total) - do NOT add extra days
-                if (hasReglueBase) {
-                    return;
-                }
-                // If no reglue in base, but midsole/undersole reglue are both selected as add-ons:
-                // they cure concurrently in 25 days total, not 50 days
-                if (!reglueAddonDaysAccounted) {
-                    shoeAddOn = Math.max(shoeAddOn, officialServiceDays(trimmedName, catalogDurations));
-                    reglueAddonDaysAccounted = true;
-                }
-                return;
+        if (rawServices.length > 0 || canonicalSet.size > 0) {
+            hasAnyService = true;
+            const pairBaseDays = calculatePairDuration(canonicalSet, rawServices, catalogDurations);
+            longestPairWithoutRush = Math.max(longestPairWithoutRush, pairBaseDays);
+
+            const isPairRush = (shoe as any).priorityLevel === 'rush' || (safeShoes.length === 1 && priorityLevel.toLowerCase() === 'rush');
+            let pairEffectiveDays = pairBaseDays;
+            // Rush order only available for plain Basic Cleaning with no add-ons
+            if (isPairRush && canonicalSet.has(CANONICAL_BC) && canonicalSet.size === 1 && addons.length === 0) {
+                anyRush = true;
+                const rush = Number(rushReductionDays);
+                const reduction = Number.isFinite(rush) ? rush : DEFAULT_RUSH_REDUCTION_DAYS;
+                pairEffectiveDays = Math.max(MIN_DURATION_DAYS, pairBaseDays - reduction);
             }
-            shoeAddOn += officialServiceDays(trimmedName, catalogDurations) * qty;
-        });
-        if (shoeBase + shoeAddOn > pairBaseDays + pairAddOnDays) {
-            pairBaseDays = shoeBase;
-            pairAddOnDays = shoeAddOn;
+            longestPairWithRush = Math.max(longestPairWithRush, pairEffectiveDays);
         }
     });
-    baseDays = pairBaseDays;
-    addOnDays = pairAddOnDays;
 
-    if (priorityLevel === 'rush') {
-        const rush = Number(rushReductionDays);
-        priorityDays = -(Number.isFinite(rush) ? rush : DEFAULT_RUSH_REDUCTION_DAYS);
+    if (!hasAnyService || longestPairWithoutRush <= 0) {
+        return { baseDays: 0, addOnDays: 0, priorityDays: 0, totalDays: 0 };
     }
 
-    const hasServices = safeShoes.some((shoe) => {
-        const base = asNameList(shoe.baseService);
-        const addons = addonPairs(shoe.addOns);
-        return base.length > 0 || addons.length > 0;
-    });
-    const effectiveDays = baseDays + addOnDays;
-    const rawTotal = effectiveDays + priorityDays;
-    const totalDays = hasServices ? Math.max(MIN_DURATION_DAYS, rawTotal) : 0;
+    const baseDays = longestPairWithoutRush;
+    const addOnDays = 0; // Non-additive: add-ons do not linearly sum
+    const priorityDays = anyRush ? -(longestPairWithoutRush - longestPairWithRush) : 0;
+    const totalDays = Math.min(
+        SAFETY_CEILING_DAYS,
+        Math.max(MIN_DURATION_DAYS, longestPairWithRush)
+    );
+
     return { baseDays, addOnDays, priorityDays, totalDays };
 }
 
-export function formatBusinessRuleLabel(breakdown: OfficialBreakdown): string {
-    const parts = ['Base Service'];
-    if (breakdown.addOnDays > 0) parts.push('Add-ons');
-    let text = parts.join(' + ');
-    if (breakdown.priorityDays < 0) text += ' - Rush';
-    else if (breakdown.priorityDays > 0) text += ' + Priority';
-    return text;
+/**
+ * Authoritative Calendar-Day Addition.
+ * Definition: The received/order date itself is NOT counted as Day 1.
+ * The day after the received date is Day 1.
+ * Examples:
+ *   08/31 + 10 days = 09/10
+ *   04/22 + 1 day   = 04/23
+ *   09/14 + 25 days = 10/09
+ */
+export function addCalendarDays(baseDate: Date | string | number, days: number): Date {
+    const d = new Date(baseDate);
+    if (isNaN(d.getTime())) return new Date();
+    d.setDate(d.getDate() + Number(days || 0));
+    return d;
 }

@@ -42,7 +42,7 @@ function withoutResolvedPilErrors(logs: ActivityLog[]): ActivityLog[] {
 
 interface ActivityContextType {
     activities: ActivityLog[];
-    addActivity: (activity: Omit<ActivityLog, 'id' | 'timestamp'> & { table?: string; recordId?: number | string; oldValues?: any; newValues?: any }) => void;
+    addActivity: (activity: Omit<ActivityLog, 'id' | 'timestamp'> & { timestamp?: string; table?: string; recordId?: number | string; oldValues?: any; newValues?: any }) => void;
     refreshActivities: () => Promise<boolean>;
 }
 
@@ -57,11 +57,19 @@ const ActivityContext = createContext<ActivityContextType | undefined>(undefined
 export function ActivityProvider({ children, user }: { children: ReactNode, user: { token: string } }) {
     const [activities, setActivities] = useState<ActivityLog[]>([]);
 
+    const normalizeRole = (role?: string, u?: string): string => {
+        const r = (role || '').toLowerCase();
+        const usr = (u || '').toLowerCase();
+        if (r === 'admin' || usr === 'admin' || r === 'system' || usr === 'system') return 'System';
+        if (r === 'owner' || usr === 'owner') return 'owner';
+        return r || (usr === 'owner' ? 'owner' : 'staff');
+    };
+
     const formatLogList = (logList: any[]): ActivityLog[] => withoutResolvedPilErrors(logList.map((d: any) => ({
         ...d,
         table: d.table || (d.type === 'service' ? 'Services' : d.type === 'inventory' ? 'Inventory' : d.type === 'expense' ? 'Expenses' : d.type === 'system' ? 'Users' : 'Orders'),
         module: d.module || (d.type === 'service' ? 'Services' : d.type === 'inventory' ? 'Inventory' : d.type === 'expense' ? 'Expenses' : d.type === 'system' ? 'User Management' : 'Job Orders'),
-        role: d.role || (d.user === 'Owner' ? 'owner' : 'staff')
+        role: normalizeRole(d.role, d.user)
     })));
 
     const refreshActivities = useCallback(async (): Promise<boolean> => {
@@ -159,15 +167,15 @@ export function ActivityProvider({ children, user }: { children: ReactNode, user
     /**
      * DISPATCHER: Add Activity
      */
-    const addActivity = async (activity: Omit<ActivityLog, 'id' | 'timestamp'> & { table?: string; recordId?: number | string; oldValues?: any; newValues?: any }) => {
+    const addActivity = async (activity: Omit<ActivityLog, 'id' | 'timestamp'> & { timestamp?: string; table?: string; recordId?: number | string; oldValues?: any; newValues?: any }) => {
         console.log('[DEBUG] ActivityContext: Dispatching activity record...', activity.action);
-        const timestamp = dateFnsFormat(new Date(), 'MM/dd/yyyy, HH:mm');
-        const defaultRole = (activity.user && activity.user.toLowerCase() === 'owner') ? 'owner' : 'staff';
+        const timestamp = activity.timestamp || dateFnsFormat(new Date(), 'MM/dd/yyyy, HH:mm');
+        const defaultRole = (activity.user && (activity.user.toLowerCase() === 'admin' || activity.user.toLowerCase() === 'system')) ? 'System' : ((activity.user && activity.user.toLowerCase() === 'owner') ? 'owner' : 'staff');
         const defaultModule = activity.module || (activity.type === 'service' ? 'Services' : activity.type === 'inventory' ? 'Inventory' : activity.type === 'expense' ? 'Expenses' : activity.type === 'system' ? 'User Management' : 'Job Orders');
 
         const newActivity: ActivityLog = {
             ...activity,
-            role: activity.role || defaultRole,
+            role: normalizeRole(activity.role || defaultRole, activity.user),
             module: defaultModule,
             table: activity.table || (activity.type === 'service' ? 'Services' : activity.type === 'inventory' ? 'Inventory' : activity.type === 'expense' ? 'Expenses' : activity.type === 'system' ? 'Users' : 'Orders'),
             id: Date.now().toString() + Math.random().toString(36).substr(2, 5),

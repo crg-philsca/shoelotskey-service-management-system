@@ -1,12 +1,21 @@
 import os
 import sys
+import io
+if sys.platform == "win32":
+    try:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace', write_through=True)
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace', write_through=True)
+    except Exception:
+        pass
 import time
 from datetime import datetime, timedelta
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
 # Add backend directory to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, backend_dir)
+sys.path.insert(0, os.path.join(backend_dir, "db"))
 
 from main import app, get_db, bcrypt
 from models import User, Role, AuditLog, Order, Inventory, Expense, StatusLog, InventoryLog
@@ -32,7 +41,11 @@ def run_verification(target_name, session_factory):
 
     # Pre-cleanup temporary records
     try:
+        db.execute(text(f"DELETE FROM inventory_logs WHERE user_id IN (SELECT user_id FROM users WHERE username LIKE '{prefix}%') OR item_id IN (SELECT item_id FROM inventory WHERE item_name LIKE '{prefix}%')"))
+        db.execute(text(f"DELETE FROM inventory WHERE item_name LIKE '{prefix}%'"))
+        db.execute(text(f"DELETE FROM user_sessions WHERE username LIKE '{prefix}%'"))
         db.execute(text(f"DELETE FROM audit_logs WHERE username LIKE '{prefix}%'"))
+        db.execute(text(f"DELETE FROM expenses WHERE description LIKE '{prefix}%'"))
         db.execute(text(f"DELETE FROM users WHERE username LIKE '{prefix}%'"))
         db.commit()
     except Exception as e:
@@ -139,7 +152,7 @@ def run_verification(target_name, session_factory):
         # 6. Compare Dashboard Values with Actual Database Queries
         print("\n--- Comparing Dashboard Stats with Direct Database Queries ---")
         db_orders = db.query(Order).count()
-        db_inventory = db.query(Inventory).count()
+        db_inventory = db.query(Inventory).filter(Inventory.is_active == True).count()
         api_orders = len(client.get("/api/orders", headers=owner_headers).json())
         api_inv = len(client.get("/api/inventory", headers=owner_headers).json())
         print(f"  Dashboard Orders API Count: {api_orders} | Direct DB Count: {db_orders} -> Match: {api_orders == db_orders}")
@@ -178,15 +191,15 @@ def run_verification(target_name, session_factory):
         inv_id = res_inv.json()["item_id"]
 
         # Test negative adjustment (deducting 50 from 10 should fail with HTTP 400)
-        res_neg = client.put(f"/api/inventory/{inv_id}/adjust", json={"action": "deduction", "amount": 50.0}, headers=owner_headers)
+        res_neg = client.post("/api/inventory/adjust", json={"item_id": inv_id, "action": "deduction", "amount": 50.0}, headers=owner_headers)
         assert res_neg.status_code == 400, f"Expected HTTP 400 when deducting below 0, got {res_neg.status_code}"
         print("✔ Confirmed: Negative inventory quantities prevented (HTTP 400 thrown on excess deduction)!")
 
         # Test valid adjustment and verify audit logging
-        res_adj = client.put(f"/api/inventory/{inv_id}/adjust", json={"action": "deduction", "amount": 2.0}, headers=owner_headers)
+        res_adj = client.post("/api/inventory/adjust", json={"item_id": inv_id, "action": "deduction", "amount": 2.0}, headers=owner_headers)
         assert res_adj.status_code == 200, f"Valid stock deduction failed: {res_adj.text}"
         
-        adj_log = db.query(AuditLog).filter(AuditLog.table_name == "inventory", AuditLog.record_id == inv_id, AuditLog.action_type == "UPDATE").first()
+        adj_log = db.query(AuditLog).filter(AuditLog.table_name == "inventory", AuditLog.record_id == inv_id, AuditLog.action_type.in_(["UPDATE", "DEDUCT"])).first()
         assert adj_log is not None, "Manual stock adjustment was NOT recorded in AuditLog!"
         print("✔ Confirmed: Manual stock adjustment correctly recorded in AuditLog system!")
 
@@ -217,6 +230,9 @@ def run_verification(target_name, session_factory):
         # Cleanup temporary records (Option A)
         print("Cleaning up temporary test records...")
         try:
+            db.execute(text(f"DELETE FROM inventory_logs WHERE user_id IN (SELECT user_id FROM users WHERE username LIKE '{prefix}%') OR item_id IN (SELECT item_id FROM inventory WHERE item_name LIKE '{prefix}%')"))
+            db.execute(text(f"DELETE FROM inventory WHERE item_name LIKE '{prefix}%'"))
+            db.execute(text(f"DELETE FROM user_sessions WHERE username LIKE '{prefix}%'"))
             db.execute(text(f"DELETE FROM audit_logs WHERE username LIKE '{prefix}%'"))
             db.execute(text(f"DELETE FROM expenses WHERE description LIKE '{prefix}%'"))
             db.execute(text(f"DELETE FROM users WHERE username LIKE '{prefix}%'"))

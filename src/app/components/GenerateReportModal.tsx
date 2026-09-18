@@ -75,6 +75,7 @@ export default function GenerateReportModal({
     isGeneratingRef.current = true;
     setIsGenerating('pdf');
     setErrorMessage(null);
+    const startTime = performance.now();
 
     try {
       const params = new URLSearchParams({
@@ -97,16 +98,33 @@ export default function GenerateReportModal({
       }
 
       const blob = await response.blob();
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let downloadFilename = '';
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename=["']?([^"';]+)["']?/i);
+        if (match && match[1]) {
+          downloadFilename = match[1].trim();
+        }
+      }
+      if (!downloadFilename) {
+        const cleanType = reportType.replace(/\s+/g, '_');
+        const periodSlug = reportPeriod.replace(/\s+/g, '_');
+        downloadFilename = `Shoelotskey_Villamor-Pasay_${cleanType}_Report_${periodSlug}.pdf`;
+      }
+
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      const cleanType = reportType.toLowerCase().replace(/\s+/g, '_');
-      a.download = `shoelotskey_${cleanType}_${reportPeriod.toLowerCase()}.pdf`;
+      a.download = downloadFilename;
       document.body.appendChild(a);
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-      toast.success(`${reportType} (PDF) downloaded successfully.`);
+
+      const elapsedMs = Math.round(performance.now() - startTime);
+      const elapsedSec = (elapsedMs / 1000).toFixed(2);
+      console.log(`[REPORT GENERATION] Generated ${reportType} (${reportPeriod}) PDF in ${elapsedMs}ms (${elapsedSec}s)`);
+      toast.success(`${reportType} (PDF) generated in ${elapsedSec}s.`);
       onClose();
     } catch (err: any) {
       console.error('[REPORT ERROR] PDF export failed:', err);
@@ -123,6 +141,7 @@ export default function GenerateReportModal({
     isGeneratingRef.current = true;
     setIsGenerating('xlsx');
     setErrorMessage(null);
+    const startTime = performance.now();
 
     try {
       const params = new URLSearchParams({
@@ -145,16 +164,33 @@ export default function GenerateReportModal({
       }
 
       const blob = await response.blob();
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let downloadFilename = '';
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename=["']?([^"';]+)["']?/i);
+        if (match && match[1]) {
+          downloadFilename = match[1].trim();
+        }
+      }
+      if (!downloadFilename) {
+        const cleanType = reportType.replace(/\s+/g, '_');
+        const periodSlug = reportPeriod.replace(/\s+/g, '_');
+        downloadFilename = `Shoelotskey_Villamor-Pasay_${cleanType}_Report_${periodSlug}.xlsx`;
+      }
+
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      const cleanType = reportType.toLowerCase().replace(/\s+/g, '_');
-      a.download = `shoelotskey_${cleanType}_${reportPeriod.toLowerCase()}.xlsx`;
+      a.download = downloadFilename;
       document.body.appendChild(a);
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-      toast.success(`${reportType} (Excel .xlsx) downloaded with active formulas.`);
+
+      const elapsedMs = Math.round(performance.now() - startTime);
+      const elapsedSec = (elapsedMs / 1000).toFixed(2);
+      console.log(`[REPORT GENERATION] Generated ${reportType} (${reportPeriod}) Excel in ${elapsedMs}ms (${elapsedSec}s)`);
+      toast.success(`${reportType} (Excel .xlsx) generated in ${elapsedSec}s.`);
       onClose();
     } catch (err: any) {
       console.error('[REPORT ERROR] Excel export failed:', err);
@@ -171,6 +207,7 @@ export default function GenerateReportModal({
     isGeneratingRef.current = true;
     setIsGenerating('csv');
     setErrorMessage(null);
+    const startTime = performance.now();
 
     try {
       const params = new URLSearchParams({
@@ -193,16 +230,33 @@ export default function GenerateReportModal({
       }
 
       const blob = await response.blob();
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let downloadFilename = '';
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename=["']?([^"';]+)["']?/i);
+        if (match && match[1]) {
+          downloadFilename = match[1].trim();
+        }
+      }
+      if (!downloadFilename) {
+        const cleanType = reportType.replace(/\s+/g, '_');
+        const periodSlug = reportPeriod.replace(/\s+/g, '_');
+        downloadFilename = `Shoelotskey_Villamor-Pasay_${cleanType}_Report_${periodSlug}.csv`;
+      }
+
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      const cleanType = reportType.toLowerCase().replace(/\s+/g, '_');
-      a.download = `shoelotskey_${cleanType}_${reportPeriod.toLowerCase()}.csv`;
+      a.download = downloadFilename;
       document.body.appendChild(a);
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-      toast.success(`${reportType} (CSV spreadsheet-friendly text) downloaded successfully.`);
+
+      const elapsedMs = Math.round(performance.now() - startTime);
+      const elapsedSec = (elapsedMs / 1000).toFixed(2);
+      console.log(`[REPORT GENERATION] Generated ${reportType} (${reportPeriod}) CSV in ${elapsedMs}ms (${elapsedSec}s)`);
+      toast.success(`${reportType} (CSV) generated in ${elapsedSec}s.`);
       onClose();
     } catch (err: any) {
       console.error('[REPORT ERROR] CSV export failed:', err);
@@ -218,11 +272,14 @@ export default function GenerateReportModal({
     if (!validateDates() || isGeneratingRef.current || isGenerating) return;
     isGeneratingRef.current = true;
     setIsGenerating('print');
+    const startTime = performance.now();
     onClose();
     setTimeout(() => {
       try {
         if (onPrintReport) {
           onPrintReport(reportType, reportPeriod, startDate, endDate);
+          const elapsedMs = Math.round(performance.now() - startTime);
+          console.log(`[REPORT GENERATION] Compiled printable ${reportType} (${reportPeriod}) in ${elapsedMs}ms`);
         }
       } catch (err: any) {
         console.error('[PRINT ERROR]', err);
@@ -305,7 +362,8 @@ export default function GenerateReportModal({
           </div>
         </div>
 
-        <div className="p-6 space-y-5">
+        {/* Content Body - Scrollable on small screens */}
+        <div className="p-4 sm:p-6 space-y-4 sm:space-y-5 overflow-y-auto flex-1 max-h-[calc(90dvh-140px)]">
           {errorMessage && (
             <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-semibold animate-in fade-in duration-200">
               <AlertCircle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
@@ -471,7 +529,7 @@ export default function GenerateReportModal({
             variant="outline"
             onClick={onClose}
             disabled={isGenerating !== null}
-            className="w-1/3 h-11 rounded-xl font-bold text-xs uppercase tracking-wider border-gray-300 text-gray-700 hover:bg-gray-100"
+            className="flex-1 h-11 rounded-xl font-bold text-xs uppercase tracking-wider border-gray-300 text-gray-700 hover:bg-gray-100"
           >
             Cancel
           </Button>
@@ -480,7 +538,7 @@ export default function GenerateReportModal({
             type="button"
             onClick={() => executeAction(selectedFormat)}
             disabled={isGenerating !== null}
-            className="w-2/3 h-11 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer"
+            className="flex-1 h-11 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer"
           >
             {isGenerating !== null ? (
               <Loader2 className="h-4 w-4 animate-spin" />

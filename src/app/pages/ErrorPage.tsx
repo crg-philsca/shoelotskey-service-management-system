@@ -48,8 +48,8 @@ interface ErrorConfig {
 }
 
 function buildConfig(type: ErrorType, onRetry?: () => void): ErrorConfig {
-  const goLogin     = () => { window.location.href = '/login'; };
-  const goDashboard = () => { window.location.href = '/dashboard'; };
+  const goLogin     = () => { onRetry?.(); window.location.href = '/login'; };
+  const goDashboard = () => { onRetry?.(); window.location.href = '/dashboard'; window.location.reload(); };
   const reload      = () => { onRetry ? onRetry() : window.location.reload(); };
 
   switch (type) {
@@ -162,7 +162,7 @@ const ErrorPage: React.FC<ErrorPageProps> = ({ type, onRetry, errorDetails }) =>
 
           <div className="mb-8 animate-shoe-walk flex items-center justify-center">
             <img
-              src="/static/branded_shoe_404.png"
+              src="/static/branded_shoe_404.png?v=transparent"
               style={{ mixBlendMode: 'multiply' }}
               onError={(e) => {
                 const t = e.target as HTMLImageElement;
@@ -172,7 +172,7 @@ const ErrorPage: React.FC<ErrorPageProps> = ({ type, onRetry, errorDetails }) =>
                   // bare hardcoded localhost:8000 (harmless in prod either way since it
                   // already falls through to /logo.png, but keep the resolution logic
                   // in one place).
-                  t.src = `${STATIC_BASE}/static/branded_shoe_404.png`;
+                  t.src = `${STATIC_BASE}/static/branded_shoe_404.png?v=transparent`;
                 } else {
                   t.src = '/logo.png';
                 }

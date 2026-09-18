@@ -34,7 +34,7 @@ export default function ServiceModal({ isOpen, onClose, service, onSave }: Servi
         if (isOpen) {
             if (service) {
                 setName(service.name);
-                setPrice(service.price.toString());
+                setPrice(Number(service.price || 0).toFixed(2));
                 setCategory(service.category);
                 setActive(service.active);
                 setDurationDays(service.durationDays !== undefined ? service.durationDays.toString() : '');
@@ -119,8 +119,15 @@ export default function ServiceModal({ isOpen, onClose, service, onSave }: Servi
                                 <Input
                                     id="price"
                                     type="number"
+                                    step="0.01"
                                     value={price}
                                     onChange={(e) => setPrice(e.target.value)}
+                                    onBlur={(e) => {
+                                        const val = parseFloat(e.target.value);
+                                        if (!isNaN(val)) {
+                                            setPrice(val.toFixed(2));
+                                        }
+                                    }}
                                     className="pl-7 font-bold text-red-600 border-red-200 focus-visible:ring-0 focus-visible:border-red-600"
                                     placeholder="0.00"
                                     required

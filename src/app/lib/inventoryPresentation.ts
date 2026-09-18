@@ -60,8 +60,8 @@ export function getInventoryPresentation(item: any): InventoryPresentation {
     const threshold = Number(item.low_stock_threshold ?? item.lowStockThreshold ?? 0);
     const consumption = Number(item.consumption_qty ?? item.consumptionQty ?? 0);
 
-    const isCountUnit = ['pcs', 'pc', 'pair', 'pairs', 'set', 'sets', 'item', 'items', 'bottle', 'bottles', 'box', 'boxes', 'can', 'cans', 'roll', 'rolls', 'sheet', 'sheets'].includes(unit.toLowerCase());
-    const isPackaged = packageSize > 1 || (packageSize > 0 && packageUnit !== '' && packageUnit.toLowerCase() !== unit.toLowerCase() && !isCountUnit);
+    const isCountUnit = ['pcs', 'pc', 'pair', 'pairs', 'set', 'sets', 'item', 'items'].includes(unit.toLowerCase());
+    const isPackaged = packageSize > 1 && Boolean(packageUnit) && packageUnit.toLowerCase() !== unit.toLowerCase() && !isCountUnit;
     const currentQuantityLabel = `${stock.toLocaleString()} ${unit}`;
 
     let fullPackages = 0;
@@ -79,15 +79,14 @@ export function getInventoryPresentation(item: any): InventoryPresentation {
 
     if (isPackaged) {
         const unitSingular = formatUnitName(packageUnit, 1);
-        const unitSingularLower = formatUnitNameLower(packageUnit, 1);
 
-        // e.g. "Jug (4,000 mL)"
+        // e.g. "Can (360 mL)" or "Jug (4,000 mL)"
         packageLabel = `${unitSingular} (${packageSize.toLocaleString()} ${unit})`;
 
         if (stock <= 0) {
             containersLabel = `0 ${formatUnitNameLower(packageUnit, 0)}`;
-            compactLabel = `0% of one ${unitSingularLower}`;
-            equivalentLabel = compactLabel;
+            compactLabel = containersLabel;
+            equivalentLabel = containersLabel;
             progressBarValue = 0;
         } else {
             fullPackages = Math.floor(stock / packageSize);
@@ -102,29 +101,26 @@ export function getInventoryPresentation(item: any): InventoryPresentation {
             }
 
             if (fullPackages > 0) {
-                const pluralUnit = formatUnitName(packageUnit, fullPackages);
+                const pluralUnit = formatUnitNameLower(packageUnit, fullPackages);
                 if (remainingVolume > 0) {
-                    containersLabel = `${fullPackages} Full ${pluralUnit} + ${remainingVolume.toLocaleString()} ${unit}`;
-                    containersSubLabel = `${percentageRemaining}% of next ${unitSingularLower}`;
-                    compactLabel = containersLabel;
-                    equivalentLabel = containersLabel;
+                    containersLabel = `${fullPackages} ${pluralUnit} + ${remainingVolume.toLocaleString()} ${unit}`;
                 } else {
-                    containersLabel = `${fullPackages} Full ${pluralUnit}`;
-                    compactLabel = containersLabel;
-                    equivalentLabel = containersLabel;
+                    containersLabel = `${fullPackages} ${pluralUnit}`;
                 }
             } else {
-                // Less than one full package
-                containersLabel = `${percentageRemaining}% of one ${unitSingularLower} remaining`;
-                compactLabel = containersLabel;
-                equivalentLabel = containersLabel;
+                // Less than one full package (e.g. 800 mL with 1 jug = 4,000 mL)
+                containersLabel = `${stock.toLocaleString()} ${unit}`;
             }
+            compactLabel = containersLabel;
+            equivalentLabel = containersLabel;
         }
     } else {
         containersLabel = currentQuantityLabel;
         compactLabel = currentQuantityLabel;
         equivalentLabel = currentQuantityLabel;
-        packageLabel = '';
+        packageLabel = packageUnit 
+            ? (packageSize > 0 && unit ? `${formatUnitName(packageUnit, 1)} (${packageSize.toLocaleString()} ${unit})` : formatUnitName(packageUnit, 1))
+            : '';
         if (stock <= 0) {
             progressBarValue = 0;
         } else if (effectiveThreshold > 0 && stock <= effectiveThreshold) {

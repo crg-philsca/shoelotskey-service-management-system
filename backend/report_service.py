@@ -21,6 +21,7 @@ Supported Periods:
 import io
 import os
 import csv
+import time
 from datetime import datetime, date, timedelta
 from typing import Dict, Any, List, Optional, Tuple
 from decimal import Decimal
@@ -29,10 +30,14 @@ from sqlalchemy import func
 from fastapi import HTTPException
 
 from models import Order, Payment, Expense, Item, Service, InventoryLog
+from order_numbering import parse_date_from_order_id
 import pymupdf
-import openpyxl
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-from openpyxl.utils import get_column_letter
+try:
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+except ImportError:
+    openpyxl = None
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOGO_PATH = os.path.join(BASE_DIR, "static", "logo.png")
@@ -153,7 +158,12 @@ def classify_expense_group(category_str: str) -> str:
     - Operating Expenses
     - Other Expenses
     """
-    c = str(category_str or "").strip().lower()
+    parts = str(category_str or "").split(" || ")
+    if len(parts) > 3 and parts[3].strip() in ("Inventory Expenses", "Operating Expenses", "Other Expenses"):
+        return parts[3].strip()
+    c = str(parts[0] or "").strip().lower()
+    if "withdrawal" in c or "owner" in c:
+        return "Other Expenses"
     for inv in INVENTORY_CATEGORIES:
         if inv in c:
             return "Inventory Expenses"
@@ -178,21 +188,32 @@ def calculate_report_data(
     Authoritatively computes report summaries and itemized records directly
     from the database using the approved Order-Cohort accounting model.
     """
+    t0 = time.perf_counter()
     start_dt, end_dt, period_label = resolve_period_range(period_type, custom_start, custom_end)
     r_norm = (report_type or "sales").strip().lower()
 
     # --- 1. COHORT ORDERS QUERY ---
-    orders = db.query(Order).options(
+    def get_authoritative_order_date(o: Order) -> datetime:
+        d = parse_date_from_order_id(o.order_number)
+        if d:
+            if o.created_at:
+                return datetime(d.year, d.month, d.day, o.created_at.hour, o.created_at.minute, o.created_at.second)
+            return datetime(d.year, d.month, d.day)
+        return o.created_at or datetime.min
+
+    all_candidate_orders = db.query(Order).options(
         joinedload(Order.customer),
         joinedload(Order.status),
         joinedload(Order.priority),
         joinedload(Order.payments).joinedload(Payment.p_status),
         joinedload(Order.payments).joinedload(Payment.method),
         joinedload(Order.items).joinedload(Item.services),
-    ).filter(
-        Order.created_at >= start_dt,
-        Order.created_at <= end_dt
-    ).order_by(Order.created_at.desc()).all()
+    ).order_by(Order.order_id.desc()).all()
+
+    orders = [
+        o for o in all_candidate_orders
+        if start_dt <= get_authoritative_order_date(o) <= end_dt
+    ]
 
     # Cohort calculations
     def is_cancelled(o: Order) -> bool:
@@ -271,7 +292,7 @@ def calculate_report_data(
         order_record = {
             "order_id": o.order_id,
             "order_number": o.order_number,
-            "order_date": o.created_at.strftime("%Y-%m-%d %H:%M") if o.created_at else "",
+            "order_date": get_authoritative_order_date(o).strftime("%Y-%m-%d %H:%M"),
             "customer_name": o.customer.customer_name if o.customer else "Guest",
             "customer_contact": contact_str,
             "shoe_details": shoe_str,
@@ -312,7 +333,9 @@ def calculate_report_data(
             retained = max(0.0, paid - (rf if rf > 0 else (paid if (o.refund_status or "").lower() == "refunded" else 0.0)))
             total_retained += retained
 
-    net_sales = max(0.0, sales_total - total_refunds + total_retained)
+    # Authoritative formula: Active Order Sales + Retained Payments from Cancelled Orders
+    # Refunds on cancelled orders are never added to sales (cancelled orders contribute only actual retained payment)
+    net_sales = max(0.0, sales_total + total_retained)
     net_payments = max(0.0, payments_received - total_refunds + total_retained)
 
     # --- 2. EXPENSES QUERY ---
@@ -363,11 +386,17 @@ def calculate_report_data(
         roi_value = None
         roi_display = "N/A"
 
+    calc_duration_ms = (time.perf_counter() - t0) * 1000.0
+    calc_duration_s = calc_duration_ms / 1000.0
+    print(f"[REPORT ENGINE] Generated {report_type} ({period_label}) in {calc_duration_ms:.2f}ms ({calc_duration_s:.3f}s) | Cohort Orders: {len(orders)} | Expenses: {len(expenses_details)}")
+
     return {
         "report_type": report_type,
         "period_type": period_type,
         "period_label": period_label,
         "generated_at": datetime.now().strftime("%Y-%m-%d %I:%M %p"),
+        "generation_duration_ms": round(calc_duration_ms, 2),
+        "generation_duration_s": round(calc_duration_s, 3),
         "summary": {
             "sales": sales_total,
             "orders_count": total_orders_count,
@@ -375,6 +404,7 @@ def calculate_report_data(
             "payments_received": payments_received,
             "balance_due": balance_due,
             "refunds_issued": total_refunds,
+            "retained_payments": total_retained,
             "retained_deposits": total_retained,
             "net_sales": net_sales,
             "net_payments": net_payments,
@@ -401,6 +431,7 @@ def generate_report_csv(report_data: Dict[str, Any], report_type: str) -> str:
     Implements active, executable spreadsheet formulas (=SUM, =COUNTA, =SUMIF, =IF, math operations)
     so that opening the CSV in Excel or any spreadsheet tool calculates live values dynamically.
     """
+    t0 = time.perf_counter()
     output = io.StringIO()
     writer = csv.writer(output, quoting=csv.QUOTE_MINIMAL)
     r_norm = (report_type or "sales").strip().lower()
@@ -425,8 +456,8 @@ def generate_report_csv(report_data: Dict[str, Any], report_type: str) -> str:
         writer.writerow(["Payments Received", f"=SUM(I{first_row}:I{last_row})" if has_items else f"{s['payments_received']:.2f}"])
         writer.writerow(["Balance Due", f"=SUM(J{first_row}:J{last_row})" if has_items else f"{s['balance_due']:.2f}"])
         writer.writerow(["Refunds Issued", f"{s['refunds_issued']:.2f}"])
-        writer.writerow(["Retained Deposits", f"{s.get('retained_deposits', 0):.2f}"])
-        writer.writerow(["Net Sales", "=B7-B11"])
+        writer.writerow(["Retained Payments", f"{s.get('retained_payments', s.get('retained_deposits', 0)):.2f}"])
+        writer.writerow(["Net Sales", "=B7+B12"])
         writer.writerow(["Total Expenses", f"{s['total_expenses']:.2f}"])
         writer.writerow(["Net Profit", "=B13-B14"])
         writer.writerow(["ROI (%)", '=IF(B14>0,(B15/B14)*100,0)'])
@@ -497,8 +528,8 @@ def generate_report_csv(report_data: Dict[str, Any], report_type: str) -> str:
         writer.writerow(["SUMMARY METRICS", "AMOUNT / VALUE"])
         writer.writerow(["Total Sales", f"{s['sales']:.2f}"])
         writer.writerow(["Refunds Issued", f"{s['refunds_issued']:.2f}"])
-        writer.writerow(["Retained Deposits", f"{s.get('retained_deposits', 0):.2f}"])
-        writer.writerow(["Net Sales", "=B7-B8"])
+        writer.writerow(["Retained Payments", f"{s.get('retained_payments', s.get('retained_deposits', 0)):.2f}"])
+        writer.writerow(["Net Sales", "=B7+B9"])
         writer.writerow(["Payments Received", f"{s['payments_received']:.2f}"])
         writer.writerow(["Balance Due", f"{s['balance_due']:.2f}"])
         writer.writerow(["Total Expenses", f"{s['total_expenses']:.2f}"])
@@ -507,9 +538,12 @@ def generate_report_csv(report_data: Dict[str, Any], report_type: str) -> str:
         writer.writerow([])
         
         writer.writerow(["ACCOUNTING FORMULAS", "EXCEL FORMULA"])
-        writer.writerow(["Net Sales", "=B7-B8"])
+        writer.writerow(["Net Sales", "=B7+B9"])
         writer.writerow(["Net Profit", "=B10-B13"])
         writer.writerow(["ROI (%)", '=IF(B13>0,(B14/B13)*100,0)'])
+
+    csv_duration_ms = (time.perf_counter() - t0) * 1000.0
+    print(f"[REPORT ENGINE] Rendered CSV for {report_type} in {csv_duration_ms:.2f}ms ({csv_duration_ms/1000.0:.3f}s)")
 
     return output.getvalue()
 
@@ -528,6 +562,7 @@ def generate_report_xlsx(report_data: Dict[str, Any], report_type: str) -> bytes
     - Auto-fitted column widths for perfect presentation without truncated text
     - Branded corporate red and slate color styling with clean borders
     """
+    t0 = time.perf_counter()
     wb = openpyxl.Workbook()
     wb.calculation.fullCalcOnLoad = True
     ws = wb.active
@@ -607,8 +642,8 @@ def generate_report_xlsx(report_data: Dict[str, Any], report_type: str) -> bytes
             ("Payments Received", f"=SUM(I{first_row}:I{last_row})" if has_items else float(s["payments_received"]), FMT_CURRENCY, False),
             ("Balance Due", f"=SUM(J{first_row}:J{last_row})" if has_items else float(s["balance_due"]), FMT_CURRENCY, False),
             ("Refunds Issued", float(s["refunds_issued"]), FMT_CURRENCY, False),
-            ("Retained Deposits", float(s.get("retained_deposits", 0.0)), FMT_CURRENCY, False),
-            ("Net Sales", "=B7-B11+B12", FMT_CURRENCY, True),
+            ("Retained Payments", float(s.get("retained_payments", s.get("retained_deposits", 0.0))), FMT_CURRENCY, False),
+            ("Net Sales", "=B7+B12", FMT_CURRENCY, True),
             ("Total Expenses", float(s["total_expenses"]), FMT_CURRENCY, False),
             ("Net Profit", "=B13-B14", FMT_CURRENCY, True),
             ("ROI", '=IF(B14>0,B15/B14,0)', FMT_PERCENT, True),
@@ -809,8 +844,8 @@ def generate_report_xlsx(report_data: Dict[str, Any], report_type: str) -> bytes
         metrics = [
             ("Total Sales", float(s["sales"]), FMT_CURRENCY, True),
             ("Refunds Issued", float(s["refunds_issued"]), FMT_CURRENCY, False),
-            ("Retained Deposits", float(s.get("retained_deposits", 0.0)), FMT_CURRENCY, False),
-            ("Net Sales", "=B7-B8+B9", FMT_CURRENCY, True),
+            ("Retained Payments", float(s.get("retained_payments", s.get("retained_deposits", 0.0))), FMT_CURRENCY, False),
+            ("Net Sales", "=B7+B9", FMT_CURRENCY, True),
             ("Payments Received", float(s["payments_received"]), FMT_CURRENCY, False),
             ("Balance Due", float(s["balance_due"]), FMT_CURRENCY, False),
             ("Total Expenses", float(s["total_expenses"]), FMT_CURRENCY, True),
@@ -839,7 +874,7 @@ def generate_report_xlsx(report_data: Dict[str, Any], report_type: str) -> bytes
         ws.row_dimensions[17].height = 22
 
         formula_rows = [
-            ("Net Sales", "=B7-B8+B9"),
+            ("Net Sales", "=B7+B9"),
             ("Net Profit", "=B10-B13"),
             ("ROI", "=IF(B13>0,B14/B13,0)"),
         ]
@@ -870,6 +905,8 @@ def generate_report_xlsx(report_data: Dict[str, Any], report_type: str) -> bytes
 
     out = io.BytesIO()
     wb.save(out)
+    xlsx_duration_ms = (time.perf_counter() - t0) * 1000.0
+    print(f"[REPORT ENGINE] Rendered XLSX for {report_type} in {xlsx_duration_ms:.2f}ms ({xlsx_duration_ms/1000.0:.3f}s)")
     return out.getvalue()
 
 
@@ -883,6 +920,7 @@ def generate_report_pdf(report_data: Dict[str, Any], report_type: str) -> bytes:
     official Shoelotskey logo branding, running headers, bounded non-overlapping
     table cells, established financial terminologies, complete itemized fields, and page numbers.
     """
+    t0 = time.perf_counter()
     doc = pymupdf.open()
     r_norm = (report_type or "sales").strip().lower()
     s = report_data["summary"]
@@ -1049,8 +1087,9 @@ def generate_report_pdf(report_data: Dict[str, Any], report_type: str) -> bytes:
         draw_kv_line(page, col1_x, col1_r, c1_y + 2 * step_y, "Net Sales:", f"\u20b1{s['net_sales']:,.2f}", lbl_bold=True, val_bold=True)
         
         c1_idx = 3
-        if s.get("retained_deposits", 0) > 0:
-            draw_kv_line(page, col1_x, col1_r, c1_y + c1_idx * step_y, "Retained Deposits:", f"\u20b1{s['retained_deposits']:,.2f}", lbl_bold=False, val_bold=True)
+        retained_val = s.get("retained_payments", s.get("retained_deposits", 0))
+        if retained_val > 0:
+            draw_kv_line(page, col1_x, col1_r, c1_y + c1_idx * step_y, "Retained Payments:", f"\u20b1{retained_val:,.2f}", lbl_bold=False, val_bold=True)
             c1_idx += 1
         draw_kv_line(page, col1_x, col1_r, c1_y + c1_idx * step_y, "Total Orders:", str(s['orders_count']), lbl_bold=False, val_bold=True)
 
@@ -1469,4 +1508,6 @@ def generate_report_pdf(report_data: Dict[str, Any], report_type: str) -> bytes:
 
     pdf_bytes = doc.tobytes()
     doc.close()
+    pdf_duration_ms = (time.perf_counter() - t0) * 1000.0
+    print(f"[REPORT ENGINE] Rendered PDF for {report_type} in {pdf_duration_ms:.2f}ms ({pdf_duration_ms/1000.0:.3f}s) | Total Pages: {total_pages}")
     return pdf_bytes

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/app/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogFooter } from '@/app/components/ui/dialog';
 import { Button } from '@/app/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { useInventory } from '@/app/context/InventoryContext';
@@ -152,13 +152,15 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave, on
     const handleUpdateQty = (itemId: number, delta: number) => {
         const itemObj = inventoryData.find(i => i.id === itemId);
         const currentItem = inventoryUsed.find(i => i.itemId === itemId);
-        if (delta > 0 && itemObj && currentItem && (currentItem.quantity + delta) > itemObj.stock) {
-            toast.error('Insufficient stock available.');
+        if (!currentItem) return;
+        const maxStock = itemObj ? Math.max(0, Number(itemObj.stock) || 0) : 999999;
+        if (delta > 0 && (currentItem.quantity + delta) > maxStock) {
+            toast.error(`Cannot exceed available in-stock quantity (${maxStock} ${currentItem.unit || 'units'}).`);
             return;
         }
         const updatedList = inventoryUsed.map(i => {
             if (i.itemId !== itemId) return i;
-            const newQty = Math.max(0, parseFloat((i.quantity + delta).toFixed(2)));
+            const newQty = Math.max(0, Math.min(maxStock, parseFloat((i.quantity + delta).toFixed(2))));
             setQuantityInputs(pv => ({ ...pv, [itemId]: String(newQty) }));
             return { 
                 ...i, 
@@ -176,13 +178,15 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave, on
     const handleQuickAdd = (itemId: number, addVal: number) => {
         const itemObj = inventoryData.find(i => i.id === itemId);
         const currentItem = inventoryUsed.find(i => i.itemId === itemId);
-        if (addVal > 0 && itemObj && currentItem && (currentItem.quantity + addVal) > itemObj.stock) {
-            toast.error('Insufficient stock available.');
+        if (!currentItem) return;
+        const maxStock = itemObj ? Math.max(0, Number(itemObj.stock) || 0) : 999999;
+        if (addVal > 0 && (currentItem.quantity + addVal) > maxStock) {
+            toast.error(`Cannot exceed available in-stock quantity (${maxStock} ${currentItem.unit || 'units'}).`);
             return;
         }
         const updatedList = inventoryUsed.map(i => {
             if (i.itemId !== itemId) return i;
-            const newQty = Math.max(0, parseFloat((i.quantity + addVal).toFixed(2)));
+            const newQty = Math.max(0, Math.min(maxStock, parseFloat((i.quantity + addVal).toFixed(2))));
             setQuantityInputs(pv => ({ ...pv, [itemId]: String(newQty) }));
             return { 
                 ...i, 
@@ -277,17 +281,22 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave, on
                 closeClassName="top-4 right-4 bg-white/20 text-white hover:bg-white/30 border-white/30 hover:border-white/50 shadow-none"
                 className="w-[calc(100vw-1.5rem)] sm:max-w-[480px] max-h-[85vh] p-0 gap-0 flex flex-col overflow-hidden rounded-2xl border border-gray-100 shadow-2xl bg-white"
             >
-                <DialogHeader className="shrink-0 bg-emerald-600 px-6 py-5 text-white text-center">
-                    <div className="mx-auto w-10 h-10 bg-white/20 rounded-full flex items-center justify-center mb-2">
-                        <Package size={20} className="text-white" />
+                {/* Header matching Generate Report Modal format */}
+                <div className="bg-gradient-to-r from-emerald-600 to-emerald-700 px-6 py-5 text-white shrink-0 pr-14">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2.5 bg-white/10 rounded-xl backdrop-blur-sm flex items-center justify-center text-white shrink-0">
+                            <Package size={22} className="text-white" />
+                        </div>
+                        <div>
+                            <DialogTitle className="text-lg font-black uppercase tracking-tight text-white m-0 text-left">
+                                Update Stock
+                            </DialogTitle>
+                            <DialogDescription className="text-xs text-emerald-100 font-medium mt-0.5 text-left">
+                                Order #{order.orderNumber} • {order.customerName}
+                            </DialogDescription>
+                        </div>
                     </div>
-                    <DialogTitle className="text-base font-black uppercase tracking-widest">
-                        Update Inventory
-                    </DialogTitle>
-                    <DialogDescription className="text-emerald-100 text-[11px] font-bold uppercase tracking-wide">
-                        Order #{order.orderNumber} • {order.customerName}
-                    </DialogDescription>
-                </DialogHeader>
+                </div>
 
                 <div className="flex-1 overflow-y-auto p-5 space-y-5 custom-scrollbar">
                     {isApplied ? (
@@ -369,7 +378,11 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave, on
                                                 </div>
                                                 <div className="min-w-0 truncate">
                                                     <p className="text-sm font-black text-gray-900 truncate">{item.name}</p>
-                                                    <p className="text-[10px] text-emerald-700 font-extrabold uppercase tracking-wider">{actualUnit}</p>
+                                                    <p className="text-[10px] text-emerald-700 font-extrabold uppercase tracking-wider flex items-center gap-1.5 mt-0.5">
+                                                        <span>{actualUnit}</span>
+                                                        <span>•</span>
+                                                        <span className="text-gray-500 font-bold">In Stock: {invObj ? invObj.stock : 0} {actualUnit}</span>
+                                                    </p>
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-2 shrink-0">
@@ -387,13 +400,21 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave, on
                                                         inputMode="decimal"
                                                         value={quantityInputs[item.itemId] ?? String(item.quantity)}
                                                         onChange={(e) => {
-                                                            const raw = e.target.value;
-                                                            if (raw === '' || /^[0-9]*\.?[0-9]*$/.test(raw)) {
-                                                                setQuantityInputs(prev => ({ ...prev, [item.itemId]: raw }));
+                                                            let raw = e.target.value;
+                                                            // Block scientific notation and absurd characters; allow decimals up to 6 digits
+                                                            if (raw === '' || /^\d{0,6}(\.\d{0,2})?$/.test(raw)) {
+                                                                const maxStock = invObj ? Math.max(0, Number(invObj.stock) || 0) : 999999;
                                                                 const parsed = parseFloat(raw);
-                                                                if (!isNaN(parsed)) {
+                                                                if (!isNaN(parsed) && parsed > maxStock) {
+                                                                    toast.error(`Cannot exceed available in-stock quantity (${maxStock} ${actualUnit}).`);
+                                                                    raw = String(maxStock);
+                                                                }
+                                                                setQuantityInputs(prev => ({ ...prev, [item.itemId]: raw }));
+                                                                const validNum = parseFloat(raw);
+                                                                if (!isNaN(validNum)) {
+                                                                    const clamped = Math.min(maxStock, Math.max(0, validNum));
                                                                     const updated = inventoryUsed.map(i => 
-                                                                        i.itemId === item.itemId ? { ...i, quantity: parsed, unit: actualUnit, staffMember: user?.username || i.staffMember || 'Staff', date: new Date().toLocaleDateString(), time: new Date().toLocaleTimeString() } : i
+                                                                        i.itemId === item.itemId ? { ...i, quantity: clamped, unit: actualUnit, staffMember: user?.username || i.staffMember || 'Staff', date: new Date().toLocaleDateString(), time: new Date().toLocaleTimeString() } : i
                                                                     );
                                                                     setInventoryUsed(updated);
                                                                     saveImmediately(updated);
@@ -402,7 +423,12 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave, on
                                                         }}
                                                         onFocus={(e) => e.target.select()}
                                                         onBlur={() => {
-                                                            const parsed = Math.max(0, parseFloat(quantityInputs[item.itemId] ?? '') || 0);
+                                                            const maxStock = invObj ? Math.max(0, Number(invObj.stock) || 0) : 999999;
+                                                            let parsed = Math.max(0, parseFloat(quantityInputs[item.itemId] ?? '') || 0);
+                                                            if (parsed > maxStock) {
+                                                                toast.error(`Clamped to available in-stock quantity (${maxStock} ${actualUnit}).`);
+                                                                parsed = maxStock;
+                                                            }
                                                             setQuantityInputs(prev => ({ ...prev, [item.itemId]: String(parsed) }));
                                                             const updated = inventoryUsed.map(i => 
                                                                 i.itemId === item.itemId ? { ...i, quantity: parsed, unit: actualUnit, staffMember: user?.username || i.staffMember || 'Staff', date: new Date().toLocaleDateString(), time: new Date().toLocaleTimeString() } : i
@@ -410,13 +436,14 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave, on
                                                             setInventoryUsed(updated);
                                                             saveImmediately(updated);
                                                         }}
-                                                        title="Click to type exact usage"
+                                                        title={`In-stock limit: ${invObj ? invObj.stock : 0} ${actualUnit}`}
                                                         className="w-14 h-7 text-xs font-black text-center bg-emerald-50/40 hover:bg-white border border-emerald-200/80 rounded-md text-gray-900 focus:bg-white focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none transition-all px-1 shadow-inner"
                                                     />
                                                     <button 
                                                         type="button"
                                                         onClick={() => handleUpdateQty(item.itemId, 1)}
-                                                        className="h-7 w-7 flex items-center justify-center text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
+                                                        disabled={invObj && item.quantity >= invObj.stock}
+                                                        className="h-7 w-7 flex items-center justify-center text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all disabled:opacity-30 disabled:pointer-events-none"
                                                         title="Add 1 unit"
                                                     >
                                                         <Plus size={13} />
@@ -446,21 +473,24 @@ export default function StockUpdateModal({ order, open, onOpenChange, onSave, on
                                                 {(() => {
                                                     const isCount = ['pcs', 'pc', 'pair', 'pairs', 'set', 'sets', 'item', 'items', 'bottle', 'bottles', 'box', 'boxes', 'can', 'cans'].includes(actualUnit.toLowerCase());
                                                     const adjustValues = isCount ? [-2, -1, 1, 2, 5] : [-10, -5, 5, 10, 25, 50];
-                                                    return adjustValues.map((val) => (
-                                                        <button
-                                                            key={val}
-                                                            type="button"
-                                                            onClick={() => handleQuickAdd(item.itemId, val)}
-                                                            disabled={val < 0 && item.quantity === 0}
-                                                            className={`px-2 py-0.5 rounded-md text-[10px] font-black shadow-2xs transition-all border disabled:opacity-40 disabled:pointer-events-none ${
-                                                                val < 0 
-                                                                    ? 'bg-white hover:bg-red-50/80 border-gray-200 text-red-600' 
-                                                                    : 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200 text-emerald-700'
-                                                            }`}
-                                                        >
-                                                            {val > 0 ? `+${val}` : val}
-                                                        </button>
-                                                    ));
+                                                    return adjustValues.map((val) => {
+                                                        const isOver = val > 0 && invObj && (item.quantity + val) > invObj.stock;
+                                                        return (
+                                                            <button
+                                                                key={val}
+                                                                type="button"
+                                                                onClick={() => handleQuickAdd(item.itemId, val)}
+                                                                disabled={(val < 0 && item.quantity === 0) || Boolean(isOver)}
+                                                                className={`px-2 py-0.5 rounded-md text-[10px] font-black shadow-2xs transition-all border disabled:opacity-40 disabled:pointer-events-none ${
+                                                                    val < 0 
+                                                                        ? 'bg-white hover:bg-red-50/80 border-gray-200 text-red-600' 
+                                                                        : 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200 text-emerald-700'
+                                                                }`}
+                                                            >
+                                                                {val > 0 ? `+${val}` : val}
+                                                            </button>
+                                                        );
+                                                    });
                                                 })()}
                                             </div>
                                         </div>

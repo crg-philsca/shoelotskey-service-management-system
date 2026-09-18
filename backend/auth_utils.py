@@ -1,12 +1,13 @@
 import jwt
 import os
-from datetime import datetime, timedelta
+import math
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 from fastapi import HTTPException, Depends, Security
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, or_
-from models import User, Role
+from models import User, Role, UserSession
 from database import get_db
 
 # --- OWASP A02: UNUSED SECRETS HARDENING ---
@@ -30,12 +31,154 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 480 # 8-hour shift default
 
 security = HTTPBearer()
 
-# --- OWASP A04: CRYPTOGRAPHIC FAILURES PREVENTION ---
-# (Usingbcrypt in main.py, keeping simple for this utility)
+# --- MULTI-SESSION ARCHITECTURE ---
+# All accounts support multiple independent concurrent sessions.
+# Authoritative session state is persisted in the PostgreSQL/SQLite `user_sessions` table.
+_ACTIVE_USER_SESSIONS: Dict[str, set] = {}
+_ACTIVE_EVAL_SESSIONS = _ACTIVE_USER_SESSIONS
+_REVOKED_SESSIONS: set = set()
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+def is_eval_account(username: Optional[str]) -> bool:
+    """Returns True if the username belongs to an evaluation account (all accounts support multi-session)."""
+    return True
+
+def register_user_session(db: Optional[Session], user: User, session_id: str, request: Optional[Any] = None):
+    """Registers session ID for user in database and memory cache."""
+    if not user or not session_id:
+        return
+    norm = str(user.username).strip().lower()
+    sid = str(session_id).strip()
+    _REVOKED_SESSIONS.discard(sid)
+    if norm not in _ACTIVE_USER_SESSIONS:
+        _ACTIVE_USER_SESSIONS[norm] = set()
+    _ACTIVE_USER_SESSIONS[norm].add(sid)
+
+    if db is not None:
+        try:
+            ip = None
+            ua = None
+            if request is not None:
+                try:
+                    ip = request.client.host if request.client else None
+                    ua = request.headers.get("user-agent", None)
+                    if ua and len(ua) > 255:
+                        ua = ua[:252] + "..."
+                except Exception:
+                    pass
+            sess = UserSession(
+                session_id=sid,
+                user_id=user.user_id,
+                username=user.username,
+                created_at=datetime.utcnow(),
+                last_active=datetime.utcnow(),
+                expires_at=datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+                is_revoked=False,
+                ip_address=ip,
+                user_agent=ua,
+            )
+            db.add(sess)
+            db.commit()
+        except Exception as e:
+            print(f"[AUTH PERSISTENCE WARNING] register_user_session error: {e}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
+
+def revoke_user_session(db: Optional[Session], username: str, session_id: Optional[str] = None):
+    """Revokes session(s). If session_id is given, revokes that specific session only."""
+    if not username:
+        return
+    norm = str(username).strip().lower()
+    if session_id:
+        sid = str(session_id).strip()
+        _REVOKED_SESSIONS.add(sid)
+        if norm in _ACTIVE_USER_SESSIONS:
+            _ACTIVE_USER_SESSIONS[norm].discard(sid)
+        if db is not None:
+            try:
+                db.query(UserSession).filter(UserSession.session_id == sid).update({"is_revoked": True})
+                db.commit()
+            except Exception as e:
+                print(f"[AUTH PERSISTENCE WARNING] revoke_user_session error: {e}")
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+    else:
+        # Revoke all sessions for user (e.g., administrative lock)
+        all_sids = _ACTIVE_USER_SESSIONS.pop(norm, set())
+        for s in all_sids:
+            _REVOKED_SESSIONS.add(s)
+        if db is not None:
+            try:
+                db.query(UserSession).filter(func.lower(UserSession.username) == norm).update({"is_revoked": True})
+                db.commit()
+            except Exception as e:
+                print(f"[AUTH PERSISTENCE WARNING] revoke all sessions error: {e}")
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+
+def is_user_session_active(username: str, session_id: Optional[str] = None) -> bool:
+    """All accounts permit multiple concurrent sessions; returns False so no login rejection occurs."""
+    return False
+
+def validate_user_session(db: Optional[Session], u: User, target: str, token_sid: Optional[str]):
+    """Enforces multi-session policy and token revocation checks using database and cache."""
+    if not token_sid:
+        return
+    sid = str(token_sid).strip()
+    if sid in _REVOKED_SESSIONS:
+        _USER_CACHE.pop(target, None)
+        raise HTTPException(status_code=401, detail="Session has ended. Please log in again.")
+
+    if db is not None:
+        try:
+            sess = db.query(UserSession).filter(UserSession.session_id == sid).first()
+            if sess:
+                if sess.is_revoked:
+                    _REVOKED_SESSIONS.add(sid)
+                    _USER_CACHE.pop(target, None)
+                    raise HTTPException(status_code=401, detail="Session has ended. Please log in again.")
+                if sess.expires_at and sess.expires_at < datetime.utcnow():
+                    _REVOKED_SESSIONS.add(sid)
+                    _USER_CACHE.pop(target, None)
+                    raise HTTPException(status_code=401, detail="Session has expired. Please log in again.")
+            else:
+                new_sess = UserSession(
+                    session_id=sid,
+                    user_id=u.user_id,
+                    username=u.username,
+                    created_at=datetime.utcnow(),
+                    last_active=datetime.utcnow(),
+                    expires_at=datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+                    is_revoked=False,
+                )
+                db.add(new_sess)
+                db.commit()
+        except HTTPException:
+            raise
+        except Exception:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+
+    if target not in _ACTIVE_USER_SESSIONS:
+        _ACTIVE_USER_SESSIONS[target] = set()
+    _ACTIVE_USER_SESSIONS[target].add(sid)
+    setattr(u, '_current_token_sid', sid)
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None, session_id: Optional[str] = None):
     """Generates a secure JWT for session management (OWASP A07)."""
     to_encode = data.copy()
+    if session_id:
+        to_encode["sid"] = str(session_id)
+    elif "sid" not in to_encode:
+        import uuid
+        to_encode["sid"] = str(uuid.uuid4())
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
@@ -67,6 +210,7 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Security(securi
         username: str = payload.get("sub")
         if username is None:
             raise HTTPException(status_code=401, detail="Invalid session - Missing user ID")
+        token_sid: Optional[str] = payload.get("sid")
     except jwt.ExpiredSignatureError:
         try:
             payload_unverified = jwt.decode(token, options={"verify_signature": False})
@@ -77,7 +221,6 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Security(securi
                 if user:
                     from main import log_audit
                     from models import AuditLog
-                    from datetime import datetime, timedelta, timezone
                     
                     # Prevent duplicate timeout logs within 60 seconds
                     time_threshold = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=60)
@@ -115,6 +258,16 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Security(securi
         if not u.is_active:
             _USER_CACHE.pop(target, None)
             raise HTTPException(status_code=403, detail="Account is deactivated")
+        if u.locked_until and u.locked_until > datetime.utcnow():
+            _USER_CACHE.pop(target, None)
+            if u.locked_until.year >= 2099:
+                raise HTTPException(status_code=403, detail="Account access has been restricted by an administrator.")
+            remaining = max(1, int(math.ceil((u.locked_until - datetime.utcnow()).total_seconds() / 60.0)))
+            raise HTTPException(status_code=403, detail=f"Account is temporarily locked. Try again in {remaining} minute{'s' if remaining != 1 else ''}.")
+        
+        # Enforce account-specific session policy on cached user
+        if token_sid:
+            validate_user_session(db, u, target, token_sid)
         return u
 
     try:
@@ -158,6 +311,17 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Security(securi
     
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Account is deactivated")
+
+    if user.locked_until and user.locked_until > datetime.utcnow():
+        _USER_CACHE.pop(target, None)
+        if user.locked_until.year >= 2099:
+            raise HTTPException(status_code=403, detail="Account access has been restricted by an administrator.")
+        remaining = max(1, int(math.ceil((user.locked_until - datetime.utcnow()).total_seconds() / 60.0)))
+        raise HTTPException(status_code=403, detail=f"Account is temporarily locked. Try again in {remaining} minute{'s' if remaining != 1 else ''}.")
+
+    # Enforce account-specific session policy on fresh user load
+    if token_sid:
+        validate_user_session(db, user, target, token_sid)
         
     return user
 
@@ -167,7 +331,10 @@ def require_role(role_name):
     Decorator-style dependency for RBAC.
     Supports a single role string or a list/tuple of strings.
     """
-    def role_checker(current_user: User = Depends(get_current_user)):
+    def role_checker(
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db),
+    ):
         roles = [role_name] if isinstance(role_name, str) else list(role_name)
         user_role = current_user.role.role_name
 
@@ -177,6 +344,27 @@ def require_role(role_name):
         if 'admin' in roles and len(roles) == 1:
             if user_role != 'admin':
                 print(f"[SECURITY] Unauthorized access attempt by {current_user.username} (Role: {user_role}) to admin-only resource.")
+                try:
+                    from models import AuditLog
+                    token_sid = getattr(current_user, '_current_token_sid', None)
+                    db.add(AuditLog(
+                        user_id=current_user.user_id,
+                        username=current_user.username,
+                        role_at_time=user_role,
+                        action_type="AUTH_UNAUTHORIZED_ACCESS",
+                        table_name="auth",
+                        new_values={
+                            "status": "unauthorized",
+                            "attempted_role": user_role,
+                            "required_roles": roles,
+                            "session_id": str(token_sid)[:8] + "..." if token_sid else ""
+                        },
+                        created_at=datetime.utcnow()
+                    ))
+                    db.commit()
+                except Exception:
+                    try: db.rollback()
+                    except Exception: pass
                 raise HTTPException(status_code=403, detail="Unauthorized - Admin access required")
             return current_user
 
@@ -185,6 +373,27 @@ def require_role(role_name):
 
         if user_role not in roles:
             print(f"[SECURITY] Unauthorized access attempt by {current_user.username} (Role: {user_role}) to {roles}-only resource.")
+            try:
+                from models import AuditLog
+                token_sid = getattr(current_user, '_current_token_sid', None)
+                db.add(AuditLog(
+                    user_id=current_user.user_id,
+                    username=current_user.username,
+                    role_at_time=user_role,
+                    action_type="AUTH_UNAUTHORIZED_ACCESS",
+                    table_name="auth",
+                    new_values={
+                        "status": "unauthorized",
+                        "attempted_role": user_role,
+                        "required_roles": roles,
+                        "session_id": str(token_sid)[:8] + "..." if token_sid else ""
+                    },
+                    created_at=datetime.utcnow()
+                ))
+                db.commit()
+            except Exception:
+                try: db.rollback()
+                except Exception: pass
             raise HTTPException(status_code=403, detail="Unauthorized - Elevated permissions required")
             
         return current_user

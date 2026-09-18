@@ -5,7 +5,7 @@ import { Button } from "@/app/components/ui/button";
 import { useState } from "react";
 
 interface JobOrderFormModalProps {
-    user?: { username: string; role: 'owner' | 'staff' | 'admin' };
+    user?: { username: string; role: 'owner' | 'staff' | 'admin' | 'front staff'; token?: string };
 }
 
 export default function JobOrderFormModal({ user }: JobOrderFormModalProps) {

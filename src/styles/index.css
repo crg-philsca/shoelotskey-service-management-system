@@ -12,6 +12,15 @@ body {
 	overflow: hidden;
 }
 
+/* Allow scrolling on standalone pages like Customer Tracking */
+body:has(#customer-tracking-page),
+#root:has(#customer-tracking-page) {
+	height: auto !important;
+	min-height: 100% !important;
+	overflow-y: auto !important;
+	overflow-x: hidden !important;
+}
+
 /* Allow toasts to show above overflow hidden */
 .toaster {
 	z-index: 9999 !important;
@@ -72,46 +81,116 @@ body {
 	fill: #166534 !important;
 }
 
-/* Neutral scrollbar styling */
+/* Universal Vertical Scrollbar Suppression — Hides all vertical scrollbars while keeping 100% functional scrolling */
+html,
+body,
+#root,
+main,
+*,
+*::before,
+*::after {
+	scrollbar-width: none !important;
+	-ms-overflow-style: none !important;
+}
+
+/* Chrome, Safari, Edge, WebKit: Hide vertical scrollbar completely */
 ::-webkit-scrollbar {
-	width: 12px;
-	height: 12px;
+	width: 0 !important;
 }
 
-::-webkit-scrollbar-track {
-	background: #f1f1f1;
+::-webkit-scrollbar:vertical,
+*::-webkit-scrollbar:vertical {
+	width: 0 !important;
+	height: 0 !important;
+	display: none !important;
 }
 
-::-webkit-scrollbar-thumb {
-	background: #9ca3af;
-	border-radius: 6px;
+::-webkit-scrollbar-thumb:vertical,
+*::-webkit-scrollbar-thumb:vertical {
+	display: none !important;
+	width: 0 !important;
 }
 
-::-webkit-scrollbar-thumb:hover {
-	background: #6b7280;
+::-webkit-scrollbar-track:vertical,
+*::-webkit-scrollbar-track:vertical {
+	display: none !important;
+	background: transparent !important;
 }
 
-/* Firefox scrollbar */
-* {
-	scrollbar-width: thin;
-	scrollbar-color: #9ca3af #f1f1f1;
+/* Horizontal scrollbar styling for wide data tables when needed */
+::-webkit-scrollbar:horizontal,
+*::-webkit-scrollbar:horizontal {
+	height: 6px !important;
 }
 
-.custom-scrollbar::-webkit-scrollbar {
-	width: 5px;
+::-webkit-scrollbar-track:horizontal,
+*::-webkit-scrollbar-track:horizontal {
+	background: transparent !important;
 }
 
-.custom-scrollbar::-webkit-scrollbar-track {
-	background: transparent;
+::-webkit-scrollbar-thumb:horizontal,
+*::-webkit-scrollbar-thumb:horizontal {
+	background: #cbd5e1 !important;
+	border-radius: 9999px !important;
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb {
-	background: #e2e8f0;
-	border-radius: 10px;
+::-webkit-scrollbar-thumb:horizontal:hover,
+*::-webkit-scrollbar-thumb:horizontal:hover {
+	background: #94a3b8 !important;
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-	background: #cbd5e1;
+/* Specific component / utility overrides */
+.no-scrollbar,
+.no-scrollbar *,
+.custom-scrollbar,
+.custom-scrollbar *,
+[data-slot="dialog-content"],
+[data-slot="dialog-content"] *,
+[data-slot="select-content"],
+[data-slot="select-content"] *,
+[data-slot="popover-content"],
+[data-slot="popover-content"] *,
+[data-slot="command-list"],
+[data-slot="command-list"] *,
+[cmdk-list],
+[cmdk-list] *,
+[data-radix-select-viewport],
+[data-radix-select-viewport] *,
+[data-slot="select-viewport"],
+[data-slot="select-viewport"] *,
+[data-radix-popper-content-wrapper],
+[data-radix-popper-content-wrapper] *,
+[role="dialog"],
+[role="dialog"] * {
+	scrollbar-width: none !important;
+	-ms-overflow-style: none !important;
+}
+
+.no-scrollbar::-webkit-scrollbar,
+.no-scrollbar *::-webkit-scrollbar,
+.custom-scrollbar::-webkit-scrollbar,
+.custom-scrollbar *::-webkit-scrollbar,
+[data-slot="dialog-content"]::-webkit-scrollbar,
+[data-slot="dialog-content"] *::-webkit-scrollbar,
+[data-slot="select-content"]::-webkit-scrollbar,
+[data-slot="select-content"] *::-webkit-scrollbar,
+[data-slot="popover-content"]::-webkit-scrollbar,
+[data-slot="popover-content"] *::-webkit-scrollbar,
+[data-slot="command-list"]::-webkit-scrollbar,
+[data-slot="command-list"] *::-webkit-scrollbar,
+[cmdk-list]::-webkit-scrollbar,
+[cmdk-list] *::-webkit-scrollbar,
+[data-radix-select-viewport]::-webkit-scrollbar,
+[data-radix-select-viewport] *::-webkit-scrollbar,
+[data-slot="select-viewport"]::-webkit-scrollbar,
+[data-slot="select-viewport"] *::-webkit-scrollbar,
+[data-radix-popper-content-wrapper]::-webkit-scrollbar,
+[data-radix-popper-content-wrapper] *::-webkit-scrollbar,
+[role="dialog"]::-webkit-scrollbar,
+[role="dialog"] *::-webkit-scrollbar {
+	display: none !important;
+	width: 0 !important;
+	height: 0 !important;
 }
 
 /* Date input styling */
@@ -132,8 +211,9 @@ input[type="date"]::-webkit-datetime-edit-year-field {
 }
 
 @media print {
-  /* Hide Chrome/Edge default URL, date, and title in the page margin. */
+  /* Responsive portrait print with zero base margin for both US Letter and ISO A4 */
   @page {
+    size: portrait;
     margin: 0;
   }
 
@@ -215,56 +295,71 @@ input[type="date"]::-webkit-datetime-edit-year-field {
   }
 
   /* Hide modal dialogs, backdrops, and overlays during general report or receipt printing */
-  [role="dialog"]:not(:has(#print-job-summary)):not(:has(#print-receipt-content)),
-  [data-radix-portal]:not(:has(#print-job-summary)):not(:has(#print-receipt-content)) {
+  [role="dialog"]:not(:has(#print-job-summary)):not(:has(#print-receipt-content)):not(:has(#claim-slip-print-content)),
+  [data-radix-portal]:not(:has(#print-job-summary)):not(:has(#print-receipt-content)):not(:has(#claim-slip-print-content)) {
     display: none !important;
   }
 
-  /* [RECEIPT / SUMMARY PRINT ISOLATION]
-     When printing a Job Order Summary or Claim Record, completely hide the application
+  /* [RECEIPT / SUMMARY / CLAIM SLIP PRINT ISOLATION]
+     When printing a Job Order Summary, Claim Slip, or Receipt, completely hide the application
      root and all unrelated dialogs/overlays. Reset the printable portal and dialog content
      so it flows naturally as a full document without fixed positioning, scrolling clipping,
      or viewport-based constraints. */
   body:has(#print-job-summary) #root,
   body:has(#print-receipt-content) #root,
+  body:has(#claim-slip-print-content) #root,
   body.printing-job-summary #root,
-  body.printing-receipt #root {
+  body.printing-receipt #root,
+  body.printing-claim-slip #root {
     display: none !important;
   }
 
   body:has(#print-job-summary) [data-slot="dialog-overlay"],
   body:has(#print-receipt-content) [data-slot="dialog-overlay"],
+  body:has(#claim-slip-print-content) [data-slot="dialog-overlay"],
   body.printing-job-summary [data-slot="dialog-overlay"],
-  body.printing-receipt [data-slot="dialog-overlay"] {
+  body.printing-receipt [data-slot="dialog-overlay"],
+  body.printing-claim-slip [data-slot="dialog-overlay"] {
     display: none !important;
   }
 
   body:has(#print-job-summary) [data-slot="dialog-close"],
   body:has(#print-receipt-content) [data-slot="dialog-close"],
+  body:has(#claim-slip-print-content) [data-slot="dialog-close"],
   body.printing-job-summary [data-slot="dialog-close"],
-  body.printing-receipt [data-slot="dialog-close"] {
+  body.printing-receipt [data-slot="dialog-close"],
+  body.printing-claim-slip [data-slot="dialog-close"] {
     display: none !important;
   }
 
   body:has(#print-job-summary) [data-radix-portal]:not(:has(#print-job-summary)),
   body:has(#print-receipt-content) [data-radix-portal]:not(:has(#print-receipt-content)),
+  body:has(#claim-slip-print-content) [data-radix-portal]:not(:has(#claim-slip-print-content)),
   body.printing-job-summary [data-radix-portal]:not(:has(#print-job-summary)),
-  body.printing-receipt [data-radix-portal]:not(:has(#print-receipt-content)) {
+  body.printing-receipt [data-radix-portal]:not(:has(#print-receipt-content)),
+  body.printing-claim-slip [data-radix-portal]:not(:has(#claim-slip-print-content)) {
     display: none !important;
   }
 
   body:has(#print-job-summary) [role="dialog"]:not(:has(#print-job-summary)),
   body:has(#print-receipt-content) [role="dialog"]:not(:has(#print-receipt-content)),
+  body:has(#claim-slip-print-content) [role="dialog"]:not(:has(#claim-slip-print-content)),
   body.printing-job-summary [role="dialog"]:not(:has(#print-job-summary)),
-  body.printing-receipt [role="dialog"]:not(:has(#print-receipt-content)) {
+  body.printing-receipt [role="dialog"]:not(:has(#print-receipt-content)),
+  body.printing-claim-slip [role="dialog"]:not(:has(#claim-slip-print-content)) {
     display: none !important;
   }
 
-  /* Reset the Radix portal containing the printable summary/receipt */
-  body:has(#print-job-summary) [data-radix-portal]:has(#print-job-summary),
-  body:has(#print-receipt-content) [data-radix-portal]:has(#print-receipt-content),
-  body.printing-job-summary [data-radix-portal]:has(#print-job-summary),
-  body.printing-receipt [data-radix-portal]:has(#print-receipt-content) {
+  /* Reset the Radix portal containing the printable summary/receipt/claim slip */
+  body:has(#print-job-summary) [data-radix-portal],
+  body:has(#print-receipt-content) [data-radix-portal],
+  body:has(#claim-slip-print-content) [data-radix-portal],
+  body.printing-job-summary [data-radix-portal],
+  body.printing-receipt [data-radix-portal],
+  body.printing-claim-slip [data-radix-portal],
+  [data-radix-portal]:has(#print-job-summary),
+  [data-radix-portal]:has(#print-receipt-content),
+  [data-radix-portal]:has(#claim-slip-print-content) {
     display: block !important;
     position: static !important;
     width: 100% !important;
@@ -272,26 +367,42 @@ input[type="date"]::-webkit-datetime-edit-year-field {
     overflow: visible !important;
     margin: 0 !important;
     padding: 0 !important;
+    transform: none !important;
+    -webkit-transform: none !important;
+    translate: none !important;
   }
 
-  /* Reset the Radix DialogContent container so it does not trap or clip scrollable receipt content */
-  body:has(#print-job-summary) [data-slot="dialog-content"]:has(#print-job-summary),
-  body:has(#print-receipt-content) [data-slot="dialog-content"]:has(#print-receipt-content),
-  body.printing-job-summary [data-slot="dialog-content"]:has(#print-job-summary),
-  body.printing-receipt [data-slot="dialog-content"]:has(#print-receipt-content),
-  body:has(#print-job-summary) [role="dialog"]:has(#print-job-summary),
-  body:has(#print-receipt-content) [role="dialog"]:has(#print-receipt-content),
-  body.printing-job-summary [role="dialog"]:has(#print-job-summary),
-  body.printing-receipt [role="dialog"]:has(#print-receipt-content) {
+  /* Reset the Radix DialogContent container so it does not trap or clip scrollable content */
+  body:has(#print-job-summary) [data-slot="dialog-content"],
+  body:has(#print-receipt-content) [data-slot="dialog-content"],
+  body:has(#claim-slip-print-content) [data-slot="dialog-content"],
+  body.printing-job-summary [data-slot="dialog-content"],
+  body.printing-receipt [data-slot="dialog-content"],
+  body.printing-claim-slip [data-slot="dialog-content"],
+  body:has(#print-job-summary) [role="dialog"],
+  body:has(#print-receipt-content) [role="dialog"],
+  body:has(#claim-slip-print-content) [role="dialog"],
+  body.printing-job-summary [role="dialog"],
+  body.printing-receipt [role="dialog"],
+  body.printing-claim-slip [role="dialog"],
+  [data-slot="dialog-content"]:has(#print-job-summary),
+  [data-slot="dialog-content"]:has(#print-receipt-content),
+  [data-slot="dialog-content"]:has(#claim-slip-print-content) {
     position: static !important;
     display: block !important;
     transform: none !important;
-    top: auto !important;
-    left: auto !important;
+    -webkit-transform: none !important;
+    translate: none !important;
+    --tw-translate-x: 0 !important;
+    --tw-translate-y: 0 !important;
+    --tw-transform: none !important;
+    top: 0 !important;
+    left: 0 !important;
     right: auto !important;
     bottom: auto !important;
     width: 100% !important;
     max-width: 100% !important;
+    min-width: 100% !important;
     height: auto !important;
     max-height: none !important;
     overflow: visible !important;
@@ -302,40 +413,293 @@ input[type="date"]::-webkit-datetime-edit-year-field {
     padding: 0 !important;
   }
 
-  /* Ensure any intermediate wrapper div (e.g. scrollable container) expands fully */
+  /* Ensure any intermediate wrapper div (e.g. scrollable container) expands fully without clipping */
   body:has(#print-job-summary) [data-slot="dialog-content"] div,
   body:has(#print-receipt-content) [data-slot="dialog-content"] div,
   body.printing-job-summary [data-slot="dialog-content"] div,
   body.printing-receipt [data-slot="dialog-content"] div {
     overflow: visible !important;
     max-height: none !important;
+    height: auto !important;
   }
 
-  /* The actual printable summary / receipt element */
-  #print-job-summary,
-  #print-receipt-content {
+  /* Claim Slip Modal Dialog Content Reset during printing: Responsive to Letter & A4 */
+  body:has(#claim-slip-print-content) [data-slot="dialog-content"],
+  body.printing-claim-slip [data-slot="dialog-content"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+  }
+
+  body:has(#claim-slip-print-content) [data-slot="dialog-content"] > div,
+  body.printing-claim-slip [data-slot="dialog-content"] > div {
+    overflow: hidden !important;
+    max-height: 100% !important;
+    height: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* The actual printable summary / receipt / claim slip element */
+  #print-job-summary {
     display: block !important;
     visibility: visible !important;
-    position: relative !important;
+    position: static !important;
     margin: 0 auto !important;
     width: 100% !important;
-    max-width: 420px !important;
-    padding: 8mm 6mm !important;
+    max-width: 100% !important;
+    padding: 6mm 8mm !important;
     background: white !important;
     color: #0f172a !important;
     box-shadow: none !important;
     border: none !important;
     overflow: visible !important;
+    height: auto !important;
     box-sizing: border-box !important;
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+    font-size: 11.5px !important;
+    line-height: 1.35 !important;
+    transform: none !important;
+  }
+
+  #print-receipt-content {
+    display: block !important;
+    visibility: visible !important;
+    position: static !important;
+    margin: 0 auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 6mm 4mm !important;
+    background: white !important;
+    color: #0f172a !important;
+    box-shadow: none !important;
+    border: none !important;
+    overflow: visible !important;
+    height: auto !important;
+    box-sizing: border-box !important;
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+    transform: none !important;
+  }
+
+  /* ==========================================================================
+     CLAIM SLIP & JOB ORDER PRINT SPECIFICATIONS
+     Responsive to both US Letter (8.5in x 11in) and ISO A4 (210mm x 297mm).
+     Exact 50/50 Midpoint: The cut line is placed at EXACTLY 50% of the page.
+     Both halves are constrained to exact 50% minus half of the divider height,
+     guaranteeing that the cut line is ALWAYS precisely in the physical center!
+     ========================================================================== */
+  @page {
+    size: portrait;
+    margin: 0;
+  }
+
+  html:has(#claim-slip-print-content),
+  body:has(#claim-slip-print-content),
+  body.printing-claim-slip {
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 100% !important;
+    max-height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    position: relative !important;
+    overflow: hidden !important;
+    background: #ffffff !important;
+  }
+
+  body:has(#claim-slip-print-content) [data-radix-portal],
+  body.printing-claim-slip [data-radix-portal],
+  [data-radix-portal]:has(#claim-slip-print-content) {
+    display: block !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    min-height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  body:has(#claim-slip-print-content) [data-slot="dialog-content"],
+  body.printing-claim-slip [data-slot="dialog-content"],
+  [data-slot="dialog-content"]:has(#claim-slip-print-content) {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 100% !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    min-height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    transform: none !important;
+    -webkit-transform: none !important;
+  }
+
+  body:has(#claim-slip-print-content) [data-slot="dialog-content"] > div,
+  body.printing-claim-slip [data-slot="dialog-content"] > div {
+    overflow: hidden !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    min-height: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  body:has(#claim-slip-print-content) #claim-slip-print-content,
+  body.printing-claim-slip #claim-slip-print-content,
+  #claim-slip-print-content {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    visibility: visible !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 100% !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    min-height: 100% !important;
+    padding: 3.5mm 5mm !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    border: none !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+    font-size: 10px !important;
+    line-height: 1.25 !important;
+    transform: none !important;
+  }
+
+  body:has(#claim-slip-print-content) .claim-slip-half,
+  body.printing-claim-slip .claim-slip-half,
+  #claim-slip-print-content .claim-slip-half {
+    height: calc(50% - 3mm) !important;
+    min-height: calc(50% - 3mm) !important;
+    max-height: calc(50% - 3mm) !important;
+    flex: 0 0 calc(50% - 3mm) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }
 
-  #print-job-summary *,
-  #print-receipt-content * {
-    visibility: visible !important;
-    color: inherit;
+  body:has(#claim-slip-print-content) .claim-slip-divider,
+  body.printing-claim-slip .claim-slip-divider,
+  #claim-slip-print-content .claim-slip-divider {
+    height: 6mm !important;
+    min-height: 6mm !important;
+    max-height: 6mm !important;
+    flex: 0 0 6mm !important;
+    box-sizing: border-box !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    position: relative !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
+
+  #claim-slip-print-content .text-red-600 {
+    color: #dc2626 !important;
+  }
+
+  #print-job-summary *,
+  #print-receipt-content *,
+  #claim-slip-print-content * {
+    visibility: visible !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Keep logical sections together where appropriate while allowing natural flow */
+  #print-job-summary > div,
+  #print-receipt-content > div,
+  #claim-slip-print-content > div {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+}
+
+/* Screen & modal claim slip preview styling */
+#claim-slip-print-content {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  box-sizing: border-box;
+  gap: 10px;
+}
+
+#claim-slip-print-content .claim-slip-half {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-sizing: border-box;
+  margin: 0;
+  width: 100%;
+  flex: 0 0 auto;
+  min-height: 460px;
+  height: auto;
+  overflow: visible;
+}
+
+#claim-slip-print-content .claim-slip-divider {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  margin: 4px 0;
+  padding: 0;
+}
+
+/* Global scrollbar hiding utility with active scrolling preserved */
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 /* [WALKING STRIDE — natural gait arc: push-off → swing → heel-strike → land] */
@@ -364,7 +728,7 @@ input[type="date"]::-webkit-datetime-edit-year-field {
 }
 
 /* Mobile Toast and Pop-Up Alert Responsiveness */
-@media (max-width: 640px) {
+@media screen and (max-width: 640px) {
   [data-sonner-toaster] {
     left: 12px !important;
     right: 12px !important;
@@ -388,10 +752,11 @@ input[type="date"]::-webkit-datetime-edit-year-field {
 
   [data-slot="dialog-content"],
   [role="dialog"] {
-    width: calc(100vw - 20px) !important;
-    max-width: calc(100vw - 20px) !important;
+    width: calc(100vw - 16px) !important;
+    max-width: calc(100vw - 16px) !important;
     margin: 0 auto !important;
-    max-height: 92dvh !important;
+    max-height: 94dvh !important;
     overflow-y: auto !important;
+    box-sizing: border-box !important;
   }
 }

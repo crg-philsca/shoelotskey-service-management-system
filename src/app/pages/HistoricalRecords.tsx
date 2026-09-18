@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
-  Archive, Plus, Download, Search, Trash2, Edit2, Eye,
-  ChevronLeft, ChevronRight, BarChart2, Cpu, X, Check, AlertTriangle,
+  Archive, Plus, Download, Search, Trash2, Edit2,
+  ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Save, BarChart2, Cpu, X, Check, AlertTriangle,
   TrendingUp, Users, Package, Clock, DollarSign, Star, Loader2, RefreshCw,
   FileText, Zap, Target, Activity, Upload, CircleCheck, CircleAlert
 } from 'lucide-react';
@@ -29,12 +29,12 @@ import HistoricalValidationQueue from './HistoricalValidationQueue';
 import { API_BASE } from '@/app/lib/apiBase';
 import { formatOrderId } from '@/app/lib/orderNumber';
 import { validateCustomerName, CUSTOMER_NAME_MAX_LENGTH } from '@/app/lib/customerValidation';
-import { calculateOfficialReleaseBreakdown } from '@/app/lib/businessRules';
+import { toServiceCode, formatServiceBadge } from '@/app/lib/businessRules';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface HistoricalRecordsProps {
-  user: { username: string; role: 'owner' | 'staff' | 'admin'; token: string };
+  user: { username: string; role: 'owner' | 'staff' | 'admin' | 'front staff'; token: string };
   onSetHeaderActionRight?: (node: React.ReactNode) => void;
 }
 
@@ -50,7 +50,7 @@ interface ShoeItem {
 interface HistoricalRecord {
   historical_order_id: number; order_id: string;
   customer_name: string; contact_number: string; branch: string;
-  date_received: string; original_estimated_release_date: string;
+  date_received: string; original_estimated_release_date: string | null;
   claimed_date: string | null; completion_days: number | null;
   total_pairs: number; grand_total: number; downpayment: number; balance: number;
   priority: string; sync_status: string; status: string;
@@ -61,21 +61,39 @@ interface HistoricalRecord {
 
 
 const CHART_COLORS = ['#b91c1c','#3b82f6','#10b981','#f59e0b','#8b5cf6','#ec4899','#06b6d4','#84cc16'];
-const BASE_SERVICES = ['Basic Cleaning','Full Reglue','Minor Reglue','Full Restoration','Minor Restoration','Color Renewal','Unyellowing'];
-const ADDON_SERVICES = ['Deep Cleaning','Sole Whitening','Deodorizing','Repainting','Sole Replacement'];
+const BASE_SERVICES = ['Basic Cleaning', 'Full Reglue', 'Minor Reglue', 'Color Renewal'];
+const ADDON_SERVICES = ['White Paint', 'Unyellowing', 'Minor Restoration', 'Minor Retouch', 'Full Reglue Midsole', 'Full Reglue Undersole', '2 Color', '3 Color'];
+const SERVICE_CODE_MAP: Record<string, string> = {
+  'Basic Cleaning': 'BC',
+  'Full Reglue': 'FR',
+  'Minor Reglue': 'MR',
+  'Color Renewal': 'COR',
+  'White Paint': 'WPT',
+  'Unyellowing': 'UNY',
+  'Minor Restoration': 'MRES',
+  'Minor Retouch': 'MRET',
+  'Full Reglue Midsole': 'FRMID',
+  'Full Reglue Undersole': 'FRUND',
+  '2 Color': 'COR2',
+  '3 Color': 'COR3',
+};
 const PRIORITIES = ['regular','rush'];
 const MATERIALS = ['Leather','Suede','Canvas','Mesh','Knit','Synthetic','Nubuck','Rubber','Other'];
 const BRANCHES = ['Villamor'];
 const RUSH_FEE_BASIC_CLEANING = 150;
 const HISTORICAL_CATALOG_PRICES: Record<string, number> = {
   'Basic Cleaning': 325, BC: 325, BCN: 325,
-  'Full Restoration': 250,
   'Full Reglue': 250, FR: 250, FRG: 250,
+  'Minor Reglue': 125, MR: 125, MRG: 125,
+  'Color Renewal': 325, COR: 325, CR: 325, CRN: 325,
+  'White Paint': 150, WPT: 150,
+  'Unyellowing': 125, UY: 125, UNY: 125,
   'Minor Restoration': 225, MRES: 225, MRS: 225,
   'Minor Retouch': 125, MRET: 125, MRT: 125,
-  'Minor Reglue': 125, MR: 125, MRG: 125,
-  'Color Renewal': 325, CR: 325, CRN: 325,
-  'Unyellowing': 125, UY: 125, UNY: 125,
+  'Full Reglue Midsole': 250, FRMID: 250, MFR: 250,
+  'Full Reglue Undersole': 250, FRUND: 250, UFR: 250,
+  '2 Color': 325, COR2: 325, '2CR': 325,
+  '3 Color': 325, COR3: 325, '3CR': 325,
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -106,16 +124,32 @@ const HISTORICAL_SERVICE_NAMES: Record<string, string> = {
   BCN: 'Basic Cleaning',
   FR: 'Full Reglue',
   FRG: 'Full Reglue',
-  MRES: 'Minor Restoration',
-  MRS: 'Minor Restoration',
   MR: 'Minor Reglue',
   MRG: 'Minor Reglue',
-  MRET: 'Minor Retouch',
-  MRT: 'Minor Retouch',
-  UY: 'Unyellowing',
-  UNY: 'Unyellowing',
+  COR: 'Color Renewal',
   CR: 'Color Renewal',
   CRN: 'Color Renewal',
+  WPT: 'White Paint',
+  UNY: 'Unyellowing',
+  UY: 'Unyellowing',
+  MRES: 'Minor Restoration',
+  MRS: 'Minor Restoration',
+  MRET: 'Minor Retouch',
+  MRT: 'Minor Retouch',
+  FRMID: 'Full Reglue Midsole',
+  MIDSOLE: 'Full Reglue Midsole',
+  MFR: 'Full Reglue Midsole',
+  FRUND: 'Full Reglue Undersole',
+  UNDERSOLE: 'Full Reglue Undersole',
+  UFR: 'Full Reglue Undersole',
+  COR2: '2 Color',
+  '2COLOR': '2 Color',
+  '2COL': '2 Color',
+  '2CR': '2 Color',
+  COR3: '3 Color',
+  '3COLOR': '3 Color',
+  '3COL': '3 Color',
+  '3CR': '3 Color',
 };
 
 function canonicalServiceName(name?: string | null) {
@@ -152,10 +186,6 @@ function mergeServiceDistribution(rows: { service?: string; count?: number }[] |
   return [...freq.entries()]
     .map(([service, count]) => ({ service, count }))
     .sort((a, b) => b.count - a.count);
-}
-
-function expandHistoricalService(name?: string | null) {
-  return canonicalServiceName(name);
 }
 
 function serviceIsSelected(shoe: ShoeItem, svcName: string) {
@@ -314,21 +344,6 @@ function HistoricalOrderForm({
   );
   const daysManualRef = useRef(false);
 
-  const officialDays = useMemo(() => {
-    const items = shoes.map((shoe) => {
-      const base = (shoe.services || [])
-        .filter((s) => s.service_type !== 'addon')
-        .map((s) => expandHistoricalService(s.service_name))
-        .filter(Boolean);
-      const addOns = (shoe.services || [])
-        .filter((s) => s.service_type === 'addon')
-        .map((s) => ({ name: expandHistoricalService(s.service_name), quantity: 1 }))
-        .filter((s) => s.name);
-      return { baseService: base, addOns };
-    });
-    return calculateOfficialReleaseBreakdown(items, priority).totalDays;
-  }, [shoes, priority]);
-
   useEffect(() => {
     let cancelled = false;
     fetch(`${API_BASE}/services`, { headers: { Authorization: `Bearer ${token}` } })
@@ -349,48 +364,37 @@ function HistoricalOrderForm({
   }, [token]);
 
   useEffect(() => {
-    if (daysManualRef.current) {
-      const days = parseInt(completionDaysInput, 10);
-      if (dateReceived && !Number.isNaN(days) && days >= 0) {
-        const next = addDaysIso(dateReceived, days);
-        setClaimedDate(next);
+    if (daysManualRef.current) return;
+    if (dateReceived && claimedDate) {
+      const diff = Math.round((new Date(claimedDate).getTime() - new Date(dateReceived).getTime()) / 86400000);
+      if (diff >= 0) {
+        setCompletionDaysInput(String(diff));
       }
-      return;
+    } else if (!claimedDate) {
+      setCompletionDaysInput('');
     }
-    if (!dateReceived || !officialDays) return;
-    const ready = addDaysIso(dateReceived, officialDays);
-    const claimedSpan = claimedDate
-      ? Math.round((new Date(claimedDate).getTime() - new Date(dateReceived).getTime()) / 86400000)
-      : null;
-    const overlong = claimedSpan != null && claimedSpan > officialDays;
-    if (!expectedRelease || overlong) setExpectedRelease(ready);
-    if (!claimedDate || overlong) {
-      setClaimedDate(ready);
-      setCompletionDaysInput(String(officialDays));
-    } else if (claimedSpan != null && claimedSpan >= 0) {
-      setCompletionDaysInput((prev) => prev || String(claimedSpan));
-    } else {
-      setCompletionDaysInput((prev) => prev || String(officialDays));
-    }
-  }, [dateReceived, officialDays]);
+  }, [dateReceived, claimedDate]);
 
   function handleCompletionDaysChange(value: string) {
     daysManualRef.current = true;
     setCompletionDaysInput(value);
     const days = parseInt(value, 10);
-    if (!dateReceived || Number.isNaN(days) || days < 0) return;
+    if (!dateReceived || Number.isNaN(days) || days < 0) {
+      if (!value) setClaimedDate('');
+      return;
+    }
     const next = addDaysIso(dateReceived, days);
-    const syncExpected = !expectedRelease || expectedRelease === claimedDate;
     setClaimedDate(next);
-    if (syncExpected) setExpectedRelease(next);
   }
 
   function handleClaimedDateChange(value: string) {
-    daysManualRef.current = true;
+    daysManualRef.current = false;
     setClaimedDate(value);
     if (dateReceived && value) {
       const diff = Math.round((new Date(value).getTime() - new Date(dateReceived).getTime()) / 86400000);
       if (diff >= 0) setCompletionDaysInput(String(diff));
+    } else if (!value) {
+      setCompletionDaysInput('');
     }
   }
 
@@ -427,7 +431,6 @@ function HistoricalOrderForm({
       errs.push(cValidation.error || 'Customer Name is invalid.');
     }
     if (!dateReceived) errs.push('Date Received is required.');
-    if (!expectedRelease) errs.push('Expected Release Date is required.');
     if (expectedRelease && dateReceived && expectedRelease < dateReceived)
       errs.push('Expected Release Date cannot be earlier than Date Received.');
     if (claimedDate && claimedDate < dateReceived)
@@ -452,7 +455,7 @@ function HistoricalOrderForm({
         contact_number: contactNumber,
         branch,
         date_received: dateReceived,
-        original_estimated_release_date: expectedRelease,
+        original_estimated_release_date: expectedRelease || null,
         claimed_date: claimedDate || null,
         completion_days: completionDaysInput === '' ? null : parseInt(completionDaysInput, 10),
         grand_total: parseFloat(grandTotal) || 0,
@@ -580,11 +583,33 @@ function HistoricalOrderForm({
                 <Input type="date" value={dateReceived} onChange={e => setDateReceived(e.target.value)} className="h-9 text-xs" />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase text-gray-500">Expected Release *</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold uppercase text-gray-500">Expected Release</label>
+                  {expectedRelease && (
+                    <button
+                      type="button"
+                      onClick={() => setExpectedRelease('')}
+                      className="text-[9px] text-red-600 hover:text-red-800 font-bold uppercase cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
                 <Input type="date" value={expectedRelease} onChange={e => setExpectedRelease(e.target.value)} className="h-9 text-xs" />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase text-gray-500">Claimed Date</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold uppercase text-gray-500">Claimed Date</label>
+                  {claimedDate && (
+                    <button
+                      type="button"
+                      onClick={() => { setClaimedDate(''); setCompletionDaysInput(''); }}
+                      className="text-[9px] text-red-600 hover:text-red-800 font-bold uppercase cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
                 <Input type="date" value={claimedDate} onChange={e => handleClaimedDateChange(e.target.value)} className="h-9 text-xs" />
               </div>
               <div className="space-y-1">
@@ -686,10 +711,11 @@ function HistoricalOrderForm({
                     <div className="flex flex-wrap gap-1.5 mb-2">
                       {BASE_SERVICES.map(svc => {
                         const active = serviceIsSelected(shoe, svc);
+                        const code = SERVICE_CODE_MAP[svc];
                         return (
                           <button key={svc} type="button" onClick={() => toggleService(i, svc, 'base')}
-                            className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase border transition-all ${active ? 'bg-red-600 text-white border-red-600' : 'bg-white text-gray-500 border-gray-200 hover:border-red-300'}`}>
-                            {svc}
+                            className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase border transition-all cursor-pointer ${active ? 'bg-red-600 text-white border-red-600 shadow-2xs' : 'bg-white text-gray-500 border-gray-200 hover:border-red-300'}`}>
+                            {svc} {code ? `(${code})` : ''}
                           </button>
                         );
                       })}
@@ -698,10 +724,11 @@ function HistoricalOrderForm({
                     <div className="flex flex-wrap gap-1.5">
                       {ADDON_SERVICES.map(svc => {
                         const active = serviceIsSelected(shoe, svc);
+                        const code = SERVICE_CODE_MAP[svc];
                         return (
                           <button key={svc} type="button" onClick={() => toggleService(i, svc, 'addon')}
-                            className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase border transition-all ${active ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200 hover:border-blue-300'}`}>
-                            {svc}
+                            className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase border transition-all cursor-pointer ${active ? 'bg-blue-600 text-white border-blue-600 shadow-2xs' : 'bg-white text-gray-500 border-gray-200 hover:border-blue-300'}`}>
+                            {svc} {code ? `(${code})` : ''}
                           </button>
                         );
                       })}
@@ -881,7 +908,6 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
   editRecord: HistoricalRecord | null,
   setEditRecord: (v: HistoricalRecord | null) => void
 }) {
-  const navigate = useNavigate();
   const [records, setRecords] = useState<HistoricalRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -895,9 +921,206 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
   const [formPreviewUrl, setFormPreviewUrl] = useState('');
   const [formPreviewKind, setFormPreviewKind] = useState<'image' | 'pdf'>('image');
   const [formPreviewLoading, setFormPreviewLoading] = useState(false);
+  const [viewPhotoUrl, setViewPhotoUrl] = useState('');
+  const [viewPhotoKind, setViewPhotoKind] = useState<'image' | 'pdf'>('image');
+  const [viewPhotoLoading, setViewPhotoLoading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<HistoricalRecord | null>(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ inserted: number; skipped: number; errors: any[] } | null>(null);
+  const [isInlineEditing, setIsInlineEditing] = useState(false);
+  const [inlineForm, setInlineForm] = useState<{
+    customer_name: string;
+    contact_number: string;
+    branch: string;
+    priority: string;
+    date_received: string;
+    original_estimated_release_date: string;
+    claimed_date: string;
+    completion_days: string;
+    grand_total: string;
+    downpayment: string;
+    payment_method: string;
+  }>({
+    customer_name: '',
+    contact_number: '',
+    branch: 'Villamor',
+    priority: 'regular',
+    date_received: '',
+    original_estimated_release_date: '',
+    claimed_date: '',
+    completion_days: '',
+    grand_total: '0',
+    downpayment: '0',
+    payment_method: 'Cash',
+  });
+  const [inlineSaving, setInlineSaving] = useState(false);
+  const [showShoesExpanded, setShowShoesExpanded] = useState(false);
+  const [inlineShoes, setInlineShoes] = useState<ShoeItem[]>([]);
+  const [catalogPrices, setCatalogPrices] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_BASE}/services`, { headers: { Authorization: `Bearer ${user.token}` } })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((list: { service_name?: string; service_code?: string; base_price?: number }[]) => {
+        if (cancelled || !Array.isArray(list)) return;
+        const map: Record<string, number> = {};
+        for (const svc of list) {
+          const price = Number(svc.base_price);
+          if (!price) continue;
+          if (svc.service_name) map[svc.service_name] = price;
+          if (svc.service_code) map[svc.service_code] = price;
+        }
+        setCatalogPrices(map);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [user.token]);
+
+  function addInlineShoe() { setInlineShoes(prev => [...prev, emptyShoe()]); }
+  function removeInlineShoe(i: number) { setInlineShoes(prev => prev.filter((_, idx) => idx !== i)); }
+  function updateInlineShoe(i: number, field: keyof ShoeItem, val: any) {
+    setInlineShoes(prev => prev.map((s, idx) => idx === i ? { ...s, [field]: val } : s));
+  }
+  function toggleInlineService(shoeIdx: number, svcName: string, type: 'base' | 'addon') {
+    setInlineShoes(prev => prev.map((s, idx) => {
+      if (idx !== shoeIdx) return s;
+      const chip = canonicalServiceName(svcName);
+      const has = serviceIsSelected(s, chip);
+      const services = has
+        ? s.services.filter(sv => canonicalServiceName(sv.service_name || sv.display_label).toLowerCase() !== chip.toLowerCase())
+        : [...s.services, { service_name: chip, service_type: type, price: catalogPriceFor(chip, 0, catalogPrices) }];
+      return { ...s, services };
+    }));
+  }
+
+  const handleOpenViewRecord = (r: HistoricalRecord) => {
+    setViewRecord(r);
+    setIsInlineEditing(false);
+    setShowShoesExpanded(false);
+    setInlineShoes(r.items?.length ? r.items.map((item) => normalizeShoe(item)) : [emptyShoe()]);
+    setInlineForm({
+      customer_name: r.customer_name || '',
+      contact_number: r.contact_number || '',
+      branch: r.branch || 'Villamor',
+      priority: r.priority || 'regular',
+      date_received: r.date_received ? r.date_received.slice(0, 10) : '',
+      original_estimated_release_date: r.original_estimated_release_date ? r.original_estimated_release_date.slice(0, 10) : '',
+      claimed_date: r.claimed_date ? r.claimed_date.slice(0, 10) : '',
+      completion_days: r.completion_days != null ? String(r.completion_days) : '',
+      grand_total: String(r.grand_total ?? 0),
+      downpayment: String(r.downpayment ?? 0),
+      payment_method: r.payment_method || 'Cash',
+    });
+  };
+
+  const handleInlineSave = async () => {
+    if (!viewRecord) return;
+    const nameToValidate = inlineForm.customer_name.trim();
+    if (!nameToValidate) {
+      toast.error('Customer name is required.');
+      return;
+    }
+    const valResult = validateCustomerName(nameToValidate);
+    if (!valResult.isValid) {
+      toast.error(valResult.error || 'Invalid customer name.');
+      return;
+    }
+    setInlineSaving(true);
+    try {
+      const gTotal = parseFloat(inlineForm.grand_total) || 0;
+      const dPayment = parseFloat(inlineForm.downpayment) || 0;
+      const itemsPayload = inlineShoes.map((s) => {
+        const breakdown = shoePriceBreakdown(s, inlineForm.priority, catalogPrices);
+        return {
+          brand: s.brand,
+          model: s.model,
+          color: s.color,
+          size: s.size,
+          material: s.material,
+          priority: s.priority || inlineForm.priority,
+          remarks: s.remarks,
+          item_price: s.is_free
+            ? 0
+            : typeof s.item_price === 'number' && !Number.isNaN(s.item_price)
+            ? s.item_price
+            : breakdown.itemTotal,
+          services: s.services.map((sv) => ({
+            service_name: canonicalServiceName(sv.service_name || sv.display_label) || sv.service_name,
+            service_type: sv.service_type || 'base',
+            price: catalogPriceFor(sv.service_name || sv.display_label, sv.price, catalogPrices),
+          })),
+        };
+      });
+
+      const payload = {
+        order_id: viewRecord.order_id,
+        customer_name: valResult.sanitized,
+        contact_number: inlineForm.contact_number?.trim() || null,
+        branch: inlineForm.branch,
+        priority: inlineForm.priority,
+        date_received: inlineForm.date_received || null,
+        original_estimated_release_date: inlineForm.original_estimated_release_date || null,
+        claimed_date: inlineForm.claimed_date || null,
+        completion_days: inlineForm.completion_days !== '' && inlineForm.completion_days != null
+          ? parseInt(inlineForm.completion_days, 10)
+          : null,
+        total_pairs: inlineShoes.length || viewRecord.total_pairs || 1,
+        grand_total: gTotal,
+        downpayment: dPayment,
+        balance: Math.max(0, gTotal - dPayment),
+        payment_method: inlineForm.payment_method || null,
+        items: itemsPayload,
+      };
+
+      const res = await fetch(`${API_BASE}/historical/orders/${viewRecord.historical_order_id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${user.token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        const detail = errData?.detail;
+        const msg = Array.isArray(detail)
+          ? detail.map((d: any) => d?.msg || JSON.stringify(d)).join('; ')
+          : (typeof detail === 'string' ? detail : 'Failed to update record.');
+        throw new Error(msg);
+      }
+      const resData = await res.json().catch(() => ({}));
+      toast.success('Historical record updated successfully!');
+      setIsInlineEditing(false);
+      if (resData?.order) {
+        setViewRecord(resData.order);
+      } else {
+        const updatedRecord: HistoricalRecord = {
+          ...viewRecord,
+          customer_name: valResult.sanitized,
+          contact_number: inlineForm.contact_number || '',
+          branch: inlineForm.branch,
+          priority: inlineForm.priority,
+          date_received: inlineForm.date_received,
+          original_estimated_release_date: inlineForm.original_estimated_release_date || null,
+          claimed_date: inlineForm.claimed_date || null,
+          completion_days: payload.completion_days,
+          grand_total: gTotal,
+          downpayment: dPayment,
+          balance: Math.max(0, gTotal - dPayment),
+          payment_method: inlineForm.payment_method,
+          items: itemsPayload as any,
+          total_pairs: inlineShoes.length,
+        };
+        setViewRecord(updatedRecord);
+      }
+      await fetchRecords();
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to save changes.');
+    } finally {
+      setInlineSaving(false);
+    }
+  };
 
   const limit = 10;
 
@@ -966,6 +1189,50 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
     };
   }, [formPreview, user.token]);
 
+  useEffect(() => {
+    const filename = originalFormFilename(viewRecord);
+    if (!filename || !user.token) {
+      setViewPhotoUrl('');
+      setViewPhotoLoading(false);
+      return;
+    }
+    let objectUrl = '';
+    let cancelled = false;
+    setViewPhotoLoading(true);
+    setViewPhotoUrl('');
+    (async () => {
+      try {
+        const res = await fetch(
+          `${API_BASE}/historical/image/${encodeURIComponent(filename)}`,
+          { headers: { Authorization: `Bearer ${user.token}` } },
+        );
+        if (!res.ok) throw new Error('Original form could not be loaded.');
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        objectUrl = url;
+        const type = (res.headers.get('content-type') || blob.type || '').toLowerCase();
+        setViewPhotoKind(
+          type.includes('pdf') || filename.toLowerCase().endsWith('.pdf') ? 'pdf' : 'image'
+        );
+        setViewPhotoUrl(url);
+      } catch {
+        if (!cancelled) {
+          setViewPhotoUrl('');
+        }
+      } finally {
+        if (!cancelled) setViewPhotoLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [viewRecord, user.token]);
+
   async function handleDelete() {
     if (!deleteTarget) return;
     try {
@@ -1030,15 +1297,11 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between w-full gap-2 mb-4">
         <div className="flex items-center gap-2 flex-1">
-          <Button onClick={() => navigate('/service-management')}
-            className="h-9 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white text-[11px] font-black uppercase tracking-widest shadow-md flex items-center gap-1.5 shrink-0">
-            <ChevronLeft className="h-4 w-4" /> BACK
-          </Button>
-          <div className="relative min-w-[160px] w-full max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
-          <Input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Search order # or customer..." className="pl-9 h-9 text-xs rounded-xl" />
-        </div>
+          <div className="relative flex-1 min-w-[240px] max-w-md sm:max-w-xl">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+            <Input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }}
+              placeholder="Search order # or customer..." className="pl-9 h-9 text-xs rounded-xl w-full" />
+          </div>
         <Select value={filterPriority} onValueChange={v => { setFilterPriority(v); setPage(1); }}>
           <SelectTrigger className="h-9 w-32 text-xs rounded-xl border-gray-200"><SelectValue placeholder="Priority" /></SelectTrigger>
           <SelectContent>
@@ -1087,35 +1350,34 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
           )}
           {/* Table */}
           <div className="overflow-x-auto w-full rounded-xl border border-gray-200 shadow-sm bg-white">
-        <table className="w-full table-fixed min-w-[1150px] text-xs">
+        <table className="w-full table-fixed min-w-[1100px] text-xs">
           <colgroup>
             <col className="w-[11%]" />
             <col className="w-[13%]" />
             <col className="w-[6%]" />
-            <col className="w-[9%]" />
+            <col className="w-[10%]" />
             <col className="w-[11%]" />
             <col className="w-[8%]" />
             <col className="w-[9%]" />
             <col className="w-[9%]" />
             <col className="w-[7%]" />
-            <col className="w-[8%]" />
-            <col className="w-[4%]" />
-            <col className="w-[5%]" />
+            <col className="w-[10%]" />
+            <col className="w-[6%]" />
           </colgroup>
           <thead>
             <tr className="bg-red-50/60 border-b border-red-100">
-              {['Order ID','Customer','Priority','Shoes','Services','Order Date','Expected Date','Claimed Date','Total Days','Grand Total','View','Actions'].map(h => (
+              {['Order ID','Customer','Priority','Shoes','Services','Order Date','Expected Date','Claimed Date','Total Days','Grand Total','Actions'].map(h => (
                 <th key={h} className="px-2 py-3 text-[10px] font-black uppercase tracking-wider text-gray-600 text-center whitespace-nowrap">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {loading ? (
-              <tr><td colSpan={12} className="py-20 text-center">
+              <tr><td colSpan={11} className="py-20 text-center">
                 <Loader2 className="h-8 w-8 animate-spin text-red-500 mx-auto" />
               </td></tr>
             ) : records.length === 0 ? (
-              <tr><td colSpan={12} className="py-20 text-center">
+              <tr><td colSpan={11} className="py-20 text-center">
                 <Archive className="h-12 w-12 text-gray-200 mx-auto mb-3" />
                 <p className="text-sm font-black text-gray-400 uppercase tracking-widest">No historical records found</p>
               </td></tr>
@@ -1123,7 +1385,7 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
               const orderId = displayOrderId(r.order_id);
               return (
               <tr key={r.historical_order_id} className="hover:bg-gray-50 cursor-pointer transition-colors"
-                onClick={() => setViewRecord(r)}>
+                onClick={() => handleOpenViewRecord(r)}>
                 <td className="px-2 py-3 text-xs font-bold text-center font-mono whitespace-nowrap">
                   {orderId.isPlaceholder ? (
                     <span className="text-gray-300">—</span>
@@ -1152,7 +1414,7 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
                 </td>
                 <td className="px-2 py-3 text-xs text-center whitespace-normal break-words">
                   {r.items?.flatMap(it => it.services).slice(0,3).map((s, i) => (
-                    <span key={i} className="inline-block mr-0.5 mb-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded bg-red-50 text-red-700">{s.display_label || s.service_name}</span>
+                    <span key={i} className="inline-block mr-0.5 mb-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded bg-red-50 text-red-700">{formatServiceBadge(s)}</span>
                   ))}
                   {r.items?.flatMap(it => it.services).length > 3 && <span className="text-[9px] text-gray-400">+more</span>}
                   {!r.items?.flatMap(it => it.services).length && <span className="text-gray-300">—</span>}
@@ -1163,29 +1425,13 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
                 <td className="px-3 py-3 text-xs text-center font-bold">{r.completion_days ?? '—'}</td>
                 <td className="px-3 py-3 text-xs text-center font-bold">{fmtPeso(r.grand_total)}</td>
                 <td className="px-3 py-3 text-center" onClick={e => e.stopPropagation()}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!originalFormFilename(r)) {
-                        toast.error('No scanned form photo is linked to this record.');
-                        return;
-                      }
-                      setFormPreview(r);
-                    }}
-                    className="inline-flex items-center gap-1 h-7 px-2 text-[10px] font-black uppercase border border-red-600 text-red-600 rounded bg-red-50 hover:bg-red-100 transition-colors"
-                    title="View original scanned form"
-                  >
-                    <Eye className="h-3.5 w-3.5" />View
-                  </button>
-                </td>
-                <td className="px-3 py-3 text-center" onClick={e => e.stopPropagation()}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <button className="inline-flex items-center justify-center h-7 w-7 text-xs border border-red-200 text-red-700 rounded-md bg-red-50 hover:bg-red-100 transition-colors" title="Actions">
+                      <button className="inline-flex items-center justify-center h-7 w-7 text-xs border border-red-200 text-red-700 rounded-md bg-red-50 hover:bg-red-100 transition-colors cursor-pointer" title="Actions">
                         <MoreVertical className="h-3.5 w-3.5" />
                       </button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-44 p-1.5 space-y-0.5">
+                    <DropdownMenuContent align="end" className="w-48 p-1.5 space-y-1">
                       <DropdownMenuItem onClick={() => {
                         if (!originalFormFilename(r)) {
                           toast.error('No scanned form photo is linked to this record.');
@@ -1193,19 +1439,19 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
                         }
                         setFormPreview(r);
                       }}
-                        className="text-xs font-bold flex items-center gap-2 rounded-md px-2 py-1.5 text-gray-700">
+                        className="text-xs font-bold flex items-center gap-2 rounded-md px-2 py-1.5 text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors cursor-pointer">
                         <FileText className="h-3.5 w-3.5" />View Form Photo
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => setShoeDetailRecord(r)}
-                        className="text-xs font-bold flex items-center gap-2 rounded-md px-2 py-1.5 text-gray-700">
-                        <Package className="h-3.5 w-3.5" />Shoe Details
+                        className="text-xs font-bold flex items-center gap-2 rounded-md px-2 py-1.5 text-purple-700 bg-purple-50 hover:bg-purple-100 transition-colors cursor-pointer">
+                        <Package className="h-3.5 w-3.5" />View Shoe Details
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => { setEditRecord(r); setShowForm(true); }}
-                        className="text-xs font-bold flex items-center gap-2 rounded-md px-2 py-1.5 text-yellow-700 bg-yellow-50 hover:bg-yellow-100">
+                        className="text-xs font-bold flex items-center gap-2 rounded-md px-2 py-1.5 text-amber-700 bg-amber-50 hover:bg-amber-100 transition-colors cursor-pointer">
                         <Edit2 className="h-3.5 w-3.5" />Edit Record
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => setDeleteTarget(r)}
-                        className="text-xs font-bold flex items-center gap-2 rounded-md px-2 py-1.5 text-red-700 bg-red-50 hover:bg-red-100">
+                        className="text-xs font-bold flex items-center gap-2 rounded-md px-2 py-1.5 text-red-700 bg-red-50 hover:bg-red-100 transition-colors cursor-pointer">
                         <Trash2 className="h-3.5 w-3.5" />Delete
                       </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -1253,77 +1499,618 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
         />
       )}
 
-      {/* View Dialog */}
+      {/* View & Edit Dialog */}
       {viewRecord && (
-        <Dialog open onOpenChange={() => setViewRecord(null)}>
-          <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="font-black uppercase text-sm tracking-widest flex items-center gap-2">
-                <Archive className="h-4 w-4 text-red-600" />{viewRecord.order_id}
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 text-sm">
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                {[
-                  ['Customer', toTitleCase(viewRecord.customer_name)],
-                  ['Contact', viewRecord.contact_number],
-                  ['Branch', viewRecord.branch],
-                  ['Priority', viewRecord.priority],
-                  ['Order Date', fmtDate(viewRecord.date_received)],
-                  ['Expected Date', fmtDate(viewRecord.original_estimated_release_date)],
-                  ['Claimed Date', fmtDate(viewRecord.claimed_date)],
-                  ['Total Days', viewRecord.completion_days !== null && viewRecord.completion_days !== undefined ? `${viewRecord.completion_days} days` : null],
-                  ['Grand Total', fmtPeso(viewRecord.grand_total)],
-                  ['Downpayment', viewRecord.downpayment ? fmtPeso(viewRecord.downpayment) : null],
-                  ['Balance', viewRecord.balance ? fmtPeso(viewRecord.balance) : null],
-                  ['Payment Method', viewRecord.payment_method],
-                  ['Sync Status', viewRecord.sync_status],
-                ].filter(([, v]) => v !== null && v !== undefined && String(v).trim() !== '' && String(v) !== '—').map(([k,v]) => (
-                  <div key={k} className="bg-gray-50 rounded-lg p-2">
-                    <p className="text-[9px] font-black uppercase text-gray-400">{k}</p>
-                    <p className="font-bold text-gray-800">{v}</p>
-                  </div>
-                ))}
+        <Dialog open onOpenChange={() => { setViewRecord(null); setViewPhotoUrl(''); setViewPhotoLoading(false); setIsInlineEditing(false); }}>
+          <DialogContent className="max-w-5xl w-[96vw] max-h-[90vh] p-0 overflow-hidden flex flex-col rounded-2xl bg-white border border-gray-200 shadow-2xl">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-red-700 to-red-900 text-white px-5 py-3.5 flex items-center justify-between shrink-0 shadow-sm">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <Archive className="h-4 w-4 text-red-200 shrink-0" />
+                <span className="font-mono font-black text-sm tracking-wider truncate">{viewRecord.order_id}</span>
+                <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full ${
+                  viewRecord.priority === 'rush' ? 'bg-amber-400 text-amber-950 font-black' : 'bg-white/20 text-white'
+                }`}>
+                  {viewRecord.priority}
+                </span>
+                {viewRecord.sync_status && (
+                  <span className="text-[10px] font-bold text-white/80 bg-black/20 px-2 py-0.5 rounded-full hidden sm:inline">
+                    Sync: {viewRecord.sync_status}
+                  </span>
+                )}
               </div>
-              {viewRecord.items.length > 0 && (
-                <div>
-                  <p className="text-[10px] font-black uppercase text-gray-400 mb-2">Shoe Details</p>
-                  {viewRecord.items.map((item, i) => {
-                    const meta = [
-                      presentField(item.color) ? `Color: ${item.color}` : null,
-                      presentField(item.size) ? `Size: ${item.size}` : null,
-                      presentField(item.material) ? `Material: ${item.material}` : null,
-                    ].filter(Boolean);
-                    const services = item.services || [];
-                    return (
-                    <div key={i} className="border border-gray-100 rounded-xl p-3 mb-2 bg-gray-50">
-                      <p className="text-xs font-black text-gray-700 mb-1">Shoe {i+1}: {[item.brand, item.model].filter(Boolean).join(' ')}</p>
-                      {meta.length > 0 && (
-                        <p className="text-[10px] text-gray-500">{meta.join(' · ')}</p>
-                      )}
-                      {services.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {services.map((s, sIdx) => (
-                            <span key={`${s.service_name}-${sIdx}`} className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-red-50 text-red-700 border border-red-100">
-                              {s.display_label || s.service_name}
-                            </span>
-                          ))}
+
+              <div className="flex items-center gap-2">
+                {!isInlineEditing ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => setIsInlineEditing(true)}
+                    className="h-7 px-3 bg-white text-red-800 hover:bg-red-50 text-[11px] font-black uppercase tracking-wider rounded-lg shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <Edit2 className="h-3 w-3" />
+                    <span>Edit Record</span>
+                  </Button>
+                ) : (
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setIsInlineEditing(false);
+                        if (viewRecord) handleOpenViewRecord(viewRecord);
+                      }}
+                      className="h-7 px-2.5 text-white/80 hover:text-white hover:bg-white/10 text-[11px] font-bold uppercase tracking-wider rounded-lg cursor-pointer"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleInlineSave}
+                      disabled={inlineSaving}
+                      className="h-7 px-3 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-black uppercase tracking-wider rounded-lg shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      {inlineSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                      <span>Save Changes</span>
+                    </Button>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => { setViewRecord(null); setViewPhotoUrl(''); setIsInlineEditing(false); }}
+                  className="p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors ml-1 cursor-pointer"
+                  title="Close"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body: 2 Columns (Photo Left, Details Right) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 flex-1 min-h-0 overflow-hidden divide-y sm:divide-y-0 sm:divide-x divide-gray-200">
+              {/* LEFT COLUMN: Receipt Document Photo */}
+              <div className="p-3.5 sm:p-4 bg-slate-900/5 flex flex-col h-full overflow-hidden">
+                <div className="flex items-center justify-between mb-2 shrink-0">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-gray-500 flex items-center gap-1.5">
+                    <FileText className="h-3.5 w-3.5 text-red-600" />
+                    Scanned Receipt Photo
+                  </span>
+                  {viewPhotoUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setFormPreview(viewRecord)}
+                      className="text-[10px] font-bold text-red-600 hover:text-red-700 uppercase tracking-wider flex items-center gap-1 cursor-pointer bg-white px-2.5 py-1 rounded-md border border-red-100 shadow-2xs hover:bg-red-50 transition-colors"
+                    >
+                      <span>Enlarge / Fullscreen</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex-1 min-h-[260px] sm:min-h-0 max-h-[75vh] rounded-xl overflow-hidden border border-gray-200 bg-white flex items-center justify-center relative shadow-inner">
+                  {viewPhotoLoading ? (
+                    <div className="flex flex-col items-center justify-center gap-2 p-6 text-center animate-pulse">
+                      <Loader2 className="h-7 w-7 animate-spin text-red-500" />
+                      <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Loading Receipt Photo...</span>
+                    </div>
+                  ) : viewPhotoUrl ? (
+                    viewPhotoKind === 'pdf' ? (
+                      <iframe
+                        src={viewPhotoUrl}
+                        title={`Receipt for ${viewRecord.order_id}`}
+                        className="w-full h-full border-0 bg-white"
+                      />
+                    ) : (
+                      <div className="relative w-full h-full flex items-center justify-center bg-slate-950/5 p-2 overflow-auto">
+                        <img
+                          src={viewPhotoUrl}
+                          alt={`Receipt for ${viewRecord.order_id}`}
+                          className="max-h-full max-w-full object-contain rounded shadow-sm cursor-zoom-in transition-transform duration-200 hover:scale-[1.02]"
+                          onClick={() => setFormPreview(viewRecord)}
+                          title="Click to view full photo"
+                        />
+                      </div>
+                    )
+                  ) : (
+                    <div className="flex flex-col items-center justify-center gap-2 p-6 text-center text-gray-400">
+                      <FileText className="h-10 w-10 text-gray-300" />
+                      <span className="text-xs font-medium">
+                        {originalFormFilename(viewRecord) ? (
+                          <>Document: <strong className="font-mono text-gray-600">{originalFormFilename(viewRecord)}</strong></>
+                        ) : (
+                          'No scanned receipt attached'
+                        )}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {originalFormFilename(viewRecord) && (
+                  <div className="mt-2 text-[10px] text-gray-400 truncate font-mono text-center shrink-0">
+                    {originalFormFilename(viewRecord)}
+                  </div>
+                )}
+              </div>
+
+              {/* RIGHT COLUMN: Order Details / Inline Form */}
+              <div className="p-3.5 sm:p-4 md:p-5 overflow-y-auto max-h-[75vh] space-y-3.5">
+                {!isInlineEditing ? (
+                  /* VIEW MODE */
+                  <div className="space-y-4">
+                    {/* Customer & Order Metadata Grid */}
+                    <div className="bg-[#F8F9FA]/70 rounded-xl p-3 border border-gray-100 space-y-2">
+                      <p className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Customer & Timeline</p>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        {[
+                          ['Customer', toTitleCase(viewRecord.customer_name)],
+                          ['Contact', viewRecord.contact_number || '—'],
+                          ['Branch', viewRecord.branch || '—'],
+                          ['Priority', viewRecord.priority || '—'],
+                          ['Order Date', fmtDate(viewRecord.date_received)],
+                          ['Expected Date', fmtDate(viewRecord.original_estimated_release_date)],
+                          ['Claimed Date', fmtDate(viewRecord.claimed_date)],
+                          ['Completion Time', viewRecord.completion_days != null ? `${viewRecord.completion_days} days` : '—'],
+                        ].map(([k, v]) => (
+                          <div key={k} className="bg-white rounded-lg p-2 border border-gray-100 shadow-2xs">
+                            <p className="text-[9px] font-black uppercase text-gray-400">{k}</p>
+                            <p className="font-bold text-gray-800 truncate">{v}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Financial Breakdown Card */}
+                    {(() => {
+                      const itemsSubtotal = (viewRecord.items || []).reduce((sum, it) => sum + (Number(it.item_price) || 0), 0);
+                      const discountAmount = itemsSubtotal > (viewRecord.grand_total || 0) ? itemsSubtotal - viewRecord.grand_total : 0;
+                      const discountPct = itemsSubtotal > 0 && discountAmount > 0.01 ? Math.round((discountAmount / itemsSubtotal) * 100) : 0;
+                      const depositAmount = Number(viewRecord.downpayment || 0);
+                      const grandTotal = Number(viewRecord.grand_total || 0);
+                      const depositPct = grandTotal > 0 ? Math.round((depositAmount / grandTotal) * 100) : 0;
+                      const isMoreThan50 = grandTotal > 0 && depositAmount > (grandTotal * 0.5) + 0.5;
+                      const isExact50 = grandTotal > 0 && Math.abs(depositAmount - (grandTotal * 0.5)) <= 0.5;
+                      const balance = viewRecord.balance != null ? Number(viewRecord.balance) : Math.max(0, grandTotal - depositAmount);
+
+                      return (
+                        <div className="bg-white rounded-xl border border-gray-200 p-3.5 shadow-2xs space-y-2.5">
+                          <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                            <span className="text-[10.5px] font-black uppercase text-gray-500 tracking-wider">Financial Breakdown</span>
+                            <span className="text-[10px] font-bold text-gray-400">Method: {viewRecord.payment_method || 'Cash'}</span>
+                          </div>
+
+                          <div className="space-y-1.5 text-xs">
+                            {/* Discount (if applicable) */}
+                            {discountAmount > 0.01 && (
+                              <div className="flex items-center justify-between text-emerald-700 bg-emerald-50/70 px-2.5 py-1 rounded-lg border border-emerald-100">
+                                <span className="font-bold text-[11px] flex items-center gap-1">
+                                  <span>Discount Applied</span>
+                                  <span className="text-[9px] font-black uppercase bg-emerald-200 text-emerald-900 px-1.5 py-0.2 rounded">
+                                    {discountPct}% OFF
+                                  </span>
+                                </span>
+                                <span className="font-black text-[11px]">-₱{discountAmount.toFixed(2)}</span>
+                              </div>
+                            )}
+
+                            {/* Grand Total */}
+                            <div className="flex items-center justify-between py-0.5">
+                              <span className="font-bold text-gray-600">Grand Total:</span>
+                              <span className="text-sm font-black text-slate-900">{fmtPeso(grandTotal)}</span>
+                            </div>
+
+                            {/* Amount Deposited */}
+                            {depositAmount > 0 && (
+                              <div className="flex items-center justify-between py-0.5">
+                                <span className="font-medium text-gray-600 flex items-center gap-1.5">
+                                  <span>Amount Deposited:</span>
+                                  {isMoreThan50 && (
+                                    <span className="text-[9px] font-black uppercase bg-emerald-100 text-emerald-800 border border-emerald-200 px-1.5 py-0.5 rounded">
+                                      &gt; 50% ({depositPct}% paid)
+                                    </span>
+                                  )}
+                                  {isExact50 && (
+                                    <span className="text-[9px] font-black uppercase bg-amber-100 text-amber-800 border border-amber-200 px-1.5 py-0.5 rounded">
+                                      50% Deposit
+                                    </span>
+                                  )}
+                                </span>
+                                <span className="font-bold text-slate-800">{fmtPeso(depositAmount)}</span>
+                              </div>
+                            )}
+
+                            {/* Remaining Balance */}
+                            <div className="flex items-center justify-between pt-1 border-t border-gray-100">
+                              <span className="font-bold text-gray-700">Remaining Balance:</span>
+                              <span className={`text-sm font-black ${balance > 0.01 ? 'text-red-600' : 'text-emerald-600'}`}>
+                                {fmtPeso(balance)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Shoe Details: Collapsible by Default */}
+                    <div className="border border-gray-200 rounded-xl overflow-hidden bg-gray-50/50">
+                      <button
+                        type="button"
+                        onClick={() => setShowShoesExpanded(!showShoesExpanded)}
+                        className="w-full px-3.5 py-2.5 flex items-center justify-between text-left hover:bg-gray-100/60 transition-colors cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Package className="h-3.5 w-3.5 text-gray-500" />
+                          <span className="text-[11px] font-black uppercase tracking-wider text-gray-700">
+                            Shoe Details ({viewRecord.items?.length || 0} Pair{viewRecord.items?.length !== 1 ? 's' : ''})
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500">
+                          <span>{showShoesExpanded ? 'Hide' : 'Expand'}</span>
+                          {showShoesExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                        </div>
+                      </button>
+
+                      {showShoesExpanded && (
+                        <div className="p-3 space-y-2.5 border-t border-gray-200 bg-white">
+                          {viewRecord.items && viewRecord.items.length > 0 ? (
+                            viewRecord.items.map((item, i) => {
+                              const meta = [
+                                presentField(item.color) ? `Color: ${item.color}` : null,
+                                presentField(item.size) ? `Size: ${item.size}` : null,
+                                presentField(item.material) ? `Material: ${item.material}` : null,
+                              ].filter(Boolean);
+                              const services = item.services || [];
+                              return (
+                                <div key={i} className="border border-gray-100 rounded-xl p-2.5 bg-gray-50/60 text-xs">
+                                  <p className="font-black text-gray-800">
+                                    Shoe {i + 1}: {[item.brand, item.model].filter(Boolean).join(' ') || 'Shoe Item'}
+                                  </p>
+                                  {meta.length > 0 && <p className="text-[10px] text-gray-500 mt-0.5">{meta.join(' · ')}</p>}
+                                  {services.length > 0 && (
+                                    <div className="flex flex-wrap gap-1 mt-1.5">
+                                      {services.map((s, sIdx) => (
+                                        <span key={`${s.service_name}-${sIdx}`} className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-red-50 text-red-700 border border-red-100">
+                                          {formatServiceBadge(s)}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {item.is_free ? (
+                                    <p className="text-[10px] font-bold text-gray-700 mt-1.5">Total Price: FREE</p>
+                                  ) : item.item_price ? (
+                                    <p className="text-[10px] font-bold text-gray-700 mt-1.5">Total Price: {fmtPeso(item.item_price)}</p>
+                                  ) : null}
+                                </div>
+                              );
+                            })
+                          ) : (
+                            <p className="text-xs text-gray-400 text-center py-2">No shoes recorded.</p>
+                          )}
                         </div>
                       )}
-                      {item.is_free ? (
-                        <p className="text-[10px] font-bold text-gray-700 mt-2">Total Price: FREE</p>
-                      ) : item.price_breakdown ? (
-                        <p className="text-[10px] font-bold text-gray-700 mt-2">
-                          {item.price_breakdown} Total Price: {fmtPeso(item.item_price)}
-                        </p>
-                      ) : item.item_price ? (
-                        <p className="text-[10px] font-bold text-gray-700 mt-2">Total Price: {fmtPeso(item.item_price)}</p>
-                      ) : null}
                     </div>
-                    );
-                  })}
-                </div>
-              )}
+                  </div>
+                ) : (
+                  /* INLINE EDIT MODE */
+                  <div className="space-y-3.5">
+                    <div className="flex items-center justify-between pb-1 border-b border-gray-100">
+                      <span className="text-[11px] font-black uppercase tracking-wider text-red-700">Editing Order Details</span>
+                      <span className="text-[10px] text-gray-400">Changes update historical record</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div className="col-span-2 space-y-1">
+                        <label className="text-[10px] font-bold uppercase text-gray-500">Customer Name *</label>
+                        <Input
+                          value={inlineForm.customer_name}
+                          maxLength={CUSTOMER_NAME_MAX_LENGTH}
+                          onChange={(e) => setInlineForm({ ...inlineForm, customer_name: e.target.value.slice(0, CUSTOMER_NAME_MAX_LENGTH) })}
+                          className="h-8 text-xs rounded-lg"
+                          placeholder="e.g. Juan Carlos Dela Cruz"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase text-gray-500">Contact Number</label>
+                        <Input
+                          value={inlineForm.contact_number}
+                          onChange={(e) => {
+                            const digits = e.target.value.replace(/\D/g, '');
+                            let norm = digits;
+                            if (digits && !digits.startsWith('09')) {
+                              norm = digits.startsWith('9') ? '0' + digits : '09' + digits;
+                            }
+                            setInlineForm({ ...inlineForm, contact_number: norm.slice(0, 11) });
+                          }}
+                          className="h-8 text-xs rounded-lg"
+                          placeholder="09XXXXXXXXX"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase text-gray-500">Branch</label>
+                        <Select value={inlineForm.branch} onValueChange={(val) => setInlineForm({ ...inlineForm, branch: val })}>
+                          <SelectTrigger className="h-8 text-xs rounded-lg"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {BRANCHES.map(b => <SelectItem key={b} value={b} className="text-xs">{b}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase text-gray-500">Priority</label>
+                        <Select value={inlineForm.priority} onValueChange={(val) => setInlineForm({ ...inlineForm, priority: val })}>
+                          <SelectTrigger className="h-8 text-xs rounded-lg"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {PRIORITIES.map(p => <SelectItem key={p} value={p} className="text-xs capitalize">{p}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase text-gray-500">Payment Method</label>
+                        <Select value={inlineForm.payment_method} onValueChange={(val) => setInlineForm({ ...inlineForm, payment_method: val })}>
+                          <SelectTrigger className="h-8 text-xs rounded-lg"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Cash" className="text-xs">Cash</SelectItem>
+                            <SelectItem value="GCash" className="text-xs">GCash</SelectItem>
+                            <SelectItem value="Maya" className="text-xs">Maya</SelectItem>
+                            <SelectItem value="Card" className="text-xs">Card</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase text-gray-500">Order Date Received</label>
+                        <Input
+                          type="date"
+                          value={inlineForm.date_received}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            let days = inlineForm.completion_days;
+                            if (val && inlineForm.claimed_date) {
+                              const diff = Math.round((new Date(inlineForm.claimed_date).getTime() - new Date(val).getTime()) / 86400000);
+                              days = diff >= 0 ? String(diff) : '';
+                            }
+                            setInlineForm({ ...inlineForm, date_received: val, completion_days: days });
+                          }}
+                          className="h-8 text-xs rounded-lg"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-bold uppercase text-gray-500">Estimated Release</label>
+                          {inlineForm.original_estimated_release_date && (
+                            <button
+                              type="button"
+                              onClick={() => setInlineForm({ ...inlineForm, original_estimated_release_date: '' })}
+                              className="text-[9px] text-red-600 hover:text-red-800 font-bold uppercase cursor-pointer"
+                            >
+                              Clear
+                            </button>
+                          )}
+                        </div>
+                        <Input
+                          type="date"
+                          value={inlineForm.original_estimated_release_date}
+                          onChange={(e) => setInlineForm({ ...inlineForm, original_estimated_release_date: e.target.value })}
+                          className="h-8 text-xs rounded-lg"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-bold uppercase text-gray-500">Claimed Date</label>
+                          {inlineForm.claimed_date && (
+                            <button
+                              type="button"
+                              onClick={() => setInlineForm({ ...inlineForm, claimed_date: '', completion_days: '' })}
+                              className="text-[9px] text-red-600 hover:text-red-800 font-bold uppercase cursor-pointer"
+                            >
+                              Clear
+                            </button>
+                          )}
+                        </div>
+                        <Input
+                          type="date"
+                          value={inlineForm.claimed_date}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            let days = '';
+                            if (val && inlineForm.date_received) {
+                              const diff = Math.round((new Date(val).getTime() - new Date(inlineForm.date_received).getTime()) / 86400000);
+                              if (diff >= 0) days = String(diff);
+                            }
+                            setInlineForm({ ...inlineForm, claimed_date: val, completion_days: days });
+                          }}
+                          className="h-8 text-xs rounded-lg"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-bold uppercase text-gray-500">Completion Days (Total Days)</label>
+                          {inlineForm.completion_days && (
+                            <button
+                              type="button"
+                              onClick={() => setInlineForm({ ...inlineForm, completion_days: '', claimed_date: '' })}
+                              className="text-[9px] text-red-600 hover:text-red-800 font-bold uppercase cursor-pointer"
+                            >
+                              Clear
+                            </button>
+                          )}
+                        </div>
+                        <Input
+                          type="number"
+                          value={inlineForm.completion_days}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            let claimed = inlineForm.claimed_date;
+                            if (val !== '' && inlineForm.date_received && !isNaN(parseInt(val, 10)) && parseInt(val, 10) >= 0) {
+                              claimed = addDaysIso(inlineForm.date_received, parseInt(val, 10));
+                            } else if (val === '') {
+                              claimed = '';
+                            }
+                            setInlineForm({ ...inlineForm, completion_days: val, claimed_date: claimed });
+                          }}
+                          className="h-8 text-xs rounded-lg"
+                          placeholder="Auto-calculated from Claimed Date"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase text-gray-500">Grand Total (₱)</label>
+                        <Input
+                          type="number"
+                          value={inlineForm.grand_total}
+                          onChange={(e) => setInlineForm({ ...inlineForm, grand_total: e.target.value })}
+                          className="h-8 text-xs rounded-lg"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase text-gray-500">Downpayment / Deposit (₱)</label>
+                        <Input
+                          type="number"
+                          value={inlineForm.downpayment}
+                          onChange={(e) => setInlineForm({ ...inlineForm, downpayment: e.target.value })}
+                          className="h-8 text-xs rounded-lg"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Section: Editable Shoe Details */}
+                    <div className="pt-3 border-t border-gray-200 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-black uppercase text-gray-500 tracking-wider">
+                          Shoe Details ({inlineShoes.length} {inlineShoes.length === 1 ? 'Pair' : 'Pairs'})
+                        </label>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={addInlineShoe}
+                          className="h-6 px-2.5 text-[9px] font-black uppercase bg-red-600 hover:bg-red-700 text-white rounded-md cursor-pointer"
+                        >
+                          <Plus className="h-2.5 w-2.5 mr-1" />Add Shoe
+                        </Button>
+                      </div>
+                      <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+                        {inlineShoes.map((shoe, idx) => (
+                          <div key={idx} className="p-3 bg-gray-50/80 rounded-xl border border-gray-200 space-y-2 relative">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-black uppercase text-gray-700">Pair #{idx + 1}</span>
+                              {inlineShoes.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeInlineShoe(idx)}
+                                  className="p-1 rounded text-red-500 hover:bg-red-100 transition-colors cursor-pointer"
+                                  title="Remove Shoe"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </button>
+                              )}
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                              <Input
+                                placeholder="Brand (Nike, etc.)"
+                                value={shoe.brand || ''}
+                                onChange={(e) => updateInlineShoe(idx, 'brand', e.target.value)}
+                                className="h-7 text-xs bg-white"
+                              />
+                              <Input
+                                placeholder="Model"
+                                value={shoe.model || ''}
+                                onChange={(e) => updateInlineShoe(idx, 'model', e.target.value)}
+                                className="h-7 text-xs bg-white"
+                              />
+                              <Input
+                                placeholder="Color"
+                                value={shoe.color || ''}
+                                onChange={(e) => updateInlineShoe(idx, 'color', e.target.value)}
+                                className="h-7 text-xs bg-white"
+                              />
+                              <Input
+                                placeholder="Size"
+                                value={shoe.size || ''}
+                                onChange={(e) => updateInlineShoe(idx, 'size', e.target.value)}
+                                className="h-7 text-xs bg-white"
+                              />
+                              <Select
+                                value={shoe.material || undefined}
+                                onValueChange={(val) => updateInlineShoe(idx, 'material', val)}
+                              >
+                                <SelectTrigger className="h-7 text-xs bg-white"><SelectValue placeholder="Material" /></SelectTrigger>
+                                <SelectContent>
+                                  {MATERIALS.map((m) => <SelectItem key={m} value={m} className="text-xs">{m}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                              <Input
+                                placeholder="Item Price (₱)"
+                                type="number"
+                                value={shoe.item_price ?? ''}
+                                onChange={(e) => updateInlineShoe(idx, 'item_price', e.target.value === '' ? '' : parseFloat(e.target.value))}
+                                className="h-7 text-xs bg-white"
+                              />
+                            </div>
+                            {/* Services chips */}
+                            <div className="space-y-1">
+                              <span className="text-[9px] font-bold text-gray-500 uppercase">Base Services:</span>
+                              <div className="flex flex-wrap gap-1">
+                                {BASE_SERVICES.map((svc) => {
+                                  const active = serviceIsSelected(shoe, svc);
+                                  const code = SERVICE_CODE_MAP[svc];
+                                  return (
+                                    <button
+                                      key={svc}
+                                      type="button"
+                                      onClick={() => toggleInlineService(idx, svc, 'base')}
+                                      className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase border transition-all cursor-pointer ${
+                                        active ? 'bg-red-600 text-white border-red-600 shadow-2xs' : 'bg-white text-gray-600 border-gray-200 hover:border-red-300'
+                                      }`}
+                                    >
+                                      {svc} {code ? `(${code})` : ''}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              <span className="text-[9px] font-bold text-gray-500 uppercase mt-1 block">Add-ons:</span>
+                              <div className="flex flex-wrap gap-1">
+                                {ADDON_SERVICES.map((svc) => {
+                                  const active = serviceIsSelected(shoe, svc);
+                                  const code = SERVICE_CODE_MAP[svc];
+                                  return (
+                                    <button
+                                      key={svc}
+                                      type="button"
+                                      onClick={() => toggleInlineService(idx, svc, 'addon')}
+                                      className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase border transition-all cursor-pointer ${
+                                        active ? 'bg-blue-600 text-white border-blue-600 shadow-2xs' : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+                                      }`}
+                                    >
+                                      {svc} {code ? `(${code})` : ''}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <Button
+                      type="button"
+                      onClick={handleInlineSave}
+                      disabled={inlineSaving}
+                      className="w-full bg-red-600 hover:bg-red-700 text-white font-bold h-9 rounded-xl shadow-md uppercase tracking-wider text-xs flex items-center justify-center gap-2 transition-all mt-2 cursor-pointer"
+                    >
+                      {inlineSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                      <span>Save Changes</span>
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
           </DialogContent>
         </Dialog>
@@ -1369,7 +2156,7 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
                         <div className="flex flex-wrap gap-1 mb-2">
                           {services.map((s, sIdx) => (
                             <span key={`${s.service_name}-${sIdx}`} className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-red-50 text-red-700 border border-red-100">
-                              {s.display_label || s.service_name}
+                              {formatServiceBadge(s)}
                             </span>
                           ))}
                         </div>
@@ -1471,7 +2258,6 @@ function RecordsTab({ user, showForm, setShowForm, editRecord, setEditRecord }: 
 // ─── TAB: ANALYTICS ──────────────────────────────────────────────────────────
 
 function AnalyticsTab({ user }: { user: HistoricalRecordsProps['user'] }) {
-  const navigate = useNavigate();
   const [data, setData] = useState<any>(null);
   const [modelInfo, setModelInfo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -1528,10 +2314,6 @@ function AnalyticsTab({ user }: { user: HistoricalRecordsProps['user'] }) {
       {/* Filters & Controls */}
       <div className="flex flex-wrap items-center justify-between w-full gap-2">
         <div className="flex items-center gap-2">
-          <Button onClick={() => navigate('/service-management')}
-            className="h-9 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white text-[11px] font-black uppercase tracking-widest shadow-md flex items-center gap-1.5 shrink-0 mr-2">
-            <ChevronLeft className="h-4 w-4" /> BACK
-          </Button>
           <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="h-9 text-xs w-36 rounded-xl" />
         <span className="text-xs text-gray-400">to</span>
         <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="h-8 text-xs w-36 rounded-lg" />
@@ -1702,7 +2484,7 @@ function AnalyticsTab({ user }: { user: HistoricalRecordsProps['user'] }) {
               </tr></thead>
               <tbody>{serviceDistribution.map((s:any) => (
                 <tr key={s.service} className="border-b border-gray-50">
-                  <td className="py-1.5 font-medium">{s.service}</td>
+                  <td className="py-1.5 font-medium"><span className="font-bold text-red-700">{toServiceCode(s.service)}</span> <span className="text-gray-500 font-normal">({s.service})</span></td>
                   <td className="py-1.5 text-right font-black text-red-700">{s.count}</td>
                 </tr>
               ))}</tbody>
@@ -1740,7 +2522,6 @@ function AnalyticsTab({ user }: { user: HistoricalRecordsProps['user'] }) {
 // ─── TAB: MACHINE LEARNING ────────────────────────────────────────────────────
 
 function MachineLearningTab({ user }: { user: HistoricalRecordsProps['user'] }) {
-  const navigate = useNavigate();
   const [modelInfo, setModelInfo] = useState<any>(null);
   const [liveStats, setLiveStats] = useState<any>(null);
   const [predictions, setPredictions] = useState<any[]>([]);
@@ -1818,11 +2599,7 @@ function MachineLearningTab({ user }: { user: HistoricalRecordsProps['user'] }) 
   return (
     <div className="space-y-6">
       {/* Top Controls */}
-      <div className="flex flex-wrap items-center justify-between w-full gap-2">
-        <Button onClick={() => navigate('/service-management')}
-          className="h-9 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white text-[11px] font-black uppercase tracking-widest shadow-md flex items-center gap-1.5 shrink-0">
-          <ChevronLeft className="h-4 w-4" /> BACK
-        </Button>
+      <div className="flex flex-wrap items-center justify-end w-full gap-2">
         <div className="flex items-center gap-2">
           <Button onClick={handleTrain} disabled={training}
             className="h-9 px-4 bg-red-600 hover:bg-red-700 text-white rounded-xl font-black uppercase text-[10px] tracking-widest shadow-md flex items-center shrink-0">
@@ -1865,7 +2642,7 @@ function MachineLearningTab({ user }: { user: HistoricalRecordsProps['user'] }) 
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-500 font-medium">Target Variable</span>
-              <span className="font-black text-gray-700">Completion Days</span>
+              <span className="font-black text-gray-700">Historical Order-to-Claim Turnaround Days</span>
             </div>
             <div className="pt-2">
               <div className="flex items-center justify-between p-3 border border-gray-200 rounded-xl bg-gray-50/50">
@@ -1899,18 +2676,26 @@ function MachineLearningTab({ user }: { user: HistoricalRecordsProps['user'] }) 
               <span className="font-black text-gray-700">Random Forest Regression</span>
             </div>
             <div className="flex justify-between text-sm">
+              <span className="text-gray-500 font-medium">Target</span>
+              <span className="font-black text-gray-700">Historical Order-to-Claim Turnaround</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500 font-medium">Training Records</span>
+              <span className="font-black text-gray-700">{info.train_count ?? 43}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500 font-medium">Unseen Test Records</span>
+              <span className="font-black text-gray-700">{info.test_count ?? 11}</span>
+            </div>
+            <div className="flex justify-between text-sm">
               <span className="text-gray-500 font-medium">Model Status</span>
               <span className={`font-black ${info.model_trained ? 'text-emerald-700' : 'text-amber-700'}`}>
                 {info.model_trained ? 'Ready' : 'Not Trained'}
               </span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500 font-medium">Last Trained</span>
-              <span className="font-black text-gray-700">{info.last_trained_at ?? '—'}</span>
-            </div>
-            <div className="flex justify-between text-sm">
               <span className="text-gray-500 font-medium">Version</span>
-              <span className="font-black text-gray-700">v{info.model_version ?? '1.0'}</span>
+              <span className="font-black text-gray-700">v{info.model_version ?? '1.2'}</span>
             </div>
           </CardContent>
         </Card>
@@ -2073,7 +2858,6 @@ function MachineLearningTab({ user }: { user: HistoricalRecordsProps['user'] }) 
 // ─── ARCHIVES TAB ─────────────────────────────────────────────────────────────
 
 function ArchivesTab({ user }: { user: HistoricalRecordsProps['user'] }) {
-  const navigate = useNavigate();
   const [archives, setArchives] = useState<{ month: string; year: string; filename: string; url: string; pdf_count?: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -2114,12 +2898,6 @@ function ArchivesTab({ user }: { user: HistoricalRecordsProps['user'] }) {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex items-center justify-between w-full">
-        <Button onClick={() => navigate('/service-management')}
-          className="h-9 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white text-[11px] font-black uppercase tracking-widest shadow-md flex items-center gap-1.5 shrink-0">
-          <ChevronLeft className="h-4 w-4" /> BACK
-        </Button>
-      </div>
       <Card className="border-gray-100 shadow-sm rounded-2xl overflow-hidden">
         <CardHeader className="bg-gray-50/50 border-b border-gray-100 pb-4">
           <CardTitle className="text-sm font-black uppercase tracking-widest text-gray-700 flex items-center gap-2">
@@ -2167,32 +2945,31 @@ function ArchivesTab({ user }: { user: HistoricalRecordsProps['user'] }) {
 type Tab = 'records' | 'analytics' | 'ml' | 'ocr' | 'archives';
 
 export default function HistoricalRecords({ user, onSetHeaderActionRight }: HistoricalRecordsProps) {
-  const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<Tab>('records');
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+
+  const isMlPath = location.pathname.includes('ml-training');
+  const initialTab: Tab = (searchParams.get('tab') as Tab) || (isMlPath ? 'ml' : 'records');
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [showForm, setShowForm] = useState(false);
   const [editRecord, setEditRecord] = useState<HistoricalRecord | null>(null);
   const isOwner = ['owner', 'admin'].includes(user.role?.toLowerCase() || '');
 
   useEffect(() => {
+    const tabFromUrl = searchParams.get('tab') as Tab;
+    if (tabFromUrl && ['records', 'analytics', 'ml', 'ocr', 'archives'].includes(tabFromUrl)) {
+      setActiveTab(tabFromUrl);
+    } else if (location.pathname.includes('ml-training')) {
+      setActiveTab('ml');
+    }
+  }, [location.pathname, searchParams]);
+
+  useEffect(() => {
     if (onSetHeaderActionRight) {
-      if (activeTab === 'ocr') {
-        onSetHeaderActionRight(null);
-      } else {
-        onSetHeaderActionRight(
-          <Button
-            onClick={() => navigate('/service-management')}
-            className="h-9 px-3 rounded-lg border border-red-200 bg-white text-red-700 hover:bg-red-50 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-xs transition"
-            title="Back to Service Management"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            <span className="hidden sm:inline">Back to Services</span>
-            <span className="sm:hidden">Back</span>
-          </Button>
-        );
-      }
+      onSetHeaderActionRight(null);
     }
     return () => { if (onSetHeaderActionRight) onSetHeaderActionRight(null); };
-  }, [onSetHeaderActionRight, navigate, activeTab]);
+  }, [onSetHeaderActionRight]);
 
   const tabs: { key: Tab; label: string; icon: React.ElementType; ownerOnly?: boolean }[] = [
     { key: 'records',   label: 'Records',          icon: Archive },
@@ -2222,24 +2999,28 @@ export default function HistoricalRecords({ user, onSetHeaderActionRight }: Hist
           </div>
         </div>
 
-        {/* Tab navigation — horizontal scroll on narrow screens; no vertical scrollbar */}
-        <div className="overflow-x-auto overflow-y-hidden pb-0 -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-thin">
-          <div className="flex justify-start sm:justify-center gap-2 sm:gap-4 border-b border-gray-200 min-w-max sm:min-w-0">
-          {tabs.filter(t => !t.ownerOnly || isOwner).map(t => (
-            <button
-              key={t.key}
-              onClick={() => setActiveTab(t.key)}
-              className={`inline-flex items-center justify-center gap-2 px-4 sm:px-6 py-3 min-w-[7.5rem] text-[11px] font-black uppercase tracking-widest whitespace-nowrap transition-all border-b-2 -mb-px shrink-0 ${
-                activeTab === t.key
-                  ? 'text-red-700 border-red-600 bg-red-50/50'
-                  : 'text-gray-400 border-transparent hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <t.icon className="h-3.5 w-3.5 shrink-0" />
-              {t.label}
-            </button>
-          ))}
+        {/* Tab navigation */}
+        <div className="flex items-center justify-center border-b border-gray-200 pb-0">
+          <div className="overflow-x-auto overflow-y-hidden pb-0 flex-1 flex justify-center no-scrollbar">
+            <div className="flex justify-start sm:justify-center gap-2 sm:gap-4 min-w-max sm:min-w-0">
+              {tabs.filter(t => !t.ownerOnly || isOwner).map(t => (
+                <button
+                  key={t.key}
+                  onClick={() => setActiveTab(t.key)}
+                  className={`inline-flex items-center justify-center gap-2 px-4 sm:px-6 py-3 min-w-[7.5rem] text-[11px] font-black uppercase tracking-widest whitespace-nowrap transition-all border-b-2 -mb-px shrink-0 ${
+                    activeTab === t.key
+                      ? 'text-red-700 border-red-600 bg-red-50/50'
+                      : 'text-gray-400 border-transparent hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <t.icon className="h-3.5 w-3.5 shrink-0" />
+                  {t.label}
+                </button>
+              ))}
+            </div>
           </div>
+
+          <div className="w-[84px] hidden md:block shrink-0" />
         </div>
 
         {/* Tab content */}

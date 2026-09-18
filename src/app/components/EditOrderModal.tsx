@@ -132,6 +132,9 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
     const [amountReceived, setAmountReceived] = useState('0');
     const [referenceNo, setReferenceNo] = useState('');
     const [priorityLevel, setPriorityLevel] = useState(order?.priorityLevel || 'regular');
+    const [orderDate, setOrderDate] = useState('');
+    const [releaseDate, setReleaseDate] = useState('');
+    const [processedBy, setProcessedBy] = useState(order?.processedBy || '');
     
     // Delivery address fields
     const [deliveryAddress, setDeliveryAddress] = useState(order?.deliveryAddress || '');
@@ -158,6 +161,39 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
             setAmountReceived((order.amountReceived || 0).toFixed(2));
             setReferenceNo(order.referenceNo || '');
             setPriorityLevel(order.priorityLevel || 'regular');
+            setProcessedBy(order.processedBy || '');
+
+            if (order.transactionDate) {
+                const d = new Date(order.transactionDate);
+                if (!isNaN(d.getTime())) {
+                    const y = d.getFullYear();
+                    const m = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    setOrderDate(`${y}-${m}-${day}`);
+                }
+            } else if (order.createdAt) {
+                const d = new Date(order.createdAt);
+                if (!isNaN(d.getTime())) {
+                    const y = d.getFullYear();
+                    const m = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    setOrderDate(`${y}-${m}-${day}`);
+                }
+            } else {
+                setOrderDate('');
+            }
+
+            if (order.predictedCompletionDate) {
+                const d = new Date(order.predictedCompletionDate);
+                if (!isNaN(d.getTime())) {
+                    const y = d.getFullYear();
+                    const m = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    setReleaseDate(`${y}-${m}-${day}`);
+                }
+            } else {
+                setReleaseDate('');
+            }
             
             setDeliveryAddress(order.deliveryAddress || '');
             setProvince(order.province || '');
@@ -236,10 +272,7 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
     });
 
     const formatPeso = (val: number) => `₱${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    const formatDate = (date: any) => {
-        if (!date) return '-';
-        return new Date(date).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
-    };
+
 
     const formatContactNumber = (value: string) => {
         const digitsOnly = value.replace(/\D/g, '').slice(0, 11);
@@ -293,34 +326,42 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                 return;
             }
 
-            const hasMissingShoeDetails = shoes.some((shoe) => {
-                const size = (shoe.shoeSize || '').trim();
-                const color = Array.isArray(shoe.color)
-                    ? shoe.color.filter(Boolean).join(', ').trim()
-                    : String(shoe.color || '').trim();
-                return !size || !color;
-            });
-            if (hasMissingShoeDetails) {
-                toast.error('Size and Color must be filled out for every item.');
+            // Material, Size, Color, and Model are optional when editing order details
+            const hasMissingService = shoes.some((shoe) => !shoe.baseService || shoe.baseService.length === 0);
+            if (hasMissingService) {
+                toast.error('At least one Base Service must be selected for every item.');
                 isSubmittingRef.current = false;
                 setIsSubmitting(false);
                 return;
             }
 
-            const updates: Partial<JobOrder> = {
-            customerName: finalName,
-            contactNumber: contactNumber.trim(),
-            shippingPreference: shippingPreference as any,
-            deliveryAddress: shippingPreference === 'delivery' ? deliveryAddress : undefined,
-            province: shippingPreference === 'delivery' ? province : undefined,
-            city: shippingPreference === 'delivery' ? city : undefined,
-            barangay: shippingPreference === 'delivery' ? barangay : undefined,
-            zipCode: shippingPreference === 'delivery' ? zipCode : undefined,
-            paymentStatus: paymentStatus as any,
-            paymentMethod: paymentMethod as any,
-            amountReceived: parseFloat(amountReceived) || 0,
-            referenceNo: ['gcash', 'maya'].includes(paymentMethod) ? referenceNo : undefined,
-            priorityLevel: priorityLevel as any,
+            const orderIntakeDate = orderDate
+                ? new Date(`${orderDate}T12:00:00`)
+                : (order.transactionDate ? new Date(order.transactionDate) : (order.createdAt ? new Date(order.createdAt) : new Date()));
+            const daysToAdd = calculations.calculatePredictedDays();
+            const computedExpectedDate = releaseDate
+                ? new Date(`${releaseDate}T12:00:00`)
+                : new Date(orderIntakeDate.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
+
+            const updates: Partial<JobOrder> & Record<string, any> = {
+                status: status as any,
+                transactionDate: orderIntakeDate,
+                predictedCompletionDate: computedExpectedDate,
+                expected_at: releaseDate ? `${releaseDate}T12:00:00` : undefined,
+                processedBy: processedBy.trim() || undefined,
+                customerName: finalName,
+                contactNumber: contactNumber.trim(),
+                shippingPreference: shippingPreference as any,
+                deliveryAddress: shippingPreference === 'delivery' ? deliveryAddress : undefined,
+                province: shippingPreference === 'delivery' ? province : undefined,
+                city: shippingPreference === 'delivery' ? city : undefined,
+                barangay: shippingPreference === 'delivery' ? barangay : undefined,
+                zipCode: shippingPreference === 'delivery' ? zipCode : undefined,
+                paymentStatus: paymentStatus as any,
+                paymentMethod: paymentMethod as any,
+                amountReceived: parseFloat(amountReceived) || 0,
+                referenceNo: ['gcash', 'maya'].includes(paymentMethod) ? referenceNo : undefined,
+                priorityLevel: priorityLevel as any,
             
             items: shoes.map(shoe => {
                 const historicalBasePrices = (shoe.baseService || []).map(serviceName => {
@@ -477,30 +518,61 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
 
                 <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
                     {/* Top Row: Meta */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 bg-white p-3.5 sm:p-4 rounded-xl shadow-sm border border-gray-50">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4 bg-white p-3.5 sm:p-4 rounded-xl shadow-sm border border-gray-50">
                         <div>
                             <Label className={LABEL_STYLE}>Order Status</Label>
-                            <div className="h-9 px-3 py-1.5 rounded-xl text-xs font-bold text-gray-700 bg-gray-50/50 border border-gray-100 cursor-not-allowed flex items-center capitalize">
-                                {status.replace('-', ' ')}
-                            </div>
+                            <Select value={status} onValueChange={(val: any) => setStatus(val)}>
+                                <SelectTrigger className={INPUT_STYLE}>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="new-order">New Order</SelectItem>
+                                    <SelectItem value="on-going">On-Going</SelectItem>
+                                    <SelectItem value="for-release">For Release</SelectItem>
+                                    <SelectItem value="claimed">Claimed</SelectItem>
+                                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
                         <div>
-                            <Label className={LABEL_STYLE}>Processed By</Label>
-                            <div className="h-9 px-3 py-1.5 rounded-xl text-xs font-bold text-gray-700 bg-gray-50/50 border border-gray-100 flex items-center">
-                                {order.processedBy || 'Owner'}
-                            </div>
+                            <Label className={LABEL_STYLE}>Priority Level</Label>
+                            <Select value={priorityLevel} onValueChange={(val: any) => setPriorityLevel(val)}>
+                                <SelectTrigger className={INPUT_STYLE}>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="regular">Regular</SelectItem>
+                                    <SelectItem value="rush">Rush</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
                         <div>
                             <Label className={LABEL_STYLE}>Order Date</Label>
-                            <div className="h-9 px-3 py-1.5 rounded-xl text-xs font-bold text-gray-700 bg-white border border-gray-100 flex items-center">
-                                {formatDate(order.transactionDate)}
-                            </div>
+                            <Input
+                                type="date"
+                                value={orderDate}
+                                onChange={(e) => setOrderDate(e.target.value)}
+                                className={INPUT_STYLE}
+                            />
                         </div>
                         <div>
-                            <Label className={LABEL_STYLE}>Estimated Date</Label>
-                            <div className="h-9 px-3 py-1.5 rounded-xl text-xs font-bold text-gray-700 bg-white border border-gray-100 flex items-center">
-                                {formatDate(order.predictedCompletionDate)}
-                            </div>
+                            <Label className={LABEL_STYLE}>Release Date</Label>
+                            <Input
+                                type="date"
+                                value={releaseDate}
+                                onChange={(e) => setReleaseDate(e.target.value)}
+                                className={INPUT_STYLE}
+                            />
+                        </div>
+                        <div>
+                            <Label className={LABEL_STYLE}>Processed By</Label>
+                            <Input
+                                type="text"
+                                value={processedBy}
+                                onChange={(e) => setProcessedBy(e.target.value)}
+                                placeholder="Staff / Owner"
+                                className={INPUT_STYLE}
+                            />
                         </div>
                     </div>
 

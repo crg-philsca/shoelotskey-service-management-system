@@ -375,13 +375,16 @@ export default function ClaimRecord({ user }: { user: { token: string } }) {
         setCurrentPage(1);
     };
 
-    const isFiltered =
-        filters.serviceType !== 'all' ||
-        filters.priority !== 'all' ||
-        filters.processedBy !== 'all' ||
-        filters.paymentMethod !== 'all' ||
-        !!filters.startDate ||
-        !!filters.endDate;
+    const activeFilterCount = (
+        (filters.serviceType !== 'all' ? 1 : 0) +
+        (filters.priority !== 'all' ? 1 : 0) +
+        (filters.processedBy !== 'all' ? 1 : 0) +
+        (filters.paymentMethod !== 'all' ? 1 : 0) +
+        (filters.startDate ? 1 : 0) +
+        (filters.endDate ? 1 : 0)
+    );
+
+    const isFiltered = activeFilterCount > 0;
 
     return (
         <div className="space-y-4">
@@ -417,7 +420,7 @@ export default function ClaimRecord({ user }: { user: { token: string } }) {
 
                             <Button
                                 variant="outline"
-                                className={`h-9 w-9 p-0 rounded-xl transition-colors flex-shrink-0 ${
+                                className={`relative h-9 w-9 p-0 rounded-xl transition-colors flex-shrink-0 ${
                                     isFiltered
                                         ? 'border-red-600 text-red-600 bg-red-50 hover:bg-red-100'
                                         : 'border-gray-200 text-gray-500 hover:border-red-600 hover:text-red-600 hover:bg-red-50'
@@ -435,18 +438,18 @@ export default function ClaimRecord({ user }: { user: { token: string } }) {
                     <div className="overflow-x-auto w-full">
                         <table className="w-full table-fixed border-collapse min-w-[700px]">
                             <colgroup>
-                                <col className="w-[15%]" />
-                                <col className="w-[22%]" />
+                                <col className="w-[14%]" />
+                                <col className="w-[21%]" />
+                                <col className="w-[23%]" />
+                                <col className="w-[7%]" />
                                 <col className="w-[17%]" />
-                                <col className="w-[8%]" />
                                 <col className="w-[18%]" />
-                                <col className="w-[20%]" />
                             </colgroup>
                             <thead className="bg-red-50/50">
                                 <tr>
                                     <th className="border-b border-gray-200 px-2 py-2 text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap text-center">Order #</th>
                                     <th className="border-b border-gray-200 px-3 py-2 text-[10px] font-black text-gray-700 uppercase tracking-wider text-center">Customer's Name</th>
-                                    <th className="border-b border-gray-200 px-2 py-2 text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap text-center">Claimed Date</th>
+                                    <th className="border-b border-gray-200 px-2 py-2 text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap text-center">Claim Schedule</th>
                                     <th className="border-b border-gray-200 px-2 py-2 text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap text-center">Pairs</th>
                                     <th className="border-b border-gray-200 px-2 py-2 text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap text-center">Payment Method</th>
                                     <th className="border-b border-gray-200 px-2 py-2 text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap text-center">Processed By</th>
@@ -461,7 +464,64 @@ export default function ClaimRecord({ user }: { user: { token: string } }) {
                                     </tr>
                                 ) : (
                                     paginatedOrders.map((order: JobOrder) => {
-                                        const releaseDate = order.actualCompletionDate ? dateFnsFormat(new Date(order.actualCompletionDate), 'MM/dd/yy HH:mm') : '-';
+                                        const toDateObj = (val: any): Date | null => {
+                                            if (!val) return null;
+                                            if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+                                            let s = String(val).trim();
+                                            if (!s) return null;
+                                            if (s.includes(' ') && !s.includes('T')) s = s.replace(' ', 'T');
+                                            const d = new Date(s);
+                                            return isNaN(d.getTime()) ? null : d;
+                                        };
+
+                                        // Promised expected date
+                                        const expectedDate = toDateObj(order.predictedCompletionDate) 
+                                            || toDateObj((order as any).expected_at)
+                                            || (() => {
+                                                const intake = toDateObj(order.transactionDate) || toDateObj(order.createdAt);
+                                                if (intake) {
+                                                    const days = Number(order.estimatedDays || order.predictedDays || 10);
+                                                    const d = new Date(intake);
+                                                    d.setDate(d.getDate() + days);
+                                                    return d;
+                                                }
+                                                return null;
+                                            })();
+
+                                        // Actual claimed date
+                                        const claimedDate = toDateObj(order.actualCompletionDate)
+                                            || toDateObj(order.claimedAt)
+                                            || toDateObj(order.actualReleaseDate)
+                                            || toDateObj(order.updatedAt);
+
+                                        // Released punctuality status
+                                        const timing = (() => {
+                                            if (!expectedDate || !claimedDate) return null;
+                                            const expMid = new Date(expectedDate.getFullYear(), expectedDate.getMonth(), expectedDate.getDate()).getTime();
+                                            const claimMid = new Date(claimedDate.getFullYear(), claimedDate.getMonth(), claimedDate.getDate()).getTime();
+                                            const diffDays = Math.round((claimMid - expMid) / (1000 * 60 * 60 * 24));
+                                            if (diffDays > 0) {
+                                                return {
+                                                    text: `Released ${diffDays} ${diffDays === 1 ? 'day' : 'days'} late`,
+                                                    className: 'text-rose-700 bg-rose-50 border-rose-200'
+                                                };
+                                            } else if (diffDays === 0) {
+                                                return {
+                                                    text: 'Released on time',
+                                                    className: 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                                                };
+                                            } else {
+                                                const early = Math.abs(diffDays);
+                                                return {
+                                                    text: `Released ${early} ${early === 1 ? 'day' : 'days'} early`,
+                                                    className: 'text-blue-700 bg-blue-50 border-blue-200'
+                                                };
+                                            }
+                                        })();
+
+                                        const expectedStr = expectedDate ? dateFnsFormat(expectedDate, 'MMM d') : null;
+                                        const claimedStr = claimedDate ? dateFnsFormat(claimedDate, 'MMM d') : '-';
+                                        const claimedTime = claimedDate ? dateFnsFormat(claimedDate, 'hh:mm a') : '';
 
                                         return (
                                             <tr key={order.id} className="hover:bg-red-50/20 transition-colors border-b border-gray-100 last:border-0 cursor-pointer" onClick={() => setSelectedOrder(order)}>
@@ -478,8 +538,23 @@ export default function ClaimRecord({ user }: { user: { token: string } }) {
                                                         )}
                                                     </div>
                                                 </td>
-                                                <td className="px-2 py-2 text-xs text-center font-medium text-gray-600 border-r border-gray-50 whitespace-nowrap">
-                                                    {releaseDate}
+                                                <td className="px-2 py-2 text-center border-r border-gray-50">
+                                                    <div className="flex flex-col items-center justify-center space-y-0.5">
+                                                        {expectedStr && (
+                                                            <div className="text-[10px] text-gray-500 font-medium whitespace-nowrap">
+                                                                Expected: <span className="font-bold text-gray-700">{expectedStr}</span>
+                                                            </div>
+                                                        )}
+                                                        <div className="text-[11px] font-bold text-gray-900 whitespace-nowrap">
+                                                            Claimed: <span className="text-gray-900">{claimedStr}</span>
+                                                            {claimedTime && <span className="text-[9.5px] font-normal text-gray-400 ml-1">({claimedTime})</span>}
+                                                        </div>
+                                                        {timing && (
+                                                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-tight border mt-0.5 ${timing.className}`}>
+                                                                {timing.text}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </td>
                                                 <td className="px-2 py-2 text-xs text-center font-medium text-gray-600 border-r border-gray-50">
                                                     {Array.isArray(order.baseService) ? order.baseService.length : 1}

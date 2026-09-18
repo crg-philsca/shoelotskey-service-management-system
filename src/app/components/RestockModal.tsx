@@ -3,10 +3,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { Switch } from '@/app/components/ui/switch';
 import { useInventory } from '@/app/context/InventoryContext';
 import { useExpenses } from '@/app/context/ExpenseContext';
+import InventoryItemCombobox from '@/app/components/InventoryItemCombobox';
 import { CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getInventoryExpenseCategory } from '@/app/lib/expenseCategories';
@@ -123,21 +123,14 @@ export default function RestockModal({ open, onOpenChange }: RestockModalProps) 
                         <Label className="text-[11px] font-black uppercase tracking-widest text-slate-700">
                             Select Inventory Item
                         </Label>
-                        <Select value={selectedItemId} onValueChange={setSelectedItemId}>
-                            <SelectTrigger className="mt-1.5 w-full h-11 rounded-xl border border-gray-200 bg-gray-50/50 font-bold text-xs text-gray-800 focus:bg-white focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all">
-                                <SelectValue placeholder="Choose an item..." />
-                            </SelectTrigger>
-                            <SelectContent className="max-h-60 rounded-xl border border-gray-100 shadow-xl">
-                                {inventoryData.map(item => {
-
-                                    return (
-                                        <SelectItem key={item.id} value={String(item.id)} className="font-semibold text-xs py-2">
-                                            <span className="font-bold text-gray-900">{item.name}</span>
-                                        </SelectItem>
-                                    );
-                                })}
-                            </SelectContent>
-                        </Select>
+                        <div className="mt-1.5">
+                            <InventoryItemCombobox
+                                items={inventoryData}
+                                value={selectedItemId}
+                                onChange={setSelectedItemId}
+                                placeholder="Search / Select Item"
+                            />
+                        </div>
                     </div>
 
                     {/* Current Status Box */}

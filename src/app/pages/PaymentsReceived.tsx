@@ -36,12 +36,13 @@ import {
   isDateInRange,
   isSalesEligible,
   orderEventDate,
+  resolvePaymentMethod,
   type ReportRange,
 } from '@/app/lib/salesAnalytics';
 
 type PaymentsReceivedProps = {
   onSetHeaderActionRight?: (action: ReactNode | null) => void;
-  user: { token: string; role: 'owner' | 'staff' | 'admin'; username: string };
+  user: { token: string; role: 'owner' | 'staff' | 'admin' | 'front staff'; username: string };
 };
 
 function FormattedDateInput({ value, onChange, className, id }: { value: string; onChange: (val: string) => void; className?: string; id?: string }) {
@@ -192,6 +193,14 @@ export default function PaymentsReceived({ onSetHeaderActionRight, user }: Payme
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;
 
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (filterPaymentMethod !== 'all') count++;
+    if (startDate) count++;
+    if (endDate) count++;
+    return count;
+  }, [filterPaymentMethod, startDate, endDate]);
+
   // Header Dropdown for Timeframe
   useEffect(() => {
     if (!onSetHeaderActionRight) return;
@@ -310,8 +319,8 @@ export default function PaymentsReceived({ onSetHeaderActionRight, user }: Payme
       const collected = collectedSales(order);
       if (collected <= 0) return;
 
-      const initM = (order.initialPaymentMethod || '').toLowerCase();
-      const finM = (order.finalPaymentMethod || '').toLowerCase();
+      const initM = resolvePaymentMethod(order.initialPaymentMethod, order.referenceNo);
+      const finM = resolvePaymentMethod(order.finalPaymentMethod, order.claimReferenceNo || order.referenceNo);
 
       if (initM && finM && initM !== finM) {
         const dp = Math.min(collected, Number(order.depositAmount) || (order.paymentStatus === 'downpayment' ? collected : 0));
@@ -324,19 +333,16 @@ export default function PaymentsReceived({ onSetHeaderActionRight, user }: Payme
         const histTotal = order.paymentHistory.reduce((s, p) => s + (Number(p.amount) || 0), 0);
         if (histTotal > 0) {
           order.paymentHistory.forEach((p) => {
-            const rawM = (p.method || 'cash').toLowerCase();
-            const key = counts[rawM] !== undefined ? rawM : 'cash';
+            const key = resolvePaymentMethod(p.method, p.referenceNo || order.referenceNo);
             const share = (Number(p.amount) / histTotal) * collected;
             counts[key] = (counts[key] || 0) + share;
           });
         } else {
-          const rawM = (order.paymentMethod || 'cash').toLowerCase();
-          const key = counts[rawM] !== undefined ? rawM : 'cash';
+          const key = resolvePaymentMethod(order.paymentMethod, order.referenceNo);
           counts[key] = (counts[key] || 0) + collected;
         }
       } else {
-        const rawM = (order.paymentMethod || 'cash').toLowerCase();
-        const key = counts[rawM] !== undefined ? rawM : 'cash';
+        const key = resolvePaymentMethod(order.paymentMethod, order.referenceNo);
         counts[key] = (counts[key] || 0) + collected;
       }
     });
@@ -658,8 +664,8 @@ export default function PaymentsReceived({ onSetHeaderActionRight, user }: Payme
 
               <Button
                 variant="outline"
-                className={`h-10 w-10 p-0 rounded-xl transition-colors flex-shrink-0 ${
-                  isFilterOpen || startDate || endDate || filterPaymentMethod !== 'all'
+                className={`relative h-10 w-10 p-0 rounded-xl transition-colors flex-shrink-0 ${
+                  activeFilterCount > 0 || isFilterOpen
                     ? 'border-red-600 text-red-600 bg-red-50 hover:bg-red-100'
                     : 'border-gray-200 text-gray-500 hover:border-red-600 hover:text-red-600 hover:bg-red-50'
                 }`}
@@ -671,66 +677,11 @@ export default function PaymentsReceived({ onSetHeaderActionRight, user }: Payme
             </div>
           </div>
 
-          {/* Collapsible Filter Panel */}
-          {isFilterOpen && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 bg-gray-50/80 rounded-xl border border-gray-200/80 mt-3 animate-in fade-in slide-in-from-top-2 duration-200">
-              <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">
-                  Payment Method
-                </label>
-                <Select
-                  value={filterPaymentMethod}
-                  onValueChange={(val) => {
-                    setFilterPaymentMethod(val);
-                    setCurrentPage(1);
-                  }}
-                >
-                  <SelectTrigger className="h-9 text-xs bg-white">
-                    <SelectValue placeholder="All Methods" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Methods</SelectItem>
-                    <SelectItem value="cash">Cash</SelectItem>
-                    <SelectItem value="gcash">GCash</SelectItem>
-                    <SelectItem value="maya">Maya</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">
-                  From Date
-                </label>
-                <FormattedDateInput
-                  value={startDate}
-                  onChange={(val) => {
-                    setStartDate(val);
-                    setCurrentPage(1);
-                  }}
-                  className="h-9 text-xs bg-white"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 block mb-1">
-                  To Date
-                </label>
-                <FormattedDateInput
-                  value={endDate}
-                  onChange={(val) => {
-                    setEndDate(val);
-                    setCurrentPage(1);
-                  }}
-                  className="h-9 text-xs bg-white"
-                />
-              </div>
-            </div>
-          )}
         </CardHeader>
 
         <CardContent className="pt-0 px-2 sm:px-4 md:px-6">
-          <div className="overflow-x-auto w-full">
-            <Table className="w-full table-fixed min-w-0 text-xs">
+          <div className="overflow-x-auto w-full custom-scrollbar pb-1">
+            <Table className="w-full table-fixed min-w-[850px] text-xs">
               <colgroup>
                 <col className="w-[16%]" />
                 <col className="w-[20%]" />
@@ -784,17 +735,41 @@ export default function PaymentsReceived({ onSetHeaderActionRight, user }: Payme
                     const collected = isCancelled ? paidAmt : collectedSales(order);
                     const dateVal = order.transactionDate || order.createdAt;
                     const dateStr = dateVal ? dateFnsFormat(new Date(dateVal), 'MM/dd/yy hh:mm a') : '—';
-                    let methodStr = (order.paymentMethod || 'cash').toUpperCase();
-                    // Detect GCash/Maya from referenceNo when stored as CASH
-                    if (methodStr === 'CASH' && order.referenceNo && order.referenceNo.trim()) {
-                      const cleanRef = order.referenceNo.replace(/\D/g, '');
-                      methodStr = cleanRef.length === 13 ? 'GCASH' : 'MAYA';
-                    }
-                    // Split combined methods (e.g. "GCASH, CASH" or "MAYA, CASH") into separate tokens
-                    const methodTokens: string[] = methodStr
-                      .split(/[,/]+/)
-                      .map((m: string) => m.trim())
-                      .filter(Boolean);
+                    const methodTokens: string[] = (() => {
+                      const hist = Array.isArray(order.paymentHistory) ? order.paymentHistory : [];
+                      if (hist.length > 0) {
+                        const methods = hist.map((p: any) => {
+                          const itemRef = p.referenceNo || (p.paymentType === 'downpayment' || hist.length === 1 ? order.referenceNo : (order as any).claimReferenceNo);
+                          const cleanRef = itemRef ? itemRef.replace(/\D/g, '') : '';
+                          if (cleanRef.length === 13) return 'GCASH';
+                          const cleanMaya = itemRef ? itemRef.replace(/[^a-zA-Z0-9]/g, '') : '';
+                          if (cleanMaya.length === 12) return 'MAYA';
+                          const m = String(p.method || '').trim().toUpperCase();
+                          if ((!m || m === 'CASH') && cleanRef.length === 13) return 'GCASH';
+                          return m || 'CASH';
+                        });
+                        return Array.from(new Set(methods));
+                      }
+
+                      let methodStr = (order.paymentMethod || 'cash').toUpperCase();
+                      const cleanRef = order.referenceNo ? order.referenceNo.replace(/\D/g, '') : '';
+                      const isGCashRef = cleanRef.length === 13;
+                      const isMayaRef = order.referenceNo ? order.referenceNo.replace(/[^a-zA-Z0-9]/g, '').length === 12 : false;
+
+                      let rawTokens = methodStr
+                        .split(/[,/]+/)
+                        .map((m: string) => m.trim())
+                        .filter(Boolean);
+
+                      if (isGCashRef) {
+                        rawTokens = rawTokens.map((m: string) => m === 'CASH' ? 'GCASH' : m);
+                        if (!rawTokens.includes('GCASH')) rawTokens.push('GCASH');
+                      } else if (isMayaRef) {
+                        rawTokens = rawTokens.map((m: string) => m === 'CASH' ? 'MAYA' : m);
+                        if (!rawTokens.includes('MAYA')) rawTokens.push('MAYA');
+                      }
+                      return Array.from(new Set(rawTokens));
+                    })();
 
                     const getBadgeStyle = (m: string) => {
                       if (m === 'GCASH') return 'bg-teal-50 text-teal-700 border-teal-300';
@@ -851,13 +826,23 @@ export default function PaymentsReceived({ onSetHeaderActionRight, user }: Payme
                         <TableCell className="px-2 py-2 text-center whitespace-nowrap">
                           {isCancelled ? (
                             order.refundStatus === 'refunded' ? (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase border whitespace-nowrap bg-rose-50 text-rose-700 border-rose-300">
-                                CANCELLED (REFUNDED)
-                              </span>
+                              <div className="flex flex-col items-center justify-center gap-1">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase border whitespace-nowrap bg-rose-50 text-rose-700 border-rose-200">
+                                  CANCELLED
+                                </span>
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase border whitespace-nowrap bg-blue-50 text-blue-700 border-blue-200">
+                                  REFUNDED
+                                </span>
+                              </div>
                             ) : (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase border whitespace-nowrap bg-amber-50 text-amber-700 border-amber-300">
-                                CANCELLED (RETAINED)
-                              </span>
+                              <div className="flex flex-col items-center justify-center gap-1">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase border whitespace-nowrap bg-rose-50 text-rose-700 border-rose-200">
+                                  CANCELLED
+                                </span>
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase border whitespace-nowrap bg-purple-50 text-purple-700 border-purple-200">
+                                  RETAINED
+                                </span>
+                              </div>
                             )
                           ) : (
                             <span
@@ -1053,6 +1038,91 @@ export default function PaymentsReceived({ onSetHeaderActionRight, user }: Payme
               }}
             >
               {isDeleting ? 'Deleting...' : 'Yes, Delete'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Filter Modal */}
+      <Dialog open={isFilterOpen} onOpenChange={setIsFilterOpen}>
+        <DialogContent className="max-w-md bg-white rounded-2xl shadow-xl p-6">
+          <DialogHeader>
+            <DialogTitle className="text-center text-base font-black uppercase tracking-tight">Filter Options</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 block text-center">
+                Payment Method
+              </label>
+              <Select
+                value={filterPaymentMethod}
+                onValueChange={(val) => {
+                  setFilterPaymentMethod(val);
+                  setCurrentPage(1);
+                }}
+              >
+                <SelectTrigger className="h-9 text-xs bg-gray-50/50 border-gray-100 text-center">
+                  <SelectValue placeholder="All Methods" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Methods</SelectItem>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="gcash">GCash</SelectItem>
+                  <SelectItem value="maya">Maya</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 block text-center">
+                  From Date
+                </label>
+                <FormattedDateInput
+                  value={startDate}
+                  onChange={(val) => {
+                    setStartDate(val);
+                    setCurrentPage(1);
+                  }}
+                  className="h-9 text-xs border-gray-100 bg-gray-50/50 text-center"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 block text-center">
+                  To Date
+                </label>
+                <FormattedDateInput
+                  value={endDate}
+                  onChange={(val) => {
+                    setEndDate(val);
+                    setCurrentPage(1);
+                  }}
+                  className="h-9 text-xs border-gray-100 bg-gray-50/50 text-center"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 pt-2">
+            <Button
+              variant="ghost"
+              className="flex-1 w-full bg-gray-200 text-gray-700 hover:bg-gray-800 hover:text-white font-bold h-10 transition-colors uppercase tracking-wider rounded-xl"
+              onClick={() => {
+                setFilterPaymentMethod('all');
+                setStartDate('');
+                setEndDate('');
+                setCurrentPage(1);
+              }}
+            >
+              Reset
+            </Button>
+            <Button
+              className="flex-1 w-full bg-red-600 hover:bg-red-700 text-white font-bold h-10 rounded-xl shadow-md uppercase tracking-wider transition-all"
+              onClick={() => setIsFilterOpen(false)}
+            >
+              Apply
             </Button>
           </div>
         </DialogContent>

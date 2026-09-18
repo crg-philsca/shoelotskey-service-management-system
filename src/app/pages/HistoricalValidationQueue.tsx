@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { 
   Box, Typography, Paper, Grid, Button, IconButton, 
-  Divider, TextField, Card, CircularProgress, Alert, MenuItem, InputAdornment, Chip, Autocomplete,
+  Divider, TextField, Card, CircularProgress, Alert, MenuItem, InputAdornment, Chip, Autocomplete, Collapse,
 } from '@mui/material';
 import Checkbox from '@mui/material/Checkbox';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
-import { CheckCircle, Cancel, Edit, ArrowBack, ArrowForward, Refresh, Add, DeleteOutline, DocumentScanner } from '@mui/icons-material';
+import { CheckCircle, Cancel, Edit, ArrowBack, ArrowForward, Refresh, Add, DeleteOutline, DocumentScanner, Clear as ClearIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 // P1-10 FIX: this previously hardcoded `http://localhost:8000/api` unconditionally, which
@@ -15,8 +15,159 @@ import { toast } from 'sonner';
 // Historical Records module on the live Heroku deployment). Centralized (see
 // src/app/lib/apiBase.ts) so this correctly targets same-origin `/api` in production.
 import { API_BASE } from '@/app/lib/apiBase';
+import { calculateOfficialReleaseBreakdown } from '@/app/lib/businessRules';
 const API_BASE_URL = API_BASE;
 const OCR_REVIEW_POSITION_KEY = 'shoelotskey.ocrReview.currentImageId';
+
+const DEFAULT_BRANDS = ['Nike', 'Adidas', 'Jordan', 'New Balance', 'Converse', 'Vans', 'Puma', 'Hoka', 'Crocs', 'On Running', 'Asics', 'Under Armour', 'Sperry', 'Timberland'];
+const DEFAULT_MODELS = ['Air Force 1', 'Dunk Low', 'Air Jordan 1', 'Ultraboost', 'Stan Smith', 'Superstar', 'Ebernon', 'Trekking', 'Classic Clog', 'Clifton', 'Bondi', 'Chuck Taylor', 'Old Skool'];
+const DEFAULT_MATERIALS = ['Leather', 'Suede', 'Canvas', 'Mesh', 'Nubuck', 'Nylon', 'Patent Leather', 'Knit', 'Rubber', 'Foam', 'Synthetic'];
+const DEFAULT_COLORS = ['White', 'Black', 'Red', 'Blue', 'Green', 'Grey', 'Brown', 'Yellow', 'Orange', 'Pink', 'Purple', 'Multi', 'Tan', 'Beige', 'Navy'];
+const DEFAULT_SIZES = ['US 6', 'US 6.5', 'US 7', 'US 7.5', 'US 8', 'US 8.5', 'US 9', 'US 9.5', 'US 10', 'US 10.5', 'US 11', 'US 11.5', 'US 12', 'UK 6', 'UK 6.5', 'UK 7', 'UK 7.5', 'UK 8', 'UK 8.5', 'UK 9', 'UK 9.5', 'UK 10', 'EU 38', 'EU 39', 'EU 40', 'EU 41', 'EU 42', 'EU 43', 'EU 44', 'EU 45'];
+
+function getRememberedOptions(category: string, defaults: string[]): string[] {
+  const key = `shoelotskey_custom_${category}`;
+  try {
+    const raw = localStorage.getItem(key);
+    const list: string[] = raw ? JSON.parse(raw) : [];
+    const combined = [...defaults];
+    for (const item of list) {
+      if (item && !combined.some(c => c.toLowerCase() === item.toLowerCase())) {
+        combined.push(item);
+      }
+    }
+    return combined;
+  } catch {
+    return defaults;
+  }
+}
+
+function rememberCustomOption(category: string, value: string) {
+  if (!value || typeof value !== 'string') return;
+  const val = value.trim();
+  if (!val || val === '—' || val === '-') return;
+  const key = `shoelotskey_custom_${category}`;
+  try {
+    const raw = localStorage.getItem(key);
+    const list: string[] = raw ? JSON.parse(raw) : [];
+    if (!list.some(item => item.toLowerCase() === val.toLowerCase())) {
+      list.push(val);
+      localStorage.setItem(key, JSON.stringify(list));
+    }
+  } catch {}
+}
+
+function cleanRemarks(val?: string | null): string {
+  if (!val) return '';
+  const s = String(val).trim();
+  if (/ocr produced no items/i.test(s)) return '';
+  return s;
+}
+
+function normalizeHistoricalOrderId(rawId?: string | null, dateReceived?: string | null, controlNo?: string | null): string {
+  const inferYear = (monthStr: string | number): string => {
+    const m = parseInt(String(monthStr), 10);
+    return m === 1 ? '2026' : '2025';
+  };
+
+  const idText = String(rawId || '').trim();
+  const ctrlText = String(controlNo || '').trim();
+
+  // If already standard full canonical: ORD-YYYY-MM-DD-NNN or ORD-YYYY-MM-NN
+  if (/^ORD-\d{4}-\d{2}(-\d{2})?-\d{2,4}$/i.test(idText)) {
+    return idText.toUpperCase();
+  }
+  if (/^ORD-\d{4}-\d{2}-\d{2,4}$/i.test(idText)) {
+    return idText.toUpperCase();
+  }
+
+  // Check if control number or rawId has mm dd nn or mm-dd-nn or mm.dd.nn (e.g. "08 26 04" or "08-26-04")
+  const mdnMatch = ctrlText.match(/^(\d{1,2})[\s\-_/.]+(\d{1,2})[\s\-_/.]+(\d{1,4})$/)
+    || idText.match(/^(\d{1,2})[\s\-_/.]+(\d{1,2})[\s\-_/.]+(\d{1,4})$/);
+  if (mdnMatch) {
+    const mm = mdnMatch[1].padStart(2, '0');
+    const dd = mdnMatch[2].padStart(2, '0');
+    const nn = mdnMatch[3].padStart(3, '0');
+    const yyyy = inferYear(mm);
+    return `ORD-${yyyy}-${mm}-${dd}-${nn}`;
+  }
+
+  // Check if 6 digits like 082604 or 682603
+  const digits = (ctrlText || idText).replace(/\D/g, '');
+  if (digits.length === 6) {
+    let mm = digits.substring(0, 2);
+    if (parseInt(mm, 10) > 12 && mm.startsWith('6')) {
+      mm = '0' + mm[1];
+    }
+    const dd = digits.substring(2, 4);
+    const nn = digits.substring(4, 6).padStart(3, '0');
+    const yyyy = inferYear(mm);
+    return `ORD-${yyyy}-${mm}-${dd}-${nn}`;
+  }
+
+  // Check if mm-nn (e.g. 08-04)
+  const mnMatch = ctrlText.match(/^(\d{1,2})[\s\-_/.]+(\d{1,4})$/)
+    || idText.match(/^(\d{1,2})[\s\-_/.]+(\d{1,4})$/);
+  if (mnMatch) {
+    const mm = mnMatch[1].padStart(2, '0');
+    const nn = mnMatch[2].padStart(2, '0');
+    const yyyy = inferYear(mm);
+    return `ORD-${yyyy}-${mm}-${nn}`;
+  }
+
+  // If dateReceived has date
+  const rec = datePartOf(dateReceived);
+  if (rec) {
+    const parts = rec.split('-');
+    if (parts.length === 3) {
+      let [yyyy, mm, dd] = parts;
+      if (!yyyy || yyyy.length < 4) {
+        yyyy = inferYear(mm);
+      }
+      const seqMatch = (ctrlText || idText).match(/\d+/);
+      const nn = seqMatch ? seqMatch[0].padStart(3, '0') : '001';
+      return `ORD-${yyyy}-${mm}-${dd}-${nn}`;
+    }
+  }
+
+  return idText;
+}
+
+function recalculateBusinessRulesExpectedDate(draft: any, force = false): any {
+  if (!draft) return draft;
+  const shoes = (draft.items || []).map((it: any) => ({
+    baseService: it.base_services,
+    addOns: it.addon_services,
+    priorityLevel: it.priority || draft.priority || 'regular'
+  }));
+  const priority = String(draft.priority || 'regular').toLowerCase();
+  const breakdown = calculateOfficialReleaseBreakdown(shoes, priority);
+  const totalDays = breakdown?.totalDays || 10;
+  draft.completion_days = totalDays;
+
+  // Incomplete orders must allow expected release date to remain empty.
+  // Do not generate a synthetic date if the field is blank unless explicitly forced.
+  const hasExpectedDate = draft.expected_release_date !== '' && draft.expected_release_date !== null && draft.expected_release_date !== undefined;
+  if (!force && !hasExpectedDate) {
+    draft.expected_release_date = '';
+    draft.original_estimated_release_date = '';
+    return draft;
+  }
+
+  const rec = datePartOf(draft.date_received);
+  if (rec) {
+    const d = new Date(`${rec}T12:00:00`);
+    if (!isNaN(d.getTime())) {
+      d.setDate(d.getDate() + totalDays);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      draft.expected_release_date = `${y}-${m}-${day}`;
+      draft.original_estimated_release_date = draft.expected_release_date;
+    }
+  }
+  return draft;
+}
 
 function rememberOcrPosition(imageId: number | null | undefined) {
   try {
@@ -72,7 +223,7 @@ function combineDateAndTime(datePart: string, timePart: string): string {
 }
 
 interface HistoricalValidationQueueProps {
-  user: { username: string; role: 'owner' | 'staff' | 'admin'; token: string };
+  user: { username: string; role: 'owner' | 'staff' | 'admin' | 'front staff'; token: string };
   onBack?: () => void;
 }
 
@@ -88,7 +239,14 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
   const [previewKind, setPreviewKind] = useState<'image' | 'pdf'>('image');
   const [busy, setBusy] = useState(false);
   const [ocrRunning, setOcrRunning] = useState(false);
+  const [showOcrSnapshot, setShowOcrSnapshot] = useState(false);
   const ocrAbortRef = useRef<AbortController | null>(null);
+
+  const [brandOptions, setBrandOptions] = useState(() => getRememberedOptions('brands', DEFAULT_BRANDS));
+  const [modelOptions, setModelOptions] = useState(() => getRememberedOptions('models', DEFAULT_MODELS));
+  const [materialOptions, setMaterialOptions] = useState(() => getRememberedOptions('materials', DEFAULT_MATERIALS));
+  const [colorOptions, setColorOptions] = useState(() => getRememberedOptions('colors', DEFAULT_COLORS));
+  const [sizeOptions, setSizeOptions] = useState(() => getRememberedOptions('sizes', DEFAULT_SIZES));
   
   const navigate = useNavigate();
 
@@ -235,14 +393,15 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
     BC: 325, 'BASIC CLEANING': 325,
     MR: 125, 'MINOR REGLUE': 125,
     FR: 250, 'FULL REGLUE': 250,
-    CR: 325, 'COLOR RENEWAL': 325,
+    CR: 325, COR: 325, 'COLOR RENEWAL': 325,
+    WPT: 150, 'WHITE PAINT': 150,
     MRET: 125, 'MINOR RETOUCH': 125,
     MRES: 225, 'MINOR RESTORATION': 225,
     UNY: 125, UY: 125, UNYELLOWING: 125,
-    '2CR': 200, '2CL': 200, '2 COLORS': 200,
-    '3CR': 300, '3CL': 300, '3 COLORS': 300,
-    UFR: 150, 'UNDERSOLE FULL REGLUE': 150,
-    MFR: 150, 'MIDSOLE FULL REGLUE': 150,
+    '2CR': 200, '2CL': 200, '2 COLORS': 200, COR2: 200, '2 COLOR': 200,
+    '3CR': 300, '3CL': 300, '3 COLORS': 300, COR3: 300, '3 COLOR': 300,
+    UFR: 150, 'UNDERSOLE FULL REGLUE': 150, FRUND: 150, 'FULL REGLUE UNDERSOLE': 150,
+    MFR: 150, 'MIDSOLE FULL REGLUE': 150, FRMID: 150, 'FULL REGLUE MIDSOLE': 150,
   };
 
   const serviceCodeLabel = (name: string) => {
@@ -251,19 +410,35 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
       BASICCLEANING: 'BC',
       MINORREGLUE: 'MR',
       FULLREGLUE: 'FR',
-      COLORRENEWAL: 'CR',
+      COLORRENEWAL: 'COR',
+      WHITEPAINT: 'WPT',
       MINORRETOUCH: 'MRET',
       MINORRESTORATION: 'MRES',
       UNYELLOWING: 'UNY',
-      TWOCOLORS: '2CR',
-      '2COLORS': '2CR',
-      '2CL': '2CR',
-      THREECOLORS: '3CR',
-      '3COLORS': '3CR',
-      '3CL': '3CR',
-      UNDERSOLEFULLREGLUE: 'UFR',
-      MIDSOLEFULLREGLUE: 'MFR',
+      TWOCOLORS: 'COR2',
+      '2COLORS': 'COR2',
+      '2COLOR': 'COR2',
+      '2CL': 'COR2',
+      '2CR': 'COR2',
+      COR2: 'COR2',
+      THREECOLORS: 'COR3',
+      '3COLORS': 'COR3',
+      '3COLOR': 'COR3',
+      '3CL': 'COR3',
+      '3CR': 'COR3',
+      COR3: 'COR3',
+      UNDERSOLEFULLREGLUE: 'FRUND',
+      FULLREGLUEUNDERSOLE: 'FRUND',
+      FRUND: 'FRUND',
+      UFR: 'FRUND',
+      MIDSOLEFULLREGLUE: 'FRMID',
+      FULLREGLUEMIDSOLE: 'FRMID',
+      FRMID: 'FRMID',
+      MFR: 'FRMID',
       UY: 'UNY',
+      COR: 'COR',
+      CR: 'COR',
+      WPT: 'WPT',
     };
     if (compact === 'UY') return 'UNY';
     return names[compact] || compact;
@@ -273,17 +448,23 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
     BC: 'Basic Cleaning',
     MR: 'Minor Reglue',
     FR: 'Full Reglue',
+    COR: 'Color Renewal',
     CR: 'Color Renewal',
   };
   const ADDON_SERVICE_LABELS: Record<string, string> = {
+    WPT: 'White Paint',
     UNY: 'Unyellowing',
     UY: 'Unyellowing',
     MRES: 'Minor Restoration',
     MRET: 'Minor Retouch',
-    '2CR': '2 Colors',
-    '3CR': '3 Colors',
-    UFR: 'Undersole Full Reglue',
-    MFR: 'Midsole Full Reglue',
+    COR2: '2 Color',
+    '2CR': '2 Color',
+    COR3: '3 Color',
+    '3CR': '3 Color',
+    FRUND: 'Full Reglue Undersole',
+    UFR: 'Full Reglue Undersole',
+    FRMID: 'Full Reglue Midsole',
+    MFR: 'Full Reglue Midsole',
   };
 
   const isAddonService = (name: string) => {
@@ -631,6 +812,9 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
       order_id: base.order_id,
       control_no: base.control_no == null ? '' : String(base.control_no),
       source_document_ref: current?.source_document_ref,
+      expected_release_date: base.expected_release_date ? (datePartOf(base.expected_release_date) || null) : null,
+      original_estimated_release_date: base.expected_release_date ? (datePartOf(base.expected_release_date) || null) : null,
+      claimed_date: base.claimed_date ? (datePartOf(base.claimed_date) || null) : null,
       items: (base.items || []).map((item: any) => {
         const priced = decorateItemPricing(item);
         const rawPrice = item?.item_price;
@@ -809,7 +993,9 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
     const grandRaw = toFiniteMoney(next.grand_total);
     if (grandRaw == null) return next;
     const grand = roundMoney(Math.max(0, grandRaw));
-    next.grand_total = grand;
+    if (typeof next.grand_total !== 'string') {
+      next.grand_total = grand;
+    }
 
     if (next.downpayment === '' || next.downpayment == null) {
       // No deposit entered — leave balance alone unless it went negative.
@@ -819,14 +1005,11 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
     }
     let down = toFiniteMoney(next.downpayment);
     if (down == null || down < 0) {
-      next.downpayment = '';
       return next;
     }
     down = roundMoney(down);
     if (down > grand) {
       down = grand;
-      next.downpayment = down;
-    } else {
       next.downpayment = down;
     }
     next.balance = roundMoney(Math.max(0, grand - down));
@@ -834,11 +1017,11 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
   };
 
   /** Apply ₱ or % discount against original; discounted grand_total is the final payable. */
-  const recomputeFromDiscount = (next: any) => {
+  const recomputeFromDiscount = (next: any, explicitBase?: number | null) => {
     const dtype = String(next.discount_type || 'amount').toLowerCase() === 'percent' ? 'percent' : 'amount';
     next.discount_type = dtype;
 
-    const base = resolveBaseTotal(next);
+    const base = explicitBase != null ? explicitBase : resolveBaseTotal(next);
     const rawInput = next.discount_value;
 
     // Clearing discount must never wipe the grand total.
@@ -847,7 +1030,9 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
       next.discount = null;
       next.discount_percent = null;
       next.discount_value = '';
-      next.original_grand_total = null;
+      if (explicitBase == null) {
+        next.original_grand_total = null;
+      }
       if (restored != null) {
         next.grand_total = roundMoney(Math.max(0, restored));
       }
@@ -863,7 +1048,9 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
       return next;
     }
 
-    next.original_grand_total = base;
+    if (next.original_grand_total === undefined || next.original_grand_total === null || next.original_grand_total === '') {
+      next.original_grand_total = base;
+    }
     let discountAmt = 0;
     let percent: number | null = null;
     if (dtype === 'percent') {
@@ -886,7 +1073,8 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
         const rushFee = String(value).toLowerCase() === 'rush'
           ? resolveRushFeeAmount({ ...prev, priority: value })
           : prev?.rush_fee;
-        return applyRushPricingToOrder(prev, value, rushFee);
+        const rushDraft = applyRushPricingToOrder(prev, value, rushFee);
+        return recalculateBusinessRulesExpectedDate(rushDraft);
       }
       if (field === 'rush_fee') {
         if (String(prev?.priority || '').toLowerCase() !== 'rush') {
@@ -895,7 +1083,26 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
         return applyRushPricingToOrder(prev, 'rush', value);
       }
       const next = { ...prev, [field]: value };
-      if (field === 'completion_days' || field === 'date_received') {
+      if (field === 'control_no') {
+        next.control_no = value;
+        next.order_id = normalizeHistoricalOrderId(next.order_id, next.date_received, value);
+        return next;
+      }
+      if (field === 'date_received') {
+        next.date_received = value;
+        next.order_id = normalizeHistoricalOrderId(next.order_id, value, next.control_no);
+        return recalculateBusinessRulesExpectedDate(next);
+      }
+      if (field === 'expected_release_date') {
+        next.expected_release_date = value || '';
+        next.original_estimated_release_date = value || '';
+        return next;
+      }
+      if (field === 'claimed_date') {
+        next.claimed_date = value || '';
+        return next;
+      }
+      if (field === 'completion_days') {
         const received = datePartOf(next.date_received || prev.date_received);
         const days = parseInt(next.completion_days ?? prev.completion_days, 10);
         if (received && !isNaN(days) && days >= 0) {
@@ -909,13 +1116,6 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
             const iso = `${y}-${m}-${day}`;
             next.expected_release_date = iso;
             next.claimed_date = iso;
-          }
-        }
-        if (field === 'date_received' && received) {
-          const currentOid = String(next.order_id || prev.order_id || '');
-          const match = currentOid.match(/^ORD-\d{4}-\d{2}-\d{2}-(\d{3})$/);
-          if (match) {
-            next.order_id = `ORD-${received}-${match[1]}`;
           }
         }
       }
@@ -948,22 +1148,20 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
         return recomputeFromDiscount(next);
       }
       if (field === 'original_grand_total') {
-        // Allow clearing / mid-typing (e.g. delete last digit) without snapping back.
+        // Allow clearing / mid-typing (e.g. "650.", "650.50") without snapping back.
+        next.original_grand_total = value;
         if (value === '' || value == null) {
-          next.original_grand_total = '';
           if (!next.discount_enabled) {
             next.grand_total = '';
           }
           return next;
         }
-        next.original_grand_total = value;
         const orig = toFiniteMoney(value);
-        if (orig == null || orig < 0) return next; // incomplete input like "3."
-        next.original_grand_total = roundMoney(orig);
+        if (orig == null || orig < 0) return next; // incomplete input like "650."
         if (next.discount_enabled || hasActiveDiscountInput(next)) {
-          return recomputeFromDiscount(next);
+          return recomputeFromDiscount(next, orig);
         }
-        next.grand_total = next.original_grand_total;
+        next.grand_total = orig;
         next.discount = null;
         next.discount_percent = null;
         return syncBalanceFromGrand(next);
@@ -1067,8 +1265,14 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
           }
         }
       }
+      if (['brand', 'model', 'material', 'color', 'size'].includes(field) && value) {
+        rememberCustomOption(field + 's', String(value));
+      }
       newItems[idx] = nextItem;
-      const nextOrder = { ...prev, items: newItems };
+      let nextOrder = { ...prev, items: newItems };
+      if (field === 'base_services' || field === 'addon_services') {
+        nextOrder = recalculateBusinessRulesExpectedDate(nextOrder);
+      }
       const pricedCount = newItems.filter((item: any) => {
         if (isExplicitlyFree(item)) return false;
         const n = Number(item?.item_price);
@@ -1126,9 +1330,17 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
   const startEdit = () => {
     const orderCopy = { ...queue[currentIndex]?.order };
     const rushFee = resolveRushFeeAmount(orderCopy);
+    const rawOid = orderCopy.order_id;
+    const normOid = normalizeHistoricalOrderId(rawOid, orderCopy.date_received, orderCopy.control_no);
+    const rawExpected = orderCopy.expected_release_date ?? orderCopy.original_estimated_release_date ?? '';
+    const rawClaimed = orderCopy.claimed_date ?? '';
     let draft: any = {
       ...orderCopy,
+      order_id: normOid,
       control_no: orderCopy.control_no ?? '',
+      expected_release_date: rawExpected ? (datePartOf(rawExpected) || '') : '',
+      original_estimated_release_date: rawExpected ? (datePartOf(rawExpected) || '') : '',
+      claimed_date: rawClaimed ? (datePartOf(rawClaimed) || '') : '',
       payment_method: ['Cash', 'GCash', 'Maya'].includes(String(orderCopy.payment_method || ''))
         ? orderCopy.payment_method
         : 'Cash',
@@ -1140,7 +1352,8 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
           (Array.isArray(item.base_services) && item.base_services.length)
           || (Array.isArray(item.addon_services) && item.addon_services.length)
         );
-        const remarksFree = String(item.remarks || '').trim().toUpperCase().startsWith('FREE');
+        const remClean = cleanRemarks(item.remarks);
+        const remarksFree = remClean.toUpperCase().startsWith('FREE');
         // Empty OCR placeholder wrongly flagged FREE → leave blank so a real amount can be typed.
         const free = Boolean(item.is_free) && (hasServices || remarksFree || Boolean(item.brand));
         return {
@@ -1150,7 +1363,7 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
           material: item.material || '',
           color: item.color || '',
           size: item.size || '',
-          remarks: item.remarks || '',
+          remarks: remClean,
           base_services: item.base_services || [],
           addon_services: item.addon_services || [],
           conditions: item.conditions || [],
@@ -1163,6 +1376,7 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
         };
       }),
     };
+    draft = recalculateBusinessRulesExpectedDate(draft);
     // Rebuild totals from base/addon + editable rush so grand total includes the fee.
     if (String(draft.priority || '').toLowerCase() === 'rush') {
       draft = applyRushPricingToOrder(draft, 'rush', rushFee);
@@ -1266,26 +1480,6 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
     <Box sx={{ p: 3, height: 'calc(100vh - 100px)', display: 'flex', flexDirection: 'column' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2, gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<ArrowBack />}
-            onClick={() => onBack ? onBack() : navigate('/service-management')}
-            sx={{
-              fontWeight: 700,
-              textTransform: 'uppercase',
-              fontSize: '0.75rem',
-              borderColor: 'error.light',
-              color: 'error.main',
-              bgcolor: 'white',
-              '&:hover': { bgcolor: 'error.50', borderColor: 'error.main' },
-              borderRadius: 2,
-              px: 1.5,
-              py: 0.5,
-            }}
-          >
-            Back to Services
-          </Button>
           <Typography variant="h5" component="div" sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', fontWeight: 800 }}>
             Needs Human Review
             <Box
@@ -1474,23 +1668,63 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
                 </Alert>
               )}
               {currentItem.raw_text_summary && (
-                <Alert severity="info" sx={{ mb: 2 }}>
-                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-                    OCR text snapshot (copy from here instead of retyping from scratch)
+                <Alert 
+                  severity="info" 
+                  sx={{ 
+                    mb: 2,
+                    backgroundColor: 'rgba(235, 245, 255, 0.96)',
+                    border: '1px solid #91caff',
+                    borderRadius: 2,
+                    py: 0.5,
+                  }}
+                  action={
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                      <Button
+                        size="small"
+                        color="inherit"
+                        onClick={() => setShowOcrSnapshot(prev => !prev)}
+                        sx={{ textTransform: 'none', fontWeight: 600, fontSize: '0.75rem' }}
+                      >
+                        {showOcrSnapshot ? 'Hide Text' : 'View Text'}
+                      </Button>
+                      <Button
+                        size="small"
+                        color="inherit"
+                        onClick={() => {
+                          navigator.clipboard.writeText(currentItem.raw_text_summary);
+                          toast.success('OCR snapshot copied to clipboard');
+                        }}
+                        sx={{ textTransform: 'none', fontWeight: 700, fontSize: '0.75rem' }}
+                      >
+                        Copy All
+                      </Button>
+                    </Box>
+                  }
+                >
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, display: 'inline-block' }}>
+                    OCR text snapshot
                   </Typography>
-                  <Typography
-                    variant="body2"
-                    component="pre"
-                    sx={{
-                      m: 0,
-                      whiteSpace: 'pre-wrap',
-                      fontFamily: 'inherit',
-                      maxHeight: 120,
-                      overflow: 'auto',
-                    }}
-                  >
-                    {currentItem.raw_text_summary}
-                  </Typography>
+                  <Collapse in={showOcrSnapshot}>
+                    <Typography
+                      variant="body2"
+                      component="pre"
+                      sx={{
+                        mt: 1,
+                        mb: 0,
+                        whiteSpace: 'pre-wrap',
+                        fontFamily: 'inherit',
+                        maxHeight: 140,
+                        overflow: 'auto',
+                        fontSize: '0.8rem',
+                        color: 'text.primary',
+                        backgroundColor: 'rgba(255, 255, 255, 0.7)',
+                        p: 1,
+                        borderRadius: 1,
+                      }}
+                    >
+                      {currentItem.raw_text_summary}
+                    </Typography>
+                  </Collapse>
                 </Alert>
               )}
 
@@ -1670,9 +1904,25 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
                       fullWidth size="small"
                       label="Expected Release"
                       type="date"
-                      value={datePartOf(editedData?.expected_release_date || editedData?.original_estimated_release_date)}
+                      value={datePartOf(editedData?.expected_release_date !== undefined ? editedData?.expected_release_date : editedData?.original_estimated_release_date) || ''}
                       onChange={(e) => handleEditChange('expected_release_date', e.target.value)}
                       InputLabelProps={{ shrink: true }}
+                      InputProps={{
+                        endAdornment: (editedData?.expected_release_date || editedData?.original_estimated_release_date) ? (
+                          <InputAdornment position="end">
+                            <IconButton
+                              size="small"
+                              title="Clear Expected Release Date"
+                              onClick={() => handleEditChange('expected_release_date', '')}
+                              edge="end"
+                              sx={{ p: 0.5 }}
+                            >
+                              <ClearIcon fontSize="small" sx={{ fontSize: 16 }} />
+                            </IconButton>
+                          </InputAdornment>
+                        ) : null,
+                      }}
+                      helperText="Optional · Leave blank if incomplete"
                       variant="outlined"
                     />
                   ) : (
@@ -1697,9 +1947,25 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
                       fullWidth size="small"
                       label="Order Claimed Date"
                       type="date"
-                      value={datePartOf(editedData?.claimed_date)}
+                      value={datePartOf(editedData?.claimed_date) || ''}
                       onChange={(e) => handleEditChange('claimed_date', e.target.value)}
                       InputLabelProps={{ shrink: true }}
+                      InputProps={{
+                        endAdornment: editedData?.claimed_date ? (
+                          <InputAdornment position="end">
+                            <IconButton
+                              size="small"
+                              title="Clear Claimed Date"
+                              onClick={() => handleEditChange('claimed_date', '')}
+                              edge="end"
+                              sx={{ p: 0.5 }}
+                            >
+                              <ClearIcon fontSize="small" sx={{ fontSize: 16 }} />
+                            </IconButton>
+                          </InputAdornment>
+                        ) : null,
+                      }}
+                      helperText="Optional · Leave blank if unclaimed"
                       variant="outlined"
                     />
                   ) : (
@@ -1799,50 +2065,80 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
                        <Grid size={{ xs: 6 }}>
                          <Autocomplete
                            freeSolo
-                           options={['Nike', 'Adidas', 'Jordan', 'New Balance', 'Converse', 'Vans', 'Puma']}
+                           options={brandOptions}
                            value={item.brand || ''}
-                           onChange={(_, newValue) => handleEditItem(idx, 'brand', newValue)}
-                           onInputChange={(_, newInputValue) => handleEditItem(idx, 'brand', newInputValue)}
+                           onChange={(_, newValue) => {
+                             handleEditItem(idx, 'brand', newValue || '');
+                             if (newValue) {
+                               rememberCustomOption('brands', String(newValue));
+                               setBrandOptions(prev => prev.some(b => b.toLowerCase() === String(newValue).toLowerCase()) ? prev : [...prev, String(newValue)]);
+                             }
+                           }}
+                           onInputChange={(_, newInputValue) => handleEditItem(idx, 'brand', newInputValue || '')}
                            renderInput={(params) => <TextField {...params} label="Brand" size="small" fullWidth variant="outlined" />}
                          />
                        </Grid>
                        <Grid size={{ xs: 6 }}>
                          <Autocomplete
                            freeSolo
-                           options={['Air Force 1', 'Dunk Low', 'Air Jordan 1', 'Ultraboost', 'Stan Smith', 'Superstar']}
+                           options={modelOptions}
                            value={item.model || ''}
-                           onChange={(_, newValue) => handleEditItem(idx, 'model', newValue)}
-                           onInputChange={(_, newInputValue) => handleEditItem(idx, 'model', newInputValue)}
+                           onChange={(_, newValue) => {
+                             handleEditItem(idx, 'model', newValue || '');
+                             if (newValue) {
+                               rememberCustomOption('models', String(newValue));
+                               setModelOptions(prev => prev.some(m => m.toLowerCase() === String(newValue).toLowerCase()) ? prev : [...prev, String(newValue)]);
+                             }
+                           }}
+                           onInputChange={(_, newInputValue) => handleEditItem(idx, 'model', newInputValue || '')}
                            renderInput={(params) => <TextField {...params} label="Model" size="small" fullWidth variant="outlined" />}
                          />
                        </Grid>
                        <Grid size={{ xs: 6 }}>
                          <Autocomplete
                            freeSolo
-                           options={['Leather', 'Suede', 'Canvas', 'Mesh', 'Nubuck', 'Nylon', 'Patent Leather']}
+                           options={materialOptions}
                            value={item.material || ''}
-                           onChange={(_, newValue) => handleEditItem(idx, 'material', newValue)}
-                           onInputChange={(_, newInputValue) => handleEditItem(idx, 'material', newInputValue)}
+                           onChange={(_, newValue) => {
+                             handleEditItem(idx, 'material', newValue || '');
+                             if (newValue) {
+                               rememberCustomOption('materials', String(newValue));
+                               setMaterialOptions(prev => prev.some(m => m.toLowerCase() === String(newValue).toLowerCase()) ? prev : [...prev, String(newValue)]);
+                             }
+                           }}
+                           onInputChange={(_, newInputValue) => handleEditItem(idx, 'material', newInputValue || '')}
                            renderInput={(params) => <TextField {...params} label="Material" size="small" fullWidth variant="outlined" />}
                          />
                        </Grid>
                        <Grid size={{ xs: 6 }}>
                          <Autocomplete
                            freeSolo
-                           options={['White', 'Black', 'Red', 'Blue', 'Green', 'Grey', 'Brown', 'Multi']}
+                           options={colorOptions}
                            value={item.color || ''}
-                           onChange={(_, newValue) => handleEditItem(idx, 'color', newValue)}
-                           onInputChange={(_, newInputValue) => handleEditItem(idx, 'color', newInputValue)}
+                           onChange={(_, newValue) => {
+                             handleEditItem(idx, 'color', newValue || '');
+                             if (newValue) {
+                               rememberCustomOption('colors', String(newValue));
+                               setColorOptions(prev => prev.some(c => c.toLowerCase() === String(newValue).toLowerCase()) ? prev : [...prev, String(newValue)]);
+                             }
+                           }}
+                           onInputChange={(_, newInputValue) => handleEditItem(idx, 'color', newInputValue || '')}
                            renderInput={(params) => <TextField {...params} label="Color" size="small" fullWidth variant="outlined" />}
                          />
                        </Grid>
                        <Grid size={{ xs: 6 }}>
                          <Autocomplete
                            freeSolo
-                           options={['US 7', 'US 8', 'US 9', 'US 10', 'US 11', 'US 12']}
+                           options={sizeOptions}
                            value={item.size || ''}
-                           onChange={(_, newValue) => handleEditItem(idx, 'size', newValue)}
-                           onInputChange={(_, newInputValue) => handleEditItem(idx, 'size', newInputValue)}
+                           onChange={(_, newValue) => {
+                             handleEditItem(idx, 'size', newValue || '');
+                             if (newValue) {
+                               rememberCustomOption('sizes', String(newValue));
+                               setSizeOptions(prev => prev.some(s => s.toLowerCase() === String(newValue).toLowerCase()) ? prev : [...prev, String(newValue)]);
+                             }
+                           }}
+                           onInputChange={(_, newInputValue) => handleEditItem(idx, 'size', newInputValue || '')}
                            renderInput={(params) => <TextField {...params} label="Size" size="small" fullWidth variant="outlined" />}
                          />
                        </Grid>
@@ -2011,11 +2307,11 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
                             {displayMmDdYyyy(item.claimed_date) || '—'}
                           </Typography>
                         </>
-                        {(item.remarks || (typeof item.conditions === 'string' && item.conditions)) && (
+                        {(cleanRemarks(item.remarks) || (typeof item.conditions === 'string' && item.conditions)) && (
                           <>
                             <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 'bold', textTransform: 'uppercase' }}>Remarks</Typography>
                             <Typography variant="body2" fontWeight="bold" sx={{ color: 'text.primary', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
-                              {item.remarks || item.conditions}
+                              {cleanRemarks(item.remarks) || item.conditions}
                             </Typography>
                           </>
                         )}
@@ -2148,9 +2444,9 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
                             </Typography>
                           </Box>
                           <Box sx={{ flex: 1, p: 1.5, minWidth: '120px', borderRight: '1px solid', borderColor: 'divider', bgcolor: 'grey.50' }}>
-                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>DISCOUNT</Typography>
+                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>DISCOUNT AMOUNT</Typography>
                             <Typography variant="subtitle1" fontWeight="bold">
-                              −₱{formatMoney(discountDisplay)}
+                              ₱{formatMoney(discountDisplay)}
                             </Typography>
                             {percentLabel != null && (
                               <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
@@ -2232,6 +2528,15 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
                                 editedData?.discount_enabled ? 'original_grand_total' : 'grand_total',
                                 e.target.value,
                               )}
+                              onBlur={() => {
+                                if (editedData?.discount_enabled) {
+                                  const num = toFiniteMoney(editedData?.original_grand_total);
+                                  if (num != null) handleEditChange('original_grand_total', num.toFixed(2));
+                                } else {
+                                  const num = toFiniteMoney(editedData?.grand_total);
+                                  if (num != null) handleEditChange('grand_total', num.toFixed(2));
+                                }
+                              }}
                               InputProps={{ startAdornment: <InputAdornment position="start">₱</InputAdornment> }}
                               InputLabelProps={{ shrink: true }}
                               title={editedData?.discount_enabled ? 'Amount before discount' : 'Order total'}
@@ -2277,7 +2582,7 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
                                 <TextField 
                                   fullWidth size="small"
                                   label="Final Total"
-                                  value={editedData?.grand_total ?? ''} 
+                                  value={toFiniteMoney(editedData?.grand_total) != null ? Number(editedData.grand_total).toFixed(2) : (editedData?.grand_total ?? '')} 
                                   InputProps={{
                                     readOnly: true,
                                     startAdornment: <InputAdornment position="start">₱</InputAdornment>,
@@ -2295,6 +2600,10 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
                               label="Downpayment" 
                               value={editedData?.downpayment ?? ''} 
                               onChange={(e) => handleEditChange('downpayment', e.target.value)}
+                              onBlur={() => {
+                                const num = toFiniteMoney(editedData?.downpayment);
+                                if (num != null) handleEditChange('downpayment', num.toFixed(2));
+                              }}
                               InputProps={{ startAdornment: <InputAdornment position="start">₱</InputAdornment> }}
                               InputLabelProps={{ shrink: true }}
                               title="Cannot exceed payable"
@@ -2307,6 +2616,10 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
                               label="Balance" 
                               value={editedData?.balance ?? ''} 
                               onChange={(e) => handleEditChange('balance', e.target.value)}
+                              onBlur={() => {
+                                const num = toFiniteMoney(editedData?.balance);
+                                if (num != null) handleEditChange('balance', num.toFixed(2));
+                              }}
                               InputProps={{ startAdornment: <InputAdornment position="start">₱</InputAdornment> }}
                               InputLabelProps={{ shrink: true }}
                               title="Payable − downpayment"

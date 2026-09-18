@@ -11,6 +11,9 @@ import {
   Menu,
   Calendar,
   LogOut,
+  Banknote,
+  FlaskConical,
+  Brain,
 } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/app/components/ui/tooltip';
@@ -19,7 +22,7 @@ import { useState, useEffect } from 'react';
 
 interface LayoutProps {
   children: React.ReactNode;
-  user: { username: string; email?: string; role: 'owner' | 'staff' | 'admin' };
+  user: { username: string; email?: string; role: 'owner' | 'staff' | 'front staff' | 'admin' };
   onLogout: () => void;
   headerAction?: React.ReactNode;
   headerCenter?: React.ReactNode;
@@ -48,6 +51,16 @@ export default function Layout({ children, user, onLogout, headerAction, headerC
   ];
   const adminMenuItems = [
     ...ownerMenuItems,
+    { path: '/ml-training', icon: Brain, label: 'ML Training', shortLabel: 'ML' },
+    { path: '/research-evidence', icon: FlaskConical, label: 'Research Evidence', shortLabel: 'Evidence' },
+  ];
+
+  const frontStaffMenuItems = [
+    { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', shortLabel: 'Dashboard' },
+    { path: '/job-order-form', icon: FileText, label: 'Job Order Form', shortLabel: 'Job Order' },
+    { path: '/cash-register', icon: Banknote, label: 'Cash Register', shortLabel: 'Cash Register' },
+    { path: '/release-calendar', icon: Calendar, label: 'Release Calendar', shortLabel: 'Calendar' },
+    { path: '/inventory', icon: Package, label: 'Inventory Management', shortLabel: 'Inventory' },
   ];
 
   const staffMenuItems = [
@@ -63,6 +76,7 @@ export default function Layout({ children, user, onLogout, headerAction, headerC
     '/dashboard': 'Dashboard',
     '/job-order-form': 'Job Order Form',
     '/job-orders': 'Job Orders',
+    '/cash-register': 'Cash Register',
     '/release-calendar': 'Release Calendar',
     '/sales-report': 'Sales Report',
     '/service-management': 'Service Management',
@@ -77,9 +91,18 @@ export default function Layout({ children, user, onLogout, headerAction, headerC
     '/inventory': 'Inventory Management',
     '/job-order-form/historical-records': 'Historical Records',
     '/service-management/historical-records': 'Historical Records',
+    '/ml-training': 'ML Training & Historical Records',
+    '/research-evidence': 'Research Evidence & Audit',
   };
 
-  const menuItems = user.role === 'admin' ? adminMenuItems : (user.role === 'owner' ? ownerMenuItems : staffMenuItems);
+  const isFrontStaffUser = user.role === 'front staff' || (user?.username || '').toLowerCase().trim() === 'front_staff';
+  const menuItems = user.role === 'admin'
+    ? adminMenuItems
+    : (user.role === 'owner'
+      ? ownerMenuItems
+      : (isFrontStaffUser
+        ? frontStaffMenuItems
+        : staffMenuItems));
   const canAccessBackup = user.role === 'owner' || user.role === 'admin';
 
   const SidebarContent = ({ collapsed }: { collapsed: boolean }) => (
@@ -126,7 +149,7 @@ export default function Layout({ children, user, onLogout, headerAction, headerC
           {!collapsed && (
             <div className="flex-1 text-center space-y-0.5 min-w-0 ml-4 pr-2">
               <h1 className="text-base font-bold leading-tight tracking-wide text-white truncate">Shoelotskey</h1>
-              <p className="text-xs text-red-200 font-medium truncate">{user.role === 'admin' ? 'Developer' : (user.role === 'owner' ? 'Owner' : 'Staff')}</p>
+              <p className="text-xs text-red-200 font-medium truncate">{user.role === 'admin' ? 'Developer' : (user.role === 'owner' ? 'Owner' : (isFrontStaffUser ? 'Front Staff' : 'Staff'))}</p>
             </div>
           )}
         </div>
@@ -251,14 +274,16 @@ export default function Layout({ children, user, onLogout, headerAction, headerC
             <div className="flex-grow" />
           )}
 
-          {headerAction && (
-            <div className="ml-2 md:ml-4 flex-shrink-0">
-              {headerAction}
-            </div>
-          )}
+          <div className="ml-auto flex items-center gap-2 sm:gap-3 flex-shrink-0">
+            {headerAction && (
+              <div className="flex-shrink-0">
+                {headerAction}
+              </div>
+            )}
+          </div>
         </header>
 
-        <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pt-3 px-3 md:px-6 pb-8">
+        <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pt-3 px-3 md:px-6 pb-8 no-scrollbar">
           {children}
         </main>
       </div>

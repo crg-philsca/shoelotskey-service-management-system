@@ -35,3 +35,10 @@ exclude = [
     ".*tmp.*",
     ".*scratch.*"
 ]
+
+[tool.pytest.ini_options]
+norecursedirs = ["node_modules", "venv", ".git", "dist", "build", ".agents", "artifacts", "brain", "scratch", "docs"]
+python_files = ["test_*.py"]
+pythonpath = ["backend", "backend/db"]
+
+

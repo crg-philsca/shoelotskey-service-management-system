@@ -134,15 +134,15 @@ def _get_client():
 
 
 def _model_name() -> str:
-    val = os.getenv("GEMINI_MODEL_NAME", "gemini-3.6-flash").strip()
-    if not val or val in ("gemini-2.0-flash", "gemini-2.5-flash", "gemini-3.5-flash"):
-        return "gemini-3.6-flash"
+    val = os.getenv("GEMINI_MODEL_NAME", "gemini-flash-latest").strip()
+    if not val or val in ("gemini-2.0-flash", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-1.5-flash", "gemini-2.5-pro"):
+        return "gemini-flash-latest"
     return val
 
 
 def _fallback_models() -> List[str]:
     primary = _model_name()
-    fallbacks = ["gemini-3.6-flash", "gemini-2.5-flash", "gemini-1.5-flash"]
+    fallbacks = ["gemini-flash-latest", "gemini-3.6-flash", "gemini-3.7-flash"]
     seen = {primary}
     ordered = [primary]
     for m in fallbacks:
@@ -238,6 +238,8 @@ def _run_gemini_ocr(
                 m = re.search(r"retry in ([0-9.]+)s", msg)
                 if m:
                     retry_after = max(int(float(m.group(1))) + 1, 5)
+                if "404" in msg or "not_found" in msg or "no longer available" in msg:
+                    break  # model deprecated or not found, try next model in fallbacks
                 if "503" in msg or "429" in msg or "unavailable" in msg or "quota" in msg or "rate" in msg:
                     if "quota" in msg and attempt >= (1 if interactive else 2):
                         break  # try next model
@@ -317,13 +319,14 @@ def extract_from_bytes(
     cancel_key: Optional[str] = None,
 ) -> Tuple[Dict[str, Any], float, str]:
     """
-    Tiered OCR: Gemini (production primary) → optional local EasyOCR → Tesseract.
+    Tiered OCR: Gemini (production primary) → optional local deep learning EasyOCR.
+    Tesseract is disabled for handwritten receipt extraction.
     Returns (extracted_data, confidence, engine_version).
 
     interactive=True (UI Re-run OCR):
       - downscales large scans
       - shorter Gemini retries / single primary model
-      - prefers Tesseract over EasyOCR (EasyOCR first-load is very slow)
+      - uses EasyOCR for handwritten local fallback
       - honors cancel_key between attempts
     """
     from historical.local_ocr import (
@@ -337,9 +340,8 @@ def extract_from_bytes(
 
     if interactive:
         image_bytes, mime_type = _prepare_image_for_ocr(image_bytes, mime_type)
-        if local_engine == "auto":
-            from historical.local_ocr import easyocr_available
-            local_engine = "easyocr" if easyocr_available() else "tesseract"
+        if local_engine in ("auto", "tesseract"):
+            local_engine = "easyocr"
 
     gemini_stub: Optional[Tuple[Dict[str, Any], float, str]] = None
     if use_gemini and not is_gemini_quota_exhausted():

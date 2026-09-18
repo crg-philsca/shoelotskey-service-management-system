@@ -5,7 +5,7 @@ import { Button } from '@/app/components/ui/button';
 import { ClipboardList } from 'lucide-react';
 
 interface JobOrderFormProps {
-    user: { username: string; role: 'owner' | 'staff' | 'admin'; token: string };
+    user: { username: string; role: 'owner' | 'staff' | 'admin' | 'front staff'; token: string };
     onSetHeaderActionRight: (node: React.ReactNode) => void;
 }
 

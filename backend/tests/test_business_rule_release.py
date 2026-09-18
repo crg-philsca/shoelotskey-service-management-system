@@ -35,12 +35,12 @@ def test_origin_main_job_order_form_rules():
         cases = [
             ("A single Basic Cleaning", _order([_item(["Basic Cleaning"])]), 10),
             ("B multiple base services BC+CR", _order([_item(["Basic Cleaning", "Color Renewal"])]), 25),
-            ("C Unyellowing with BC", _order([_item(["Basic Cleaning"], [{"name": "Unyellowing", "quantity": 1}])]), 15),
+            ("C Unyellowing with BC", _order([_item(["Basic Cleaning"], [{"name": "Unyellowing", "quantity": 1}])]), 20),
             ("D Minor Reglue with BC", _order([_item(["Basic Cleaning", "Minor Reglue"])]), 10),
             ("E Full Reglue with BC", _order([_item(["Basic Cleaning", "Full Reglue"])]), 25),
             ("F Color Renewal with BC", _order([_item(["Basic Cleaning", "Color Renewal"])]), 25),
             ("G Full Reglue + Unyellowing", _order([_item(["Full Reglue"], [{"name": "Unyellowing", "quantity": 1}])]), 25),
-            ("H Rush Basic Cleaning", _order([_item(["Basic Cleaning"])], priority="rush"), 3),
+            ("H Rush Basic Cleaning", _order([_item(["Basic Cleaning"])], priority="rush"), 1),
             ("Minor Restoration with BC", _order([_item(["Basic Cleaning"], [{"name": "Minor Restoration", "quantity": 1}])]), 20),
             ("Minor Retouch with BC", _order([_item(["Basic Cleaning"], [{"name": "Minor Retouch", "quantity": 1}])]), 20),
         ]

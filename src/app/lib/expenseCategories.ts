@@ -37,9 +37,10 @@ export const OPERATIONAL_EXPENSE_CATEGORIES = [
 
 /**
  * 3. OTHER EXPENSES
- * Non-operating overhead, maintenance, marketing, and miscellaneous costs.
+ * Non-operating overhead, owner equity withdrawals, maintenance, marketing, and miscellaneous costs.
  */
 export const OTHER_EXPENSE_CATEGORIES = [
+    'Owner Withdrawal',
     'Repairs & Maintenance',
     'Marketing & Promotion',
     'Packaging & Delivery',
@@ -85,11 +86,46 @@ export const EXPENSE_FILTER_CATEGORIES = EXPENSE_CATEGORIES.filter(
     (cat) => cat !== 'Other (Manual Insert)'
 );
 
+const STORAGE_KEY_CUSTOM_GROUPS = 'shoelotskey_custom_category_groups';
+
+export function getStoredCategoryGroup(category: string): ExpenseGroupType | null {
+    if (typeof window === 'undefined') return null;
+    try {
+        const map = JSON.parse(localStorage.getItem(STORAGE_KEY_CUSTOM_GROUPS) || '{}');
+        const key = String(category || '').trim();
+        if (map[key]) return map[key];
+        if (map[key.toLowerCase()]) return map[key.toLowerCase()];
+    } catch {}
+    return null;
+}
+
+export function setStoredCategoryGroup(category: string, group: ExpenseGroupType): void {
+    if (typeof window === 'undefined') return;
+    try {
+        const map = JSON.parse(localStorage.getItem(STORAGE_KEY_CUSTOM_GROUPS) || '{}');
+        const key = String(category || '').trim();
+        if (key) {
+            map[key] = group;
+            map[key.toLowerCase()] = group;
+            localStorage.setItem(STORAGE_KEY_CUSTOM_GROUPS, JSON.stringify(map));
+        }
+    } catch {}
+}
+
 /**
  * Maps any category name to its canonical Expense Group.
  */
-export function getExpenseGroup(category: string): ExpenseGroupType {
+export function getExpenseGroup(category: string, explicitGroup?: string): ExpenseGroupType {
+    if (explicitGroup && ['Inventory Expenses', 'Operating Expenses', 'Other Expenses'].includes(explicitGroup)) {
+        return explicitGroup as ExpenseGroupType;
+    }
+    const stored = getStoredCategoryGroup(category);
+    if (stored) return stored;
+
     const c = String(category || '').toLowerCase().trim();
+    if (c.includes('withdrawal') || c.includes('owner')) {
+        return 'Other Expenses';
+    }
     if (
         c.includes('cleaning') ||
         c.includes('chemical') ||

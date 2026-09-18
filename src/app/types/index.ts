@@ -18,6 +18,8 @@ export interface ShoeEntry {
     addOns: any[];
     inventoryUsed: any[];
     color?: string;
+    priorityLevel?: Priority;
+    rushReductionDays?: string | number;
     /**
      * Immutable pricing snapshot captured when the service was added to this shoe.
      * Used for historical financial integrity to prevent old prices from changing.
@@ -29,10 +31,12 @@ export interface ShoeEntry {
      */
     historicalAddOnPrices?: { name: string; price: number }[];
     status?: JobStatus;
-    actualReleaseDate?: Date | string;
-    actualCompletionDate?: Date | string;
+    actualReleaseDate?: Date | string | null;
+    actualCompletionDate?: Date | string | null;
     releasedBy?: string;
     claimedBy?: string;
+    beforeImage?: string;
+    afterImage?: string;
 }
 
 export interface InventoryUsed {
@@ -143,6 +147,8 @@ export interface BaseJobOrderData {
   // Metadata
   transactionDate: Date;
   processedBy: string;
+  beforeImage?: string;
+  afterImage?: string;
 }
 
 export interface PaymentRecord {
@@ -186,10 +192,13 @@ export interface ShoeItem {
    */
   historicalAddOnPrices?: { name: string; price: number }[];
   status?: JobStatus;
-  actualReleaseDate?: Date | string;
-  actualCompletionDate?: Date | string;
+  actualReleaseDate?: Date | string | null;
+  actualCompletionDate?: Date | string | null;
   releasedBy?: string;
   claimedBy?: string;
+  inventoryUsed?: any[];
+  beforeImage?: string;
+  afterImage?: string;
 }
 
 export interface JobOrder extends BaseJobOrderData {
@@ -201,14 +210,17 @@ export interface JobOrder extends BaseJobOrderData {
   predictedAt?: Date;
   predictedDays?: number;
   estimatedDays?: number;
-  actualReleaseDate?: Date;
-  actualCompletionDate?: Date;
+  actualReleaseDate?: Date | string | null;
+  actualCompletionDate?: Date | string | null;
+  claimedAt?: Date | string | null;
   createdAt: Date;
   updatedAt: Date;
   items?: ShoeItem[];
   releaseTime?: string;
   claimedBy?: string;
   releasedBy?: string;
+  customerSignature?: string;
+  staffSignature?: string;
   statusHistory: Array<{
     status: JobStatus;
     timestamp: Date;
@@ -220,8 +232,29 @@ export interface JobOrder extends BaseJobOrderData {
   cancellationReason?: string;
   refundStatus?: 'refunded' | 'no-refund' | string;
   refundAmount?: number;
-  forfeitedDeposit?: number;
   cancelledAt?: Date | string;
+  preCancellationState?: PreCancellationPaymentState;
+  orderDate?: string;
+  orderTime?: string;
+  formDurationSeconds?: number;
+  formDurationFormatted?: string;
+  efficiencyMetric?: string;
+}
+
+export interface PreCancellationPaymentState {
+  status: JobStatus | string;
+  paymentStatus: PaymentStatus | string;
+  amountReceived: number;
+  balance: number;
+  depositAmount: number;
+  paymentMethod?: PaymentMethod | string;
+  initialPaymentMethod?: PaymentMethod | string;
+  finalPaymentMethod?: PaymentMethod | string;
+  referenceNo?: string;
+  claimReferenceNo?: string;
+  paymentHistory?: PaymentRecord[];
+  actualReleaseDate?: Date | string | null;
+  actualCompletionDate?: Date | string | null;
 }
 
 export interface Service {
@@ -240,7 +273,7 @@ export interface Service {
 export interface User {
   id: string;
   username: string;
-  role: 'owner' | 'staff' | 'admin';
+  role: 'owner' | 'staff' | 'front staff' | 'admin';
   email?: string;
   password?: string;
   active: boolean;
@@ -255,3 +288,61 @@ export interface Shelf {
   occupied: boolean;
   jobOrderId?: string;
 }
+
+export interface CashSession {
+  id: number;
+  business_date: string;
+  opening_cash: number;
+  expected_cash?: number | null;
+  actual_cash?: number | null;
+  over_short?: number | null;
+  status: 'OPEN' | 'CLOSED';
+  opened_by: number;
+  opened_by_name?: string;
+  opened_at: string;
+  closed_by?: number | null;
+  closed_by_name?: string | null;
+  closed_at?: string | null;
+  variance_reason?: string | null;
+}
+
+export interface CashSummary {
+  session: CashSession | null;
+  business_date: string;
+  beginning_cash: number;
+  cash_sales: number;
+  gcash_sales: number;
+  maya_sales: number;
+  digital_sales: number;
+  other_sales: number;
+  total_daily_payments: number;
+  business_expenses: number;
+  owner_withdrawals: number;
+  total_cash_out: number;
+  expected_cash: number;
+}
+
+export interface CashTransaction {
+  id: string;
+  time: string;
+  raw_time?: string;
+  transaction: string;
+  details: string;
+  order_id: string;
+  cash_in: number;
+  cash_out: number;
+  amount?: number;
+  method?: string;
+}
+
+export interface FrontStaffSummary {
+  total_sales: number;
+  cash_sales: number;
+  digital_sales: number;
+  balance_due: number;
+  daily_expenses: number;
+  cash_on_hand: number;
+  session_status: 'OPEN' | 'CLOSED' | 'NONE';
+  business_date: string;
+}
+

@@ -58,3 +58,58 @@ export function nextOrderId(
   const maxSeq = existingIds.length > 0 ? Math.max(...existingIds) : 0;
   return `${prefix}${String(maxSeq + 1).padStart(3, '0')}`;
 }
+
+/**
+ * Extracts the calendar Date represented by an order ID.
+ * Supports:
+ * - ORD-YYYY-MM-DD-NNN (e.g. ORD-2026-09-02-001 -> September 2, 2026)
+ * - ORD-MM-DD-YYYY-NNN (e.g. ORD-09-02-2026-001 -> September 2, 2026)
+ * - ORD-YYYY-MM-NN (e.g. ORD-2025-08-04)
+ * - ORD-MM-DD-NN (e.g. ORD-08-26-04 -> August 26, 2025; January is 2026, Aug-Dec is 2025)
+ */
+export function parseDateFromOrderId(orderId?: string | null): Date | null {
+  if (!orderId || typeof orderId !== 'string') return null;
+  const trimmed = orderId.trim();
+
+  // Pattern 1: ORD-YYYY-MM-DD-... (e.g. ORD-2026-09-02-001)
+  const matchYMD = trimmed.match(/^ORD-(\d{4})-(\d{2})-(\d{2})(?:-\d+)?$/i);
+  if (matchYMD) {
+    const y = parseInt(matchYMD[1], 10);
+    const m = parseInt(matchYMD[2], 10) - 1;
+    const d = parseInt(matchYMD[3], 10);
+    const dt = new Date(y, m, d);
+    if (!isNaN(dt.getTime())) return dt;
+  }
+
+  // Pattern 2: ORD-MM-DD-YYYY-... (e.g. ORD-09-02-2026-001)
+  const matchMDY = trimmed.match(/^ORD-(\d{2})-(\d{2})-(\d{4})(?:-\d+)?$/i);
+  if (matchMDY) {
+    const m = parseInt(matchMDY[1], 10) - 1;
+    const d = parseInt(matchMDY[2], 10);
+    const y = parseInt(matchMDY[3], 10);
+    const dt = new Date(y, m, d);
+    if (!isNaN(dt.getTime())) return dt;
+  }
+
+  // Pattern 3: ORD-YYYY-MM-NN (e.g. ORD-2025-08-04)
+  const matchYM = trimmed.match(/^ORD-(\d{4})-(\d{2})-\d+$/i);
+  if (matchYM) {
+    const y = parseInt(matchYM[1], 10);
+    const m = parseInt(matchYM[2], 10) - 1;
+    const dt = new Date(y, m, 1);
+    if (!isNaN(dt.getTime())) return dt;
+  }
+
+  // Pattern 4: ORD-MM-DD-NN without year (e.g. ORD-08-26-04)
+  // Historical data runs August 2025 to January 2026 -> only January (01) is 2026, all other months are 2025
+  const matchMD = trimmed.match(/^ORD-(\d{2})-(\d{2})-\d+$/i);
+  if (matchMD) {
+    const m = parseInt(matchMD[1], 10) - 1;
+    const d = parseInt(matchMD[2], 10);
+    const y = m === 0 ? 2026 : 2025;
+    const dt = new Date(y, m, d);
+    if (!isNaN(dt.getTime())) return dt;
+  }
+
+  return null;
+}

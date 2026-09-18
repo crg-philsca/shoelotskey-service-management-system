@@ -17,6 +17,8 @@ import OrderDetailModal from '@/app/components/OrderDetailModal';
 import { toast } from 'sonner';
 import { Label } from '@/app/components/ui/label';
 import { Checkbox } from '@/app/components/ui/checkbox';
+import { getOrderPaidAmount, getOrderRetainedAmount } from '@/app/lib/salesAnalytics';
+import { toServiceCode, chunkServiceCodesTwoPerRow } from '@/app/lib/businessRules';
 
 function FormattedDateInput({ value, onChange, className, id }: { value: string; onChange: (val: string) => void; className?: string; id?: string }) {
     const toDisplay = (iso: string) => {
@@ -74,7 +76,7 @@ function FormattedDateInput({ value, onChange, className, id }: { value: string;
 }
 
 interface JobOrdersProps {
-    user: { username: string; role: 'owner' | 'staff' | 'admin'; token: string };
+    user: { username: string; role: 'owner' | 'staff' | 'admin' | 'front staff'; token: string };
     onSetHeaderActionRight: (action: React.ReactNode) => void;
 }
 
@@ -99,6 +101,7 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
     const [selectedOrder, setSelectedOrder] = useState<JobOrder | null>(null);
     const [processClaimOrder, setProcessClaimOrder] = useState<JobOrder | null>(null);
     const [cancelOrderModal, setCancelOrderModal] = useState<JobOrder | null>(null);
+    const [cancellationReason, setCancellationReason] = useState('');
     const [isCancelling, setIsCancelling] = useState(false);
     const isCancellingRef = useRef(false);
     const [isEditing, setIsEditing] = useState(false);
@@ -234,7 +237,7 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                             </Select>
                             <Button
                                 variant="outline"
-                                className={`px-3 ${filterService !== 'all' || startDate || endDate ? 'text-red-600 border-red-200 bg-red-50' : ''}`}
+                                className={`relative px-3 ${((filterService !== 'all' ? 1 : 0) + (startDate ? 1 : 0) + (endDate ? 1 : 0)) > 0 ? 'text-red-600 border-red-200 bg-red-50' : ''}`}
                                 onClick={() => setIsFilterOpen(true)}
                             >
                                 <Filter className="h-4 w-4 mr-2" />
@@ -244,8 +247,8 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                     </div>
 
                     {/* Table */}
-                    <div className="overflow-x-auto w-full rounded-xl border">
-                        <table className="w-full table-fixed min-w-0 text-sm">
+                    <div className="overflow-x-auto overflow-y-auto max-h-[620px] w-full rounded-xl border custom-scrollbar pb-1">
+                        <table className="w-full table-fixed min-w-[1000px] text-sm">
                             <colgroup>
                                 <col className="w-[4%]" />
                                 <col className="w-[13%]" />
@@ -257,8 +260,8 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                                 <col className="w-[17%]" />
                                 <col className="w-[10%]" />
                             </colgroup>
-                            <thead className="bg-red-50/50 border-b border-red-100">
-                                <tr>
+                            <thead className="bg-red-50/95 backdrop-blur-xs border-b border-red-100 sticky top-0 z-10 shadow-xs">
+                                <tr className="bg-red-50/95">
                                     <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px]">
                                         <Checkbox
                                             checked={paginatedOrders.length > 0 && selectedOrderIds.length === paginatedOrders.length}
@@ -332,17 +335,44 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                                             </td>
                                             <td className="px-2 py-2 text-xs font-medium text-gray-700 text-center whitespace-normal break-words">
                                                 {(() => {
-                                                    const servicesList = (Array.isArray(order.baseService)
+                                                    const baseSvcs = (Array.isArray(order.baseService)
                                                         ? order.baseService
                                                         : String(order.baseService || '').split(',')
                                                     )
+                                                        .flatMap((s) => String(s || '').split(','))
                                                         .map((s) => String(s || '').trim().replace(' (with basic cleaning)', ''))
                                                         .filter(Boolean);
-                                                    const fullText = servicesList.join(', ') || '-';
-                                                    return (
-                                                        <span className="block text-center leading-tight truncate max-w-full" title={fullText}>
-                                                            {fullText}
-                                                        </span>
+
+                                                    const addonSvcs = (Array.isArray(order.addOns)
+                                                        ? order.addOns
+                                                        : String(order.addOns || '').split(',')
+                                                    )
+                                                        .flatMap((a: any) => {
+                                                            if (!a) return [];
+                                                            if (typeof a === 'string') return a.split(',');
+                                                            return [a.name || a.service_name || a.service_code || ''];
+                                                        })
+                                                        .map((s) => String(s || '').trim())
+                                                        .filter(Boolean);
+
+                                                    const rawServicesList = [...baseSvcs, ...addonSvcs];
+                                                    const servicesList = rawServicesList.length > 0 ? rawServicesList : baseSvcs;
+                                                    const serviceLines = chunkServiceCodesTwoPerRow(servicesList);
+                                                    const tooltipText = servicesList.map((s) => `${toServiceCode(s)} (${s})`).join(', ');
+
+                                                    return servicesList.length > 0 ? (
+                                                        <div className="flex flex-col items-center justify-center text-center text-[10.5px] font-bold text-gray-800 leading-tight" title={tooltipText}>
+                                                            {serviceLines.slice(0, 3).map((line, idx) => (
+                                                                <span key={idx} className="block text-[10.5px] font-bold text-gray-800 leading-tight">
+                                                                    {line}
+                                                                </span>
+                                                            ))}
+                                                            {serviceLines.length > 3 && (
+                                                                <span className="text-[9px] text-gray-400 leading-none">+{servicesList.length - 6} more</span>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-gray-400 italic font-normal text-center block">-</span>
                                                     );
                                                 })()}
                                             </td>
@@ -396,7 +426,7 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                                                                     {isRefunded ? 'REFUND ISSUED' : 'DEPOSIT RETAINED'}
                                                                 </span>
                                                                 <span className="text-[10px] text-gray-500 font-semibold mt-0.5 whitespace-nowrap">
-                                                                    {isRefunded ? `Less from Sales: -${formatPeso(order.refundAmount || order.amountReceived || 0)}` : `Retained: ${formatPeso(order.depositAmount || order.amountReceived || 0)}`}
+                                                                    {isRefunded ? `Less from Sales: -${formatPeso(Number(order.refundAmount || (order.refundStatus === 'refunded' ? getOrderPaidAmount(order) : 0)))}` : `Retained: ${formatPeso(getOrderRetainedAmount(order))}`}
                                                                 </span>
                                                             </div>
                                                         );
@@ -500,17 +530,23 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                                                         {order.status === 'claimed' && (
                                                             <DropdownMenuItem onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                const depositAmt = order.depositAmount || 0;
-                                                                const paymentUpdates = (depositAmt < order.grandTotal) ? {
+                                                                const hasDownpayment = Boolean(order.depositAmount && order.depositAmount > 0 && order.depositAmount < order.grandTotal);
+                                                                const paymentUpdates = hasDownpayment ? {
                                                                     paymentStatus: 'downpayment' as any,
-                                                                    amountReceived: depositAmt,
-                                                                    balance: order.grandTotal - depositAmt,
+                                                                    amountReceived: order.depositAmount!,
+                                                                    balance: Math.max(0, order.grandTotal - order.depositAmount!),
                                                                     change: 0
-                                                                } : {};
+                                                                } : {
+                                                                    paymentStatus: 'fully-paid' as any,
+                                                                    amountReceived: order.amountReceived && order.amountReceived >= order.grandTotal ? order.amountReceived : order.grandTotal,
+                                                                    balance: 0,
+                                                                    change: 0
+                                                                };
                                                                 updateOrder(order.id, {
                                                                     status: 'for-release' as any,
                                                                     updatedAt: new Date(),
                                                                     actualCompletionDate: undefined,
+                                                                    actualReleaseDate: order.actualReleaseDate,
                                                                     ...paymentUpdates
                                                                 }, user.username);
                                                                 toast.success('Order reverted to for release');
@@ -522,18 +558,33 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                                                             <>
                                                                 <DropdownMenuItem onClick={(e) => {
                                                                     e.stopPropagation();
-                                                                    const targetStage = order.cancellationStage || 'new-order';
+                                                                    const pre = order.preCancellationState;
+                                                                    const targetStage = (pre?.status || order.cancellationStage || 'new-order') as any;
+                                                                    const restoredPaymentStatus = pre?.paymentStatus || (Number(order.balance || 0) <= 0 ? 'fully-paid' : 'downpayment');
+                                                                    const restoredAmountReceived = pre?.amountReceived != null ? pre.amountReceived : order.amountReceived;
+                                                                    const restoredBalance = pre?.balance != null ? pre.balance : order.balance;
+                                                                    const restoredDepositAmount = pre?.depositAmount != null ? pre.depositAmount : order.depositAmount;
+
                                                                     updateOrder(order.id, {
-                                                                        status: targetStage as any,
+                                                                        status: targetStage,
                                                                         cancellationStage: null as any,
                                                                         refundStatus: null as any,
                                                                         refundAmount: 0,
                                                                         refundReason: null as any,
                                                                         cancelledAt: null as any,
+                                                                        preCancellationState: null as any,
+                                                                        paymentStatus: restoredPaymentStatus as any,
+                                                                        amountReceived: restoredAmountReceived,
+                                                                        balance: restoredBalance,
+                                                                        depositAmount: restoredDepositAmount,
+                                                                        ...(pre?.paymentMethod ? { paymentMethod: pre.paymentMethod } : {}),
+                                                                        ...(pre?.initialPaymentMethod ? { initialPaymentMethod: pre.initialPaymentMethod } : {}),
+                                                                        ...(pre?.finalPaymentMethod ? { finalPaymentMethod: pre.finalPaymentMethod } : {}),
+                                                                        ...(pre?.paymentHistory ? { paymentHistory: pre.paymentHistory } : {}),
                                                                         updatedAt: new Date()
                                                                     }, user.username);
                                                                     const wasRefunded = order.refundStatus === 'refunded';
-                                                                    toast.success(`Order #${order.orderNumber} restored to ${targetStage.replace('-', ' ')} (${wasRefunded ? 'Refund Undone' : 'Cancellation Undone'})`);
+                                                                    toast.success(`Order #${order.orderNumber} restored to ${String(targetStage).replace('-', ' ')} (${wasRefunded ? 'Refund Undone' : 'Cancellation Undone'})`);
                                                                 }} className="border border-purple-200 rounded-md px-2.5 py-1.5 text-purple-600 bg-purple-50 hover:bg-purple-100 focus:text-purple-700 focus:bg-purple-100 font-bold mb-1 cursor-pointer">
                                                                     <RotateCcw className="mr-2 h-4 w-4 text-purple-500" /> {order.refundStatus === 'refunded' ? 'Undo Refund' : 'Undo Cancel Order'}
                                                                 </DropdownMenuItem>
@@ -698,7 +749,7 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
             />
 
             {/* CANCEL ORDER / DYNAMIC REFUND POLICY CONFIRMATION MODAL */}
-            <Dialog open={!!cancelOrderModal} onOpenChange={() => setCancelOrderModal(null)}>
+            <Dialog open={!!cancelOrderModal} onOpenChange={(open) => { if (!open) { setCancelOrderModal(null); setCancellationReason(''); } }}>
                 <DialogContent className="max-w-[460px] p-6 text-center rounded-2xl shadow-2xl border border-red-100 bg-white">
                     {(() => {
                         const isRefundAllowed = cancelOrderModal?.status === 'new-order';
@@ -722,7 +773,7 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                                             <div>
                                                 <p className="text-xs font-black text-emerald-950 uppercase tracking-wide">Pre-Service Policy: Refund Allowed</p>
                                                 <p className="text-[11px] font-semibold text-emerald-800 mt-0.5 leading-normal">
-                                                    Since this job order is in 'New Order' status and treatment has not commenced, canceling will issue a FULL REFUND of paid deposits (₱{(cancelOrderModal?.amountReceived || 0).toLocaleString()} paid).
+                                                    Since this job order is in 'New Order' status and treatment has not commenced, canceling will issue a FULL REFUND of paid deposits ({formatPeso(cancelOrderModal?.amountReceived || 0)} paid).
                                                 </p>
                                             </div>
                                         </div>
@@ -732,18 +783,37 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                                             <div>
                                                 <p className="text-xs font-black text-rose-900 uppercase tracking-wide">Strict Policy: No Refunds</p>
                                                 <p className="text-[11px] font-semibold text-rose-700 mt-0.5 leading-normal">
-                                                    This job order is currently 'On-Going' (or active) and treatment has already commenced. Canceling at this stage forfeits all deposit amounts paid (₱{(cancelOrderModal?.amountReceived || 0).toLocaleString()}). Payment cannot be refunded once work has started.
+                                                    This job order is currently 'On-Going' (or active) and treatment has already commenced. Canceling at this stage forfeits all deposit amounts paid ({formatPeso(cancelOrderModal?.amountReceived || 0)}). Payment cannot be refunded once work has started.
                                                 </p>
                                             </div>
                                         </div>
                                     )}
+
+                                    {/* Cancellation Reason Note Field */}
+                                    <div className="text-left space-y-1.5 pt-1">
+                                        <label className="text-[11px] font-black uppercase tracking-wider text-gray-700 flex items-center justify-between">
+                                            <span>Reason for Cancellation</span>
+                                            <span className="text-[10px] font-medium text-gray-400 normal-case">(Optional Note)</span>
+                                        </label>
+                                        <textarea
+                                            value={cancellationReason}
+                                            onChange={(e) => setCancellationReason(e.target.value)}
+                                            placeholder={
+                                                isRefundAllowed
+                                                    ? "Add note or reason (e.g. Customer changed mind prior to service, double booking, etc.)..."
+                                                    : "Add note or reason (e.g. Customer emergency, request to halt work in progress, etc.)..."
+                                            }
+                                            rows={3}
+                                            className="w-full text-xs p-3 rounded-xl border border-gray-200 focus:outline-hidden focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all placeholder:text-gray-400 bg-gray-50 focus:bg-white resize-none"
+                                        />
+                                    </div>
                                 </div>
                                 <div className="flex gap-3 pt-2">
                                     <Button
                                         variant="outline"
                                         disabled={isCancelling}
                                         className="flex-1 bg-gray-100 border-gray-200 text-gray-700 font-black uppercase text-xs h-10 rounded-xl hover:bg-gray-200 disabled:opacity-50"
-                                        onClick={() => { if (!isCancelling) setCancelOrderModal(null); }}
+                                        onClick={() => { if (!isCancelling) { setCancelOrderModal(null); setCancellationReason(''); } }}
                                     >
                                         Do Not Cancel
                                     </Button>
@@ -756,22 +826,47 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                                                 setIsCancelling(true);
                                                 const orderToCancel = cancelOrderModal;
                                                 try {
-                                                    const isRefund = orderToCancel.status === 'new-order';
-                                                    const depositAmt = orderToCancel.depositAmount || orderToCancel.amountReceived || 0;
-                                                    await updateOrder(orderToCancel.id, {
-                                                        status: 'cancelled',
-                                                        cancellationStage: orderToCancel.status as any,
-                                                        refundStatus: isRefund ? 'refunded' : 'no-refund',
-                                                        refundAmount: isRefund ? depositAmt : 0,
-                                                        refundReason: isRefund ? 'Order cancelled before service commenced (full refund)' : 'Order cancelled during service (deposit forfeited per policy)',
-                                                        cancelledAt: new Date()
-                                                    });
-                                                    setCancelOrderModal(null);
-                                                    if (isRefund) {
-                                                        toast.success(`Order #${orderToCancel.orderNumber} cancelled. Full refund of ₱${depositAmt.toLocaleString()} issued since service had not commenced.`);
-                                                    } else {
-                                                        toast.error(`Order #${orderToCancel.orderNumber} cancelled. No refund issued per policy (service already commenced).`);
-                                                    }
+                                                     const isRefund = orderToCancel.status === 'new-order';
+                                                     const fullPaidAmt = Number(orderToCancel.amountReceived || orderToCancel.depositAmount || 0);
+                                                     const refundAmt = isRefund ? fullPaidAmt : 0;
+                                                     const defaultReason = isRefund ? 'Order cancelled before service commenced (full refund)' : 'Order cancelled during service (deposit forfeited per policy)';
+                                                     const trimmedReason = cancellationReason.trim();
+                                                     const finalReason = trimmedReason ? `${defaultReason} - Note: ${trimmedReason}` : defaultReason;
+
+                                                     // Capture complete pre-cancellation payment state snapshot
+                                                     const preCancellationSnapshot = {
+                                                         status: orderToCancel.status,
+                                                         paymentStatus: orderToCancel.paymentStatus || (Number(orderToCancel.balance || 0) <= 0 ? 'fully-paid' : 'downpayment'),
+                                                         amountReceived: Number(orderToCancel.amountReceived || 0),
+                                                         balance: Number(orderToCancel.balance != null ? orderToCancel.balance : Math.max(0, (orderToCancel.grandTotal || 0) - (orderToCancel.amountReceived || 0))),
+                                                         depositAmount: Number(orderToCancel.depositAmount || (orderToCancel.paymentStatus === 'downpayment' ? orderToCancel.amountReceived : 0) || 0),
+                                                         paymentMethod: orderToCancel.paymentMethod,
+                                                         initialPaymentMethod: orderToCancel.initialPaymentMethod,
+                                                         finalPaymentMethod: orderToCancel.finalPaymentMethod,
+                                                         referenceNo: orderToCancel.referenceNo,
+                                                         claimReferenceNo: orderToCancel.claimReferenceNo,
+                                                         paymentHistory: orderToCancel.paymentHistory,
+                                                         actualReleaseDate: orderToCancel.actualReleaseDate,
+                                                         actualCompletionDate: orderToCancel.actualCompletionDate,
+                                                     };
+
+                                                     await updateOrder(orderToCancel.id, {
+                                                         status: 'cancelled',
+                                                         cancellationStage: orderToCancel.status as any,
+                                                         cancellationReason: trimmedReason || defaultReason,
+                                                         refundStatus: isRefund ? 'refunded' : 'no-refund',
+                                                         refundAmount: refundAmt,
+                                                         refundReason: finalReason,
+                                                         cancelledAt: new Date(),
+                                                         preCancellationState: preCancellationSnapshot
+                                                     });
+                                                     setCancellationReason('');
+                                                     setCancelOrderModal(null);
+                                                     if (isRefund) {
+                                                         toast.success(`Order #${orderToCancel.orderNumber} cancelled. Full refund of ${formatPeso(refundAmt)} issued since service had not commenced.`);
+                                                     } else {
+                                                         toast.error(`Order #${orderToCancel.orderNumber} cancelled. No refund issued per policy (service already commenced).`);
+                                                     }
                                                 } finally {
                                                     isCancellingRef.current = false;
                                                     setIsCancelling(false);

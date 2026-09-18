@@ -282,24 +282,21 @@ def normalize_historical_timeline(order) -> Dict[str, Any]:
     except (TypeError, ValueError):
         stored_days = None
 
-    days = stored_days
+    # Do not invent release or claimed dates if missing; paper orders without them must remain null.
+    # Only enforce chronology if dates are genuinely present.
     if received:
-        ready = received + timedelta(days=duration)
-        if expected is None or expected < received:
+        if expected is not None and expected < received:
+            ready = received + timedelta(days=duration)
             expected = ready
-        if claimed is None or claimed < received:
-            claimed = expected if expected >= received else ready
-        days = (claimed - received).days
-        # Recap leftover archive spans (e.g. 717 days), negative dates, and
-        # doubled combo sums (FR 25 + MRES 25 = 50). Keep a modest user-edited
-        # span that is only slightly longer than the official duration.
-        doubled_combo = duration > 0 and days > duration and days >= duration * 2
-        if days < 0 or days > MAX_REASONABLE_COMPLETION_DAYS or doubled_combo:
-            expected = ready
-            claimed = ready
-            days = duration
-    elif stored_days is not None and (stored_days < 0 or stored_days > MAX_REASONABLE_COMPLETION_DAYS):
-        days = duration
+        if claimed is not None and claimed < received:
+            claimed = received
+
+        if claimed is not None:
+            days = max(0, (claimed - received).days)
+        else:
+            days = None
+    else:
+        days = None
 
     return {
         "date_received": received,
@@ -466,10 +463,14 @@ def apply_normalized_timeline(order) -> Dict[str, Any]:
         if isinstance(prev, datetime) and (prev.hour or prev.minute or prev.second):
             tod = prev.time()
         order.date_received = datetime.combine(timeline["date_received"], tod)
-    if timeline["expected_release"]:
+    if timeline.get("expected_release") is not None:
         order.original_estimated_release_date = datetime.combine(timeline["expected_release"], datetime.min.time())
-    if timeline["claimed_date"]:
+    else:
+        order.original_estimated_release_date = None
+    if timeline.get("claimed_date") is not None:
         order.claimed_date = datetime.combine(timeline["claimed_date"], datetime.min.time())
+    else:
+        order.claimed_date = None
     order.completion_days = timeline["completion_days"]
     return timeline
 
@@ -512,9 +513,14 @@ def apply_explicit_completion_days(
 
     claimed_dt = _as_dt(claimed_date)
     expected_dt = _as_dt(expected_release)
-    order.claimed_date = claimed_dt if claimed_dt is not None and claimed_dt >= received_dt else ready
-    if expected_dt is not None and expected_dt >= received_dt:
-        order.original_estimated_release_date = expected_dt
+    if claimed_dt is not None:
+        order.claimed_date = claimed_dt if claimed_dt >= received_dt else ready
+    else:
+        order.claimed_date = None
+    if expected_dt is not None:
+        order.original_estimated_release_date = expected_dt if expected_dt >= received_dt else None
+    else:
+        order.original_estimated_release_date = None
     order.completion_days = days
 
 
@@ -1150,9 +1156,9 @@ def apply_order_corrections(order, corrections, db: Session, assign_canonical_id
                             val = datetime.combine(parsed, datetime.min.time()) if parsed else None
                         setattr(db_item, item_field, val)
                         continue
-                    if item_field == "item_price" and val == "":
+                    if val == "":
                         val = None
-                    elif item_field == "item_price" and (
+                    if item_field == "item_price" and (
                         item_data.get("is_free") is True
                         or (isinstance(val, str) and val.strip().lower() == "free")
                     ):
@@ -1282,18 +1288,28 @@ def apply_order_corrections(order, corrections, db: Session, assign_canonical_id
                 if old_item.historical_item_id not in kept_ids:
                     db.delete(old_item)
 
-        elif field == "customer":
-            if order.customer and isinstance(value, dict):
+        elif field in ("customer", "customer_name", "contact_number"):
+            name = None
+            contact = None
+            if isinstance(value, dict):
                 name = value.get("name") or value.get("customer_name")
                 contact = value.get("contact") or value.get("contact_number")
-                if name:
-                    if hasattr(order.customer, "customer_name"):
-                        order.customer.customer_name = name
-                    elif hasattr(order.customer, "name"):
-                        order.customer.name = name
+            elif field == "customer_name":
+                name = str(value).strip() if value else None
+            elif field == "contact_number":
+                contact = str(value).strip() if value else None
+
+            if order.customer:
+                if name is not None:
+                    order.customer.customer_name = name or None
                 if contact is not None:
-                    if hasattr(order.customer, "contact_number"):
-                        order.customer.contact_number = contact
+                    order.customer.contact_number = contact or None
+            elif name or contact:
+                from models import Customer
+                cust = Customer(customer_name=name or "Customer", contact_number=contact)
+                db.add(cust)
+                db.flush()
+                order.customer_id = cust.customer_id
         elif field == "order_id":
             continue
         elif field == "control_no":

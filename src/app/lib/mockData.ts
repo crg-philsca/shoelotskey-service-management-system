@@ -3,23 +3,23 @@ import { Service, JobOrder, JobStatus, Shelf, Priority, PaymentMethod } from '@/
 // Services based on the pricing image
 export const mockServices: Service[] = [
   // Base Services
-  { id: '1', name: 'Basic Cleaning', price: 325, category: 'base', active: true, description: 'Standard shoe cleaning service', durationDays: 10, code: 'BCN' },
-  { id: '2', name: 'Minor Reglue', price: 125, category: 'base', active: true, description: 'Minor regluing', durationDays: 25, code: 'MRG' },
-  { id: '3', name: 'Full Reglue', price: 250, category: 'base', active: true, description: 'Full regluing', durationDays: 25, code: 'FRG' },
-  { id: '4', name: 'Color Renewal', price: 325, category: 'base', active: true, durationDays: 15, code: 'CR2' },
+  { id: '1', name: 'Basic Cleaning', price: 325, category: 'base', active: true, description: 'Standard shoe cleaning service', durationDays: 10, code: 'BC' },
+  { id: '2', name: 'Minor Reglue', price: 125, category: 'base', active: true, description: 'Minor regluing', durationDays: 25, code: 'MR' },
+  { id: '3', name: 'Full Reglue', price: 250, category: 'base', active: true, description: 'Full regluing', durationDays: 25, code: 'FR' },
+  { id: '4', name: 'Color Renewal', price: 325, category: 'base', active: true, durationDays: 15, code: 'COR' },
 
   // Add-ons
   { id: '6', name: 'Unyellowing', price: 125, category: 'addon', active: true, durationDays: 5, code: 'UNY' },
   { id: '12', name: 'White Paint', price: 150, category: 'addon', active: true, durationDays: 0, code: 'WPT' },
-  { id: '7', name: 'Minor Retouch', price: 125, category: 'addon', active: true, durationDays: 0, code: 'MRT' },
+  { id: '7', name: 'Minor Retouch', price: 125, category: 'addon', active: true, durationDays: 0, code: 'MRET' },
   { id: '8', name: 'Add Glue Layer', price: 150, category: 'addon', active: true, durationDays: 0, code: 'AGL' },
-  { id: '9', name: 'Minor Restoration', price: 225, category: 'addon', active: true, durationDays: 0, code: 'MRS' },
-  { id: '10', name: '2 Colors', price: 375, category: 'addon', active: true, durationDays: 25, code: 'CR2' },
-  { id: '11', name: '3 Colors', price: 475, category: 'addon', active: true, durationDays: 25, code: 'CR3' },
-  { id: '18', name: 'Full Reglue Midsole', price: 150, category: 'addon', active: true, durationDays: 25, code: 'FRM' },
-  { id: '19', name: 'Full Reglue Undersole', price: 150, category: 'addon', active: true, durationDays: 25, code: 'FRU' },
-  { id: '20', name: 'Midsole', price: 150, category: 'addon', active: true, durationDays: 25, code: 'FRM' },
-  { id: '21', name: 'Undersole', price: 150, category: 'addon', active: true, durationDays: 25, code: 'FRU' },
+  { id: '9', name: 'Minor Restoration', price: 225, category: 'addon', active: true, durationDays: 0, code: 'MRES' },
+  { id: '10', name: '2 Color', price: 375, category: 'addon', active: true, durationDays: 25, code: 'COR2' },
+  { id: '11', name: '3 Color', price: 475, category: 'addon', active: true, durationDays: 25, code: 'COR3' },
+  { id: '18', name: 'Full Reglue Midsole', price: 150, category: 'addon', active: true, durationDays: 25, code: 'FRMID' },
+  { id: '19', name: 'Full Reglue Undersole', price: 150, category: 'addon', active: true, durationDays: 25, code: 'FRUND' },
+  { id: '20', name: 'Midsole', price: 150, category: 'addon', active: true, durationDays: 25, code: 'FRMID' },
+  { id: '21', name: 'Undersole', price: 150, category: 'addon', active: true, durationDays: 25, code: 'FRUND' },
 
   // Priority
   { id: '13', name: 'Rush Fee (Basic Cleaning)', price: 150, category: 'priority', active: true, durationDays: -9 },
@@ -173,6 +173,7 @@ export interface Expense {
   date: string;
   frequency?: 'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Yearly' | 'One-Time' | string;
   notes?: string;
+  group?: string;
 }
 
 export const mockExpenses: Expense[] = [

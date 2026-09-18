@@ -1,11 +1,14 @@
 # Shoelotskey SMS - Main Entry
 
-from fastapi import FastAPI, Depends, HTTPException, Body, Request
+from fastapi import FastAPI, Depends, HTTPException, Body, Request, Security, Response
+from fastapi.security import HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import text, inspect, func, or_, case
+from sqlalchemy.exc import IntegrityError
 from typing import List, Dict, Any, Union, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import os
 import uuid
 import json
@@ -144,15 +147,17 @@ from models import (
     User, Customer, Role, Status, AuditLog, ItemServiceMapping,
     Payment, Delivery, ServiceCategory, PriorityLevel, Condition,
     ItemConditionMapping, ShippingPreference, PaymentMethod, PaymentStatus,
-    Inventory, InventoryLog,
-    HistoricalOrder, HistoricalItem, HistoricalItemService, HistoricalPrediction, HistoricalImage
+    Inventory, InventoryLog, MaterialConsumption, CashSession,
+    HistoricalOrder, HistoricalItem, HistoricalItemService, HistoricalPrediction, HistoricalImage,
+    ResearchTestRun, ResearchMeasurement
 )
 from db.repositories import InventoryRepository
 from schemas import (
     OrderSchema, ServiceSchema, ExpenseSchema, UserSchema, LoginRequest, 
     ForgotPasswordRequest, ResetPasswordRequest, RoleSchema, StatusSchema, 
     ItemSchema, PaymentSchema, DeliverySchema, UserCreateSchema, UserUpdateSchema,
-    InventorySchema, InventoryUpdateSchema, InventoryLogSchema
+    InventorySchema, InventoryUpdateSchema, InventoryLogSchema, OrderMaterialPayload,
+    OpenCashRegisterRequest, CloseCashRegisterRequest
 )
 from db.database import (
     engine, get_db, SessionLocal, DATABASE_URL, is_sqlite, conn_error,
@@ -170,6 +175,14 @@ from auth_utils import (
     humanize_server_error,
     frontend_base_for_reset_link,
     local_vite_auth_redirect,
+    is_eval_account,
+    is_user_session_active,
+    register_user_session,
+    revoke_user_session,
+    invalidate_user_cache,
+    security,
+    SECRET_KEY,
+    ALGORITHM,
 )
 
 # ------------------------------------------
@@ -185,20 +198,137 @@ _IS_PRODUCTION = (
 )
 ENV = "Production" if _IS_PRODUCTION else "Localhost"
 
-def parse_local_date(iso_str: Optional[str]) -> datetime:
-    if not iso_str:
-        return datetime.now()
+def parse_local_date(date_input: Optional[Any]) -> datetime:
+    from datetime import date as dt_date, datetime as dt_datetime
+    if not date_input:
+        return dt_datetime.now()
+    if isinstance(date_input, dt_datetime):
+        return date_input.astimezone().replace(tzinfo=None) if date_input.tzinfo else date_input
+    if isinstance(date_input, dt_date):
+        return dt_datetime(date_input.year, date_input.month, date_input.day)
+
+    raw_str = str(date_input).strip()
+    if not raw_str:
+        return dt_datetime.now()
+
+    # 1. Try ISO format
     try:
-        # Standardize UTC indicator to '+00:00' for fromisoformat compatibility
-        clean_str = iso_str.replace('Z', '+00:00')
+        clean_str = raw_str.replace('Z', '+00:00')
         dt = datetime.fromisoformat(clean_str)
         if dt.tzinfo is not None:
-            # Convert to local timezone and strip timezone metadata to make it naive local
             return dt.astimezone().replace(tzinfo=None)
         return dt
-    except Exception as e:
-        print(f"[DATE PARSER] Warning: Failed to parse '{iso_str}', returning current time. Error: {e}")
-        return datetime.now()
+    except Exception:
+        pass
+
+    # 2. Try common formats (e.g. MM/dd/yyyy, HH:mm or YYYY-MM-DD HH:mm:ss)
+    formats = [
+        "%m/%d/%Y, %H:%M",
+        "%m/%d/%Y, %H:%M:%S",
+        "%m/%d/%Y %H:%M",
+        "%m/%d/%Y %H:%M:%S",
+        "%m/%d/%Y, %I:%M %p",
+        "%m/%d/%Y %I:%M %p",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d %H:%M",
+        "%Y-%m-%d",
+        "%m/%d/%Y",
+    ]
+    for fmt in formats:
+        try:
+            return datetime.strptime(raw_str, fmt)
+        except ValueError:
+            continue
+
+    print(f"[DATE PARSER] Warning: Failed to parse '{date_input}', returning current time.")
+    return datetime.now()
+
+
+def resolve_activity_datetime(
+    raw_timestamp: Optional[Any] = None,
+    order_number: Optional[str] = None,
+    order_date: Optional[str] = None,
+    order_time: Optional[str] = None,
+    details: Optional[str] = None,
+) -> datetime:
+    """
+    Chronologically pins an activity/order log to its true historical or specified intake date & time.
+    Resolution priority:
+    1. Explicit order_date + order_time
+    2. Order number pattern (ORD-YYYY-MM-DD-XXX or JO-YYYY-MM-DD-XXX) + order_time
+    3. raw_timestamp string (ISO or local formatted)
+    4. Order number regex from details string
+    5. Fallback to datetime.now()
+    """
+    def parse_time_parts(t_str: Optional[str]):
+        if not t_str:
+            return None
+        cleaned = str(t_str).strip()
+        is_pm = bool(re.search(r'pm', cleaned, re.IGNORECASE))
+        is_am = bool(re.search(r'am', cleaned, re.IGNORECASE))
+        m = re.search(r'(\d{1,2}):(\d{2})', cleaned)
+        if m:
+            h = int(m.group(1))
+            minute = int(m.group(2))
+            if is_pm and h < 12:
+                h += 12
+            elif is_am and h == 12:
+                h = 0
+            return h, minute
+        return None
+
+    time_tuple = parse_time_parts(order_time)
+
+    # 1. Explicit order_date
+    if order_date:
+        d_str = str(order_date).strip()
+        parsed_d = None
+        if "-" in d_str:
+            parts = d_str.split("-")
+            if len(parts) == 3 and len(parts[0]) == 4:
+                try:
+                    parsed_d = (int(parts[0]), int(parts[1]), int(parts[2]))
+                except ValueError:
+                    pass
+        elif "/" in d_str:
+            parts = d_str.split("/")
+            if len(parts) == 3:
+                try:
+                    parsed_d = (int(parts[2]), int(parts[0]), int(parts[1]))
+                except ValueError:
+                    pass
+        if parsed_d:
+            h = time_tuple[0] if time_tuple else 0
+            mi = time_tuple[1] if time_tuple else 0
+            return datetime(parsed_d[0], parsed_d[1], parsed_d[2], h, mi, 0)
+
+    # 2. Order number pattern: e.g. ORD-2026-09-17-002
+    target_num = order_number or ""
+    if not target_num and details:
+        m_num = re.search(r'(?:ORD|JO)-(\d{4})-(\d{2})-(\d{2})-\d+', str(details))
+        if m_num:
+            target_num = m_num.group(0)
+
+    if target_num:
+        m_date = re.search(r'(\d{4})-(\d{2})-(\d{2})', str(target_num))
+        if m_date:
+            y, m, d = int(m_date.group(1)), int(m_date.group(2)), int(m_date.group(3))
+            h = time_tuple[0] if time_tuple else 0
+            mi = time_tuple[1] if time_tuple else 0
+            if not time_tuple and raw_timestamp:
+                try:
+                    ts_dt = parse_local_date(raw_timestamp)
+                    if ts_dt and (ts_dt.hour != 0 or ts_dt.minute != 0):
+                        h, mi = ts_dt.hour, ts_dt.minute
+                except Exception:
+                    pass
+            return datetime(y, m, d, h, mi, 0)
+
+    # 3. raw_timestamp fallback
+    if raw_timestamp:
+        return parse_local_date(raw_timestamp)
+
+    return datetime.now()
 
 def recalculate_inventory_status(item: Inventory):
     item.recalculate_status()
@@ -221,12 +351,12 @@ def assert_assignable_role(actor: User, role_name: str) -> str:
     """Prevent Owner privilege escalation into Admin."""
     requested = str(role_name or "").strip().lower()
     actor_role = str(getattr(getattr(actor, "role", None), "role_name", "") or "").strip().lower()
-    if requested not in ("owner", "staff", "admin"):
+    if requested not in ("owner", "staff", "front staff", "admin"):
         raise HTTPException(status_code=400, detail="Invalid role specified")
     if requested == "admin" and actor_role != "admin":
         raise HTTPException(status_code=403, detail="Only an Admin can assign the Admin role")
-    if actor_role == "owner" and requested not in ("owner", "staff"):
-        raise HTTPException(status_code=403, detail="Owner accounts may only assign Owner or Staff roles")
+    if actor_role == "owner" and requested not in ("owner", "staff", "front staff"):
+        raise HTTPException(status_code=403, detail="Owner accounts may only assign Owner, Staff, or Front Staff roles")
     return requested
 
 # ==========================================
@@ -244,6 +374,7 @@ TABLE_TO_MODULE: dict = {
     "services":            "Services",
     "service_categories":  "Services",
     "expenses":            "Expenses",
+    "cash_sessions":       "Cash Register",
     "auth":                "Authentication",
     "audit_logs":          "System",
     "backend_v2":          "System",
@@ -453,6 +584,7 @@ def log_audit(
     new_values: Optional[dict] = None,
     request: Optional[Any] = None,
     module: Optional[str] = None,
+    created_at: Optional[datetime] = None,
 ) -> Optional[AuditLog]:
     """
     Centralized, fail-safe audit log writer.
@@ -502,44 +634,60 @@ def log_audit(
         action_u = (action or "").upper().replace(" ", "_")
 
         # Deduplication check: prevent duplicate logs for the same user, action, table, and record within a recent window
-        try:
-            from datetime import timedelta
-            dedup_window_secs = 60 if action_u in ("LOGIN", "LOGIN_SUCCESS", "PRINT", "REPORT_GENERATED", "EXPORT_PDF", "EXPORT_CSV") else 10
-            window_start = datetime.now() - timedelta(seconds=dedup_window_secs)
-            recent_q = db.query(AuditLog).filter(
-                AuditLog.username == actor_username,
-                AuditLog.action_type == action,
-                AuditLog.table_name == table_name,
-                AuditLog.created_at >= window_start,
-            )
-            if record_id is not None:
-                recent_q = recent_q.filter(AuditLog.record_id == record_id)
-            else:
-                recent_q = recent_q.filter(AuditLog.record_id.is_(None))
-            
-            existing = recent_q.order_by(AuditLog.audit_log_id.desc()).first()
-            if existing:
-                # Non-destructive overwrite: enrich new_values if existing lacked details
-                if new_values and isinstance(new_values, dict) and not existing.new_values:
-                    existing.new_values = new_values
-                    db.commit()
-                return existing
-        except Exception:
-            pass  # Fail safe to ensure logging continues
+        # EXEMPTION: Status transitions and undos (e.g. order status changes) must ALWAYS be logged and never deduplicated!
+        is_status_transition = False
+        if old_values and new_values and isinstance(old_values, dict) and isinstance(new_values, dict):
+            old_st = str(old_values.get("status") or old_values.get("order_status") or "").strip().lower()
+            new_st = str(new_values.get("status") or new_values.get("order_status") or "").strip().lower()
+            if old_st and new_st and old_st != new_st:
+                is_status_transition = True
+        if new_values and isinstance(new_values, dict):
+            det = str(new_values.get("details") or "").lower()
+            if "status changed" in det or "status reverted" in det or "undo" in det or "reverted from" in det:
+                is_status_transition = True
 
-        entry = AuditLog(
-            user_id=user.user_id if user else None,
-            username=user.username if user else "system",
-            role=user.role.role_name if (user and user.role) else "system",
-            action_type=action,
-            module=resolved_module,
-            table_name=table_name,
-            record_id=record_id,
-            old_values=old_values,
-            new_values=new_values,
-            ip_address=ip_address,
-            user_agent=user_agent,
-        )
+        if not is_status_transition:
+            try:
+                from datetime import timedelta
+                dedup_window_secs = 60 if action_u in ("LOGIN", "LOGIN_SUCCESS", "PRINT", "REPORT_GENERATED", "EXPORT_PDF", "EXPORT_CSV") else 10
+                window_start = datetime.now() - timedelta(seconds=dedup_window_secs)
+                recent_q = db.query(AuditLog).filter(
+                    AuditLog.username == actor_username,
+                    AuditLog.action_type == action,
+                    AuditLog.table_name == table_name,
+                    AuditLog.created_at >= window_start,
+                )
+                if record_id is not None:
+                    recent_q = recent_q.filter(AuditLog.record_id == record_id)
+                else:
+                    recent_q = recent_q.filter(AuditLog.record_id.is_(None))
+                
+                existing = recent_q.order_by(AuditLog.audit_log_id.desc()).first()
+                if existing:
+                    # Non-destructive overwrite: enrich new_values if existing lacked details
+                    if new_values and isinstance(new_values, dict) and not existing.new_values:
+                        existing.new_values = new_values
+                        db.commit()
+                    return existing
+            except Exception:
+                pass  # Fail safe to ensure logging continues
+
+        entry_kwargs = {
+            "user_id": user.user_id if user else None,
+            "username": user.username if user else "system",
+            "role": user.role.role_name if (user and user.role) else "system",
+            "action_type": action,
+            "module": resolved_module,
+            "table_name": table_name,
+            "record_id": record_id,
+            "old_values": old_values,
+            "new_values": new_values,
+            "ip_address": ip_address,
+            "user_agent": user_agent,
+        }
+        if created_at is not None:
+            entry_kwargs["created_at"] = created_at
+        entry = AuditLog(**entry_kwargs)
         db.add(entry)
         db.commit()
         return entry
@@ -565,6 +713,9 @@ app = FastAPI(
     redoc_url=None if _IS_PRODUCTION else "/redoc",
     openapi_url=None if _IS_PRODUCTION else "/openapi.json",
 )
+
+from api.research import router as research_router
+app.include_router(research_router)
 
 # Defense-in-depth: even if docs routes were somehow mounted, block them in Production.
 if _IS_PRODUCTION:
@@ -821,6 +972,12 @@ def startup_sequence():
                 if "reset_token_expiry" not in columns:
                     try: conn.execute(text("ALTER TABLE users ADD COLUMN reset_token_expiry TIMESTAMP"))
                     except: pass
+                if "active_session_id" not in columns:
+                    try: conn.execute(text("ALTER TABLE users ADD COLUMN active_session_id VARCHAR(100)"))
+                    except: pass
+                else:
+                    try: conn.execute(text("UPDATE users SET active_session_id = NULL WHERE active_session_id IS NOT NULL"))
+                    except: pass
     except Exception as e:
         print(f">>> Migration Warning (users table): {e}")
 
@@ -998,6 +1155,9 @@ def startup_sequence():
                             conn.execute(text(f"ALTER TABLE orders ADD COLUMN inventory_used {json_type} DEFAULT '[]'::jsonb"))
                         else:
                             conn.execute(text(f"ALTER TABLE orders ADD COLUMN inventory_used {json_type} DEFAULT '[]'"))
+                    if 'pre_cancellation_state' not in cols:
+                        print(f">>> Migration ({engine_name}): Adding orders.pre_cancellation_state ({json_type})")
+                        conn.execute(text(f"ALTER TABLE orders ADD COLUMN pre_cancellation_state {json_type}"))
                 
                 # Fix ITEMS table
                 if 'items' in tables:
@@ -1009,12 +1169,27 @@ def startup_sequence():
                         else:
                             conn.execute(text(f"ALTER TABLE items ADD COLUMN inventory_used {json_type} DEFAULT '[]'"))
                 
-                # Fix INVENTORY table — add low_stock_threshold if missing
+                # Fix INVENTORY table — add low_stock_threshold if missing and expand trigger_service to TEXT on PostgreSQL
                 if 'inventory' in tables:
                     inv_cols = [c['name'] for c in inspector.get_columns('inventory')]
                     if 'low_stock_threshold' not in inv_cols:
                         print(f">>> Migration ({engine_name}): Adding inventory.low_stock_threshold")
                         conn.execute(text("ALTER TABLE inventory ADD COLUMN low_stock_threshold FLOAT DEFAULT 0.0"))
+                    if is_pg and 'trigger_service' in inv_cols:
+                        try:
+                            conn.execute(text("ALTER TABLE inventory ALTER COLUMN trigger_service TYPE TEXT;"))
+                        except Exception:
+                            pass
+
+                # Fix INVENTORY_LOGS table — add service_name and execution_ref
+                if 'inventory_logs' in tables:
+                    log_cols = [c['name'] for c in inspector.get_columns('inventory_logs')]
+                    if 'service_name' not in log_cols:
+                        print(f">>> Migration ({engine_name}): Adding inventory_logs.service_name")
+                        conn.execute(text("ALTER TABLE inventory_logs ADD COLUMN service_name VARCHAR(100) NULL"))
+                    if 'execution_ref' not in log_cols:
+                        print(f">>> Migration ({engine_name}): Adding inventory_logs.execution_ref")
+                        conn.execute(text("ALTER TABLE inventory_logs ADD COLUMN execution_ref VARCHAR(100) NULL"))
                 
         except Exception as e:
             print(f">>> Migration Warning ({sync_engine.url}): {e}")
@@ -1158,11 +1333,12 @@ def startup_sequence():
                 if "orders" in tbl_names:
                     ord_cols = [c['name'] for c in feat_inspector.get_columns("orders")]
                     for col_name, pg_t, sq_t in [
-                        ("cancellation_stage", "VARCHAR(30)", "VARCHAR(30)"),
-                        ("refund_status",      "VARCHAR(30)", "VARCHAR(30)"),
-                        ("refund_amount",      "NUMERIC(10, 2) DEFAULT 0.0", "DECIMAL(10, 2) DEFAULT 0.0"),
-                        ("refund_reason",      "VARCHAR(255)", "VARCHAR(255)"),
-                        ("cancelled_at",       "TIMESTAMP", "TIMESTAMP"),
+                        ("cancellation_stage",  "VARCHAR(30)", "VARCHAR(30)"),
+                        ("cancellation_reason", "VARCHAR(255)", "VARCHAR(255)"),
+                        ("refund_status",       "VARCHAR(30)", "VARCHAR(30)"),
+                        ("refund_amount",       "NUMERIC(10, 2) DEFAULT 0.0", "DECIMAL(10, 2) DEFAULT 0.0"),
+                        ("refund_reason",       "VARCHAR(255)", "VARCHAR(255)"),
+                        ("cancelled_at",        "TIMESTAMP", "TIMESTAMP"),
                     ]:
                         if col_name not in ord_cols:
                             col_type = pg_t if is_pg else sq_t
@@ -1191,6 +1367,12 @@ def startup_sequence():
                                 print(f">>> Migration Notice (items.{col_name} on {engine_label}): {c_err}")
             except Exception as feat_mig_err:
                 print(f">>> Feature Migration Notice on {engine_label}: {feat_mig_err}")
+
+            # 5. ATOMIC MIGRATION: Cash Sessions table
+            try:
+                CashSession.__table__.create(bind=sync_engine, checkfirst=True)
+            except Exception as cs_mig_err:
+                print(f">>> Migration Notice (cash_sessions on {engine_label}): {cs_mig_err}")
     except Exception as al_outer_err:
         print(f">>> Migration Warning (audit_logs outer): {al_outer_err}")
 
@@ -1273,7 +1455,7 @@ def seed_lookups(db: Session):
     # Seed Roles
     if db.query(Role).count() == 0:
         print(">>> Seeding Roles...")
-        roles = [Role(role_name="owner"), Role(role_name="staff"), Role(role_name="admin")]
+        roles = [Role(role_name="owner"), Role(role_name="staff"), Role(role_name="front staff"), Role(role_name="admin")]
         db.add_all(roles)
         db.commit()
     else:
@@ -1282,6 +1464,21 @@ def seed_lookups(db: Session):
         if not admin_role:
             db.add(Role(role_name="admin"))
             db.commit()
+        # Ensure front staff role exists dynamically
+        front_staff_role = db.query(Role).filter(Role.role_name == "front staff").first()
+        if not front_staff_role:
+            front_staff_role = Role(role_name="front staff")
+            db.add(front_staff_role)
+            db.commit()
+
+    # Ensure front_staff user has the front staff role
+    front_staff_role = db.query(Role).filter(Role.role_name == "front staff").first()
+    if front_staff_role:
+        fs_u = db.query(User).filter(User.username == "front_staff").first()
+        if fs_u and fs_u.role_id != front_staff_role.role_id:
+            fs_u.role_id = front_staff_role.role_id
+            db.commit()
+            print(">>> Updated user 'front_staff' to role 'front staff'.")
 
     # Seed Admin User
     import bcrypt
@@ -1368,7 +1565,7 @@ def seed_lookups(db: Session):
         {"service_name": "Undersole", "base_price": 150, "category": "addon", "duration_days": 25, "service_code": "USL", "is_active": True, "sort_order": 10},
         {"service_name": "Midsole", "base_price": 150, "category": "addon", "duration_days": 25, "service_code": "MSL", "is_active": True, "sort_order": 11},
         {"service_name": "Minor Restoration", "base_price": 300, "category": "addon", "duration_days": 25, "service_code": "MRS", "is_active": True, "sort_order": 12},
-        {"service_name": "Minor Retouch", "base_price": 125, "category": "addon", "duration_days": 5, "service_code": "MRT", "is_active": True, "sort_order": 13},
+        {"service_name": "Minor Retouch", "base_price": 125, "category": "addon", "duration_days": 20, "service_code": "MRT", "is_active": True, "sort_order": 13},
         {"service_name": "Add Glue Layer", "base_price": 100, "category": "addon", "duration_days": 2, "service_code": "AGL", "is_active": True, "sort_order": 14},
         {"service_name": "Unyellowing", "base_price": 125, "category": "addon", "duration_days": 5, "service_code": "UNY", "is_active": True, "sort_order": 15},
         {"service_name": "White Paint", "base_price": 150, "category": "addon", "duration_days": 0, "service_code": "WPT", "is_active": True, "sort_order": 16},
@@ -2371,14 +2568,30 @@ def login(request: LoginRequest, db: Session = Depends(get_db), http_request: Re
             print(f"[AUTH] Denied: Account '{request.username}' is inactive/deactivated.")
             raise HTTPException(status_code=403, detail="Account is deactivated. Please contact an administrator.")
 
-        # 1. CHECK LOCK STATUS
-        if db_user.locked_until:
+        # 1. CHECK LOCK STATUS (Admin account is completely immune to lockouts)
+        is_admin_account = (db_user.username or '').lower() == 'admin' or (db_user.role and db_user.role.role_name.lower() == 'admin')
+        if is_admin_account:
+            if db_user.locked_until is not None or (db_user.failed_login_attempts or 0) > 0:
+                db_user.locked_until = None
+                db_user.failed_login_attempts = 0
+                try:
+                    db.commit()
+                except Exception:
+                    db.rollback()
+        elif db_user.locked_until:
             if db_user.locked_until > datetime.utcnow():
-                remaining = (db_user.locked_until - datetime.utcnow()).total_seconds() / 60
-                print(f"[AUTH] Denied: Account '{request.username}' is locked for {remaining:.1f} more mins.")
+                if db_user.locked_until.year >= 2099:
+                    print(f"[AUTH] Denied: Account '{request.username}' has been restricted by an administrator.")
+                    raise HTTPException(
+                        status_code=403, 
+                        detail="Account access has been restricted by an administrator. Please contact your manager or owner to unlock."
+                    )
+                import math
+                remaining = max(1, int(math.ceil((db_user.locked_until - datetime.utcnow()).total_seconds() / 60.0)))
+                print(f"[AUTH] Denied: Account '{request.username}' is locked for {remaining} more mins.")
                 raise HTTPException(
                     status_code=403, 
-                    detail=f"Account locked. Try again in {int(remaining)} minutes."
+                    detail=f"Account locked. Try again in {remaining} minute{'s' if remaining != 1 else ''}."
                 )
             else:
                 # Lock has expired. Reset attempts to prevent immediate re-locking on next failure.
@@ -2406,20 +2619,24 @@ def login(request: LoginRequest, db: Session = Depends(get_db), http_request: Re
                 db_user.failed_login_attempts = 0
                 db_user.locked_until = None
                 db.commit()
-                
-                # Security Log: Success (OWASP A09)
-                log_audit(
-                    db=db, action="LOGIN", table_name="auth",
-                    record_id=db_user.user_id, user=db_user,
-                    new_values={"status": "success", "username": db_user.username},
-                    request=http_request, module="Authentication",
-                )
             except Exception as auth_db_err:
-                print(f"[AUTH RESILIENCE] Non-fatal warning: Failed to save login audit/reset attempt counters: {auth_db_err}")
+                print(f"[AUTH RESILIENCE] Non-fatal warning: Failed to reset attempt counters: {auth_db_err}")
                 db.rollback()
 
-            print(f"[AUTH] Granted: {db_user.username} authenticated.")
-            access_token = create_access_token(data={"sub": db_user.username})
+            session_id = str(uuid.uuid4())
+            register_user_session(db, db_user, session_id, http_request)
+            invalidate_user_cache(db_user.username)
+
+            # Security Log: AUTH_LOGIN_SUCCESS (OWASP A09)
+            log_audit(
+                db=db, action="AUTH_LOGIN_SUCCESS", table_name="auth",
+                record_id=db_user.user_id, user=db_user,
+                new_values={"status": "success", "username": db_user.username, "session_id": session_id[:8] + "..."},
+                request=http_request, module="Authentication",
+            )
+
+            print(f"[AUTH] Granted: {db_user.username} authenticated (session: {session_id}).")
+            access_token = create_access_token(data={"sub": db_user.username}, session_id=session_id)
 
             return {
                 "user_id": db_user.user_id,
@@ -2430,7 +2647,23 @@ def login(request: LoginRequest, db: Session = Depends(get_db), http_request: Re
                 "token_type": "bearer"
             }
         else:
-            # FAILURE: Increment attempts
+            # FAILURE: Increment attempts (Admin account never locks out)
+            if is_admin_account:
+                db_user.failed_login_attempts = 0
+                db_user.locked_until = None
+                try:
+                    db.commit()
+                except Exception:
+                    db.rollback()
+                print(f"[AUTH] Denied: Bad password for admin account '{request.username}'. Lockout bypassed (Admin account is immune).")
+                log_audit(
+                    db=db, action="LOGIN_FAILED", table_name="auth",
+                    record_id=db_user.user_id, user=db_user,
+                    new_values={"reason": "wrong_password", "failed_attempts": 0, "admin_immunity": True},
+                    request=http_request, module="Authentication",
+                )
+                raise HTTPException(status_code=401, detail="Invalid username or password")
+
             db_user.failed_login_attempts += 1
             if db_user.failed_login_attempts >= 3:
                 db_user.locked_until = datetime.utcnow() + timedelta(minutes=15)
@@ -2466,19 +2699,37 @@ def login(request: LoginRequest, db: Session = Depends(get_db), http_request: Re
         raise HTTPException(status_code=500, detail="Internal Authentication Error")
 
 @app.post("/api/logout")
-def logout(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def logout(
+    db: Session = Depends(get_db), 
+    current_user: User = Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
     """
-    Logout endpoint purely for audit trail logging.
-    JWTs are stateless — the actual token invalidation happens client-side by clearing localStorage.
-    This endpoint records the LOGOUT event so it appears in the Activity History.
+    Logout endpoint for session invalidation and audit trail logging.
+    Revokes ONLY the current session (identified by session_id/sid),
+    leaving other sessions belonging to the same account active.
     """
+    token_sid = getattr(current_user, '_current_token_sid', None)
+    if not token_sid and credentials and credentials.credentials:
+        try:
+            import jwt
+            p = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+            token_sid = p.get("sid")
+        except Exception:
+            pass
+
+    if token_sid:
+        revoke_user_session(db, current_user.username, session_id=token_sid)
+
+    invalidate_user_cache(current_user.username)
+
     log_audit(
-        db=db, action="LOGOUT", table_name="auth",
+        db=db, action="AUTH_LOGOUT", table_name="auth",
         record_id=current_user.user_id, user=current_user,
-        new_values={"status": "logged_out", "username": current_user.username},
+        new_values={"status": "logged_out", "username": current_user.username, "session_id": (str(token_sid)[:8] + "...") if token_sid else ""},
         module="Authentication",
     )
-    print(f"[AUTH] Logout recorded for: {current_user.username}")
+    print(f"[AUTH] Logout recorded for: {current_user.username} (session: {token_sid})")
     return {"status": "success", "message": "Logout recorded"}
 
 @app.get("/api/auth/verify-token")
@@ -2711,6 +2962,24 @@ def get_prediction(
             "model_loaded": bool(estimate.get("model_loaded")),
             "algorithm": "Shoelotskey Business Rules",
         }
+
+        # ML System Logging (Phase 20)
+        log_audit(
+            db=db,
+            action="ML_PREDICTION_COMPLETED",
+            table_name="orders",
+            user=current_user,
+            new_values={
+                "model_version": "1.2",
+                "ml_status": ml_status,
+                "ml_predicted_days": estimate.get("ml_predicted_days"),
+                "business_rule_days": estimate.get("business_rule_days"),
+                "total_pairs": len(order_data.get("items") or [1]),
+                "status": "SUCCESS"
+            },
+            module="Machine Learning"
+        )
+
         if memo_key:
             _PREDICT_MEMO[memo_key] = {"response": resp, "time": time.time()}
         return resp
@@ -2913,8 +3182,8 @@ def delete_user(user_id: int, db: Session = Depends(get_db), current_user: User 
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
         
-    if db_user.username.lower() == "admin" or (db_user.role and db_user.role.role_name.lower() == "admin"):
-        raise HTTPException(status_code=403, detail="System account cannot be deleted.")
+    if db_user.username.lower() in ["admin", "owner", "front_staff", "staff"] or (db_user.role and db_user.role.role_name.lower() == "admin"):
+        raise HTTPException(status_code=403, detail="System and protected operational accounts (admin, owner, front_staff, staff) cannot be deleted.")
         
     # Prevent deleting the last owner
     if db_user.role.role_name == 'owner':
@@ -2984,8 +3253,15 @@ def delete_user(user_id: int, db: Session = Depends(get_db), current_user: User 
     return {"status": "success", "message": f"User {user_id} deleted"}
 
 @app.post("/api/users/{user_id}/unlock")
-def unlock_user(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_role("owner"))):
-    """Unlock a locked user account and reset failed login attempts (Owner and Admin only)."""
+def unlock_user(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Unlock a locked user account and reset failed login attempts (Owner, Expert Owner, and Admin only)."""
+    allowed_roles = ['owner', 'admin']
+    allowed_usernames = ['admin', 'owner', 'expert_owner']
+    user_role = (current_user.role.role_name if current_user.role else '').lower()
+    user_name = (current_user.username or '').lower()
+    if user_role not in allowed_roles and user_name not in allowed_usernames:
+        raise HTTPException(status_code=403, detail="Unauthorized: Only Owner, Expert Owner, and Admin can unlock accounts.")
+
     db_user = db.query(User).filter(User.user_id == user_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -3025,13 +3301,71 @@ def unlock_user(user_id: int, db: Session = Depends(get_db), current_user: User 
         "username": db_user.username
     }
 
+@app.post("/api/users/{user_id}/lock")
+def lock_user(user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Manually lock a user account (Owner, Expert Owner, and Admin only)."""
+    allowed_roles = ['owner', 'admin']
+    allowed_usernames = ['admin', 'owner', 'expert_owner']
+    user_role = (current_user.role.role_name if current_user.role else '').lower()
+    user_name = (current_user.username or '').lower()
+    if user_role not in allowed_roles and user_name not in allowed_usernames:
+        raise HTTPException(status_code=403, detail="Unauthorized: Only Owner, Expert Owner, and Admin can lock accounts.")
+
+    db_user = db.query(User).filter(User.user_id == user_id).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    target_role = (db_user.role.role_name if db_user.role else '').lower()
+    target_name = (db_user.username or '').lower()
+    if target_name == 'admin' or target_role == 'admin':
+        raise HTTPException(status_code=400, detail="System administrator account cannot be locked.")
+
+    db_user.failed_login_attempts = 3
+    db_user.locked_until = datetime(2099, 12, 31, 23, 59, 59)
+    db_user.active_session_id = None
+    db.commit()
+    db.refresh(db_user)
+
+    from auth_utils import invalidate_user_cache, revoke_user_session
+    invalidate_user_cache(db_user.username)
+    revoke_user_session(db, db_user.username, session_id=None)
+
+    try:
+        import sqlite3
+        conn = sqlite3.connect("backend/db/shoelotskey.db")
+        conn.execute("UPDATE users SET failed_login_attempts = 3, locked_until = '2099-12-31 23:59:59', active_session_id = NULL WHERE user_id = ? OR username = ?", (user_id, db_user.username))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[LOCK USER] SQLite sync warning: {e}")
+
+    log_audit(
+        db=db, action="LOCK", table_name="users",
+        record_id=user_id, user=current_user,
+        old_values={"locked": False},
+        new_values={"locked": True, "restriction_type": "administrative", "username": db_user.username},
+        module="User Management",
+    )
+    return {
+        "status": "success",
+        "message": f"Account '{db_user.username}' has been restricted and locked until unlocked by an administrator.",
+        "user_id": db_user.user_id,
+        "username": db_user.username
+    }
+
 # ==========================================
 # 3. JOB ORDERS (Complex 3NF Normalization)
 # ==========================================
 
 @app.get("/api/orders", response_model=List[OrderSchema])
-def read_orders(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def read_orders(
+    request: Request,
+    test_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """Retrieves all orders with full 3NF hydration (Auth Required)."""
+    t0 = time.perf_counter()
     print("[QUERY] Fetching Order history...")
     orders = db.query(Order).options(
         joinedload(Order.customer),
@@ -3047,12 +3381,261 @@ def read_orders(db: Session = Depends(get_db), current_user: User = Depends(get_
         joinedload(Order.items).joinedload(Item.conditions),
     ).order_by(Order.created_at.desc()).all()
 
+    elapsed_ms = (time.perf_counter() - t0) * 1000.0
+
+    # Objective 1 Logging: Measure digital retrieval duration
+    tid = test_id or request.headers.get("X-Test-Id") or f"O1-RET-{int(time.time()*1000)%100000:05d}"
+    log_audit(
+        db=db,
+        action="JOB_ORDER_RETRIEVED",
+        table_name="orders",
+        user=current_user,
+        new_values={
+            "test_id": tid,
+            "order_reference": "All Orders",
+            "duration_ms": round(elapsed_ms, 2),
+            "result_count": len(orders),
+            "status": "SUCCESS"
+        },
+        module="Job Orders"
+    )
+
     return orders
+
+@app.get("/api/orders/search")
+def search_orders(
+    request: Request,
+    q: Optional[str] = None,
+    status_filter: Optional[str] = "active",
+    limit: int = 150,
+    test_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Searchable and filterable job orders endpoint for Combobox selectors.
+    Supports partial matching by Order Number, Customer Name, and status filters.
+    """
+    t0 = time.perf_counter()
+    query = db.query(Order).options(
+        joinedload(Order.customer),
+        joinedload(Order.status)
+    ).join(Order.customer).join(Order.status)
+
+    sf = (status_filter or "active").lower().strip()
+    if sf in ("active", "active orders", "active_orders"):
+        query = query.filter(
+            func.lower(Status.status_name).in_([
+                "new order", "new-order", "new",
+                "on-going", "ongoing", "in progress",
+                "for release", "for-release", "ready"
+            ])
+        )
+    elif sf in ("new order", "new-order", "new_order"):
+        query = query.filter(func.lower(Status.status_name).in_(["new order", "new-order", "new"]))
+    elif sf in ("on-going", "ongoing", "on_going", "in progress"):
+        query = query.filter(func.lower(Status.status_name).in_(["on-going", "ongoing", "in progress"]))
+    elif sf in ("for release", "for-release", "for_release", "ready"):
+        query = query.filter(func.lower(Status.status_name).in_(["for release", "for-release", "ready"]))
+    elif sf in ("claimed", "completed"):
+        query = query.filter(func.lower(Status.status_name).in_(["claimed", "completed"]))
+    # "all" or "all orders" applies no status filter
+
+    if q and q.strip():
+        term = f"%{q.strip().lower()}%"
+        query = query.filter(
+            or_(
+                func.lower(Order.order_number).like(term),
+                func.lower(Customer.customer_name).like(term)
+            )
+        )
+
+    results = query.order_by(Order.created_at.desc()).limit(limit).all()
+    elapsed_ms = (time.perf_counter() - t0) * 1000.0
+
+    # Objective 1 Logging: Measure digital retrieval duration for search queries
+    tid = test_id or request.headers.get("X-Test-Id") or f"O1-RET-{int(time.time()*1000)%100000:05d}"
+    log_audit(
+        db=db,
+        action="JOB_ORDER_RETRIEVED",
+        table_name="orders",
+        user=current_user,
+        new_values={
+            "test_id": tid,
+            "order_reference": q or f"Status: {status_filter}",
+            "duration_ms": round(elapsed_ms, 2),
+            "result_count": len(results),
+            "status": "SUCCESS"
+        },
+        module="Job Orders"
+    )
+
+    return [
+        {
+            "id": o.order_id,
+            "orderNumber": o.order_number,
+            "customerName": o.customer.customer_name if o.customer else "Unknown",
+            "status": o.status.status_name if o.status else "New Order",
+            "createdAt": o.created_at.isoformat() if o.created_at else None
+        }
+        for o in results
+    ]
+
+@app.get("/api/orders/track/{tracking_number}")
+@app.get("/orders/track/{tracking_number}")
+def track_order_public(
+    tracking_number: str,
+    response: Response,
+    db: Session = Depends(get_db)
+):
+    """
+    Public Order Tracking Endpoint for Customer QR Scanning.
+    No authentication required.
+    Allows customers to track the status, progress, target release date, and balance
+    of their footwear in real-time.
+    """
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+
+    tn = tracking_number.strip()
+    if tn.startswith("#"):
+        tn = tn[1:]
+    
+    # Query order by order_number or numeric order_id
+    query = db.query(Order).options(
+        joinedload(Order.customer),
+        joinedload(Order.status),
+        joinedload(Order.priority),
+        joinedload(Order.status_logs).joinedload(StatusLog.status),
+        joinedload(Order.payments).joinedload(Payment.method),
+        joinedload(Order.payments).joinedload(Payment.p_status),
+        joinedload(Order.delivery).joinedload(Delivery.preference),
+        joinedload(Order.items).joinedload(Item.services).joinedload(Service.category),
+        joinedload(Order.items).joinedload(Item.conditions),
+    )
+    
+    order = query.filter(func.lower(Order.order_number) == tn.lower()).first()
+    if not order and tn.isdigit():
+        order = query.filter(Order.order_id == int(tn)).first()
+        
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found. Please verify your tracking number.")
+    
+    # Calculate payment balance
+    grand_total = float(order.grand_total or 0)
+    paid_sum = 0.0
+    for p in (order.payments or []):
+        st = (p.p_status.status_name.lower()) if (p.p_status and getattr(p.p_status, 'status_name', None)) else ""
+        if "paid" in st or "complete" in st:
+            paid_sum += float(p.amount_received or 0)
+        elif float(p.deposit_amount or 0) > 0:
+            paid_sum += float(p.deposit_amount or 0)
+            
+    is_claimed = (order.status.status_name.lower() == "claimed") if order.status else False
+    if is_claimed or paid_sum >= grand_total:
+        balance_due = 0.0
+        payment_status = "Fully Paid"
+    elif paid_sum > 0:
+        balance_due = max(0.0, grand_total - paid_sum)
+        payment_status = "Partial (Downpayment Paid)"
+    else:
+        balance_due = grand_total
+        payment_status = "Unpaid"
+        
+    # Customer name: provide first name and last initial for customer privacy
+    raw_name = order.customer.customer_name if order.customer else "Valued Customer"
+    parts = raw_name.split()
+    if len(parts) >= 2:
+        masked_name = f"{parts[0]} {parts[-1][0]}."
+    else:
+        masked_name = raw_name
+
+    # Build items list
+    items_data = []
+    for it in (order.items or []):
+        services_list = [s.service_name for s in (it.services or [])]
+        conds = [c.condition_name for c in (it.conditions or [])]
+        items_data.append({
+            "id": it.item_id,
+            "brand": it.brand or "Footwear",
+            "shoeModel": it.shoe_model or "",
+            "material": it.material or "",
+            "color": it.color or "",
+            "shoeSize": it.shoe_size or "",
+            "quantity": it.quantity or 1,
+            "status": it.status or (order.status.status_name if order.status else "In Service"),
+            "services": services_list,
+            "conditions": conds,
+            "notes": it.item_notes or ""
+        })
+
+    # Timeline logs
+    timeline = []
+    for log in (order.status_logs or []):
+        st_name = log.status.status_name if log.status else "Updated"
+        timeline.append({
+            "status": st_name,
+            "timestamp": log.changed_at.isoformat() if log.changed_at else None
+        })
+    timeline.sort(key=lambda x: x["timestamp"] or "")
+
+    status_map = {
+        "new-order": "New Order",
+        "on-going": "On-Going",
+        "for-release": "For Release",
+        "claimed": "Claimed",
+        "pending": "New Order",
+        "ongoing": "On-Going",
+        "in-progress": "On-Going",
+        "in progress": "On-Going",
+        "ready": "For Release",
+        "ready for release": "For Release",
+        "completed": "For Release",
+        "cancelled": "Cancelled",
+        "canceled": "Cancelled"
+    }
+    raw_st = (order.status.status_name if order.status else "new-order").strip().lower()
+    pretty_status = status_map.get(raw_st, raw_st.replace("-", " ").title())
+
+    last_log_time = order.status_logs[-1].changed_at if (order.status_logs and len(order.status_logs) > 0) else order.created_at
+
+    return {
+        "orderNumber": order.order_number,
+        "customerName": masked_name,
+        "status": pretty_status,
+        "priority": order.priority.priority_name if order.priority else "Regular",
+        "createdAt": order.created_at.isoformat() if order.created_at else None,
+        "updatedAt": last_log_time.isoformat() if last_log_time else None,
+        "targetDate": (order.expected_at or order.predicted_at).isoformat() if (order.expected_at or order.predicted_at) else None,
+        "claimedAt": order.claimed_at.isoformat() if order.claimed_at else None,
+        "releasedAt": order.released_at.isoformat() if order.released_at else None,
+        "fulfillment": order.delivery.preference.pref_name if (order.delivery and order.delivery.preference) else "Store Pickup",
+        "grandTotal": grand_total,
+        "amountPaid": paid_sum,
+        "balanceDue": balance_due,
+        "paymentStatus": payment_status,
+        "items": items_data,
+        "timeline": timeline
+    }
+
+import threading
+_ORDER_CONCURRENCY_LOCK = threading.Lock()
+_RESERVED_ORDER_NUMBERS: set = set()
+
+def clean_shoe_field(val: Any) -> str:
+    if not val:
+        return ""
+    s = str(val).strip()
+    if s.lower() in ["unknown", "other", "others", "none", "n/a", "na", "other (specify)", "footwear"]:
+        return ""
+    return s
+
 
 def _live_canonical_order_number(db: Session, created_dt: datetime) -> str:
     """Same ORD-YYYY-MM-DD-NNN rule as JobOrderForm when the client omits orderNumber."""
     from order_numbering import generate_canonical_order_id
-    return generate_canonical_order_id(db, created_dt)
+    return generate_canonical_order_id(db, created_dt, reserved=_RESERVED_ORDER_NUMBERS)
 
 
 @app.post("/api/orders", response_model=OrderSchema)
@@ -3068,14 +3651,25 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
     """
     print(f"[TRANS] Creating new Job Order for: {order_data.get('customerName')}")
     
-    # [IDEMPOTENCY FIX] Check if order number already exists to prevent duplicate sync errors
+    # [IDEMPOTENCY & CONCURRENCY FIX]
     order_num = order_data.get("orderNumber")
     if order_num:
         existing_order = db.query(Order).filter(Order.order_number == order_num).first()
         if existing_order:
-            print(f"[TRANS] NOTICE: Order {order_num} already exists. Returning existing record to satisfy sync queue.")
-            return existing_order
+            # Only treat as idempotent replay if customer name and grand_total match
+            raw_cname = str(order_data.get("customerName", "") or "").strip().lower()
+            ex_cname = str(existing_order.customer.customer_name if existing_order.customer else "").strip().lower()
+            ex_gt = float(existing_order.grand_total or 0.0)
+            req_gt = float(order_data.get("grandTotal", 0.0) or 0.0)
+            if raw_cname and raw_cname == ex_cname and abs(ex_gt - req_gt) < 0.01:
+                print(f"[TRANS] NOTICE: Order {order_num} already exists and matches payload. Returning existing record to satisfy sync queue.")
+                return existing_order
+            else:
+                # Collision with another concurrent order: reallocate fresh canonical order number
+                print(f"[CONCURRENCY] Order number collision detected for '{order_num}'. Allocating fresh canonical order number.")
+                order_num = None
 
+    final_order_num = None
     try:
         # Step 1: Customer Normalization (soft unique lookup; DB unique deferred while duplicates remain)
         raw_customer_name = str(order_data.get("customerName", "Guest") or "Guest").strip()
@@ -3158,10 +3752,32 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
                 pred_days = None
 
         t_date = order_data.get("transactionDate") or order_data.get("createdAt")
-        created_dt = parse_local_date(t_date) if t_date else datetime.now()
+        ord_date = order_data.get("orderDate")
+        ord_time = order_data.get("orderTime")
+        created_dt = resolve_activity_datetime(
+            raw_timestamp=t_date,
+            order_number=order_num,
+            order_date=ord_date,
+            order_time=ord_time
+        )
+
+        with _ORDER_CONCURRENCY_LOCK:
+            if not order_num or order_num in _RESERVED_ORDER_NUMBERS or db.query(Order).filter(Order.order_number == order_num).first():
+                final_order_num = _live_canonical_order_number(db, created_dt)
+            else:
+                final_order_num = order_num
+            _RESERVED_ORDER_NUMBERS.add(final_order_num)
+
+        claimed_dt = None
+        released_dt = None
+        if mapped_status == "claimed" or order_data.get("claimedAt"):
+            claimed_dt = parse_local_date(order_data.get("claimedAt")) if order_data.get("claimedAt") else expected_dt
+            released_dt = parse_local_date(order_data.get("releasedAt")) if order_data.get("releasedAt") else expected_dt
+        elif mapped_status == "for-release" or order_data.get("releasedAt"):
+            released_dt = parse_local_date(order_data.get("releasedAt")) if order_data.get("releasedAt") else expected_dt
 
         db_order = Order(
-            order_number=order_data.get("orderNumber") or _live_canonical_order_number(db, created_dt),
+            order_number=final_order_num,
             customer_id=db_customer.customer_id,
             status_id=db_status.status_id,
             priority_id=db_prio.priority_id,
@@ -3169,6 +3785,8 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
             expected_at=expected_dt,
             predicted_at=pred_dt,
             predicted_days=pred_days,
+            claimed_at=claimed_dt,
+            released_at=released_dt,
             created_at=created_dt,
             updated_at=created_dt,
             user_id=current_user.user_id  # Use authenticated user's ID
@@ -3176,10 +3794,22 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
         db.add(db_order)
         db.flush()
 
+        # Initial status log entry
+        db.add(StatusLog(order_id=db_order.order_id, status_id=db_status.status_id, user_id=current_user.user_id, changed_at=created_dt))
+        if mapped_status == "claimed" and claimed_dt and claimed_dt != created_dt:
+            db.add(StatusLog(order_id=db_order.order_id, status_id=db_status.status_id, user_id=current_user.user_id, changed_at=claimed_dt))
+
         # Payment Normalization
         # DB stores lowercase: 'cash', 'gcash', 'maya', 'bank-transfer'
-        m_name = str(order_data.get("paymentMethod", "cash")).lower()
-        if m_name not in ["cash", "gcash", "maya", "bank-transfer"]: m_name = "cash"
+        ref_raw = str(order_data.get("referenceNo") or "").strip()
+        ref_clean = re.sub(r'[^a-zA-Z0-9]', '', ref_raw)
+        m_name = str(order_data.get("paymentMethod", "")).lower().strip()
+        if "maya" in m_name or len(ref_clean) == 12 or ref_raw.lower().startswith(("may", "my")):
+            m_name = "maya"
+        elif "gcash" in m_name or len(re.sub(r'\D', '', ref_raw)) == 13 or ref_raw.lower().startswith("gc"):
+            m_name = "gcash"
+        elif m_name not in ["cash", "gcash", "maya", "bank-transfer"]:
+            m_name = "cash"
         db_method = db.query(PaymentMethod).filter(PaymentMethod.method_name == m_name).first() or db.query(PaymentMethod).first()
         
         # DB stores lowercase: 'fully-paid', 'downpayment', 'pending'
@@ -3194,9 +3824,35 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
             amount_received=order_data.get("amountReceived", 0.0),
             balance=order_data.get("balance", 0.0),
             reference_no=order_data.get("referenceNo"),
-            deposit_amount=order_data.get("depositAmount", 0.0)
+            deposit_amount=order_data.get("depositAmount", 0.0),
+            created_at=created_dt
         )
+        db_payment.method = db_method
+        db_payment.p_status = db_p_status
         db.add(db_payment)
+        db_order.payments = [db_payment]
+
+        if mapped_status == "claimed" and ps_name == "downpayment":
+            db_paid_status = db.query(PaymentStatus).filter(PaymentStatus.status_name == "fully-paid").first() or db_p_status
+            db_cash_method = db.query(PaymentMethod).filter(PaymentMethod.method_name == "cash").first() or db_method
+            dp_val = float(order_data.get("depositAmount", 0.0) or 0.0)
+            gt_val = float(order_data.get("grandTotal", 0.0) or 0.0)
+            settle_amt = max(0.0, gt_val - dp_val)
+            if settle_amt > 0:
+                settle_payment = Payment(
+                    order_id=db_order.order_id,
+                    method_id=db_cash_method.method_id,
+                    status_id=db_paid_status.p_status_id,
+                    amount_received=settle_amt,
+                    balance=0.0,
+                    reference_no=None,
+                    deposit_amount=0.0,
+                    created_at=claimed_dt or created_dt
+                )
+                settle_payment.method = db_cash_method
+                settle_payment.p_status = db_paid_status
+                db.add(settle_payment)
+                db_order.payments = [db_payment, settle_payment]
         
         # Delivery Normalization  
         # DB stores lowercase: 'pickup', 'delivery'
@@ -3247,11 +3903,11 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
                 item_color = ", ".join(str(c).strip() for c in item_color if str(c).strip())
             db_item = Item(
                 order_id=db_order.order_id, 
-                brand=item_data.get("brand") or order_data.get("brand") or "Unknown", 
-                shoe_model=item_data.get("shoeModel") or order_data.get("shoeModel") or "Unknown",
-                material=item_data.get("shoeMaterial") or order_data.get("shoeMaterial") or "Unknown",
+                brand=clean_shoe_field(item_data.get("brand") or order_data.get("brand") or ""), 
+                shoe_model=clean_shoe_field(item_data.get("shoeModel") or order_data.get("shoeModel") or ""),
+                material=clean_shoe_field(item_data.get("shoeMaterial") or order_data.get("shoeMaterial") or ""),
                 shoe_size=str(item_data.get("shoeSize") or item_data.get("size") or order_data.get("shoeSize") or order_data.get("size") or ""),
-                color=str(item_color or ""),
+                color=clean_shoe_field(item_color or ""),
                 quantity=item_data.get("quantity", 1),
                 item_notes=item_data.get("condition", {}).get("others") if isinstance(item_data.get("condition"), dict) else None
             )
@@ -3269,8 +3925,14 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
                     if inv_id and inv_amount > 0:
                         inv_item = lock_inventory_row(db, inv_id)
                         if inv_item:
+                            available_stock = float(inv_item.stock_quantity or 0)
+                            if (available_stock - inv_amount) < 0:
+                                raise HTTPException(
+                                    status_code=400,
+                                    detail=f"Insufficient stock for '{inv_item.item_name}'. Available: {available_stock:.2f}, Required: {inv_amount:.2f}"
+                                )
                             print(f"[INVENTORY] Deducting {inv_amount} {inv_item.unit} of '{inv_item.item_name}' for Order {db_order.order_number}")
-                            inv_item.stock_quantity = max(0.0, float(inv_item.stock_quantity or 0) - inv_amount)
+                            inv_item.stock_quantity = max(0.0, available_stock - inv_amount)
                             recalculate_inventory_status(inv_item)
                             
                             # Log the stock movement
@@ -3326,22 +3988,154 @@ def create_order(order_data: Dict[str, Any], db: Session = Depends(get_db), curr
         db.commit()
         db.refresh(db_order)
         print(f"[TRANS] Success: Job Order {db_order.order_number} verified with {len(db_order.items)} items.")
+
+        # Objective 1: Digital Job Order Entry Duration Empirical Logging
+        # TRANSACTION ISOLATION: Recorded in a dedicated separate SessionLocal session so
+        # research logging failure can NEVER roll back or corrupt an authoritative business transaction.
+        research_db = None
+        try:
+            raw_entry_start = order_data.get("entry_started_at") or order_data.get("form_started_at")
+            started_at = None
+            if raw_entry_start:
+                started_at = parse_local_date(raw_entry_start)
+            elif order_data.get("formDurationSeconds"):
+                dur_s = float(order_data.get("formDurationSeconds"))
+                started_at = datetime.now() - timedelta(seconds=dur_s)
+
+            if started_at:
+                saved_at = datetime.now()
+                dur_ms = max(1.0, (saved_at - started_at).total_seconds() * 1000.0)
+                test_run_id = order_data.get("test_run_id") or order_data.get("test_id")
+                entry_meas = ResearchMeasurement(
+                    test_run_id=int(test_run_id) if str(test_run_id or "").isdigit() else None,
+                    objective="Objective 1",
+                    measurement_type="JOB_ORDER_CREATED",
+                    reference_id=db_order.order_number,
+                    started_at=started_at,
+                    completed_at=saved_at,
+                    duration_ms=dur_ms,
+                    status="SUCCESS",
+                    value_numeric=dur_ms,
+                    value_text=f"{dur_ms / 1000.0:.2f}s",
+                    metadata_json={
+                        "order_id": db_order.order_id,
+                        "order_number": db_order.order_number,
+                        "customer_name": order_data.get("customerName"),
+                        "items_count": len(db_order.items or []),
+                        "user_id": current_user.user_id if current_user else None,
+                        "username": current_user.username if current_user else "staff",
+                    }
+                )
+                research_db = SessionLocal()
+                research_db.add(entry_meas)
+                research_db.commit()
+        except Exception as res_err:
+            if research_db:
+                research_db.rollback()
+            print(f"[RESEARCH LOGGING WARNING] Could not persist JOB_ORDER_CREATED measurement: {res_err}")
+        finally:
+            if research_db:
+                research_db.close()
+
         create_snapshot = build_order_snapshot(db_order)
         create_snapshot["order_number"] = db_order.order_number
         create_snapshot["customer_name"] = order_data.get("customerName") or create_snapshot.get("customerName")
         create_snapshot["items_count"] = len(db_order.items or [])
+        create_snapshot["shoes_count"] = len(db_order.items or [])
+        disc_val = float(order_data.get("discountAmount") or order_data.get("discount") or 0.0)
+        if disc_val > 0:
+            create_snapshot["discount"] = disc_val
+        if order_data.get("formDurationFormatted") or order_data.get("formDurationSeconds"):
+            dur_fmt = order_data.get("formDurationFormatted") or f"{order_data.get('formDurationSeconds')}s"
+            create_snapshot["encoding_time"] = dur_fmt
+            create_snapshot["efficiency_vs_paper"] = order_data.get("efficiencyMetric") or f"{dur_fmt} (Paper manual baseline: ~5–10 mins)"
+        if ord_date:
+            create_snapshot["order_date"] = ord_date
+        if ord_time:
+            create_snapshot["order_time"] = ord_time
+        dur_note = f" [Creation Time: {create_snapshot['encoding_time']}]" if "encoding_time" in create_snapshot else ""
+        create_snapshot["details"] = f"Created new Job Order #{db_order.order_number} for {create_snapshot['customer_name']}{dur_note}"
         log_audit(
             db=db, action="CREATE", table_name="orders",
             record_id=db_order.order_id, user=current_user,
             new_values=create_snapshot,
             module="Job Orders",
+            created_at=created_dt
         )
         return db_order
         
+    except HTTPException as he:
+        db.rollback()
+        # Record failed research entry in an isolated session if entry_started_at was provided
+        fail_db = None
+        try:
+            raw_entry_start = order_data.get("entry_started_at") or order_data.get("form_started_at")
+            if raw_entry_start:
+                started_at = parse_local_date(raw_entry_start)
+                failed_at = datetime.now()
+                dur_ms = max(1.0, (failed_at - started_at).total_seconds() * 1000.0)
+                test_run_id = order_data.get("test_run_id") or order_data.get("test_id")
+                fail_meas = ResearchMeasurement(
+                    test_run_id=int(test_run_id) if str(test_run_id or "").isdigit() else None,
+                    objective="Objective 1",
+                    measurement_type="JOB_ORDER_CREATED",
+                    reference_id=final_order_num or "FAILED_ATTEMPT",
+                    started_at=started_at,
+                    completed_at=failed_at,
+                    duration_ms=dur_ms,
+                    status="FAILED",
+                    value_numeric=dur_ms,
+                    value_text="FAILED",
+                    metadata_json={"error_detail": getattr(he, "detail", str(he))}
+                )
+                fail_db = SessionLocal()
+                fail_db.add(fail_meas)
+                fail_db.commit()
+        except Exception:
+            if fail_db:
+                fail_db.rollback()
+        finally:
+            if fail_db:
+                fail_db.close()
+        raise
     except Exception as e:
         print(f"[TRANS ERROR] {e}")
         db.rollback()
+        fail_db = None
+        try:
+            raw_entry_start = order_data.get("entry_started_at") or order_data.get("form_started_at")
+            if raw_entry_start:
+                started_at = parse_local_date(raw_entry_start)
+                failed_at = datetime.now()
+                dur_ms = max(1.0, (failed_at - started_at).total_seconds() * 1000.0)
+                test_run_id = order_data.get("test_run_id") or order_data.get("test_id")
+                fail_meas = ResearchMeasurement(
+                    test_run_id=int(test_run_id) if str(test_run_id or "").isdigit() else None,
+                    objective="Objective 1",
+                    measurement_type="JOB_ORDER_CREATED",
+                    reference_id=final_order_num or "FAILED_ATTEMPT",
+                    started_at=started_at,
+                    completed_at=failed_at,
+                    duration_ms=dur_ms,
+                    status="FAILED",
+                    value_numeric=dur_ms,
+                    value_text="FAILED",
+                    metadata_json={"error_detail": str(e)}
+                )
+                fail_db = SessionLocal()
+                fail_db.add(fail_meas)
+                fail_db.commit()
+        except Exception:
+            if fail_db:
+                fail_db.rollback()
+        finally:
+            if fail_db:
+                fail_db.close()
         raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        if final_order_num:
+            _RESERVED_ORDER_NUMBERS.discard(final_order_num)
+
 
 def _item_text(value) -> str:
     if value is None:
@@ -3371,18 +4165,22 @@ def build_order_snapshot(db_order) -> dict:
         "inventoryApplied": getattr(db_order, "inventory_applied", False),
         "inventoryUsed": getattr(db_order, "inventory_used", []),
         "cancellationStage": getattr(db_order, "cancellation_stage", None),
+        "cancellationReason": getattr(db_order, "cancellation_reason", None),
         "refundStatus": getattr(db_order, "refund_status", None),
         "refundAmount": float(db_order.refund_amount) if getattr(db_order, "refund_amount", None) is not None else 0.0,
         "refundReason": getattr(db_order, "refund_reason", None),
         "cancelledAt": db_order.cancelled_at.isoformat() if getattr(db_order, "cancelled_at", None) else None,
+        "preCancellationState": getattr(db_order, "pre_cancellation_state", None),
     }
     if getattr(db_order, "customer", None):
         snapshot["customerName"] = db_order.customer.customer_name
         snapshot["contactNumber"] = db_order.customer.contact_number
     if getattr(db_order, "payments", None) and len(db_order.payments) > 0:
         pay = db_order.payments[0]
-        snapshot["paymentMethod"] = pay.method.method_name if getattr(pay, "method", None) else "cash"
-        snapshot["paymentStatus"] = pay.status.status_name if getattr(pay, "status", None) else "pending"
+        m_obj = getattr(pay, "method", None)
+        ps_obj = getattr(pay, "p_status", None) or getattr(pay, "status", None)
+        snapshot["paymentMethod"] = (m_obj.method_name if m_obj else None) or "cash"
+        snapshot["paymentStatus"] = (ps_obj.status_name if ps_obj else None) or "pending"
         snapshot["amountReceived"] = float(pay.amount_received) if getattr(pay, "amount_received", None) else 0.0
         snapshot["balance"] = float(pay.balance) if getattr(pay, "balance", None) else 0.0
         snapshot["referenceNo"] = pay.reference_no
@@ -3396,13 +4194,63 @@ def build_order_snapshot(db_order) -> dict:
         snapshot["city"] = db_order.delivery.city
         snapshot["barangay"] = db_order.delivery.barangay
         snapshot["zipCode"] = db_order.delivery.zip_code
+    if hasattr(db_order, "discount_amount") and getattr(db_order, "discount_amount") is not None:
+        snapshot["discount"] = float(db_order.discount_amount)
+    elif hasattr(db_order, "discount") and getattr(db_order, "discount") is not None:
+        snapshot["discount"] = float(db_order.discount)
+
     if getattr(db_order, "items", None) and len(db_order.items) > 0:
+        all_shoe_descs = []
+        all_services = []
+        items_arr = []
+        for idx, it in enumerate(db_order.items):
+            b = clean_shoe_field(it.brand)
+            m = clean_shoe_field(it.shoe_model)
+            mat = clean_shoe_field(it.material)
+            sz = (it.shoe_size or "").strip()
+            clr = clean_shoe_field(it.color)
+
+            it_srvs = []
+            if getattr(it, "services", None):
+                for s_map in it.services:
+                    s_name = getattr(s_map, "service_name", "")
+                    if s_name:
+                        it_srvs.append(s_name)
+                        if s_name not in all_services:
+                            all_services.append(s_name)
+
+            pair_title = " ".join([p for p in [b, m] if p]) or f"Pair #{idx + 1}"
+            spec_parts = []
+            if sz: spec_parts.append(f"Size: {sz}")
+            if clr: spec_parts.append(f"Color: {clr}")
+            if mat: spec_parts.append(f"Material: {mat}")
+            if it_srvs: spec_parts.append(f"Services: {', '.join(it_srvs)}")
+            desc = f"Pair #{idx + 1}: {pair_title}" + (f" ({'; '.join(spec_parts)})" if spec_parts else "")
+            all_shoe_descs.append(desc)
+
+            items_arr.append({
+                "id": it.item_id,
+                "brand": b,
+                "shoeModel": m,
+                "shoeMaterial": mat,
+                "shoeSize": sz,
+                "color": clr,
+                "quantity": it.quantity,
+                "services": it_srvs
+            })
+
+        snapshot["shoes"] = " \n".join(all_shoe_descs)
+        snapshot["services"] = ", ".join(all_services)
+        snapshot["items_count"] = len(db_order.items)
+        snapshot["shoes_count"] = len(db_order.items)
+        snapshot["items"] = items_arr
+
         item = db_order.items[0]
-        snapshot["brand"] = item.brand
-        snapshot["shoeModel"] = item.shoe_model
-        snapshot["shoeMaterial"] = item.material
+        snapshot["brand"] = clean_shoe_field(item.brand)
+        snapshot["shoeModel"] = clean_shoe_field(item.shoe_model)
+        snapshot["shoeMaterial"] = clean_shoe_field(item.material)
         snapshot["shoeSize"] = item.shoe_size
-        snapshot["color"] = item.color
+        snapshot["color"] = clean_shoe_field(item.color)
         snapshot["quantity"] = item.quantity
         c_dict = {}
         if getattr(item, "conditions", None):
@@ -3414,7 +4262,7 @@ def build_order_snapshot(db_order) -> dict:
                 elif "stain" in n: c_dict["deepStains"] = True
                 elif "separat" in n: c_dict["soleSeparation"] = True
                 elif "worn" in n: c_dict["wornOut"] = True
-        if getattr(item, "item_notes", None): c_dict["others"] = item.item_notes
+        if getattr(item, "item_notes", None): c_dict["others"] = clean_shoe_field(item.item_notes)
         snapshot["condition"] = c_dict
         services = []
         addons = []
@@ -3473,8 +4321,8 @@ def update_order(order_id: str, updates: Dict[str, Any], db: Session = Depends(g
         if db_status:
             db_order.status_id = db_status.status_id
             
-            # Log the change for ML time-tracking
-            log = StatusLog(order_id=order_id, status_id=db_status.status_id, user_id=current_user.user_id) 
+            # Log the change for ML time-tracking with authoritative integer order_id
+            log = StatusLog(order_id=db_order.order_id, status_id=db_status.status_id, user_id=current_user.user_id) 
             db.add(log)
             print(f"[EDIT] Status changed for Order {db_order.order_number}: {mapped_status}")
             
@@ -3509,103 +4357,134 @@ def update_order(order_id: str, updates: Dict[str, Any], db: Session = Depends(g
                     except Exception:
                         auto_items = auto_q.all()
                     
+                    int_oid = int(order_id) if str(order_id).isdigit() else getattr(db_order, "order_id", None)
+                    order_services = []
+                    for ord_item in (getattr(db_order, "items", None) or []):
+                        for svc in (getattr(ord_item, "services", None) or []):
+                            s_name = getattr(svc, "service_name", None)
+                            if s_name and isinstance(s_name, str):
+                                s_name = s_name.strip()
+                                if 'rush' not in s_name.lower():
+                                    order_services.append(s_name)
+
+                    current_used = list(db_order.inventory_used or [])
+
                     for item in auto_items:
-                        # Check if already deducted for this order to prevent duplicate deductions
-                        int_oid = int(order_id) if str(order_id).isdigit() else getattr(db_order, "order_id", None)
-                        existing_log = db.query(InventoryLog).filter(
-                            InventoryLog.item_id == item.item_id,
-                            InventoryLog.order_id == int_oid,
-                            InventoryLog.action_type == "deduction"
-                        ).first()
+                        # Determine configured services and consumption amounts
+                        # Format 1: JSON array: [{"service": "Basic Cleaning", "quantity": 20}, ...]
+                        # Format 2: JSON object: {"Basic Cleaning": 20, "Unyellowing": 30}
+                        # Format 3: Legacy comma-separated or "All"
+                        configured_services = [] # list of (service_name, quantity)
+                        ts = (item.trigger_service or "").strip()
                         
-                        if existing_log:
-                            print(f"[AUTO-CONSUME] Skipping item '{item.item_name}' for Order {db_order.order_number}: already deducted.")
-                            continue
+                        if ts.startswith("[") or ts.startswith("{"):
+                            try:
+                                parsed = json.loads(ts)
+                                if isinstance(parsed, list):
+                                    for entry in parsed:
+                                        if isinstance(entry, dict) and entry.get("service"):
+                                            qty = float(entry.get("quantity") or entry.get("amount") or item.consumption_qty or 0)
+                                            if qty > 0:
+                                                configured_services.append((str(entry.get("service")).strip(), qty))
+                                elif isinstance(parsed, dict):
+                                    for s_name, s_qty in parsed.items():
+                                        qty = float(s_qty or 0)
+                                        if qty > 0:
+                                            configured_services.append((str(s_name).strip(), qty))
+                            except Exception:
+                                pass
                         
-                        # Match trigger service (robust substring matching to handle multiple services)
-                        is_match = False
-                        if not item.trigger_service or item.trigger_service.lower() in ["all", "all services", ""]:
-                            is_match = True
-                        else:
-                            # Retrieve selected services names for this order
-                            svc_names = []
-                            for ord_item in db_order.items:
-                                for svc in ord_item.services:
-                                    svc_names.append(svc.service_name.lower())
+                        if not configured_services:
+                            # Fallback to legacy string or "All"
+                            default_qty = float(item.consumption_qty or 0.0)
+                            if default_qty > 0:
+                                if not ts or ts.lower() in ["all", "all services"]:
+                                    unique_order_services = list(dict.fromkeys([s for s in order_services if s]))
+                                    for s_name in unique_order_services:
+                                        configured_services.append((s_name, default_qty))
+                                else:
+                                    t_svcs = [s.strip() for s in ts.split(",") if s.strip()]
+                                    for t_s in t_svcs:
+                                        configured_services.append((t_s, default_qty))
+
+                        # Process each configured service for this item
+                        for svc_target, qty_to_deduct in configured_services:
+                            # Check if the order contains this service
+                            matches_order = any(svc_target.lower() == s.lower() or svc_target.lower() in s.lower() for s in order_services)
+                            if not matches_order:
+                                continue
                             
-                            # Split multiple trigger services by comma
-                            trigger_services = [s.strip().lower() for s in item.trigger_service.split(",") if s.strip()]
-                            for t_svc in trigger_services:
-                                for s_name in svc_names:
-                                    if t_svc in s_name or s_name in t_svc:
-                                        is_match = True
-                                        break
-                                if is_match:
-                                    break
-                                    
-                        if is_match:
-                            # Calculate consumption in stock units
-                            qty_consumed = float(item.consumption_qty) if item.consumption_qty else 0.0
-                            deduct_amount = qty_consumed
+                            # Logical Idempotency Key: order_id + item_id + service_name + action_type
+                            svc_clean = svc_target.lower().replace(" ", "_")
+                            exec_ref = f"ORD-{int_oid}_ITEM-{item.item_id}_SVC-{svc_clean}_auto_deduct"
                             
-                            if deduct_amount > 0.0:
-                                # Decrement stock quantity without going below zero
-                                item.stock_quantity = max(0.0, item.stock_quantity - deduct_amount)
-                                
+                            existing_log = db.query(InventoryLog).filter(
+                                InventoryLog.item_id == item.item_id,
+                                InventoryLog.order_id == int_oid,
+                                (
+                                    (InventoryLog.execution_ref == exec_ref) |
+                                    (
+                                        (func.lower(InventoryLog.service_name) == svc_target.lower()) &
+                                        (InventoryLog.action_type.in_(["auto_deduct", "deduction"]))
+                                    )
+                                )
+                            ).first()
+                            
+                            if existing_log:
+                                print(f"[AUTO-CONSUME] Skipping '{item.item_name}' for service '{svc_target}' on Order {db_order.order_number}: already deducted.")
+                                continue
+                            
+                            if qty_to_deduct > 0:
+                                item.stock_quantity = max(0.0, float(item.stock_quantity or 0) - qty_to_deduct)
                                 recalculate_inventory_status(item)
                                 
-                                # Add to order's inventory_used list for frontend tracking
-                                current_used = db_order.inventory_used or []
-                                updated_used = list(current_used)
+                                # Add to order's inventory_used list
+                                current_used.append({
+                                    "itemId": item.item_id,
+                                    "name": item.item_name,
+                                    "service": svc_target,
+                                    "quantity": qty_to_deduct,
+                                    "unit": item.unit or "units"
+                                })
                                 
-                                # Check if already in the list to avoid duplicate records
-                                found = False
-                                for i_used in updated_used:
-                                    if i_used.get("itemId") == item.item_id:
-                                        i_used["quantity"] = float(i_used.get("quantity", 0.0)) + deduct_amount
-                                        found = True
-                                        break
-                                
-                                if not found:
-                                    # Use package unit if package_size is set, otherwise default unit
-                                    unit_name = item.package_unit if (item.package_size and item.package_size > 0.0) else item.unit
-                                    updated_used.append({
-                                        "itemId": item.item_id,
-                                        "name": item.item_name,
-                                        "quantity": deduct_amount,
-                                        "unit": unit_name or "units"
-                                    })
-                                    
-                                db_order.inventory_used = updated_used
-                                db_order.inventory_applied = True
-                                
-                                # Log movement
+                                # Log stock movement with execution reference and service name
                                 consume_log = InventoryLog(
                                     item_id=item.item_id,
-                                    change_amount=-deduct_amount,
-                                    action_type="deduction",
-                                    order_id=order_id,
+                                    change_amount=-qty_to_deduct,
+                                    action_type="auto_deduct",
+                                    order_id=int_oid,
+                                    service_name=svc_target,
+                                    execution_ref=exec_ref,
                                     user_id=current_user.user_id
                                 )
                                 db.add(consume_log)
-                                print(f"[AUTO-CONSUME] Deducted {deduct_amount} units of '{item.item_name}' for Order {db_order.order_number}")
+                                print(f"[AUTO-CONSUME] Deducted {qty_to_deduct} {item.unit} of '{item.item_name}' for service '{svc_target}' on Order {db_order.order_number}")
+
+                    db_order.inventory_used = current_used
+                    db_order.inventory_applied = True
             except Exception as auto_err:
                 print(f"[AUTO-CONSUME ERROR] Failed to run consumption: {auto_err}")
         else:
             print(f"[EDIT] Error: Mapped status '{mapped_status}' not found in Status table.")
 
         if mapped_status == "claimed":
-            if old_mapped != "claimed":
+            if updates.get("claimedAt") or updates.get("claimed_at") or updates.get("actualCompletionDate"):
+                db_order.claimed_at = parse_local_date(updates.get("claimedAt") or updates.get("claimed_at") or updates.get("actualCompletionDate"))
+            elif old_mapped != "claimed":
                 db_order.claimed_at = datetime.now()
         else:
-            db_order.claimed_at = None
+            if "claimedAt" in updates or "claimed_at" in updates or "actualCompletionDate" in updates:
+                c_val = updates.get("claimedAt") if "claimedAt" in updates else (updates.get("claimed_at") if "claimed_at" in updates else updates.get("actualCompletionDate"))
+                db_order.claimed_at = parse_local_date(c_val) if c_val else None
+            else:
+                db_order.claimed_at = None
 
         def _first_for_release_log():
             return (
                 db.query(StatusLog)
                 .join(Status, StatusLog.status_id == Status.status_id)
                 .filter(
-                    StatusLog.order_id == order_id,
+                    StatusLog.order_id == db_order.order_id,
                     func.lower(Status.status_name) == "for-release",
                 )
                 .order_by(StatusLog.changed_at.asc())
@@ -3613,17 +4492,23 @@ def update_order(order_id: str, updates: Dict[str, Any], db: Session = Depends(g
             )
 
         if mapped_status == "for-release":
-            if old_mapped not in ("for-release", "claimed"):
-                db_order.released_at = datetime.now()
-            elif not db_order.released_at:
+            if updates.get("actualReleaseDate") or updates.get("released_at"):
+                db_order.released_at = parse_local_date(updates.get("actualReleaseDate") or updates.get("released_at"))
+            elif db_order.released_at:
+                # Preserve existing valid historical release date
+                pass
+            else:
                 prev_release = _first_for_release_log()
-                db_order.released_at = prev_release.changed_at if prev_release else datetime.now()
+                db_order.released_at = prev_release.changed_at if (prev_release and prev_release.changed_at) else datetime.now()
         elif mapped_status == "claimed":
-            if not db_order.released_at:
+            if updates.get("actualReleaseDate") or updates.get("released_at"):
+                db_order.released_at = parse_local_date(updates.get("actualReleaseDate") or updates.get("released_at"))
+            elif not db_order.released_at:
                 prev_release = _first_for_release_log()
                 db_order.released_at = prev_release.changed_at if prev_release else (db_order.claimed_at or datetime.now())
         else:
-            db_order.released_at = None
+            if "actualReleaseDate" not in updates and "released_at" not in updates:
+                db_order.released_at = None
 
         if mapped_status != "cancelled":
             db_order.cancelled_at = None
@@ -3702,12 +4587,19 @@ def update_order(order_id: str, updates: Dict[str, Any], db: Session = Depends(g
                 db.add(second_pay)
         else:
             # Standard single payment update
-            if "paymentMethod" in updates:
+            if "paymentMethod" in updates or "referenceNo" in updates:
                 # DB stores lowercase: 'cash', 'gcash', 'maya', 'bank-transfer'
-                m_name = str(updates["paymentMethod"]).lower().strip()
+                ref_u = str(updates.get("referenceNo") or db_pay.reference_no or "").strip()
+                ref_clean = re.sub(r'[^a-zA-Z0-9]', '', ref_u)
+                m_name = str(updates.get("paymentMethod") or (db_pay.method.method_name if db_pay.method else "cash")).lower().strip()
                 if "," in m_name:
                     m_name = m_name.split(",")[0].strip()
-                if m_name not in ["cash", "gcash", "maya", "bank-transfer"]: m_name = "cash"
+                if "maya" in m_name or len(ref_clean) == 12 or ref_u.lower().startswith(("may", "my")):
+                    m_name = "maya"
+                elif "gcash" in m_name or len(re.sub(r'\D', '', ref_u)) == 13 or ref_u.lower().startswith("gc"):
+                    m_name = "gcash"
+                elif m_name not in ["cash", "gcash", "maya", "bank-transfer"]:
+                    m_name = "cash"
                 db_m = db.query(PaymentMethod).filter(PaymentMethod.method_name == m_name).first()
                 if db_m: 
                     db_pay.method_id = db_m.method_id
@@ -3770,71 +4662,11 @@ def update_order(order_id: str, updates: Dict[str, Any], db: Session = Depends(g
                     if "quantity" in item_update: db_item.quantity = item_update["quantity"]
 
                     if "inventoryUsed" in item_update:
-                        new_usage = item_update["inventoryUsed"]
-                        old_usage = db_item.inventory_used or []
-                        
-                        # Reconciliation: Add back old, subtract new
-                        if isinstance(old_usage, list):
-                            for u in old_usage:
-                                i_id = u.get("itemId") or u.get("id")
-                                i_amt = float(u.get("amount") or 0)
-                                if i_id:
-                                    inv_item = lock_inventory_row(db, i_id)
-                                    if inv_item:
-                                        inv_item.stock_quantity = float(inv_item.stock_quantity or 0) + i_amt
-                                        recalculate_inventory_status(inv_item)
-                        
-                        if isinstance(new_usage, list):
-                            for u in new_usage:
-                                i_id = u.get("itemId") or u.get("id")
-                                i_amt = float(u.get("amount") or 0)
-                                if i_id and i_amt > 0:
-                                    inv_item = lock_inventory_row(db, i_id)
-                                    if inv_item:
-                                        inv_item.stock_quantity = max(0.0, float(inv_item.stock_quantity or 0) - i_amt)
-                                        recalculate_inventory_status(inv_item)
-                                        db.add(InventoryLog(item_id=i_id, change_amount=-i_amt, action_type='manual_edit', order_id=db_order.order_id, user_id=current_user.user_id))
-                        
-                        db_item.inventory_used = new_usage
+                        db_item.inventory_used = item_update["inventoryUsed"]
 
-    # 5. Handle Inventory Persistence & Dynamic Stock Adjustment
+    # 5. Handle Inventory Metadata Persistence (Stock deductions handled strictly via POST /materials)
     if "inventoryUsed" in updates: 
-        new_usage = updates["inventoryUsed"]
-        old_usage = db_order.inventory_used or []
-        
-        # S.O.L.I.D: Encapsulated Delta Deduction Logic
-        # 1. Reverse old deductions (Restock)
-        if isinstance(old_usage, list):
-            for usage in old_usage:
-                inv_id = usage.get("itemId") or usage.get("id")
-                inv_amount = float(usage.get("amount") or 0)
-                if inv_id and inv_amount > 0:
-                    inv_item = lock_inventory_row(db, inv_id)
-                    if inv_item:
-                        inv_item.stock_quantity = float(inv_item.stock_quantity or 0) + inv_amount # Restock previous usage
-                        recalculate_inventory_status(inv_item)
-        
-        # 2. Apply new usage (Deduct)
-        if isinstance(new_usage, list):
-            for usage in new_usage:
-                inv_id = usage.get("itemId") or usage.get("id")
-                inv_amount = float(usage.get("amount") or 0)
-                if inv_id and inv_amount > 0:
-                    inv_item = lock_inventory_row(db, inv_id)
-                    if inv_item:
-                        inv_item.stock_quantity = max(0.0, float(inv_item.stock_quantity or 0) - inv_amount) # Deduct new usage
-                        recalculate_inventory_status(inv_item)
-                        
-                        # Log the adjustment
-                        db.add(InventoryLog(
-                            item_id=inv_id,
-                            change_amount=-inv_amount,
-                            action_type='order_update',
-                            order_id=db_order.order_id,
-                            user_id=current_user.user_id
-                        ))
-
-        db_order.inventory_used = new_usage
+        db_order.inventory_used = updates["inventoryUsed"]
     
     if "inventoryApplied" in updates: 
         db_order.inventory_applied = updates["inventoryApplied"]
@@ -3885,9 +4717,51 @@ def update_order(order_id: str, updates: Dict[str, Any], db: Session = Depends(g
             except (ValueError, TypeError):
                 pass
 
+    # 5.1 Handle Direct Actual Release Date (released_at) modification
+    if "actualReleaseDate" in updates or "released_at" in updates:
+        raw_rel = updates.get("actualReleaseDate") if "actualReleaseDate" in updates else updates.get("released_at")
+        if raw_rel:
+            db_order.released_at = parse_local_date(raw_rel)
+            # Sync to status log
+            rel_log = (
+                db.query(StatusLog)
+                .join(Status, StatusLog.status_id == Status.status_id)
+                .filter(
+                    StatusLog.order_id == db_order.order_id,
+                    func.lower(Status.status_name) == "for-release",
+                )
+                .order_by(StatusLog.changed_at.desc())
+                .first()
+            )
+            if rel_log:
+                rel_log.changed_at = db_order.released_at
+            # Sync to items if not individual
+            if db_order.items:
+                for it in db_order.items:
+                    it.released_at = db_order.released_at
+        elif updates.get("actualReleaseDate") is None and "actualReleaseDate" in updates:
+            db_order.released_at = None
+
+    # 5.2 Handle Direct Claimed Date (claimed_at) modification
+    if "claimedAt" in updates or "claimed_at" in updates or "actualCompletionDate" in updates:
+        raw_cl = updates.get("claimedAt") if "claimedAt" in updates else (updates.get("claimed_at") if "claimed_at" in updates else updates.get("actualCompletionDate"))
+        if raw_cl:
+            db_order.claimed_at = parse_local_date(raw_cl)
+            if db_order.items:
+                for it in db_order.items:
+                    it.claimed_at = db_order.claimed_at
+        elif ("claimedAt" in updates and updates.get("claimedAt") is None) or ("actualCompletionDate" in updates and updates.get("actualCompletionDate") is None) or ("claimed_at" in updates and updates.get("claimed_at") is None):
+            db_order.claimed_at = None
+            if db_order.items:
+                for it in db_order.items:
+                    it.claimed_at = None
+
     # 5.5 Handle Cancellation & Refund Information
     if "cancellationStage" in updates or "cancellation_stage" in updates:
         db_order.cancellation_stage = updates.get("cancellationStage") or updates.get("cancellation_stage")
+
+    if "cancellationReason" in updates or "cancellation_reason" in updates:
+        db_order.cancellation_reason = updates.get("cancellationReason") or updates.get("cancellation_reason")
 
     if "refundStatus" in updates or "refund_status" in updates:
         db_order.refund_status = updates.get("refundStatus") or updates.get("refund_status")
@@ -3902,6 +4776,9 @@ def update_order(order_id: str, updates: Dict[str, Any], db: Session = Depends(g
     if "refundReason" in updates or "refund_reason" in updates:
         db_order.refund_reason = updates.get("refundReason") or updates.get("refund_reason")
 
+    if "preCancellationState" in updates or "pre_cancellation_state" in updates:
+        db_order.pre_cancellation_state = updates.get("preCancellationState") or updates.get("pre_cancellation_state")
+
     if "cancelledAt" in updates or "cancelled_at" in updates:
         raw_ca = updates.get("cancelledAt") or updates.get("cancelled_at")
         if raw_ca:
@@ -3911,15 +4788,17 @@ def update_order(order_id: str, updates: Dict[str, Any], db: Session = Depends(g
     elif "status" in updates and str(updates.get("status", "")).lower().strip() in ("cancelled", "canceled"):
         if not db_order.cancelled_at:
             db_order.cancelled_at = datetime.now()
+    elif "status" in updates and str(updates.get("status", "")).lower().strip() not in ("cancelled", "canceled"):
+        db_order.pre_cancellation_state = None
 
     # 6. Cascading Updates: Items, Conditions, and Services
     items_updates = updates.get("items", [])
     if not items_updates and ("brand" in updates or "shoeMaterial" in updates or "shoeModel" in updates or "condition" in updates):
         # Fallback for single-item updates from flat structures
         items_updates = [{
-            "brand": updates.get("brand", db_order.items[0].brand if db_order.items else "Unknown"),
-            "shoeModel": updates.get("shoeModel", db_order.items[0].shoe_model if db_order.items else "Unknown"),
-            "shoeMaterial": updates.get("shoeMaterial", db_order.items[0].material if db_order.items else "Unknown"),
+            "brand": clean_shoe_field(updates.get("brand", db_order.items[0].brand if db_order.items else "")),
+            "shoeModel": clean_shoe_field(updates.get("shoeModel", db_order.items[0].shoe_model if db_order.items else "")),
+            "shoeMaterial": clean_shoe_field(updates.get("shoeMaterial", db_order.items[0].material if db_order.items else "")),
             "quantity": updates.get("quantity", db_order.items[0].quantity if db_order.items else 1),
             "condition": updates.get("condition"),
             "baseService": updates.get("baseService"),
@@ -3941,9 +4820,9 @@ def update_order(order_id: str, updates: Dict[str, Any], db: Session = Depends(g
                 
             if not db_item: continue
 
-            if "brand" in item_data: db_item.brand = item_data["brand"]
-            if "shoeModel" in item_data: db_item.shoe_model = item_data["shoeModel"]
-            if "shoeMaterial" in item_data: db_item.material = item_data["shoeMaterial"]
+            if "brand" in item_data: db_item.brand = clean_shoe_field(item_data["brand"])
+            if "shoeModel" in item_data: db_item.shoe_model = clean_shoe_field(item_data["shoeModel"])
+            if "shoeMaterial" in item_data: db_item.material = clean_shoe_field(item_data["shoeMaterial"])
             if "color" in item_data:
                 db_item.color = _keep_item_text(db_item.color, item_data.get("color"))
             if "shoeSize" in item_data or "size" in item_data:
@@ -4002,18 +4881,199 @@ def update_order(order_id: str, updates: Dict[str, Any], db: Session = Depends(g
         db.commit()
         db.refresh(db_order)
         print(f"[TRANS] Success: Order {db_order.order_number} state synchronized.")
+        
+        new_snapshot = build_order_snapshot(db_order)
+        old_st = str(old_order_snapshot.get("status") or "").strip().lower()
+        new_st = str(new_snapshot.get("status") or "").strip().lower()
+        if old_st != new_st:
+            stage_order = ["new-order", "on-going", "for-release", "claimed"]
+            old_idx = stage_order.index(old_st) if old_st in stage_order else -1
+            new_idx = stage_order.index(new_st) if new_st in stage_order else -1
+            is_undo = (new_idx >= 0 and old_idx >= 0 and new_idx < old_idx) or bool(updates.get("isUndo") or updates.get("undo") or "undo" in str(updates.get("reason") or "").lower())
+            old_disp = old_st.replace("-", " ").title()
+            new_disp = new_st.replace("-", " ").title()
+            if is_undo:
+                new_snapshot["details"] = f"Status reverted from {old_disp} to {new_disp} (Undo)"
+            else:
+                new_snapshot["details"] = f"Status changed from {old_disp} to {new_disp}"
+
         log_audit(
             db=db, action="UPDATE", table_name="orders",
-            record_id=order_id, user=current_user,
+            record_id=db_order.order_id, user=current_user,
             old_values=old_order_snapshot,
-            new_values=build_order_snapshot(db_order),
+            new_values=new_snapshot,
             module="Job Orders",
         )
         return db_order
     except Exception as e:
         db.rollback()
         print(f"[TRANS ERROR] Failed to sync order update: {e}")
-        raise HTTPException(status_code=500, detail="Database Sync Error")
+
+@app.post("/api/orders/{order_id}/materials")
+def add_order_material(
+    order_id: int,
+    payload: OrderMaterialPayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Lightweight, authoritative, idempotent per-pair / per-order material usage.
+    Deducts stock from inventory, creates InventoryLog with execution_ref,
+    creates MaterialConsumption with unique idempotency_key for database-level concurrency protection,
+    creates AuditLog with before/after snapshots, and updates item/order inventory_used.
+    """
+    db_order = db.query(Order).options(
+        joinedload(Order.customer),
+        joinedload(Order.items),
+        joinedload(Order.status)
+    ).filter(Order.order_id == order_id).first()
+    if not db_order:
+        raise HTTPException(status_code=404, detail="Job Order not found")
+
+    if payload.quantity <= 0:
+        raise HTTPException(status_code=400, detail="Quantity must be greater than 0")
+
+    # Authoritative idempotency reference key
+    exec_ref = payload.idempotency_key or f"ORD-{order_id}_ITEM-{payload.item_id or 'all'}_INV-{payload.inventory_id}_{int(time.time() * 1000)}"
+
+    # 1. Check existing MaterialConsumption record
+    existing_consumption = db.query(MaterialConsumption).filter(
+        MaterialConsumption.idempotency_key == exec_ref
+    ).first()
+    if existing_consumption:
+        return {
+            "status": "already_applied",
+            "message": "Material consumption already applied.",
+            "order_id": order_id
+        }
+
+    # Also check InventoryLog for backward compatibility
+    existing_log = db.query(InventoryLog).filter(
+        InventoryLog.execution_ref == exec_ref
+    ).first()
+    if existing_log:
+        return {
+            "status": "already_applied",
+            "message": "Material consumption already applied.",
+            "order_id": order_id
+        }
+
+    # 2. Lock and validate inventory item
+    inv_item = lock_inventory_row(db, payload.inventory_id)
+    if not inv_item:
+        raise HTTPException(status_code=404, detail="Inventory item not found")
+
+    old_stock = float(inv_item.stock_quantity or 0)
+    if old_stock < payload.quantity:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Insufficient stock on hand for '{inv_item.item_name}' ({old_stock} {inv_item.unit or ''} available)."
+        )
+
+    # 3. Deduct stock
+    new_stock = max(0.0, old_stock - payload.quantity)
+    inv_item.stock_quantity = new_stock
+    recalculate_inventory_status(inv_item)
+
+    # 4. Build material entry for order / item metadata
+    mat_id = str(uuid.uuid4())
+    now_dt = datetime.now()
+    mat_entry = {
+        "id": mat_id,
+        "itemId": inv_item.item_id,
+        "name": inv_item.item_name,
+        "quantity": payload.quantity,
+        "unit": inv_item.unit or payload.unit or "units",
+        "notes": payload.notes or "",
+        "staffMember": current_user.username,
+        "date": now_dt.strftime("%m/%d/%Y"),
+        "time": now_dt.strftime("%I:%M:%S %p"),
+        "executionRef": exec_ref
+    }
+
+    # Associate with item / pair
+    target_pair_label = "General"
+    if payload.item_id and db_order.items:
+        db_item = next((i for i in db_order.items if i.item_id == payload.item_id), None)
+        if db_item:
+            pair_idx = next((idx + 1 for idx, i in enumerate(db_order.items) if i.item_id == payload.item_id), 1)
+            target_pair_label = f"Pair #{pair_idx}"
+            curr_item_used = list(db_item.inventory_used or [])
+            curr_item_used.append(mat_entry)
+            db_item.inventory_used = curr_item_used
+    elif db_order.items and len(db_order.items) == 1:
+        db_item = db_order.items[0]
+        target_pair_label = "Single Pair"
+        curr_item_used = list(db_item.inventory_used or [])
+        curr_item_used.append(mat_entry)
+        db_item.inventory_used = curr_item_used
+
+    curr_order_used = list(db_order.inventory_used or [])
+    curr_order_used.append(mat_entry)
+    db_order.inventory_used = curr_order_used
+
+    # 5. Insert MaterialConsumption for database-level unique constraint
+    db.add(MaterialConsumption(
+        idempotency_key=exec_ref,
+        order_id=db_order.order_id,
+        item_id=payload.item_id,
+        inventory_id=inv_item.item_id,
+        quantity=payload.quantity
+    ))
+
+    # 6. Write InventoryLog
+    db.add(InventoryLog(
+        item_id=inv_item.item_id,
+        change_amount=-payload.quantity,
+        action_type="order_material",
+        order_id=db_order.order_id,
+        service_name=f"{target_pair_label}: {payload.notes}" if payload.notes else target_pair_label,
+        execution_ref=exec_ref,
+        user_id=current_user.user_id
+    ))
+
+    # 7. Write AuditLog
+    log_audit(
+        db=db,
+        action="DEDUCT",
+        table_name="inventory",
+        record_id=inv_item.item_id,
+        user=current_user,
+        old_values={"item_name": inv_item.item_name, "stock_quantity": old_stock, "unit": inv_item.unit},
+        new_values={
+            "item_name": inv_item.item_name,
+            "stock_quantity": new_stock,
+            "unit": inv_item.unit,
+            "amount": payload.quantity,
+            "order_id": db_order.order_id,
+            "order_number": db_order.order_number,
+            "item_id": payload.item_id,
+            "pair": target_pair_label,
+            "notes": payload.notes,
+            "details": f"Logged {payload.quantity} {inv_item.unit or ''} of '{inv_item.item_name}' for Order #{db_order.order_number} ({target_pair_label})"
+        },
+        module="Inventory"
+    )
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        # Concurrent request caught by unique constraint on idempotency_key
+        return {
+            "status": "already_applied",
+            "message": "Material consumption already applied by concurrent request.",
+            "order_id": order_id
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to record material consumption: {e}")
+
+    return {
+        "status": "success",
+        "material": mat_entry,
+        "new_stock": new_stock
+    }
 
 @app.delete("/api/orders/{order_id}")
 def delete_order(order_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -4304,14 +5364,14 @@ def get_statuses(db: Session = Depends(get_db), current_user: User = Depends(get
 
 
 @app.get("/api/expenses", response_model=List[ExpenseSchema])
-def get_expenses(db: Session = Depends(get_db), current_user: User = Depends(require_role("owner"))):
-    """Retrieves all standard logged business and whole-product restock expenses (Owner only - OWASP A01)."""
+def get_expenses(db: Session = Depends(get_db), current_user: User = Depends(require_role(["owner", "front staff", "admin"]))):
+    """Retrieves all standard logged business and whole-product restock expenses."""
     standard_expenses = db.query(Expense).all()
     return list(standard_expenses)
 
 @app.post("/api/expenses", response_model=ExpenseSchema)
-def create_expense(expense_data: dict, db: Session = Depends(get_db), current_user: User = Depends(require_role("owner"))):
-    """Logs a new business expense (Owner only - OWASP A01)."""
+def create_expense(expense_data: dict, db: Session = Depends(get_db), current_user: User = Depends(require_role(["owner", "front staff", "admin"]))):
+    """Logs a new business expense."""
     # Logic: If date is missing, use now. Use first admin user as fallback for user_id.
     user_id = expense_data.get('user_id', current_user.user_id)
     
@@ -4322,11 +5382,14 @@ def create_expense(expense_data: dict, db: Session = Depends(get_db), current_us
     else:
         exp_date = datetime.now()
         
-    # Standardize description format: "Category || Notes || Frequency"
+    # Standardize description format: "Category || Notes || Frequency || Group"
     cat = expense_data.get('category', 'Misc Expense')
     notes = expense_data.get('notes', '')
     freq = expense_data.get('frequency', '')
-    if freq:
+    grp = expense_data.get('group', '')
+    if grp:
+        description = f"{cat} || {notes} || {freq} || {grp}"
+    elif freq:
         description = f"{cat} || {notes} || {freq}"
     else:
         description = f"{cat} || {notes}" if notes else cat
@@ -4438,14 +5501,24 @@ def update_expense(expense_id: int, expense_data: dict, db: Session = Depends(ge
         
     cat = expense_data.get('category')
     notes = expense_data.get('notes')
-    if cat is None or notes is None:
-        parts = (db_exp.description or '').split(' || ')
-        curr_cat = parts[0] if len(parts) > 0 else 'Misc Expense'
-        curr_notes = parts[1] if len(parts) > 1 else ''
-        cat = cat if cat is not None else curr_cat
-        notes = notes if notes is not None else curr_notes
+    freq = expense_data.get('frequency')
+    grp = expense_data.get('group')
+    parts = (db_exp.description or '').split(' || ')
+    if cat is None:
+        cat = parts[0] if len(parts) > 0 else 'Misc Expense'
+    if notes is None:
+        notes = parts[1] if len(parts) > 1 else ''
+    if freq is None and len(parts) > 2:
+        freq = parts[2]
+    if grp is None and len(parts) > 3:
+        grp = parts[3]
 
-    db_exp.description = f"{cat} || {notes}" if notes else cat
+    if grp:
+        db_exp.description = f"{cat} || {notes} || {freq or 'One-Time'} || {grp}"
+    elif freq:
+        db_exp.description = f"{cat} || {notes} || {freq}"
+    else:
+        db_exp.description = f"{cat} || {notes}" if notes else cat
     
     if 'date' in expense_data:
         exp_date = expense_data['date']
@@ -4784,13 +5857,52 @@ def log_custom_activity(activity: dict, db: Session = Depends(get_db), current_u
 
     rec_id = activity.get("recordId") or activity.get("record_id") or None
 
+    # Merge details into new_values dictionary without dropping other fields
+    new_vals = dict(activity.get("newValues") or activity.get("new_values") or {})
+    if activity.get("details"):
+        new_vals["details"] = activity.get("details")
+
+    old_vals = activity.get("oldValues") or activity.get("old_values")
+
+    # Resolve historical/intake datetime if provided or associated with an order
+    raw_ts = activity.get("timestamp") or activity.get("created_at")
+    ord_num = (
+        new_vals.get("order_number")
+        or new_vals.get("orderNumber")
+        or (activity.get("details") if ("ORD-" in str(activity.get("details") or "") or "JO-" in str(activity.get("details") or "")) else None)
+    )
+    ord_date = new_vals.get("order_date") or new_vals.get("orderDate") or activity.get("orderDate")
+    ord_time = new_vals.get("order_time") or new_vals.get("orderTime") or activity.get("orderTime")
+
+    order_obj = None
+    if table_name == "orders" and rec_id and str(rec_id).isdigit():
+        try:
+            order_obj = db.query(Order).filter(Order.order_id == int(rec_id)).first()
+        except Exception:
+            pass
+
+    req_created_at = None
+    if ord_date or ord_num or raw_ts:
+        req_created_at = resolve_activity_datetime(
+            raw_timestamp=raw_ts,
+            order_number=ord_num or (order_obj.order_number if order_obj else None),
+            order_date=ord_date,
+            order_time=ord_time,
+            details=activity.get("details"),
+        )
+    elif order_obj and order_obj.created_at:
+        req_created_at = order_obj.created_at
+
     # De-duplicate identical audit logs recorded in the debounce window (handling both record_id and non-record events)
     try:
         from datetime import timedelta
         dedup_secs = 60 if action_type in ("PRINT", "REPORT_GENERATED", "EXPORT_PDF", "EXPORT_CSV", "LOGIN", "LOGOUT") else 10
+        target_actions = [action_type]
+        if table_name == "orders" and action_type in ("CREATE", "NEW_ORDER"):
+            target_actions = ["CREATE", "NEW_ORDER"]
         recent_q = db.query(AuditLog).filter(
             AuditLog.table_name == table_name,
-            AuditLog.action_type == action_type,
+            AuditLog.action_type.in_(target_actions),
             AuditLog.user_id == u.user_id,
             AuditLog.created_at >= datetime.now() - timedelta(seconds=dedup_secs),
         )
@@ -4800,16 +5912,12 @@ def log_custom_activity(activity: dict, db: Session = Depends(get_db), current_u
             recent_q = recent_q.filter(AuditLog.record_id.is_(None))
         recent_dup = recent_q.order_by(AuditLog.audit_log_id.desc()).first()
         if recent_dup:
+            if req_created_at and recent_dup.created_at != req_created_at:
+                recent_dup.created_at = req_created_at
+                db.commit()
             return {"status": "already_logged", "id": recent_dup.audit_log_id}
     except Exception:
         pass
-
-    # Merge details into new_values dictionary without dropping other fields
-    new_vals = dict(activity.get("newValues") or activity.get("new_values") or {})
-    if activity.get("details"):
-        new_vals["details"] = activity.get("details")
-
-    old_vals = activity.get("oldValues") or activity.get("old_values")
 
     entry = log_audit(
         db=db,
@@ -4820,6 +5928,7 @@ def log_custom_activity(activity: dict, db: Session = Depends(get_db), current_u
         old_values=old_vals,
         new_values=new_vals if new_vals else None,
         module=module,
+        created_at=req_created_at,
     )
     return {"status": "logged", "id": entry.audit_log_id if entry else None}
 
@@ -4900,7 +6009,7 @@ def _inventory_audit_snapshot(item: Inventory) -> dict:
     }
 
 @app.post("/api/inventory", response_model=InventorySchema)
-def create_inventory_item(item: InventorySchema, db: Session = Depends(get_db), current_user: User = Depends(require_role(["owner", "admin", "staff"]))):
+def create_inventory_item(item: InventorySchema, db: Session = Depends(get_db), current_user: User = Depends(require_role(["owner", "admin", "staff", "front staff"]))):
     """Add new material to catalog or reactivate inactive existing item."""
     if item.stock_quantity < 0:
         raise HTTPException(status_code=400, detail="Stock quantity cannot be negative.")
@@ -5044,7 +6153,7 @@ def create_inventory_item(item: InventorySchema, db: Session = Depends(get_db), 
 
 
 @app.put("/api/inventory/{item_id}", response_model=InventorySchema)
-def update_inventory_item(item_id: int, updates: InventoryUpdateSchema, db: Session = Depends(get_db), current_user: User = Depends(require_role(["owner", "admin", "staff"]))):
+def update_inventory_item(item_id: int, updates: InventoryUpdateSchema, db: Session = Depends(get_db), current_user: User = Depends(require_role(["owner", "admin", "staff", "front staff"]))):
     """Modify stock or metadata (Owner only - OWASP A01)."""
     item = lock_inventory_row(db, item_id)
     if not item:
@@ -5122,7 +6231,7 @@ def update_inventory_item(item_id: int, updates: InventoryUpdateSchema, db: Sess
     return item
 
 @app.delete("/api/inventory/{item_id}")
-def delete_inventory_item(item_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_role(["owner", "admin", "staff"]))):
+def delete_inventory_item(item_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_role(["owner", "admin", "staff", "front staff"]))):
     """Soft-delete inventory item from catalog (preserves transaction history)."""
     repo = InventoryRepository(db)
     item = repo.get_by_id(item_id)
@@ -5212,70 +6321,271 @@ def delete_inventory_item(item_id: int, db: Session = Depends(get_db), current_u
 def adjust_stock(
     item_id: int = Body(...), 
     amount: float = Body(...), 
-    action: str = Body(...), # 'deduction', 'restock'
+    action: str = Body(...), # 'deduction', 'restock', 'set_balance', 'auto_deduct'
+    unit_mode: Optional[str] = Body("base"), # 'base' or 'package'
+    packages: Optional[float] = Body(None),
     order_id: Optional[int] = Body(None),
+    service_name: Optional[str] = Body(None),
+    service_id: Optional[int] = Body(None),
+    execution_ref: Optional[str] = Body(None),
+    create_expense: Optional[bool] = Body(False),
+    expense_amount: Optional[float] = Body(None),
+    expense_category: Optional[str] = Body("Inventory Restock"),
+    expense_notes: Optional[str] = Body(None),
+    reason: Optional[str] = Body(None),
     db: Session = Depends(get_db), 
-    current_user: User = Depends(require_role(["owner", "admin", "staff"]))
+    current_user: User = Depends(require_role(["owner", "admin", "staff", "front staff"]))
 ):
-    """Record stock movement and update balance (Owner only - OWASP A01)."""
-    item = lock_inventory_row(db, item_id)
-    if not item:
-        raise HTTPException(status_code=404, detail="Item not found")
-    
-    if amount < 0:
-        raise HTTPException(status_code=400, detail="Adjustment amount cannot be negative.")
-    old_stock = item.stock_quantity
+    """
+    Record stock movement and update balance with strict atomicity and idempotency.
+    Base stock is the sole authoritative stored quantity in DB.
+    Transaction flow: Validate -> Lock row -> Convert units -> Verify stock -> Update -> Log -> Audit -> Commit.
+    If any step fails, entire transaction is rolled back immediately.
+    """
+    try:
+        item = lock_inventory_row(db, item_id)
+        if not item:
+            raise HTTPException(status_code=404, detail="Item not found")
 
-    # 1. Update the inventory balance
-    if action == 'deduction':
-        if (float(item.stock_quantity or 0) - amount) < 0:
-            raise HTTPException(status_code=400, detail="Insufficient stock: quantity cannot be negative.")
-        item.stock_quantity = max(0.0, float(item.stock_quantity or 0) - amount)
-    else:
-        item.stock_quantity = float(item.stock_quantity or 0) + amount
-    
-    # 2. Update status using helper
-    recalculate_inventory_status(item)
+        # 0. Convert packages to base unit if requested
+        pkg_size = float(getattr(item, 'package_size', 1.0) or 1.0)
+        pkg_unit = str(getattr(item, 'package_unit', 'pkg') or 'pkg')
+        
+        effective_amount = float(amount)
+        if unit_mode == "package" and packages is not None and float(packages) > 0:
+            if action != 'set_balance' or float(amount or 0.0) == 0.0:
+                effective_amount = float(packages) * pkg_size
+        
+        if effective_amount < 0:
+            raise HTTPException(status_code=400, detail="Adjustment amount cannot be negative.")
+        old_stock = float(item.stock_quantity or 0)
 
-    # 3. Log the transaction
-    log = InventoryLog(
-        item_id=item_id,
-        change_amount=amount if action == 'restock' else -amount,
-        action_type=action,
-        order_id=order_id,
-        user_id=current_user.user_id
-    )
-    
-    db.add(log)
-    db.commit()
-    db.refresh(item)
-    # Write manual inventory adjustment to system audit trail
-    log_audit(
-        db=db,
-        action="RESTOCK" if action == "restock" else "DEDUCT",
-        table_name="inventory",
-        record_id=item_id, user=current_user,
-        old_values={
-            "item_name": item.item_name,
-            "inventory_number": getattr(item, "inventory_number", None),
-            "stock_quantity": float(old_stock or 0),
-            "unit": item.unit,
-        },
-        new_values={
-            "item_name": item.item_name,
-            "inventory_number": getattr(item, "inventory_number", None),
-            "stock_quantity": float(item.stock_quantity or 0),
-            "unit": item.unit,
-            "action": action,
-            "amount": float(amount),
-            "details": (
-                f"{'Restocked' if action == 'restock' else 'Deducted'} {amount} {item.unit or ''} "
-                f"on '{item.item_name}': stock {float(old_stock or 0)} → {float(item.stock_quantity or 0)}"
-            ).strip(),
-        },
-        module="Inventory",
-    )
-    return {"status": "success", "new_stock": item.stock_quantity}
+        # 1. AUTO-DEDUCT IDEMPOTENT HANDLER
+        if action == 'auto_deduct':
+            svc_name_clean = (service_name or (f"Service #{service_id}" if service_id else "")).strip()
+            svc_key = svc_name_clean.lower().replace(" ", "_")
+            exec_ref = execution_ref or (f"ORD-{order_id}_ITEM-{item_id}_SVC-{svc_key}_auto_deduct" if order_id and svc_key else None)
+            
+            # Logical Idempotency Key check: order_id + item_id + service_name + action_type
+            if order_id and svc_name_clean:
+                existing_query = db.query(InventoryLog).filter(
+                    InventoryLog.item_id == item_id,
+                    InventoryLog.order_id == order_id
+                )
+                if exec_ref:
+                    existing_log = existing_query.filter(
+                        (InventoryLog.execution_ref == exec_ref) |
+                        (
+                            (func.lower(InventoryLog.service_name) == svc_name_clean.lower()) &
+                            (InventoryLog.action_type.in_(["auto_deduct", "deduction"]))
+                        )
+                    ).first()
+                else:
+                    existing_log = existing_query.filter(
+                        func.lower(InventoryLog.service_name) == svc_name_clean.lower(),
+                        InventoryLog.action_type.in_(["auto_deduct", "deduction"])
+                    ).first()
+
+                if existing_log:
+                    return {
+                        "status": "skipped",
+                        "message": f"Already deducted for service '{svc_name_clean}' in order {order_id}",
+                        "new_stock": item.stock_quantity,
+                        "idempotent": True
+                    }
+
+            if (old_stock - effective_amount) < 0:
+                raise HTTPException(status_code=400, detail="Insufficient stock for automatic deduction.")
+            item.stock_quantity = max(0.0, old_stock - effective_amount)
+            recalculate_inventory_status(item)
+
+            log = InventoryLog(
+                item_id=item_id,
+                change_amount=-effective_amount,
+                action_type="auto_deduct",
+                order_id=order_id,
+                service_name=svc_name_clean or None,
+                execution_ref=exec_ref,
+                user_id=current_user.user_id
+            )
+            db.add(log)
+            db.commit()
+            db.refresh(item)
+            log_audit(
+                db=db,
+                action="DEDUCT",
+                table_name="inventory",
+                record_id=item_id, user=current_user,
+                old_values={"item_name": item.item_name, "stock_quantity": old_stock, "unit": item.unit},
+                new_values={
+                    "item_name": item.item_name,
+                    "stock_quantity": float(item.stock_quantity or 0),
+                    "unit": item.unit,
+                    "action": "auto_deduct",
+                    "amount": float(effective_amount),
+                    "service_name": svc_name_clean,
+                    "order_id": order_id,
+                    "details": f"Auto-deducted {effective_amount} {item.unit or ''} on '{item.item_name}' for service '{svc_name_clean}' (Order #{order_id or 'N/A'})"
+                },
+                module="Inventory"
+            )
+            return {"status": "success", "new_stock": item.stock_quantity}
+
+        # 2. SET BALANCE (Reconciliation) HANDLER
+        elif action == 'set_balance':
+            diff = effective_amount - old_stock
+            item.stock_quantity = max(0.0, float(effective_amount))
+            recalculate_inventory_status(item)
+
+            log = InventoryLog(
+                item_id=item_id,
+                change_amount=diff,
+                action_type='set_balance',
+                order_id=order_id,
+                user_id=current_user.user_id
+            )
+            db.add(log)
+            db.commit()
+            db.refresh(item)
+            log_audit(
+                db=db,
+                action="SET_BALANCE",
+                table_name="inventory",
+                record_id=item_id, user=current_user,
+                old_values={"item_name": item.item_name, "stock_quantity": old_stock, "unit": item.unit},
+                new_values={
+                    "item_name": item.item_name,
+                    "stock_quantity": float(item.stock_quantity or 0),
+                    "unit": item.unit,
+                    "action": "set_balance",
+                    "physical_count": float(effective_amount),
+                    "difference": float(diff),
+                    "reason": reason,
+                    "details": f"Physical count reconciliation on '{item.item_name}': {old_stock} → {float(effective_amount)} {item.unit or ''} (Diff: {diff:+.2f} {item.unit or ''})" + (f" - {reason}" if reason else "")
+                },
+                module="Inventory"
+            )
+            return {"status": "success", "new_stock": item.stock_quantity, "adjustment": diff}
+
+        # 3. USE STOCK (Deduction) HANDLER
+        elif action == 'deduction':
+            if (old_stock - effective_amount) < 0:
+                raise HTTPException(status_code=400, detail="Insufficient stock: quantity cannot be negative.")
+            item.stock_quantity = max(0.0, old_stock - effective_amount)
+            recalculate_inventory_status(item)
+
+            log = InventoryLog(
+                item_id=item_id,
+                change_amount=-effective_amount,
+                action_type='deduction',
+                order_id=order_id,
+                service_name=service_name,
+                user_id=current_user.user_id
+            )
+            db.add(log)
+            db.commit()
+            db.refresh(item)
+            pkg_note = f" ({packages} {pkg_unit}s)" if (unit_mode == "package" and packages) else ""
+            log_audit(
+                db=db,
+                action="DEDUCT",
+                table_name="inventory",
+                record_id=item_id, user=current_user,
+                old_values={"item_name": item.item_name, "stock_quantity": old_stock, "unit": item.unit},
+                new_values={
+                    "item_name": item.item_name,
+                    "stock_quantity": float(item.stock_quantity or 0),
+                    "unit": item.unit,
+                    "action": "deduction",
+                    "amount": float(effective_amount),
+                    "order_id": order_id,
+                    "reason": reason,
+                    "details": f"Deducted {effective_amount} {item.unit or ''}{pkg_note} on '{item.item_name}': stock {old_stock} → {float(item.stock_quantity or 0)}" + (f" - {reason}" if reason else "")
+                },
+                module="Inventory"
+            )
+            return {"status": "success", "new_stock": item.stock_quantity}
+
+        # 4. ADD STOCK (Restock) HANDLER
+        else:
+            item.stock_quantity = old_stock + effective_amount
+            recalculate_inventory_status(item)
+
+            log = InventoryLog(
+                item_id=item_id,
+                change_amount=effective_amount,
+                action_type='restock',
+                order_id=order_id,
+                user_id=current_user.user_id
+            )
+            db.add(log)
+
+            created_expense_id = None
+            if create_expense and expense_amount and expense_amount > 0:
+                try:
+                    item_unit = item.unit or 'units'
+                    default_notes = f"Stock addition for {item.item_name} (+{effective_amount} {item_unit})"
+                    exp_desc = f"{expense_category or 'Inventory'} || {expense_notes or default_notes}"
+                    new_expense = Expense(
+                        amount=expense_amount,
+                        description=exp_desc,
+                        expense_date=datetime.now(),
+                        user_id=current_user.user_id
+                    )
+                    db.add(new_expense)
+                    db.flush()
+                    created_expense_id = new_expense.expense_id
+                    log_audit(
+                        db=db,
+                        action="RESTOCK",
+                        table_name="expenses",
+                        record_id=new_expense.expense_id,
+                        user=current_user,
+                        new_values={
+                            "amount": float(expense_amount),
+                            "expense_amount": float(expense_amount),
+                            "description": exp_desc,
+                            "item_name": item.item_name,
+                            "action": "restock",
+                            "stock_added": float(effective_amount),
+                            "unit": item.unit,
+                            "details": f"Automated expense recorded from Stock Addition: ₱{expense_amount:,.2f} for '{item.item_name}' (+{effective_amount} {item.unit or ''})"
+                        },
+                        module="Inventory"
+                    )
+                except Exception as exp_err:
+                    print(f"[STOCK ADDITION EXPENSE WARNING] Failed to record expense: {exp_err}")
+
+            db.commit()
+            db.refresh(item)
+            pkg_note = f" ({packages} {pkg_unit}s)" if (unit_mode == "package" and packages) else ""
+            log_audit(
+                db=db,
+                action="RESTOCK",
+                table_name="inventory",
+                record_id=item_id, user=current_user,
+                old_values={"item_name": item.item_name, "stock_quantity": old_stock, "unit": item.unit},
+                new_values={
+                    "item_name": item.item_name,
+                    "stock_quantity": float(item.stock_quantity or 0),
+                    "unit": item.unit,
+                    "action": "restock",
+                    "amount": float(effective_amount),
+                    "stock_added": float(effective_amount),
+                    "reason": reason,
+                    "expense_id": created_expense_id,
+                    "expense_amount": float(expense_amount) if (create_expense and expense_amount) else None,
+                    "details": f"Added {effective_amount} {item.unit or ''}{pkg_note} on '{item.item_name}': stock {old_stock} → {float(item.stock_quantity or 0)}" + (f" - {reason}" if reason else "") + (f" [Expense #{created_expense_id} created]" if created_expense_id else "")
+                },
+                module="Inventory"
+            )
+            return {"status": "success", "new_stock": item.stock_quantity, "expense_id": created_expense_id}
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Stock adjustment failed: {str(exc)}")
 
 # ------------------------------------------
 # DEFENSE DEBUGGING TOOLS
@@ -5651,14 +6961,16 @@ async def update_historical_order(
         db, date_value=order.date_received, current_order_id=order.order_id,
         exclude_historical_order_id=historical_order_id,
     )
-    if "original_estimated_release_date" in payload:
-        parsed_expected = _parse(payload["original_estimated_release_date"])
-        if parsed_expected is not None:
-            order.original_estimated_release_date = parsed_expected
+    if "original_estimated_release_date" in payload or "expected_release_date" in payload:
+        raw_expected = payload.get("original_estimated_release_date") if "original_estimated_release_date" in payload else payload.get("expected_release_date")
+        order.original_estimated_release_date = _parse(raw_expected) if raw_expected else None
     if "claimed_date" in payload:
-        order.claimed_date = _parse(payload["claimed_date"])
+        raw_claimed = payload.get("claimed_date")
+        order.claimed_date = _parse(raw_claimed) if raw_claimed else None
     if order.claimed_date and order.date_received:
         order.completion_days = (order.claimed_date - order.date_received).days
+    elif not order.claimed_date:
+        order.completion_days = None
     if "branch" in payload:
         order.branch = payload["branch"]
     if "priority" in payload:
@@ -5718,17 +7030,28 @@ async def update_historical_order(
     db.expire(order, ["items", "customer"])
     from api.historical_processing import apply_explicit_completion_days, apply_normalized_timeline
     apply_normalized_timeline(order)
-    if payload.get("completion_days") is not None:
+    if payload.get("completion_days") is not None and str(payload.get("completion_days")).strip() != "":
+        raw_clm = payload.get("claimed_date")
+        claimed_arg = _parse(raw_clm) if raw_clm else (None if "claimed_date" in payload else order.claimed_date)
+        raw_exp = payload.get("original_estimated_release_date") if "original_estimated_release_date" in payload else payload.get("expected_release_date")
+        expected_arg = _parse(raw_exp) if raw_exp else (None if ("original_estimated_release_date" in payload or "expected_release_date" in payload) else order.original_estimated_release_date)
         apply_explicit_completion_days(
             order,
             payload.get("completion_days"),
-            claimed_date=_parse(payload.get("claimed_date")) if payload.get("claimed_date") else order.claimed_date,
-            expected_release=(
-                _parse(payload.get("original_estimated_release_date"))
-                if payload.get("original_estimated_release_date")
-                else order.original_estimated_release_date
-            ),
+            claimed_date=claimed_arg,
+            expected_release=expected_arg,
         )
+    elif "completion_days" in payload and (payload.get("completion_days") is None or str(payload.get("completion_days")).strip() == ""):
+        order.completion_days = None
+
+    # Enforce strict user deletion if explicitly provided as null/empty
+    if "claimed_date" in payload and (payload.get("claimed_date") is None or str(payload.get("claimed_date")).strip() == ""):
+        order.claimed_date = None
+        order.completion_days = None
+    if "original_estimated_release_date" in payload or "expected_release_date" in payload:
+        raw_exp = payload.get("original_estimated_release_date") if "original_estimated_release_date" in payload else payload.get("expected_release_date")
+        if raw_exp is None or str(raw_exp).strip() == "":
+            order.original_estimated_release_date = None
     db.commit()
     db.refresh(order)
     new_hist_snapshot = {
@@ -5749,11 +7072,15 @@ async def update_historical_order(
         new_values=new_hist_snapshot,
         module="Historical Records",
     )
+    from api.historical_processing import load_service_price_map, serialize_historical_order
+    catalog = load_service_price_map(db)
+    serialized = serialize_historical_order(order, catalog)
     return {
         "status": "updated",
         "historical_order_id": order.historical_order_id,
         "order_id": order.order_id,
         "customer_name": order.customer.customer_name if order.customer else None,
+        "order": serialized,
     }
 
 
@@ -6193,8 +7520,18 @@ async def validate_hist_order_fields(
                         _add_svcs(item_payload.get("addon_services"), 'addon')
 
     for field, value in corrections.items():
-        if hasattr(order, field):
-            setattr(order, field, value)
+        target = "original_estimated_release_date" if field == "expected_release_date" else field
+        if hasattr(order, target):
+            if target in ("original_estimated_release_date", "claimed_date"):
+                if value in ("", None):
+                    setattr(order, target, None)
+                else:
+                    setattr(order, target, _parse(value))
+            elif target == "date_received":
+                if value not in ("", None):
+                    setattr(order, target, _parse(value) or getattr(order, target))
+            else:
+                setattr(order, target, value)
     # Recalculate completion_days if dates present
     if order.date_received and order.claimed_date:
         try:
@@ -6203,6 +7540,8 @@ async def validate_hist_order_fields(
             order.completion_days = (cd - dr).days
         except Exception:
             pass
+    elif not order.claimed_date:
+        order.completion_days = None
     action = str(payload.get("action") or "").strip().lower()
     from historical.ocr_status import REJECTED, VALIDATED
     from api.historical_processing import apply_canonical_id_on_validate, apply_normalized_timeline
@@ -6615,7 +7954,30 @@ def get_report_data_api(
     current_user: User = Depends(require_role(["owner", "admin"]))
 ):
     """Authoritative backend report calculation (Sales, Expenses, ROI)."""
-    return calculate_report_data(db, report_type, period_type, start_date, end_date)
+    t0 = time.perf_counter()
+    data = calculate_report_data(db, report_type, period_type, start_date, end_date)
+    elapsed_ms = (time.perf_counter() - t0) * 1000.0
+    print(f"[REPORT API] /api/reports/data served {report_type} ({period_type}) in {elapsed_ms:.2f}ms ({elapsed_ms/1000.0:.3f}s)")
+
+    # Objective 3 Logging: Real-Time Report Generation Performance
+    clean_type = report_type.title()
+    log_audit(
+        db=db,
+        action="REPORT_GENERATION_COMPLETED",
+        table_name="reports",
+        user=current_user,
+        new_values={
+            "report_type": report_type,
+            "period_type": period_type,
+            "period_label": data.get("period_label", ""),
+            "duration_ms": round(elapsed_ms, 2),
+            "format": "JSON",
+            "status": "SUCCESS"
+        },
+        module=f"{clean_type} Report"
+    )
+
+    return data
 
 @app.get("/api/reports/export-csv")
 def export_report_csv_api(
@@ -6627,17 +7989,20 @@ def export_report_csv_api(
     current_user: User = Depends(require_role(["owner", "admin"]))
 ):
     """Generates and streams RFC 4180 structured CSV report with active spreadsheet formulas."""
+    t0 = time.perf_counter()
     data = calculate_report_data(db, report_type, period_type, start_date, end_date)
     csv_content = generate_report_csv(data, report_type)
+    elapsed_ms = (time.perf_counter() - t0) * 1000.0
+    print(f"[REPORT API] /api/reports/export-csv completed {report_type} ({period_type}) in {elapsed_ms:.2f}ms ({elapsed_ms/1000.0:.3f}s)")
     
-    clean_type = report_type.lower().replace(" ", "_")
-    period_slug = data["period_label"].lower().replace(" ", "_").replace("–", "-").replace(",", "")
-    filename = f"shoelotskey_{clean_type}_{period_slug}.csv"
+    clean_type = report_type.title().replace(" ", "_")
+    period_slug = data["period_label"].replace(" ", "_").replace("–", "-").replace(",", "").replace("(", "").replace(")", "")
+    filename = f"Shoelotskey_Villamor-Pasay_{clean_type}_Report_{period_slug}.csv"
     
     log_audit(
         db=db, action="EXPORT_CSV", table_name="reports",
         user=current_user,
-        new_values={"report_type": report_type, "period": data["period_label"], "filename": filename},
+        new_values={"report_type": report_type, "period": data["period_label"], "filename": filename, "duration_ms": round(elapsed_ms, 2)},
         module="Reports"
     )
     
@@ -6658,17 +8023,20 @@ def export_report_xlsx_api(
     current_user: User = Depends(require_role(["owner", "admin"]))
 ):
     """Generates and streams native Excel (.xlsx) report with active formulas and corporate styling."""
+    t0 = time.perf_counter()
     data = calculate_report_data(db, report_type, period_type, start_date, end_date)
     xlsx_bytes = generate_report_xlsx(data, report_type)
+    elapsed_ms = (time.perf_counter() - t0) * 1000.0
+    print(f"[REPORT API] /api/reports/export-xlsx completed {report_type} ({period_type}) in {elapsed_ms:.2f}ms ({elapsed_ms/1000.0:.3f}s)")
     
-    clean_type = report_type.lower().replace(" ", "_")
-    period_slug = data["period_label"].lower().replace(" ", "_").replace("–", "-").replace(",", "")
-    filename = f"shoelotskey_{clean_type}_{period_slug}.xlsx"
+    clean_type = report_type.title().replace(" ", "_")
+    period_slug = data["period_label"].replace(" ", "_").replace("–", "-").replace(",", "").replace("(", "").replace(")", "")
+    filename = f"Shoelotskey_Villamor-Pasay_{clean_type}_Report_{period_slug}.xlsx"
     
     log_audit(
         db=db, action="EXPORT_XLSX", table_name="reports",
         user=current_user,
-        new_values={"report_type": report_type, "period": data["period_label"], "filename": filename},
+        new_values={"report_type": report_type, "period": data["period_label"], "filename": filename, "duration_ms": round(elapsed_ms, 2)},
         module="Reports"
     )
     
@@ -6689,17 +8057,20 @@ def export_report_pdf_api(
     current_user: User = Depends(require_role(["owner", "admin"]))
 ):
     """Generates and streams authoritative paginated PDF report."""
+    t0 = time.perf_counter()
     data = calculate_report_data(db, report_type, period_type, start_date, end_date)
     pdf_bytes = generate_report_pdf(data, report_type)
+    elapsed_ms = (time.perf_counter() - t0) * 1000.0
+    print(f"[REPORT API] /api/reports/export-pdf completed {report_type} ({period_type}) in {elapsed_ms:.2f}ms ({elapsed_ms/1000.0:.3f}s)")
     
-    clean_type = report_type.lower().replace(" ", "_")
-    period_slug = data["period_label"].lower().replace(" ", "_").replace("–", "-").replace(",", "")
-    filename = f"shoelotskey_{clean_type}_{period_slug}.pdf"
+    clean_type = report_type.title().replace(" ", "_")
+    period_slug = data["period_label"].replace(" ", "_").replace("–", "-").replace(",", "").replace("(", "").replace(")", "")
+    filename = f"Shoelotskey_Villamor-Pasay_{clean_type}_Report_{period_slug}.pdf"
     
     log_audit(
         db=db, action="EXPORT_PDF", table_name="reports",
         user=current_user,
-        new_values={"report_type": report_type, "period": data["period_label"], "filename": filename},
+        new_values={"report_type": report_type, "period": data["period_label"], "filename": filename, "duration_ms": round(elapsed_ms, 2)},
         module="Reports"
     )
     
@@ -6848,6 +8219,460 @@ def list_system_backups_api(
                 except Exception:
                     pass
     return backups
+
+
+# ==========================================
+# CASH REGISTER & FINANCIAL MONITORING MODULE
+# ==========================================
+
+def format_cash_session(session: Optional[CashSession]) -> Optional[dict]:
+    if not session:
+        return None
+    return {
+        "id": session.id,
+        "business_date": str(session.business_date),
+        "opening_cash": float(session.opening_cash) if session.opening_cash is not None else 0.0,
+        "expected_cash": float(session.expected_cash) if session.expected_cash is not None else None,
+        "actual_cash": float(session.actual_cash) if session.actual_cash is not None else None,
+        "over_short": float(session.over_short) if session.over_short is not None else None,
+        "status": session.status,
+        "opened_by": session.opened_by,
+        "opened_by_name": session.opener.username if session.opener else "Staff",
+        "opened_at": session.opened_at.isoformat() if session.opened_at else None,
+        "closed_by": session.closed_by,
+        "closed_by_name": session.closer.username if session.closer else None,
+        "closed_at": session.closed_at.isoformat() if session.closed_at else None,
+        "variance_reason": session.variance_reason,
+    }
+
+def _get_daily_cash_financials(db: Session, b_date: date) -> dict:
+    """
+    Authoritative server-side calculation of daily cash register balances.
+    Digital sales (GCash, Maya) are recorded for sales tracking but DO NOT increase physical cash.
+    Cash payments DO increase physical cash.
+    Business expenses & owner withdrawals paid in cash reduce physical cash.
+    """
+    start_of_day = datetime.combine(b_date, datetime.min.time())
+    end_of_day = datetime.combine(b_date, datetime.max.time())
+
+    # Latest session for this business date
+    session = db.query(CashSession).filter(
+        CashSession.business_date == b_date
+    ).order_by(CashSession.id.desc()).first()
+
+    beginning_cash = Decimal(str(session.opening_cash)) if session else Decimal("0.00")
+
+    # Order payments received on this business date
+    payments = db.query(Payment).options(
+        joinedload(Payment.method),
+        joinedload(Payment.order)
+    ).filter(
+        Payment.created_at >= start_of_day,
+        Payment.created_at <= end_of_day
+    ).order_by(Payment.created_at.asc()).all()
+
+    cash_sales = Decimal("0.00")
+    gcash_sales = Decimal("0.00")
+    maya_sales = Decimal("0.00")
+    other_sales = Decimal("0.00")
+
+    for p in payments:
+        amt = Decimal(str(p.amount_received or 0))
+        m_name = (p.method.method_name.lower().strip() if p.method and p.method.method_name else "cash")
+        if m_name == "cash":
+            cash_sales += amt
+        elif m_name == "gcash":
+            gcash_sales += amt
+        elif m_name == "maya":
+            maya_sales += amt
+        else:
+            other_sales += amt
+
+    digital_sales = gcash_sales + maya_sales
+    total_daily_payments = cash_sales + digital_sales + other_sales
+
+    # Expenses logged on this business date
+    expenses = db.query(Expense).filter(
+        Expense.expense_date >= start_of_day,
+        Expense.expense_date <= end_of_day
+    ).order_by(Expense.expense_date.asc()).all()
+
+    business_expenses = Decimal("0.00")
+    owner_withdrawals = Decimal("0.00")
+
+    for e in expenses:
+        amt = Decimal(str(e.amount or 0))
+        desc_lower = (e.description or "").lower()
+        is_wd = (
+            "owner withdrawal" in desc_lower
+            or "owner / personal" in desc_lower
+            or "owner personal" in desc_lower
+            or "withdrawal" in desc_lower
+        )
+        if is_wd:
+            owner_withdrawals += amt
+        else:
+            business_expenses += amt
+
+    total_cash_out = business_expenses + owner_withdrawals
+    expected_cash = beginning_cash + cash_sales - total_cash_out
+
+    return {
+        "session": session,
+        "business_date": b_date,
+        "beginning_cash": beginning_cash,
+        "cash_sales": cash_sales,
+        "gcash_sales": gcash_sales,
+        "maya_sales": maya_sales,
+        "digital_sales": digital_sales,
+        "other_sales": other_sales,
+        "total_daily_payments": total_daily_payments,
+        "business_expenses": business_expenses,
+        "owner_withdrawals": owner_withdrawals,
+        "total_cash_out": total_cash_out,
+        "expected_cash": expected_cash,
+        "payments": payments,
+        "expenses": expenses,
+    }
+
+
+@app.get("/api/cash-register/current")
+def get_current_cash_session(
+    business_date: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["owner", "front staff", "admin"]))
+):
+    """Returns the current or specified date's active cash register session (Front Staff, Owner, Admin)."""
+    if business_date:
+        try:
+            b_date = datetime.strptime(business_date, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid business_date format. Use YYYY-MM-DD.")
+    else:
+        b_date = date.today()
+
+    session = db.query(CashSession).options(
+        joinedload(CashSession.opener),
+        joinedload(CashSession.closer)
+    ).filter(
+        CashSession.business_date == b_date
+    ).order_by(CashSession.id.desc()).first()
+
+    return {"status": "success", "session": format_cash_session(session)}
+
+
+@app.get("/api/cash-register/summary")
+def get_cash_register_summary(
+    business_date: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["owner", "front staff", "admin"]))
+):
+    """Returns server-authoritative financial calculation for Cash Register cards."""
+    if business_date:
+        try:
+            b_date = datetime.strptime(business_date, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid business_date format. Use YYYY-MM-DD.")
+    else:
+        b_date = date.today()
+
+    fin = _get_daily_cash_financials(db, b_date)
+    return {
+        "status": "success",
+        "business_date": str(b_date),
+        "session": format_cash_session(fin["session"]),
+        "beginning_cash": float(fin["beginning_cash"]),
+        "cash_sales": float(fin["cash_sales"]),
+        "gcash_sales": float(fin["gcash_sales"]),
+        "maya_sales": float(fin["maya_sales"]),
+        "digital_sales": float(fin["digital_sales"]),
+        "other_sales": float(fin["other_sales"]),
+        "total_daily_payments": float(fin["total_daily_payments"]),
+        "business_expenses": float(fin["business_expenses"]),
+        "owner_withdrawals": float(fin["owner_withdrawals"]),
+        "total_cash_out": float(fin["total_cash_out"]),
+        "expected_cash": float(fin["expected_cash"]),
+    }
+
+
+@app.get("/api/cash-register/transactions")
+def get_cash_register_transactions(
+    business_date: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["owner", "front staff", "admin"]))
+):
+    """Returns a unified, chronological log of all cash drawer movements for the business date."""
+    if business_date:
+        try:
+            b_date = datetime.strptime(business_date, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid business_date format. Use YYYY-MM-DD.")
+    else:
+        b_date = date.today()
+
+    fin = _get_daily_cash_financials(db, b_date)
+    items = []
+
+    # 1. Opening Fund
+    session = fin["session"]
+    if session:
+        items.append({
+            "id": f"open-{session.id}",
+            "time": session.opened_at.strftime("%I:%M %p") if session.opened_at else "",
+            "raw_time": session.opened_at.isoformat() if session.opened_at else "",
+            "timestamp": session.opened_at or datetime.min,
+            "transaction": "Beginning Cash Fund",
+            "details": f"Register opened by {session.opener.username if session.opener else 'Staff'}",
+            "order_id": "-",
+            "cash_in": float(session.opening_cash),
+            "cash_out": 0.0,
+            "method": "CASH",
+        })
+
+    # 2. Payments
+    for p in fin["payments"]:
+        m_name = (p.method.method_name.upper() if p.method and p.method.method_name else "CASH")
+        is_cash = (m_name == "CASH")
+        order_num = p.order.order_number if p.order else f"ORD-{p.order_id}"
+        items.append({
+            "id": f"pay-{p.payment_id}",
+            "time": p.created_at.strftime("%I:%M %p") if p.created_at else "",
+            "raw_time": p.created_at.isoformat() if p.created_at else "",
+            "timestamp": p.created_at or datetime.min,
+            "transaction": f"Order Payment ({m_name})",
+            "details": f"Payment for Order #{order_num}",
+            "order_id": order_num,
+            "cash_in": float(p.amount_received) if is_cash else 0.0,
+            "cash_out": 0.0,
+            "amount": float(p.amount_received),
+            "method": m_name,
+        })
+
+    # 3. Expenses & Withdrawals
+    for e in fin["expenses"]:
+        desc = e.description or "Business Expense"
+        is_wd = "owner withdrawal" in desc.lower() or "withdrawal" in desc.lower()
+        t_name = "Owner Withdrawal" if is_wd else "Business Expense"
+        items.append({
+            "id": f"exp-{e.expense_id}",
+            "time": e.expense_date.strftime("%I:%M %p") if e.expense_date else "",
+            "raw_time": e.expense_date.isoformat() if e.expense_date else "",
+            "timestamp": e.expense_date or datetime.min,
+            "transaction": t_name,
+            "details": desc,
+            "order_id": "-",
+            "cash_in": 0.0,
+            "cash_out": float(e.amount),
+            "amount": float(e.amount),
+            "method": "CASH",
+        })
+
+    # Sort chronologically
+    items.sort(key=lambda x: x["timestamp"])
+
+    # Remove temporary timestamp object from payload
+    for it in items:
+        it.pop("timestamp", None)
+
+    return {"status": "success", "transactions": items}
+
+
+@app.post("/api/cash-register/open")
+def open_cash_register(
+    req: OpenCashRegisterRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["owner", "front staff", "admin"]))
+):
+    """Opens the cash register with an initial beginning cash fund."""
+    if req.opening_cash < 0:
+        raise HTTPException(status_code=400, detail="Beginning cash fund cannot be negative.")
+
+    if req.business_date:
+        try:
+            b_date = datetime.strptime(req.business_date, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid business_date format. Use YYYY-MM-DD.")
+    else:
+        b_date = date.today()
+
+    existing_open = db.query(CashSession).filter(
+        CashSession.business_date == b_date,
+        CashSession.status == "OPEN"
+    ).first()
+
+    if existing_open:
+        raise HTTPException(status_code=400, detail="A cash register session is already OPEN for this business date.")
+
+    new_session = CashSession(
+        business_date=b_date,
+        opening_cash=Decimal(str(round(req.opening_cash, 2))),
+        status="OPEN",
+        opened_by=current_user.user_id,
+        opened_at=datetime.utcnow()
+    )
+    db.add(new_session)
+    db.commit()
+    db.refresh(new_session)
+
+    log_audit(
+        db=db,
+        action="OPEN",
+        table_name="cash_sessions",
+        record_id=new_session.id,
+        user=current_user,
+        new_values={
+            "session_id": new_session.id,
+            "business_date": str(new_session.business_date),
+            "opening_cash": float(new_session.opening_cash),
+            "status": "OPEN",
+        },
+        module="Cash Register",
+    )
+
+    return {"status": "success", "message": "Cash register opened successfully.", "session": format_cash_session(new_session)}
+
+
+@app.post("/api/cash-register/close")
+def close_cash_register(
+    req: CloseCashRegisterRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["owner", "front staff", "admin"]))
+):
+    """Closes the active cash register session, checking expected vs actual cash counted."""
+    if req.session_id:
+        session = db.query(CashSession).filter(CashSession.id == req.session_id).first()
+    else:
+        session = db.query(CashSession).filter(
+            CashSession.status == "OPEN"
+        ).order_by(CashSession.id.desc()).first()
+
+    if not session or session.status != "OPEN":
+        raise HTTPException(status_code=400, detail="No active OPEN cash register session found to close.")
+
+    fin = _get_daily_cash_financials(db, session.business_date)
+    expected_cash = fin["expected_cash"]
+    actual_cash = Decimal(str(round(req.actual_cash, 2)))
+    over_short = actual_cash - expected_cash
+
+    if abs(over_short) > Decimal("0.001"):
+        if not req.variance_reason or not req.variance_reason.strip():
+            sign_label = "OVER" if over_short > 0 else "SHORT"
+            raise HTTPException(
+                status_code=400,
+                detail=f"Variance detected (₱{abs(float(over_short)):.2f} {sign_label}). A variance reason is required."
+            )
+
+    session.expected_cash = expected_cash
+    session.actual_cash = actual_cash
+    session.over_short = over_short
+    session.variance_reason = req.variance_reason.strip() if req.variance_reason else None
+    session.status = "CLOSED"
+    session.closed_by = current_user.user_id
+    session.closed_at = datetime.utcnow()
+    db.commit()
+    db.refresh(session)
+
+    log_audit(
+        db=db,
+        action="CLOSE",
+        table_name="cash_sessions",
+        record_id=session.id,
+        user=current_user,
+        new_values={
+            "session_id": session.id,
+            "business_date": str(session.business_date),
+            "expected_cash": float(expected_cash),
+            "actual_cash": float(actual_cash),
+            "over_short": float(over_short),
+            "variance_reason": session.variance_reason,
+            "status": "CLOSED",
+        },
+        module="Cash Register",
+    )
+
+    return {"status": "success", "message": "Cash register closed successfully.", "session": format_cash_session(session)}
+
+
+@app.get("/api/dashboard/front-staff-summary")
+def get_front_staff_summary(
+    business_date: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["owner", "front staff", "admin"]))
+):
+    """
+    Returns the exact 6 KPI metrics for the Front Staff Dashboard:
+    1. Total Sales (Gross value of active orders created today)
+    2. Cash Sales (CASH customer payments received today)
+    3. Digital Sales (GCash + Maya customer payments received today)
+    4. Balance Due (Unpaid order balances)
+    5. Daily Expenses (Business operating expenses for today, excluding owner withdrawals)
+    6. Cash on Hand (Dynamic expected cash if OPEN, or actual cash counted if CLOSED)
+    """
+    if business_date:
+        try:
+            b_date = datetime.strptime(business_date, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid business_date format. Use YYYY-MM-DD.")
+    else:
+        b_date = date.today()
+
+    start_of_day = datetime.combine(b_date, datetime.min.time())
+    end_of_day = datetime.combine(b_date, datetime.max.time())
+
+    fin = _get_daily_cash_financials(db, b_date)
+
+    # 1. Total Sales (Orders created today that are not cancelled)
+    orders_today = db.query(Order).filter(
+        Order.created_at >= start_of_day,
+        Order.created_at <= end_of_day,
+        Order.cancellation_stage.is_(None)
+    ).all()
+    total_sales = sum([Decimal(str(o.grand_total or 0)) for o in orders_today], Decimal("0.00"))
+
+    # 2. Cash Sales
+    cash_sales = fin["cash_sales"]
+
+    # 3. Digital Sales (GCash + Maya)
+    digital_sales = fin["digital_sales"]
+
+    # 4. Balance Due (All active orders with outstanding balance)
+    active_orders = db.query(Order).options(joinedload(Order.payments)).filter(
+        Order.status_id.in_([1, 2, 3]),  # new-order, on-going, for-release
+        Order.cancellation_stage.is_(None)
+    ).all()
+    balance_due = Decimal("0.00")
+    for o in active_orders:
+        if o.payments:
+            latest_payment = o.payments[-1]
+            balance_due += Decimal(str(latest_payment.balance or 0))
+        else:
+            balance_due += Decimal(str(o.grand_total or 0))
+
+    # 5. Daily Expenses (Business operations only, excluding owner withdrawals)
+    daily_expenses = fin["business_expenses"]
+
+    # 6. Cash on Hand
+    session = fin["session"]
+    if session and session.status == "OPEN":
+        cash_on_hand = fin["expected_cash"]
+        session_status = "OPEN"
+    elif session and session.status == "CLOSED":
+        cash_on_hand = Decimal(str(session.actual_cash or session.expected_cash or 0))
+        session_status = "CLOSED"
+    else:
+        cash_on_hand = Decimal("0.00")
+        session_status = "NONE"
+
+    return {
+        "total_sales": float(total_sales),
+        "cash_sales": float(cash_sales),
+        "digital_sales": float(digital_sales),
+        "balance_due": float(balance_due),
+        "daily_expenses": float(daily_expenses),
+        "cash_on_hand": float(cash_on_hand),
+        "session_status": session_status,
+        "business_date": str(b_date),
+    }
 
 
 # 3. SPA Support (Catch-all)

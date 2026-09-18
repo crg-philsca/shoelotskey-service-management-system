@@ -276,7 +276,7 @@ def create_order_from_extraction(
             historical_order_id=order.historical_order_id,
             brand=None,
             model=None,
-            remarks=f"OCR produced no items for {source_label}",
+            remarks=None,
         )
         db.add(placeholder)
 
@@ -442,7 +442,7 @@ def apply_extraction_to_order(
     only_placeholders = bool(existing_items) and all(
         (not i.brand)
         and (i.item_price is None)
-        and str(i.remarks or "").lower().startswith("ocr produced no items")
+        and (not i.remarks or str(i.remarks or "").lower().startswith("ocr produced no items"))
         for i in existing_items
     )
     useful_rows = [i for i in items_data if _item_row_useful(i)]

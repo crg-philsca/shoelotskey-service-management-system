@@ -329,10 +329,16 @@ def ensure_sqlite_schema_and_defaults(target_engine):
             if ldb.query(Role).count() == 0:
                 ldb.add(Role(role_name="owner"))
                 ldb.add(Role(role_name="staff"))
+                ldb.add(Role(role_name="front staff"))
                 ldb.add(Role(role_name="admin"))
                 ldb.commit()
             role_owner = ldb.query(Role).filter(Role.role_name == "owner").first()
             role_staff = ldb.query(Role).filter(Role.role_name == "staff").first()
+            role_front_staff = ldb.query(Role).filter(Role.role_name == "front staff").first()
+            if role_front_staff is None:
+                role_front_staff = Role(role_name="front staff")
+                ldb.add(role_front_staff)
+                ldb.commit()
             if ldb.query(Role).filter(Role.role_name == "admin").first() is None:
                 ldb.add(Role(role_name="admin"))
                 ldb.commit()
@@ -362,7 +368,14 @@ def ensure_sqlite_schema_and_defaults(target_engine):
                 staff_u = ldb.query(User).filter(or_(User.username == "staff", User.email == "staff@shoelotskey.com")).first()
                 if not staff_u:
                     ldb.add(User(username="staff", email="staff@shoelotskey.com", password_hash=_hash_pw("staff123"), role_id=role_staff.role_id, is_active=True))
-                    
+
+            if role_front_staff and not IS_PRODUCTION_ENV:
+                fs_u = ldb.query(User).filter(or_(User.username == "front_staff", User.email == "frontstaff@shoelotskey.com")).first()
+                if not fs_u:
+                    ldb.add(User(username="front_staff", email="frontstaff@shoelotskey.com", password_hash=_hash_pw("staff123"), role_id=role_front_staff.role_id, is_active=True))
+                elif fs_u.role_id != role_front_staff.role_id:
+                    fs_u.role_id = role_front_staff.role_id
+
             ldb.commit()
         checkpoint_sqlite(target_engine)
     except Exception as e:

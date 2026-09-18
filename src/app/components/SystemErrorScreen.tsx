@@ -52,7 +52,7 @@ const SystemErrorScreen: React.FC<SystemErrorScreenProps> = ({
           {/* Branded 3D Sneaker with Walking Animation & Seamless Multiply Blending */}
           <div className="mb-8 animate-shoe-walk flex items-center justify-center">
             <img 
-              src="/static/branded_shoe_404.png" 
+              src="/static/branded_shoe_404.png?v=transparent" 
               style={{ mixBlendMode: 'multiply' }}
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
@@ -60,7 +60,7 @@ const SystemErrorScreen: React.FC<SystemErrorScreenProps> = ({
                   target.dataset.retried = "true";
                   // P1-10 FIX: use the centralized local-dev backend origin instead of a
                   // bare hardcoded localhost:8000.
-                  target.src = `${STATIC_BASE}/static/branded_shoe_404.png`;
+                  target.src = `${STATIC_BASE}/static/branded_shoe_404.png?v=transparent`;
                 } else {
                   target.src = "/logo.png";
                 }

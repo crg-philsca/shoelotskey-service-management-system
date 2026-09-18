@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/ca
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { Input } from '@/app/components/ui/input';
-import { PlusCircle, Edit, Trash, Search, Filter, ChevronLeft, ChevronRight, History as HistoryIcon, Activity, AlertTriangle, Lock, Unlock, MoreVertical } from 'lucide-react';
+import { PlusCircle, Edit, Trash, Search, Filter, ChevronLeft, ChevronRight, History as HistoryIcon, Activity, AlertTriangle, Lock, Unlock, MoreVertical, Loader2 } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import React from 'react';
@@ -47,13 +47,152 @@ const formatError = (errOrDetail: any, fallback: string = 'Operation failed'): s
   return String(target).replace(/^Value error,\s*/i, '');
 };
 
-export default function UserManagement({ onSetHeaderActionRight, user }: { onSetHeaderActionRight?: (action: React.ReactNode) => void, user: { token: string } }) {
+const getRoleBadge = (roleName: string, isSystemAdmin?: boolean) => {
+  if (isSystemAdmin || roleName?.toLowerCase() === 'admin') {
+    return (
+      <Badge className="bg-slate-100 text-slate-700 border-slate-300 text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 shadow-none hover:bg-slate-100 whitespace-nowrap">
+        SYSTEM
+      </Badge>
+    );
+  }
+
+  const normalized = (roleName || '').toLowerCase();
+  switch (normalized) {
+    case 'owner':
+      return (
+        <Badge className="bg-purple-50 text-purple-700 border-purple-200 text-[10px] font-bold uppercase px-2.5 py-0.5 shadow-none hover:bg-purple-50 whitespace-nowrap">
+          {roleName}
+        </Badge>
+      );
+    case 'staff':
+      return (
+        <Badge className="bg-sky-50 text-sky-700 border-sky-200 text-[10px] font-bold uppercase px-2.5 py-0.5 shadow-none hover:bg-sky-50 whitespace-nowrap">
+          {roleName}
+        </Badge>
+      );
+    case 'front staff':
+      return (
+        <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] font-bold uppercase px-2.5 py-0.5 shadow-none hover:bg-emerald-50 whitespace-nowrap">
+          {roleName}
+        </Badge>
+      );
+    case 'manager':
+      return (
+        <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200 text-[10px] font-bold uppercase px-2.5 py-0.5 shadow-none hover:bg-indigo-50 whitespace-nowrap">
+          {roleName}
+        </Badge>
+      );
+    case 'cashier':
+      return (
+        <Badge className="bg-teal-50 text-teal-700 border-teal-200 text-[10px] font-bold uppercase px-2.5 py-0.5 shadow-none hover:bg-teal-50 whitespace-nowrap">
+          {roleName}
+        </Badge>
+      );
+    default:
+      return (
+        <Badge className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] font-bold uppercase px-2.5 py-0.5 shadow-none hover:bg-amber-50 whitespace-nowrap">
+          {roleName}
+        </Badge>
+      );
+  }
+};
+
+const parseUtcMs = (val: any) => {
+  if (!val) return 0;
+  let str = String(val).trim().replace(' ', 'T');
+  if (!str.endsWith('Z') && !str.includes('+')) {
+    const lastDash = str.lastIndexOf('-');
+    if (lastDash <= 7) {
+      str += 'Z';
+    }
+  }
+  const t = new Date(str).getTime();
+  return isNaN(t) ? 0 : t;
+};
+
+const getLockInfo = (user: User) => {
+  // Admin account is permanently immune to lockouts
+  const isSystemAdmin = (user.username || '').toLowerCase() === 'admin' || (user.role || '').toLowerCase() === 'admin';
+  if (isSystemAdmin) {
+    return { isLocked: false, isRestricted: false, minsRemaining: 0 };
+  }
+
+  const lockExpiryMs = user.lockedUntil ? parseUtcMs(user.lockedUntil) : 0;
+  const nowMs = Date.now();
+  const isRestricted = Boolean(
+    lockExpiryMs > 0 && (new Date(lockExpiryMs).getUTCFullYear() >= 2099 || (lockExpiryMs - nowMs) > 365 * 24 * 3600 * 1000)
+  );
+  const msRemaining = (!isRestricted && lockExpiryMs > nowMs) ? Math.max(0, lockExpiryMs - nowMs) : 0;
+  const minsRemaining = msRemaining > 0 ? Math.max(1, Math.ceil(msRemaining / 60000)) : 0;
+  const isTempLocked = Boolean(
+    !isRestricted && (
+      (user.failedLoginAttempts !== undefined && user.failedLoginAttempts >= 3) || 
+      msRemaining > 0
+    )
+  );
+  const isLocked = isRestricted || isTempLocked;
+  return { isLocked, isRestricted, minsRemaining };
+};
+
+const getStatusBadge = (
+  active: boolean, 
+  isLocked?: boolean, 
+  onUnlock?: () => void, 
+  canUnlock?: boolean, 
+  minsRemaining?: number,
+  isRestricted?: boolean
+) => {
+  if (isLocked) {
+    if (isRestricted) {
+      return (
+        <Badge 
+          onClick={canUnlock && onUnlock ? (e) => { e.stopPropagation(); onUnlock(); } : undefined}
+          title={canUnlock ? "Account access restricted by administrator. Click or use Actions menu to unlock" : "Account access restricted by administrator"}
+          className={`bg-rose-50 text-rose-700 border-rose-200 text-[10px] font-black uppercase whitespace-nowrap shadow-none px-2.5 py-0.5 inline-flex items-center gap-1 hover:bg-rose-50 ${canUnlock ? 'cursor-pointer hover:bg-rose-100 transition-colors' : ''}`}
+        >
+          <Lock size={10} className="text-rose-600 shrink-0" />
+          <span>Restricted</span>
+        </Badge>
+      );
+    }
+    const minsText = minsRemaining && minsRemaining > 0 ? ` (${minsRemaining} min${minsRemaining === 1 ? '' : 's'})` : '';
+    return (
+      <Badge 
+        onClick={canUnlock && onUnlock ? (e) => { e.stopPropagation(); onUnlock(); } : undefined}
+        title={canUnlock ? `Account is locked${minsText}. Click or use Actions menu to unlock` : `Account is locked${minsText}`}
+        className={`bg-amber-50 text-amber-700 border-amber-200 text-[10px] font-black uppercase whitespace-nowrap shadow-none px-2.5 py-0.5 inline-flex items-center gap-1 hover:bg-amber-50 ${canUnlock ? 'cursor-pointer hover:bg-amber-100 transition-colors' : ''}`}
+      >
+        <Lock size={10} className="text-amber-600 shrink-0" />
+        <span>Locked{minsText}</span>
+      </Badge>
+    );
+  }
+
+  if (active) {
+    return (
+      <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] font-black uppercase whitespace-nowrap inline-flex items-center gap-1.5 shadow-none px-2 py-0.5 hover:bg-emerald-50">
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 inline-block" />
+        <span>Active</span>
+      </Badge>
+    );
+  }
+
+  return (
+    <Badge className="bg-rose-50 text-rose-700 border-rose-200 text-[10px] font-black uppercase whitespace-nowrap inline-flex items-center gap-1.5 shadow-none px-2 py-0.5 hover:bg-rose-50">
+      <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0 inline-block" />
+      <span>Inactive</span>
+    </Badge>
+  );
+};
+
+export default function UserManagement({ onSetHeaderActionRight, user }: { onSetHeaderActionRight?: (action: React.ReactNode) => void, user: { id?: number; username?: string; role?: string; token: string } }) {
   const navigate = useNavigate();
     const [currentPage, setCurrentPage] = useState(1);
     const [searchQuery, setSearchQuery] = useState('');
     const [roleFilter, setRoleFilter] = useState('all');
     const [statusFilter, setStatusFilter] = useState('all');
     const [isFilterOpen, setIsFilterOpen] = useState(false);
+    const activeFilterCount = (roleFilter !== 'all' ? 1 : 0) + (statusFilter !== 'all' ? 1 : 0);
     const itemsPerPage = 10;
 
     const [users, setUsers] = useState<User[]>(() => {
@@ -62,12 +201,21 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
       return saved ? JSON.parse(saved) : [];
     });
     const [loading, setLoading] = useState(users.length === 0);
+    const [actionLoadingUserId, setActionLoadingUserId] = useState<string | null>(null);
     const [userModalOpen, setUserModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<User | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
     const [serverError, setServerError] = useState<string>('');
     const { addActivity } = useActivities();
-    const currentUser = JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}').username;
+    const storedUser = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user') || '{}') : {};
+    const currentUser = user?.username || storedUser.username || 'Owner';
+    const currentUsername = currentUser.toLowerCase();
+    const currentUserRole = (user?.role || storedUser.role || '').toLowerCase();
+    const canUnlock = currentUserRole === 'owner' || 
+                      currentUserRole === 'admin' || 
+                      currentUsername === 'admin' || 
+                      currentUsername === 'owner' || 
+                      currentUsername === 'expert_owner';
 
     // Fetch users from API
     const fetchUsers = async () => {
@@ -86,8 +234,8 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
             email: u.email,
             role: u.role?.role_name || 'staff',
             active: u.is_active,
-            failedLoginAttempts: u.failed_login_attempts || 0,
-            lockedUntil: u.locked_until || null
+            failedLoginAttempts: u.failed_login_attempts ?? u.failedLoginAttempts ?? 0,
+            lockedUntil: u.locked_until || u.lockedUntil || null
           }));
           setUsers(mappedUsers);
           localStorage.setItem('userManagement_cache', JSON.stringify(mappedUsers));
@@ -105,6 +253,13 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
 
     useEffect(() => {
       fetchUsers();
+      const interval = setInterval(fetchUsers, 5000);
+      const onFocus = () => fetchUsers();
+      window.addEventListener('focus', onFocus);
+      return () => {
+        clearInterval(interval);
+        window.removeEventListener('focus', onFocus);
+      };
     }, []);
 
     // Filter users based on search and filters
@@ -113,7 +268,11 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
         const matchesSearch = (user.username || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
           (user.email || '').toLowerCase().includes(searchQuery.toLowerCase());
         const matchesRole = roleFilter === 'all' || user.role === roleFilter;
-        const matchesStatus = statusFilter === 'all' || (statusFilter === 'active' ? user.active : !user.active);
+        const { isLocked } = getLockInfo(user);
+        const matchesStatus = statusFilter === 'all' || 
+          (statusFilter === 'locked' ? isLocked :
+           statusFilter === 'active' ? (user.active && !isLocked) :
+           (!user.active && !isLocked));
         return matchesSearch && matchesRole && matchesStatus;
       });
     }, [users, searchQuery, roleFilter, statusFilter]);
@@ -251,8 +410,9 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
 
     const handleDeleteUser = (id: string) => {
       const uToDelete = users.find(u => u.id === id);
-      if (uToDelete?.username?.toLowerCase() === 'admin' || uToDelete?.role?.toLowerCase() === 'admin') {
-        toast.error('System account cannot be deleted.');
+      const uName = (uToDelete?.username || '').toLowerCase().trim();
+      if (['admin', 'owner', 'front_staff', 'staff'].includes(uName)) {
+        toast.error('System accounts (admin, owner, staff, front_staff) cannot be deleted.');
         return;
       }
       if (uToDelete) {
@@ -297,6 +457,12 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
     };
 
     const handleUnlockUser = async (targetUser: User) => {
+      if (!canUnlock) {
+        toast.error('Only Owner, Expert Owner, and Admin can unlock accounts.');
+        return;
+      }
+      setActionLoadingUserId(targetUser.id);
+      const toastId = toast.loading(`Unlocking account for ${targetUser.username}...`);
       try {
         const response = await fetch(`${API_BASE}/users/${targetUser.id}/unlock`, {
           method: 'POST',
@@ -306,7 +472,7 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
           }
         });
         if (response.ok) {
-          toast.success(`Account for ${targetUser.username} unlocked successfully`);
+          toast.success(`Account for ${targetUser.username} unlocked successfully`, { id: toastId });
           await fetchUsers();
           addActivity({
             user: currentUser,
@@ -317,11 +483,50 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
           });
         } else {
           const err = await response.json().catch(() => ({}));
-          toast.error(`Failed to unlock account: ${formatError(err.detail, 'Unknown error')}`);
+          toast.error(`Failed to unlock account: ${formatError(err.detail, 'Unknown error')}`, { id: toastId });
         }
       } catch (error) {
         console.error('Error unlocking user:', error);
-        toast.error('Network error unlocking user account');
+        toast.error('Network error unlocking user account', { id: toastId });
+      } finally {
+        setActionLoadingUserId(null);
+      }
+    };
+
+    const handleLockUser = async (targetUser: User) => {
+      if (!canUnlock) {
+        toast.error('Only Owner, Expert Owner, and Admin can lock accounts.');
+        return;
+      }
+      setActionLoadingUserId(targetUser.id);
+      const toastId = toast.loading(`Restricting account access for ${targetUser.username}...`);
+      try {
+        const response = await fetch(`${API_BASE}/users/${targetUser.id}/lock`, {
+          method: 'POST',
+          headers: { 
+            'Authorization': `Bearer ${user.token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        if (response.ok) {
+          toast.success(`Account access for ${targetUser.username} restricted successfully`, { id: toastId });
+          await fetchUsers();
+          addActivity({
+            user: currentUser,
+            action: 'Lock User',
+            details: `Restricted user account ${targetUser.username}`,
+            type: 'system',
+            recordId: targetUser.id
+          });
+        } else {
+          const err = await response.json().catch(() => ({}));
+          toast.error(`Failed to restrict account: ${formatError(err.detail, 'Unknown error')}`, { id: toastId });
+        }
+      } catch (error) {
+        console.error('Error locking user:', error);
+        toast.error('Network error restricting user account', { id: toastId });
+      } finally {
+        setActionLoadingUserId(null);
       }
     };
 
@@ -336,17 +541,17 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
     };
 
     return (
-      <Card>
-        <CardHeader className="pt-5 pb-0 px-6">
+      <Card className="flex flex-col max-h-[calc(100vh-5.5rem)] shadow-md border-gray-100 no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden overflow-y-auto">
+        <CardHeader className="pt-4 pb-0 px-6 shrink-0">
           <div className="flex items-center justify-center">
             <CardTitle className="text-center text-[15px] font-black text-gray-900 uppercase tracking-[0.1em] leading-tight p-0 -m-1">
               USER MANAGEMENT
             </CardTitle>
           </div>
         </CardHeader>
-        <CardContent className="pt-0 -mt-3">
+        <CardContent className="pt-0 -mt-2 flex-1 flex flex-col min-h-0 pb-2 px-4 sm:px-6">
           {/* Search and Filter Section */}
-          <div className="flex gap-2 mb-5 items-center">
+          <div className="flex gap-2 mb-3 items-center shrink-0">
             <div className="flex-1 relative group">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 group-focus-within:text-red-600 transition-colors" />
               <Input
@@ -362,7 +567,7 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
             </div>
             <Button
               variant="outline"
-              className={`h-9 w-9 p-0 rounded-lg transition-colors ${roleFilter !== 'all' || statusFilter !== 'all'
+              className={`relative h-9 w-9 p-0 rounded-lg transition-colors ${activeFilterCount > 0
                 ? 'border-red-600 text-red-600 bg-red-50 hover:bg-red-100'
                 : 'border-gray-200 text-gray-500 hover:border-red-600 hover:text-red-600 hover:bg-red-50'
                 }`}
@@ -413,6 +618,7 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
                       <SelectItem value="all">All Status</SelectItem>
                       <SelectItem value="active">Active</SelectItem>
                       <SelectItem value="inactive">Inactive</SelectItem>
+                      <SelectItem value="locked">Locked</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -436,9 +642,9 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
             </DialogContent>
           </Dialog>
 
-          {/* Table Section */}
-          <div className="overflow-x-auto w-full">
-            <table className="w-full table-fixed min-w-0">
+          {/* Table Section - Limited to 10 rows with smooth vertical scroll & sticky header, scrollbar hidden */}
+          <div className="overflow-x-auto overflow-y-auto flex-1 w-full max-h-[435px] xl:max-h-[460px] no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden border border-gray-100 rounded-lg min-h-0 pb-1">
+            <table className="w-full table-fixed min-w-[700px]">
               <colgroup>
                 <col className="w-[28%]" />
                 <col className="w-[34%]" />
@@ -446,13 +652,13 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
                 <col className="w-[14%]" />
                 <col className="w-[8%]" />
               </colgroup>
-              <thead className="bg-red-50/60 border-y border-red-100">
+              <thead className="bg-red-50/95 backdrop-blur-xs border-b border-red-100 sticky top-0 z-10 shadow-xs">
                 <tr>
-                  <th className="px-3 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Username</th>
-                  <th className="px-3 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Email</th>
-                  <th className="px-3 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Role</th>
-                  <th className="px-3 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Status</th>
-                  <th className="px-3 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Actions</th>
+                  <th className="px-3 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap bg-red-50/95">Username</th>
+                  <th className="px-3 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap bg-red-50/95">Email</th>
+                  <th className="px-3 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap bg-red-50/95">Role</th>
+                  <th className="px-3 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap bg-red-50/95">Status</th>
+                  <th className="px-3 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap bg-red-50/95">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -473,21 +679,14 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
                 ) : (
                   paginatedUsers.map((user) => {
                     const isSystemAdmin = user.username?.toLowerCase() === 'admin' || user.role?.toLowerCase() === 'admin';
-                    const isLocked = Boolean(
-                      (user.failedLoginAttempts !== undefined && user.failedLoginAttempts >= 3) || 
-                      (user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now())
-                    );
+                    const isProtectedDelete = ['admin', 'owner', 'front_staff', 'staff'].includes((user.username || '').toLowerCase().trim());
+                    const { isLocked, isRestricted, minsRemaining } = getLockInfo(user);
                     return (
                     <tr key={user.id} className="hover:bg-gray-50/80 transition-colors animate-in fade-in duration-500">
                       <td className="px-3 py-2 text-xs font-medium max-w-0">
                         <div className="flex justify-center w-full">
                           <div className="w-[180px] max-w-full flex items-center gap-1.5 text-left min-w-0">
                             <span className="font-semibold text-gray-900 truncate" title={user.username}>{user.username}</span>
-                            {isSystemAdmin && (
-                              <span title="System Protected Account" className="inline-flex items-center text-gray-400 shrink-0">
-                                <Lock size={13} className="text-gray-400" />
-                              </span>
-                            )}
                           </div>
                         </div>
                       </td>
@@ -499,48 +698,13 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
                         </div>
                       </td>
                       <td className="px-3 py-2 text-center max-w-0">
-                        {isSystemAdmin ? (
-                          <Badge className="bg-gray-200 text-gray-700 border-gray-300 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 shadow-none hover:bg-gray-200 whitespace-nowrap">
-                            SYSTEM
-                          </Badge>
-                        ) : (
-                          <Badge className="bg-blue-50 text-blue-700 border-blue-100 text-[10px] font-bold uppercase px-2 py-0.5 shadow-none hover:bg-blue-50 whitespace-nowrap">
-                            {user.role}
-                          </Badge>
-                        )}
+                        {getRoleBadge(user.role, isSystemAdmin)}
                       </td>
                       <td className="px-3 py-2 text-center max-w-0">
-                        {isLocked ? (
-                          <Badge className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] font-black uppercase whitespace-nowrap inline-flex items-center gap-1 shadow-none">
-                            <Lock size={10} className="text-amber-600 shrink-0" />
-                            <span>Locked (15m)</span>
-                          </Badge>
-                        ) : (
-                          <Badge className={`
-                            ${user.active ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-gray-100 text-gray-500 border-gray-200'}
-                            text-[10px] font-black uppercase whitespace-nowrap
-                          `}>
-                            {user.active ? 'Active' : 'Inactive'}
-                          </Badge>
-                        )}
+                        {getStatusBadge(user.active, isLocked, () => handleUnlockUser(user), canUnlock, minsRemaining, isRestricted)}
                       </td>
                       <td className="px-2 py-2 text-xs text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        <div className="inline-flex items-center justify-center gap-1">
-                          {isLocked && (
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleUnlockUser(user);
-                              }}
-                              className="h-7 px-2 border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 hover:text-amber-800 font-bold rounded-md inline-flex items-center gap-1 text-[11px] shadow-xs"
-                              title="Unlock account immediately"
-                            >
-                              <Unlock className="h-3.5 w-3.5 text-amber-600" />
-                              <span className="hidden sm:inline">Unlock</span>
-                            </Button>
-                          )}
+                        <div className="flex items-center justify-center">
                           {isSystemAdmin ? (
                             <Button 
                               variant="outline" 
@@ -563,18 +727,6 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-44 p-1.5 space-y-1">
-                                {isLocked && (
-                                  <DropdownMenuItem
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleUnlockUser(user);
-                                    }}
-                                    className="border border-amber-200 rounded-md px-2.5 py-1.5 text-amber-700 bg-amber-50 hover:bg-amber-100 focus:text-amber-800 focus:bg-amber-100 font-bold cursor-pointer"
-                                  >
-                                    <Unlock className="h-4 w-4 mr-2 text-amber-600" />
-                                    Unlock Account
-                                  </DropdownMenuItem>
-                                )}
                                 <DropdownMenuItem
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -585,16 +737,55 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
                                   <Edit className="h-4 w-4 mr-2 text-yellow-600" />
                                   Edit User
                                 </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDeleteUser(user.id);
-                                  }}
-                                  className="border border-red-200 rounded-md px-2.5 py-1.5 text-red-700 bg-red-50 hover:bg-red-100 focus:text-red-800 focus:bg-red-100 font-bold cursor-pointer"
-                                >
-                                  <Trash className="h-4 w-4 mr-2 text-red-600" />
-                                  Delete User
-                                </DropdownMenuItem>
+                                {isLocked ? (
+                                  canUnlock && (
+                                    <DropdownMenuItem
+                                      disabled={actionLoadingUserId === user.id}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleUnlockUser(user);
+                                      }}
+                                      className="border border-blue-200 rounded-md px-2.5 py-1.5 text-blue-700 bg-blue-50 hover:bg-blue-100 focus:text-blue-800 focus:bg-blue-100 font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                      {actionLoadingUserId === user.id ? (
+                                        <Loader2 className="h-4 w-4 mr-2 animate-spin text-blue-600" />
+                                      ) : (
+                                        <Unlock className="h-4 w-4 mr-2 text-blue-600" />
+                                      )}
+                                      {actionLoadingUserId === user.id ? 'Unlocking...' : 'Unlock Account'}
+                                    </DropdownMenuItem>
+                                  )
+                                ) : (
+                                  canUnlock && !isSystemAdmin && (
+                                    <DropdownMenuItem
+                                      disabled={actionLoadingUserId === user.id}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleLockUser(user);
+                                      }}
+                                      className="border border-orange-300 rounded-md px-2.5 py-1.5 text-orange-700 bg-orange-50 hover:bg-orange-100 focus:text-orange-800 focus:bg-orange-100 font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                      {actionLoadingUserId === user.id ? (
+                                        <Loader2 className="h-4 w-4 mr-2 animate-spin text-orange-600" />
+                                      ) : (
+                                        <Lock className="h-4 w-4 mr-2 text-orange-600" />
+                                      )}
+                                      {actionLoadingUserId === user.id ? 'Restricting...' : 'Lock Account'}
+                                    </DropdownMenuItem>
+                                  )
+                                )}
+                                {!isProtectedDelete && (
+                                  <DropdownMenuItem
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteUser(user.id);
+                                    }}
+                                    className="border border-red-200 rounded-md px-2.5 py-1.5 text-red-700 bg-red-50 hover:bg-red-100 focus:text-red-800 focus:bg-red-100 font-bold cursor-pointer"
+                                  >
+                                    <Trash className="h-4 w-4 mr-2 text-red-600" />
+                                    Delete User
+                                  </DropdownMenuItem>
+                                )}
                               </DropdownMenuContent>
                             </DropdownMenu>
                           )}
@@ -608,7 +799,7 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
             </table>
           </div>
 
-          <div className="bg-white border-t border-gray-100 pt-1.5 pb-1 px-3 flex items-center justify-between">
+          <div className="bg-white border-t border-gray-100 pt-2 pb-1 px-3 flex items-center justify-between shrink-0">
             <div className="text-[11px] text-gray-500 font-bold uppercase tracking-wider">
               PAGE {currentPage} OF {totalPages || 1}
             </div>

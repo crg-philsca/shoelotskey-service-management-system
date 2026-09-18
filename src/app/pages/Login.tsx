@@ -11,7 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { API_BASE } from '@/app/lib/apiBase';
 
 interface LoginProps {
-  onLogin: (id: number, username: string, role: 'owner' | 'staff' | 'admin', token: string, rememberMe?: boolean) => void;
+  onLogin: (id: number, username: string, role: 'owner' | 'staff' | 'admin' | 'front staff', token: string, rememberMe?: boolean) => void;
 }
 
 const hashPassword = async (password: string): Promise<string> => {
@@ -33,6 +33,18 @@ export default function Login({ onLogin }: LoginProps) {
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
+    // Prevent logging into multiple accounts simultaneously in the same browser
+    const existing = localStorage.getItem('user') || sessionStorage.getItem('user');
+    if (existing) {
+      try {
+        const parsed = JSON.parse(existing);
+        if (parsed?.token) {
+          navigate('/dashboard', { replace: true });
+          return;
+        }
+      } catch (e) {}
+    }
+
     const msg = sessionStorage.getItem('logout_message');
     if (msg) {
       sessionStorage.removeItem('logout_message');
@@ -55,7 +67,7 @@ export default function Login({ onLogin }: LoginProps) {
         }, 50);
       }
     }
-  }, []);
+  }, [navigate]);
 
   /**
    * HANDLER: handleSubmit

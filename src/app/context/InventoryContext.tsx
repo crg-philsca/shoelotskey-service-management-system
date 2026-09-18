@@ -26,13 +26,27 @@ export interface InventoryItem {
     retail_price?: number;
 }
 
+export interface StockAdjustmentOptions {
+    action?: 'deduction' | 'restock' | 'set_balance' | 'auto_deduct';
+    orderId?: number;
+    serviceName?: string;
+    serviceId?: number;
+    executionRef?: string;
+    createExpense?: boolean;
+    expenseAmount?: number;
+    expenseCategory?: string;
+    expenseNotes?: string;
+    reason?: string;
+}
+
 interface InventoryContextType {
     inventoryData: InventoryItem[];
     setInventoryData: React.Dispatch<React.SetStateAction<InventoryItem[]>>;
-    updateStock: (itemId: number, usedQuantity: number, orderId?: number) => void;
+    updateStock: (itemId: number, usedQuantity: number, orderIdOrOptions?: number | StockAdjustmentOptions, options?: StockAdjustmentOptions) => Promise<boolean | any>;
     addItem: (item: Omit<InventoryItem, 'id' | 'status'>) => Promise<boolean>;
     updateItem: (item: InventoryItem) => void;
     deleteItem: (id: number) => void;
+    refreshInventory: () => Promise<void>;
 }
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
@@ -96,15 +110,37 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
         fetchInventory();
     }, [user.token]);
 
-    const updateStock = async (itemId: number, usedQuantity: number, orderId?: number) => {
-        const isRestock = usedQuantity < 0;
-        const absoluteAmount = Math.abs(usedQuantity);
+    const updateStock = async (
+        itemId: number, 
+        usedQuantity: number, 
+        orderIdOrOptions?: number | StockAdjustmentOptions, 
+        explicitOptions?: StockAdjustmentOptions
+    ) => {
+        let orderId: number | undefined = undefined;
+        let options: StockAdjustmentOptions = {};
+
+        if (typeof orderIdOrOptions === 'object' && orderIdOrOptions !== null) {
+            options = orderIdOrOptions;
+            orderId = options.orderId;
+        } else {
+            orderId = orderIdOrOptions;
+            options = explicitOptions || {};
+        }
+
+        const action = options.action || (usedQuantity < 0 ? 'restock' : 'deduction');
         const oldData = [...inventoryData];
 
-        // Optimistic UI Update (works offline too)
+        // Optimistic UI Update
         setInventoryData(prev => prev.map(item => {
             if (item.id === itemId) {
-                const newStock = isRestock ? item.stock + absoluteAmount : Math.max(0, item.stock - absoluteAmount);
+                let newStock = item.stock;
+                if (action === 'set_balance') {
+                    newStock = Math.max(0, usedQuantity);
+                } else if (action === 'restock') {
+                    newStock = item.stock + Math.abs(usedQuantity);
+                } else {
+                    newStock = Math.max(0, item.stock - Math.abs(usedQuantity));
+                }
                 return { 
                     ...item, 
                     stock: newStock, 
@@ -114,22 +150,32 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
             return item;
         }));
 
-        // Also update localStorage immediately for offline persistence
         setInventoryData(current => {
             localStorage.setItem('inventory_cache', JSON.stringify(current));
             return current;
         });
 
-        // Attempt to sync with backend; queue if offline
-        const task = { item_id: itemId, amount: absoluteAmount, action: isRestock ? 'restock' : 'deduction', order_id: orderId ?? null };
+        const task: any = { 
+            item_id: itemId, 
+            amount: action === 'set_balance' ? usedQuantity : Math.abs(usedQuantity), 
+            action: action, 
+            order_id: orderId ?? null,
+            service_name: options.serviceName ?? null,
+            service_id: options.serviceId ?? null,
+            execution_ref: options.executionRef ?? null,
+            create_expense: Boolean(options.createExpense),
+            expense_amount: options.expenseAmount ?? null,
+            expense_category: options.expenseCategory ?? 'Inventory Restock',
+            expense_notes: options.expenseNotes ?? null,
+            reason: options.reason ?? null
+        };
 
         if (!navigator.onLine) {
-            // Queue for later sync
             const q = JSON.parse(localStorage.getItem('inventory_sync_queue') || '[]');
             q.push({ ...task, timestamp: Date.now() });
             localStorage.setItem('inventory_sync_queue', JSON.stringify(q));
             console.warn('[OFFLINE] Stock adjustment queued for sync:', task);
-            return;
+            return true;
         }
 
         try {
@@ -145,18 +191,22 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
                 throw new Error(`HTTP_${res.status}`);
             }
             if (!res.ok) throw new Error('Stock adjustment failed');
+            const data = await res.json();
             refreshActivities().catch(() => {});
+            await fetchInventory();
+            return data;
         } catch (err: any) {
             console.error("Inventory sync failed:", err);
             if (err?.message && err.message.startsWith('HTTP_')) {
                 setInventoryData(oldData);
                 localStorage.setItem('inventory_cache', JSON.stringify(oldData));
                 import('sonner').then(({ toast }) => toast.error('Stock adjustment denied (400/401/403).'));
-                return;
+                return false;
             }
             const q = JSON.parse(localStorage.getItem('inventory_sync_queue') || '[]');
             q.push({ ...task, timestamp: Date.now() });
             localStorage.setItem('inventory_sync_queue', JSON.stringify(q));
+            return true;
         }
     };
 
@@ -452,8 +502,9 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
         updateStock, 
         addItem, 
         updateItem, 
-        deleteItem 
-    }), [inventoryData, updateStock, addItem, updateItem, deleteItem]);
+        deleteItem,
+        refreshInventory: fetchInventory
+    }), [inventoryData, updateStock, addItem, updateItem, deleteItem, fetchInventory]);
 
     return (
         <InventoryContext.Provider value={contextValue}>

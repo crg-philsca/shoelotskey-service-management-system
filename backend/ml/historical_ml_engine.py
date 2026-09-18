@@ -286,19 +286,70 @@ class HistoricalMLEngine:
         mae = None
         rmse = None
         eval_note = None
+        acc_1 = None
+        acc_2 = None
+        acc_3 = None
+        count_1 = None
+        count_2 = None
+        count_3 = None
+        mean_actual = None
+        mean_pred = None
+        median_abs_err = None
+        max_abs_err = None
+        min_abs_err = None
+        target_85_status = None
+        test_predictions: List[Dict[str, Any]] = []
 
         if n >= 10:
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=0.2, random_state=42
-            )
+            indices = np.arange(n)
+            train_idx, test_idx = train_test_split(indices, test_size=0.2, random_state=42)
+            X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
+            y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
+            test_orders = [orders[i] for i in test_idx]
+
             train_count = len(X_train)
             test_count = len(X_test)
             eval_model = RandomForestRegressor(n_estimators=150, random_state=42, max_depth=10)
             eval_model.fit(X_train.values, y_train)
             y_pred = eval_model.predict(X_test.values)
+
             r2 = round(float(sk_r2(y_test, y_pred)), 4)
             mae = round(float(mean_absolute_error(y_test, y_pred)), 2)
             rmse = round(float(np.sqrt(mean_squared_error(y_test, y_pred))), 2)
+
+            abs_errors = np.abs(y_test.values - y_pred)
+            acc_1 = round(float(np.mean(abs_errors <= 1.0) * 100), 2)
+            acc_2 = round(float(np.mean(abs_errors <= 2.0) * 100), 2)
+            acc_3 = round(float(np.mean(abs_errors <= 3.0) * 100), 2)
+            count_1 = int(np.sum(abs_errors <= 1.0))
+            count_2 = int(np.sum(abs_errors <= 2.0))
+            count_3 = int(np.sum(abs_errors <= 3.0))
+
+            mean_actual = round(float(np.mean(y_test.values)), 2)
+            mean_pred = round(float(np.mean(y_pred)), 2)
+            median_abs_err = round(float(np.median(abs_errors)), 2)
+            max_abs_err = round(float(np.max(abs_errors)), 2)
+            min_abs_err = round(float(np.min(abs_errors)), 2)
+            target_85_status = "TARGET MET" if acc_2 >= 85.0 else "TARGET NOT MET"
+
+            for i in range(len(test_orders)):
+                to = test_orders[i]
+                svcs = self._flatten_services(to)
+                svc_names = sorted(list(set(s.get("service_name") for s in svcs if s.get("service_name"))))
+                test_predictions.append({
+                    "test_id": f"O2-TEST-{i+1:03d}",
+                    "order_id": to.order_id,
+                    "service_summary": " + ".join(svc_names) if svc_names else "Standard Service",
+                    "total_pairs": int(to.total_pairs or 1),
+                    "services_count": len(svcs),
+                    "priority": str(to.priority or "regular").title(),
+                    "actual_completion_days": round(float(y_test.values[i]), 1),
+                    "predicted_completion_days": round(float(y_pred[i]), 1),
+                    "absolute_error": round(float(abs_errors[i]), 1),
+                    "within_1_day": bool(abs_errors[i] <= 1.0),
+                    "within_2_days": bool(abs_errors[i] <= 2.0),
+                    "within_3_days": bool(abs_errors[i] <= 3.0),
+                })
         else:
             eval_note = (
                 f"Dataset has {n} records (<10); held-out 80/20 evaluation skipped. "
@@ -328,10 +379,26 @@ class HistoricalMLEngine:
             "train_count": train_count,
             "test_count": test_count,
             "feature_columns": FEATURE_COLS,
-            "target": "completion_days (order-to-claim turnaround; claimed_date − date_received)",
+            "target_type": "historical_order_to_claim",
+            "target_definition": "Historical Order-to-Claim Turnaround (claimed_date − date_received)",
+            "actual_completion_target_available": False,
+            "actual_completion_note": "Physical paper receipts did not record technician finish timestamps. Digital forward orders record actual_release_at.",
             "r2_score": r2,
             "mae": mae,
             "rmse": rmse,
+            "accuracy_within_1_day": acc_1,
+            "accuracy_within_2_days": acc_2,
+            "accuracy_within_3_days": acc_3,
+            "target_85_status": target_85_status,
+            "count_within_1_day": count_1,
+            "count_within_2_days": count_2,
+            "count_within_3_days": count_3,
+            "mean_actual_duration": mean_actual,
+            "mean_predicted_duration": mean_pred,
+            "median_absolute_error": median_abs_err,
+            "max_absolute_error": max_abs_err,
+            "min_absolute_error": min_abs_err,
+            "test_predictions": test_predictions,
             "trained_at": trained_at,
             "evaluation_note": eval_note if n < 10 else None,
             "data_source": "VALIDATED + ML-eligible historical_orders only",
@@ -342,7 +409,7 @@ class HistoricalMLEngine:
 
         print(
             f">>> HistoricalMLEngine: Trained n={n} train={train_count} test={test_count} "
-            f"R²={r2} MAE={mae} RMSE={rmse} synced={sync_result.get('synced')}"
+            f"R²={r2} MAE={mae} RMSE={rmse} ±2d={acc_2}% ({target_85_status}) synced={sync_result.get('synced')}"
         )
         return {
             "status": "success",
@@ -352,6 +419,10 @@ class HistoricalMLEngine:
             "r2_score": r2,
             "mae": mae,
             "rmse": rmse,
+            "accuracy_within_1_day": acc_1,
+            "accuracy_within_2_days": acc_2,
+            "accuracy_within_3_days": acc_3,
+            "target_85_status": target_85_status,
             "model_version": HISTORICAL_MODEL_VERSION,
             "trained_at": trained_at,
             "model_type": type(rf).__name__,
@@ -414,6 +485,100 @@ class HistoricalMLEngine:
             raw_pred = max(1.0, raw_pred - rush_red)
         return max(1.0, raw_pred)
 
+    def get_dataset_funnel(self, db: Session) -> Dict[str, Any]:
+        from models import HistoricalOrder
+        all_orders = db.query(HistoricalOrder).all()
+        total = len(all_orders)
+        with_received = sum(1 for o in all_orders if o.date_received)
+        with_est = sum(1 for o in all_orders if o.original_estimated_release_date)
+        with_claimed = sum(1 for o in all_orders if o.claimed_date)
+        with_actual = 0  # Physical paper receipts did not record technician finish timestamps
+
+        cat_a = 0
+        cat_b = sum(1 for o in all_orders if o.date_received and o.original_estimated_release_date)
+        cat_c = sum(1 for o in all_orders if o.date_received and o.claimed_date and not o.original_estimated_release_date)
+        cat_d = total - (cat_b + cat_c)
+
+        with_valid_days = sum(1 for o in all_orders if o.completion_days and 1 <= o.completion_days <= MAX_ML_COMPLETION_DAYS)
+        eligible = [o for o in all_orders if is_ml_eligible_order(o)]
+        eligible_count = len(eligible)
+
+        reasons = {
+            "insufficient_dates": total - (with_est if with_est > with_claimed else with_claimed),
+            "unvalidated_ocr": sum(1 for o in all_orders if (getattr(o, "ocr_status", "") or "").strip() not in ("Validated", "Corrected", "VALIDATED", "CORRECTED")),
+            "target_duration_outside_range": sum(1 for o in all_orders if o.completion_days is not None and (o.completion_days < 1 or o.completion_days > MAX_ML_COMPLETION_DAYS)),
+        }
+
+        return {
+            "total_historical_records": total,
+            "with_date_received": with_received,
+            "with_estimated_release": with_est,
+            "with_claimed_date": with_claimed,
+            "with_actual_completion_date": with_actual,
+            "category_a_count": cat_a,
+            "category_b_count": cat_b,
+            "category_c_count": cat_c,
+            "category_d_count": cat_d,
+            "with_valid_target_duration": with_valid_days,
+            "ml_eligible_records": eligible_count,
+            "excluded_records": total - eligible_count,
+            "exclusion_reasons": reasons,
+        }
+
+    def get_research_evidence(self, db: Session) -> Dict[str, Any]:
+        meta = self.metadata or {}
+        funnel = self.get_dataset_funnel(db)
+        return {
+            "model_overview": {
+                "algorithm": "Random Forest Regressor",
+                "model_version": meta.get("model_version", HISTORICAL_MODEL_VERSION),
+                "last_trained_at": meta.get("trained_at") or self.last_train_date,
+                "dataset_version": meta.get("dataset_version"),
+                "dataset_size": funnel["ml_eligible_records"],
+                "train_records": meta.get("train_count"),
+                "test_records": meta.get("test_count"),
+                "model_loaded": self.model is not None,
+                "hyperparameters": {
+                    "n_estimators": 150,
+                    "max_depth": 10,
+                    "random_state": 42,
+                    "test_size": 0.2,
+                }
+            },
+            "target_info": {
+                "historical_target_type": "historical_order_to_claim",
+                "historical_target_definition": "Historical Order-to-Claim Turnaround (claimed_date − date_received)",
+                "historical_actual_completion_available": False,
+                "digital_forward_target_type": "actual_service_completion",
+                "digital_forward_target_definition": "Actual Service Completion Duration (released_at − created_at)",
+                "academic_status": "Partially Supported historically (predicting turnaround); forward digital collection supports actual service completion."
+            },
+            "feature_contract": [
+                {"name": col, "type": "int/float", "available_at_intake": True, "description": col.replace("_", " ").title()}
+                for col in FEATURE_COLS
+            ],
+            "metrics": {
+                "mae": meta.get("mae"),
+                "rmse": meta.get("rmse"),
+                "r2_score": meta.get("r2_score"),
+                "accuracy_within_1_day": meta.get("accuracy_within_1_day"),
+                "accuracy_within_2_days": meta.get("accuracy_within_2_days"),
+                "accuracy_within_3_days": meta.get("accuracy_within_3_days"),
+                "target_85_threshold": 85.0,
+                "target_85_status": meta.get("target_85_status", "TARGET NOT MET"),
+                "count_within_1_day": meta.get("count_within_1_day"),
+                "count_within_2_days": meta.get("count_within_2_days"),
+                "count_within_3_days": meta.get("count_within_3_days"),
+                "mean_actual_duration": meta.get("mean_actual_duration"),
+                "mean_predicted_duration": meta.get("mean_predicted_duration"),
+                "median_absolute_error": meta.get("median_absolute_error"),
+                "max_absolute_error": meta.get("max_absolute_error"),
+                "min_absolute_error": meta.get("min_absolute_error"),
+            },
+            "dataset_funnel": funnel,
+            "test_predictions": meta.get("test_predictions", []),
+        }
+
     def get_model_info(self) -> Dict[str, Any]:
         model_exists = os.path.exists(self.model_path)
         meta = self.metadata or {}
@@ -431,6 +596,10 @@ class HistoricalMLEngine:
             "r2_score": meta.get("r2_score"),
             "mae": meta.get("mae"),
             "rmse": meta.get("rmse"),
+            "accuracy_within_1_day": meta.get("accuracy_within_1_day"),
+            "accuracy_within_2_days": meta.get("accuracy_within_2_days"),
+            "accuracy_within_3_days": meta.get("accuracy_within_3_days"),
+            "target_85_status": meta.get("target_85_status"),
             "train_count": meta.get("train_count"),
             "test_count": meta.get("test_count"),
         }

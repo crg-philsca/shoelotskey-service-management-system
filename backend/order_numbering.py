@@ -90,6 +90,49 @@ def is_placeholder_order_id(value: Optional[str]) -> bool:
     return any(upper.startswith(p) for p in PLACEHOLDER_PREFIXES)
 
 
+def parse_date_from_order_id(order_id: Optional[str]) -> Optional[date]:
+    """Extracts date from order ID (ORD-YYYY-MM-DD-NNN, ORD-MM-DD-YYYY-NNN, etc.)."""
+    if not order_id or not str(order_id).strip():
+        return None
+    s = str(order_id).strip()
+
+    # Pattern 1: ORD-YYYY-MM-DD-... (e.g. ORD-2026-09-02-001)
+    m = re.match(r"^ORD-(\d{4})-(\d{2})-(\d{2})(?:-\d+)?$", s, re.IGNORECASE)
+    if m:
+        try:
+            return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            pass
+
+    # Pattern 2: ORD-MM-DD-YYYY-... (e.g. ORD-09-02-2026-001 -> Sept 2, 2026)
+    m = re.match(r"^ORD-(\d{2})-(\d{2})-(\d{4})(?:-\d+)?$", s, re.IGNORECASE)
+    if m:
+        try:
+            return date(int(m.group(3)), int(m.group(1)), int(m.group(2)))
+        except ValueError:
+            pass
+
+    # Pattern 3: ORD-YYYY-MM-NN (e.g. ORD-2025-08-04)
+    m = re.match(r"^ORD-(\d{4})-(\d{2})-\d+$", s, re.IGNORECASE)
+    if m:
+        try:
+            return date(int(m.group(1)), int(m.group(2)), 1)
+        except ValueError:
+            pass
+
+    # Pattern 4: ORD-MM-DD-NN without year (e.g. ORD-08-26-04 -> Jan is 2026, others 2025)
+    m = re.match(r"^ORD-(\d{2})-(\d{2})-\d+$", s, re.IGNORECASE)
+    if m:
+        try:
+            month = int(m.group(1))
+            year = 2026 if month == 1 else 2025
+            return date(year, month, int(m.group(2)))
+        except ValueError:
+            pass
+
+    return None
+
+
 def parse_order_date(value: DateLike) -> Optional[date]:
     if value is None or value == "":
         return None
@@ -98,6 +141,10 @@ def parse_order_date(value: DateLike) -> Optional[date]:
     if isinstance(value, date):
         return value
     s = str(value).strip()
+    if s.upper().startswith("ORD-"):
+        from_id = parse_date_from_order_id(s)
+        if from_id:
+            return from_id
     for fmt in ("%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"):
         try:
             return datetime.strptime(s[:19], fmt).date()

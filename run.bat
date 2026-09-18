@@ -41,8 +41,17 @@ echo.
 echo [INFO] Starting Backend (FastAPI in background)...
 start /B cmd /c "npm run server"
 
-echo [INFO] Waiting for database initialization...
-timeout /t 3 /nobreak >nul
+echo [INFO] Waiting for FastAPI backend to be ready on port 8000 (cloud DB sync)...
+for /L %%i in (1,1,60) do (
+    timeout /t 1 /nobreak >nul
+    netstat -ano | findstr ":8000 " | findstr "LISTENING" >nul 2>&1
+    if not errorlevel 1 (
+        echo [INFO] Backend is ready on port 8000!
+        goto BACKEND_READY
+    )
+)
+echo [WARNING] Backend startup taking longer than usual, proceeding with frontend...
+:BACKEND_READY
 
 echo [INFO] Starting Frontend (Vite in foreground)...
 npm run dev

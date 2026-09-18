@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/app/components/ui/dialog';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
@@ -6,13 +6,17 @@ import { Label } from '@/app/components/ui/label';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { Textarea } from '@/app/components/ui/textarea';
 import { toast } from 'sonner';
-import { Search, Plus, Trash2, Users, Package } from 'lucide-react';
+import { Search, Plus, Trash2, Users, Package, Boxes } from 'lucide-react';
+import { useInventory } from '@/app/context/InventoryContext';
 import {
     INVENTORY_EXPENSE_CATEGORIES,
     OPERATIONAL_EXPENSE_CATEGORIES,
     OTHER_EXPENSE_CATEGORIES,
     EXPENSE_CATEGORIES,
     cleanExpenseCategory,
+    getExpenseGroup,
+    setStoredCategoryGroup,
+    type ExpenseGroupType,
 } from '@/app/lib/expenseCategories';
 
 interface AddExpenseModalProps {
@@ -153,8 +157,10 @@ function parseExpenseNotesToBreakdown(rawNotes: string, cat: string) {
 }
 
 export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditExpense, initialData }: AddExpenseModalProps) {
+    const { inventoryData } = useInventory();
     const [category, setCategory] = useState<string>('');
     const [customCategory, setCustomCategory] = useState('');
+    const [customGroup, setCustomGroup] = useState<ExpenseGroupType>('Other Expenses');
     const [categorySearch, setCategorySearch] = useState('');
     const [amount, setAmount] = useState('');
     const [frequency, setFrequency] = useState<string>('Monthly');
@@ -178,7 +184,13 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditE
                 const cleanCat = cleanExpenseCategory(cat);
                 const isCustom = !(EXPENSE_CATEGORIES as readonly string[]).includes(cleanCat);
                 setCategory(isCustom ? 'Other (Manual Insert)' : cleanCat);
-                if (isCustom) setCustomCategory(cleanCat);
+                if (isCustom) {
+                    setCustomCategory(cleanCat);
+                    const existingGroup = (initialData as any).group || getExpenseGroup(cleanCat);
+                    setCustomGroup(existingGroup);
+                } else {
+                    setCustomGroup(getExpenseGroup(cleanCat));
+                }
                 
                 setAmount(formatAmount(initialData.amount.toString()));
                 
@@ -196,7 +208,7 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditE
                 if (cleanCat === 'Staff Salary') {
                     setStaffItems(parsedStaff.length > 0 ? parsedStaff : [{ id: Math.random().toString(), name: '', role: 'Technician', amount: '' }]);
                     setSupplyItems([]);
-                } else if ((INVENTORY_EXPENSE_CATEGORIES as readonly string[]).includes(cleanCat)) {
+                } else if ((INVENTORY_EXPENSE_CATEGORIES as readonly string[]).includes(cleanCat) || (isCustom && ((initialData as any).group === 'Inventory Expenses' || getExpenseGroup(cleanCat) === 'Inventory Expenses'))) {
                     setSupplyItems(parsedSupply.length > 0 ? parsedSupply : [{ id: Math.random().toString(), name: '', price: '' }]);
                     setStaffItems([]);
                 } else {
@@ -219,6 +231,7 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditE
                 setTime(localISO.slice(11, 16));
                 setCategory('');
                 setCustomCategory('');
+                setCustomGroup('Other Expenses');
                 setAmount('');
                 setFrequency('Monthly');
                 setCustomFrequency('');
@@ -231,6 +244,12 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditE
 
     const handleCategorySelect = (selectedCat: string) => {
         setCategory(selectedCat);
+        if (selectedCat === 'Other (Manual Insert)') {
+            if (!customGroup) setCustomGroup('Other Expenses');
+        } else {
+            setCustomGroup(getExpenseGroup(selectedCat));
+        }
+
         if (selectedCat === 'Staff Salary' && staffItems.length === 0) {
             setStaffItems([{ id: Math.random().toString(), name: '', role: 'Technician', amount: '' }]);
             setFrequency('Weekly');
@@ -272,14 +291,67 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditE
         }
     };
 
+    // Inventory supplies filter based on active category
+    const inventorySupplies = useMemo(() => {
+        if (!inventoryData || !Array.isArray(inventoryData)) return [];
+        const activeCat = (category === 'Other (Manual Insert)' ? customCategory : category).toLowerCase().trim();
+        if (activeCat === 'supplies' || activeCat.includes('suppl')) {
+            const matches = inventoryData.filter(i => 
+                (i.category || '').toLowerCase().includes('suppl') ||
+                (i.category || '').toLowerCase().includes('clean') ||
+                (i.category || '').toLowerCase().includes('aid') ||
+                (i.category || '').toLowerCase().includes('material')
+            );
+            return matches.length > 0 ? matches : inventoryData;
+        }
+        if (activeCat === 'chemicals' || activeCat.includes('chem')) {
+            const matches = inventoryData.filter(i => (i.category || '').toLowerCase().includes('chem'));
+            return matches.length > 0 ? matches : inventoryData;
+        }
+        if (activeCat === 'tools' || activeCat.includes('tool')) {
+            const matches = inventoryData.filter(i => (i.category || '').toLowerCase().includes('tool'));
+            return matches.length > 0 ? matches : inventoryData;
+        }
+        return inventoryData;
+    }, [inventoryData, category, customCategory]);
+
+    const handleAddFromInventory = (invItem: any) => {
+        const itemPrice = typeof invItem.price === 'number' && invItem.price > 0 ? invItem.price.toFixed(2) : '';
+        setSupplyItems(prev => {
+            let updated;
+            if (prev.length === 1 && !prev[0].name.trim() && !prev[0].price.trim()) {
+                updated = [{ id: prev[0].id, name: invItem.name, price: itemPrice }];
+            } else {
+                updated = [...prev, { id: Math.random().toString(), name: invItem.name, price: itemPrice }];
+            }
+            const total = updated.reduce((sum, item) => sum + (parseFloat(item.price.replace(/,/g, '')) || 0), 0);
+            if (total > 0) setAmount(formatAmount(total.toString()));
+            return updated;
+        });
+    };
+
     const updateSupplyItem = (id: string, field: string, value: string) => {
-        const updated = supplyItems.map(item => item.id === id ? { ...item, [field]: value } : item);
+        const updated = supplyItems.map(item => {
+            if (item.id !== id) return item;
+            const newItem = { ...item, [field]: value };
+            if (field === 'name' && value.trim()) {
+                const matchedInv = inventoryData.find(inv => inv.name.toLowerCase() === value.trim().toLowerCase());
+                if (matchedInv && (!item.price || item.price === '0.00' || item.price === '0' || item.price === '')) {
+                    newItem.price = matchedInv.price.toFixed(2);
+                }
+            }
+            return newItem;
+        });
         setSupplyItems(updated);
-        if (field === 'price') {
+        if (field === 'price' || field === 'name') {
             const total = updated.reduce((sum, item) => sum + (parseFloat(item.price.replace(/,/g, '')) || 0), 0);
             if (total > 0) setAmount(formatAmount(total.toString()));
         }
     };
+
+    const isStaffSalary = category === 'Staff Salary';
+    const isSupplyCategory = (INVENTORY_EXPENSE_CATEGORIES as readonly string[]).includes(category) || 
+        (category === 'Other (Manual Insert)' && customGroup === 'Inventory Expenses');
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -288,13 +360,18 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditE
         setIsSubmitting(true);
 
         try {
-            const finalCategory = category === 'Other (Manual Insert)' ? customCategory : category;
+            const finalCategory = category === 'Other (Manual Insert)' ? customCategory.trim() : category;
             const finalAmount = parseFloat(amount.replace(/,/g, ''));
             const finalFrequency = frequency === 'Custom (Specify)' ? customFrequency : frequency;
+            const finalGroup: ExpenseGroupType = category === 'Other (Manual Insert)' ? customGroup : getExpenseGroup(finalCategory);
 
             if (!finalCategory || isNaN(finalAmount)) {
                 toast.error('Please fill in all required fields and enter a valid amount');
                 return;
+            }
+
+            if (category === 'Other (Manual Insert)' && finalCategory) {
+                setStoredCategoryGroup(finalCategory, finalGroup);
             }
 
             // Compile itemized lists into notes for pristine data preservation
@@ -304,8 +381,9 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditE
                     `• ${s.name || 'Unnamed Staff'} (${s.role || 'Staff'}): ₱${parseFloat(s.amount || '0').toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                 ).join('\n');
                 compiledNotes = breakdown + (notes ? `\n\n[ADDITIONAL NOTES]\n${notes}` : '');
-            } else if ((INVENTORY_EXPENSE_CATEGORIES as readonly string[]).includes(category) && supplyItems.length > 0 && supplyItems.some(i => i.name || i.price)) {
-                const breakdown = `[${category.toUpperCase()} ITEMIZED BREAKDOWN]\n` + supplyItems.filter(i => i.name || i.price).map(i => 
+            } else if (isSupplyCategory && supplyItems.length > 0 && supplyItems.some(i => i.name || i.price)) {
+                const headerTitle = finalCategory ? finalCategory.toUpperCase() : 'SUPPLIES';
+                const breakdown = `[${headerTitle} ITEMIZED BREAKDOWN]\n` + supplyItems.filter(i => i.name || i.price).map(i => 
                     `• ${i.name || 'Unnamed Item'}: ₱${parseFloat(i.price || '0').toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                 ).join('\n');
                 compiledNotes = breakdown + (notes ? `\n\n[ADDITIONAL NOTES]\n${notes}` : '');
@@ -317,7 +395,8 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditE
                 amount: finalAmount,
                 frequency: finalFrequency || 'One-Time',
                 date: `${date}T${time}`,
-                notes: compiledNotes
+                notes: compiledNotes,
+                group: finalGroup,
             };
 
             if (initialData && onEditExpense) {
@@ -331,6 +410,7 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditE
             onClose();
             setCategory('');
             setCustomCategory('');
+            setCustomGroup('Other Expenses');
             setAmount('');
             setNotes('');
             setCategorySearch('');
@@ -349,9 +429,6 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditE
     const filteredOth = OTHER_EXPENSE_CATEGORIES.filter(cat => cat.toLowerCase().includes(searchLow));
     const hasAnyResults = filteredInv.length > 0 || filteredOp.length > 0 || filteredOth.length > 0;
 
-    const isStaffSalary = category === 'Staff Salary';
-    const isSupplyCategory = (INVENTORY_EXPENSE_CATEGORIES as readonly string[]).includes(category);
-
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-[500px] max-h-[90vh] flex flex-col p-0 rounded-2xl border-0 shadow-2xl bg-white overflow-hidden">
@@ -364,7 +441,7 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditE
                 <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
                     <div className="overflow-y-auto p-6 pt-4 space-y-4 flex-1 min-h-0 custom-scrollbar">
                         <div className="grid grid-cols-2 gap-4">
-                        <div className={`space-y-2 ${category === 'Other (Manual Insert)' ? 'col-span-1' : 'col-span-2'}`}>
+                        <div className="col-span-2 space-y-2">
                             <Label htmlFor="category" className={LABEL_STYLE}>Category</Label>
                             <Select value={category} onValueChange={handleCategorySelect}>
                                 <SelectTrigger id="category" className={INPUT_STYLE}>
@@ -430,16 +507,45 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditE
                         </div>
 
                         {category === 'Other (Manual Insert)' && (
-                            <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                                <Label htmlFor="customCategory" className={LABEL_STYLE}>Custom Category Name</Label>
-                                <Input
-                                    id="customCategory"
-                                    placeholder="e.g., Repair, Tools, etc."
-                                    value={customCategory}
-                                    onChange={(e) => setCustomCategory(e.target.value)}
-                                    className={INPUT_STYLE}
-                                    required
-                                />
+                            <div className="col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-red-50/40 border border-red-100 rounded-xl animate-in fade-in slide-in-from-top-1 duration-200">
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="customCategory" className={LABEL_STYLE}>Custom Category Name</Label>
+                                    <Input
+                                        id="customCategory"
+                                        placeholder="e.g., Sole Sauce, Machinery Repair..."
+                                        value={customCategory}
+                                        onChange={(e) => setCustomCategory(e.target.value)}
+                                        className={INPUT_STYLE}
+                                        required
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="customGroup" className={LABEL_STYLE}>Expense Group</Label>
+                                    <Select 
+                                        value={customGroup} 
+                                        onValueChange={(val: ExpenseGroupType) => {
+                                            setCustomGroup(val);
+                                            if (val === 'Inventory Expenses' && supplyItems.length === 0) {
+                                                setSupplyItems([{ id: Math.random().toString(), name: '', price: '' }]);
+                                            }
+                                        }}
+                                    >
+                                        <SelectTrigger id="customGroup" className={INPUT_STYLE}>
+                                            <SelectValue placeholder="Select group" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="Inventory Expenses" className="text-xs font-bold text-amber-800 focus:bg-amber-50 cursor-pointer">
+                                                📦 Inventory Expenses
+                                            </SelectItem>
+                                            <SelectItem value="Operating Expenses" className="text-xs font-bold text-blue-800 focus:bg-blue-50 cursor-pointer">
+                                                🏢 Operational Expenses
+                                            </SelectItem>
+                                            <SelectItem value="Other Expenses" className="text-xs font-bold text-purple-800 focus:bg-purple-50 cursor-pointer">
+                                                🏷️ Other Expenses
+                                            </SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
                             </div>
                         )}
                     </div>
@@ -492,6 +598,9 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditE
                                                     placeholder="0.00"
                                                     value={item.amount}
                                                     onChange={(e) => updateStaffItem(item.id, 'amount', e.target.value)}
+                                                    onBlur={() => {
+                                                        if (item.amount) updateStaffItem(item.id, 'amount', formatAmount(item.amount));
+                                                    }}
                                                     className="h-8 text-xs bg-gray-50 border-gray-100 pl-5 font-bold text-red-600"
                                                 />
                                             </div>
@@ -519,29 +628,75 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditE
                         </div>
                     )}
 
-                    {/* DYNAMIC SECTION: Cleaning Supplies / Chemicals Itemization */}
+                    {/* DYNAMIC SECTION: Supplies / Inventory Itemization */}
                     {isSupplyCategory && (
                         <div className="bg-amber-50/50 border border-amber-100 rounded-xl p-3.5 space-y-3 animate-in fade-in duration-200">
                             <div className="flex items-center justify-between">
                                 <span className="text-xs font-black uppercase tracking-wider text-amber-800 flex items-center gap-1.5">
-                                    <Package className="h-4 w-4 text-amber-600" /> {category} Items Breakdown
+                                    <Package className="h-4 w-4 text-amber-600" /> {category === 'Other (Manual Insert)' ? (customCategory || 'Supplies') : category} Items Breakdown
                                 </span>
                                 <Button
                                     type="button"
                                     variant="outline"
                                     size="sm"
                                     onClick={() => setSupplyItems([...supplyItems, { id: Math.random().toString(), name: '', price: '' }])}
-                                    className="h-7 text-[10px] bg-white border-amber-200 text-amber-800 hover:bg-amber-600 hover:text-white font-black uppercase tracking-wider rounded-lg px-2.5 shadow-xs transition-all"
+                                    className="h-7 text-[10px] bg-white border-amber-200 text-amber-800 hover:bg-amber-600 hover:text-white font-black uppercase tracking-wider rounded-lg px-2.5 shadow-xs transition-all cursor-pointer"
                                 >
-                                    <Plus className="h-3 w-3 mr-1" /> Add Item
+                                    <Plus className="h-3 w-3 mr-1" /> Add Custom Item
                                 </Button>
                             </div>
+
+                            {/* What's in Inventory under Supplies - Quick Selector */}
+                            {inventorySupplies.length > 0 && (
+                                <div className="bg-white/90 border border-amber-200/80 rounded-lg p-2.5 space-y-1.5 shadow-2xs">
+                                    <div className="flex items-center justify-between text-[10px]">
+                                        <span className="font-black uppercase tracking-wider text-amber-900 flex items-center gap-1">
+                                            <Boxes className="h-3.5 w-3.5 text-amber-600" />
+                                            In Inventory Under Supplies ({inventorySupplies.length} items):
+                                        </span>
+                                        <span className="text-amber-700 font-medium italic">
+                                            Click item to quick-add
+                                        </span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
+                                        {inventorySupplies.map((inv) => (
+                                            <button
+                                                key={inv.id}
+                                                type="button"
+                                                onClick={() => handleAddFromInventory(inv)}
+                                                className="inline-flex items-center gap-1.5 px-2 py-1 bg-amber-50/70 hover:bg-amber-600 hover:text-white border border-amber-200 text-gray-800 text-[11px] font-bold rounded-md transition-all cursor-pointer group shadow-2xs"
+                                                title={`Click to add: ${inv.name}\nCategory: ${inv.category || 'Supplies'}\nStock: ${inv.stock} ${inv.unit || ''}\nPrice: ₱${(inv.price || 0).toFixed(2)}`}
+                                            >
+                                                <Plus className="h-2.5 w-2.5 text-amber-600 group-hover:text-white shrink-0" />
+                                                <span className="truncate max-w-[130px]">{inv.name}</span>
+                                                <span className="text-[10px] text-amber-800 group-hover:text-amber-100 font-mono">
+                                                    ₱{(inv.price || 0).toFixed(2)}
+                                                </span>
+                                                <span className="text-[9px] px-1 py-0.2 bg-white group-hover:bg-amber-700 border border-amber-200 group-hover:border-amber-600 text-amber-900 group-hover:text-white rounded font-medium">
+                                                    {inv.stock} {inv.unit || ''}
+                                                </span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Global datalist for inventory item autocomplete while still allowing any custom text */}
+                            <datalist id="inventory-supplies-options">
+                                {inventoryData.map((inv) => (
+                                    <option key={inv.id} value={inv.name}>
+                                        {inv.category ? `[${inv.category}] ` : ''}{inv.name} (Stock: {inv.stock} {inv.unit || ''} • ₱{(inv.price || 0).toFixed(2)})
+                                    </option>
+                                ))}
+                            </datalist>
+
                             <div className="space-y-2">
                                 {supplyItems.map((item) => (
                                     <div key={item.id} className="grid grid-cols-12 gap-2 items-center bg-white p-2 rounded-lg border border-amber-100 shadow-xs">
                                         <div className="col-span-7">
                                             <Input
-                                                placeholder="Item Name (e.g. Sole Sauce x2, Horsehair Brush)"
+                                                list="inventory-supplies-options"
+                                                placeholder="Item Name (e.g. Sole Sauce, Cleaner, or custom)"
                                                 value={item.name}
                                                 onChange={(e) => updateSupplyItem(item.id, 'name', e.target.value)}
                                                 className="h-8 text-xs bg-gray-50 border-gray-100 font-semibold"
@@ -554,6 +709,9 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditE
                                                     placeholder="0.00"
                                                     value={item.price}
                                                     onChange={(e) => updateSupplyItem(item.id, 'price', e.target.value)}
+                                                    onBlur={() => {
+                                                        if (item.price) updateSupplyItem(item.id, 'price', formatAmount(item.price));
+                                                    }}
                                                     className="h-8 text-xs bg-gray-50 border-gray-100 pl-6 font-bold text-amber-700"
                                                 />
                                             </div>
@@ -577,7 +735,7 @@ export default function AddExpenseModal({ isOpen, onClose, onAddExpense, onEditE
                                     </div>
                                 ))}
                             </div>
-                            <p className="text-[10px] text-gray-500 font-medium italic">Tip: Entering individual item prices automatically totals up the amount.</p>
+                            <p className="text-[10px] text-gray-500 font-medium italic">Tip: You can pick items from inventory or type custom items and amounts.</p>
                         </div>
                     )}
 

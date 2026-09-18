@@ -1,15 +1,15 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
-import { PlusCircle, Edit, Trash, GripVertical, AlertTriangle, Archive } from 'lucide-react';
+import { PlusCircle, Edit, Trash, GripVertical, AlertTriangle } from 'lucide-react';
 import { Reorder } from 'motion/react';
 import ServiceModal from '@/app/components/ServiceModal';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 
 import { Service } from '@/app/types';
 import { useServices } from '@/app/context/ServiceContext';
+import { formatPeso } from '@/app/lib/currency';
 
 interface ServiceManagementProps {
   onSetHeaderActionRight?: (action: React.ReactNode | null) => void;
@@ -21,7 +21,6 @@ export default function ServiceManagement({ onSetHeaderActionRight, user }: Serv
   const [serviceModalOpen, setServiceModalOpen] = useState(false);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Service | null>(null);
-  const navigate = useNavigate();
   const canManageServices = ['owner', 'admin'].includes(user.role?.toLowerCase() || '');
 
   // HIGH PERFORMANCE: Keep local copies for reordering to ensure zero-lag dragging
@@ -51,16 +50,6 @@ export default function ServiceManagement({ onSetHeaderActionRight, user }: Serv
     if (onSetHeaderActionRight && canManageServices) {
       onSetHeaderActionRight(
         <div className="flex items-center gap-2">
-            {/* Historical Records button */}
-            {user.role?.toLowerCase() === 'admin' && (
-              <Button 
-                  className="w-10 h-10 flex items-center justify-center rounded-md border border-red-200 bg-white text-red-600 shadow-sm transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500"
-                  onClick={() => navigate('/job-order-form/historical-records')}
-                  title="Historical Records"
-              >
-                  <Archive className="h-4 w-4" />
-              </Button>
-            )}
             {/* New Service button */}
             <Button 
                 className="w-10 h-10 sm:w-40 flex items-center justify-center rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-sm font-bold uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500"
@@ -76,7 +65,7 @@ export default function ServiceManagement({ onSetHeaderActionRight, user }: Serv
       );
     }
     return () => onSetHeaderActionRight?.(null);
-  }, [onSetHeaderActionRight, navigate, user.role, canManageServices]);
+  }, [onSetHeaderActionRight, user.role, canManageServices]);
 
   const handleSaveService = (service: Service) => {
     const exists = services.find(s => s.id === service.id);
@@ -118,13 +107,13 @@ export default function ServiceManagement({ onSetHeaderActionRight, user }: Serv
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
-        <div className="flex flex-col justify-between gap-4 h-full">
-          <Card className="border-none shadow-md">
+        <div className="flex flex-col gap-4 h-full">
+          <Card className="border-none shadow-md flex-1 flex flex-col min-h-[380px]">
             <CardHeader className="pt-3 pb-0 px-4">
               <CardTitle className="text-base font-black text-gray-900 uppercase">Base Services</CardTitle>
             </CardHeader>
-            <CardContent className="pt-0">
-              <div className="max-h-[390px] overflow-y-auto pr-1 custom-scrollbar -mt-2">
+            <CardContent className="pt-0 flex-1 flex flex-col min-h-0 pb-3">
+              <div className="flex-1 max-h-[440px] overflow-y-auto pr-1 custom-scrollbar -mt-2 min-h-0">
                 <Reorder.Group axis="y" values={localBase} onReorder={(newOrder) => handleReorder('base', newOrder)} className="space-y-3 list-none p-0">
                   {localBase.map(service => (
                     <Reorder.Item 
@@ -138,7 +127,7 @@ export default function ServiceManagement({ onSetHeaderActionRight, user }: Serv
                         <GripVertical size={16} className="text-gray-400 shrink-0" />
                         <div className="min-w-0">
                           <p className="font-bold text-gray-900 text-[13px] leading-tight truncate">{service.name}</p>
-                          <p className="text-[11px] font-black text-red-600 mt-0">{'\u20B1'}{service.price.toLocaleString()}</p>
+                          <p className="text-[11px] font-black text-red-600 mt-0">{formatPeso(service.price)}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
@@ -163,7 +152,7 @@ export default function ServiceManagement({ onSetHeaderActionRight, user }: Serv
             </CardContent>
           </Card>
 
-          <Card className="border-none shadow-md">
+          <Card className="border-none shadow-md shrink-0">
             <CardHeader className="pt-3 pb-0 px-4">
               <CardTitle className="text-base font-black text-gray-900 uppercase">Priority Fees</CardTitle>
             </CardHeader>
@@ -182,7 +171,7 @@ export default function ServiceManagement({ onSetHeaderActionRight, user }: Serv
                         <GripVertical size={16} className="text-gray-400 shrink-0" />
                         <div className="min-w-0">
                           <p className="font-bold text-gray-900 text-[13px] leading-tight truncate">{service.name}</p>
-                          <p className="text-[11px] font-black text-red-600 mt-0.5">{'\u20B1'}{service.price.toLocaleString()}</p>
+                          <p className="text-[11px] font-black text-red-600 mt-0.5">{formatPeso(service.price)}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
@@ -210,12 +199,12 @@ export default function ServiceManagement({ onSetHeaderActionRight, user }: Serv
 
 
 
-        <Card className="border-none shadow-md h-full">
+        <Card className="border-none shadow-md h-full flex flex-col">
           <CardHeader className="pt-3 pb-0 px-4">
             <CardTitle className="text-base font-black text-gray-900 uppercase">Add-On Services</CardTitle>
           </CardHeader>
-          <CardContent className="pt-0">
-            <div className="max-h-[555px] overflow-y-auto pr-1 custom-scrollbar -mt-2">
+          <CardContent className="pt-0 flex-1 flex flex-col min-h-0 pb-3">
+            <div className="flex-1 max-h-[555px] overflow-y-auto pr-1 custom-scrollbar -mt-2 min-h-0">
               <Reorder.Group axis="y" values={localAddon} onReorder={(newOrder) => handleReorder('addon', newOrder)} className="space-y-3 list-none p-0">
                 {localAddon.map(service => (
                   <Reorder.Item 
@@ -229,7 +218,7 @@ export default function ServiceManagement({ onSetHeaderActionRight, user }: Serv
                       <GripVertical size={16} className="text-gray-400 shrink-0" />
                       <div className="min-w-0">
                         <p className="font-bold text-gray-900 text-[13px] leading-tight truncate">{service.name}</p>
-                        <p className="text-[11px] font-black text-red-600 mt-0.5">{'\u20B1'}{service.price.toLocaleString()}</p>
+                        <p className="text-[11px] font-black text-red-600 mt-0.5">{formatPeso(service.price)}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useRef, type ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useExpenses } from '@/app/context/ExpenseContext';
-import { ArrowLeft, ChevronLeft, PlusCircle, Calendar as CalendarIcon, ChevronRight, Filter, Search, ChevronDown, Wallet, Boxes, Building2, Tags, MoreVertical, Edit, Trash2, X } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, PlusCircle, Calendar as CalendarIcon, ChevronRight, Filter, Search, ChevronDown, Wallet, Boxes, Building2, Tags, MoreVertical, Edit, Trash2 } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/app/components/ui/table';
@@ -20,6 +20,7 @@ import {
     matchExpenseCategory,
 } from '@/app/lib/expenseCategories';
 import { isDateInRange, type ReportRange } from '@/app/lib/salesAnalytics';
+import { formatPeso } from '@/app/lib/currency';
 
 
 
@@ -309,7 +310,7 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
         periodExpenses.forEach((exp) => {
             const amt = Number(exp.amount || 0);
             total += amt;
-            const grp = getExpenseGroup(exp.category);
+            const grp = getExpenseGroup(exp.category, (exp as any).group);
             if (grp === 'Inventory Expenses') {
                 inv += amt;
             } else if (grp === 'Operating Expenses') {
@@ -332,11 +333,11 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
         let filtered = [...periodExpenses];
 
         if (cardFilter === 'inventory') {
-            filtered = filtered.filter((exp) => getExpenseGroup(exp.category) === 'Inventory Expenses');
+            filtered = filtered.filter((exp) => getExpenseGroup(exp.category, (exp as any).group) === 'Inventory Expenses');
         } else if (cardFilter === 'operating') {
-            filtered = filtered.filter((exp) => getExpenseGroup(exp.category) === 'Operating Expenses');
+            filtered = filtered.filter((exp) => getExpenseGroup(exp.category, (exp as any).group) === 'Operating Expenses');
         } else if (cardFilter === 'other') {
-            filtered = filtered.filter((exp) => getExpenseGroup(exp.category) === 'Other Expenses');
+            filtered = filtered.filter((exp) => getExpenseGroup(exp.category, (exp as any).group) === 'Other Expenses');
         }
 
         if (filterCategory !== 'all') {
@@ -372,7 +373,7 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
             filtered = filtered.filter(
                 (exp) =>
                     exp.category.toLowerCase().includes(query) ||
-                    getExpenseGroup(exp.category).toLowerCase().includes(query) ||
+                    getExpenseGroup(exp.category, (exp as any).group).toLowerCase().includes(query) ||
                     (exp.frequency ? exp.frequency.toLowerCase().includes(query) : false) ||
                     (exp.notes ? exp.notes.toLowerCase().includes(query) : false) ||
                     String(exp.amount || '').includes(query)
@@ -558,11 +559,6 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
                                 title="Open filters"
                             >
                                 <Filter className="h-4 w-4" />
-                                {activeFilterCount > 0 && (
-                                    <span className="absolute -top-1.5 -right-1.5 h-4 min-w-[16px] px-1 rounded-full bg-red-600 text-white text-[9px] font-black flex items-center justify-center shadow-xs">
-                                        {activeFilterCount}
-                                    </span>
-                                )}
                             </Button>
 
                             <Button
@@ -573,67 +569,12 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
                                 New Expense
                             </Button>
                         </div>
-
-                        {/* Active Filter Chips Bar */}
-                        {activeFilterCount > 0 && (
-                            <div className="flex flex-wrap items-center gap-1.5 w-full pt-1 animate-in fade-in duration-200">
-                                <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 mr-0.5">Active:</span>
-                                {cardFilter !== 'all' && (
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-amber-50 text-amber-800 border border-amber-200 shadow-2xs">
-                                        Group: {cardFilter === 'inventory' ? 'Inventory' : cardFilter === 'operating' ? 'Operational' : 'Other'}
-                                        <button type="button" onClick={() => setCardFilter('all')} className="hover:text-amber-950 font-black ml-0.5">
-                                            <X size={11} />
-                                        </button>
-                                    </span>
-                                )}
-                                {filterCategory !== 'all' && (
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-red-50 text-red-700 border border-red-200 shadow-2xs">
-                                        Category: {filterCategory}
-                                        <button type="button" onClick={() => setFilterCategory('all')} className="hover:text-red-950 font-black ml-0.5">
-                                            <X size={11} />
-                                        </button>
-                                    </span>
-                                )}
-                                {startDate && (
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-purple-50 text-purple-700 border border-purple-200 shadow-2xs">
-                                        From: {startDate}
-                                        <button type="button" onClick={() => setStartDate('')} className="hover:text-purple-950 font-black ml-0.5">
-                                            <X size={11} />
-                                        </button>
-                                    </span>
-                                )}
-                                {endDate && (
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-purple-50 text-purple-700 border border-purple-200 shadow-2xs">
-                                        To: {endDate}
-                                        <button type="button" onClick={() => setEndDate('')} className="hover:text-purple-950 font-black ml-0.5">
-                                            <X size={11} />
-                                        </button>
-                                    </span>
-                                )}
-                                {(minAmount || maxAmount) && (
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
-                                        Amount: ₱{minAmount || '0'} - ₱{maxAmount || '∞'}
-                                        <button type="button" onClick={() => { setMinAmount(''); setMaxAmount(''); }} className="hover:text-emerald-950 font-black ml-0.5">
-                                            <X size={11} />
-                                        </button>
-                                    </span>
-                                )}
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={handleResetFilters}
-                                    className="h-6 px-2 text-[10px] font-bold uppercase text-red-600 hover:text-red-700 hover:bg-red-50 rounded-full"
-                                >
-                                    Clear All
-                                </Button>
-                            </div>
-                        )}
                     </div>
                 </CardHeader>
 
                 <CardContent className="pt-0">
-                    <div className="overflow-x-auto w-full">
-                        <Table className="w-full table-fixed min-w-0 text-sm">
+                    <div className="overflow-x-auto w-full custom-scrollbar pb-1">
+                        <Table className="w-full table-fixed text-sm min-w-[600px] lg:min-w-0">
                             <colgroup>
                                 <col className="w-[15%]" />
                                 <col className="w-[20%]" />
@@ -675,7 +616,7 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
                                                 <div className="flex flex-col items-center justify-center text-center gap-0.5">
                                                     <span className="text-xs font-bold text-gray-900 leading-tight truncate max-w-full">{expense.category}</span>
                                                     {(() => {
-                                                        const grp = getExpenseGroup(expense.category);
+                                                        const grp = getExpenseGroup(expense.category, (expense as any).group);
                                                         if (grp === 'Inventory Expenses') {
                                                             return (
                                                                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[8.5px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200">
@@ -1041,7 +982,7 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
                         <DialogTitle className="text-xl font-bold text-red-600 uppercase text-center w-full">Delete Expense</DialogTitle>
                     </DialogHeader>
                     <div className="py-4 text-center text-sm font-semibold text-gray-700">
-                        Are you sure you want to permanently delete &quot;{expenseToDelete?.category}&quot; worth ₱{expenseToDelete?.amount}?
+                        Are you sure you want to permanently delete &quot;{expenseToDelete?.category}&quot; worth {formatPeso(expenseToDelete?.amount)}?
                     </div>
                     <div className="flex gap-3 justify-between">
                         <Button type="button" variant="outline" onClick={() => setExpenseToDelete(null)} className="flex-1 font-bold shadow-sm">

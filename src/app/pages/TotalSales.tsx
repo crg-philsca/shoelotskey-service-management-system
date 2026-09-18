@@ -31,6 +31,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useServices } from '@/app/context/ServiceContext';
 import EditOrderModal from '@/app/components/EditOrderModal';
 import OrderDetailModal from '@/app/components/OrderDetailModal';
+import { toServiceCode, chunkServiceCodesTwoPerRow } from '@/app/lib/businessRules';
 import { toast } from 'sonner';
 import {
     collectedSales,
@@ -39,12 +40,14 @@ import {
     isCancelledOrder,
     cancelledOrdersBreakdown,
     orderEventDate,
+    getOrderPaidAmount,
+    getOrderRetainedAmount,
     type ReportRange,
 } from '@/app/lib/salesAnalytics';
 
 type TotalSalesProps = {
     onSetHeaderActionRight?: (action: ReactNode | null) => void;
-    user: { token: string; role: 'owner' | 'staff' | 'admin'; username: string };
+    user: { token: string; role: 'owner' | 'staff' | 'admin' | 'front staff'; username: string };
 };
 
 function FormattedDateInput({ value, onChange, className, id }: { value: string; onChange: (val: string) => void; className?: string; id?: string }) {
@@ -201,6 +204,17 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
     const { services } = useServices();
     const baseServices = (services || []).filter((s) => s?.category === 'base' && s?.active);
 
+    const activeFilterCount = useMemo(() => {
+        let count = 0;
+        if (filterService !== 'all') count++;
+        if (filterPriority !== 'all') count++;
+        if (filterPaymentStatus !== 'all') count++;
+        if (filterPaymentMethod !== 'all') count++;
+        if (startDate) count++;
+        if (endDate) count++;
+        return count;
+    }, [filterService, filterPriority, filterPaymentStatus, filterPaymentMethod, startDate, endDate]);
+
     useEffect(() => {
         if (!onSetHeaderActionRight) return;
 
@@ -262,10 +276,9 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
         return (orders || [])
             .filter((order: JobOrder) => isSalesEligible(order) || (isCancelledOrder(order) && (order.refundStatus === 'refunded' || Number(order.refundAmount || 0) > 0 || Number(order.amountReceived || order.depositAmount || 0) > 0)))
             .filter((order: JobOrder) => {
-                if (filterPaymentStatus === 'refunded') return true;
                 return isDateInRange(orderEventDate(order), profitRange, now, customStartDate, customEndDate);
             });
-    }, [orders, profitRange, customStartDate, customEndDate, filterPaymentStatus]);
+    }, [orders, profitRange, customStartDate, customEndDate]);
 
     // Base filtered orders for date range, search, service, priority, and payment status (independent of card payment method filter)
     const baseFilteredOrders = useMemo(() => {
@@ -309,11 +322,13 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
 
 
 
+    // Top 4 outcome cards derive authoritatively from the entire date cohort (salesOrders)
+    // so clicking a table card filter never zero-outs or recalculates the top summary metrics
     const grossTotalSales = useMemo(() => {
-        return baseFilteredOrders
+        return salesOrders
             .filter(o => !isCancelledOrder(o))
             .reduce((sum: number, order: JobOrder) => sum + (Number(order.grandTotal) || 0), 0);
-    }, [baseFilteredOrders]);
+    }, [salesOrders]);
 
     const cancellationStats = useMemo(() => {
         const now = new Date();
@@ -323,12 +338,13 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
         return cancelledOrdersBreakdown(periodOrders);
     }, [orders, profitRange, customStartDate, customEndDate]);
 
+    // Authoritative formula: Active Order Sales + Retained Payments from Cancelled Orders
     const netSalesAmount = useMemo(() => {
-        return Math.max(0, grossTotalSales - cancellationStats.totalRefunded + cancellationStats.totalRetained);
-    }, [grossTotalSales, cancellationStats]);
+        return Math.max(0, grossTotalSales + cancellationStats.totalRetained);
+    }, [grossTotalSales, cancellationStats.totalRetained]);
 
     const totalBalanceDue = useMemo(() => {
-        return baseFilteredOrders.reduce((sum: number, order: JobOrder) => {
+        return salesOrders.reduce((sum: number, order: JobOrder) => {
             if (isCancelledOrder(order)) return sum;
             const billed = Number(order.grandTotal) || 0;
             const isDP = String(order.paymentStatus || '').toLowerCase() === 'downpayment';
@@ -337,7 +353,7 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                 : collectedSales(order);
             return sum + Math.max(0, billed - collected);
         }, 0);
-    }, [baseFilteredOrders]);
+    }, [salesOrders]);
 
 
     // Table orders filtered by the active card filter (Total Sales, Balance Due, Refunds Issued, Net Sales)
@@ -355,35 +371,15 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                 return Math.max(0, billed - collected) > 0;
             });
         } else if (cardFilter === 'refunds') {
-            const periodRefunds = filtered.filter((order) => {
+            filtered = filtered.filter((order) => {
                 const rf = Number(order.refundAmount || 0);
                 const isCancelled = isCancelledOrder(order);
-                const hasRefund = rf > 0 || (isCancelled && (order.refundStatus === 'refunded' || Number(order.amountReceived || order.depositAmount || 0) > 0));
-                return hasRefund;
+                return rf > 0 || (isCancelled && (order.refundStatus === 'refunded' || Number(order.amountReceived || order.depositAmount || 0) > 0));
             });
-            // If current date period has matching refunds, show them; otherwise fallback to all-time refunds matching active filters
-            if (periodRefunds.length > 0) {
-                filtered = periodRefunds;
-            } else {
-                filtered = (orders || []).filter((order) => {
-                    const rf = Number(order.refundAmount || 0);
-                    const isCancelled = isCancelledOrder(order);
-                    const hasRefund = rf > 0 || (isCancelled && (order.refundStatus === 'refunded' || Number(order.amountReceived || order.depositAmount || 0) > 0));
-                    if (!hasRefund) return false;
-                    if (searchQuery) {
-                        const query = searchQuery.toLowerCase();
-                        if (!order.customerName.toLowerCase().includes(query) && !order.orderNumber.toLowerCase().includes(query)) return false;
-                    }
-                    if (filterService !== 'all' && !order.baseService.includes(filterService)) return false;
-                    return true;
-                });
-            }
         } else if (cardFilter === 'net-sales') {
             filtered = filtered.filter((order) => {
                 if (isCancelledOrder(order)) {
-                    const paid = Number(order.amountReceived || order.depositAmount || 0);
-                    const refunded = Number(order.refundAmount || (order.refundStatus === 'refunded' ? paid : 0));
-                    return Math.max(0, paid - refunded) > 0;
+                    return getOrderRetainedAmount(order) > 0;
                 }
                 return (Number(order.grandTotal) || 0) > 0;
             });
@@ -433,6 +429,10 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
         return filtered;
     }, [baseFilteredOrders, cardFilter, filterPaymentMethod]);
 
+    const displayedRefunds = useMemo(() => {
+        return cancellationStats.totalRefunded;
+    }, [cancellationStats.totalRefunded]);
+
     const totalPages = Math.ceil(filteredOrders.length / itemsPerPage) || 1;
     const startIndex = (currentPage - 1) * itemsPerPage;
     const paginatedOrders = filteredOrders.slice(startIndex, startIndex + itemsPerPage);
@@ -443,18 +443,33 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
     };
 
     const handleUndoRefund = (order: JobOrder) => {
-        const targetStage = order.cancellationStage || 'new-order';
-        const wasRefunded = order.refundStatus === 'refunded';
+        const pre = order.preCancellationState;
+        const targetStage = (pre?.status || order.cancellationStage || 'new-order') as any;
+        const restoredPaymentStatus = pre?.paymentStatus || (Number(order.balance || 0) <= 0 ? 'fully-paid' : 'downpayment');
+        const restoredAmountReceived = pre?.amountReceived != null ? pre.amountReceived : order.amountReceived;
+        const restoredBalance = pre?.balance != null ? pre.balance : order.balance;
+        const restoredDepositAmount = pre?.depositAmount != null ? pre.depositAmount : order.depositAmount;
+
         updateOrder(order.id, {
-            status: targetStage as any,
+            status: targetStage,
             cancellationStage: null as any,
             refundStatus: null as any,
             refundAmount: 0,
             refundReason: null as any,
             cancelledAt: null as any,
+            preCancellationState: null as any,
+            paymentStatus: restoredPaymentStatus as any,
+            amountReceived: restoredAmountReceived,
+            balance: restoredBalance,
+            depositAmount: restoredDepositAmount,
+            ...(pre?.paymentMethod ? { paymentMethod: pre.paymentMethod } : {}),
+            ...(pre?.initialPaymentMethod ? { initialPaymentMethod: pre.initialPaymentMethod } : {}),
+            ...(pre?.finalPaymentMethod ? { finalPaymentMethod: pre.finalPaymentMethod } : {}),
+            ...(pre?.paymentHistory ? { paymentHistory: pre.paymentHistory } : {}),
             updatedAt: new Date()
         }, user?.username || 'Staff');
-        toast.success(`Order #${order.orderNumber} restored to ${targetStage.replace('-', ' ')} (${wasRefunded ? 'Refund Undone' : 'Cancellation Undone'})`);
+        const wasRefunded = order.refundStatus === 'refunded';
+        toast.success(`Order #${order.orderNumber} restored to ${String(targetStage).replace('-', ' ')} (${wasRefunded ? 'Refund Undone' : 'Cancellation Undone'})`);
     };
 
     return (
@@ -555,7 +570,7 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                             </div>
                             <p className="text-xs font-black uppercase tracking-wider text-gray-500">Refunds Issued</p>
                         </div>
-                        <p className="text-2xl font-black text-rose-700 tracking-tight">{formatPeso(cancellationStats.totalRefunded)}</p>
+                        <p className="text-2xl font-black text-rose-700 tracking-tight">{formatPeso(displayedRefunds)}</p>
                     </CardContent>
                 </Card>
 
@@ -620,7 +635,7 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
 
                             <Button
                                 variant="outline"
-                                className={`h-10 w-10 p-0 rounded-xl transition-colors flex-shrink-0 ${filterService !== 'all' || filterPriority !== 'all' || filterPaymentStatus !== 'all' || filterPaymentMethod !== 'all' || startDate || endDate
+                                className={`relative h-10 w-10 p-0 rounded-xl transition-colors flex-shrink-0 ${activeFilterCount > 0
                                     ? 'border-red-600 text-red-600 bg-red-50 hover:bg-red-100'
                                     : 'border-gray-200 text-gray-500 hover:border-red-600 hover:text-red-600 hover:bg-red-50'
                                     }`}
@@ -634,21 +649,21 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                 </CardHeader>
 
                 <CardContent className="pt-0">
-                    <div className="overflow-x-auto w-full">
-                        <Table className="w-full table-fixed min-w-0 text-xs">
+                    <div className="overflow-x-auto overflow-y-auto max-h-[620px] w-full custom-scrollbar pb-1 rounded-lg border border-gray-100">
+                        <Table className="w-full table-fixed text-xs min-w-[850px]">
                             <colgroup>
                                 <col className="w-[12%]" />
-                                <col className="w-[16%]" />
-                                <col className="w-[16%]" />
+                                <col className="w-[18%]" />
+                                <col className="w-[20%]" />
                                 <col className="w-[5%]" />
-                                <col className="w-[10%]" />
                                 <col className="w-[9%]" />
-                                <col className="w-[14%]" />
-                                <col className="w-[11%]" />
-                                <col className="w-[7%]" />
+                                <col className="w-[8%]" />
+                                <col className="w-[12%]" />
+                                <col className="w-[10%]" />
+                                <col className="w-[6%]" />
                             </colgroup>
-                            <TableHeader className="bg-red-50/50 border-b border-red-100">
-                                <TableRow className="border-b border-red-100 hover:bg-transparent">
+                            <TableHeader className="bg-red-50/95 backdrop-blur-xs border-b border-red-100 sticky top-0 z-10 shadow-xs">
+                                <TableRow className="border-b border-red-100 hover:bg-transparent bg-red-50/95">
                                     <TableHead className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Order #</TableHead>
                                     <TableHead className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Customer</TableHead>
                                     <TableHead className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px]">Services</TableHead>
@@ -656,7 +671,7 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                                     <TableHead className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Order Date</TableHead>
                                     <TableHead className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Priority</TableHead>
                                     <TableHead className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Payment</TableHead>
-                                    <TableHead className="h-9 px-2 text-right font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Total</TableHead>
+                                    <TableHead className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Total</TableHead>
                                     <TableHead className="h-9 px-1 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -675,7 +690,7 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                                         const orderDate = new Date(order.createdAt || (order as any).transactionDate);
                                         const pStatus = order.paymentStatus || '';
 
-                                        const servicesList = (Array.isArray(order.baseService)
+                                        const baseSvcs = (Array.isArray(order.baseService)
                                             ? order.baseService
                                             : String(order.baseService || '').split(',')
                                         )
@@ -683,9 +698,29 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                                             .map((s) => s.trim().replace(' (with basic cleaning)', ''))
                                             .filter(Boolean);
 
+                                        const addonSvcs = (Array.isArray(order.addOns)
+                                            ? order.addOns
+                                            : String(order.addOns || '').split(',')
+                                        )
+                                            .flatMap((a: any) => {
+                                                if (!a) return [];
+                                                if (typeof a === 'string') return a.split(',');
+                                                return [a.name || a.service_name || a.service_code || ''];
+                                            })
+                                            .map((s) => String(s || '').trim())
+                                            .filter(Boolean);
+
+                                        const rawServicesList = [...baseSvcs, ...addonSvcs];
+                                        const servicesList = rawServicesList.length > 0 ? rawServicesList : baseSvcs;
+                                        const serviceLines = chunkServiceCodesTwoPerRow(servicesList);
+
                                         return (
                                             <TableRow key={order.id} onClick={() => setViewingOrder(order)} className="border-b border-gray-100 hover:bg-gray-50/80 transition-all cursor-pointer">
-                                                <TableCell className="px-2 py-2 text-center text-[11px] font-semibold text-gray-800 whitespace-nowrap" title={order.orderNumber || order.id || '-'}>{order.orderNumber || order.id || '-'}</TableCell>
+                                                <TableCell className="px-2 py-2 text-center text-[11px] font-semibold text-gray-800 whitespace-nowrap max-w-0" title={order.orderNumber || order.id || '-'}>
+                                                    <span className="block truncate">
+                                                        {order.orderNumber || order.id || '-'}
+                                                    </span>
+                                                </TableCell>
                                                 <TableCell className="px-2 py-2 text-center max-w-0">
                                                     <div className="flex flex-col items-center justify-center text-center w-full min-w-0">
                                                         <div className="text-xs font-bold text-gray-900 leading-tight truncate w-full max-w-full" title={order.customerName || 'Walk-In'}>{order.customerName || 'Walk-In'}</div>
@@ -696,12 +731,15 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                                                 </TableCell>
                                                 <TableCell className="px-2 py-2 text-center text-[11px] font-semibold text-gray-800 whitespace-normal break-words max-w-0">
                                                     {servicesList.length > 0 ? (
-                                                        <div className="flex flex-col items-center justify-center text-center text-[11px] font-semibold text-gray-800 leading-snug w-full min-w-0" title={servicesList.join(', ')}>
-                                                            {servicesList.slice(0, 3).map((srv, idx) => (
-                                                                <span key={idx} className="block text-[11px] font-semibold text-gray-800 leading-tight truncate w-full max-w-full">
-                                                                    {srv}{idx < servicesList.length - 1 ? ',' : ''}
+                                                        <div className="flex flex-col items-center justify-center text-center text-[11px] font-bold text-gray-800 leading-snug w-full min-w-0" title={servicesList.map(s => `${toServiceCode(s)} (${s})`).join(', ')}>
+                                                            {serviceLines.slice(0, 3).map((line, idx) => (
+                                                                <span key={idx} className="block text-[11px] font-bold text-gray-800 leading-tight truncate w-full max-w-full">
+                                                                    {line}
                                                                 </span>
                                                             ))}
+                                                            {serviceLines.length > 3 && (
+                                                                <span className="text-[9px] text-gray-400 leading-none">+{servicesList.length - 6} more</span>
+                                                            )}
                                                         </div>
                                                     ) : (
                                                         <span className="text-gray-400 italic font-normal text-center block">-</span>
@@ -731,20 +769,20 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                                                         {isCancelledOrder(order) ? (
                                                             order.refundStatus === 'refunded' ? (
                                                                 <>
-                                                                    <span className="text-[10px] font-bold tracking-wider text-rose-600">
-                                                                        CANCELLED (REFUNDED)
+                                                                    <span className="text-[10px] font-bold tracking-wider text-blue-600">
+                                                                        REFUNDED
                                                                     </span>
-                                                                    <span className="text-[9px] text-rose-600 font-medium tracking-wider mt-0.5">
-                                                                        Refund: {formatPeso(Number(order.refundAmount || order.amountReceived || order.depositAmount || order.grandTotal || 0))}
+                                                                    <span className="text-[9px] text-blue-600 font-medium tracking-wider mt-0.5">
+                                                                        Refund: {formatPeso(Number(order.refundAmount || (order.refundStatus === 'refunded' ? getOrderPaidAmount(order) : 0)))}
                                                                     </span>
                                                                 </>
                                                             ) : (
                                                                 <>
-                                                                    <span className="text-[10px] font-bold tracking-wider text-amber-700">
-                                                                        CANCELLED (RETAINED)
+                                                                    <span className="text-[10px] font-bold tracking-wider text-purple-700">
+                                                                        RETAINED
                                                                     </span>
-                                                                    <span className="text-[9px] text-amber-700 font-medium tracking-wider mt-0.5">
-                                                                        Retained: {formatPeso(Number(order.amountReceived || order.depositAmount || 0))}
+                                                                    <span className="text-[9px] text-purple-700 font-medium tracking-wider mt-0.5">
+                                                                        Retained: {formatPeso(getOrderRetainedAmount(order))}
                                                                     </span>
                                                                 </>
                                                             )
@@ -772,26 +810,11 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                                                         )}
                                                     </div>
                                                 </TableCell>
-                                                <TableCell className="px-2 py-2 text-right whitespace-nowrap">
+                                                <TableCell className="px-2 py-2 text-center whitespace-nowrap">
                                                     <span className="font-bold text-gray-900 text-xs">₱{(Number(order.grandTotal) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                                 </TableCell>
                                                 <TableCell className="px-1 py-1.5 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                                                    <div className="flex items-center justify-center gap-1.5">
-                                                        {(order.refundStatus === 'refunded' || isCancelledOrder(order) || order.status === 'cancelled') && (
-                                                            <Button
-                                                                variant="outline"
-                                                                size="sm"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleUndoRefund(order);
-                                                                }}
-                                                                className="h-7 px-2 text-[11px] font-bold border-purple-200 text-purple-700 bg-purple-50 hover:bg-purple-100 shadow-xs inline-flex items-center gap-1 cursor-pointer transition-all"
-                                                                title={order.refundStatus === 'refunded' ? "Undo Refund" : "Undo Cancel Order"}
-                                                            >
-                                                                <RotateCcw className="h-3.5 w-3.5 text-purple-600" />
-                                                                <span>{order.refundStatus === 'refunded' ? 'Undo Refund' : 'Undo Cancel'}</span>
-                                                            </Button>
-                                                        )}
+                                                    <div className="flex items-center justify-center">
                                                         <DropdownMenu>
                                                             <DropdownMenuTrigger asChild>
                                                                 <Button

@@ -8,7 +8,7 @@ ML-Specific fields are explicitly labeled for easy feature extraction.
 
 from sqlalchemy import (
     Column, String, Float, Boolean, JSON, Integer, 
-    ForeignKey, Text, DateTime, DECIMAL, Enum, TIMESTAMP, Table, text, func
+    ForeignKey, Text, DateTime, Date, DECIMAL, Enum, TIMESTAMP, Table, text, func
 )
 from sqlalchemy.orm import declarative_base, relationship, backref
 from datetime import datetime
@@ -95,6 +95,7 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     failed_login_attempts = Column(Integer, default=0)
     locked_until = Column(DateTime, nullable=True)
+    active_session_id = Column(String(100), nullable=True)
     reset_token = Column(String(255), nullable=True)
     reset_token_expiry = Column(DateTime, nullable=True)
     created_at = Column(TIMESTAMP, default=datetime.now)
@@ -104,6 +105,22 @@ class User(Base):
     orders = relationship("Order", back_populates="processor")
     expenses = relationship("Expense", back_populates="user")
     status_logs = relationship("StatusLog", back_populates="user")
+    sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
+
+class UserSession(Base):
+    """Authoritative persistent session tracking supporting multiple independent sessions per account."""
+    __tablename__ = "user_sessions"
+    session_id = Column(String(100), primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True)
+    username = Column(String(50), nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    last_active = Column(DateTime, default=datetime.utcnow, nullable=False)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    is_revoked = Column(Boolean, default=False, nullable=False, index=True)
+    ip_address = Column(String(45), nullable=True)
+    user_agent = Column(String(255), nullable=True)
+
+    user = relationship("User", back_populates="sessions")
 
 class Customer(Base):
     """Central customer database for CRM and return-user tracking."""
@@ -176,10 +193,12 @@ class Order(Base):
     inventory_applied = Column(Boolean, default=False)
     inventory_used = Column(JSON, nullable=True)
     cancellation_stage = Column(String(30), nullable=True)
+    cancellation_reason = Column(String(255), nullable=True)
     refund_status = Column(String(30), nullable=True)
     refund_amount = Column(DECIMAL(10, 2), default=0.0)
     refund_reason = Column(String(255), nullable=True)
     cancelled_at = Column(DateTime, nullable=True)
+    pre_cancellation_state = Column(JSON, nullable=True)
     created_at = Column(TIMESTAMP, default=datetime.now)
     updated_at = Column(TIMESTAMP, default=datetime.now, onupdate=datetime.now)
     
@@ -190,7 +209,7 @@ class Order(Base):
     processor = relationship("User", back_populates="orders")
     items = relationship("Item", back_populates="order", cascade="all, delete-orphan")
     status_logs = relationship("StatusLog", back_populates="order", cascade="all, delete-orphan")
-    payments = relationship("Payment", back_populates="order", cascade="all, delete-orphan")
+    payments = relationship("Payment", back_populates="order", cascade="all, delete-orphan", order_by="Payment.payment_id.asc()")
     delivery = relationship("Delivery", back_populates="order", uselist=False, cascade="all, delete-orphan")
 
 # ==========================================
@@ -213,6 +232,27 @@ class Payment(Base):
     order = relationship("Order", back_populates="payments")
     method = relationship("PaymentMethod")
     p_status = relationship("PaymentStatus")
+
+class CashSession(Base):
+    """Tracks daily physical cash register sessions (Source of Truth)."""
+    __tablename__ = "cash_sessions"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    business_date = Column(Date, nullable=False, index=True)
+    opening_cash = Column(DECIMAL(12, 2), nullable=False, default=0.0)
+    expected_cash = Column(DECIMAL(12, 2), nullable=True)
+    actual_cash = Column(DECIMAL(12, 2), nullable=True)
+    over_short = Column(DECIMAL(12, 2), nullable=True)
+    status = Column(String(20), nullable=False, default="OPEN")  # 'OPEN' | 'CLOSED'
+    opened_by = Column(Integer, ForeignKey("users.user_id"), nullable=False)
+    opened_at = Column(DateTime, nullable=False, default=datetime.now)
+    closed_by = Column(Integer, ForeignKey("users.user_id"), nullable=True)
+    closed_at = Column(DateTime, nullable=True)
+    variance_reason = Column(Text, nullable=True)
+    created_at = Column(TIMESTAMP, default=datetime.now)
+    updated_at = Column(TIMESTAMP, default=datetime.now, onupdate=datetime.now)
+
+    opener = relationship("User", foreign_keys=[opened_by])
+    closer = relationship("User", foreign_keys=[closed_by])
 
 class Delivery(Base):
     """Normalized Delivery/Shipping Details."""
@@ -378,19 +418,35 @@ class Inventory(Base):
     updated_at = Column(TIMESTAMP, default=datetime.now, onupdate=datetime.now)
 
 class InventoryLog(Base):
-    """Audit trail for stock adjustments (deductions/restocks)."""
+    """Audit trail for stock adjustments (deductions/restocks/set_balance/auto_deduct)."""
     __tablename__ = "inventory_logs"
     log_id = Column(Integer, primary_key=True, autoincrement=True)
     item_id = Column(Integer, ForeignKey("inventory.item_id"), nullable=False)
     change_amount = Column(Float, nullable=False)
-    action_type = Column(String(20), nullable=False) # 'deduction', 'restock', 'manual_edit'
+    action_type = Column(String(50), nullable=False) # 'deduction', 'restock', 'manual_edit', 'auto_deduct', 'set_balance'
     order_id = Column(Integer, ForeignKey("orders.order_id", ondelete="SET NULL"), nullable=True) # Linked to job order if needed
+    service_name = Column(String(100), nullable=True)
+    execution_ref = Column(String(100), nullable=True, index=True)
     user_id = Column(Integer, ForeignKey("users.user_id"), nullable=False)
     created_at = Column(TIMESTAMP, default=datetime.now)
     
     inventory_item = relationship("Inventory")
     order = relationship("Order")
     user = relationship("User")
+
+class MaterialConsumption(Base):
+    """Authoritative idempotency and deduction lock for per-pair material usage."""
+    __tablename__ = "material_consumptions"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    idempotency_key = Column(String(150), nullable=False, unique=True, index=True)
+    order_id = Column(Integer, ForeignKey("orders.order_id", ondelete="CASCADE"), nullable=False)
+    item_id = Column(Integer, nullable=True)
+    inventory_id = Column(Integer, ForeignKey("inventory.item_id"), nullable=False)
+    quantity = Column(Float, nullable=False)
+    created_at = Column(TIMESTAMP, default=datetime.now)
+
+    order = relationship("Order")
+    inventory = relationship("Inventory")
 
 
 # ==========================================
@@ -575,3 +631,53 @@ class EtlImportHistory(Base):
     imported_by         = Column(String(100), nullable=True)           # Username who triggered it
     status              = Column(String(20), default="running")        # 'completed' | 'failed' | 'running'
     error_message       = Column(Text, nullable=True)                  # Populated on failure
+
+
+# ==========================================
+# 11. RESEARCH EVIDENCE & CONTROLLED BENCHMARKING
+# ==========================================
+
+class ResearchTestRun(Base):
+    """
+    Groups controlled empirical research test executions across Specific Objectives 1-6.
+    """
+    __tablename__ = "research_test_runs"
+
+    id           = Column(Integer, primary_key=True, autoincrement=True)
+    test_id      = Column(String(100), unique=True, index=True, nullable=False) # e.g. O1-JOE-001, O1-RET-001
+    objective    = Column(String(50), nullable=False, default="Objective 1")
+    test_name    = Column(String(100), nullable=False)
+    started_at   = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    duration_ms  = Column(Float, nullable=True)
+    status       = Column(String(20), default="SUCCESS", index=True) # SUCCESS, FAILED, CANCELLED
+    tester       = Column(String(100), nullable=True)
+    created_at   = Column(TIMESTAMP, default=datetime.now, index=True)
+
+    measurements = relationship("ResearchMeasurement", back_populates="test_run", cascade="all, delete-orphan")
+
+
+class ResearchMeasurement(Base):
+    """
+    Granular, permanent research measurements for dissertation Chapter 4 evidence.
+    Separated from ordinary business audit logs to ensure transactional isolation.
+    """
+    __tablename__ = "research_measurements"
+
+    id               = Column(Integer, primary_key=True, autoincrement=True)
+    test_run_id      = Column(Integer, ForeignKey("research_test_runs.id", ondelete="CASCADE"), nullable=True)
+    objective        = Column(String(50), nullable=False, default="Objective 1")
+    measurement_type = Column(String(50), nullable=False, index=True) # JOB_ORDER_CREATED, JOB_ORDER_RETRIEVED, MANUAL_JOB_ORDER_ENTRY_TEST, etc.
+    reference_id     = Column(String(100), index=True, nullable=True) # Order #, Scenario ID, etc.
+    started_at       = Column(DateTime, nullable=True)
+    completed_at     = Column(DateTime, nullable=True)
+    duration_ms      = Column(Float, nullable=False)
+    status           = Column(String(20), nullable=False, default="SUCCESS", index=True) # SUCCESS, FAILED, CANCELLED
+    value_numeric    = Column(Float, nullable=True)
+    value_text       = Column(String(255), nullable=True)
+    metadata_json    = Column(JSON, nullable=True)
+    created_at       = Column(TIMESTAMP, default=datetime.now, index=True)
+
+    test_run = relationship("ResearchTestRun", back_populates="measurements")
+
+

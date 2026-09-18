@@ -30,13 +30,14 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useServices } from '@/app/context/ServiceContext';
 import EditOrderModal from '@/app/components/EditOrderModal';
 import OrderDetailModal from '@/app/components/OrderDetailModal';
+import { toServiceCode, chunkServiceCodesTwoPerRow } from '@/app/lib/businessRules';
 import { toast } from 'sonner';
 import type { JobOrder } from '@/app/types';
-import { isCancelledOrder, isDateInRange, orderEventDate, type ReportRange } from '@/app/lib/salesAnalytics';
+import { isCancelledOrder, isDateInRange, orderEventDate, getOrderPaidAmount, getOrderRetainedAmount, type ReportRange } from '@/app/lib/salesAnalytics';
 
 type TotalOrdersProps = {
     onSetHeaderActionRight?: (action: ReactNode | null) => void;
-    user: { token: string; role: 'owner' | 'staff' | 'admin'; username: string };
+    user: { token: string; role: 'owner' | 'staff' | 'admin' | 'front staff'; username: string };
 };
 
 function FormattedDateInput({ value, onChange, className, id }: { value: string; onChange: (val: string) => void; className?: string; id?: string }) {
@@ -191,6 +192,17 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
     const { services } = useServices();
     const baseServices = (services || []).filter((s) => s?.category === 'base' && s?.active);
 
+    const activeFilterCount = useMemo(() => {
+        let count = 0;
+        if (filterService !== 'all') count++;
+        if (filterPriority !== 'all') count++;
+        if (filterPaymentStatus !== 'all') count++;
+        if (filterOrderStatus !== 'all') count++;
+        if (startDate) count++;
+        if (endDate) count++;
+        return count;
+    }, [filterService, filterPriority, filterPaymentStatus, filterOrderStatus, startDate, endDate]);
+
     useEffect(() => {
         if (!onSetHeaderActionRight) return;
 
@@ -321,14 +333,9 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
     const activeOrdersCount = baseFilteredOrders.filter((order) => 
         order.status !== 'claimed' && (order.status as string)?.toLowerCase() !== 'cancelled' && (order.status as string)?.toLowerCase() !== 'canceled'
     ).length;
-    const allCancelledOrders = useMemo(() => {
-        return (orders || []).filter(isCancelledOrder);
-    }, [orders]);
-
     const cancelledOrdersCount = useMemo(() => {
-        const inPeriod = baseFilteredOrders.filter(isCancelledOrder).length;
-        return inPeriod > 0 ? inPeriod : allCancelledOrders.length;
-    }, [baseFilteredOrders, allCancelledOrders]);
+        return baseFilteredOrders.filter(isCancelledOrder).length;
+    }, [baseFilteredOrders]);
 
     // Table orders filtered by the active card filter
     const filteredOrders = useMemo(() => {
@@ -341,25 +348,7 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
         } else if (cardFilter === 'active') {
             filtered = filtered.filter((order) => order.status !== 'claimed' && !isCancelledOrder(order));
         } else if (cardFilter === 'cancelled') {
-            const inPeriod = baseFilteredOrders.filter(isCancelledOrder);
-            if (inPeriod.length > 0) {
-                filtered = inPeriod;
-            } else {
-                filtered = (orders || []).filter((order) => {
-                    if (!isCancelledOrder(order)) return false;
-                    if (filterService !== 'all') {
-                        if (Array.isArray(order.baseService)) return order.baseService.some(s => String(s || '').toLowerCase().includes(filterService.toLowerCase()));
-                        if (typeof order.baseService === 'string') return (order.baseService as string).toLowerCase().includes(filterService.toLowerCase());
-                        return false;
-                    }
-                    if (filterPriority !== 'all' && order.priorityLevel !== filterPriority) return false;
-                    if (searchQuery) {
-                        const q = searchQuery.toLowerCase();
-                        return String(order.customerName || '').toLowerCase().includes(q) || String(order.orderNumber || order.id || '').toLowerCase().includes(q);
-                    }
-                    return true;
-                });
-            }
+            filtered = filtered.filter(isCancelledOrder);
         }
 
         // Sort: Recently updated/created first, then by priority, then by Order Number descending
@@ -544,7 +533,7 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
 
                             <Button
                                 variant="outline"
-                                className={`h-10 w-10 p-0 rounded-xl transition-colors flex-shrink-0 ${filterService !== 'all' || filterPriority !== 'all' || filterPaymentStatus !== 'all' || filterOrderStatus !== 'all' || startDate || endDate
+                                className={`relative h-10 w-10 p-0 rounded-xl transition-colors flex-shrink-0 ${activeFilterCount > 0
                                     ? 'border-red-600 text-red-600 bg-red-50 hover:bg-red-100'
                                     : 'border-gray-200 text-gray-500 hover:border-red-600 hover:text-red-600 hover:bg-red-50'
                                     }`}
@@ -557,22 +546,22 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                     </div>
                 </CardHeader>
                 <CardContent className="pt-0 px-2 sm:px-4 md:px-6">
-                    <div className="overflow-x-auto w-full">
-                        <Table className="w-full table-fixed min-w-0 text-xs">
+                    <div className="overflow-x-auto overflow-y-auto max-h-[620px] w-full custom-scrollbar pb-1 rounded-lg border border-gray-100">
+                        <Table className="w-full table-fixed text-xs min-w-[850px]">
                             <colgroup>
                                 <col className="w-[12%]" />
                                 <col className="w-[15%]" />
-                                <col className="w-[15%]" />
+                                <col className="w-[16%]" />
                                 <col className="w-[5%]" />
                                 <col className="w-[9%]" />
                                 <col className="w-[8%]" />
                                 <col className="w-[10%]" />
-                                <col className="w-[12%]" />
+                                <col className="w-[11%]" />
                                 <col className="w-[8%]" />
                                 <col className="w-[6%]" />
                             </colgroup>
-                            <TableHeader className="bg-red-50/50 border-b border-red-100">
-                                <TableRow className="border-b border-red-100 hover:bg-transparent">
+                            <TableHeader className="bg-red-50/95 backdrop-blur-xs border-b border-red-100 sticky top-0 z-10 shadow-xs">
+                                <TableRow className="border-b border-red-100 hover:bg-transparent bg-red-50/95">
                                     <TableHead className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Order #</TableHead>
                                     <TableHead className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Customer</TableHead>
                                     <TableHead className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px]">Services</TableHead>
@@ -601,18 +590,38 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                                     paginatedOrders.map((order: JobOrder) => {
                                         const orderDate = new Date(order.createdAt || (order as any).transactionDate);
                                         const pStatus = order.paymentStatus || '';
-                                        const servicesList = (Array.isArray(order.baseService)
+                                        const baseSvcs = (Array.isArray(order.baseService)
                                             ? order.baseService
                                             : String(order.baseService || '').split(',')
                                         )
                                             .flatMap((s) => String(s || '').split(','))
                                             .map((s) => String(s || '').trim().replace(' (with basic cleaning)', ''))
                                             .filter(Boolean);
+
+                                        const addonSvcs = (Array.isArray(order.addOns)
+                                            ? order.addOns
+                                            : String(order.addOns || '').split(',')
+                                        )
+                                            .flatMap((a: any) => {
+                                                if (!a) return [];
+                                                if (typeof a === 'string') return a.split(',');
+                                                return [a.name || a.service_name || a.service_code || ''];
+                                            })
+                                            .map((s) => String(s || '').trim())
+                                            .filter(Boolean);
+
+                                        const rawServicesList = [...baseSvcs, ...addonSvcs];
+                                        const servicesList = rawServicesList.length > 0 ? rawServicesList : baseSvcs;
+                                        const serviceLines = chunkServiceCodesTwoPerRow(servicesList);
                                         const isCancelled = order.status === 'cancelled' || (order.status as string)?.toLowerCase() === 'cancelled' || (order.status as string)?.toLowerCase() === 'canceled';
 
                                         return (
                                         <TableRow key={order.id} onClick={() => setViewingOrder(order)} className="border-b border-gray-100 hover:bg-gray-50/80 transition-all cursor-pointer">
-                                            <TableCell className="px-2 py-2 text-center text-[11px] font-semibold whitespace-nowrap text-gray-800" title={order.orderNumber || order.id || '-'}>{order.orderNumber || order.id || '-'}</TableCell>
+                                            <TableCell className="px-2 py-2 text-center text-[11px] font-semibold whitespace-nowrap text-gray-800 max-w-0">
+                                                <span className="block truncate" title={order.orderNumber || order.id || '-'}>
+                                                    {order.orderNumber || order.id || '-'}
+                                                </span>
+                                            </TableCell>
                                             <TableCell className="px-2 py-2 text-center">
                                                 <div className="flex flex-col items-center justify-center text-center w-full min-w-0">
                                                     <div className="text-xs font-bold text-gray-900 leading-tight truncate max-w-full" title={order.customerName || 'Walk-In'}>{order.customerName || 'Walk-In'}</div>
@@ -623,12 +632,15 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                                             </TableCell>
                                             <TableCell className="px-2 py-2 text-center text-[11px] font-semibold text-gray-800 whitespace-normal break-words">
                                                 {servicesList.length > 0 ? (
-                                                    <div className="flex flex-col items-center justify-center text-center text-[10.5px] font-semibold text-gray-800 leading-tight" title={servicesList.join(', ')}>
-                                                        {servicesList.slice(0, 3).map((srv, idx) => (
-                                                            <span key={idx} className="block text-[10.5px] font-semibold text-gray-800 leading-tight">
-                                                                {srv}{idx < servicesList.length - 1 ? ',' : ''}
+                                                    <div className="flex flex-col items-center justify-center text-center text-[10.5px] font-bold text-gray-800 leading-tight" title={servicesList.map(s => `${toServiceCode(s)} (${s})`).join(', ')}>
+                                                        {serviceLines.slice(0, 3).map((line, idx) => (
+                                                            <span key={idx} className="block text-[10.5px] font-bold text-gray-800 leading-tight">
+                                                                {line}
                                                             </span>
                                                         ))}
+                                                        {serviceLines.length > 3 && (
+                                                            <span className="text-[9px] text-gray-400 leading-none">+{servicesList.length - 6} more</span>
+                                                        )}
                                                     </div>
                                                 ) : (
                                                     <span className="text-gray-400 italic font-normal text-center block">-</span>
@@ -682,20 +694,20 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                                                      {isCancelled ? (
                                                          order.refundStatus === 'refunded' ? (
                                                              <>
-                                                                 <span className="text-[10px] font-bold tracking-wider text-rose-600">
-                                                                     CANCELLED (REFUNDED)
+                                                                 <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase border whitespace-nowrap bg-blue-50 text-blue-700 border-blue-200">
+                                                                     REFUNDED
                                                                  </span>
-                                                                 <span className="text-[9px] text-rose-600 font-medium tracking-wider mt-0.5">
-                                                                     Refund: {formatPeso(Number(order.refundAmount || order.amountReceived || order.depositAmount || order.grandTotal || 0))}
+                                                                 <span className="text-[9px] text-blue-600 font-medium tracking-wider mt-0.5">
+                                                                     Refund: {formatPeso(Number(order.refundAmount || (order.refundStatus === 'refunded' ? getOrderPaidAmount(order) : 0)))}
                                                                  </span>
                                                              </>
                                                          ) : (
                                                              <>
-                                                                 <span className="text-[10px] font-bold tracking-wider text-amber-700">
-                                                                     CANCELLED (RETAINED)
+                                                                 <span className="inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase border whitespace-nowrap bg-purple-50 text-purple-700 border-purple-200">
+                                                                     RETAINED
                                                                  </span>
-                                                                 <span className="text-[9px] text-amber-700 font-medium tracking-wider mt-0.5">
-                                                                     Retained: {formatPeso(Number(order.amountReceived || order.depositAmount || 0))}
+                                                                 <span className="text-[9px] text-purple-700 font-medium tracking-wider mt-0.5">
+                                                                     Retained: {formatPeso(getOrderRetainedAmount(order))}
                                                                  </span>
                                                              </>
                                                          )
@@ -742,18 +754,33 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                                                                <DropdownMenuItem
                                                                    onClick={(e) => {
                                                                        e.stopPropagation();
-                                                                       const targetStage = order.cancellationStage || 'new-order';
+                                                                       const pre = order.preCancellationState;
+                                                                       const targetStage = (pre?.status || order.cancellationStage || 'new-order') as any;
+                                                                       const restoredPaymentStatus = pre?.paymentStatus || (Number(order.balance || 0) <= 0 ? 'fully-paid' : 'downpayment');
+                                                                       const restoredAmountReceived = pre?.amountReceived != null ? pre.amountReceived : order.amountReceived;
+                                                                       const restoredBalance = pre?.balance != null ? pre.balance : order.balance;
+                                                                       const restoredDepositAmount = pre?.depositAmount != null ? pre.depositAmount : order.depositAmount;
+
                                                                        updateOrder(order.id, {
-                                                                           status: targetStage as any,
+                                                                           status: targetStage,
                                                                            cancellationStage: null as any,
                                                                            refundStatus: null as any,
                                                                            refundAmount: 0,
                                                                            refundReason: null as any,
                                                                            cancelledAt: null as any,
+                                                                           preCancellationState: null as any,
+                                                                           paymentStatus: restoredPaymentStatus as any,
+                                                                           amountReceived: restoredAmountReceived,
+                                                                           balance: restoredBalance,
+                                                                           depositAmount: restoredDepositAmount,
+                                                                           ...(pre?.paymentMethod ? { paymentMethod: pre.paymentMethod } : {}),
+                                                                           ...(pre?.initialPaymentMethod ? { initialPaymentMethod: pre.initialPaymentMethod } : {}),
+                                                                           ...(pre?.finalPaymentMethod ? { finalPaymentMethod: pre.finalPaymentMethod } : {}),
+                                                                           ...(pre?.paymentHistory ? { paymentHistory: pre.paymentHistory } : {}),
                                                                            updatedAt: new Date()
                                                                        }, user.username);
                                                                        const wasRefunded = order.refundStatus === 'refunded';
-                                                                       toast.success(`Order #${order.orderNumber} restored to ${targetStage.replace('-', ' ')} (${wasRefunded ? 'Refund Undone' : 'Cancellation Undone'})`);
+                                                                       toast.success(`Order #${order.orderNumber} restored to ${String(targetStage).replace('-', ' ')} (${wasRefunded ? 'Refund Undone' : 'Cancellation Undone'})`);
                                                                    }}
                                                                    className="border border-purple-200 rounded-md px-2.5 py-1.5 text-purple-700 bg-purple-50 hover:bg-purple-100 focus:text-purple-800 focus:bg-purple-100 font-bold cursor-pointer"
                                                                >

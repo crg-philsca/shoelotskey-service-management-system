@@ -210,7 +210,14 @@ class ShoelotskeyPredictor:
 
     def _parse_base_date(self, order_data: dict) -> datetime:
         base_date = datetime.now()
-        td_iso = order_data.get("transactionDate") or order_data.get("createdAt")
+        td_iso = (
+            order_data.get("transactionDate")
+            or order_data.get("orderDate")
+            or order_data.get("createdAt")
+            or order_data.get("created_at")
+            or order_data.get("dateReceived")
+            or order_data.get("date_received")
+        )
         if not td_iso:
             return base_date
         try:
@@ -370,34 +377,25 @@ class ShoelotskeyPredictor:
         rf_days = float(self.model.predict([row])[0])
         priority = str(order_data.get("priorityLevel") or "").lower()
         
-        # Calibrate ML prediction to operational baseline targets:
-        # Basic Cleaning: close/exact to 10 days
-        # Basic Cleaning + Minor Reglue: close/exact to 25 days
-        # Full Reglue: close/exact to 25 days
-        official_base = calculate_official_release_days(order_data, self._service_duration_map(db))
-        if official_base > 0:
-            delta = (rf_days - 4.0) * 0.25
-            calibrated = official_base + delta
-            if priority == "rush":
-                rush_red = float(order_data.get("rushReductionDays") or 9)
-                calibrated = max(1.0, calibrated - rush_red)
-            predicted_days = max(1, int(round(calibrated)))
-        else:
-            if priority == "rush":
-                rush_red = float(order_data.get("rushReductionDays") or 9)
-                rf_days = max(1.0, rf_days - rush_red)
-            predicted_days = max(1, int(round(rf_days)))
+        # Genuine Random Forest prediction without artificial business-rule clamping.
+        # Bounded only by physiological service duration limits: min 1 day, max MAX_ML_COMPLETION_DAYS (60 days).
+        MAX_ESTIMATED_DAYS = 60.0
 
-        upper_bound = max(heuristic_days * 4, heuristic_days + 30, 60)
+        if priority == "rush":
+            rush_red = float(order_data.get("rushReductionDays") or 9)
+            rf_days = max(1.0, rf_days - rush_red)
+        
+        predicted_days = max(1, int(round(rf_days)))
+
         result["ml_predicted_days"] = predicted_days
         self.last_ml_days = result["ml_predicted_days"]
         self.last_prediction_source = "random_forest"
 
-        if rf_days < 1 or rf_days > upper_bound:
+        if rf_days < 1 or rf_days > MAX_ESTIMATED_DAYS:
             result["ml_status"] = "invalid"
             result["ml_reason"] = (
                 f"Prediction outside valid service-duration range "
-                f"(1–{upper_bound:.0f} days). Random Forest predicted {rf_days:.1f} days."
+                f"(1–{MAX_ESTIMATED_DAYS:.0f} days). Random Forest predicted {rf_days:.1f} days."
             )
             self.last_fallback_reason = result["ml_reason"]
             self.last_ml_status = "invalid"
@@ -499,7 +497,9 @@ def live_order_payload_from_db_order(db_order, extra: Optional[dict] = None) -> 
         "transactionDate": db_order.created_at.isoformat() if getattr(db_order, "created_at", None) else None,
     }
     if extra:
-        payload.update({k: v for k, v in extra.items() if v is not None})
+        payload.update({k: v for k, v in extra.items() if v is not None and (k != "transactionDate" or str(v).strip())})
+    if getattr(db_order, "created_at", None) and not payload.get("transactionDate"):
+        payload["transactionDate"] = db_order.created_at.isoformat()
     return payload
 
 

@@ -631,3 +631,62 @@ Cash
     bal = extracted.get("balance")
     if bal is not None:
         assert abs(float(bal) - 650.0) > 0.009
+
+
+def test_incomplete_orders_allow_empty_release_and_claimed_dates():
+    from datetime import datetime
+    from types import SimpleNamespace
+    from api.historical_processing import normalize_historical_timeline, apply_normalized_timeline, apply_queue_review_action
+
+    item = SimpleNamespace(
+        historical_item_id=1,
+        brand="Nike",
+        model="Air Force 1",
+        color="White",
+        size="US 9",
+        item_price=325.0,
+        remarks="",
+        claimed_date=None,
+        services=[SimpleNamespace(service_name="BC", service_type="base", price=325.0)],
+    )
+    # An incomplete order where paper scan has no release or claimed dates
+    order = SimpleNamespace(
+        historical_order_id=999,
+        order_id="ORD-2025-08-17-001",
+        date_received=datetime(2025, 8, 17),
+        original_estimated_release_date=None,
+        claimed_date=None,
+        completion_days=None,
+        priority="regular",
+        items=[item],
+        audit_trail=[],
+        ocr_status="Pending Review",
+        sync_status="pending",
+        grand_total=325.0,
+        downpayment=None,
+        balance=325.0,
+    )
+
+    # 1. Timeline normalization must NOT invent dates
+    timeline = normalize_historical_timeline(order)
+    assert timeline["expected_release"] is None
+    assert timeline["claimed_date"] is None
+    assert timeline["completion_days"] is None
+
+    # 2. Applying normalized timeline must keep dates None
+    apply_normalized_timeline(order)
+    assert order.original_estimated_release_date is None
+    assert order.claimed_date is None
+    assert order.completion_days is None
+
+    # 3. Saving corrections with empty/null strings must set them to None
+    corrections = {
+        "expected_release_date": "",
+        "claimed_date": None,
+        "completion_days": None,
+    }
+    apply_queue_review_action("save", None, order, corrections, SimpleNamespace())
+    assert order.original_estimated_release_date is None
+    assert order.claimed_date is None
+    assert order.completion_days is None
+

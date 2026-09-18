@@ -1,6 +1,6 @@
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator, field_serializer
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 import re
 
@@ -70,6 +70,15 @@ class UserSchema(BaseModel):
     role: Optional[RoleSchema] = None
     failed_login_attempts: Optional[int] = 0
     locked_until: Optional[datetime] = None
+
+    @field_serializer('locked_until')
+    def serialize_locked_until(self, dt: Optional[datetime], _info):
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.isoformat()
+
     class Config:
         from_attributes = True
 
@@ -234,10 +243,12 @@ class OrderSchema(BaseModel):
     inventory_applied: bool = False
     inventory_used: Optional[Any] = None
     cancellation_stage: Optional[str] = None
+    cancellation_reason: Optional[str] = None
     refund_status: Optional[str] = None
     refund_amount: Optional[Decimal] = Decimal('0.0')
     refund_reason: Optional[str] = None
     cancelled_at: Optional[datetime] = None
+    pre_cancellation_state: Optional[Any] = None
     
     customer: Optional[CustomerSchema] = None
     status: Optional[StatusSchema] = None
@@ -390,8 +401,20 @@ class InventoryLogSchema(BaseModel):
     change_amount: float
     action_type: str
     order_id: Optional[int] = None
+    service_name: Optional[str] = None
+    execution_ref: Optional[str] = None
     user_id: int
     created_at: datetime
+    class Config:
+        from_attributes = True
+
+class OrderMaterialPayload(BaseModel):
+    item_id: Optional[int] = None
+    inventory_id: int
+    quantity: float
+    unit: Optional[str] = None
+    notes: Optional[str] = None
+    idempotency_key: Optional[str] = None
     class Config:
         from_attributes = True
 
@@ -475,4 +498,13 @@ class HistoricalOrderCreateSchema(BaseModel):
     balance: Decimal = 0.0
     priority: str = "regular"
     items: List[HistoricalItemSchema] = []
+
+class OpenCashRegisterRequest(BaseModel):
+    opening_cash: float = Field(..., ge=0, description="Beginning physical cash fund")
+    business_date: Optional[str] = None
+
+class CloseCashRegisterRequest(BaseModel):
+    session_id: Optional[int] = None
+    actual_cash: float = Field(..., ge=0, description="Actual physical cash counted")
+    variance_reason: Optional[str] = None
 

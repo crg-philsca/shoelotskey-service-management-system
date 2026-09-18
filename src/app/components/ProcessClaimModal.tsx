@@ -5,7 +5,7 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { JobOrder, PaymentMethod, InventoryUsed, PaymentRecord } from "@/app/types";
-import { CheckCircle2, User, ShieldAlert, Wrench, ShoppingBag, Trash2, Printer, RotateCcw } from "lucide-react";
+import { CheckCircle2, User, ShieldAlert, Wrench, ShoppingBag, Trash2, Printer, RotateCcw, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { formatReferenceNo } from "@/app/lib/utils";
 import { useInventory } from "@/app/context/InventoryContext";
@@ -76,7 +76,8 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
     const [purchasedProducts, setPurchasedProducts] = useState<InventoryUsed[]>([]);
     const [selectedRetailToAdd, setSelectedRetailToAdd] = useState<string>('');
     const [retailQtyInput, setRetailQtyInput] = useState<string>("1");
-    const [retailPriceInput, setRetailPriceInput] = useState<string>("0");
+    const [retailPriceInput, setRetailPriceInput] = useState<string>("0.00");
+    const [amountReceivedStr, setAmountReceivedStr] = useState<string>('');
 
     // Receipt modal state
     const [showReceipt, setShowReceipt] = useState(false);
@@ -87,6 +88,7 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
             setClaimedBy(order.customerName);
             setPaymentMethod("cash");
             setAmountReceived(0);
+            setAmountReceivedStr('0.00');
             setChange(0);
             setReferenceNo("");
             setEnableRefund(false);
@@ -123,13 +125,13 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
         }
     }, [order, open]);
 
-    // Update default price when selecting a retail-flagged inventory item
+    // Update default price with 2 decimal places when selecting a retail-flagged inventory item
     useEffect(() => {
         if (selectedRetailToAdd) {
             const item = inventoryData.find(i => i.id.toString() === selectedRetailToAdd);
             if (item) {
                 const retailPrice = Number(item.retail_price || 0);
-                setRetailPriceInput(String(retailPrice > 0 ? retailPrice : 0));
+                setRetailPriceInput(retailPrice > 0 ? retailPrice.toFixed(2) : '0.00');
             }
         }
     }, [selectedRetailToAdd, inventoryData]);
@@ -144,6 +146,18 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
     const effectiveTotal = Math.max(0, totalAmount - (enableRefund ? refundAmount : 0));
     const isFullyPaid = order?.paymentStatus === 'fully-paid' && retailTotal === 0 && (!enableRefund || refundAmount === 0);
     const remainingBalance = isFullyPaid ? 0 : Math.max(0, effectiveTotal - amountPaid);
+
+    useEffect(() => {
+        if (remainingBalance > 0) {
+            setAmountReceived(remainingBalance);
+            setAmountReceivedStr(remainingBalance.toFixed(2));
+            setChange(0);
+        } else {
+            setAmountReceived(0);
+            setAmountReceivedStr('0.00');
+            setChange(0);
+        }
+    }, [remainingBalance]);
 
     useEffect(() => {
         if (remainingBalance > 0) {
@@ -349,7 +363,11 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
         }
 
         // Preserve initial payment method and track payment history
-        const initialMethod = order.initialPaymentMethod || order.paymentMethod || 'cash';
+        const cleanInitialRef = order.referenceNo ? order.referenceNo.replace(/\D/g, '') : '';
+        const isInitialGCash = cleanInitialRef.length === 13;
+        const isInitialMaya = order.referenceNo ? order.referenceNo.replace(/[^a-zA-Z0-9]/g, '').length === 12 : false;
+        const detectedInitial = isInitialGCash ? 'gcash' : (isInitialMaya ? 'maya' : undefined);
+        const initialMethod = detectedInitial || order.initialPaymentMethod || order.paymentMethod || 'cash';
         const initialAmount = order.depositAmount || order.amountReceived || 0;
         const initialRef = order.referenceNo;
         const initialDate = order.createdAt || order.transactionDate || timestamp;
@@ -481,32 +499,54 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
 
                     <div className="p-4 space-y-3.5 overflow-y-auto flex-1 min-h-0 custom-scrollbar">
                         {/* Compact Order Summary Card */}
-                        <div className="bg-[#F9FAFB] p-3 rounded-xl border border-gray-100 flex flex-col gap-2 shadow-sm">
-                            <div className="flex justify-between items-start border-b border-gray-200/50 pb-2">
+                        <div className="bg-[#F9FAFB] p-3.5 rounded-xl border border-gray-200/80 flex flex-col gap-2.5 shadow-sm">
+                            <div className="flex justify-between items-start border-b border-gray-200/70 pb-2">
                                 <div>
                                     <p className="text-[9px] text-gray-400 font-black uppercase tracking-widest">Order ID</p>
                                     <p className="text-[11px] font-bold text-gray-900">{order.orderNumber}</p>
                                 </div>
                                 <div className="text-right">
                                     <p className="text-[9px] text-gray-400 font-black uppercase tracking-widest">Customer</p>
-                                    <p className="text-[11px] font-bold text-gray-900 truncate max-w-[140px]">{order.customerName}</p>
+                                    <p className="text-[11px] font-bold text-gray-900 truncate max-w-[160px]">{order.customerName}</p>
                                 </div>
                             </div>
 
-                            <div className="flex justify-between items-center pt-0.5">
-                                <div>
-                                    <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Balance Due</p>
-                                    <p className={`text-xl font-black leading-none tracking-tight ${remainingBalance > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                                        ₱{remainingBalance.toFixed(2)}
+                            {/* Prominent Grand Total and Balance Due side by side */}
+                            <div className="grid grid-cols-2 gap-2.5 pt-0.5">
+                                <div className="p-2.5 bg-white rounded-xl border border-gray-200 shadow-2xs flex flex-col justify-between">
+                                    <div className="flex items-center justify-between gap-1 flex-wrap">
+                                        <p className="text-[9px] text-gray-500 font-black uppercase tracking-wider">Grand Total</p>
+                                        {retailTotal > 0 && (
+                                            <span className="text-[8px] font-black text-sky-700 bg-sky-50 border border-sky-200 px-1.5 py-0.5 rounded leading-none">
+                                                +{retailTotal.toFixed(2)} retail
+                                            </span>
+                                        )}
+                                    </div>
+                                    <p className="text-lg sm:text-xl font-black text-slate-900 leading-tight mt-1 tracking-tight">
+                                        ₱{effectiveTotal.toFixed(2)}
+                                    </p>
+                                    <p className="text-[9px] text-gray-400 font-semibold mt-0.5 truncate">
+                                        Paid: ₱{(amountPaid || 0).toFixed(2)}
                                     </p>
                                 </div>
-                                <div className="text-right flex flex-col items-end gap-0.5">
-                                    <div className="px-2 py-0.5 bg-white border border-gray-200 rounded-full text-[9px] font-bold text-gray-600 whitespace-nowrap">
-                                        Total: ₱{effectiveTotal.toFixed(2)} {retailTotal > 0 && `(incl. +₱${retailTotal} retail)`}
+
+                                <div className={`p-2.5 rounded-xl border shadow-2xs flex flex-col justify-between ${remainingBalance > 0 ? 'bg-red-50/70 border-red-200' : 'bg-emerald-50/70 border-emerald-200'}`}>
+                                    <div className="flex items-center justify-between gap-1">
+                                        <p className={`text-[9px] font-black uppercase tracking-wider ${remainingBalance > 0 ? 'text-red-700' : 'text-emerald-700'}`}>
+                                            Balance Due
+                                        </p>
+                                        {remainingBalance > 0 && (
+                                            <span className="text-[8px] font-black text-red-700 bg-white border border-red-200 px-1.5 py-0.5 rounded leading-none">
+                                                To Pay
+                                            </span>
+                                        )}
                                     </div>
-                                    <div className="px-2 py-0.5 bg-emerald-50 border border-emerald-100 rounded-full text-[9px] font-bold text-emerald-600 whitespace-nowrap">
-                                        Previously Paid: ₱{(order.amountReceived || 0).toFixed(2)}
-                                    </div>
+                                    <p className={`text-lg sm:text-xl font-black leading-tight mt-1 tracking-tight ${remainingBalance > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                                        ₱{remainingBalance.toFixed(2)}
+                                    </p>
+                                    <p className={`text-[9px] font-bold mt-0.5 ${remainingBalance > 0 ? 'text-red-500' : 'text-emerald-600'}`}>
+                                        {remainingBalance > 0 ? 'Settlement required' : 'Fully settled'}
+                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -741,8 +781,13 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
                                                     <Input
                                                         type="number"
                                                         min="0"
+                                                        step="0.01"
                                                         value={retailPriceInput}
                                                         onChange={(e) => setRetailPriceInput(e.target.value)}
+                                                        onBlur={() => {
+                                                            const val = parseFloat(retailPriceInput);
+                                                            if (!isNaN(val)) setRetailPriceInput(val.toFixed(2));
+                                                        }}
                                                         className="h-7 text-xs font-black text-center bg-white border-sky-200 text-emerald-700 rounded"
                                                     />
                                                 </div>
@@ -751,7 +796,7 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
                                                         type="button"
                                                         onClick={handleAddRetailProduct}
                                                         disabled={!selectedRetailToAdd}
-                                                        className="w-full h-7 bg-sky-600 hover:bg-sky-700 text-white font-black text-[10px] uppercase rounded"
+                                                        className="w-full h-7 bg-red-600 hover:bg-red-700 text-white font-black text-[10px] uppercase rounded shadow-sm hover:shadow active:scale-[0.98] transition-all"
                                                     >
                                                         Add Item
                                                     </Button>
@@ -805,18 +850,54 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
                                         </div>
 
                                         <div className="space-y-1">
-                                            <Label className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Amount</Label>
+                                            <div className="flex items-center justify-between">
+                                                <Label className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Amount</Label>
+                                                {paymentMethod === 'cash' && remainingBalance > 0 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setAmountReceived(remainingBalance);
+                                                            setAmountReceivedStr(remainingBalance.toFixed(2));
+                                                        }}
+                                                        className="text-[9px] font-bold text-red-600 hover:text-red-700 underline"
+                                                    >
+                                                        Exact (₱{remainingBalance.toFixed(2)})
+                                                    </button>
+                                                )}
+                                            </div>
                                             <div className="relative">
                                                 <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-300">₱</span>
                                                 <Input
                                                     type="number"
                                                     min={remainingBalance}
-                                                    value={amountReceived || ''}
-                                                    onChange={(e) => setAmountReceived(parseFloat(e.target.value) || 0)}
-                                                    className="h-9 pl-6 text-[12px] font-black bg-white border-gray-200 rounded-lg focus:ring-red-50 text-red-600 shadow-sm"
+                                                    step="0.01"
+                                                    value={amountReceivedStr}
+                                                    onChange={(e) => {
+                                                        setAmountReceivedStr(e.target.value);
+                                                        const val = parseFloat(e.target.value);
+                                                        setAmountReceived(isNaN(val) ? 0 : val);
+                                                    }}
+                                                    onBlur={() => {
+                                                        const val = parseFloat(amountReceivedStr);
+                                                        if (!isNaN(val) && val > 0) {
+                                                            setAmountReceivedStr(val.toFixed(2));
+                                                            setAmountReceived(val);
+                                                        }
+                                                    }}
+                                                    className={`h-9 pl-6 text-[12px] font-black bg-white border rounded-lg focus:ring-red-50 shadow-sm ${
+                                                        remainingBalance > 0 && amountReceived < remainingBalance
+                                                            ? 'border-red-400 text-red-600 focus:border-red-500'
+                                                            : 'border-gray-200 text-emerald-700 focus:border-emerald-400'
+                                                    }`}
                                                     placeholder="0.00"
                                                 />
                                             </div>
+                                            {remainingBalance > 0 && amountReceived < remainingBalance && (
+                                                <p className="text-[10px] font-bold text-red-600 flex items-center gap-1 mt-1">
+                                                    <AlertTriangle size={11} className="shrink-0" />
+                                                    Payment is not enough (Short by ₱{(remainingBalance - amountReceived).toFixed(2)})
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
 
@@ -900,7 +981,7 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
                                         <div className="space-y-1">
                                             <Label className="text-[9px] font-black uppercase text-amber-950 tracking-wider flex items-center justify-between">
                                                 <span>Refund Amount to Deduct</span>
-                                                <span className="text-gray-500 font-bold lowercase text-[9px]">(max ₱{totalAmount})</span>
+                                                <span className="text-gray-500 font-bold lowercase text-[9px]">(max ₱{Number(totalAmount || 0).toFixed(2)})</span>
                                             </Label>
                                             <div className="relative">
                                                 <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-gray-400">₱</span>
@@ -926,25 +1007,38 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
                         </div>
                     </div>
 
-                    <DialogFooter className="bg-[#FAFAFA] border-t border-gray-100 p-3 flex flex-row items-center justify-center gap-3 sm:justify-center shrink-0">
+                    {remainingBalance > 0 && amountReceived < remainingBalance && (
+                        <div className="px-4 py-2 bg-red-50 border-t border-red-200 text-red-700 text-xs font-bold flex items-center gap-2 shrink-0 animate-in fade-in duration-200">
+                            <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                            <span>Payment is not enough to complete claim. Short by ₱{(remainingBalance - amountReceived).toFixed(2)}.</span>
+                        </div>
+                    )}
+
+                    <DialogFooter className="bg-[#FAFAFA] border-t border-gray-100 p-2.5 sm:p-3 flex flex-row items-center justify-center gap-3 shrink-0">
                         <Button
                             variant="outline"
                             size="sm"
                             onClick={() => onOpenChange(false)}
-                            className="flex-1 max-w-[220px] h-10 text-[10px] font-black uppercase tracking-widest text-gray-700 border-gray-300 bg-white hover:bg-gray-100 hover:text-gray-900 rounded-xl transition-colors"
+                            className="flex-1 min-w-[140px] max-w-[220px] h-9 px-6 text-[11px] font-black uppercase tracking-wider text-gray-700 border-gray-300 bg-white hover:bg-gray-100 hover:text-gray-900 rounded-xl transition-all"
                         >
                             Cancel
                         </Button>
                         <Button
                             size="sm"
-                            onClick={handleConfirm}
+                            onClick={() => {
+                                if (remainingBalance > 0 && amountReceived < remainingBalance) {
+                                    toast.error(`Payment is not enough! Remaining balance due is ₱${remainingBalance.toFixed(2)}.`);
+                                    return;
+                                }
+                                handleConfirm();
+                            }}
                             disabled={!claimedBy || !isPaymentValid || isProcessingClaim}
-                            className="flex-1 max-w-[220px] h-10 text-[10px] bg-[#D92D20] hover:bg-[#B42318] text-white font-black uppercase tracking-widest shadow-lg shadow-red-100 rounded-xl transition-all active:scale-95 disabled:opacity-50 disabled:scale-100"
+                            className="flex-1 min-w-[160px] max-w-[240px] h-9 px-6 text-[11px] bg-red-600 hover:bg-red-700 text-white font-black uppercase tracking-wider shadow-md shadow-red-100 rounded-xl transition-all active:scale-95 disabled:opacity-50 disabled:scale-100"
                         >
                             {/* P1-9 FIX: disable + relabel while processing so a rapid double-click
                                 cannot fire a second deduction before the modal transitions to the
                                 receipt view. */}
-                            {isProcessingClaim ? 'Processing...' : 'Claim'}
+                            {isProcessingClaim ? 'Processing...' : 'Claim & Complete'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -1100,18 +1194,26 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
                 </div>
 
                     {/* Action Buttons (Excluded from print) */}
-                    <div className="flex items-center gap-3 p-4 bg-[#FAFAFA] border-t border-gray-100 print:hidden shrink-0">
+                    <div className="flex items-center justify-center gap-3 p-3 bg-[#FAFAFA] border-t border-gray-100 print:hidden shrink-0">
                         <Button
                             variant="outline"
-                            onClick={() => window.print()}
-                            className="flex-1 h-11 rounded-xl text-xs font-black uppercase tracking-widest text-gray-700 border-gray-200 hover:bg-gray-50 flex items-center justify-center gap-2"
+                            onClick={() => {
+                                document.body.classList.add('printing-receipt');
+                                const scrollParent = document.getElementById('print-receipt-content')?.parentElement;
+                                if (scrollParent) scrollParent.scrollTop = 0;
+                                window.print();
+                                setTimeout(() => {
+                                    document.body.classList.remove('printing-receipt');
+                                }, 1000);
+                            }}
+                            className="flex-1 min-w-[150px] max-w-[220px] h-9 px-6 rounded-xl text-[11px] font-black uppercase tracking-wider text-gray-700 border-gray-200 hover:bg-gray-50 flex items-center justify-center gap-2"
                         >
-                            <Printer size={16} />
+                            <Printer size={15} />
                             Print Summary
                         </Button>
                         <Button
                             onClick={() => { setShowReceipt(false); onOpenChange(false); }}
-                            className="flex-1 h-11 rounded-xl text-xs font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-100 justify-center"
+                            className="flex-1 min-w-[150px] max-w-[220px] h-9 px-6 rounded-xl text-[11px] font-black uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-100 justify-center"
                         >
                             Done & Close
                         </Button>

@@ -25,6 +25,7 @@ import { useInventory } from '@/app/context/InventoryContext';
 import { getInventoryPresentation } from '@/app/lib/inventoryPresentation';
 import AddExpenseModal from '@/app/components/AddExpenseModal';
 import ProcessClaimModal from '@/app/components/ProcessClaimModal';
+import { toServiceCode, chunkServiceCodesTwoPerRow } from '@/app/lib/businessRules';
 import {
   Search,
   MoreVertical,
@@ -36,10 +37,10 @@ import {
   Edit,
   ArrowRight,
   PlusCircle,
-  Filter,
-  RotateCcw,
   Clock7,
   PackageOpen,
+  Filter,
+  RotateCcw,
   ClipboardCheck,
   FileText,
   CircleAlert,
@@ -49,10 +50,15 @@ import {
   AlertTriangle,
   CheckCircle2,
   Loader2,
+  Coins,
+  Smartphone,
+  Wallet,
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Cell } from 'recharts';
-import type { JobOrder } from '@/app/types';
+import type { JobOrder, FrontStaffSummary } from '@/app/types';
 import React from 'react';
+
+const API_BASE = (import.meta as any).env?.VITE_API_URL || '/api';
 import {
   buildOrderActivityTrends,
   getOrderActivityPeriodLabel,
@@ -99,7 +105,7 @@ class DashboardErrorBoundary extends React.Component<{children: React.ReactNode}
  * @param onSetHeaderActionRight - Function to inject components into the global header's right action area.
  */
 interface DashboardProps {
-  user: { username: string; role: 'owner' | 'staff' | 'admin'; token: string };
+  user: { username: string; role: 'owner' | 'staff' | 'front staff' | 'admin'; token: string };
   onSetHeaderActionRight?: (action: ReactNode | null) => void;
 }
 
@@ -261,9 +267,32 @@ const TrendTooltip = ({ active, payload, label }: any) => {
 };
 
 function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
-  const role = user.role;
+  const role = (user?.role || '').toLowerCase().trim();
+  const isOwner = ['owner', 'admin'].includes(role);
+  const isFrontStaff = (user?.username || '').toLowerCase().trim() === 'front_staff' || role === 'front staff';
+  const isStaff = !isOwner && !isFrontStaff;
+
+  const [frontStaffSummary, setFrontStaffSummary] = useState<FrontStaffSummary | null>(null);
 
   const { orders, loading, refreshing, updateOrder } = useOrders();
+
+  useEffect(() => {
+    if (!isFrontStaff) return;
+    const fetchFrontStaffSummary = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/dashboard/front-staff-summary`, {
+          headers: { 'Authorization': `Bearer ${user.token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setFrontStaffSummary(data);
+        }
+      } catch (e) {
+        console.error('Failed to load front staff summary:', e);
+      }
+    };
+    fetchFrontStaffSummary();
+  }, [isFrontStaff, user.token, refreshing]);
   const { services } = useServices();
   const [isEditing, setIsEditing] = useState(false);
   const [isUpdatingStock, setIsUpdatingStock] = useState(false);
@@ -414,8 +443,8 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
    * Adapts automatically based on profitRange (Hours for Daily, Days for Weekly, etc.).
    */
   const timeSeriesData = useMemo(
-    () => buildOrderActivityTrends(orders ?? [], profitRange, customStartDate, customEndDate),
-    [orders, profitRange, customStartDate, customEndDate],
+    () => buildOrderActivityTrends(analyticsOrders ?? [], profitRange, customStartDate, customEndDate),
+    [analyticsOrders, profitRange, customStartDate, customEndDate],
   );
 
   const chartTitle = profitRange === 'Quarterly'
@@ -545,9 +574,6 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
             <CardHeader className="text-center pt-5 pb-0 mb-0">
               <CardTitle className="text-center text-base font-bold text-gray-900 uppercase mb-0 pb-0 tracking-tight">
                 Status Summary
-                <span className="ml-2 text-xs font-semibold text-gray-400 normal-case tracking-normal">
-                  ({profitRange === 'Annually' ? 'Annual' : profitRange})
-                </span>
               </CardTitle>
             </CardHeader>
             <CardContent className="flex justify-center pt-0 pb-0 mb-0 -mt-5">
@@ -615,83 +641,160 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                 <CardTitle className="text-center text-base font-bold text-gray-900 uppercase mb-0 pb-0 tracking-tight">Overview Summary</CardTitle>
               </CardHeader>
               <CardContent className="pt-0 pb-0 mb-0 -mt-5">
-                <div className={`grid gap-2 ${role !== 'staff' ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4' : 'grid-cols-1 md:grid-cols-2'}`}>
-                  {/* Card 1: Total Active Orders */}
-                  <Card 
-                    role="button"
-                    tabIndex={0}
-                    aria-label="Navigate to active orders"
-                    onClick={() => navigate('/total-orders', { state: { dateRange: profitRange, customStartDate, customEndDate, filterCard: 'active' } })}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/total-orders', { state: { dateRange: profitRange, customStartDate, customEndDate, filterCard: 'active' } }); } }}
-                    className={`border-none shadow-md bg-white overflow-hidden relative cursor-pointer hover:shadow-lg transition-all ${role === 'staff' ? 'col-span-1 md:col-span-2' : 'col-span-1'}`}
-                  >
-                    <div className="absolute top-0 right-0 p-3 opacity-10">
-                      <FileText size={42} className="text-yellow-600" />
-                    </div>
-                    <CardContent className="pt-4 pb-3 px-4">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">Active Orders</p>
-                      <p className="text-2xl font-black text-yellow-600 tracking-tight">{statusCounts.new + statusCounts.ongoing + statusCounts.forRelease}</p>
-                    </CardContent>
-                  </Card>
-                  {/* Assigned Orders Removed per user request */}
-                  {role !== 'staff' && (
-                    <>
-                      {/* Card 2: Sales (Green) - Next to Active Orders */}
-                      <Card 
-                        role="button"
-                        tabIndex={0}
-                        aria-label="Navigate to total sales"
-                        onClick={() => navigate('/total-sales', { state: { dateRange: profitRange, customStartDate, customEndDate, filterCard: 'all' } })}
-                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/total-sales', { state: { dateRange: profitRange, customStartDate, customEndDate, filterCard: 'all' } }); } }}
-                        className="border-none shadow-md bg-white overflow-hidden relative col-span-1 border-t-4 border-green-500 cursor-pointer hover:shadow-lg transition-all"
-                      >
-                        <div className="absolute top-0 right-0 p-3 opacity-10">
-                          <TrendingUp size={42} className="text-green-600" />
-                        </div>
-                        <CardContent className="pt-4 pb-3 px-4">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">{profitRange === 'Annually' ? 'Annual' : profitRange} Sales</p>
-                          <p className="text-2xl font-black text-green-600 tracking-tight">{formatPeso(netSales)}</p>
-                        </CardContent>
-                      </Card>
+                {isFrontStaff ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+                    {/* Card 1: Total Sales */}
+                    <Card className="border-none shadow-md bg-white overflow-hidden relative col-span-1 border-t-4 border-purple-500">
+                      <div className="absolute top-0 right-0 p-2 opacity-10 pointer-events-none">
+                        <TrendingUp size={36} className="text-purple-600" />
+                      </div>
+                      <CardContent className="pt-4 pb-3 px-3">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5 truncate">Total Sales</p>
+                        <p className="text-xl font-black text-purple-600 tracking-tight">{formatPeso(frontStaffSummary?.total_sales ?? 0)}</p>
+                      </CardContent>
+                    </Card>
 
-                      {/* Card 3: Balance Due (Red) */}
-                      <Card 
-                        role="button"
-                        tabIndex={0}
-                        aria-label="Navigate to balance due sales"
-                        onClick={() => navigate('/total-sales', { state: { dateRange: profitRange, customStartDate, customEndDate, filterCard: 'balance-due' } })}
-                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/total-sales', { state: { dateRange: profitRange, customStartDate, customEndDate, filterCard: 'balance-due' } }); } }}
-                        className="border-none shadow-md bg-white overflow-hidden relative col-span-1 border-t-4 border-red-500 cursor-pointer hover:shadow-lg transition-all"
-                      >
-                        <div className="absolute top-0 right-0 p-3 opacity-10">
-                          <CircleAlert size={42} className="text-red-600" />
-                        </div>
-                        <CardContent className="pt-4 pb-3 px-4">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">{profitRange === 'Annually' ? 'Annual' : profitRange} Balance Due</p>
-                          <p className="text-2xl font-black text-red-600 tracking-tight">{'\u20B1'}{(totalBalanceDue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                        </CardContent>
-                      </Card>
+                    {/* Card 2: Cash Sales */}
+                    <Card className="border-none shadow-md bg-white overflow-hidden relative col-span-1 border-t-4 border-emerald-500">
+                      <div className="absolute top-0 right-0 p-2 opacity-10 pointer-events-none">
+                        <Coins size={36} className="text-emerald-600" />
+                      </div>
+                      <CardContent className="pt-4 pb-3 px-3">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5 truncate">Cash Sales</p>
+                        <p className="text-xl font-black text-emerald-600 tracking-tight">{formatPeso(frontStaffSummary?.cash_sales ?? 0)}</p>
+                      </CardContent>
+                    </Card>
 
-                      {/* Card 4: Total Expenses (Orange) */}
-                      <Card 
-                        role="button"
-                        tabIndex={0}
-                        aria-label="Navigate to expenses report"
-                        onClick={() => navigate('/expenses', { state: { dateRange: profitRange, customStartDate, customEndDate, filterCard: 'all' } })}
-                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/expenses', { state: { dateRange: profitRange, customStartDate, customEndDate, filterCard: 'all' } }); } }}
-                        className="border-none shadow-md bg-white overflow-hidden relative col-span-1 border-t-4 border-orange-500 cursor-pointer hover:shadow-lg transition-all"
-                      >
-                        <div className="absolute top-0 right-0 p-3 opacity-10">
-                          <TrendingDown size={42} className="text-orange-600" />
+                    {/* Card 3: Digital Sales (GCash + Maya) */}
+                    <Card className="border-none shadow-md bg-white overflow-hidden relative col-span-1 border-t-4 border-blue-500">
+                      <div className="absolute top-0 right-0 p-2 opacity-10 pointer-events-none">
+                        <Smartphone size={36} className="text-blue-600" />
+                      </div>
+                      <CardContent className="pt-4 pb-3 px-3">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5 truncate">Digital Sales</p>
+                        <p className="text-xl font-black text-blue-600 tracking-tight">{formatPeso(frontStaffSummary?.digital_sales ?? 0)}</p>
+                      </CardContent>
+                    </Card>
+
+                    {/* Card 4: Balance Due */}
+                    <Card className="border-none shadow-md bg-white overflow-hidden relative col-span-1 border-t-4 border-amber-500">
+                      <div className="absolute top-0 right-0 p-2 opacity-10 pointer-events-none">
+                        <CircleAlert size={36} className="text-amber-600" />
+                      </div>
+                      <CardContent className="pt-4 pb-3 px-3">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5 truncate">Balance Due</p>
+                        <p className="text-xl font-black text-amber-600 tracking-tight">{formatPeso(frontStaffSummary?.balance_due ?? 0)}</p>
+                      </CardContent>
+                    </Card>
+
+                    {/* Card 5: Daily Expenses */}
+                    <Card className="border-none shadow-md bg-white overflow-hidden relative col-span-1 border-t-4 border-rose-500">
+                      <div className="absolute top-0 right-0 p-2 opacity-10 pointer-events-none">
+                        <TrendingDown size={36} className="text-rose-600" />
+                      </div>
+                      <CardContent className="pt-4 pb-3 px-3">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5 truncate">Daily Expenses</p>
+                        <p className="text-xl font-black text-rose-600 tracking-tight">{formatPeso(frontStaffSummary?.daily_expenses ?? 0)}</p>
+                      </CardContent>
+                    </Card>
+
+                    {/* Card 6: Cash on Hand */}
+                    <Card className="border-none shadow-md bg-white overflow-hidden relative col-span-1 border-t-4 border-teal-500">
+                      <div className="absolute top-0 right-0 p-2 opacity-10 pointer-events-none">
+                        <Wallet size={36} className="text-teal-600" />
+                      </div>
+                      <CardContent className="pt-4 pb-3 px-3">
+                        <div className="flex items-center justify-between gap-1 mb-1.5">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 truncate">Cash on Hand</p>
+                          {frontStaffSummary?.session_status === 'OPEN' ? (
+                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">OPEN</span>
+                          ) : (
+                            <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 border border-gray-200">CLOSED</span>
+                          )}
                         </div>
-                        <CardContent className="pt-4 pb-3 px-4">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">{profitRange === 'Annually' ? 'Annual' : profitRange} Expenses</p>
-                          <p className="text-2xl font-black text-orange-600 tracking-tight">{'\u20B1'}{(totalExpenses || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                        </CardContent>
-                      </Card>
-                    </>
-                  )}
-                </div>
+                        <p className="text-xl font-black text-teal-700 tracking-tight">{formatPeso(frontStaffSummary?.cash_on_hand ?? 0)}</p>
+                      </CardContent>
+                    </Card>
+                  </div>
+                ) : (
+                  <div className={`grid gap-2 ${!isStaff ? 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4' : 'grid-cols-1 md:grid-cols-2'}`}>
+                    {/* Card 1: Total Active Orders */}
+                    <Card 
+                      role={isStaff ? undefined : "button"}
+                      tabIndex={isStaff ? undefined : 0}
+                      aria-label={isStaff ? "Active orders" : "Navigate to active orders"}
+                      onClick={isStaff ? undefined : () => navigate('/total-orders', { state: { dateRange: profitRange, customStartDate, customEndDate, filterCard: 'active' } })}
+                      onKeyDown={isStaff ? undefined : (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/total-orders', { state: { dateRange: profitRange, customStartDate, customEndDate, filterCard: 'active' } }); } }}
+                      className={`border-none shadow-md bg-white overflow-hidden relative ${isStaff ? 'col-span-1 md:col-span-2 cursor-default select-none pointer-events-none' : 'col-span-1 cursor-pointer hover:shadow-lg transition-all'}`}
+                    >
+                      <div className="absolute top-0 right-0 p-3 opacity-10">
+                        <FileText size={42} className="text-yellow-600" />
+                      </div>
+                      <CardContent className="pt-4 pb-3 px-4">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">Active Orders</p>
+                        <p className="text-2xl font-black text-yellow-600 tracking-tight">{statusCounts.new + statusCounts.ongoing + statusCounts.forRelease}</p>
+                      </CardContent>
+                    </Card>
+                    {/* Assigned Orders Removed per user request */}
+                    {!isStaff && (
+                      <>
+                        {/* Card 2: Sales (Green) - Next to Active Orders */}
+                        <Card 
+                          role="button"
+                          tabIndex={0}
+                          aria-label="Navigate to total sales"
+                          onClick={() => navigate('/total-sales', { state: { dateRange: profitRange, customStartDate, customEndDate, filterCard: 'all' } })}
+                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/total-sales', { state: { dateRange: profitRange, customStartDate, customEndDate, filterCard: 'all' } }); } }}
+                          className="border-none shadow-md bg-white overflow-hidden relative col-span-1 border-t-4 border-green-500 cursor-pointer hover:shadow-lg transition-all"
+                        >
+                          <div className="absolute top-0 right-0 p-3 opacity-10">
+                            <TrendingUp size={42} className="text-green-600" />
+                          </div>
+                          <CardContent className="pt-4 pb-3 px-4">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">{profitRange === 'Annually' ? 'Annual' : profitRange} Sales</p>
+                            <p className="text-2xl font-black text-green-600 tracking-tight">{formatPeso(netSales)}</p>
+                          </CardContent>
+                        </Card>
+
+                        {/* Card 3: Balance Due (Red) */}
+                        <Card 
+                          role="button"
+                          tabIndex={0}
+                          aria-label="Navigate to balance due sales"
+                          onClick={() => navigate('/total-sales', { state: { dateRange: profitRange, customStartDate, customEndDate, filterCard: 'balance-due' } })}
+                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/total-sales', { state: { dateRange: profitRange, customStartDate, customEndDate, filterCard: 'balance-due' } }); } }}
+                          className="border-none shadow-md bg-white overflow-hidden relative col-span-1 border-t-4 border-red-500 cursor-pointer hover:shadow-lg transition-all"
+                        >
+                          <div className="absolute top-0 right-0 p-3 opacity-10">
+                            <CircleAlert size={42} className="text-red-600" />
+                          </div>
+                          <CardContent className="pt-4 pb-3 px-4">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">{profitRange === 'Annually' ? 'Annual' : profitRange} Balance Due</p>
+                            <p className="text-2xl font-black text-red-600 tracking-tight">{'\u20B1'}{(totalBalanceDue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                          </CardContent>
+                        </Card>
+
+                        {/* Card 4: Total Expenses (Orange) */}
+                        <Card 
+                          role="button"
+                          tabIndex={0}
+                          aria-label="Navigate to expenses report"
+                          onClick={() => navigate('/expenses', { state: { dateRange: profitRange, customStartDate, customEndDate, filterCard: 'all' } })}
+                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/expenses', { state: { dateRange: profitRange, customStartDate, customEndDate, filterCard: 'all' } }); } }}
+                          className="border-none shadow-md bg-white overflow-hidden relative col-span-1 border-t-4 border-orange-500 cursor-pointer hover:shadow-lg transition-all"
+                        >
+                          <div className="absolute top-0 right-0 p-3 opacity-10">
+                            <TrendingDown size={42} className="text-orange-600" />
+                          </div>
+                          <CardContent className="pt-4 pb-3 px-4">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">{profitRange === 'Annually' ? 'Annual' : profitRange} Expenses</p>
+                            <p className="text-2xl font-black text-orange-600 tracking-tight">{'\u20B1'}{(totalExpenses || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                          </CardContent>
+                        </Card>
+                      </>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
@@ -716,7 +819,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                   </CardTitle>
                 </div>
               </CardHeader>
-              <CardContent className="pt-0">
+              <CardContent className="pt-0 px-2 sm:px-4">
                 {/* Search and Filter Section */}
                 <div className="flex flex-wrap md:flex-nowrap gap-2 md:gap-4 mb-4 items-center">
                   <Button
@@ -920,34 +1023,34 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
 
                     return (
                       <>
-                        <div className="overflow-x-auto -mx-1 px-1 overflow-y-hidden no-scrollbar">
-                          <table className="w-full table-fixed text-xs">
+                        <div className="overflow-x-auto overflow-y-auto max-h-[620px] -mx-2 px-2 pb-2 custom-scrollbar border border-gray-100 rounded-lg">
+                          <table className="w-full text-xs min-w-[1020px]">
                             <colgroup>
-                               <col className="w-[11%]" />
-                               <col className="w-[13%]" />
-                               <col className="w-[13%]" />
-                               <col className="w-[5%]" />
-                               <col className="w-[10%]" />
-                               <col className="w-[12%]" />
-                               <col className="w-[9%]" />
-                               <col className="w-[12%]" />
-                               <col className="w-[8%]" />
-                               <col className="w-[7%]" />
+                               <col style={{ width: '140px' }} />
+                               <col style={{ width: '140px' }} />
+                               <col style={{ width: '160px' }} />
+                               <col style={{ width: '55px' }} />
+                               <col style={{ width: '105px' }} />
+                               <col style={{ width: '125px' }} />
+                               <col style={{ width: '80px' }} />
+                               <col style={{ width: '130px' }} />
+                               <col style={{ width: '95px' }} />
+                               <col style={{ width: '60px' }} />
                             </colgroup>
-                            <thead className="bg-red-50/50 border-b border-red-100">
-                              <tr>
-                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Order #</th>
-                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Customer</th>
-                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px]">Services</th>
-                                <th className="h-9 px-1 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">QTY</th>
-                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Order Date</th>
-                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">
-                                  {selectedStatus === 'for-release' ? 'Release Date' : selectedStatus === 'claimed' ? 'Claimed Date' : selectedStatus === 'cancelled' ? 'Cancelled Date' : 'Estimated Date'}
+                            <thead className="bg-red-50/95 backdrop-blur-xs border-b border-red-100 sticky top-0 z-10 shadow-xs">
+                              <tr className="bg-red-50/95">
+                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-tight text-[10.5px] whitespace-nowrap">Order #</th>
+                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-tight text-[10.5px] whitespace-nowrap">Customer</th>
+                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-tight text-[10.5px] whitespace-nowrap">Services</th>
+                                <th className="h-9 px-1.5 text-center font-black text-gray-700 uppercase tracking-tight text-[10.5px] whitespace-nowrap">QTY</th>
+                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-tight text-[10.5px] whitespace-nowrap">Order Date</th>
+                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-tight text-[10.5px] whitespace-nowrap">
+                                  {selectedStatus === 'for-release' ? 'Released Date' : selectedStatus === 'claimed' ? 'Claimed Date' : selectedStatus === 'cancelled' ? 'Cancelled Date' : 'Release Date'}
                                 </th>
-                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Priority</th>
-                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Payment</th>
-                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Total</th>
-                                <th className="h-9 px-1 text-center font-black text-gray-700 uppercase tracking-wide text-[10px] whitespace-nowrap">Actions</th>
+                                <th className="h-9 px-1.5 text-center font-black text-gray-700 uppercase tracking-tight text-[10.5px] whitespace-nowrap">Priority</th>
+                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-tight text-[10.5px] whitespace-nowrap">Payment</th>
+                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-tight text-[10.5px] whitespace-nowrap">Total</th>
+                                <th className="h-9 px-1.5 text-center font-black text-gray-700 uppercase tracking-tight text-[10.5px] whitespace-nowrap">Actions</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -984,70 +1087,90 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                       setIsEditing(false);
                                     }}
                                   >
-                                    <td className="px-1.5 py-2.5 text-center text-[11px] font-semibold text-gray-800 max-w-0">
-                                      <span className="block truncate w-full" title={order.orderNumber || String(order.id) || '-'}>
+                                    <td className="px-2.5 py-2.5 text-center whitespace-nowrap">
+                                      <span className="font-mono text-[11px] font-semibold text-gray-800 whitespace-nowrap" title={order.orderNumber || String(order.id) || '-'}>
                                         {order.orderNumber || order.id || '-'}
                                       </span>
                                     </td>
-                                    <td className="px-1.5 py-2.5 text-center max-w-0">
-                                      <div className="flex flex-col items-center justify-center text-center w-full min-w-0">
-                                        <div className="text-xs font-bold text-gray-900 leading-tight truncate w-full max-w-full" title={order.customerName || 'Walk-In'}>
+                                    <td className="px-2.5 py-2.5 text-center whitespace-nowrap">
+                                      <div className="flex flex-col items-center justify-center text-center whitespace-nowrap">
+                                        <div className="text-xs font-bold text-gray-900 leading-tight whitespace-nowrap">
                                           {order.customerName || 'Walk-In'}
                                         </div>
                                         {order.contactNumber && (
-                                          <div className="text-[10px] text-gray-500 mt-0.5 truncate w-full max-w-full whitespace-nowrap" title={order.contactNumber}>
+                                          <div className="text-[10.5px] text-gray-500 mt-0.5 whitespace-nowrap">
                                             {order.contactNumber}
                                           </div>
                                         )}
                                       </div>
                                     </td>
-                                    <td className="px-1.5 py-2 text-center max-w-0">
+                                    <td className="px-2.5 py-2 text-center whitespace-nowrap">
                                       {(() => {
-                                        const servicesList = (Array.isArray(order.baseService)
+                                        const baseSvcs = (Array.isArray(order.baseService)
                                           ? order.baseService
                                           : String(order.baseService || '').split(',')
                                         )
                                           .flatMap((s) => String(s || '').split(','))
                                           .map((s) => String(s || '').trim().replace(' (with basic cleaning)', ''))
                                           .filter(Boolean);
-                                        return servicesList.length > 0 ? (
-                                          <div className="flex flex-col items-center justify-center text-center text-[11px] font-semibold text-gray-800 leading-snug w-full min-w-0" title={servicesList.join(', ')}>
-                                            {servicesList.slice(0, 3).map((srv, idx) => (
-                                              <span key={idx} className="block text-[11px] font-semibold text-gray-800 leading-tight truncate w-full max-w-full">
-                                                {srv}{idx < servicesList.length - 1 ? ',' : ''}
+
+                                        const addonSvcs = (Array.isArray(order.addOns)
+                                          ? order.addOns
+                                          : String(order.addOns || '').split(',')
+                                        )
+                                          .flatMap((a: any) => {
+                                            if (!a) return [];
+                                            if (typeof a === 'string') return a.split(',');
+                                            return [a.name || a.service_name || a.service_code || ''];
+                                          })
+                                          .map((s) => String(s || '').trim())
+                                          .filter(Boolean);
+
+                                        const servicesList = [...baseSvcs, ...addonSvcs];
+                                        const finalSvcs = servicesList.length > 0 ? servicesList : baseSvcs;
+                                        const serviceLines = chunkServiceCodesTwoPerRow(finalSvcs);
+
+                                        return finalSvcs.length > 0 ? (
+                                          <div className="flex flex-col items-center justify-center text-center text-[11px] font-semibold text-gray-800 leading-snug whitespace-nowrap" title={finalSvcs.map(s => `${toServiceCode(s)} (${s})`).join(', ')}>
+                                            {serviceLines.slice(0, 3).map((line, idx) => (
+                                              <span key={idx} className="block text-[11px] font-bold text-gray-800 leading-tight whitespace-nowrap">
+                                                {line}
                                               </span>
                                             ))}
+                                            {serviceLines.length > 3 && (
+                                              <span className="text-[9px] text-gray-400 leading-none">+{finalSvcs.length - 6} more</span>
+                                            )}
                                           </div>
                                         ) : (
                                           <span className="text-gray-400 italic font-normal text-center block">-</span>
                                         );
                                       })()}
                                     </td>
-                                    <td className="px-1 py-2.5 text-center text-xs font-semibold text-gray-700 whitespace-nowrap max-w-0">
-                                      <span className="block truncate">{order.quantity || 1} PR</span>
+                                    <td className="px-2 py-2.5 text-center text-xs font-semibold text-gray-700 whitespace-nowrap">
+                                      <span className="whitespace-nowrap">{order.quantity || 1} PR</span>
                                     </td>
-                                    <td className="px-1.5 py-2.5 text-center text-xs font-medium text-gray-700 whitespace-nowrap max-w-0">
+                                    <td className="px-2 py-2.5 text-center text-xs font-medium text-gray-700 whitespace-nowrap">
                                       {(() => {
                                         const d = new Date(order.createdAt);
                                         if (isNaN(d.getTime())) return '-';
                                         return (
-                                          <div className="inline-flex items-center justify-center gap-1 max-w-full">
+                                          <div className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap">
                                             <CalendarIcon size={12} className="text-purple-600 shrink-0" />
-                                            <span className="truncate">{dateFnsFormat(d, 'MM/dd/yy')}</span>
+                                            <span>{dateFnsFormat(d, 'MM/dd/yy')}</span>
                                           </div>
                                         );
                                       })()}
                                     </td>
-                                    <td className="px-1.5 py-2.5 text-center text-xs font-medium text-gray-700 whitespace-nowrap max-w-0">
+                                    <td className="px-2.5 py-2.5 text-center text-xs font-medium text-gray-700 whitespace-nowrap">
                                         {(() => {
                                           if (selectedStatus === 'cancelled') {
                                             const cDate = order.cancelledAt || (order as any).updatedAt || order.createdAt;
                                             if (!cDate) return '-';
                                             const d = new Date(cDate);
                                             return (
-                                              <div className="inline-flex items-center justify-center gap-1 max-w-full">
+                                              <div className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap">
                                                 <CalendarIcon size={12} className="text-rose-600 shrink-0" />
-                                                <span className="truncate">{isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy')}</span>
+                                                <span>{isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy')}</span>
                                               </div>
                                             );
                                           }
@@ -1057,12 +1180,12 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                             const d = new Date(claimDate);
                                             const formattedDate = isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy');
                                             return (
-                                              <div className="flex flex-col items-center w-full min-w-0">
-                                                <div className="inline-flex items-center justify-center gap-1 max-w-full">
+                                              <div className="flex flex-col items-center justify-center text-center whitespace-nowrap">
+                                                <div className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap">
                                                   <CalendarIcon size={12} className="text-slate-500 shrink-0" />
-                                                  <span className="truncate">{formattedDate}</span>
+                                                  <span>{formattedDate}</span>
                                                 </div>
-                                                <span className="text-[10px] text-gray-400 font-medium tracking-wider mt-0.5 whitespace-nowrap truncate w-full max-w-full" title={order.claimedBy || order.customerName || '-'}>
+                                                <span className="text-[10px] text-gray-400 font-medium tracking-wider mt-0.5 whitespace-nowrap" title={order.claimedBy || order.customerName || '-'}>
                                                   by {order.claimedBy || order.customerName || '-'}
                                                 </span>
                                               </div>
@@ -1076,9 +1199,9 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                             const d = new Date(released);
                                             if (isNaN(d.getTime())) return '-';
                                             return (
-                                              <div className="inline-flex items-center justify-center gap-1 max-w-full">
+                                              <div className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap">
                                                 <CalendarIcon size={12} className="text-orange-600 shrink-0" />
-                                                <span className="truncate">{dateFnsFormat(d, 'MM/dd/yy')}</span>
+                                                <span>{dateFnsFormat(d, 'MM/dd/yy')}</span>
                                               </div>
                                             );
                                           }
@@ -1086,57 +1209,57 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                           const d = new Date(order.predictedCompletionDate);
                                           if (isNaN(d.getTime())) return '-';
                                           return (
-                                            <div className="inline-flex items-center justify-center gap-1 max-w-full">
+                                            <div className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap">
                                               <CalendarIcon size={12} className="text-emerald-600 shrink-0" />
-                                              <span className="truncate">{dateFnsFormat(d, 'MM/dd/yy')}</span>
+                                              <span>{dateFnsFormat(d, 'MM/dd/yy')}</span>
                                             </div>
                                           );
                                         })()}
                                     </td>
-                                    <td className="px-1 py-2.5 text-center whitespace-nowrap max-w-0">
-                                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[8.5px] font-bold uppercase border whitespace-nowrap ${order.priorityLevel === 'rush'
+                                    <td className="px-2 py-2.5 text-center whitespace-nowrap">
+                                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase border whitespace-nowrap ${order.priorityLevel === 'rush'
                                         ? 'bg-red-50 text-red-700 border-red-100'
                                         : 'bg-emerald-50 text-emerald-700 border-emerald-100'
                                         }`}>
                                         {order.priorityLevel}
                                       </span>
                                     </td>
-                                    <td className="px-1.5 py-2.5 whitespace-nowrap max-w-0">
-                                      <div className="flex flex-col items-center justify-center text-center w-full min-w-0">
+                                    <td className="px-2.5 py-2.5 whitespace-nowrap">
+                                      <div className="flex flex-col items-center justify-center text-center whitespace-nowrap">
                                         {isCancelledOrder(order) ? (
                                           order.refundStatus === 'refunded' ? (
                                             <>
-                                              <span className="text-[10px] font-bold text-rose-600 tracking-wider whitespace-nowrap truncate max-w-full">
+                                              <span className="text-[10px] font-bold text-rose-600 tracking-wider whitespace-nowrap">
                                                 CANCELLED (REFUNDED)
                                               </span>
-                                              <span className="text-[8.5px] text-rose-600 font-bold tracking-wider mt-0.5 whitespace-nowrap truncate max-w-full">
+                                              <span className="text-[8.5px] text-rose-600 font-bold tracking-wider mt-0.5 whitespace-nowrap">
                                                 Refund: {formatPeso(Number(order.refundAmount || order.amountReceived || order.depositAmount || order.grandTotal || 0))}
                                               </span>
                                             </>
                                           ) : (
                                             <>
-                                              <span className="text-[10px] font-bold text-amber-700 tracking-wider whitespace-nowrap truncate max-w-full">
+                                              <span className="text-[10px] font-bold text-amber-700 tracking-wider whitespace-nowrap">
                                                 CANCELLED (RETAINED)
                                               </span>
-                                              <span className="text-[8.5px] text-amber-700 font-bold tracking-wider mt-0.5 whitespace-nowrap truncate max-w-full">
+                                              <span className="text-[8.5px] text-amber-700 font-bold tracking-wider mt-0.5 whitespace-nowrap">
                                                 Retained: {formatPeso(Number(order.amountReceived || order.depositAmount || 0))}
                                               </span>
                                             </>
                                           )
                                         ) : (
                                           <>
-                                            <span className={`text-[10px] font-bold tracking-wider whitespace-nowrap truncate max-w-full ${order.paymentStatus === 'fully-paid' ? 'text-green-600' :
+                                            <span className={`text-[10px] font-bold tracking-wider whitespace-nowrap ${order.paymentStatus === 'fully-paid' ? 'text-green-600' :
                                                 order.paymentStatus === 'downpayment' ? 'text-yellow-600' : 'text-red-600'
                                                 }`}>
                                                 {order.paymentStatus === 'fully-paid' ? 'FULLY PAID' : order.paymentStatus === 'downpayment' ? 'DOWNPAYMENT' : order.paymentStatus ? order.paymentStatus.toUpperCase() : '-'}
                                             </span>
                                             {order.paymentMethod && (
                                                 <>
-                                                    <span className="text-[8.5px] text-gray-400 font-medium uppercase tracking-wider mt-0.5 whitespace-nowrap truncate max-w-full">
+                                                    <span className="text-[8.5px] text-gray-400 font-medium uppercase tracking-wider mt-0.5 whitespace-nowrap">
                                                       {order.paymentMethod}
                                                     </span>
                                                       {order.paymentStatus === 'downpayment' && (
-                                                        <span className="text-[9px] text-red-500 font-medium tracking-wider mt-0.5 whitespace-nowrap truncate max-w-full">
+                                                        <span className="text-[9px] text-red-500 font-medium tracking-wider mt-0.5 whitespace-nowrap">
                                                           BAL: {formatPeso(order.balance !== undefined && order.balance !== null && !isNaN(Number(order.balance)) ? Math.max(0, Number(order.balance)) : Math.max(0, (order.grandTotal || 0) - (order.depositAmount || (order.amountReceived && order.amountReceived < order.grandTotal ? order.amountReceived : 0))))}
                                                         </span>
                                                       )}
@@ -1146,8 +1269,8 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                         )}
                                       </div>
                                     </td>
-                                    <td className="px-1.5 py-2.5 text-center font-medium text-gray-900 whitespace-nowrap max-w-0">
-                                      <span className="text-xs font-bold block truncate">
+                                    <td className="px-2.5 py-2.5 text-center font-medium text-gray-900 whitespace-nowrap">
+                                      <span className="text-xs font-bold whitespace-nowrap">
                                         {'\u20B1'}{(order.grandTotal || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                       </span>
                                     </td>
@@ -1203,14 +1326,6 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                               }} className="border border-purple-200 rounded-md px-2.5 py-1.5 text-purple-600 bg-purple-50 hover:bg-purple-100 focus:text-purple-700 focus:bg-purple-100 font-bold mb-1">
                                                 <RotateCcw className="h-4 w-4 mr-2 text-purple-500" />
                                                 Undo to New Order
-                                              </DropdownMenuItem>
-                                              <DropdownMenuItem onClick={(e) => {
-                                                e.stopPropagation();
-                                                if (order) setSelectedOrder({...order});
-                                                setIsUpdatingStock(true);
-                                              }} className="border border-emerald-200 rounded-md px-2.5 py-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 focus:text-emerald-800 focus:bg-emerald-100 font-bold mb-1">
-                                                <Package className="h-4 w-4 mr-2 text-emerald-600" />
-                                                Update Inventory
                                               </DropdownMenuItem>
                                               <DropdownMenuItem onClick={(e) => {
                                                 e.stopPropagation();
@@ -1499,7 +1614,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                          <p className="text-xs font-black uppercase tracking-widest text-gray-400">All stock levels normal</p>
                       </div>
                     ) : (
-                      <div className={`flex flex-col gap-2.5 ${lowStockItems.length > 3 ? 'max-h-[220px] overflow-y-auto pr-1 custom-scrollbar' : ''}`}>
+                      <div className={`grid grid-cols-1 md:grid-cols-3 gap-3 ${lowStockItems.length > 3 ? 'max-h-[115px] overflow-y-auto pr-1 custom-scrollbar' : ''}`}>
                       {lowStockItems.map((item, idx) => {
                         const pres = getInventoryPresentation(item);
                         const isCritical = Number(item.stock || 0) <= 0;
@@ -1522,12 +1637,12 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                             {/* Row 2: Current Stock (left) + Package (right) */}
                             <div className="flex items-center justify-between gap-2 text-xs mt-1">
                               <div className="flex items-center gap-1.5">
-                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Current Stock:</span>
+                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">STOCK:</span>
                                 <span className="text-xs font-bold text-gray-900">{pres.currentQuantityLabel}</span>
                               </div>
                               {pres.isPackaged && (
                                 <div className="flex items-center gap-1.5 text-right">
-                                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Package:</span>
+                                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">PKG:</span>
                                   <span className="text-[11px] font-semibold text-gray-600">1 {pres.packageLabel}</span>
                                 </div>
                               )}
