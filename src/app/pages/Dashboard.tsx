@@ -1469,26 +1469,28 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                         <div className={`w-full overflow-y-auto max-h-[435px] xl:max-h-[460px] subtle-vertical-scroll pb-1 rounded-lg border border-gray-100 ${paginatedOrders.length === 0 ? 'overflow-x-hidden' : 'overflow-x-auto lg:overflow-x-hidden'}`}>
                           <table className={`w-full text-xs table-fixed ${paginatedOrders.length === 0 ? 'min-w-full' : 'min-w-[820px] lg:min-w-full'}`}>
                             <colgroup>
-                               <col style={{ width: '13%' }} />
-                               <col style={{ width: '14%' }} />
                                <col style={{ width: '11%' }} />
-                               <col style={{ width: '5%' }} />
-                               <col style={{ width: '10%' }} />
-                               <col style={{ width: '11%' }} />
-                               <col style={{ width: '8%' }} />
                                <col style={{ width: '13%' }} />
+                               <col style={{ width: '11%' }} />
+                               <col style={{ width: '12%' }} />
+                               <col style={{ width: '4%' }} />
                                <col style={{ width: '9%' }} />
-                               <col style={{ width: '6%' }} />
+                               <col style={{ width: '11%' }} />
+                               <col style={{ width: '7%' }} />
+                               <col style={{ width: '11%' }} />
+                               <col style={{ width: '7%' }} />
+                               <col style={{ width: '4%' }} />
                             </colgroup>
                             <thead className="bg-red-50/95 backdrop-blur-xs border-b border-red-100 sticky top-0 z-10 shadow-xs">
                               <tr className="bg-red-50/95">
                                 <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-tight text-[10.5px] whitespace-nowrap">Order #</th>
                                 <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-tight text-[10.5px] whitespace-nowrap">Customer</th>
+                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-tight text-[10.5px] whitespace-nowrap">Shoe / Brand</th>
                                 <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-tight text-[10.5px] whitespace-nowrap">Services</th>
                                 <th className="h-9 px-1.5 text-center font-black text-gray-700 uppercase tracking-tight text-[10.5px] whitespace-nowrap">QTY</th>
                                 <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-tight text-[10.5px] whitespace-nowrap">Order Date</th>
                                 <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-tight text-[10.5px] whitespace-nowrap">
-                                  {selectedStatus === 'for-release' ? 'Released Date' : selectedStatus === 'claimed' ? 'Claimed Date' : selectedStatus === 'cancelled' ? 'Cancelled Date' : 'Release Date'}
+                                  {selectedStatus === 'for-release' ? 'Released Date' : selectedStatus === 'claimed' ? 'Claimed Date' : selectedStatus === 'cancelled' ? 'Cancelled Date' : 'Expected Release'}
                                 </th>
                                 <th className="h-9 px-1.5 text-center font-black text-gray-700 uppercase tracking-tight text-[10.5px] whitespace-nowrap">Priority</th>
                                 <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-tight text-[10.5px] whitespace-nowrap">Payment</th>
@@ -1499,7 +1501,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                             <tbody className="divide-y divide-gray-100">
                               {paginatedOrders.length === 0 ? (
                                 <tr>
-                                  <td colSpan={10} className="px-6 py-20 text-center">
+                                  <td colSpan={11} className="px-6 py-20 text-center">
                                     <div className="flex flex-col items-center justify-center space-y-3 opacity-40">
                                       <ClipboardCheck size={48} className="text-gray-400" />
                                       <p className="text-sm font-black text-gray-600 uppercase tracking-[0.2em]">
@@ -1540,52 +1542,101 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                         <div className="text-xs font-bold text-gray-900 leading-tight whitespace-nowrap">
                                           {order.customerName || 'Walk-In'}
                                         </div>
-                                        {order.contactNumber && (
-                                          <div className="text-[10.5px] text-gray-500 mt-0.5 whitespace-nowrap">
-                                            {order.contactNumber}
-                                          </div>
-                                        )}
+                                        <div className="text-[10.5px] text-gray-500 mt-0.5 whitespace-nowrap">
+                                          {order.contactNumber && order.contactNumber !== '-' ? (
+                                            order.contactNumber
+                                          ) : (
+                                            <span className="text-gray-400 font-semibold">—</span>
+                                          )}
+                                        </div>
                                       </div>
                                     </td>
-                                    <td className="px-2.5 py-2 text-center whitespace-nowrap">
+                                    <td className="px-2 py-2 text-center">
                                       {(() => {
-                                        const baseSvcs = (Array.isArray(order.baseService)
-                                          ? order.baseService
-                                          : String(order.baseService || '').split(',')
-                                        )
-                                          .flatMap((s) => String(s || '').split(','))
-                                          .map((s) => String(s || '').trim().replace(' (with basic cleaning)', ''))
+                                        let brandDisplay = '—';
+                                        if (order.items && order.items.length > 0) {
+                                          const brandCounts: Record<string, number> = {};
+                                          order.items.forEach((item: any) => {
+                                            const b = (item.brand || item.shoeModel || '').trim();
+                                            if (b) {
+                                              brandCounts[b] = (brandCounts[b] || 0) + (item.quantity || 1);
+                                            }
+                                          });
+                                          const entries = Object.entries(brandCounts);
+                                          if (entries.length > 0) {
+                                            brandDisplay = entries.map(([b, cnt]) => cnt > 1 ? `${b} ×${cnt}` : b).join(', ');
+                                          }
+                                        } else if (order.brand && order.brand.trim()) {
+                                          brandDisplay = order.brand.trim();
+                                        }
+
+                                        if (brandDisplay === '—' || !brandDisplay) {
+                                          return <span className="text-gray-400 font-semibold">—</span>;
+                                        }
+
+                                        return (
+                                          <div className="max-w-[115px] mx-auto text-center" title={brandDisplay}>
+                                            <span className="text-[11px] font-semibold text-gray-800 leading-tight line-clamp-2 break-words block">
+                                              {brandDisplay}
+                                            </span>
+                                          </div>
+                                        );
+                                      })()}
+                                    </td>
+                                    <td className="px-2 py-2 text-center">
+                                      {(() => {
+                                        const itemSvcs: string[] = [];
+                                        if (order.items && order.items.length > 0) {
+                                          order.items.forEach((it: any) => {
+                                            const b = (Array.isArray(it.baseService) ? it.baseService : String(it.baseService || '').split(','))
+                                              .map((s: any) => String(s || '').trim().replace(' (with basic cleaning)', ''))
+                                              .filter(Boolean);
+                                            const a = (Array.isArray(it.addOns) ? it.addOns : String(it.addOns || '').split(','))
+                                              .flatMap((x: any) => {
+                                                if (!x) return [];
+                                                if (typeof x === 'string') return x.split(',');
+                                                return [x.name || x.service_name || x.service_code || ''];
+                                              })
+                                              .map((s: any) => String(s || '').trim())
+                                              .filter(Boolean);
+                                            itemSvcs.push(...b, ...a);
+                                          });
+                                        }
+
+                                        const baseSvcs = (Array.isArray(order.baseService) ? order.baseService : String(order.baseService || '').split(','))
+                                          .map((s: any) => String(s || '').trim().replace(' (with basic cleaning)', ''))
                                           .filter(Boolean);
 
-                                        const addonSvcs = (Array.isArray(order.addOns)
-                                          ? order.addOns
-                                          : String(order.addOns || '').split(',')
-                                        )
+                                        const addonSvcs = (Array.isArray(order.addOns) ? order.addOns : String(order.addOns || '').split(','))
                                           .flatMap((a: any) => {
                                             if (!a) return [];
                                             if (typeof a === 'string') return a.split(',');
                                             return [a.name || a.service_name || a.service_code || ''];
                                           })
-                                          .map((s) => String(s || '').trim())
+                                          .map((s: any) => String(s || '').trim())
                                           .filter(Boolean);
 
-                                        const servicesList = [...baseSvcs, ...addonSvcs];
-                                        const finalSvcs = servicesList.length > 0 ? servicesList : baseSvcs;
-                                        const serviceLines = chunkServiceCodesTwoPerRow(finalSvcs);
+                                        const allServices = itemSvcs.length > 0 ? itemSvcs : [...baseSvcs, ...addonSvcs];
+                                        const serviceLines = chunkServiceCodesTwoPerRow(allServices);
 
-                                        return finalSvcs.length > 0 ? (
-                                          <div className="flex flex-col items-center justify-center text-center text-[11px] font-semibold text-gray-800 leading-snug whitespace-nowrap" title={normalizeServiceCodes(finalSvcs).join(', ')}>
-                                            {serviceLines.slice(0, 3).map((line, idx) => (
-                                              <span key={idx} className="block text-[11px] font-bold text-gray-800 leading-tight whitespace-nowrap">
+                                        return serviceLines.length > 0 ? (
+                                          <div 
+                                            className="flex flex-col items-center justify-center text-center text-[11px] font-bold text-gray-800 leading-tight max-w-[95px] mx-auto" 
+                                            title={allServices.join(', ')}
+                                          >
+                                            {serviceLines.slice(0, 2).map((line, idx) => (
+                                              <span key={idx} className="block text-[11px] font-bold text-gray-800 leading-tight truncate max-w-full">
                                                 {line}
                                               </span>
                                             ))}
-                                            {serviceLines.length > 3 && (
-                                              <span className="text-[11px] text-gray-600 font-semibold leading-none">+{finalSvcs.length - 6} more</span>
+                                            {serviceLines.length > 2 && (
+                                              <span className="text-[10px] text-gray-500 font-semibold leading-none">
+                                                +{normalizeServiceCodes(allServices).length - 4} more
+                                              </span>
                                             )}
                                           </div>
                                         ) : (
-                                          <span className="text-gray-600 italic font-normal text-center block">-</span>
+                                          <span className="text-gray-400 font-semibold text-center block">—</span>
                                         );
                                       })()}
                                     </td>
@@ -1608,20 +1659,20 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                         {(() => {
                                           if (selectedStatus === 'cancelled') {
                                             const cDate = order.cancelledAt || (order as any).updatedAt || order.createdAt;
-                                            if (!cDate) return '-';
+                                            if (!cDate) return <span className="text-gray-400 font-semibold">—</span>;
                                             const d = new Date(cDate);
                                             return (
                                               <div className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap">
                                                 <CalendarIcon size={12} className="text-rose-600 shrink-0" />
-                                                <span>{isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy')}</span>
+                                                <span>{isNaN(d.getTime()) ? '—' : dateFnsFormat(d, 'MM/dd/yy')}</span>
                                               </div>
                                             );
                                           }
                                           if (selectedStatus === 'claimed') {
                                             const claimDate = order.actualCompletionDate || ((order as any).statusHistory?.find((s: any) => s.status === 'claimed')?.timestamp);
-                                            if (!claimDate) return '-';
+                                            if (!claimDate) return <span className="text-gray-400 font-semibold">—</span>;
                                             const d = new Date(claimDate);
-                                            const formattedDate = isNaN(d.getTime()) ? '-' : dateFnsFormat(d, 'MM/dd/yy');
+                                            const formattedDate = isNaN(d.getTime()) ? '—' : dateFnsFormat(d, 'MM/dd/yy');
                                             return (
                                               <div className="flex flex-col items-center justify-center text-center whitespace-nowrap">
                                                 <div className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap">
@@ -1638,9 +1689,9 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                             const released = order.actualReleaseDate
                                               || (order as any).statusHistory?.find((s: any) => s.status === 'for-release')?.timestamp
                                               || order.actualCompletionDate;
-                                            if (!released) return '-';
+                                            if (!released) return <span className="text-gray-400 font-semibold">—</span>;
                                             const d = new Date(released);
-                                            if (isNaN(d.getTime())) return '-';
+                                            if (isNaN(d.getTime())) return <span className="text-gray-400 font-semibold">—</span>;
                                             return (
                                               <div className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap">
                                                 <CalendarIcon size={12} className="text-orange-600 shrink-0" />
@@ -1648,9 +1699,20 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                               </div>
                                             );
                                           }
-                                          if (!order.predictedCompletionDate) return '-';
+                                          if (!order.predictedCompletionDate) return <span className="text-gray-400 font-semibold">—</span>;
                                           const d = new Date(order.predictedCompletionDate);
-                                          if (isNaN(d.getTime())) return '-';
+                                          if (isNaN(d.getTime())) return <span className="text-gray-400 font-semibold">—</span>;
+
+                                          // Historical September check: if predictedCompletionDate is same-day storage anchor, show em-dash
+                                          if (order.orderNumber?.startsWith('ORD-2026-09-')) {
+                                            const intakeDateStr = dateFnsFormat(new Date(order.createdAt), 'yyyy-MM-dd');
+                                            const predDateStr = dateFnsFormat(d, 'yyyy-MM-dd');
+                                            const hasPhysicalItems = order.items && order.items.length > 0;
+                                            if (!hasPhysicalItems || predDateStr === intakeDateStr) {
+                                              return <span className="text-gray-400 font-semibold">—</span>;
+                                            }
+                                          }
+
                                           return (
                                             <div className="inline-flex items-center justify-center gap-1.5 whitespace-nowrap">
                                               <CalendarIcon size={12} className="text-emerald-600 shrink-0" />

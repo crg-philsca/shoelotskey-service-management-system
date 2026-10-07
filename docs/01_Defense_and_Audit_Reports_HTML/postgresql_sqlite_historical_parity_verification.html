@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PostgreSQL & SQLite Historical Parity Verification Report</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 40px; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+        h1 { color: #0f172a; border-bottom: 2px solid #e2e8f0; padding-bottom: 16px; margin-top: 0; }
+        h2 { color: #1e293b; margin-top: 32px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; }
+        .badge { display: inline-block; padding: 4px 10px; border-radius: 9999px; font-size: 12px; font-weight: 700; text-transform: uppercase; }
+        .badge-success { background-color: #dcfce7; color: #15803d; }
+        table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 13px; }
+        th, td { border: 1px solid #cbd5e1; padding: 10px 14px; text-align: left; }
+        th { background-color: #f1f5f9; font-weight: 700; color: #334155; }
+        tr:nth-child(even) { background-color: #f8fafc; }
+        .match { color: #16a34a; font-weight: 700; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>PostgreSQL vs. SQLite Dual-Database Historical Parity Verification</h1>
+    <p><strong>System:</strong> Shoelotskey Service Management System &bull; <strong>Verified At:</strong> 2026-10-07 17:03:49</p>
+
+    <h2>1. Cohort Metric Parity Matrix</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Audit Metric</th>
+                <th>Target Ground Truth</th>
+                <th>PostgreSQL (Production)</th>
+                <th>SQLite (Localhost)</th>
+                <th>Parity Result</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Historical Order Count</strong></td>
+                <td>54 Orders</td>
+                <td>54 Orders</td>
+                <td>54 Orders</td>
+                <td><span class="badge badge-success">100% Match</span></td>
+            </tr>
+            <tr>
+                <td><strong>Gross Contracted Revenue</strong></td>
+                <td>₱53,880.00</td>
+                <td>₱53,880.00</td>
+                <td>₱53,880.00</td>
+                <td><span class="badge badge-success">100% Match</span></td>
+            </tr>
+            <tr>
+                <td><strong>Intake Collected Amount</strong></td>
+                <td>₱33,017.00</td>
+                <td>₱33,017.00</td>
+                <td>₱33,017.00</td>
+                <td><span class="badge badge-success">100% Match</span></td>
+            </tr>
+            <tr>
+                <td><strong>Outstanding Balance</strong></td>
+                <td>₱20,863.00</td>
+                <td>₱20,863.00</td>
+                <td>₱20,863.00</td>
+                <td><span class="badge badge-success">100% Match</span></td>
+            </tr>
+            <tr>
+                <td><strong>Fixed Expenses (IDs 232-238)</strong></td>
+                <td>₱53,124.17</td>
+                <td>₱53,124.17</td>
+                <td>₱53,124.17</td>
+                <td><span class="badge badge-success">100% Match</span></td>
+            </tr>
+            <tr>
+                <td><strong>Documented Items (Physical JOs)</strong></td>
+                <td>22 Items</td>
+                <td>22 Items</td>
+                <td>22 Items</td>
+                <td><span class="badge badge-success">100% Match</span></td>
+            </tr>
+            <tr>
+                <td><strong>Item-Service Mappings</strong></td>
+                <td>22 Mappings</td>
+                <td>22 Mappings</td>
+                <td>22 Mappings</td>
+                <td><span class="badge badge-success">100% Match</span></td>
+            </tr>
+            <tr>
+                <td><strong>Historical Payments</strong></td>
+                <td>48 Payments</td>
+                <td>48 Payments</td>
+                <td>48 Payments</td>
+                <td><span class="badge badge-success">100% Match</span></td>
+            </tr>
+            <tr>
+                <td><strong>DSMR-Only Undocumented Contacts</strong></td>
+                <td>True NULL</td>
+                <td>True NULL (No Random Digits)</td>
+                <td>True NULL (No Random Digits)</td>
+                <td><span class="badge badge-success">100% Match</span></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2>2. Idempotency Proof</h2>
+    <p>The synchronization script <span style="font-family: monospace;">scratch/sync_approved_historical_to_sqlite.py</span> was executed multiple times consecutively. In each run, zero duplicate records were created, foreign key references remained intact, and all parity invariants verified with zero delta.</p>
+</div>
+</body>
+</html>
