@@ -6,6 +6,7 @@ import { Label } from '@/app/components/ui/label';
 import { useMemo, useState, useEffect } from 'react';
 import { useServices } from '@/app/context/ServiceContext';
 import { useOrders } from '@/app/context/OrderContext';
+import { useActivities } from '@/app/context/ActivityContext';
 import { Calendar as CalendarIcon, Package, User, Wallet, ClipboardList, FileText, ChevronLeft, ChevronRight, Search, Filter, Clock, Truck, Store, AlertTriangle, AlertCircle } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
@@ -23,6 +24,7 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
   const navigate = useNavigate();
   const { services } = useServices();
   const { orders, loading } = useOrders();
+  const { addActivity } = useActivities();
 
   const toValidDate = (val: any): Date | null => {
     if (!val) return null;
@@ -161,8 +163,23 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
     // [OWASP A09] Security Audit Logging
     if (user.token) {
       console.log('[SECURITY] Release Calendar viewed by authenticated session');
+      try {
+        const sessionKey = 'logged_calendar_view_' + new Date().toDateString();
+        if (!sessionStorage.getItem(sessionKey)) {
+          sessionStorage.setItem(sessionKey, 'true');
+          const actor = JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}').username;
+          addActivity({
+            type: 'calendar',
+            module: 'Release Calendar',
+            user: actor,
+            action: 'CALENDAR_VIEW',
+            table: 'orders',
+            details: 'Accessed Release Calendar schedule view',
+          });
+        }
+      } catch (e) {}
     }
-  }, [user.token]);
+  }, [user.token, addActivity]);
 
   /**
    * FILTER LOGIC: jobsOnDate
@@ -254,7 +271,7 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
   }, [onSetHeaderActionRight, navigate]);
 
   return (
-    <div className="w-full max-w-[1560px] mx-auto space-y-2">
+    <div className="w-full max-w-[1560px] mx-auto my-auto space-y-2">
       <Card className="shadow-lg border-gray-200 overflow-hidden flex flex-col">
         <CardContent className="p-0 flex flex-col lg:flex-row flex-1">
           {/* Sidebar - Calendar */}
@@ -475,7 +492,7 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
                       'relative after:content-[""] after:absolute after:left-1/2 after:-translate-x-1/2 after:bottom-0.5 after:h-[4px] after:w-[4px] after:rounded-full after:bg-red-600 font-bold text-red-700'
                   }}
                   classNames={{
-                    head_cell: 'text-[10px] font-bold rounded-md w-9 text-gray-400 uppercase py-2',
+                    head_cell: 'text-xs font-bold rounded-md w-9 text-gray-600 uppercase py-2',
                     caption_label: 'text-base font-black text-red-600 uppercase tracking-tight',
                     table: 'w-full border-collapse',
                     months: 'w-full',
@@ -492,7 +509,7 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
                 <div className="mt-2 p-2 bg-white rounded-xl border border-gray-200/80 shadow-2xs space-y-1">
                   <div className="flex items-center gap-1.5 mb-1">
                     <div className="h-1.5 w-1.5 rounded-full bg-red-600"></div>
-                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider">Guide</span>
+                    <span className="text-xs font-black text-gray-600 uppercase tracking-wider">Guide</span>
                   </div>
                   <p className="text-[10px] text-gray-600 font-medium leading-snug">
                     Dates with a <strong className="text-red-600 font-bold">dot</strong> indicate scheduled releases. Expected dates outlined in <strong className="text-rose-600 font-bold">red</strong> are overdue orders.
@@ -512,7 +529,7 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
                       <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 stroke-[2.5] text-rose-600 shrink-0" />
                       <span className="truncate">OVERDUE / DELAYED RELEASES</span>
                     </h3>
-                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest truncate max-w-full">
+                    <p className="text-xs font-bold text-gray-600 uppercase tracking-widest truncate max-w-full">
                       Orders past their promised release date
                     </p>
                   </>
@@ -524,7 +541,7 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
                         {date && !isNaN(date.getTime()) ? `${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase()} (${date.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase()})` : 'SELECT A DATE'}
                       </span>
                     </h3>
-                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest truncate max-w-full">Release Schedule Overview</p>
+                    <p className="text-xs font-bold text-gray-600 uppercase tracking-widest truncate max-w-full">Release Schedule Overview</p>
                   </>
                 )}
               </div>
@@ -538,22 +555,22 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
               </div>
             </div>
 
-            {/* Orders container displaying 2 rows comfortably, fitted to 100% zoom */}
-            <div className="flex-1 p-2.5 sm:p-3 pr-1 sm:pr-2 overflow-y-auto max-h-[460px] xl:max-h-[480px] flex flex-col custom-scrollbar">
+            {/* Orders container displaying 2 rows comfortably, maintaining height for 100% zoom */}
+            <div className="flex-1 p-2.5 sm:p-3 pr-1 sm:pr-2 overflow-y-auto min-h-[440px] xl:min-h-[470px] max-h-[460px] xl:max-h-[480px] flex flex-col custom-scrollbar">
               {loading ? (
                 <div className="h-full flex items-center justify-center py-16">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
                 </div>
               ) : sortedJobsOnDate.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center py-16 text-center space-y-3">
-                  <div className="h-16 w-16 rounded-full bg-gray-50 flex items-center justify-center text-gray-300">
+                <div className="h-full flex-1 flex flex-col items-center justify-center py-16 text-center space-y-3">
+                  <div className="h-16 w-16 rounded-full bg-gray-50 flex items-center justify-center text-gray-400">
                     <Package size={32} />
                   </div>
                   <div className="space-y-1">
-                    <p className="text-gray-400 font-black uppercase tracking-widest text-xs sm:text-sm">
+                    <p className="text-gray-700 font-black uppercase tracking-widest text-xs sm:text-sm">
                       {searchTerm ? 'No matching orders' : isEffectiveOverdue ? 'No Overdue Orders' : 'No Releases Scheduled'}
                     </p>
-                    <p className="text-[11px] text-gray-400 font-medium">
+                    <p className="text-xs text-gray-500 font-medium">
                       {searchTerm
                         ? `We couldn't find any orders matching "${searchTerm}".`
                         : isEffectiveOverdue
@@ -615,7 +632,7 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
                     return (
                     <div
                       key={job.id}
-                      className={`group border rounded-xl p-2 sm:p-2.5 hover:shadow-md transition-all duration-200 bg-white relative overflow-hidden flex flex-col justify-between h-full min-h-[158px] sm:min-h-[160px] ring-1 ring-transparent cursor-pointer ${
+                      className={`group border rounded-xl p-2 sm:p-2.5 hover:shadow-md transition-all duration-200 bg-white relative overflow-hidden flex flex-col justify-between h-full min-h-[188px] sm:min-h-[192px] xl:min-h-[196px] ring-1 ring-transparent cursor-pointer ${
                         isOverdue 
                           ? 'border-rose-200 hover:border-rose-400 hover:ring-rose-50' 
                           : 'border-blue-200 hover:border-blue-400 hover:ring-blue-50'
@@ -670,7 +687,7 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
                             {intakeDisplay && (
                               <div className="flex items-center gap-1.5 text-[10px] sm:text-[10.5px] text-purple-700 bg-purple-50/60 border border-purple-200/80 rounded-md px-2 py-0.5">
                                 <CalendarIcon size={11} className="text-purple-600 shrink-0" />
-                                <span className="truncate">
+                                <span className="font-bold truncate text-purple-900">
                                   Received: <span className="font-bold text-purple-900">{intakeDisplay}</span>
                                 </span>
                               </div>
@@ -751,53 +768,52 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
               )}
             </div>
 
-            {totalPages > 0 && (
-              <div className="pt-2 pb-2 border-t border-gray-100 bg-white flex flex-wrap items-center justify-between px-3 sm:px-5 gap-2 shrink-0">
-                <div className="text-[10px] sm:text-[11px] text-gray-500 font-bold uppercase tracking-wider">
-                  PAGE {currentPage} OF {totalPages}
-                </div>
-                <div className="flex items-center gap-1.5 sm:gap-2.5">
-                  <Button
-                    variant="outline"
-                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                    disabled={currentPage === 1}
-                    className={`h-7 w-7 sm:h-8 sm:w-8 p-0 rounded-lg transition-all border ${currentPage === 1
-                      ? 'bg-gray-50 text-gray-300 border-gray-100'
-                      : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:text-gray-900 shadow-sm'
-                      }`}
-                  >
-                    <ChevronLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                  </Button>
-                  <div className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto max-w-[180px] sm:max-w-[360px] custom-scrollbar py-0.5 px-0.5">
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                      <Button
-                        key={page}
-                        variant={currentPage === page ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => setCurrentPage(page)}
-                        className={`h-7 w-7 sm:h-8 sm:w-8 p-0 text-[10px] sm:text-[11px] font-bold rounded-lg flex-shrink-0 transition-all ${currentPage === page
-                          ? 'bg-red-600 hover:bg-red-700 text-white border-red-600 shadow-sm'
-                          : 'bg-white border-gray-100 text-gray-600 hover:bg-red-50 hover:text-red-600 hover:border-red-100'
-                          }`}
-                      >
-                        {page}
-                      </Button>
-                    ))}
-                  </div>
-                  <Button
-                    variant="outline"
-                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                    disabled={currentPage === totalPages || totalPages === 0}
-                    className={`h-7 w-7 sm:h-8 sm:w-8 p-0 rounded-lg transition-all border ${currentPage === totalPages || totalPages === 0
-                      ? 'bg-gray-50 text-gray-300 border-gray-100'
-                      : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:text-gray-900 shadow-sm'
-                      }`}
-                  >
-                    <ChevronRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                  </Button>
-                </div>
+            <div className="pt-2 pb-2 border-t border-gray-100 bg-white flex flex-wrap items-center justify-between px-3 sm:px-5 gap-2 shrink-0 min-h-[48px]">
+              <div className="text-[10px] sm:text-[11px] text-gray-500 font-bold uppercase tracking-wider">
+                PAGE {currentPage} OF {Math.max(1, totalPages)}
               </div>
-            )}
+              <div className="flex items-center gap-1.5 sm:gap-2.5">
+                <Button
+                  variant="outline"
+                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1 || totalPages <= 1}
+                  className={`h-7 w-7 sm:h-8 sm:w-8 p-0 rounded-lg transition-all border ${currentPage === 1 || totalPages <= 1
+                    ? 'bg-gray-50 text-gray-300 border-gray-100'
+                    : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:text-gray-900 shadow-sm'
+                    }`}
+                >
+                  <ChevronLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                </Button>
+                <div className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto max-w-[180px] sm:max-w-[360px] custom-scrollbar py-0.5 px-0.5">
+                  {Array.from({ length: Math.max(1, totalPages) }, (_, i) => i + 1).map((page) => (
+                    <Button
+                      key={page}
+                      variant={currentPage === page ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setCurrentPage(page)}
+                      disabled={totalPages <= 1}
+                      className={`h-7 w-7 sm:h-8 sm:w-8 p-0 text-[10px] sm:text-[11px] font-bold rounded-lg flex-shrink-0 transition-all ${currentPage === page
+                        ? 'bg-red-600 hover:bg-red-700 text-white border-red-600 shadow-sm'
+                        : 'bg-white border-gray-100 text-gray-600 hover:bg-red-50 hover:text-red-600 hover:border-red-100'
+                        }`}
+                    >
+                      {page}
+                    </Button>
+                  ))}
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() => setCurrentPage(Math.min(Math.max(1, totalPages), currentPage + 1))}
+                  disabled={currentPage >= totalPages || totalPages <= 1}
+                  className={`h-7 w-7 sm:h-8 sm:w-8 p-0 rounded-lg transition-all border ${currentPage >= totalPages || totalPages <= 1
+                    ? 'bg-gray-50 text-gray-300 border-gray-100'
+                    : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:text-gray-900 shadow-sm'
+                    }`}
+                >
+                  <ChevronRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                </Button>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -807,6 +823,7 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
         order={selectedOrder}
         open={!!selectedOrder}
         onOpenChange={(open) => !open && setSelectedOrder(null)}
+        user={user}
       />
     </div>
   );

@@ -1,0 +1,26 @@
+{
+  "total_rows": 10000,
+  "partitions": {
+    "train": {
+      "file": "dataset_b_train_7000.csv",
+      "rows": 7000,
+      "sha256": "4dab063f029936a2788454a013539294eff13f29036bff6ba30e9701c45c2aed"
+    },
+    "validation": {
+      "file": "dataset_b_validation_1500.csv",
+      "rows": 1500,
+      "sha256": "d2dc915946435d85448a3bde6f4981177e8c4ebf710908c3bf8e8fa7c30ed0c3"
+    },
+    "test": {
+      "file": "dataset_b_test_1500.csv",
+      "rows": 1500,
+      "sha256": "caaa2774868ce0657020cb1cfb2f153bc2fe56dee99af9cb2c6e38342e906a5f"
+    }
+  },
+  "cross_partition_overlap": {
+    "train_intersection_validation": 0,
+    "train_intersection_test": 0,
+    "validation_intersection_test": 0
+  },
+  "union_integrity_check": "PASS"
+}

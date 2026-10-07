@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shoelotskey SMS — System Enhancement & Future Recommendations Roadmap</title>
+  <style>
+    :root {
+      --primary: #991b1b;
+      --primary-dark: #7f1d1d;
+      --primary-light: #fef2f2;
+      --accent: #4338ca;
+      --accent-light: #e0e7ff;
+      --slate-900: #0f172a;
+      --slate-800: #1e293b;
+      --slate-700: #334155;
+      --slate-600: #475569;
+      --slate-500: #64748b;
+      --slate-100: #f1f5f9;
+      --slate-50: #f8fafc;
+      --emerald-700: #047857;
+      --emerald-600: #059669;
+      --emerald-50: #ecfdf5;
+      --amber-700: #b45309;
+      --amber-600: #d97706;
+      --amber-50: #fffbeb;
+      --indigo-700: #4338ca;
+      --indigo-50: #eef2ff;
+      --border: #cbd5e1;
+      --border-light: #e2e8f0;
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--font);
+      background-color: #f1f5f9;
+      color: var(--slate-800);
+      line-height: 1.65;
+      padding: 30px 16px 60px 16px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: #ffffff;
+      border: 1px solid var(--border-light);
+      border-radius: 16px;
+      box-shadow: 0 10px 25px -5px rgba(0,0,0,0.06), 0 8px 10px -6px rgba(0,0,0,0.02);
+      overflow: hidden;
+    }
+
+    /* Header */
+    header {
+      background: linear-gradient(135deg, var(--slate-900) 0%, #1e1b4b 100%);
+      color: #ffffff;
+      padding: 44px 48px;
+      border-bottom: 4px solid var(--primary);
+    }
+    .badge-bar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .badge {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 4px 10px;
+      border-radius: 6px;
+      display: inline-block;
+    }
+    .badge-primary { background: rgba(239, 68, 68, 0.25); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.4); }
+    .badge-success { background: rgba(16, 185, 129, 0.25); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.4); }
+    .badge-warning { background: rgba(245, 158, 11, 0.25); color: #fde68a; border: 1px solid rgba(245, 158, 11, 0.4); }
+    .badge-accent { background: rgba(99, 102, 241, 0.25); color: #c7d2fe; border: 1px solid rgba(99, 102, 241, 0.4); }
+
+    h1 { font-size: 26px; font-weight: 800; line-height: 1.25; margin-bottom: 12px; }
+    header p { color: #cbd5e1; font-size: 14.5px; max-width: 950px; }
+
+    /* Nav Bar */
+    .nav-bar {
+      background: var(--slate-800);
+      padding: 12px 30px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+      border-bottom: 1px solid var(--slate-700);
+    }
+    .nav-btn {
+      background: rgba(255,255,255,0.08);
+      color: #e2e8f0;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .nav-btn:hover { background: var(--primary); color: #ffffff; }
+
+    .content { padding: 40px 48px; }
+
+    h2 {
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--slate-900);
+      margin: 40px 0 16px 0;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--slate-100);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    h2:first-of-type { margin-top: 0; }
+    h3 { font-size: 16px; font-weight: 700; color: var(--slate-800); margin: 24px 0 10px 0; }
+    p { margin-bottom: 14px; font-size: 14px; color: var(--slate-700); }
+    ul, ol { margin-left: 24px; margin-bottom: 16px; font-size: 14px; color: var(--slate-700); }
+    li { margin-bottom: 6px; }
+
+    /* Callouts */
+    .callout {
+      border-radius: 10px;
+      padding: 18px 22px;
+      margin: 20px 0;
+      font-size: 13.5px;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      line-height: 1.6;
+    }
+    .callout-warning { background: var(--amber-50); border: 1px solid #fde68a; color: #92400e; }
+    .callout-danger { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+    .callout-success { background: var(--emerald-50); border: 1px solid #a7f3d0; color: #065f46; }
+    .callout-info { background: #eef2ff; border: 1px solid #c7d2fe; color: #3730a3; }
+    .callout strong { display: block; margin-bottom: 4px; font-size: 14px; }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0 28px 0;
+      font-size: 13px;
+      background: #ffffff;
+      border: 1px solid var(--border-light);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th {
+      background: var(--slate-100);
+      color: var(--slate-800);
+      font-weight: 700;
+      text-align: left;
+      padding: 12px 14px;
+      border-bottom: 2px solid var(--border-light);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    td {
+      padding: 11px 14px;
+      border-bottom: 1px solid var(--border-light);
+      color: var(--slate-700);
+      vertical-align: top;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background-color: var(--slate-50); }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; }
+
+    /* Enhancement Card */
+    .enhancement-card {
+      margin: 28px 0;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03);
+      background: #ffffff;
+    }
+    .enhancement-header {
+      background: var(--slate-800);
+      color: #f8fafc;
+      padding: 14px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .enhancement-title {
+      font-size: 14.5px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .rank-badge {
+      background: var(--primary);
+      color: #ffffff;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 4px;
+      letter-spacing: 0.04em;
+    }
+    .status-badge {
+      font-size: 11.5px;
+      font-weight: 700;
+      padding: 3px 9px;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+    .status-prototype { background: #fef3c7; color: #92400e; }
+    .status-deferred { background: #fee2e2; color: #991b1b; }
+    .status-planned { background: #e0e7ff; color: #3730a3; }
+
+    .enhancement-body { padding: 22px; }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      background: var(--slate-50);
+      padding: 14px 18px;
+      border-radius: 8px;
+      border: 1px solid var(--border-light);
+      margin-bottom: 18px;
+      font-size: 12.5px;
+    }
+    .meta-item strong { color: var(--slate-900); display: block; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.03em; }
+
+    .section-subtitle {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--slate-800);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin: 14px 0 6px 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .code-box {
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 14px 16px;
+      border-radius: 8px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.6;
+      margin: 10px 0 16px 0;
+      overflow-x: auto;
+    }
+
+    footer {
+      background: var(--slate-50);
+      border-top: 1px solid var(--border-light);
+      padding: 24px 48px;
+      font-size: 12px;
+      color: var(--slate-600);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    @media print {
+      body { padding: 0; background: #fff; }
+      .container { box-shadow: none; border: none; }
+      .nav-bar { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- Header -->
+  <header>
+    <div class="badge-bar">
+      <span class="badge badge-primary">Chapter 4 & 5 Aligned</span>
+      <span class="badge badge-success">5 IT Experts Surveyed</span>
+      <span class="badge badge-accent">ISO/IEC 25010 Roadmap</span>
+      <span class="badge badge-warning">Post-Capstone Development</span>
+    </div>
+    <h1>Shoelotskey SMS — Recommended System Enhancements & Future Roadmap</h1>
+    <p>A comprehensive, academically rigorous synthesis of uncompleted features, expert feedback, and architectural recommendations compiled from the official ISO/IEC 25010 evaluations (Dr. Eduardo Yu, Edison Yu, Jheo Enndi Corona, Expert 4, and Ken Carlo Javier). Aligned with <strong>Chapter 4 (Section 4.7, Table 24)</strong> and <strong>Chapter 5 (Section 6, Pages 154–155)</strong>.</p>
+  </header>
+
+  <!-- Navigation Bar -->
+  <div class="nav-bar">
+    <a href="#executive-summary" class="nav-btn">📌 Executive Summary</a>
+    <a href="#summary-matrix" class="nav-btn">📊 Master Ranking Matrix</a>
+    <a href="#domain-1" class="nav-btn">📱 Customer Portal & QR</a>
+    <a href="#domain-2" class="nav-btn">🤖 ML Retraining & XAI</a>
+    <a href="#domain-3" class="nav-btn">⚙️ Master Data Dropdowns</a>
+    <a href="#domain-4" class="nav-btn">📦 Inventory Auto-Deduct</a>
+    <a href="#domain-5" class="nav-btn">🔒 Security & API Hardening</a>
+    <a href="#domain-6" class="nav-btn">🎨 UI/UX & WCAG Contrast</a>
+  </div>
+
+  <div class="content">
+
+    <!-- Section 1: Executive Summary -->
+    <h2 id="executive-summary">1. Executive Summary: The Strategic Value of Recommendations</h2>
+    <p>In academic capstone defense, a research project is evaluated not only on what was successfully built in Version 1.0, but on the researchers' maturity in identifying real-world operational gaps and formulating concrete, evidence-based engineering roadmaps. The five IT experts who evaluated Shoelotskey SMS under the ISO/IEC 25010 standard praised the system's core architecture while offering high-value suggestions for future industrialization.</p>
+
+    <div class="callout callout-info">
+      <div>
+        <strong>The Academic Defense Stance on Unimplemented / Prototype Features:</strong>
+        Features such as the <em>Customer Self-Service Portal</em> and <em>QR Code Verification</em> were explicitly designated in Chapter 1 (Scope and Limitations, Pages 12–14) as secondary, customer-facing modules beyond the internal management scope of Version 1.0. Presenting them as <strong>"Operational Prototypes Deferred for Phase 2 Deployment"</strong> demonstrates rigorous project scope management rather than an incomplete project.
+      </div>
+    </div>
+
+    <!-- Section 2: Master Ranking Matrix -->
+    <h2 id="summary-matrix">2. Master Ranking Matrix: IT Expert Suggestions (Table 24 Alignment)</h2>
+    <p>This table synthesizes the verbatim suggestions from all five IT experts in the official compilation archive, ranked according to frequency and impact:</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Rank</th>
+          <th>Recommendation / Feature Enhancement</th>
+          <th>Frequency</th>
+          <th>Percentage</th>
+          <th>Evaluators Who Cited</th>
+          <th>ISO 25010 Dimension</th>
+          <th>Current Status in SMS</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Rank 1</strong></td>
+          <td><strong>Dynamic Dropdown Management</strong> (Customizable brands, models, couriers, and services without code modification)</td>
+          <td>3 / 5</td>
+          <td>60.0%</td>
+          <td>Dr. Eduardo Yu, Edison Yu, Respondent 4</td>
+          <td>Flexibility & Maintainability</td>
+          <td><span class="status-badge status-prototype">Prototype / Partial</span></td>
+        </tr>
+        <tr>
+          <td><strong>Rank 2</strong></td>
+          <td><strong>Detailed Inventory Audit Trail</strong> (Granular transaction logging for material stock-in/out and usage tracking)</td>
+          <td>2 / 5</td>
+          <td>40.0%</td>
+          <td>Edison Yu, Respondent 4</td>
+          <td>Reliability & Safety</td>
+          <td><span class="status-badge status-prototype">Functional in V1.0</span></td>
+        </tr>
+        <tr>
+          <td><strong>Rank 2</strong></td>
+          <td><strong>Automated SMS/Email Status Notifications</strong> (Customer alerts on order stage transitions: On-Going, For Release, Ready for Pickup)</td>
+          <td>2 / 5</td>
+          <td>40.0%</td>
+          <td>Edison Yu, Ken Carlo Javier</td>
+          <td>Functional Suitability & Safety</td>
+          <td><span class="status-badge status-deferred">Deferred (Phase 2)</span></td>
+        </tr>
+        <tr>
+          <td><strong>Rank 4</strong></td>
+          <td><strong>Automated ML Retraining Pipeline</strong> (Continuous model updating on forward digital timestamps `released_at − created_at`)</td>
+          <td>1 / 5</td>
+          <td>20.0%</td>
+          <td>Ken Carlo Javier</td>
+          <td>Maintainability & Accuracy</td>
+          <td><span class="status-badge status-planned">Planned Research</span></td>
+        </tr>
+        <tr>
+          <td><strong>Rank 4</strong></td>
+          <td><strong>Strict Backend API Payload Validation</strong> (Defense-in-depth Pydantic enforcement to reject malformed/empty payloads)</td>
+          <td>1 / 5</td>
+          <td>20.0%</td>
+          <td>Ken Carlo Javier</td>
+          <td>Security & Reliability</td>
+          <td><span class="status-badge status-prototype">Implemented V1.1</span></td>
+        </tr>
+        <tr>
+          <td><strong>Rank 4</strong></td>
+          <td><strong>Redis Caching & Login Rate Limiting</strong> (Performance optimization for Sales reports and protection against brute-force login)</td>
+          <td>1 / 5</td>
+          <td>20.0%</td>
+          <td>Ken Carlo Javier</td>
+          <td>Performance & Security</td>
+          <td><span class="status-badge status-deferred">Deferred (Phase 2)</span></td>
+        </tr>
+        <tr>
+          <td><strong>Rank 4</strong></td>
+          <td><strong>WCAG 2.1 AA Accessibility & Color Contrast</strong> (Fixing low-contrast gray text and sub-12px font sizes for readability)</td>
+          <td>1 / 5</td>
+          <td>20.0%</td>
+          <td>Ken Carlo Javier</td>
+          <td>Interaction Capability</td>
+          <td><span class="status-badge status-prototype">Implemented V1.1</span></td>
+        </tr>
+        <tr>
+          <td><strong>Rank 4</strong></td>
+          <td><strong>Currency Formatting Standardization</strong> (Consistent two-decimal display `₱912.50` and fixing negative pending balances)</td>
+          <td>1 / 5</td>
+          <td>20.0%</td>
+          <td>Jheo Enndi Corona</td>
+          <td>Functional Suitability</td>
+          <td><span class="status-badge status-prototype">Implemented V1.1</span></td>
+        </tr>
+        <tr>
+          <td><strong>Rank 4</strong></td>
+          <td><strong>Customer Order History & Profiling View</strong> (Comprehensive modal displaying repeat client transactions and preferences)</td>
+          <td>1 / 5</td>
+          <td>20.0%</td>
+          <td>Ken Carlo Javier</td>
+          <td>Flexibility & Usability</td>
+          <td><span class="status-badge status-prototype">Functional in V1.0</span></td>
+        </tr>
+        <tr>
+          <td><strong>Rank 4</strong></td>
+          <td><strong>Auto-Deduction of Raw Materials on "On-Going"</strong> (Automatic inventory consumption triggered by technician status update)</td>
+          <td>1 / 5</td>
+          <td>20.0%</td>
+          <td>Ken Carlo Javier</td>
+          <td>Functional Suitability & Safety</td>
+          <td><span class="status-badge status-prototype">Functional in V1.0</span></td>
+        </tr>
+        <tr>
+          <td><strong>Extension</strong></td>
+          <td><strong>QR Code Physical Claim Stub Verification</strong> (Camera/scanner instant lookup for receipt claiming)</td>
+          <td>Unimplemented</td>
+          <td>—</td>
+          <td>Scope & Workflow Gap Analysis</td>
+          <td>Performance Efficiency</td>
+          <td><span class="status-badge status-deferred">Prototype Only</span></td>
+        </tr>
+        <tr>
+          <td><strong>Extension</strong></td>
+          <td><strong>Customer Self-Service Online Booking Portal</strong> (Public web portal for booking drop-offs and checking claim status)</td>
+          <td>Unimplemented</td>
+          <td>—</td>
+          <td>Chapter 1 Scope Limitation</td>
+          <td>Functional Suitability</td>
+          <td><span class="status-badge status-deferred">Deferred (Phase 2)</span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Section 3: Domain 1 - Customer Portal & QR Code -->
+    <h2 id="domain-1">3. Domain 1: Customer Engagement & Self-Service Architecture</h2>
+
+    <!-- Feature 1: Customer Portal -->
+    <div class="enhancement-card">
+      <div class="enhancement-header">
+        <div class="enhancement-title">
+          <span class="rank-badge">EXTENSION</span>
+          <span>Customer Self-Service Portal & Online Order Booking</span>
+        </div>
+        <span class="status-badge status-deferred">Phase 2 Architecture</span>
+      </div>
+      <div class="enhancement-body">
+        <div class="meta-grid">
+          <div class="meta-item"><strong>Originating Context:</strong> Chapter 1 Scope (p. 12–14) & Customer Feedback</div>
+          <div class="meta-item"><strong>Target ISO Characteristic:</strong> Functional Suitability, Usability</div>
+          <div class="meta-item"><strong>Operational Priority:</strong> High (Customer Convenience)</div>
+          <div class="meta-item"><strong>Target Deployment:</strong> Version 2.0 (Public Cloud)</div>
+        </div>
+
+        <div class="section-subtitle">Observed Limitation in Version 1.0:</div>
+        <p>In the current implementation, Shoelotskey SMS is strictly an internal intranet/web management system used exclusively by the owner and shop technicians. Customers must physically visit the Villamor shop or message staff via personal Facebook Messenger accounts to inquire about order status, causing repetitive verbal inquiries and staff interruptions during bench work.</p>
+
+        <div class="section-subtitle">Recommended Technical Solution:</div>
+        <p>Develop a decoupled, lightweight customer-facing Progressive Web App (PWA) allowing customers to log in using their mobile number with One-Time Password (OTP) verification via SMS. The portal enables clients to:</p>
+        <ul>
+          <li>Submit online booking requests with uploaded shoe photos before dropping off footwear.</li>
+          <li>View real-time stage progress (e.g., <em>Received $\rightarrow$ Cleaning in Progress $\rightarrow$ Curing $\rightarrow$ Ready for Pickup</em>).</li>
+          <li>Review before/after restoration photos uploaded by technicians.</li>
+          <li>Authorize add-on services or repair recommendations digitally.</li>
+        </ul>
+
+        <div class="section-subtitle">Proposed Architecture & API Blueprint:</div>
+        <div class="code-box">
+# Customer Portal Public Endpoint (FastAPI)
+@app.get("/api/public/orders/track/{tracking_token}", response_model=PublicOrderTrackSchema)
+def track_customer_order(tracking_token: str, db: Session = Depends(get_db)):
+    order = db.query(Order).filter(Order.tracking_token == tracking_token).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order tracking record not found")
+    return {
+        "order_number": order.order_number,
+        "status": order.status,
+        "expected_release_date": order.expected_release_date,
+        "items_count": len(order.items),
+        "total_amount": order.grand_total,
+        "balance_due": order.grand_total - order.amount_received,
+        "is_ready_for_claim": order.status == "For Release"
+    }</div>
+      </div>
+    </div>
+
+    <!-- Feature 2: QR Code Stub -->
+    <div class="enhancement-card">
+      <div class="enhancement-header">
+        <div class="enhancement-title">
+          <span class="rank-badge">EXTENSION</span>
+          <span>QR Code Instant Lookup & Physical Claim Stub Verification</span>
+        </div>
+        <span class="status-badge status-prototype">Prototype Deferred</span>
+      </div>
+      <div class="enhancement-body">
+        <div class="meta-grid">
+          <div class="meta-item"><strong>Originating Context:</strong> Shop Staff Feedback & Counter Operations</div>
+          <div class="meta-item"><strong>Target ISO Characteristic:</strong> Performance Efficiency, Safety</div>
+          <div class="meta-item"><strong>Operational Priority:</strong> Medium (Counter Speed)</div>
+          <div class="meta-item"><strong>Target Deployment:</strong> Version 1.5 Update</div>
+        </div>
+
+        <div class="section-subtitle">Observed Limitation in Version 1.0:</div>
+        <p>While the digital search bar achieves an average retrieval time of 0.41 minutes (24.6 seconds), staff must still manually type the customer name or order number on the keyboard when a client presents their paper claim stub. During peak weekend hours, typing errors or spelling variations can cause brief delays.</p>
+
+        <div class="section-subtitle">Recommended Technical Solution:</div>
+        <p>Integrate automated QR code generation directly into the printed/digital receipt. When the job order is created, the system generates a cryptographically signed QR code containing the order ID and security hash. At the counter, staff use a standard USB barcode/QR scanner or mobile tablet camera to scan the stub, instantly pulling up the order details in less than <strong>0.05 seconds</strong>.</p>
+
+        <div class="section-subtitle">Frontend QR Scanning Integration (React / TypeScript):</div>
+        <div class="code-box">
+// QR Scanner Hook for Counter Lookup
+import { Html5QrcodeScanner } from "html5-qrcode";
+
+const onScanSuccess = (decodedText: string) => {
+  // Instant redirect to Claim modal without manual typing
+  if (decodedText.startsWith("SLK-ORD-")) {
+    fetchOrderDetails(decodedText);
+    openClaimModal();
+  }
+};</div>
+      </div>
+    </div>
+
+    <!-- Feature 3: Automated SMS/Email -->
+    <div class="enhancement-card">
+      <div class="enhancement-header">
+        <div class="enhancement-title">
+          <span class="rank-badge">RANK 2</span>
+          <span>Automated SMS & Email Status Notifications (Twilio / Semaphore)</span>
+        </div>
+        <span class="status-badge status-deferred">Deferred (Phase 2)</span>
+      </div>
+      <div class="enhancement-body">
+        <div class="meta-grid">
+          <div class="meta-item"><strong>Evaluator Cited:</strong> Ken Carlo Javier, Edison Yu (Table 24, Rank 2 - 40.0%)</div>
+          <div class="meta-item"><strong>Target ISO Characteristic:</strong> Functional Suitability, Safety</div>
+          <div class="meta-item"><strong>Operational Priority:</strong> High (Customer Pickup Rate)</div>
+          <div class="meta-item"><strong>Target Deployment:</strong> Version 2.0 (SMS Gateway Integration)</div>
+        </div>
+
+        <div class="section-subtitle">Expert Comment (Ken Carlo Javier):</div>
+        <p><em>"Automated SMS/Email notifications for customers when their order status changes. Customers do not know when their shoes are ready, leading to excessive shop storage and delayed pickups."</em></p>
+
+        <div class="section-subtitle">Academic Rationale & Thesis Defense Alignment:</div>
+        <p>This recommendation directly addresses the primary finding of your thesis! In Chapter 4, your Random Forest evaluation revealed that the historical dataset suffered from an average customer pickup latency of <strong>4.63 days</strong>. Automated SMS alerts (e.g., <em>"Hello Marco, your Nike Air Force 1 is clean and ready for pickup at Shoelotskey Villamor!"</em>) will prompt customers to claim their shoes immediately, drastically reducing storage clutter and tightening the turnaround loop.</p>
+      </div>
+    </div>
+
+    <!-- Section 4: Domain 2 - Machine Learning Pipeline -->
+    <h2 id="domain-2">4. Domain 2: Machine Learning Retraining & Explainable AI (XAI)</h2>
+
+    <!-- Feature 4: ML Retraining Pipeline -->
+    <div class="enhancement-card">
+      <div class="enhancement-header">
+        <div class="enhancement-title">
+          <span class="rank-badge">RANK 4</span>
+          <span>Automated Weekly ML Retraining Pipeline with Drift Detection</span>
+        </div>
+        <span class="status-badge status-planned">Future Research</span>
+      </div>
+      <div class="enhancement-body">
+        <div class="meta-grid">
+          <div class="meta-item"><strong>Evaluator Cited:</strong> Ken Carlo Javier (Table 24, Rank 4 - 20.0%)</div>
+          <div class="meta-item"><strong>Target ISO Characteristic:</strong> Maintainability, Reliability</div>
+          <div class="meta-item"><strong>Operational Priority:</strong> Critical for Long-Term AI Value</div>
+          <div class="meta-item"><strong>Target Deployment:</strong> Next Research Phase</div>
+        </div>
+
+        <div class="section-subtitle">Expert Comment (Ken Carlo Javier):</div>
+        <p><em>"Automated pipeline to retrain the ML model weekly with new historical data."</em></p>
+
+        <div class="section-subtitle">Technical Implementation Design:</div>
+        <p>In Version 1.0, the Random Forest model was trained on 119 validated historical orders. As the shop operates the digital system, new orders accumulate in the PostgreSQL database with authentic <code class="mono">released_at</code> timestamps. An automated retraining worker (using Celery or GitHub Actions cron) should be scheduled to:</p>
+        <ol>
+          <li>Query all completed orders where <code class="mono">status = 'Claimed'</code> and <code class="mono">released_at IS NOT NULL</code>.</li>
+          <li>Calculate the pure bench duration: <code class="mono">bench_turnaround_days = (released_at - created_at)</code>.</li>
+          <li>Evaluate model drift against the holdout set; if the newly trained model achieves an MAE lower than 8.56 days, promote it to active production and archive the older model artifact with an audit log.</li>
+        </ol>
+      </div>
+    </div>
+
+    <!-- Feature 5: Explainable AI -->
+    <div class="enhancement-card">
+      <div class="enhancement-header">
+        <div class="enhancement-title">
+          <span class="rank-badge">RANK 1</span>
+          <span>Explainable AI (XAI): SHAP Feature Contribution Visualizer</span>
+        </div>
+        <span class="status-badge status-planned">Future Research</span>
+      </div>
+      <div class="enhancement-body">
+        <div class="meta-grid">
+          <div class="meta-item"><strong>Evaluator Cited:</strong> Dr. Eduardo R. Yu II (Chapter 4, p. 132)</div>
+          <div class="meta-item"><strong>Target ISO Characteristic:</strong> Functional Suitability, Usability</div>
+          <div class="meta-item"><strong>Operational Priority:</strong> High (Trust & Transparency)</div>
+          <div class="meta-item"><strong>Target Deployment:</strong> Version 2.0</div>
+        </div>
+
+        <div class="section-subtitle">Expert Comment (Dr. Eduardo Yu):</div>
+        <p><em>"More detailed information on the predicted date for explainable and transparency."</em></p>
+
+        <div class="section-subtitle">Technical Solution:</div>
+        <p>Incorporate SHAP (SHapley Additive exPlanations) into the Job Order modal. When staff view the advisory predicted release date, a breakdown tooltip shows exactly which features added or subtracted turnaround days (e.g., <em>+3.0 days due to Full Reglue cure time, +1.5 days due to 4 pending shop orders, -1.0 day due to Rush priority</em>). This transforms the model from an opaque black box into an intuitive operational assistant.</p>
+      </div>
+    </div>
+
+    <!-- Section 5: Domain 3 - Master Data Management -->
+    <h2 id="domain-3">5. Domain 3: Operational Flexibility & Dynamic Dropdown Management</h2>
+
+    <!-- Feature 6: Dynamic Dropdowns -->
+    <div class="enhancement-card">
+      <div class="enhancement-header">
+        <div class="enhancement-title">
+          <span class="rank-badge">RANK 1</span>
+          <span>Dynamic Master Data Management (Configurable Brands, Couriers & Services)</span>
+        </div>
+        <span class="status-badge status-prototype">Prototype / Partial</span>
+      </div>
+      <div class="enhancement-body">
+        <div class="meta-grid">
+          <div class="meta-item"><strong>Evaluators Cited:</strong> Dr. Eduardo Yu, Edison Yu, Respondent 4 (Table 24, Rank 1 - 60.0%)</div>
+          <div class="meta-item"><strong>Target ISO Characteristic:</strong> Flexibility, Maintainability</div>
+          <div class="meta-item"><strong>Operational Priority:</strong> High (Administrative Independence)</div>
+          <div class="meta-item"><strong>Target Deployment:</strong> Version 1.5 Update</div>
+        </div>
+
+        <div class="section-subtitle">Expert Comments:</div>
+        <p>• <strong>Edison Yu:</strong> <em>"Some of the options are hardwired, it is wise to have more flexibility to add new brands etc., courier etc., model etc. Avoid direct modification on your products & services."</em><br>
+        • <strong>Dr. Eduardo Yu:</strong> <em>"More flexibility on the drop-down option by providing a facility to add/update the data."</em></p>
+
+        <div class="section-subtitle">Current System Reality & Improvement Roadmap:</div>
+        <p>In Version 1.0, core shoe services (Basic Cleaning, Reglue, Restoration, etc.) can be managed via the <strong>Service Management</strong> page. However, footwear brands (Nike, Adidas, Jordan, New Balance) and delivery couriers (Lalamove, Grab, J&T) were stored as frontend static constants in <code class="mono">JobOrderForm.tsx</code>. The recommended enhancement is to create an <strong>Admin Configuration Panel</strong> backed by database tables (<code class="mono">shoe_brands</code>, <code class="mono">couriers</code>, <code class="mono">shoe_materials</code>), allowing the owner to add new sneaker brands without developer intervention.</p>
+      </div>
+    </div>
+
+    <!-- Section 6: Domain 4 - Inventory Automation -->
+    <h2 id="domain-4">6. Domain 4: Inventory Automation & Supply Chain Tracking</h2>
+
+    <!-- Feature 7: Inventory Auto-Deduct -->
+    <div class="enhancement-card">
+      <div class="enhancement-header">
+        <div class="enhancement-title">
+          <span class="rank-badge">RANK 4</span>
+          <span>Automated BOM (Bill of Materials) Stock Deduction on Order Progression</span>
+        </div>
+        <span class="status-badge status-prototype">Functional in V1.0</span>
+      </div>
+      <div class="enhancement-body">
+        <div class="meta-grid">
+          <div class="meta-item"><strong>Evaluators Cited:</strong> Ken Carlo Javier (Table 24, Rank 4 - 20.0%), Respondent 4</div>
+          <div class="meta-item"><strong>Target ISO Characteristic:</strong> Functional Suitability, Safety</div>
+          <div class="meta-item"><strong>Operational Priority:</strong> High (Stock Accuracy)</div>
+          <div class="meta-item"><strong>Target Deployment:</strong> Enhanced in V1.1</div>
+        </div>
+
+        <div class="section-subtitle">Expert Comment (Ken Carlo Javier):</div>
+        <p><em>"Auto-deduction of raw materials from inventory when a job order status changes to 'On-Going'."</em></p>
+
+        <div class="section-subtitle">Implementation Architecture:</div>
+        <p>Map each service to a standard consumption ratio (e.g., <em>Basic Cleaning $\rightarrow$ 30ml Premium Sneaker Shampoo + 1 Microfiber Towel; Full Reglue $\rightarrow$ 50ml Barge Infinity Cement</em>). When an order transitions from <strong>New Order</strong> to <strong>On-Going</strong>, the backend executes an atomic database transaction deducting these quantities and logging the movement into <code class="mono">inventory_logs</code> with reference to the specific Job Order ID.</p>
+      </div>
+    </div>
+
+    <!-- Section 7: Domain 5 - Security & API Hardening -->
+    <h2 id="domain-5">7. Domain 5: Enterprise Security & Backend API Hardening</h2>
+
+    <!-- Feature 8: Strict API Validation -->
+    <div class="enhancement-card">
+      <div class="enhancement-header">
+        <div class="enhancement-title">
+          <span class="rank-badge">RANK 4</span>
+          <span>Strict Defense-in-Depth API Validation & Payload Schema Enforcement</span>
+        </div>
+        <span class="status-badge status-prototype">Implemented V1.1</span>
+      </div>
+      <div class="enhancement-body">
+        <div class="meta-grid">
+          <div class="meta-item"><strong>Evaluator Cited:</strong> Ken Carlo Javier (Table 24, Rank 4 - 20.0%)</div>
+          <div class="meta-item"><strong>Target ISO Characteristic:</strong> Security, Reliability</div>
+          <div class="meta-item"><strong>Operational Priority:</strong> Critical for OWASP Compliance</div>
+          <div class="meta-item"><strong>Target Deployment:</strong> Version 1.1 (Active)</div>
+        </div>
+
+        <div class="section-subtitle">Expert Comment (Ken Carlo Javier):</div>
+        <p><em>"Backend API validation is overly permissive. While the UI correctly blocks empty fields, direct API testing shows it accepts empty or malformed payloads and assigns default values (e.g., 0.00 for totals) instead of rejecting them, lacking defense-in-depth. See ORD-2026-09-19-001 for example. Enforce strict backend validation to reject incomplete payloads at the API level."</em></p>
+
+        <div class="section-subtitle">Remediation Status:</div>
+        <p>This vulnerability was confirmed and resolved in the active codebase by replacing untyped <code class="mono">Dict[str, Any]</code> request bodies with strict Pydantic schemas (<code class="mono">OrderCreateSchema</code>) that validate phone numbers, non-zero items, positive prices, and non-empty customer names before accepting requests.</p>
+      </div>
+    </div>
+
+    <!-- Feature 9: Redis Caching & Rate Limiting -->
+    <div class="enhancement-card">
+      <div class="enhancement-header">
+        <div class="enhancement-title">
+          <span class="rank-badge">RANK 4</span>
+          <span>Redis In-Memory Caching & Login Endpoint Rate Limiting</span>
+        </div>
+        <span class="status-badge status-deferred">Deferred (Phase 2)</span>
+      </div>
+      <div class="enhancement-body">
+        <div class="meta-grid">
+          <div class="meta-item"><strong>Evaluator Cited:</strong> Ken Carlo Javier (Table 24, Rank 4 - 20.0%)</div>
+          <div class="meta-item"><strong>Target ISO Characteristic:</strong> Performance Efficiency, Security</div>
+          <div class="meta-item"><strong>Operational Priority:</strong> Medium (Scalability Defense)</div>
+          <div class="meta-item"><strong>Target Deployment:</strong> Cloud Production Deployment</div>
+        </div>
+
+        <div class="section-subtitle">Expert Comment (Ken Carlo Javier):</div>
+        <p><em>"Implement Redis caching for the Sales/Analytics modules to reduce database load as data scales, and add rate-limiting to the login endpoint to prevent brute-force attacks."</em></p>
+
+        <div class="section-subtitle">Architecture Recommendation:</div>
+        <p>Deploy Redis alongside PostgreSQL on Heroku/AWS. Cache expensive SQL aggregations for annual and quarterly sales reports with a 5-minute TTL. Use <code class="mono">slowapi</code> on the <code class="mono">/api/login</code> route to enforce a maximum of 5 attempts per minute per IP address, preventing automated dictionary attacks.</p>
+      </div>
+    </div>
+
+    <!-- Section 8: Domain 6 - UI/UX & Accessibility -->
+    <h2 id="domain-6">8. Domain 6: UI/UX Quality & WCAG 2.1 AA Accessibility Standards</h2>
+
+    <!-- Feature 10: WCAG Contrast -->
+    <div class="enhancement-card">
+      <div class="enhancement-header">
+        <div class="enhancement-title">
+          <span class="rank-badge">RANK 4</span>
+          <span>WCAG 2.1 Level AA Contrast & Font Scaling Compliance</span>
+        </div>
+        <span class="status-badge status-prototype">Implemented V1.1</span>
+      </div>
+      <div class="enhancement-body">
+        <div class="meta-grid">
+          <div class="meta-item"><strong>Evaluator Cited:</strong> Ken Carlo Javier (Table 24, Rank 4 - 20.0%)</div>
+          <div class="meta-item"><strong>Target ISO Characteristic:</strong> Interaction Capability, Usability</div>
+          <div class="meta-item"><strong>Operational Priority:</strong> High (Shop Floor Usability)</div>
+          <div class="meta-item"><strong>Target Deployment:</strong> Version 1.1 (Active)</div>
+        </div>
+
+        <div class="section-subtitle">Expert Comment (Ken Carlo Javier):</div>
+        <p><em>"Enhance the interface to comply with WCAG standards. Improve color contrast (the current gray text is difficult to read) and ensure proper font sizing for better readability."</em></p>
+
+        <div class="section-subtitle">Remediation Status:</div>
+        <p>In the original prototype, secondary labels used <code class="mono">text-gray-400</code> (#9CA3AF), yielding a contrast ratio of only 2.14:1 against white backgrounds (failing WCAG 4.5:1 AA). The active codebase updated these styles to <code class="mono">text-slate-600</code> (#475569, contrast ratio 7.0:1) and standardized all micro-fonts to at least <code class="mono">text-xs</code> (12px), ensuring readability on shop tablets under varying lighting.</p>
+      </div>
+    </div>
+
+    <!-- Feature 11: Currency Standardization -->
+    <div class="enhancement-card">
+      <div class="enhancement-header">
+        <div class="enhancement-title">
+          <span class="rank-badge">RANK 4</span>
+          <span>Monetary Currency Formatting Standardization (`₱0.00`)</span>
+        </div>
+        <span class="status-badge status-prototype">Implemented V1.1</span>
+      </div>
+      <div class="enhancement-body">
+        <div class="meta-grid">
+          <div class="meta-item"><strong>Evaluator Cited:</strong> Jheo Enndi Corona (Table 24, Rank 4 - 20.0%)</div>
+          <div class="meta-item"><strong>Target ISO Characteristic:</strong> Functional Suitability, Reliability</div>
+          <div class="meta-item"><strong>Operational Priority:</strong> High (Financial Accuracy)</div>
+          <div class="meta-item"><strong>Target Deployment:</strong> Version 1.1 (Active)</div>
+        </div>
+
+        <div class="section-subtitle">Expert Comment (Jheo Enndi Corona):</div>
+        <p><em>"Standardize currency display to two decimals and fix the negative pending payments value (P912.5 instead of P912.50)."</em></p>
+
+        <div class="section-subtitle">Remediation Status:</div>
+        <p>Implemented a global utility formatter <code class="mono">formatCurrency(value)</code> in <code class="mono">src/app/utils/formatters.ts</code> utilizing <code class="mono">Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' })</code>, guaranteeing that all order totals, deposits, and balances strictly render with two decimal places and prevent negative balance artifacts.</p>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>
+    <div><strong>Shoelotskey Service Management System</strong> — System Enhancement & Future Recommendations Roadmap</div>
+    <div>Generated: September 22, 2026 | National Aviation Academy of the Philippines</div>
+  </footer>
+</div>
+
+</body>
+</html>

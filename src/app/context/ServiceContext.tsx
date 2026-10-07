@@ -6,6 +6,8 @@ import { useActivities } from './ActivityContext';
 
 interface ServiceContextType {
     services: Service[];
+    authorizationCode: string;
+    setAuthorizationCode: (code: string) => Promise<boolean>;
     addService: (service: Service) => void;
     updateService: (id: string, updates: Partial<Service>) => void;
     deleteService: (id: string) => void;
@@ -14,9 +16,174 @@ interface ServiceContextType {
 
 const ServiceContext = createContext<ServiceContextType | undefined>(undefined);
 
+const parseConnectedAddons = (val: any): string[] => {
+    if (!val) return [];
+    if (Array.isArray(val)) return val.map(String).map(s => s.trim()).filter(Boolean);
+    if (typeof val === 'string') {
+        const trimmed = val.trim();
+        if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+            try {
+                const parsed = JSON.parse(trimmed);
+                if (Array.isArray(parsed)) return parsed.map(String).map(s => s.trim()).filter(Boolean);
+            } catch (_) {}
+        }
+        return trimmed.split(',').map(s => s.trim()).filter(Boolean);
+    }
+    return [];
+};
+
+const parseDiscountMeta = (description: any, name: string) => {
+    let parsed: any = null;
+    if (typeof description === 'string' && description.trim().startsWith('{')) {
+        try {
+            parsed = JSON.parse(description);
+        } catch (_) {}
+    }
+    const sName = (name || '').toLowerCase();
+    const isSenior = sName.includes('senior') || sName.includes('snr');
+    const isPwd = sName.includes('pwd') || sName.includes('disability');
+
+    const requiresIdVerification = parsed?.requiresId ?? (parsed?.idType && parsed.idType !== 'none' ? true : (isSenior || isPwd));
+    const idVerificationType: 'control_number' | 'id_number' | 'none' = parsed?.idType || (isSenior ? 'control_number' : isPwd ? 'id_number' : 'none');
+    const idFormat: 'alphanumeric' | 'numbers' | 'letters' = parsed?.idFormat || 'alphanumeric';
+    const idDigits = parsed?.digits != null ? Number(parsed.digits) : undefined;
+    const discountType = parsed?.discountType || (description === 'fixed' ? 'fixed' : 'percent');
+
+    return { requiresIdVerification, idVerificationType, idFormat, idDigits, discountType };
+};
+
+const sanitizeServices = (raw: any[]): Service[] => {
+    if (!Array.isArray(raw)) return [];
+    return raw
+        .filter(bs => {
+            const name = (bs.name || bs.service_name || '').trim().toLowerCase();
+            if (name === 'midsole full reglue' || name === 'undersole full reglue') return false;
+            return true;
+        })
+        .map((bs: any) => {
+            const rawCat = typeof bs.category === 'object' ? bs.category?.category_name : bs.category;
+            const isDiscount = rawCat === 'discount';
+            const meta = isDiscount ? parseDiscountMeta(bs.description, bs.service_name ?? bs.name) : null;
+
+            return {
+                id: (bs.service_id ?? bs.id).toString(),
+                name: bs.service_name ?? bs.name,
+                price: parseFloat(bs.base_price ?? bs.price ?? 0),
+                category: rawCat,
+                active: bs.is_active !== undefined ? bs.is_active : (bs.active ?? true),
+                description: meta?.discountType || bs.description || '',
+                durationDays: bs.duration_days ?? bs.durationDays ?? 0,
+                code: bs.service_code ?? bs.code ?? '',
+                sortOrder: bs.sort_order ?? bs.sortOrder ?? 0,
+                connectedAddons: parseConnectedAddons(bs.connected_addons ?? bs.connectedAddons),
+                connectedBaseServices: parseConnectedAddons(bs.connected_base_services ?? bs.connectedBaseServices),
+                requiresIdVerification: meta ? meta.requiresIdVerification : Boolean(bs.requiresIdVerification),
+                idVerificationType: meta ? meta.idVerificationType : (bs.idVerificationType || 'none'),
+                idFormat: meta ? meta.idFormat : (bs.idFormat || 'alphanumeric'),
+                idDigits: meta ? meta.idDigits : bs.idDigits,
+                hasSpinner: (bs.category === 'addon' || bs.category?.category_name === 'addon') ? (bs.has_spinner !== undefined ? Boolean(bs.has_spinner) : (bs.hasSpinner !== undefined ? Boolean(bs.hasSpinner) : ((bs.service_name || bs.name || '').toLowerCase() === 'unyellowing' || (bs.service_name || bs.name || '').toLowerCase() === 'white paint'))) : false,
+            };
+        });
+};
+
 export function ServiceProvider({ children, user }: { children: ReactNode, user: { token: string; username?: string } }) {
     const { addActivity } = useActivities();
-    const [services, setServices] = useState<Service[]>([]);
+    const [services, setServices] = useState<Service[]>(() => {
+        if (typeof window !== 'undefined') {
+            const cache = localStorage.getItem('service_data_cache');
+            if (cache) {
+                try {
+                    const parsed = JSON.parse(cache);
+                    return sanitizeServices(parsed);
+                } catch(e) {}
+            }
+        }
+        return [];
+    });
+
+    const [authorizationCode, setAuthorizationCodeState] = useState<string>('');
+
+    useEffect(() => {
+        // Security Cleanup: Purge any legacy authorization codes from localStorage to prevent XSS exfiltration
+        if (typeof window !== 'undefined') {
+            try {
+                localStorage.removeItem('shoelotskey_auth_code');
+            } catch (_) {}
+        }
+        if (!user.token) return;
+
+        const fetchCode = () => {
+            fetch(`${API_BASE}/settings/authorization-code`, {
+                headers: {
+                    'Authorization': `Bearer ${user.token}`,
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(r => r.ok ? r.json() : null)
+            .then(data => {
+                if (data?.authorization_code && data.authorization_code !== '***') {
+                    setAuthorizationCodeState(data.authorization_code);
+                }
+            })
+            .catch(() => {});
+        };
+
+        fetchCode();
+
+        const handleLocalUpdate = (e: any) => {
+            if (e?.detail) setAuthorizationCodeState(e.detail);
+        };
+        window.addEventListener('shoelotskey:auth-code-updated', handleLocalUpdate);
+        window.addEventListener('focus', fetchCode);
+
+        let bc: BroadcastChannel | null = null;
+        try {
+            bc = new BroadcastChannel('shoelotskey_auth_channel');
+            bc.onmessage = (event) => {
+                if (event.data?.code) {
+                    setAuthorizationCodeState(event.data.code);
+                }
+            };
+        } catch (_) {}
+
+        return () => {
+            window.removeEventListener('shoelotskey:auth-code-updated', handleLocalUpdate);
+            window.removeEventListener('focus', fetchCode);
+            if (bc) bc.close();
+        };
+    }, [user.token]);
+
+    const setAuthorizationCode = async (code: string): Promise<boolean> => {
+        const clean = code.trim();
+        setAuthorizationCodeState(clean);
+        try {
+            const res = await fetch(`${API_BASE}/settings/authorization-code`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${user.token}`
+                },
+                body: JSON.stringify({ authorization_code: clean })
+            });
+            if (res.ok) {
+                const data = await res.json().catch(() => ({}));
+                const savedCode = data.authorization_code || clean;
+                setAuthorizationCodeState(savedCode);
+                if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('shoelotskey:auth-code-updated', { detail: savedCode }));
+                    try {
+                        const bc = new BroadcastChannel('shoelotskey_auth_channel');
+                        bc.postMessage({ type: 'AUTH_CODE_UPDATED', code: savedCode });
+                        bc.close();
+                    } catch (_) {}
+                }
+                return true;
+            }
+            return false;
+        } catch {
+            return false;
+        }
+    };
 
     // --- OFFLINE AUTO-SYNC QUEUE ---
     const queueServiceSync = (task: any) => {
@@ -25,44 +192,6 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
         const queue = queueStr ? JSON.parse(queueStr) : [];
         queue.push({ ...task, timestamp: Date.now() });
         localStorage.setItem('service_sync_queue', JSON.stringify(queue));
-    };
-
-    const parseConnectedAddons = (val: any): string[] => {
-        if (!val) return [];
-        if (Array.isArray(val)) return val.map(String).map(s => s.trim()).filter(Boolean);
-        if (typeof val === 'string') {
-            const trimmed = val.trim();
-            if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
-                try {
-                    const parsed = JSON.parse(trimmed);
-                    if (Array.isArray(parsed)) return parsed.map(String).map(s => s.trim()).filter(Boolean);
-                } catch (_) {}
-            }
-            return trimmed.split(',').map(s => s.trim()).filter(Boolean);
-        }
-        return [];
-    };
-
-    const sanitizeServices = (raw: any[]): Service[] => {
-        if (!Array.isArray(raw)) return [];
-        return raw
-            .filter(bs => {
-                const name = (bs.name || bs.service_name || '').trim().toLowerCase();
-                if (name === 'midsole full reglue' || name === 'undersole full reglue') return false;
-                return true;
-            })
-            .map((bs: any) => ({
-                id: (bs.service_id ?? bs.id).toString(),
-                name: bs.service_name ?? bs.name,
-                price: parseFloat(bs.base_price ?? bs.price ?? 0),
-                category: typeof bs.category === 'object' ? bs.category?.category_name : bs.category,
-                active: bs.is_active !== undefined ? bs.is_active : (bs.active ?? true),
-                description: bs.description || '',
-                durationDays: bs.duration_days ?? bs.durationDays ?? 0,
-                code: bs.service_code ?? bs.code ?? '',
-                sortOrder: bs.sort_order ?? bs.sortOrder ?? 0,
-                connectedAddons: parseConnectedAddons(bs.connected_addons ?? bs.connectedAddons)
-            }));
     };
 
     useEffect(() => {
@@ -184,10 +313,20 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
                 });
         };
 
-        initialFetch();
+        const isJobOrderForm = typeof window !== 'undefined' && window.location.pathname.startsWith('/job-order-form');
+        let deferTimer: any;
+        if (isJobOrderForm) {
+            deferTimer = setTimeout(initialFetch, 10000);
+        } else {
+            initialFetch();
+        }
+
         processSyncQueue();
         window.addEventListener('online', processSyncQueue);
-        return () => window.removeEventListener('online', processSyncQueue);
+        return () => {
+            clearTimeout(deferTimer);
+            window.removeEventListener('online', processSyncQueue);
+        };
     }, [user.token]);
 
     const addService = (service: Service) => {
@@ -208,7 +347,9 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
             duration_days: service.durationDays || 0,
             service_code: service.code || null,
             sort_order: optimisticService.sortOrder,
-            connected_addons: service.connectedAddons || []
+            connected_addons: service.connectedAddons || [],
+            connected_base_services: service.connectedBaseServices || [],
+            has_spinner: service.category === 'addon' ? Boolean(service.hasSpinner) : false
         };
 
         fetch(`${API_BASE}/services`, {
@@ -227,17 +368,25 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
                 return res.json();
             })
             .then(data => {
+                const rawCat = typeof data.category === 'object' ? data.category?.category_name : (data.category || service.category);
+                const meta = rawCat === 'discount' ? parseDiscountMeta(data.description, data.service_name) : null;
                 const verifiedSvc: Service = {
                     id: data.service_id.toString(),
                     name: data.service_name,
                     price: parseFloat(data.base_price),
-                    category: typeof data.category === 'object' ? data.category?.category_name : (data.category || service.category),
+                    category: rawCat,
                     active: data.is_active,
-                    description: data.description || '',
+                    description: meta?.discountType || data.description || '',
                     durationDays: data.duration_days || 0,
                     code: data.service_code || '',
                     sortOrder: data.sort_order || optimisticService.sortOrder,
-                    connectedAddons: parseConnectedAddons(data.connected_addons) || optimisticService.connectedAddons || []
+                    connectedAddons: parseConnectedAddons(data.connected_addons) || optimisticService.connectedAddons || [],
+                    connectedBaseServices: parseConnectedAddons(data.connected_base_services) || optimisticService.connectedBaseServices || [],
+                    requiresIdVerification: meta ? meta.requiresIdVerification : Boolean(service.requiresIdVerification),
+                    idVerificationType: meta ? meta.idVerificationType : (service.idVerificationType || 'none'),
+                    idFormat: meta ? meta.idFormat : (service.idFormat || 'alphanumeric'),
+                    idDigits: meta ? meta.idDigits : service.idDigits,
+                    hasSpinner: rawCat === 'addon' ? (data.has_spinner !== undefined ? Boolean(data.has_spinner) : Boolean(service.hasSpinner)) : false,
                 };
                 setServices((prev) => {
                     const updated = prev.map(s => s.id === tempId ? verifiedSvc : s);
@@ -293,6 +442,8 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
         if (updates.code !== undefined) payload.service_code = updates.code;
         if (updates.sortOrder !== undefined) payload.sort_order = updates.sortOrder;
         if (updates.connectedAddons !== undefined) payload.connected_addons = updates.connectedAddons;
+        if (updates.connectedBaseServices !== undefined) payload.connected_base_services = updates.connectedBaseServices;
+        if (updates.hasSpinner !== undefined) payload.has_spinner = (updates.category ?? service.category) === 'addon' ? Boolean(updates.hasSpinner) : false;
 
         fetch(`${API_BASE}/services/${id}`, {
             method: 'PUT',
@@ -310,18 +461,26 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
                 return res.json();
             })
             .then(data => {
+                const rawCat = typeof data.category === 'object' ? data.category?.category_name : (data.category || updates.category);
+                const meta = rawCat === 'discount' ? parseDiscountMeta(data.description, data.service_name) : null;
                 setServices((prev) => {
                     const updated = prev.map((service) => service.id === id ? {
                         ...service,
                         name: data.service_name,
                         price: parseFloat(data.base_price),
-                        category: typeof data.category === 'object' ? data.category?.category_name : (data.category || service.category),
+                        category: rawCat || service.category,
                         active: data.is_active,
-                        description: data.description || '',
+                        description: meta?.discountType || data.description || '',
                         durationDays: data.duration_days || 0,
                         code: data.service_code || '',
                         sortOrder: data.sort_order ?? service.sortOrder,
-                        connectedAddons: parseConnectedAddons(data.connected_addons ?? updates.connectedAddons ?? service.connectedAddons)
+                        connectedAddons: parseConnectedAddons(data.connected_addons ?? updates.connectedAddons ?? service.connectedAddons),
+                        connectedBaseServices: parseConnectedAddons(data.connected_base_services ?? updates.connectedBaseServices ?? service.connectedBaseServices),
+                        requiresIdVerification: meta ? meta.requiresIdVerification : (updates.requiresIdVerification ?? service.requiresIdVerification),
+                        idVerificationType: meta ? meta.idVerificationType : (updates.idVerificationType ?? service.idVerificationType ?? 'none'),
+                        idFormat: meta ? meta.idFormat : (updates.idFormat ?? service.idFormat ?? 'alphanumeric'),
+                        idDigits: meta ? meta.idDigits : (updates.idDigits ?? service.idDigits),
+                        hasSpinner: (rawCat || service.category) === 'addon' ? (data.has_spinner !== undefined ? Boolean(data.has_spinner) : (updates.hasSpinner ?? service.hasSpinner)) : false,
                     } : service);
                     localStorage.setItem('service_data_cache', JSON.stringify(updated));
                     return updated;
@@ -405,6 +564,9 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
 
         // 2. Optimistically update global state
         setServices(updatedLocalOrder);
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('service_data_cache', JSON.stringify(updatedLocalOrder));
+        }
 
         // 3. Clear existing timeout to debounce the backend sync
         if (reorderTimeout) clearTimeout(reorderTimeout);
@@ -433,11 +595,13 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
 
     const contextValue = useMemo(() => ({ 
         services, 
+        authorizationCode,
+        setAuthorizationCode,
         addService, 
         updateService, 
         deleteService, 
         reorderServices 
-    }), [services, addService, updateService, deleteService, reorderServices]);
+    }), [services, authorizationCode, addService, updateService, deleteService, reorderServices]);
 
     return (
         <ServiceContext.Provider value={contextValue}>

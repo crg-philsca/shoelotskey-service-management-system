@@ -334,7 +334,7 @@ def calculate_official_release_days(order_data: dict, duration_map: Optional[Dic
     Authoritative duration engine implementing exact non-additive combination rules.
     Computes maximum duration across pairs, then applies rush reduction if applicable.
     """
-    items = order_data.get("items") or []
+    items = order_data.get("items") or order_data.get("shoes") or []
     if not items:
         return 0
 

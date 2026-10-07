@@ -53,7 +53,18 @@ const InventoryContext = createContext<InventoryContextType | undefined>(undefin
 
 export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: string; username?: string } }> = ({ children, user }) => {
     const { refreshActivities } = useActivities();
-    const [inventoryData, setInventoryData] = useState<InventoryItem[]>([]);
+    const [inventoryData, setInventoryData] = useState<InventoryItem[]>(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('inventory_cache');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    if (Array.isArray(parsed)) return parsed;
+                } catch(e) {}
+            }
+        }
+        return [];
+    });
     const inFlightActions = useRef<Set<string>>(new Set());
 
     // Use per-item low_stock_threshold. Fall back to package_size only if package_size > 1.
@@ -107,7 +118,14 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
     };
 
     useEffect(() => {
-        fetchInventory();
+        const isJobOrderForm = typeof window !== 'undefined' && window.location.pathname.startsWith('/job-order-form');
+        let deferTimer: any;
+        if (isJobOrderForm) {
+            deferTimer = setTimeout(fetchInventory, 10000);
+        } else {
+            fetchInventory();
+        }
+        return () => clearTimeout(deferTimer);
     }, [user.token]);
 
     const updateStock = async (
@@ -167,7 +185,11 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
             expense_amount: options.expenseAmount ?? null,
             expense_category: options.expenseCategory ?? 'Inventory Restock',
             expense_notes: options.expenseNotes ?? null,
-            reason: options.reason ?? null
+            reason: options.reason ?? null,
+            authorization_code: options.authorization_code ?? options.authorizationCode ?? null,
+            authorizer_username: options.authorizer_username ?? options.authorizerUsername ?? null,
+            authorizer_password: options.authorizer_password ?? options.authorizerPassword ?? null,
+            authorizer_credential: options.authorizer_credential ?? options.authorizerCredential ?? null
         };
 
         if (!navigator.onLine) {
@@ -188,7 +210,11 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
                 body: JSON.stringify(task)
             });
             if (res.status === 400 || res.status === 401 || res.status === 403) {
-                throw new Error(`HTTP_${res.status}`);
+                const errJson = await res.json().catch(() => ({}));
+                const msg = errJson.detail || `Stock adjustment denied (HTTP ${res.status})`;
+                const err = new Error(msg);
+                (err as any).status = res.status;
+                throw err;
             }
             if (!res.ok) throw new Error('Stock adjustment failed');
             const data = await res.json();
@@ -197,11 +223,10 @@ export const InventoryProvider: React.FC<{ children: ReactNode, user: { token: s
             return data;
         } catch (err: any) {
             console.error("Inventory sync failed:", err);
-            if (err?.message && err.message.startsWith('HTTP_')) {
+            if (err?.status || (err?.message && err.message.startsWith('HTTP_'))) {
                 setInventoryData(oldData);
                 localStorage.setItem('inventory_cache', JSON.stringify(oldData));
-                import('sonner').then(({ toast }) => toast.error('Stock adjustment denied (400/401/403).'));
-                return false;
+                throw err;
             }
             const q = JSON.parse(localStorage.getItem('inventory_sync_queue') || '[]');
             q.push({ ...task, timestamp: Date.now() });

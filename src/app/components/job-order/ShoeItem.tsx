@@ -10,7 +10,7 @@ import { formatPeso } from '@/app/lib/utils';
 import { useServices } from '@/app/context/ServiceContext';
 import { useInventory } from '@/app/context/InventoryContext';
 import { getInventoryPresentation } from '@/app/lib/inventoryPresentation';
-import { isAddonVisibleForBaseServices, applyColorCountExclusive, syncColorRenewalAddons, isColorCountAddon } from '@/app/lib/serviceCompatibility';
+import { isAddonVisibleForBaseServices, applyColorCountExclusive, syncColorRenewalAddons, syncFullReglueAddons, isColorCountAddon } from '@/app/lib/serviceCompatibility';
 
 interface ShoeItemProps {
     shoe: any;
@@ -165,7 +165,7 @@ export const ShoeItem: React.FC<ShoeItemProps> = ({ shoe, index, updateShoe, rem
                                                             }
 
                                                             let currentAddOns = shoe.addOns ? [...shoe.addOns] : [];
-                                                            currentAddOns = syncColorRenewalAddons(currentAddOns, newServices).filter((a: any) => isAddonVisibleForBaseServices(a.name, newServices, services));
+                                                            currentAddOns = syncFullReglueAddons(syncColorRenewalAddons(currentAddOns, newServices), newServices).filter((a: any) => isAddonVisibleForBaseServices(a.name, newServices, services));
 
                                                             // [DYNAMIC INVENTORY] Auto-suggest chemicals based on service
                                                             let newInventory = [...(shoe.inventoryUsed || [])];
@@ -218,19 +218,9 @@ export const ShoeItem: React.FC<ShoeItemProps> = ({ shoe, index, updateShoe, rem
                                         </div>
                                     ) : (
                                         <div className="grid grid-cols-2 gap-2 flex-grow overflow-y-auto max-h-[220px] pr-1 custom-scrollbar">
-                                            {addOnServices.filter(addon => isAddonVisibleForBaseServices(addon.name, shoe.baseService || [], services)).sort((a, b) => {
-                                                const baseServicesArr = shoe.baseService || [];
-                                                const hasColorRenewal = baseServicesArr.some((s: string) => s.includes('Color Renewal'));
-                                                const hasReglue = baseServicesArr.some((s: string) => s.toLowerCase().includes('reglue'));
-                                                
-                                                const getPriority = (addonName: string) => {
-                                                    if (hasColorRenewal && (addonName === '2 Colors' || addonName === '3 Colors')) return 2;
-                                                    if (hasReglue && (addonName.toLowerCase().includes('midsole') || addonName.toLowerCase().includes('undersole'))) return 1;
-                                                    return 0;
-                                                };
-                                                
-                                                return getPriority(b.name) - getPriority(a.name);
-                                            }).map((addon) => {
+                                            {addOnServices
+                                                .filter(addon => isAddonVisibleForBaseServices(addon.name, shoe.baseService || [], services))
+                                                .sort((a, b) => (Number(a.sortOrder) || 999) - (Number(b.sortOrder) || 999)).map((addon) => {
                                                 const isChecked = shoe.addOns.some((a: any) => a.name === addon.name);
                                                 const addonItem = shoe.addOns.find((a: any) => a.name === addon.name);
                                                 const quantity = addonItem?.quantity || 1;
@@ -261,21 +251,23 @@ export const ShoeItem: React.FC<ShoeItemProps> = ({ shoe, index, updateShoe, rem
                                                         </div>
                                                         {isChecked && (
                                                             <div className="flex items-center justify-between border-t border-gray-100 pt-1.5 mt-1.5">
-                                                                <input
-                                                                    type="number"
-                                                                    min="1"
-                                                                    value={quantity}
-                                                                    onChange={(e) => {
-                                                                        const val = e.target.value;
-                                                                        const newQty = val === '' ? 1 : Math.max(1, parseInt(val));
-                                                                        const newAddOns = shoe.addOns.map((a: any) =>
-                                                                            a.name === addon.name ? { ...a, quantity: newQty } : a
-                                                                        );
-                                                                        updateShoe(shoe.id, { addOns: newAddOns });
-                                                                    }}
-                                                                    className="w-10 h-6 border-none bg-gray-50 rounded text-[10px] font-black text-center focus:outline-none"
-                                                                />
-                                                                <span className="text-[11px] font-black text-red-600">{formatPeso(getAddonTotal(addon.name, quantity))}</span>
+                                                                {Boolean(addon.hasSpinner ?? ((addon.name || '').toLowerCase() === 'unyellowing' || (addon.name || '').toLowerCase() === 'white paint')) ? (
+                                                                    <input
+                                                                        type="number"
+                                                                        min="1"
+                                                                        value={quantity}
+                                                                        onChange={(e) => {
+                                                                            const val = e.target.value;
+                                                                            const newQty = val === '' ? 1 : Math.max(1, parseInt(val));
+                                                                            const newAddOns = shoe.addOns.map((a: any) =>
+                                                                                a.name === addon.name ? { ...a, quantity: newQty } : a
+                                                                            );
+                                                                            updateShoe(shoe.id, { addOns: newAddOns });
+                                                                        }}
+                                                                        className="w-10 h-6 border-none bg-gray-50 rounded text-[10px] font-black text-center focus:outline-none"
+                                                                    />
+                                                                ) : <div />}
+                                                                <span className="text-[11px] font-black text-red-600 ml-auto">{formatPeso(getAddonTotal(addon.name, quantity))}</span>
                                                             </div>
                                                         )}
                                                     </div>

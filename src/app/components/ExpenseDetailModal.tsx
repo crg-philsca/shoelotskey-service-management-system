@@ -27,8 +27,16 @@ export default function ExpenseDetailModal({
     try {
       const d = new Date(dateVal);
       if (isNaN(d.getTime())) return String(dateVal);
-      const options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'long', day: 'numeric' };
-      return d.toLocaleDateString('en-US', options);
+      const strVal = typeof dateVal === 'string' ? dateVal.trim() : '';
+      const isDateOnlyString = /^\d{4}[-/]\d{2}[-/]\d{2}$/.test(strVal) || /^\d{2}[-/]\d{2}[-/]\d{4}$/.test(strVal);
+      const isMidnight = d.getHours() === 0 && d.getMinutes() === 0 && d.getSeconds() === 0;
+
+      const dateStr = d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+      if (isDateOnlyString || isMidnight) {
+        return dateStr;
+      }
+      const timeStr = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+      return `${dateStr} ${timeStr}`;
     } catch (e) {
       return String(dateVal);
     }

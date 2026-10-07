@@ -5,7 +5,7 @@ import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { JobOrder, PaymentMethod, InventoryUsed, PaymentRecord } from "@/app/types";
-import { CheckCircle2, User, ShieldAlert, Wrench, ShoppingBag, Trash2, Printer, RotateCcw, AlertTriangle } from "lucide-react";
+import { CheckCircle2, User, ShieldAlert, Wrench, ShoppingBag, Trash2, RotateCcw, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { formatReferenceNo } from "@/app/lib/utils";
 import { useInventory } from "@/app/context/InventoryContext";
@@ -1193,27 +1193,11 @@ export default function ProcessClaimModal({ order, open, onOpenChange, onConfirm
                     </div>
                 </div>
 
-                    {/* Action Buttons (Excluded from print) */}
-                    <div className="flex items-center justify-center gap-3 p-3 bg-[#FAFAFA] border-t border-gray-100 print:hidden shrink-0">
-                        <Button
-                            variant="outline"
-                            onClick={() => {
-                                document.body.classList.add('printing-receipt');
-                                const scrollParent = document.getElementById('print-receipt-content')?.parentElement;
-                                if (scrollParent) scrollParent.scrollTop = 0;
-                                window.print();
-                                setTimeout(() => {
-                                    document.body.classList.remove('printing-receipt');
-                                }, 1000);
-                            }}
-                            className="flex-1 min-w-[150px] max-w-[220px] h-9 px-6 rounded-xl text-[11px] font-black uppercase tracking-wider text-gray-700 border-gray-200 hover:bg-gray-50 flex items-center justify-center gap-2"
-                        >
-                            <Printer size={15} />
-                            Print Summary
-                        </Button>
+                    {/* Action Buttons */}
+                    <div className="flex items-center justify-center p-3 bg-[#FAFAFA] border-t border-gray-100 shrink-0">
                         <Button
                             onClick={() => { setShowReceipt(false); onOpenChange(false); }}
-                            className="flex-1 min-w-[150px] max-w-[220px] h-9 px-6 rounded-xl text-[11px] font-black uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-100 justify-center"
+                            className="w-full max-w-[240px] h-9 px-6 rounded-xl text-[11px] font-black uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-100 justify-center"
                         >
                             Done & Close
                         </Button>

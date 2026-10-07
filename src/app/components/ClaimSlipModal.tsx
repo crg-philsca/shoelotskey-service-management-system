@@ -7,7 +7,8 @@ import { SignaturePadModal } from '@/app/components/SignaturePadModal';
 import { useOrders } from '@/app/context/OrderContext';
 import { useServices } from '@/app/context/ServiceContext';
 import { saveOrderAttachments } from '@/app/lib/imageUtils';
-import { toServiceCode } from '@/app/lib/businessRules';
+import { normalizeServiceCodes } from '@/app/lib/businessRules';
+import { isFullReglueSoleAddon } from '@/app/lib/serviceCompatibility';
 import type { JobOrder } from '@/app/types';
 
 const formatCurrency = (val: number | string | null | undefined): string => {
@@ -42,6 +43,19 @@ export function ClaimSlipModal({ order, open, onOpenChange, user }: ClaimSlipMod
   const { services: catalogServices = [] } = useServices();
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'slip' | 'terms'>('slip');
+  
+  // Resolve effective user role - Strictly Admin-only features
+  const storedUser = typeof window !== 'undefined' ? (() => {
+    try {
+      return JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user') || '{}');
+    } catch {
+      return {};
+    }
+  })() : {};
+  const effectiveUser = (user && (user.role || user.username)) ? user : storedUser;
+  const userRole = String(effectiveUser?.role || '').trim().toLowerCase();
+  const userName = String(effectiveUser?.username || '').trim().toLowerCase();
+  const isAdmin = userRole === 'admin' || userName === 'admin';
   
   // Interactive Signatures State
   const [customerSig, setCustomerSig] = useState<string | null>(order.customerSignature || null);
@@ -137,26 +151,31 @@ export function ClaimSlipModal({ order, open, onOpenChange, user }: ClaimSlipMod
     const histBase = item.historicalBasePrices || (item as any).historical_base_prices;
     const histAddOns = item.historicalAddOnPrices || (item as any).historical_add_on_prices;
 
+    const hasFR = rawServices.some((s: any) => {
+      const sName = typeof s === 'string' ? s : (s?.name || s?.service_name || '');
+      return sName.toLowerCase().includes('full reglue') || sName.toUpperCase() === 'FR';
+    });
+
     rawServices.forEach((s: any) => {
       const sName = typeof s === 'string' ? s : (s?.name || s?.service_name || '');
       if (!sName) return;
       if (Array.isArray(histBase)) {
         const found = histBase.find((h: any) => (h.name || '').toLowerCase() === sName.toLowerCase());
-        if (found && Number(found.price) > 0) {
+        if (found && Number.isFinite(Number(found.price))) {
           baseSum += Number(found.price);
           return;
         }
       }
       const cat = catalogServices.find((c: any) => (c.name || '').toLowerCase() === sName.toLowerCase());
-      if (cat && Number(cat.price) > 0) {
+      if (cat && Number.isFinite(Number(cat.price))) {
         baseSum += Number(cat.price);
       } else {
         const sLower = sName.toLowerCase();
-        if (sLower.includes('full reglue') || (sLower.includes('reglue') && (sLower.includes('midsole') || sLower.includes('undersole')))) baseSum += 800;
-        else if (sLower.includes('minor reglue') || sLower.includes('reglue')) baseSum += 450;
-        else if (sLower.includes('color renewal') || sLower.includes('color restoration')) baseSum += 650;
+        if (sLower.includes('full reglue') || (sLower.includes('reglue') && (sLower.includes('midsole') || sLower.includes('undersole')))) baseSum += 250;
+        else if (sLower.includes('minor reglue') || sLower.includes('reglue')) baseSum += 125;
+        else if (sLower.includes('color renewal') || sLower.includes('color restoration')) baseSum += 0;
         else if (sLower.includes('unyellow')) baseSum += 400;
-        else baseSum += 450; // default Basic Cleaning
+        else baseSum += 325; // default Basic Cleaning
       }
     });
 
@@ -165,23 +184,34 @@ export function ClaimSlipModal({ order, open, onOpenChange, user }: ClaimSlipMod
       ? item.addOns
       : (item.addOns ? [item.addOns] : []);
 
+    let soleCounted = 0;
     rawAddOns.forEach((a: any) => {
       const aName = typeof a === 'string' ? a : (a?.name || a?.service_name || '');
       const aQty = (typeof a === 'object' && a?.quantity) ? Number(a.quantity) : 1;
       if (!aName) return;
       if (Array.isArray(histAddOns)) {
         const found = histAddOns.find((h: any) => (h.name || '').toLowerCase() === aName.toLowerCase());
-        if (found && Number(found.price) > 0) {
+        if (found && Number.isFinite(Number(found.price))) {
           addOnSum += Number(found.price) * aQty;
           return;
         }
       }
+      if (hasFR && isFullReglueSoleAddon(aName)) {
+        if (soleCounted === 0) {
+          soleCounted++;
+          // First Full Reglue sole specification is included in base Full Reglue (₱0 add-on fee)
+          return;
+        }
+      }
       const cat = catalogServices.find((c: any) => (c.name || '').toLowerCase() === aName.toLowerCase());
-      if (cat && Number(cat.price) > 0) {
+      if (cat && Number.isFinite(Number(cat.price))) {
         addOnSum += Number(cat.price) * aQty;
       } else {
         const aLower = aName.toLowerCase();
-        if (aLower.includes('minor reglue') || aLower.includes('reglue')) addOnSum += 250 * aQty;
+        if (aLower.includes('undersole') || aLower.includes('midsole')) addOnSum += 150 * aQty;
+        else if (aLower.includes('2 color') || aLower === 'cor2') addOnSum += 375 * aQty;
+        else if (aLower.includes('3 color') || aLower === 'cor3') addOnSum += 475 * aQty;
+        else if (aLower.includes('minor reglue') || aLower.includes('reglue')) addOnSum += 125 * aQty;
         else if (aLower.includes('color renewal') || aLower.includes('color')) addOnSum += 250 * aQty;
         else if (aLower.includes('unyellow')) addOnSum += 250 * aQty;
         else if (aLower.includes('retouch')) addOnSum += 250 * aQty;
@@ -229,49 +259,12 @@ export function ClaimSlipModal({ order, open, onOpenChange, user }: ClaimSlipMod
       ? item.addOns
       : (item.addOns ? [item.addOns] : []);
 
-    const serviceCodes: string[] = [];
-    rawServices.forEach((s: any) => {
-      const str = typeof s === 'string' ? s : (s?.name || s?.service_name || s?.service_code || '');
-      if (str.includes(',')) {
-        str.split(',').forEach((sub: string) => {
-          const c = toServiceCode(sub.trim());
-          if (c) serviceCodes.push(c);
-        });
-      } else {
-        const c = toServiceCode(str);
-        if (c) serviceCodes.push(c);
-      }
-    });
+    const allServices = [...rawServices, ...rawAddOns];
+    const normalizedCodes = normalizeServiceCodes(allServices);
 
-    const addOnCodes: string[] = [];
-    rawAddOns.forEach((a: any) => {
-      const str = typeof a === 'string' ? a : (a?.name || a?.service_name || a?.service_code || '');
-      if (str.includes(',')) {
-        str.split(',').forEach((sub: string) => {
-          const c = toServiceCode(sub.trim());
-          if (c) addOnCodes.push(c);
-        });
-      } else {
-        const c = toServiceCode(str);
-        if (c) addOnCodes.push(c);
-      }
-    });
-
-    // Remove redundant base 'COR' if add-on already indicates multi-color Color Restoration (e.g. COR2 or COR3)
-    let processedServiceCodes = [...serviceCodes];
-    let processedAddOnCodes = [...addOnCodes];
-
-    const hasMultiColorAddOn = processedAddOnCodes.some(c => c === 'COR2' || c === 'COR3');
-    if (hasMultiColorAddOn && processedServiceCodes.includes('COR')) {
-      processedServiceCodes = processedServiceCodes.filter(c => c !== 'COR');
-      if (processedServiceCodes.length === 0) {
-        const promoIdx = processedAddOnCodes.findIndex(c => c === 'COR2' || c === 'COR3');
-        if (promoIdx !== -1) {
-          processedServiceCodes.push(processedAddOnCodes[promoIdx]);
-          processedAddOnCodes.splice(promoIdx, 1);
-        }
-      }
-    }
+    const isBaseOrSpec = (code: string) => ['BC', 'MR', 'FR', 'COR', 'BR', 'FRMID', 'FRUND', 'COR2', 'COR3'].includes(code);
+    const baseCodes = normalizedCodes.filter(c => isBaseOrSpec(c));
+    const extraAddOnCodes = normalizedCodes.filter(c => !isBaseOrSpec(c));
 
     // Clean model description: omit 'other', 'unknown', 'footwear', etc.
     const rawBrand = item.brand || (item as any).brand_name;
@@ -308,11 +301,11 @@ export function ClaimSlipModal({ order, open, onOpenChange, user }: ClaimSlipMod
     const cleanNotes = cleanShoeText(rawNotes);
 
     const itemPrice = getItemCalculatedPrice(item, idx);
-    const baseCodeStr = processedServiceCodes.length > 0 
-      ? processedServiceCodes.join(', ') 
-      : (processedAddOnCodes.length > 0 ? '' : 'BC');
-    const addOnCodeStr = processedAddOnCodes.length > 0 
-      ? `${processedServiceCodes.length > 0 ? '+ ' : ''}${processedAddOnCodes.join(', ')}` 
+    const baseCodeStr = baseCodes.length > 0 
+      ? baseCodes.join(', ') 
+      : (extraAddOnCodes.length > 0 ? '' : 'BC');
+    const addOnCodeStr = extraAddOnCodes.length > 0 
+      ? `${baseCodes.length > 0 ? '+ ' : ''}${extraAddOnCodes.join(', ')}` 
       : '';
 
     return {
@@ -374,20 +367,20 @@ export function ClaimSlipModal({ order, open, onOpenChange, user }: ClaimSlipMod
   const staffName = order.processedBy || (order as any).receivedBy || user?.username || 'Yang';
 
   const renderTermsAndConditions = () => (
-    <div className="claim-slip-half border border-black p-2.5 sm:p-3 bg-white text-black print:p-2.5 flex flex-col justify-between print:flex-1 print:min-h-0 print:overflow-hidden">
-      <div className="text-center space-y-0.5 pb-0.5 sm:pb-1 border-b border-black shrink-0">
-        <h2 className="text-sm sm:text-base font-black uppercase text-red-600 m-0 leading-tight tracking-wider">
+    <div className="claim-slip-half border border-black p-2.5 sm:p-3 bg-white text-black print:p-2 flex flex-col justify-between print:flex-1 print:min-h-0 print:overflow-hidden">
+      <div className="text-center space-y-0.5 pb-0.5 sm:pb-1 border-b border-black shrink-0 print:space-y-0 print:pb-0.5">
+        <h2 className="text-sm sm:text-base font-black uppercase text-red-600 m-0 leading-tight tracking-wider print:text-[11px]">
           SHOELOTSKEY VILLAMOR-PASAY
         </h2>
-        <h3 className="text-[11px] sm:text-xs font-black uppercase text-black m-0 leading-tight tracking-wider">
+        <h3 className="text-[11px] sm:text-xs font-black uppercase text-black m-0 leading-tight tracking-wider print:text-[9.5px]">
           SHOE JOB ORDER FORM
         </h3>
-        <p className="text-[10px] sm:text-[10.5px] font-black uppercase text-black m-0 leading-tight tracking-wider">
+        <p className="text-[10px] sm:text-[10.5px] font-black uppercase text-black m-0 leading-tight tracking-wider print:text-[8px]">
           Service Terms and Conditions
         </p>
       </div>
 
-      <ol className="list-decimal pl-4 sm:pl-5 text-black text-[9px] sm:text-[9.5px] leading-[1.24] font-medium print:text-[8.5px] print:leading-[1.2] my-1 flex-1 flex flex-col justify-between">
+      <ol className="list-decimal pl-4 sm:pl-5 text-black text-[9px] sm:text-[9.5px] leading-[1.24] font-medium print:text-[7.2px] print:leading-[1.14] my-1 print:my-0.5 flex-1 flex flex-col justify-around print:pl-3.5 print:gap-y-[1px]">
         <li>
           Shoelotskey is committed to handling every item we receive using the most suitable methods and choice of chemicals to be used based on our professional assessment and judgment of what best fits the nature and condition of each item.
         </li>
@@ -420,16 +413,16 @@ export function ClaimSlipModal({ order, open, onOpenChange, user }: ClaimSlipMod
         </li>
       </ol>
 
-      <div className="pt-1 sm:pt-1.5 print:pt-1 flex justify-center pb-0.5 shrink-0">
+      <div className="pt-0.5 sm:pt-1.5 print:pt-0.5 flex justify-center pb-0.5 shrink-0 print:pb-0">
         <div 
           onClick={() => setActiveSignRole('customer')}
-          className="text-center w-60 sm:w-68 cursor-pointer group"
+          className="text-center w-52 sm:w-68 print:w-44 cursor-pointer group"
           title="Click to sign electronically"
         >
           {/* Signature Area above the line */}
-          <div className="h-6 sm:h-7 flex items-end justify-center pb-0.5 group-hover:bg-slate-50 transition-colors">
+          <div className="h-5 sm:h-7 print:h-3.5 flex items-end justify-center pb-0.5 group-hover:bg-slate-50 transition-colors">
             {customerSig ? (
-              <img src={customerSig} alt="Customer Signature" className="max-h-6 sm:max-h-7 object-contain" />
+              <img src={customerSig} alt="Customer Signature" className="max-h-5 sm:max-h-7 print:max-h-3.5 object-contain" />
             ) : (
               <span className="text-[7.5px] italic text-slate-400 print:hidden">Click to sign</span>
             )}
@@ -437,10 +430,10 @@ export function ClaimSlipModal({ order, open, onOpenChange, user }: ClaimSlipMod
           {/* Solid horizontal signature line */}
           <div className="w-full border-t border-black" />
           {/* Printed Name under the signature line */}
-          <span className="text-[11px] sm:text-xs font-black text-black block uppercase tracking-wider pt-0.5 leading-tight">
+          <span className="text-[10px] sm:text-xs font-black text-black block uppercase tracking-wider pt-0.5 leading-tight print:text-[8.5px] print:pt-0">
             {order.customerName || '—'}
           </span>
-          <span className="text-[8px] sm:text-[8.5px] font-black uppercase tracking-wider block pt-0.5 leading-tight text-black">
+          <span className="text-[7.5px] sm:text-[8.5px] font-black uppercase tracking-wider block pt-0.5 leading-tight text-black print:text-[6.5px] print:pt-0">
             SIGNATURE OVER PRINTED NAME
           </span>
         </div>
@@ -515,68 +508,68 @@ export function ClaimSlipModal({ order, open, onOpenChange, user }: ClaimSlipMod
                   {/* ======================================================================== */}
                   {/* UPPER HALF: SHOE JOB ORDER FORM (STORE / WORKSHOP COPY)                   */}
                   {/* ======================================================================== */}
-                  <div className="claim-slip-half border border-black p-2 sm:p-2.5 print:p-2 bg-white flex flex-col justify-between print:overflow-hidden">
+                  <div className="claim-slip-half border border-black p-2 sm:p-2.5 print:p-1.5 bg-white flex flex-col justify-between print:flex-1 print:min-h-0 print:overflow-hidden">
                     {/* Top Intake Header Block: Brand Header + Client & Order Info tightly coupled */}
-                    <div className="space-y-1 sm:space-y-1.5 shrink-0">
+                    <div className="space-y-1 sm:space-y-1.5 print:space-y-0.5 shrink-0">
                       {/* Brand Header */}
                       <div className="text-center space-y-0.5 print:space-y-0">
                         <div className="flex items-center justify-center gap-1.5">
-                          <img src="/logo.png" alt="Shoelotskey" className="h-5 w-5 sm:h-6 sm:w-6 object-contain" />
-                          <h1 className="text-sm sm:text-base font-black uppercase text-red-600 tracking-wide m-0 leading-tight">
+                          <img src="/logo.webp" alt="Shoelotskey" width="24" height="24" className="h-5 w-5 sm:h-6 sm:w-6 print:h-3.5 print:w-3.5 object-contain" />
+                          <h1 className="text-sm sm:text-base font-black uppercase text-red-600 tracking-wide m-0 leading-tight print:text-[11.5px]">
                             SHOELOTSKEY VILLAMOR-PASAY
                           </h1>
                         </div>
-                        <p className="text-[9px] sm:text-[9.5px] font-black text-black uppercase tracking-tight leading-none">
+                        <p className="text-[9px] sm:text-[9.5px] font-black text-black uppercase tracking-tight leading-none print:text-[7px]">
                           Shoe Care & Restoration Services
                         </p>
-                        <p className="text-[8px] sm:text-[8.5px] text-black font-semibold leading-tight">
+                        <p className="text-[8px] sm:text-[8.5px] text-black font-semibold leading-tight print:text-[6.5px] print:leading-none">
                           6th 9th Street, Brgy. 183, Villamor, Pasay City • Mon–Sat: 9:00 AM – 7:00 PM
                         </p>
-                        <p className="text-[8px] sm:text-[8.5px] text-black font-semibold leading-tight">
+                        <p className="text-[8px] sm:text-[8.5px] text-black font-semibold leading-tight print:text-[6.5px] print:leading-none">
                           Contact: 0956 632 7642 • FB: Shoelotskey Villamor-Pasay
                         </p>
-                        <h2 className="text-xs sm:text-[13px] font-black uppercase text-black tracking-wider pt-0.5 m-0 underline decoration-1 underline-offset-2">
+                        <h2 className="text-xs sm:text-[13px] font-black uppercase text-black tracking-wider pt-0.5 m-0 underline decoration-1 underline-offset-2 print:text-[9px] print:pt-0">
                           SHOE JOB ORDER FORM
                         </h2>
                       </div>
 
                       {/* Client & Order Header Box */}
-                      <div className="grid grid-cols-2 border border-black text-[9.5px] sm:text-[10px] leading-snug text-black">
-                        <div className="border-r border-black p-1 sm:p-1.5 space-y-0.5">
-                          <div><strong className="uppercase">CLIENT NAME:</strong> <span className="font-black text-xs sm:text-[12.5px] pl-1">{order.customerName || '—'}</span></div>
-                          <div><strong className="uppercase">CONTACT NO:</strong> <span className="font-bold pl-1">{order.contactNumber || '—'}</span></div>
+                      <div className="grid grid-cols-2 border border-black text-[9.5px] sm:text-[10px] leading-snug text-black print:text-[7.5px] print:leading-tight">
+                        <div className="border-r border-black p-1 sm:p-1.5 print:p-0.5 space-y-0.5 print:space-y-0">
+                          <div><strong className="uppercase">CLIENT NAME:</strong> <span className="font-black text-xs sm:text-[12.5px] pl-1 print:text-[9.5px]">{order.customerName || '—'}</span></div>
+                          <div><strong className="uppercase">CONTACT NO:</strong> <span className="font-bold pl-1 print:text-[7.5px]">{order.contactNumber || '—'}</span></div>
                         </div>
-                        <div className="p-1 sm:p-1.5 space-y-0.5">
-                          <div><strong className="uppercase">ORDER #:</strong> <span className="font-mono font-black text-xs sm:text-sm pl-1">{order.orderNumber.replace(/^#/, '')}</span></div>
-                          <div><strong className="uppercase">DATE & TIME:</strong> <span className="font-semibold pl-1">{formattedOrderDate}</span></div>
-                          <div><strong className="uppercase">BRANCH:</strong> <span className="font-bold pl-1">VILLAMOR</span></div>
+                        <div className="p-1 sm:p-1.5 print:p-0.5 space-y-0.5 print:space-y-0">
+                          <div><strong className="uppercase">ORDER #:</strong> <span className="font-mono font-black text-xs sm:text-sm pl-1 print:text-[9.5px]">{order.orderNumber.replace(/^#/, '')}</span></div>
+                          <div><strong className="uppercase">DATE & TIME:</strong> <span className="font-semibold pl-1 print:text-[7.5px]">{formattedOrderDate}</span></div>
+                          <div><strong className="uppercase">BRANCH:</strong> <span className="font-bold pl-1 print:text-[7.5px]">VILLAMOR</span></div>
                         </div>
                       </div>
                     </div>
 
                     {/* Middle Section: Shoe and Service Details Table (balanced between Header and Signature) */}
                     <div className="border border-black bg-white shrink-0">
-                      <div className="px-2 py-0.5 sm:py-1 font-black uppercase tracking-wider text-center border-b border-black text-[10.5px] sm:text-[11px] bg-slate-50">
+                      <div className="px-2 py-0.5 sm:py-1 print:py-0 font-black uppercase tracking-wider text-center border-b border-black text-[10.5px] sm:text-[11px] print:text-[8px] bg-slate-50">
                         SHOE AND SERVICE DETAILS
                       </div>
                       {isMultiColumn ? (
-                        <div className="grid grid-cols-2 divide-x divide-black border-b border-black font-bold uppercase text-center text-[8.5px] sm:text-[9px] bg-slate-100/70">
+                        <div className="grid grid-cols-2 divide-x divide-black border-b border-black font-bold uppercase text-center text-[8.5px] sm:text-[9px] print:text-[7px] bg-slate-100/70">
                           <div className="grid grid-cols-12">
-                            <div className="col-span-6 border-r border-black py-0.5 px-1 text-left">MODEL, DESCRIPTION, AND CONDITION</div>
-                            <div className="col-span-3 border-r border-black py-0.5 px-0.5">SERVICE</div>
-                            <div className="col-span-3 py-0.5 px-1">PRICE</div>
+                            <div className="col-span-6 border-r border-black py-0.5 px-1 print:py-0 text-left">MODEL, DESCRIPTION, AND CONDITION</div>
+                            <div className="col-span-3 border-r border-black py-0.5 px-0.5 print:py-0">SERVICE</div>
+                            <div className="col-span-3 py-0.5 px-1 print:py-0">PRICE</div>
                           </div>
                           <div className="grid grid-cols-12">
-                            <div className="col-span-6 border-r border-black py-0.5 px-1 text-left">MODEL, DESCRIPTION, AND CONDITION</div>
-                            <div className="col-span-3 border-r border-black py-0.5 px-0.5">SERVICE</div>
-                            <div className="col-span-3 py-0.5 px-1">PRICE</div>
+                            <div className="col-span-6 border-r border-black py-0.5 px-1 print:py-0 text-left">MODEL, DESCRIPTION, AND CONDITION</div>
+                            <div className="col-span-3 border-r border-black py-0.5 px-0.5 print:py-0">SERVICE</div>
+                            <div className="col-span-3 py-0.5 px-1 print:py-0">PRICE</div>
                           </div>
                         </div>
                       ) : (
-                        <div className="grid grid-cols-12 border-b border-black font-bold uppercase text-center text-[9px] sm:text-[9.5px] bg-slate-100/60">
-                          <div className="col-span-6 border-r border-black py-1 px-2 text-left">MODEL, DESCRIPTION, AND CONDITION</div>
-                          <div className="col-span-4 border-r border-black py-1 px-1.5">SERVICE</div>
-                          <div className="col-span-2 py-1 px-2">PRICE</div>
+                        <div className="grid grid-cols-12 border-b border-black font-bold uppercase text-center text-[9px] sm:text-[9.5px] print:text-[7.5px] bg-slate-100/60">
+                          <div className="col-span-6 border-r border-black py-1 px-2 print:py-0.5 print:px-1 text-left">MODEL, DESCRIPTION, AND CONDITION</div>
+                          <div className="col-span-4 border-r border-black py-1 px-1.5 print:py-0.5 print:px-1">SERVICE</div>
+                          <div className="col-span-2 py-1 px-2 print:py-0.5 print:px-1">PRICE</div>
                         </div>
                       )}
 
@@ -593,35 +586,35 @@ export function ClaimSlipModal({ order, open, onOpenChange, user }: ClaimSlipMod
                             const rightData = rightItem ? getItemDetails(rightItem, rightIdx) : null;
 
                             return (
-                              <div key={rIdx} className="grid grid-cols-2 divide-x divide-black min-h-[24px] sm:min-h-[26px] items-stretch">
+                              <div key={rIdx} className="grid grid-cols-2 divide-x divide-black min-h-[24px] sm:min-h-[26px] print:min-h-[16px] items-stretch">
                                 {/* Left Column Item */}
                                 <div className="grid grid-cols-12 items-stretch h-full">
-                                  <div className="col-span-6 border-r border-black py-0.5 px-1.5 flex flex-col justify-center overflow-hidden">
-                                    <div className="font-bold text-[9px] sm:text-[9.5px] text-black truncate" title={`#${leftIdx + 1} ${leftData.titleText}`}>
+                                  <div className="col-span-6 border-r border-black py-0.5 px-1.5 print:py-0 print:px-1 flex flex-col justify-center overflow-hidden">
+                                    <div className="font-bold text-[9px] sm:text-[9.5px] print:text-[7.5px] text-black truncate" title={`#${leftIdx + 1} ${leftData.titleText}`}>
                                       #{leftIdx + 1} {leftData.titleText}
                                     </div>
                                     {leftData.condArr.length > 0 && (
-                                      <div className="text-[7.5px] sm:text-[8px] text-black font-medium leading-tight truncate">
+                                      <div className="text-[7.5px] sm:text-[8px] print:text-[6px] text-black font-medium leading-tight print:leading-none truncate">
                                         Cond: {leftData.condArr.join(', ')}
                                       </div>
                                     )}
                                     {leftData.cleanNotes && (
-                                      <div className="text-[7px] sm:text-[7.5px] italic text-slate-700 leading-tight truncate">
+                                      <div className="text-[7px] sm:text-[7.5px] print:text-[6px] italic text-slate-700 leading-tight print:leading-none truncate">
                                         Note: {leftData.cleanNotes}
                                       </div>
                                     )}
                                   </div>
-                                  <div className="col-span-3 border-r border-black py-0.5 px-0.5 flex items-center justify-center text-center">
-                                    <div className="font-bold text-[9px] sm:text-[9.5px] text-black font-mono leading-tight flex items-center justify-center flex-wrap gap-x-1">
+                                  <div className="col-span-3 border-r border-black py-0.5 px-0.5 print:py-0 flex items-center justify-center text-center">
+                                    <div className="font-bold text-[9px] sm:text-[9.5px] print:text-[7px] text-black font-mono leading-tight flex items-center justify-center flex-wrap gap-x-1">
                                       <span>{leftData.baseCodeStr}</span>
                                       {leftData.addOnCodeStr && (
-                                        <span className="text-slate-800 font-semibold text-[8px] sm:text-[8.5px]">
+                                        <span className="text-slate-800 font-semibold text-[8px] sm:text-[8.5px] print:text-[6.5px]">
                                           {leftData.addOnCodeStr}
                                         </span>
                                       )}
                                     </div>
                                   </div>
-                                  <div className="col-span-3 py-0.5 px-1.5 text-right font-mono font-bold text-[9.5px] sm:text-[10px] text-black flex items-center justify-end">
+                                  <div className="col-span-3 py-0.5 px-1.5 print:py-0 print:px-1 text-right font-mono font-bold text-[9.5px] sm:text-[10px] print:text-[7.5px] text-black flex items-center justify-end">
                                     ₱{formatCurrency(leftData.itemPrice)}
                                   </div>
                                 </div>
@@ -629,32 +622,32 @@ export function ClaimSlipModal({ order, open, onOpenChange, user }: ClaimSlipMod
                                 {/* Right Column Item */}
                                 {rightData && rightItem ? (
                                   <div className="grid grid-cols-12 items-stretch h-full">
-                                    <div className="col-span-6 border-r border-black py-0.5 px-1.5 flex flex-col justify-center overflow-hidden">
-                                      <div className="font-bold text-[9px] sm:text-[9.5px] text-black truncate" title={`#${rightIdx + 1} ${rightData.titleText}`}>
+                                    <div className="col-span-6 border-r border-black py-0.5 px-1.5 print:py-0 print:px-1 flex flex-col justify-center overflow-hidden">
+                                      <div className="font-bold text-[9px] sm:text-[9.5px] print:text-[7.5px] text-black truncate" title={`#${rightIdx + 1} ${rightData.titleText}`}>
                                         #{rightIdx + 1} {rightData.titleText}
                                       </div>
                                       {rightData.condArr.length > 0 && (
-                                        <div className="text-[7.5px] sm:text-[8px] text-black font-medium leading-tight truncate">
+                                        <div className="text-[7.5px] sm:text-[8px] print:text-[6px] text-black font-medium leading-tight print:leading-none truncate">
                                           Cond: {rightData.condArr.join(', ')}
                                         </div>
                                       )}
                                       {rightData.cleanNotes && (
-                                        <div className="text-[7px] sm:text-[7.5px] italic text-slate-700 leading-tight truncate">
+                                        <div className="text-[7px] sm:text-[7.5px] print:text-[6px] italic text-slate-700 leading-tight print:leading-none truncate">
                                           Note: {rightData.cleanNotes}
                                         </div>
                                       )}
                                     </div>
-                                    <div className="col-span-3 border-r border-black py-0.5 px-0.5 flex items-center justify-center text-center">
-                                      <div className="font-bold text-[9px] sm:text-[9.5px] text-black font-mono leading-tight flex items-center justify-center flex-wrap gap-x-1">
+                                    <div className="col-span-3 border-r border-black py-0.5 px-0.5 print:py-0 flex items-center justify-center text-center">
+                                      <div className="font-bold text-[9px] sm:text-[9.5px] print:text-[7px] text-black font-mono leading-tight flex items-center justify-center flex-wrap gap-x-1">
                                         <span>{rightData.baseCodeStr}</span>
                                         {rightData.addOnCodeStr && (
-                                          <span className="text-slate-800 font-semibold text-[8px] sm:text-[8.5px]">
+                                          <span className="text-slate-800 font-semibold text-[8px] sm:text-[8.5px] print:text-[6.5px]">
                                             {rightData.addOnCodeStr}
                                           </span>
                                         )}
                                       </div>
                                     </div>
-                                    <div className="col-span-3 py-0.5 px-1.5 text-right font-mono font-bold text-[9.5px] sm:text-[10px] text-black flex items-center justify-end">
+                                    <div className="col-span-3 py-0.5 px-1.5 print:py-0 print:px-1 text-right font-mono font-bold text-[9.5px] sm:text-[10px] print:text-[7.5px] text-black flex items-center justify-end">
                                       ₱{formatCurrency(rightData.itemPrice)}
                                     </div>
                                   </div>
@@ -674,33 +667,33 @@ export function ClaimSlipModal({ order, open, onOpenChange, user }: ClaimSlipMod
                           {itemsToDisplay.map((item, idx) => {
                             const { titleText, condArr, cleanNotes, baseCodeStr, addOnCodeStr, itemPrice } = getItemDetails(item, idx);
                             return (
-                              <div key={idx} className={`grid grid-cols-12 ${isCompactMultiItem ? 'text-[9px] sm:text-[9.5px] min-h-[26px]' : 'text-[10px] sm:text-[10.5px] min-h-[28px] sm:min-h-[32px]'} items-stretch`}>
-                                <div className={`col-span-6 border-r border-black ${isCompactMultiItem ? 'py-0.5 px-1' : 'p-1 sm:p-1.5'} flex flex-col justify-center`}>
-                                  <div className={`font-bold ${isCompactMultiItem ? 'text-[10px] sm:text-[10.5px]' : 'text-[10.5px] sm:text-[11px]'} text-black`}>
+                              <div key={idx} className={`grid grid-cols-12 ${isCompactMultiItem ? 'text-[9px] sm:text-[9.5px] min-h-[26px] print:min-h-[16px] print:text-[7.5px]' : 'text-[10px] sm:text-[10.5px] min-h-[28px] sm:min-h-[32px] print:min-h-[18px] print:text-[8px]'} items-stretch`}>
+                                <div className={`col-span-6 border-r border-black ${isCompactMultiItem ? 'py-0.5 px-1 print:py-0' : 'p-1 sm:p-1.5 print:py-0.5 print:px-1'} flex flex-col justify-center`}>
+                                  <div className={`font-bold ${isCompactMultiItem ? 'text-[10px] sm:text-[10.5px] print:text-[8px]' : 'text-[10.5px] sm:text-[11px] print:text-[8.5px]'} text-black`}>
                                     #{idx + 1} {titleText}
                                   </div>
                                   {condArr.length > 0 && (
-                                    <div className={`${isCompactMultiItem ? 'text-[7.5px]' : 'text-[8px] sm:text-[8.5px]'} text-black font-medium pt-0.5 leading-tight`}>
+                                    <div className={`${isCompactMultiItem ? 'text-[7.5px] print:text-[6px]' : 'text-[8px] sm:text-[8.5px] print:text-[6.5px]'} text-black font-medium pt-0.5 leading-tight print:leading-none`}>
                                       Condition: {condArr.join(', ')}
                                     </div>
                                   )}
                                   {cleanNotes && (
-                                    <div className={`${isCompactMultiItem ? 'text-[7px]' : 'text-[7.5px] sm:text-[8px]'} italic text-slate-700 pt-0.5 leading-tight`}>
+                                    <div className={`${isCompactMultiItem ? 'text-[7px] print:text-[6px]' : 'text-[7.5px] sm:text-[8px] print:text-[6.5px]'} italic text-slate-700 pt-0.5 leading-tight print:leading-none`}>
                                       Note: {cleanNotes}
                                     </div>
                                   )}
                                 </div>
-                                <div className={`col-span-4 border-r border-black ${isCompactMultiItem ? 'py-0.5 px-1' : 'p-1 sm:p-1.5'} flex items-center justify-center text-center`}>
-                                  <div className={`font-bold ${isCompactMultiItem ? 'text-[9.5px]' : 'text-[10px] sm:text-[10.5px]'} text-black font-mono leading-tight flex items-center justify-center flex-wrap gap-x-1.5`}>
+                                <div className={`col-span-4 border-r border-black ${isCompactMultiItem ? 'py-0.5 px-1 print:py-0' : 'p-1 sm:p-1.5 print:py-0.5 print:px-1'} flex items-center justify-center text-center`}>
+                                  <div className={`font-bold ${isCompactMultiItem ? 'text-[9.5px] print:text-[7.5px]' : 'text-[10px] sm:text-[10.5px] print:text-[8px]'} text-black font-mono leading-tight flex items-center justify-center flex-wrap gap-x-1.5`}>
                                     <span>{baseCodeStr}</span>
                                     {addOnCodeStr && (
-                                      <span className={`${isCompactMultiItem ? 'text-[8.5px]' : 'text-[9px] sm:text-[9.5px]'} text-slate-800 font-semibold`}>
+                                      <span className={`${isCompactMultiItem ? 'text-[8.5px] print:text-[7px]' : 'text-[9px] sm:text-[9.5px] print:text-[7.5px]'} text-slate-800 font-semibold`}>
                                         {addOnCodeStr}
                                       </span>
                                     )}
                                   </div>
                                 </div>
-                                <div className={`col-span-2 ${isCompactMultiItem ? 'py-0.5 px-1' : 'p-1 sm:p-1.5'} text-right font-mono font-bold ${isCompactMultiItem ? 'text-[10px] sm:text-[10.5px]' : 'text-[10.5px] sm:text-[11px]'} text-black flex items-center justify-end`}>
+                                <div className={`col-span-2 ${isCompactMultiItem ? 'py-0.5 px-1 print:py-0' : 'p-1 sm:p-1.5 print:py-0.5 print:px-1'} text-right font-mono font-bold ${isCompactMultiItem ? 'text-[10px] sm:text-[10.5px] print:text-[8px]' : 'text-[10.5px] sm:text-[11px] print:text-[8.5px]'} text-black flex items-center justify-end`}>
                                   ₱{formatCurrency(itemPrice)}
                                 </div>
                               </div>
@@ -709,51 +702,54 @@ export function ClaimSlipModal({ order, open, onOpenChange, user }: ClaimSlipMod
                         </div>
                       )}
 
-                      {/* Financial Totals Row with Subtotal and Discount when applicable */}
-                      <div className="border-t border-black bg-slate-50 font-bold divide-y divide-black/30">
+                      {/* Financial Totals Row with Subtotal, Discount, Paid & Balance Due */}
+                      <div className="border-t border-black bg-slate-50 font-bold divide-y divide-black/20 text-[9px] sm:text-[9.5px] print:text-[7.5px]">
                         {discountAmount > 0.01 && (
-                          <div className="grid grid-cols-12 py-0.5 px-2 text-[8.5px] sm:text-[9px] items-center">
-                            <div className="col-span-5 text-right pr-2 text-slate-700 uppercase font-bold">
-                              SUBTOTAL:
+                          <>
+                            <div className="flex justify-between py-0.5 px-2 print:py-0 print:px-1.5 text-slate-700">
+                              <span className="uppercase font-bold">SUBTOTAL:</span>
+                              <span className="font-mono font-bold">₱{formatCurrency(grossSubtotal)}</span>
                             </div>
-                            <div className="col-span-7 flex justify-between items-center font-mono">
-                              <span className="text-slate-900 font-bold">₱{formatCurrency(grossSubtotal)}</span>
-                              <span className="text-emerald-700 font-black font-sans text-[8.5px] sm:text-[9px]">
-                                DISCOUNT {discountPercent > 0 ? `(${discountPercent}% OFF)` : ''}: <strong className="font-mono text-emerald-800">-₱{formatCurrency(discountAmount)}</strong>
+                            <div className="flex justify-between py-0.5 px-2 print:py-0 print:px-1.5 text-emerald-800">
+                              <span>
+                                DISCOUNT {discountPercent > 0 ? `(${discountPercent}% OFF)` : ''}
+                                {Boolean((order as any)?.discountIdNumber) && ` [${String((order as any)?.discountType).toLowerCase() === 'pwd' ? 'PWD' : 'SNR'}: ${(order as any).discountIdNumber}]`}:
                               </span>
+                              <span className="font-mono font-bold">-₱{formatCurrency(discountAmount)}</span>
                             </div>
-                          </div>
+                          </>
                         )}
-                        <div className="grid grid-cols-12 py-1 px-2 text-[9.5px] sm:text-[10px] items-center">
-                          <div className="col-span-5 text-right pr-2 font-black uppercase">
-                            GRAND TOTAL:
-                          </div>
-                          <div className="col-span-7 flex justify-between items-center font-mono">
-                            <span className="text-xs sm:text-[13px] font-black">₱{formatCurrency(grandTotal)}</span>
-                            <span className="text-[9px] sm:text-[9.5px] font-bold font-sans">
-                              DP: <strong className="font-mono font-black">₱{formatCurrency(effectivePaid)}</strong> | BAL: <strong className="font-mono text-red-600 font-black">₱{formatCurrency(balanceDue)}</strong>
-                            </span>
-                          </div>
+                        <div className="flex justify-between py-0.5 px-2 print:py-0 print:px-1.5 text-slate-900">
+                          <span className="font-bold uppercase">TOTAL:</span>
+                          <span className="font-mono font-black text-xs print:text-[8px]">₱{formatCurrency(grandTotal)}</span>
+                        </div>
+                        <div className="flex justify-between py-0.5 px-2 print:py-0 print:px-1.5 text-slate-900">
+                          <span className="font-bold uppercase">PAID / DOWNPAYMENT:</span>
+                          <span className="font-mono font-bold">₱{formatCurrency(effectivePaid)}</span>
+                        </div>
+                        <div className="flex justify-between py-0.5 px-2 print:py-0 print:px-1.5 bg-slate-100 font-black text-slate-900">
+                          <span className="uppercase">BALANCE DUE:</span>
+                          <span className="font-mono text-red-600 font-black">₱{formatCurrency(balanceDue)}</span>
                         </div>
                       </div>
                     </div>
 
                     {/* Bottom Section: Disclaimer & Signature Acknowledgement (Guaranteed fully visible) */}
-                    <div className="space-y-1 sm:space-y-1.5 pt-1 pb-0.5 shrink-0">
-                      <p className="text-[7.5px] sm:text-[8px] leading-tight italic text-slate-800 m-0">
+                    <div className="space-y-1 sm:space-y-1.5 print:space-y-0 pt-1 pb-0.5 print:pt-0.5 print:pb-0 shrink-0">
+                      <p className="text-[7.5px] sm:text-[8px] leading-tight italic text-slate-800 m-0 print:text-[6px] print:leading-[1.1]">
                         I hereby acknowledge receipt of a copy of this service order and confirm the accuracy of the above-mentioned model, description, and condition of shoes surrendered to Shoelotskey for servicing. I agree to the total computed service amount stated herein.
                       </p>
 
-                      <div className="flex justify-end pt-1">
+                      <div className="flex justify-end pt-1 print:pt-0.5">
                         <div 
                           onClick={() => setActiveSignRole('customer')}
-                          className="text-center w-60 sm:w-68 cursor-pointer group"
+                          className="text-center w-52 sm:w-68 print:w-44 cursor-pointer group"
                           title="Click to sign electronically"
                         >
                           {/* Signature Area above the line */}
-                          <div className="h-6 sm:h-7 flex items-end justify-center pb-0.5 group-hover:bg-slate-50 transition-colors">
+                          <div className="h-5 sm:h-7 print:h-3.5 flex items-end justify-center pb-0.5 group-hover:bg-slate-50 transition-colors">
                             {customerSig ? (
-                              <img src={customerSig} alt="Signature" className="max-h-6 sm:max-h-7 object-contain" />
+                              <img src={customerSig} alt="Signature" className="max-h-5 sm:max-h-7 print:max-h-3.5 object-contain" />
                             ) : (
                               <span className="text-[7.5px] italic text-slate-400 print:hidden">Click to sign</span>
                             )}
@@ -761,11 +757,11 @@ export function ClaimSlipModal({ order, open, onOpenChange, user }: ClaimSlipMod
                           {/* Solid horizontal signature line */}
                           <div className="w-full border-t border-black" />
                           {/* Printed Name under the signature line */}
-                          <span className="text-xs sm:text-[13px] font-black text-black block uppercase tracking-wider pt-0.5 leading-tight">
+                          <span className="text-xs sm:text-[13px] font-black text-black block uppercase tracking-wider pt-0.5 leading-tight print:text-[8.5px] print:pt-0">
                             {order.customerName || '—'}
                           </span>
                           {/* Label */}
-                          <span className="text-[8px] sm:text-[8.5px] font-black uppercase tracking-wider block pt-0.5 leading-tight text-black">
+                          <span className="text-[8px] sm:text-[8.5px] font-black uppercase tracking-wider block pt-0.5 leading-tight text-black print:text-[6.5px] print:pt-0">
                             SIGNATURE OVER PRINTED NAME
                           </span>
                         </div>
@@ -778,7 +774,7 @@ export function ClaimSlipModal({ order, open, onOpenChange, user }: ClaimSlipMod
                   {/* ======================================================================== */}
                   <div className="claim-slip-divider relative my-2 py-0.5 flex items-center justify-center break-inside-avoid print:my-0 print:py-0 shrink-0">
                     <div className="w-full border-t border-dashed border-black" />
-                    <span className="absolute bg-white px-3 text-[7.5px] font-black uppercase tracking-widest text-black border border-black rounded-full flex items-center gap-1 shadow-2xs">
+                    <span className="absolute bg-white px-3 text-[7.5px] font-black uppercase tracking-widest text-black border border-black rounded-full flex items-center gap-1 shadow-2xs print:text-[6.5px] print:px-2 print:py-0">
                       ✂ .................................... (CUT HERE) .................................... ✂
                     </span>
                   </div>
@@ -786,125 +782,142 @@ export function ClaimSlipModal({ order, open, onOpenChange, user }: ClaimSlipMod
                   {/* ======================================================================== */}
                   {/* LOWER HALF: ACKNOWLEDGEMENT COPY FOR CUSTOMER (CLAIM SLIP)               */}
                   {/* ======================================================================== */}
-                  <div className={`claim-slip-half border border-black ${isCompactMultiItem ? 'p-1.5 sm:p-2 print:p-1.5 space-y-0.5 sm:space-y-1 print:space-y-0.5' : 'p-2 sm:p-2.5 print:p-2 space-y-1 sm:space-y-1.5 print:space-y-0.5'} bg-white flex flex-col justify-between print:overflow-hidden`}>
+                  <div className={`claim-slip-half border border-black ${isCompactMultiItem ? 'p-1.5 sm:p-2 print:p-1.5 space-y-0.5 sm:space-y-1 print:space-y-0' : 'p-2 sm:p-2.5 print:p-1.5 space-y-1 sm:space-y-1.5 print:space-y-0'} bg-white flex flex-col justify-between print:flex-1 print:min-h-0 print:overflow-hidden`}>
                     {/* Top Date, Order No, and Title */}
-                    <div className="flex items-center justify-between text-[11px] sm:text-xs border-b border-black pb-1 shrink-0">
+                    <div className="flex items-center justify-between text-[11px] sm:text-xs border-b border-black pb-1 shrink-0 print:text-[8px] print:pb-0.5">
                       <div>
                         <strong className="uppercase">DATE:</strong> <span className="font-bold">{formattedDateOnly}</span>
                       </div>
                       <div className="text-center">
-                        <span className="text-[8px] italic block leading-none text-slate-600">(Please keep and present upon pick up)</span>
-                        <span className="font-black uppercase tracking-wider text-[11px] sm:text-xs">ACKNOWLEDGEMENT COPY FOR CUSTOMER</span>
+                        <span className="font-black uppercase tracking-wider text-[11px] sm:text-xs block leading-tight print:text-[8.5px]">ACKNOWLEDGEMENT COPY FOR CUSTOMER</span>
+                        <span className="text-[8px] italic block leading-none text-slate-600 mt-0.5 print:text-[6px] print:mt-0">(Please keep and present upon pick up)</span>
                       </div>
                       <div>
-                        <strong className="uppercase">ORDER #:</strong> <span className="font-mono font-black text-xs sm:text-sm">{order.orderNumber.replace(/^#/, '')}</span>
+                        <strong className="uppercase">ORDER #:</strong> <span className="font-mono font-black text-xs sm:text-sm print:text-[9px]">{order.orderNumber.replace(/^#/, '')}</span>
                       </div>
                     </div>
 
                     {/* Shop Brand & Scannable QR Row */}
-                    <div className="flex items-center justify-between gap-2 pt-0.5 shrink-0">
+                    <div className="flex items-center justify-between gap-2 pt-0.5 shrink-0 print:pt-0">
                       <div className="flex items-center gap-2">
-                        <img src="/logo.png" alt="Shoelotskey" className="h-6 w-6 sm:h-7 sm:w-7 object-contain" />
+                        <img src="/logo.webp" alt="Shoelotskey" width="28" height="28" className="h-6 w-6 sm:h-7 sm:w-7 print:h-3.5 print:w-3.5 object-contain" />
                         <div>
-                          <h3 className="text-sm sm:text-base font-black uppercase text-red-600 m-0 leading-tight tracking-wide">
+                          <h3 className="text-sm sm:text-base font-black uppercase text-red-600 m-0 leading-tight tracking-wide print:text-[10.5px]">
                             SHOELOTSKEY VILLAMOR-PASAY
                           </h3>
-                          <p className="text-[9px] sm:text-[9.5px] font-black text-black uppercase leading-tight">
+                          <p className="text-[9px] sm:text-[9.5px] font-black text-black uppercase leading-tight print:text-[6.5px] print:leading-none">
                             Shoe Care & Restoration Services
                           </p>
-                          <p className="text-[8px] sm:text-[8.5px] text-black font-semibold leading-tight">
+                          <p className="text-[8px] sm:text-[8.5px] text-black font-semibold leading-tight print:text-[6.5px] print:leading-none">
                             6th 9th Street, Brgy. 183, Villamor, Pasay City • Mon–Sat: 9:00 AM – 7:00 PM
                           </p>
-                          <p className="text-[8px] sm:text-[8.5px] text-black font-semibold leading-tight">
+                          <p className="text-[8px] sm:text-[8.5px] text-black font-semibold leading-tight print:text-[6.5px] print:leading-none">
                             Contact: 0956 632 7642 • FB: Shoelotskey Villamor-Pasay
                           </p>
                         </div>
                       </div>
 
-                      {/* Scannable Tracking QR */}
-                      <div className="flex items-center gap-1.5 shrink-0 border border-black rounded p-1 bg-slate-50/50">
-                        <div className="text-right">
-                          <span className="text-[8px] font-black uppercase text-black block leading-none">SCAN TO TRACK</span>
-                          <span className="text-[7.5px] text-slate-700 block leading-tight font-semibold">Live Status</span>
-                        </div>
-                        {qrCodeDataUrl ? (
-                          <img 
-                            src={qrCodeDataUrl} 
-                            alt={`QR #${order.orderNumber}`} 
-                            className="h-8 w-8 sm:h-9 sm:w-9 object-contain"
-                          />
-                        ) : (
-                          <div className="h-8 w-8 sm:h-9 sm:w-9 border border-black rounded flex items-center justify-center">
-                            <QrIcon size={14} className="text-black" />
+                      {/* Scannable Tracking QR (Admin Only) */}
+                      {isAdmin && (
+                        <div className="flex items-center gap-1.5 shrink-0 border border-black rounded p-1 bg-slate-50/50 print:p-0.5">
+                          <div className="text-right">
+                            <span className="text-[8px] font-black uppercase text-black block leading-none print:text-[5.5px]">SCAN TO TRACK</span>
+                            <span className="text-[7.5px] text-slate-700 block leading-tight font-semibold print:text-[5px]">Live Status</span>
                           </div>
-                        )}
-                      </div>
+                          {qrCodeDataUrl ? (
+                            <img 
+                              src={qrCodeDataUrl} 
+                              alt={`QR #${order.orderNumber}`} 
+                              className="h-8 w-8 sm:h-9 sm:w-9 print:h-4.5 print:w-4.5 object-contain"
+                            />
+                          ) : (
+                            <div className="h-8 w-8 sm:h-9 sm:w-9 print:h-4.5 print:w-4.5 border border-black rounded flex items-center justify-center">
+                              <QrIcon size={12} className="text-black" />
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {/* Turnaround Guidelines (matching authentic sheet) */}
-                    <div className="border border-black p-1.5 sm:p-2 text-[9px] sm:text-[9.5px] space-y-0.5 bg-slate-50/40 text-black leading-snug shrink-0">
+                    <div className="border border-black p-1.5 sm:p-2 text-[9px] sm:text-[9.5px] space-y-0.5 bg-slate-50/40 text-black leading-snug shrink-0 print:p-0.5 print:text-[6.5px] print:leading-tight print:space-y-0">
                       <div>📌 <strong>CLEANING DAYS: 10 DAYS</strong></div>
                       <div>📌 <strong>CLEANING DAYS + ADDITIONAL SERVICES: 15-25 DAYS</strong> <em className="text-slate-800">(May exceed depending on condition of shoes.)</em></div>
                       <div>📌 <strong>You will receive a text notification when shoes are ready for pick up.</strong></div>
                     </div>
 
                     {/* Client Name, Signature & Release Date Table */}
-                    <div className="border border-black text-[10.5px] sm:text-[11px] bg-white shrink-0">
-                      <div className="grid grid-cols-12 border-b border-black font-bold uppercase text-center text-[9px] sm:text-[9.5px] bg-slate-50 items-stretch">
-                        <div className="col-span-5 border-r border-black py-1 px-1.5 text-left">CLIENT NAME:</div>
-                        <div className="col-span-3 border-r border-black py-1 px-1.5">SIGNATURE:</div>
-                        <div className="col-span-4 py-1 px-1.5">RELEASE DATE</div>
+                    <div className="border border-black text-[10.5px] sm:text-[11px] bg-white shrink-0 print:text-[7.5px]">
+                      <div className="grid grid-cols-12 border-b border-black font-bold uppercase text-center text-[9px] sm:text-[9.5px] print:text-[6.5px] bg-slate-50 items-stretch">
+                        <div className="col-span-5 border-r border-black py-1 px-1.5 print:py-0 print:px-1 text-left">CLIENT NAME:</div>
+                        <div className="col-span-3 border-r border-black py-1 px-1.5 print:py-0 print:px-1">SIGNATURE:</div>
+                        <div className="col-span-4 py-1 px-1.5 print:py-0 print:px-1">RELEASE DATE</div>
                       </div>
-                      <div className="grid grid-cols-12 text-[10.5px] sm:text-[11px] items-stretch text-center min-h-[30px] sm:min-h-[34px]">
-                        <div className="col-span-5 border-r border-black px-1.5 py-1 text-left font-bold flex items-center">
+                      <div className="grid grid-cols-12 text-[10.5px] sm:text-[11px] print:text-[7.5px] items-stretch text-center min-h-[30px] sm:min-h-[34px] print:min-h-[16px]">
+                        <div className="col-span-5 border-r border-black px-1.5 py-1 print:py-0.5 print:px-1 text-left font-bold flex items-center">
                           {order.customerName || '—'}
                         </div>
                         <div 
                           onClick={() => setActiveSignRole('customer')}
-                          className="col-span-3 border-r border-black px-1 py-0.5 flex items-center justify-center cursor-pointer"
+                          className="col-span-3 border-r border-black px-1 py-0.5 print:p-0 flex items-center justify-center cursor-pointer"
                           title="Click to sign customer signature"
                         >
                           {customerSig ? (
-                            <img src={customerSig} alt="Sig" className="max-h-5 sm:max-h-6 object-contain" />
+                            <img src={customerSig} alt="Sig" className="max-h-5 sm:max-h-6 print:max-h-3 object-contain" />
                           ) : (
                             <span className="text-[8px] italic text-slate-400 print:hidden">Click to sign</span>
                           )}
                         </div>
-                        <div className="col-span-4 px-1.5 py-1 font-black text-black flex items-center justify-center">
+                        <div className="col-span-4 px-1.5 py-1 print:py-0.5 print:px-1 font-black text-black flex items-center justify-center print:text-[7.5px]">
                           {formattedReleaseDate}
                         </div>
                       </div>
                     </div>
 
                     {/* Staff Info Box & Payment Breakdown */}
-                    <div className="grid grid-cols-2 gap-1.5 text-[10.5px] sm:text-[11px] items-stretch shrink-0">
+                    <div className="grid grid-cols-2 gap-1.5 text-[10.5px] sm:text-[11px] items-stretch shrink-0 print:text-[7px] print:gap-1">
                       {/* Left: Shoelotskey Staff Box */}
-                      <div className="border border-black p-1.5 space-y-0.5 bg-white text-black leading-snug">
+                      <div className="border border-black p-1.5 space-y-0.5 bg-white text-black leading-snug print:p-0.5 print:space-y-0">
                         <div><strong>SHOELOTSKEY STAFF:</strong> <span className="font-bold uppercase pl-1">{staffName}</span></div>
                         <div><strong>BRANCH:</strong> <span className="font-semibold pl-1">VILLAMOR</span></div>
                         <div><strong>CONTACT NO:</strong> <span className="pl-1">0956 632 7642</span></div>
                       </div>
 
                       {/* Right: Payment Status */}
-                      <div className="border border-black p-1.5 space-y-0.5 bg-white text-black leading-snug">
+                      <div className="border border-black p-1.5 space-y-0.5 bg-white text-black leading-snug print:p-0.5 print:space-y-0">
+                        {discountAmount > 0.01 && (
+                          <>
+                            <div className="flex justify-between text-slate-700">
+                              <span>SUBTOTAL:</span>
+                              <span className="font-mono font-bold">₱{formatCurrency(grossSubtotal)}</span>
+                            </div>
+                            <div className="flex justify-between text-emerald-800">
+                              <span className="text-[9px] sm:text-[9.5px] print:text-[6.5px]">
+                                DISCOUNT {discountPercent > 0 ? `(${discountPercent}%)` : ''}
+                                {Boolean((order as any)?.discountIdNumber) && ` [ID: ${(order as any).discountIdNumber}]`}:
+                              </span>
+                              <span className="font-mono font-bold">-₱{formatCurrency(discountAmount)}</span>
+                            </div>
+                          </>
+                        )}
                         <div className="flex justify-between">
-                          <span>TOTAL COMPUTED:</span>
+                          <span>TOTAL:</span>
                           <span className="font-mono font-bold">₱{formatCurrency(grandTotal)}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span>DOWNPAYMENT / PAID:</span>
+                          <span>PAID / DOWNPAYMENT:</span>
                           <span className="font-mono font-bold">₱{formatCurrency(effectivePaid)}</span>
                         </div>
-                        <div className="border-t border-black pt-0.5 flex justify-between font-black">
-                          <span>BALANCE DUE UPON CLAIM:</span>
-                          <span className="font-mono text-red-600 font-bold">₱{formatCurrency(balanceDue)}</span>
+                        <div className="border-t border-black pt-0.5 flex justify-between font-black print:pt-0">
+                          <span>BALANCE DUE:</span>
+                          <span className="font-mono text-red-600 font-bold print:text-[7.5px]">₱{formatCurrency(balanceDue)}</span>
                         </div>
                       </div>
                     </div>
 
                     {/* Bottom Scripture Quote (matching authentic sheet) */}
-                    <div className="text-center pt-0.5 border-t border-slate-300 shrink-0">
-                      <p className="text-[8px] sm:text-[8.5px] italic text-slate-700 m-0 leading-normal">
+                    <div className="text-center pt-0.5 border-t border-slate-300 shrink-0 print:pt-0.5 print:border-t print:border-slate-300">
+                      <p className="text-[8px] sm:text-[8.5px] italic text-slate-700 m-0 leading-normal print:text-[6.5px] print:leading-none">
                         &ldquo;Each of you should use whatever gift you have received to serve others, as faithful stewardess of God&apos;s grace in its various forms.&rdquo; &mdash; 1 Peter 4:10
                       </p>
                     </div>
@@ -921,7 +934,7 @@ export function ClaimSlipModal({ order, open, onOpenChange, user }: ClaimSlipMod
                   {/* PERFORATION / CUT-OFF DIVIDER */}
                   <div className="claim-slip-divider relative my-2 py-0.5 flex items-center justify-center break-inside-avoid print:my-0 print:py-0 shrink-0">
                     <div className="w-full border-t border-dashed border-black" />
-                    <span className="absolute bg-white px-3 text-[7.5px] font-black uppercase tracking-widest text-black border border-black rounded-full flex items-center gap-1 shadow-2xs">
+                    <span className="absolute bg-white px-3 text-[7.5px] font-black uppercase tracking-widest text-black border border-black rounded-full flex items-center gap-1 shadow-2xs print:text-[6.5px] print:px-2 print:py-0">
                       ✂ .................................... (CUT HERE) .................................... ✂
                     </span>
                   </div>

@@ -1,0 +1,8 @@
+Guideline_Category,Institutional_Requirement,Manuscript_Implementation,Compliance_Status,Proof_Location
+Academic Style,"IEEE Editorial and Citation Style across all chapters","28 IEEE citations formatted with numeric brackets [1]–[28] matching reference list",Fully Compliant,"Manuscript pp. 145–148"
+Manuscript Structure,"Standard 5-Chapter Capstone Format (Ch 1 to 5)","Complete 155-page manuscript comprising Chapters 1, 2, 3, 4, and 5",Fully Compliant,"Official 155-Page Manuscript"
+Preliminary Pages,"Title page, Approval Sheet, Acknowledgments, Abstract, TOC, List of Tables, List of Figures","All prelim pages present, roman numeral pagination i to xiii",Fully Compliant,"Manuscript prelim pages"
+Table / Figure Formats,"IEEE table headers and figure captions with contextual narrative introductions","Tables 1–25 and Figures 1–12 accompanied by descriptive introductory paragraphs",Fully Compliant,"Chapters 1 to 4"
+Software Engineering Standards,"Evaluation against ISO/IEC 25010 and User Acceptance Testing","9 characteristics of ISO/IEC 25010:2023 (N=5) and 4 constructs of TAM (N=6 census)",Fully Compliant,"Chapter 4 (pp. 120–144)"
+Appendices Completeness,"Mandatory technical appendices including ERD, DFD, evaluation forms, CVI, and manual","Appendices A through J fully documented and cross-referenced in TOC",Fully Compliant,"Appendices A to J"
+Plagiarism & Originality,"Substantial technical contribution with verifiable institutional defense revisions","18 official panel revisions implemented and tracked in signed revision matrix",Fully Compliant,"MATRIX-OF-CAPSTONE-PROJECT-REVISIONS (3).pdf"

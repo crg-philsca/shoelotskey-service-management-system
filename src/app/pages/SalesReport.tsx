@@ -1,7 +1,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { useState, useMemo, useEffect } from 'react';
-import { TrendingUp, ShoppingBag, Filter, Calendar, TrendingDown, ChevronDown, Wallet, CircleAlert, Percent, Download } from 'lucide-react';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { TrendingUp, ShoppingBag, Filter, Calendar, TrendingDown, ChevronDown, Wallet, CircleAlert, Percent, Download, RotateCcw } from 'lucide-react';
+import { toast } from 'sonner';
 import GenerateReportModal from '@/app/components/GenerateReportModal';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
@@ -24,7 +25,8 @@ import {
 } from '@/app/lib/salesAnalytics';
 import { formatPeso } from '@/app/lib/currency';
 import { getExpenseGroup } from '@/app/lib/expenseCategories';
-import { toServiceCode, chunkServiceCodesTwoPerRow } from '@/app/lib/businessRules';
+import { toServiceCode, normalizeServiceCodes } from '@/app/lib/businessRules';
+import MMDDYYYYDatePicker from '@/app/components/ui/MMDDYYYYDatePicker';
 
 interface SalesReportProps {
   onSetHeaderActionRight?: (action: React.ReactNode | null) => void;
@@ -118,6 +120,14 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
     }, 0);
   }, [totalSalesData]);
 
+  // Total Discounts Granted for the selected timeframe
+  const totalDiscountsAmount = useMemo(() => {
+    return totalSalesData.reduce((sum: number, order: JobOrder) => {
+      const disc = Number((order as any).discountAmount || (order as any).discount || 0);
+      return sum + (disc > 0 ? disc : 0);
+    }, 0);
+  }, [totalSalesData]);
+
   // 3. CHART & METRIC DATA
   // Payment Method Analytics (Based on filtered date)
   const paymentMethodStats = useMemo(() => {
@@ -198,19 +208,27 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
   const handleExport = (type: 'Sales' | 'Expenses' | 'ROI') => {
     const t0 = performance.now();
     const reportTitle = type === 'Sales' ? 'Sales Report' : type === 'Expenses' ? 'Expenses Report' : 'ROI Report';
-    addActivity({
-      type: 'Reports',
-      module: 'Reports',
-      user: JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}').username,
-      action: 'PRINT',
-      table: 'Sales Report',
-      details: `Printed ${type} Report for period: ${periodLabel}`
-    });
     setPrintMode(type);
     document.body.classList.add('printing-report');
     setTimeout(() => {
       const renderDurationMs = Math.round(performance.now() - t0);
       console.log(`[REPORT GENERATION] Rendered ${reportTitle} for Print/Preview (${periodLabel}) in ${renderDurationMs}ms (${(renderDurationMs / 1000).toFixed(3)}s)`);
+      addActivity({
+        type: 'Reports',
+        module: 'Sales Report',
+        user: JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}').username,
+        action: 'PRINT',
+        table: 'reports',
+        details: `Printed ${type} Report for period: ${periodLabel} (Duration: ${renderDurationMs}ms)`,
+        newValues: {
+          report_type: type.toLowerCase(),
+          period_type: dateRange.toLowerCase(),
+          period_label: periodLabel,
+          duration_ms: renderDurationMs,
+          duration_formatted: `${renderDurationMs}ms`,
+          status: 'SUCCESS'
+        }
+      });
       window.print();
       setTimeout(() => {
         document.body.classList.remove('printing-report');
@@ -219,29 +237,246 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
     }, 250);
   };
 
-  useEffect(() => {
-    if (!loading && allOrders) {
-      const t0 = performance.now();
-      const calcMs = Math.round(performance.now() - t0);
-      console.log(`[REPORT ANALYTICS] Generated on-screen metrics for Sales Report, Expenses Report, and ROI Report (${periodLabel}) in ${calcMs}ms | Orders: ${filteredOrdersByDate.length} | Expenses: ${filteredExpensesByDate.length}`);
+  const formatDurationText = (ms: number) => {
+    return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(2)}s`;
+  };
+
+  const handleRangeChange = (range: ReportRange) => {
+    const t0 = performance.now();
+    setDateRange(range);
+    if (range === 'Custom' && (!customStartDate || !customEndDate)) {
+      toast.info('Please select custom start and end dates');
+      return;
     }
-  }, [dateRange, customStartDate, customEndDate, filteredOrdersByDate.length, filteredExpensesByDate.length, loading, periodLabel]);
+    requestAnimationFrame(() => {
+      const elapsed = performance.now() - t0;
+      const durMs = Math.max(12, Math.round(elapsed));
+      const formatted = formatDurationText(durMs);
+      const rangeLabel = range === 'Annually' ? 'Annual' : range;
+      toast.success(`Sales Report (${rangeLabel}): Displayed (Duration: ${formatted})`);
+
+      addActivity({
+        type: 'Reports',
+        module: 'Sales Report',
+        user: JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}').username,
+        action: 'REPORT_GENERATION_COMPLETED',
+        table: 'reports',
+        details: `Displayed Sales Report for ${rangeLabel} timeframe (Duration: ${formatted})`,
+        newValues: {
+          report_type: 'sales',
+          period_type: range.toLowerCase(),
+          duration_ms: durMs,
+          duration_formatted: formatted,
+          status: 'SUCCESS'
+        }
+      });
+    });
+  };
+
+  const handleClearCustomDates = () => {
+    const t0 = performance.now();
+    setCustomStartDate('');
+    setCustomEndDate('');
+    requestAnimationFrame(() => {
+      const elapsed = performance.now() - t0;
+      const durMs = Math.max(12, Math.round(elapsed));
+      const formatted = formatDurationText(durMs);
+      toast.success(`Sales Report (Custom): Dates Cleared (Duration: ${formatted})`);
+      addActivity({
+        type: 'Reports',
+        module: 'Sales Report',
+        user: JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}').username,
+        action: 'REPORT_GENERATION_COMPLETED',
+        table: 'reports',
+        details: `Cleared custom dates (Duration: ${formatted})`,
+        newValues: {
+          report_type: 'sales',
+          period_type: 'custom',
+          duration_ms: durMs,
+          duration_formatted: formatted,
+          status: 'SUCCESS'
+        }
+      });
+    });
+  };
+
+
+  const handleCustomStartDateChange = (newStart: string) => {
+    setCustomStartDate(newStart);
+    if (!newStart) return;
+
+    let targetEnd = customEndDate;
+    let wasAdjusted = false;
+    if (customEndDate && newStart > customEndDate) {
+      targetEnd = newStart;
+      setCustomEndDate(newStart);
+      wasAdjusted = true;
+    }
+
+    const t0 = performance.now();
+    requestAnimationFrame(() => {
+      const elapsed = performance.now() - t0;
+      const durMs = Math.max(12, Math.round(elapsed));
+      const formatted = formatDurationText(durMs);
+      const label = targetEnd ? `${newStart} to ${targetEnd}` : `from ${newStart}`;
+      if (wasAdjusted) {
+        toast.error(`Invalid range: Start date cannot be after end date. End date adjusted to ${newStart}.`);
+      } else {
+        toast.success(`Sales Report (Custom): Displayed (${label})`);
+      }
+      addActivity({
+        type: 'Reports',
+        module: 'Sales Report',
+        user: JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}').username,
+        action: 'REPORT_GENERATION_COMPLETED',
+        table: 'reports',
+        details: wasAdjusted
+          ? `Start date was after end date; end date auto-adjusted to ${newStart} (${label})`
+          : `Displayed Sales Report for Custom timeframe (${label}) (Duration: ${formatted})`,
+        newValues: {
+          report_type: 'sales',
+          period_type: 'custom',
+          start_date: newStart,
+          end_date: targetEnd || '',
+          duration_ms: durMs,
+          duration_formatted: formatted,
+          status: 'SUCCESS'
+        }
+      });
+    });
+  };
+
+  const handleCustomEndDateChange = (newEnd: string) => {
+    setCustomEndDate(newEnd);
+    if (!newEnd) return;
+
+    let targetStart = customStartDate;
+    let wasAdjusted = false;
+    if (customStartDate && newEnd < customStartDate) {
+      targetStart = newEnd;
+      setCustomStartDate(newEnd);
+      wasAdjusted = true;
+    }
+
+    const t0 = performance.now();
+    requestAnimationFrame(() => {
+      const elapsed = performance.now() - t0;
+      const durMs = Math.max(12, Math.round(elapsed));
+      const formatted = formatDurationText(durMs);
+      const label = targetStart ? `${targetStart} to ${newEnd}` : `until ${newEnd}`;
+      if (wasAdjusted) {
+        toast.error(`Invalid range: End date cannot be earlier than start date. Start date adjusted to ${newEnd}.`);
+      } else {
+        toast.success(`Sales Report (Custom): Displayed (${label})`);
+      }
+      addActivity({
+        type: 'Reports',
+        module: 'Sales Report',
+        user: JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}').username,
+        action: 'REPORT_GENERATION_COMPLETED',
+        table: 'reports',
+        details: wasAdjusted
+          ? `End date was earlier than start date; start date auto-adjusted to ${newEnd} (${label})`
+          : `Displayed Sales Report for Custom timeframe (${label}) (Duration: ${formatted})`,
+        newValues: {
+          report_type: 'sales',
+          period_type: 'custom',
+          start_date: targetStart || '',
+          end_date: newEnd,
+          duration_ms: durMs,
+          duration_formatted: formatted,
+          status: 'SUCCESS'
+        }
+      });
+    });
+  };
+
+  const initialDailyLoggedRef = useRef(false);
+
+  const handlePaymentMethodChange = (method: string) => {
+    const t0 = performance.now();
+    setSelectedPaymentMethod(method);
+    requestAnimationFrame(() => {
+      const elapsed = performance.now() - t0;
+      const durMs = Math.max(12, Math.round(elapsed));
+      const formatted = formatDurationText(durMs);
+      const methodLabel = method === 'all' ? 'All Payment Methods' : method.toUpperCase();
+      addActivity({
+        type: 'Reports',
+        module: 'Sales Report',
+        user: JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}').username,
+        action: 'REPORT_GENERATION_COMPLETED',
+        table: 'reports',
+        details: `Filtered Sales Report by payment method: ${methodLabel} (Duration: ${formatted})`,
+        newValues: {
+          report_type: 'sales',
+          period_type: dateRange.toLowerCase(),
+          payment_method: method,
+          duration_ms: durMs,
+          duration_formatted: formatted,
+          status: 'SUCCESS'
+        }
+      });
+    });
+  };
+
+  useEffect(() => {
+    if (!loading && allOrders && !initialDailyLoggedRef.current) {
+      initialDailyLoggedRef.current = true;
+      const t0 = performance.now();
+      requestAnimationFrame(() => {
+        const elapsed = performance.now() - t0;
+        const durMs = Math.max(16, Math.round(elapsed));
+        const formatted = formatDurationText(durMs);
+        const rangeLabel = dateRange === 'Annually' ? 'Annual' : dateRange;
+
+        addActivity({
+          type: 'Reports',
+          module: 'Sales Report',
+          user: JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}').username,
+          action: 'REPORT_GENERATION_COMPLETED',
+          table: 'reports',
+          details: `Displayed Sales Report for ${rangeLabel} timeframe (Duration: ${formatted})`,
+          newValues: {
+            report_type: 'sales',
+            period_type: dateRange.toLowerCase(),
+            duration_ms: durMs,
+            duration_formatted: formatted,
+            status: 'SUCCESS'
+          }
+        });
+      });
+    }
+  }, [loading, allOrders, dateRange, addActivity]);
 
   useEffect(() => {
     if (onSetHeaderActionRight) {
       onSetHeaderActionRight(
         <div className="flex items-center gap-2">
           {dateRange === 'Custom' && (
-            <div className="hidden lg:flex items-center gap-1">
-              <input type="date" aria-label="Custom start date" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} className="h-10 rounded-md border border-gray-300 px-2 text-xs" />
-              <span className="text-xs text-gray-500">–</span>
-              <input type="date" aria-label="Custom end date" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)} className="h-10 rounded-md border border-gray-300 px-2 text-xs" />
+            <div className="hidden lg:flex items-center h-10 rounded-md border border-red-600 bg-white shadow-xs px-1.5 gap-1 focus-within:ring-2 focus-within:ring-red-500/20">
+              <MMDDYYYYDatePicker
+                aria-label="Custom start date"
+                value={customStartDate}
+                onChange={(val) => handleCustomStartDateChange(val)}
+                variant="embedded"
+              />
+              <span className="text-xs text-red-500 font-bold px-0.5 select-none">–</span>
+              <MMDDYYYYDatePicker
+                aria-label="Custom end date"
+                value={customEndDate}
+                onChange={(val) => handleCustomEndDateChange(val)}
+                variant="embedded"
+              />
+              <div className="h-5 w-px bg-red-200 mx-0.5" />
               <button
                 type="button"
-                className="h-10 px-2 text-sm font-bold uppercase text-red-700 border border-red-200 rounded-md bg-white hover:bg-red-50 hover:text-red-700"
-                onClick={() => { setCustomStartDate(''); setCustomEndDate(''); setDateRange('Daily'); }}
+                onClick={handleClearCustomDates}
+                className="h-7 w-7 flex items-center justify-center rounded-md text-red-600 hover:bg-red-50 hover:text-red-700 active:bg-red-100 transition cursor-pointer"
+                title="Clear dates"
+                aria-label="Clear dates"
               >
-                Clear
+                <RotateCcw className="h-3.5 w-3.5 stroke-[2.5]" />
               </button>
             </div>
           )}
@@ -274,10 +509,10 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
               {['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Annually', 'Custom'].map((range) => (
                 <DropdownMenuItem
                   key={range}
-                  onClick={() => setDateRange(range as typeof dateRange)}
-                  className={`uppercase px-4 py-2 text-sm font-semibold cursor-pointer ${dateRange === range ? 'bg-red-600 text-white focus:bg-red-600 focus:text-white' : 'bg-white text-red-700 hover:bg-red-100 hover:text-red-700 focus:bg-red-100 focus:text-red-700'}`}
+                  onClick={() => handleRangeChange(range as typeof dateRange)}
+                  className={`uppercase px-4 py-2 text-sm font-semibold cursor-pointer flex items-center justify-between transition-colors ${dateRange === range ? 'bg-red-600 text-white focus:bg-red-600 focus:text-white' : 'bg-white text-red-700 hover:bg-red-100 hover:text-red-700 focus:bg-red-100 focus:text-red-700'}`}
                 >
-                  {range === 'Annually' ? 'Annual' : range}
+                  <span>{range === 'Annually' ? 'Annual' : range}</span>
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
@@ -298,33 +533,39 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
 
   return (
     <>
-    <div className="space-y-8 pb-10 animate-in fade-in duration-700 print:hidden">
+    <div className="space-y-4 animate-in fade-in duration-700 print:hidden">
       {dateRange === 'Custom' && (
-        <div className="flex flex-wrap items-end justify-center gap-2 rounded-xl border border-red-100 bg-red-50/60 p-3 lg:hidden">
-          <label className="flex flex-col gap-1">
+        <div className="flex flex-wrap items-end justify-center gap-2 rounded-xl border border-red-200 bg-white p-3 shadow-xs lg:hidden">
+          <label className="flex flex-col gap-1 flex-1 min-w-[130px]">
             <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Start date</span>
-            <input type="date" aria-label="Custom start date" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} className="h-10 rounded-md border border-gray-300 bg-white px-2 text-xs" />
+            <MMDDYYYYDatePicker aria-label="Custom start date" value={customStartDate} onChange={(val) => handleCustomStartDateChange(val)} className="w-full" />
           </label>
-          <label className="flex flex-col gap-1">
+          <label className="flex flex-col gap-1 flex-1 min-w-[130px]">
             <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">End date</span>
-            <input type="date" aria-label="Custom end date" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)} className="h-10 rounded-md border border-gray-300 bg-white px-2 text-xs" />
+            <MMDDYYYYDatePicker aria-label="Custom end date" value={customEndDate} onChange={(val) => handleCustomEndDateChange(val)} className="w-full" />
           </label>
-          <button
-            type="button"
-            className="h-10 px-3 text-sm font-bold uppercase text-red-700 border border-red-200 rounded-md bg-white hover:bg-red-50 hover:text-red-700"
-            onClick={() => { setCustomStartDate(''); setCustomEndDate(''); setDateRange('Daily'); }}
-          >
-            Clear
-          </button>
+          <div className="flex items-center gap-1.5 pb-0.5">
+            <button
+              type="button"
+              onClick={handleClearCustomDates}
+              className="h-10 px-3 flex items-center gap-1.5 text-xs font-bold uppercase text-red-700 border border-red-200 rounded-md bg-white hover:bg-red-50 transition cursor-pointer"
+              title="Clear dates"
+            >
+              <RotateCcw className="h-4 w-4 stroke-[2.5]" />
+              <span>Clear</span>
+            </button>
+          </div>
         </div>
       )}
       {/* 1. TOP SUMMARY CARDS - Business Activity Section */}
-      <Card className="border-none shadow-none mb-2">
-        <CardHeader className="pt-5 pb-0 mb-0">
-          <CardTitle className="text-center text-base font-bold text-gray-900 uppercase mb-0 pb-0 tracking-tight">Business Activity</CardTitle>
+      <Card>
+        <CardHeader className="text-center pt-2 pb-0 mb-0">
+          <CardTitle className="text-center text-base font-bold text-gray-900 uppercase mb-0 pb-0 tracking-tight">
+            Business Activity
+          </CardTitle>
         </CardHeader>
-        <CardContent className="pt-0 pb-0 mb-0 -mt-5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+        <CardContent className="flex justify-center pt-0 pb-0 mb-0 -mt-5">
+          <div className="grid w-full grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2">
             <Card
               role="button"
               tabIndex={0}
@@ -338,11 +579,11 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
                 }
               }}
             >
-              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                <TrendingUp size={48} className="text-green-600" />
+              <div className="absolute top-0 right-0 p-3 opacity-10">
+                <TrendingUp size={42} className="text-green-600" />
               </div>
-              <CardContent className="pt-6">
-                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">{timeframePrefix} Sales</p>
+              <CardContent className="pt-4 pb-3 px-4">
+                <p className="text-xs font-black uppercase tracking-widest text-gray-600 mb-1.5 truncate">{timeframePrefix} Sales</p>
                 <p className="text-2xl font-black text-green-600 tracking-tight">
                   {formatPeso(totalSalesAmount || 0)}
                 </p>
@@ -362,11 +603,11 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
                 }
               }}
             >
-              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                <Wallet size={48} className="text-blue-600" />
+              <div className="absolute top-0 right-0 p-3 opacity-10">
+                <Wallet size={42} className="text-blue-600" />
               </div>
-              <CardContent className="pt-6">
-                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">{timeframePrefix} Payments Received</p>
+              <CardContent className="pt-4 pb-3 px-4">
+                <p className="text-xs font-black uppercase tracking-widest text-gray-600 mb-1.5 truncate">{timeframePrefix} Payments Received</p>
                 <p className="text-2xl font-black text-blue-600 tracking-tight">
                   {formatPeso(totalPaymentsReceived || 0)}
                 </p>
@@ -386,11 +627,11 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
                 }
               }}
             >
-              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                <ShoppingBag size={48} className="text-purple-600" />
+              <div className="absolute top-0 right-0 p-3 opacity-10">
+                <ShoppingBag size={42} className="text-purple-600" />
               </div>
-              <CardContent className="pt-6">
-                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">{timeframePrefix} Orders</p>
+              <CardContent className="pt-4 pb-3 px-4">
+                <p className="text-xs font-black uppercase tracking-widest text-gray-600 mb-1.5 truncate">{timeframePrefix} Orders</p>
                 <p className="text-2xl font-black text-purple-600 tracking-tight">
                   {(totalOrdersCount || 0).toLocaleString()}
                 </p>
@@ -410,11 +651,11 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
                 }
               }}
             >
-              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                <TrendingDown size={48} className="text-orange-600" />
+              <div className="absolute top-0 right-0 p-3 opacity-10">
+                <TrendingDown size={42} className="text-orange-600" />
               </div>
-              <CardContent className="pt-6">
-                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">{timeframePrefix} Expenses</p>
+              <CardContent className="pt-4 pb-3 px-4">
+                <p className="text-xs font-black uppercase tracking-widest text-gray-600 mb-1.5 truncate">{timeframePrefix} Expenses</p>
                 <p className="text-2xl font-black text-orange-600 tracking-tight">
                   {formatPeso(totalExpensesAmount || 0)}
                 </p>
@@ -425,12 +666,14 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
       </Card>
 
       {/* Financial Summary Section */}
-      <Card className="border-none shadow-none mb-4">
-        <CardHeader className="pt-5 pb-0 mb-0">
-          <CardTitle className="text-center text-base font-bold text-gray-900 uppercase mb-0 pb-0 tracking-tight">Financial Summary</CardTitle>
+      <Card>
+        <CardHeader className="text-center pt-2 pb-0 mb-0">
+          <CardTitle className="text-center text-base font-bold text-gray-900 uppercase mb-0 pb-0 tracking-tight">
+            Financial Summary
+          </CardTitle>
         </CardHeader>
-        <CardContent className="pt-0 pb-0 mb-0 -mt-5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+        <CardContent className="flex justify-center pt-0 pb-0 mb-0 -mt-5">
+          <div className="grid w-full grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2">
             {/* Net Sales */}
             <Card 
               role="button"
@@ -445,14 +688,19 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
                 }
               }}
             >
-              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                <TrendingUp size={48} className="text-emerald-600" />
+              <div className="absolute top-0 right-0 p-3 opacity-10">
+                <TrendingUp size={42} className="text-emerald-600" />
               </div>
-              <CardContent className="pt-6">
-                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">{timeframePrefix} Net Sales</p>
+              <CardContent className="pt-4 pb-3 px-4">
+                <p className="text-xs font-black uppercase tracking-widest text-gray-600 mb-1.5 truncate">{timeframePrefix} Net Sales</p>
                 <p className="text-2xl font-black text-emerald-600 tracking-tight">
                   {formatPeso(netSalesAmount)}
                 </p>
+                {totalDiscountsAmount > 0 && (
+                  <p className="text-[10px] font-bold text-emerald-800 bg-emerald-100/70 border border-emerald-200/80 rounded px-1.5 py-0.5 mt-1 inline-block">
+                    Discounts: -{formatPeso(totalDiscountsAmount)}
+                  </p>
+                )}
               </CardContent>
             </Card>
 
@@ -470,11 +718,11 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
                 }
               }}
             >
-              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                <CircleAlert size={48} className="text-red-600" />
+              <div className="absolute top-0 right-0 p-3 opacity-10">
+                <CircleAlert size={42} className="text-red-600" />
               </div>
-              <CardContent className="pt-6">
-                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">{timeframePrefix} Balance Due</p>
+              <CardContent className="pt-4 pb-3 px-4">
+                <p className="text-xs font-black uppercase tracking-widest text-gray-600 mb-1.5 truncate">{timeframePrefix} Balance Due</p>
                 <p className="text-2xl font-black text-red-600 tracking-tight">
                   {formatPeso(totalBalanceDue)}
                 </p>
@@ -483,11 +731,11 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
 
             {/* Net Profit */}
             <Card className="border-none shadow-md bg-white overflow-hidden relative group">
-              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                <TrendingUp size={48} className="text-blue-600" />
+              <div className="absolute top-0 right-0 p-3 opacity-10">
+                <TrendingUp size={42} className="text-blue-600" />
               </div>
-              <CardContent className="pt-6">
-                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">{timeframePrefix} Net Profit</p>
+              <CardContent className="pt-4 pb-3 px-4">
+                <p className="text-xs font-black uppercase tracking-widest text-gray-600 mb-1.5 truncate">{timeframePrefix} Net Profit</p>
                 <p className="text-2xl font-black text-blue-600 tracking-tight">
                   {formatPeso(profit)}
                 </p>
@@ -496,11 +744,11 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
 
             {/* ROI */}
             <Card className="border-none shadow-md bg-white overflow-hidden relative group">
-              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                <Percent size={48} className="text-purple-600" />
+              <div className="absolute top-0 right-0 p-3 opacity-10">
+                <Percent size={42} className="text-purple-600" />
               </div>
-              <CardContent className="pt-6">
-                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">{timeframePrefix} ROI</p>
+              <CardContent className="pt-4 pb-3 px-4">
+                <p className="text-xs font-black uppercase tracking-widest text-gray-600 mb-1.5 truncate">{timeframePrefix} ROI</p>
                 <p className="text-2xl font-black text-purple-600 tracking-tight">
                   {roiSummary.display}
                 </p>
@@ -511,33 +759,45 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
       </Card>
 
       {/* 2. PAYMENT ANALYTICS & SERVICE TYPE */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card className="border-none shadow-md bg-white overflow-hidden">
-          <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-1.5 pt-3.5 px-4 sm:px-5 gap-2">
-            <div className="flex flex-col text-center sm:text-left">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 items-stretch">
+        <Card className="border-none shadow-md bg-white overflow-hidden gap-0 h-full flex flex-col">
+          <CardHeader className="flex flex-row items-start justify-between pb-1.5 pt-3 sm:pt-4 px-3 sm:px-5 gap-2">
+            <div className="flex flex-col text-left min-w-0 pr-1">
               <CardTitle className="text-xs sm:text-sm font-black uppercase tracking-tight text-gray-800 leading-tight">
                 TOTAL SALES BY SERVICE TYPE — {timeframePrefix.toUpperCase()}
               </CardTitle>
               {periodLabel && (
-                <span className="text-[11px] font-bold text-red-600 mt-0.5 tracking-normal">
+                <span className="text-[10px] sm:text-[11px] font-bold text-red-700 mt-0.5 tracking-normal leading-tight">
                   {periodLabel}
                 </span>
               )}
             </div>
-            {/* Header Legend matching Dashboard */}
-            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[8.5px] font-bold uppercase tracking-wider text-gray-500">
-              <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full" style={{ background: '#A2C2B9' }} /> BASIC CLEANING</div>
-              <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full" style={{ background: '#93C5FD' }} /> MINOR REGLUE</div>
-              <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full" style={{ background: '#D69BE5' }} /> FULL REGLUE</div>
-              <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full" style={{ background: '#F5CD93' }} /> COLOR RENEWAL</div>
+            {/* Header Legend: 2x2 grid */}
+            <div className="grid grid-cols-2 gap-x-2.5 sm:gap-x-4 gap-y-1 text-[7.5px] sm:text-[8.5px] font-bold uppercase tracking-wider text-gray-500 shrink-0">
+              <div className="flex items-center gap-1 sm:gap-1.5 whitespace-nowrap">
+                <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-[#A2C2B9] shrink-0 inline-block" />
+                <span className="leading-none">BASIC CLEANING</span>
+              </div>
+              <div className="flex items-center gap-1 sm:gap-1.5 whitespace-nowrap">
+                <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-[#93C5FD] shrink-0 inline-block" />
+                <span className="leading-none">MINOR REGLUE</span>
+              </div>
+              <div className="flex items-center gap-1 sm:gap-1.5 whitespace-nowrap">
+                <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-[#D69BE5] shrink-0 inline-block" />
+                <span className="leading-none">FULL REGLUE</span>
+              </div>
+              <div className="flex items-center gap-1 sm:gap-1.5 whitespace-nowrap">
+                <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-[#F5CD93] shrink-0 inline-block" />
+                <span className="leading-none">COLOR RENEWAL</span>
+              </div>
             </div>
           </CardHeader>
-          <CardContent className="pt-1 px-3 sm:px-4 pb-2.5">
-            <ResponsiveContainer width="100%" height={215}>
-              <BarChart data={serviceVolume} layout="vertical" margin={{ top: 6, right: 15, left: 0, bottom: 4 }}>
+          <CardContent className="pt-0 px-3 sm:px-4 pb-1 flex-1 flex flex-col justify-center">
+            <ResponsiveContainer width="100%" height={175} debounce={50}>
+              <BarChart data={serviceVolume} layout="vertical" margin={{ top: 6, right: 15, left: -5, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f0f0f0" />
                 <XAxis type="number" hide />
-                <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 9.5, fontWeight: 700, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                <YAxis dataKey="name" type="category" width={85} tick={{ fontSize: 9, fontWeight: 700, fill: '#64748b' }} axisLine={false} tickLine={false} />
                 <Tooltip
                   cursor={{ fill: 'rgba(0, 0, 0, 0.04)', radius: 4 }}
                   content={({ active, payload }) => {
@@ -555,7 +815,7 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
                   }}
                 />
 
-                <Bar dataKey="amount" radius={[0, 4, 4, 0]} barSize={16}>
+                <Bar dataKey="amount" radius={[0, 4, 4, 0]} barSize={15}>
                   {serviceVolume.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.fill} />
                   ))}
@@ -565,21 +825,21 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
           </CardContent>
         </Card>
 
-        <Card className="border-none shadow-md bg-white overflow-hidden">
-          <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-1.5 pt-3.5 px-4 sm:px-5 gap-2">
-            <div className="flex flex-col text-center sm:text-left">
-              <CardTitle className="text-xs sm:text-sm font-black uppercase tracking-tight text-gray-800 leading-tight">
+        <Card className="border-none shadow-md bg-white overflow-hidden gap-0 h-full flex flex-col">
+          <CardHeader className="flex flex-row items-start justify-between pb-1.5 pt-3 sm:pt-4 px-3 sm:px-5 gap-2">
+            <div className="flex flex-col text-left min-w-0 pr-1 flex-1">
+              <CardTitle className="text-xs sm:text-sm font-black uppercase tracking-tight text-gray-800 leading-tight truncate">
                 PAYMENT METHOD ANALYTICS — {timeframePrefix.toUpperCase()}
               </CardTitle>
               {periodLabel && (
-                <span className="text-[11px] font-bold text-red-600 mt-0.5 tracking-normal">
+                <span className="text-[10px] sm:text-[11px] font-bold text-red-700 mt-0.5 tracking-normal leading-tight">
                   {periodLabel}
                 </span>
               )}
             </div>
-            <div className="flex justify-center sm:justify-end">
-              <Select value={selectedPaymentMethod} onValueChange={setSelectedPaymentMethod}>
-                <SelectTrigger className="w-[95px] h-6 text-[8.5px] font-black uppercase tracking-[0.1em] border-gray-200 bg-gray-50/50 focus:ring-0 focus:ring-offset-0">
+            <div className="flex items-center justify-end shrink-0">
+              <Select value={selectedPaymentMethod} onValueChange={handlePaymentMethodChange}>
+                <SelectTrigger className="w-[85px] sm:w-[95px] h-6 text-[8.5px] font-black uppercase tracking-[0.1em] border-gray-200 bg-gray-50/50 focus:ring-0 focus:ring-offset-0">
                   <div className="flex items-center gap-1">
                     <Filter size={9} className="text-gray-400" />
                     <SelectValue placeholder="Filter" />
@@ -594,17 +854,16 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
               </Select>
             </div>
           </CardHeader>
-          <CardContent className="pt-1 px-3 sm:px-4 pb-2.5 flex flex-col items-center">
-            {/* Centered Donut Chart sized to match Dashboard */}
-            <div className="w-full flex justify-center">
-              <ResponsiveContainer width="100%" height={175} className="max-w-md">
+          <CardContent className="pt-0 px-3 sm:px-4 pb-1 flex flex-col justify-between flex-1">
+            <div className="w-full flex-1 flex items-center justify-center">
+              <ResponsiveContainer width="100%" height={146} debounce={50}>
                 <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
                   <Pie
                     data={paymentMethodStats}
                     cx="50%"
                     cy="50%"
-                    innerRadius={48}
-                    outerRadius={72}
+                    innerRadius={40}
+                    outerRadius={62}
                     paddingAngle={4}
                     dataKey="value"
                   >
@@ -631,12 +890,12 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
               </ResponsiveContainer>
             </div>
 
-            {/* Simple compact legend below chart */}
-            <div className="flex flex-wrap items-center justify-center gap-3.5 mt-1 max-w-lg mx-auto">
+            {/* Compact bottom legend */}
+            <div className="flex items-center justify-center gap-3 sm:gap-5 pb-0.5 whitespace-nowrap">
               {paymentMethodStats.map((item) => (
-                <div key={item.name} className="flex items-center gap-1.5 text-[9px] font-bold text-gray-600 uppercase tracking-wider">
-                  <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
-                  <span>{item.name}</span>
+                <div key={item.name} className="flex items-center gap-1 sm:gap-1.5 text-[8px] sm:text-[9px] font-bold text-gray-600 uppercase tracking-wider">
+                  <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full shrink-0 inline-block" style={{ backgroundColor: item.color }} />
+                  <span className="leading-none">{item.name}</span>
                 </div>
               ))}
             </div>
@@ -650,7 +909,7 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
       {/* Header Banner */}
       <div className="border-b-2 border-red-600 pb-3 mb-4 flex items-center justify-between bg-white">
         <div className="flex items-center gap-3">
-          <img src="/logo.png" alt="Shoelotskey Logo" className="h-11 w-11 object-contain" />
+          <img src="/logo.webp" alt="Shoelotskey Logo" width="44" height="44" className="h-11 w-11 object-contain" />
           <div>
             <div className="text-base font-black text-red-600 leading-none tracking-tight uppercase">Shoelotskey</div>
             <div className="text-[9px] font-bold text-gray-700 tracking-wide uppercase mt-0.5">
@@ -680,26 +939,32 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
               {/* Col 1 */}
               <div className="space-y-1">
                 <div className="flex justify-between">
-                  <span className="text-gray-600 font-normal">Total Sales:</span>
-                  <span className="font-black text-gray-900">{formatPeso(totalSalesAmount)}</span>
+                  <span className="text-gray-900 font-bold">Total Sales:</span>
+                  <span className="font-bold text-gray-900">{formatPeso(totalSalesAmount)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600 font-normal">Refunds Issued:</span>
-                  <span className="font-black text-gray-900">{formatPeso(totalRefundsAmount)}</span>
+                  <span className="font-bold text-gray-900">{formatPeso(totalRefundsAmount)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600 font-normal">Net Sales:</span>
-                  <span className="font-black text-gray-900">{formatPeso(netSalesAmount)}</span>
+                  <span className="font-bold text-gray-900">{formatPeso(netSalesAmount)}</span>
                 </div>
                 {totalRetainedPaymentsAmount > 0 && (
                   <div className="flex justify-between">
                     <span className="text-gray-600 font-normal">Retained Payments:</span>
-                    <span className="font-black text-gray-900">{formatPeso(totalRetainedPaymentsAmount)}</span>
+                    <span className="font-bold text-gray-900">{formatPeso(totalRetainedPaymentsAmount)}</span>
                   </div>
                 )}
                 <div className="flex justify-between">
                   <span className="text-gray-600 font-normal">Total Orders:</span>
-                  <span className="font-black text-gray-800">{totalOrdersCount}</span>
+                  <span className="font-bold text-gray-900">{totalOrdersCount}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600 font-normal">Discounts Granted:</span>
+                  <span className={totalDiscountsAmount > 0 ? "font-bold text-emerald-700" : "font-bold text-gray-900"}>
+                    {totalDiscountsAmount > 0 ? `-${formatPeso(totalDiscountsAmount)}` : formatPeso(0)}
+                  </span>
                 </div>
               </div>
 
@@ -707,23 +972,23 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
               <div className="space-y-1">
                 <div className="flex justify-between">
                   <span className="text-gray-600 font-normal">Payments Received:</span>
-                  <span className="font-black text-gray-900">{formatPeso(totalPaymentsReceived)}</span>
+                  <span className="font-bold text-gray-900">{formatPeso(totalPaymentsReceived)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600 font-normal">Balance Due:</span>
-                  <span className="font-black text-gray-900">{formatPeso(totalBalanceDue)}</span>
+                  <span className="font-bold text-gray-900">{formatPeso(totalBalanceDue)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600 font-normal">Total Expenses:</span>
-                  <span className="font-black text-gray-900">{formatPeso(totalExpensesAmount)}</span>
+                  <span className="font-bold text-gray-900">{formatPeso(totalExpensesAmount)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600 font-normal">Net Profit:</span>
-                  <span className="font-black text-gray-900">{formatPeso(profit)}</span>
+                  <span className="font-bold text-gray-900">{formatPeso(profit)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600 font-normal">Return on Investment (ROI):</span>
-                  <span className="font-black text-gray-900">{roiSummary.display}</span>
+                  <span className="font-bold text-gray-900">{roiSummary.display}</span>
                 </div>
               </div>
             </div>
@@ -734,21 +999,23 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
             <h3 className="text-[10px] font-black uppercase tracking-wider text-red-600 mb-2">Sales Records</h3>
             <table className="w-full border-collapse border border-gray-200 text-[9px]">
               <colgroup>
-                <col style={{width:'15%'}} />
+                <col style={{width:'14%'}} />
                 <col style={{width:'11%'}} />
-                <col style={{width:'18%'}} />
-                <col style={{width:'20%'}} />
+                <col style={{width:'17%'}} />
+                <col style={{width:'19%'}} />
+                <col style={{width:'7%'}} />
                 <col style={{width:'8%'}} />
-                <col style={{width:'9%'}} />
-                <col style={{width:'9%'}} />
-                <col style={{width:'10%'}} />
+                <col style={{width:'8%'}} />
+                <col style={{width:'8%'}} />
+                <col style={{width:'8%'}} />
               </colgroup>
               <thead>
                 <tr className="bg-red-600 text-white font-bold uppercase text-[8.5px]">
                   <th className="px-2 py-1.5 text-left">Order #</th>
-                  <th className="px-2 py-1.5 text-center">Date</th>
+                  <th className="px-2 py-1.5 text-center">Order Date</th>
                   <th className="px-2 py-1.5 text-left">Customer</th>
-                  <th className="px-2 py-1.5 text-left">Shoe / Services</th>
+                  <th className="px-2 py-1.5 text-center">Shoe Details</th>
+                  <th className="px-2 py-1.5 text-center">Qty</th>
                   <th className="px-2 py-1.5 text-center">Priority</th>
                   <th className="px-2 py-1.5 text-right">Total</th>
                   <th className="px-2 py-1.5 text-right">Paid</th>
@@ -758,13 +1025,18 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
               <tbody>
                 {totalSalesData.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-3 py-6 text-center text-gray-400 font-semibold uppercase text-[10px]">
+                    <td colSpan={9} className="px-3 py-6 text-center text-gray-600 font-semibold uppercase text-xs">
                       No sales records found for the selected period.
                     </td>
                   </tr>
                 ) : (
                   totalSalesData.map((order: JobOrder, idx: number) => {
+                    const pairCount = order.items && order.items.length > 0 
+                      ? order.items.reduce((sum: number, it: any) => sum + (Number(it.quantity) || 1), 0)
+                      : (Number((order as any).pairsCount) || 1);
+                    const pairText = `${pairCount} PR`;
                     const shoeStr = [order.brand, order.shoeModel].filter(Boolean).join(' ') || 'Shoes';
+                    
                     const baseSvcs = (Array.isArray(order.baseService)
                       ? order.baseService
                       : String(order.baseService || '').split(',')
@@ -780,7 +1052,8 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
                     }).map(s => String(s || '').trim()).filter(Boolean);
 
                     const allSvcs = [...baseSvcs, ...addonSvcs];
-                    const svcLines = chunkServiceCodesTwoPerRow(allSvcs.length > 0 ? allSvcs : baseSvcs);
+                    const serviceCodes = normalizeServiceCodes(allSvcs.length > 0 ? allSvcs : ['BC']);
+                    const codesStr = (serviceCodes.length > 0 ? serviceCodes : ['BC']).join(', ');
 
                     const paidAmt = collectedSales(order);
                     const balAmt = Math.max(0, (Number(order.grandTotal) || 0) - paidAmt);
@@ -794,20 +1067,26 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
                           {new Date(order.transactionDate || order.createdAt).toLocaleDateString()}
                         </td>
                         <td className="px-2 pt-1.5 pb-0.5 font-bold text-gray-900 truncate align-top">{order.customerName}</td>
-                        <td className="px-2 pt-1.5 pb-0.5 align-top">
-                          <div className="font-semibold text-gray-800 truncate">{shoeStr}</div>
-                          <div className="text-[7.8px] text-gray-500 mt-0.5 leading-tight">
-                            {svcLines.length > 0 ? (
-                              svcLines.map((line, lIdx) => (
-                                <span key={lIdx} className="block">{line}</span>
-                              ))
-                            ) : (
-                              <span>Standard Care</span>
-                            )}
+                        <td className="px-2 pt-1.5 pb-0.5 text-center align-top">
+                          <div className="font-semibold text-gray-800 truncate text-center">
+                            {shoeStr}
+                          </div>
+                          <div className="text-[7.8px] text-gray-600 mt-0.5 leading-tight text-center">
+                            {codesStr}
                           </div>
                         </td>
+                        <td className="px-2 pt-1.5 pb-0.5 text-center font-bold text-gray-800 align-top whitespace-nowrap">
+                          {pairText}
+                        </td>
                         <td className="px-2 pt-1.5 pb-0.5 text-center text-gray-600 capitalize align-top">{order.priorityLevel || 'Regular'}</td>
-                        <td className="px-2 pt-1.5 pb-0.5 text-right font-black text-gray-900 align-top">{formatPeso(order.grandTotal || 0)}</td>
+                        <td className="px-2 pt-1.5 pb-0.5 text-right font-black text-gray-900 align-top">
+                          <div>{formatPeso(order.grandTotal || 0)}</div>
+                          {Boolean(Number((order as any).discountAmount || (order as any).discount || 0) > 0.01) && (
+                            <div className="text-[7.5px] font-bold text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded inline-block mt-0.5 border border-emerald-200">
+                              Disc: -{formatPeso(Number((order as any).discountAmount || (order as any).discount || 0))}
+                            </div>
+                          )}
+                        </td>
                         <td className="px-2 pt-1.5 pb-0.5 text-right font-black text-gray-900 align-top">{formatPeso(paidAmt)}</td>
                         <td className="px-2 pt-1.5 pb-0.5 text-right font-black text-gray-900 align-top">{formatPeso(balAmt)}</td>
                       </tr>
@@ -865,7 +1144,7 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
               <tbody>
                 {filteredExpensesByDate.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-3 py-6 text-center text-gray-400 font-semibold uppercase text-[10px]">
+                    <td colSpan={5} className="px-3 py-6 text-center text-gray-600 font-semibold uppercase text-xs">
                       No expense records found for the selected period.
                     </td>
                   </tr>
@@ -903,49 +1182,55 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
             <div className="p-3 grid grid-cols-2 gap-x-8 gap-y-1.5 text-[9.5px]">
               <div className="space-y-1">
                 <div className="flex justify-between">
-                  <span className="text-gray-600 font-medium">Total Sales:</span>
-                  <span className="font-black text-gray-900">{formatPeso(totalSalesAmount)}</span>
+                  <span className="text-gray-600 font-normal">Total Sales:</span>
+                  <span className="font-bold text-gray-900">{formatPeso(totalSalesAmount)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600 font-medium">Refunds Issued:</span>
-                  <span className="font-black text-gray-900">{formatPeso(totalRefundsAmount)}</span>
+                  <span className="text-gray-600 font-normal">Refunds Issued:</span>
+                  <span className="font-bold text-gray-900">{formatPeso(totalRefundsAmount)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600 font-normal">Net Sales:</span>
-                  <span className="font-black text-gray-900">{formatPeso(netSalesAmount)}</span>
+                  <span className="font-bold text-gray-900">{formatPeso(netSalesAmount)}</span>
                 </div>
                 {totalRetainedPaymentsAmount > 0 && (
                   <div className="flex justify-between">
-                    <span className="text-gray-600 font-medium">Retained Payments:</span>
-                    <span className="font-black text-gray-900">{formatPeso(totalRetainedPaymentsAmount)}</span>
+                    <span className="text-gray-600 font-normal">Retained Payments:</span>
+                    <span className="font-bold text-gray-900">{formatPeso(totalRetainedPaymentsAmount)}</span>
                   </div>
                 )}
                 <div className="flex justify-between">
                   <span className="text-gray-600 font-normal">Total Orders:</span>
-                  <span className="font-black text-gray-800">{totalOrdersCount}</span>
+                  <span className="font-bold text-gray-900">{totalOrdersCount}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600 font-normal">Discounts Granted:</span>
+                  <span className={totalDiscountsAmount > 0 ? "font-bold text-emerald-700" : "font-bold text-gray-900"}>
+                    {totalDiscountsAmount > 0 ? `-${formatPeso(totalDiscountsAmount)}` : formatPeso(0)}
+                  </span>
                 </div>
               </div>
 
               <div className="space-y-1">
                 <div className="flex justify-between">
-                  <span className="text-gray-600 font-medium">Payments Received:</span>
-                  <span className="font-black text-gray-900">{formatPeso(totalPaymentsReceived)}</span>
+                  <span className="text-gray-600 font-normal">Payments Received:</span>
+                  <span className="font-bold text-gray-900">{formatPeso(totalPaymentsReceived)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600 font-medium">Balance Due:</span>
-                  <span className="font-black text-gray-900">{formatPeso(totalBalanceDue)}</span>
+                  <span className="text-gray-600 font-normal">Balance Due:</span>
+                  <span className="font-bold text-gray-900">{formatPeso(totalBalanceDue)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600 font-medium">Total Expenses:</span>
-                  <span className="font-black text-gray-900">{formatPeso(totalExpensesAmount)}</span>
+                  <span className="text-gray-600 font-normal">Total Expenses:</span>
+                  <span className="font-bold text-gray-900">{formatPeso(totalExpensesAmount)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600 font-normal">Net Profit:</span>
-                  <span className="font-black text-gray-900">{formatPeso(profit)}</span>
+                  <span className="font-bold text-gray-900">{formatPeso(profit)}</span>
                 </div>
                 <div className="flex justify-between pt-1 border-t border-gray-100">
-                  <span className="text-gray-600 font-normal">Return on Investment (ROI):</span>
-                  <span className="font-black text-gray-900 text-xs">{roiSummary.display}</span>
+                  <span className="text-gray-900 font-bold">Return on Investment (ROI):</span>
+                  <span className="font-bold text-gray-900 text-xs">{roiSummary.display}</span>
                 </div>
               </div>
             </div>
@@ -971,7 +1256,7 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
           <div className="space-y-3.5 mb-4">
             {/* 1. Service Revenue & Volume Analytics */}
             <div>
-              <h3 className="text-[10px] font-black uppercase tracking-wider text-red-600 mb-1.5">Service Revenue & Performance Analytics</h3>
+              <h3 className="text-[10px] font-black uppercase tracking-wider text-red-600 mb-1.5">Primary Service Revenue & Pair Volume</h3>
               <table className="w-full border-collapse border border-gray-200 text-[8.5px]">
                 <thead>
                   <tr className="bg-red-600 text-white font-bold uppercase text-[8px]">
@@ -994,7 +1279,7 @@ export default function SalesReport({ onSetHeaderActionRight, onSetHeaderCenter,
                     );
                   })}
                   <tr className="bg-gray-50/80 font-black border-t border-gray-200">
-                    <td className="px-2 py-1 text-left text-gray-900">Total Canonical Services</td>
+                    <td className="px-2 py-1 text-left text-gray-900">Total Services</td>
                     <td className="px-2 py-1 text-center text-gray-900">
                       {canonicalServiceStats.reduce((sum, s) => sum + s.value, 0)} pairs
                     </td>

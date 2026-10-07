@@ -1,6 +1,12 @@
 import { format as dateFnsFormat } from 'date-fns';
 import type { JobOrder, ShoeItem } from '@/app/types';
 import { parseDateFromOrderId } from './orderNumber';
+import {
+  getOperatingSchedule,
+  getOperatingHoursRange,
+  getOperatingDaysSummary,
+  OperatingScheduleData,
+} from './operatingSchedule';
 
 export type ReportRange = 'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Annually' | 'Custom';
 
@@ -206,7 +212,7 @@ export function isDateInRange(
     if (customEndDate) {
       return dateStr <= customEndDate;
     }
-    return true;
+    return false;
   }
   return false;
 }
@@ -216,7 +222,10 @@ export function getOrderActivityPeriodLabel(
   customStartDate = '',
   customEndDate = '',
   now = new Date(),
+  customSchedule?: OperatingScheduleData,
 ): string {
+  const schedule = customSchedule || getOperatingSchedule();
+
   if (range === 'Daily') {
     return dateFnsFormat(now, 'MMMM d, yyyy');
   }
@@ -226,10 +235,10 @@ export function getOrderActivityPeriodLabel(
     const distanceToMonday = (dayOfWeek + 6) % 7;
     const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - distanceToMonday);
     const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6);
-    if (monday.getMonth() === sunday.getMonth()) {
-      return `${dateFnsFormat(monday, 'MMMM')} ${monday.getDate()}–${sunday.getDate()}, ${sunday.getFullYear()}`;
-    }
-    return `${dateFnsFormat(monday, 'MMMM d')} – ${dateFnsFormat(sunday, 'MMMM d, yyyy')}`;
+    const dateRangeStr = monday.getMonth() === sunday.getMonth()
+      ? `${dateFnsFormat(monday, 'MMMM')} ${monday.getDate()}–${sunday.getDate()}, ${sunday.getFullYear()}`
+      : `${dateFnsFormat(monday, 'MMMM d')} – ${dateFnsFormat(sunday, 'MMMM d, yyyy')}`;
+    return dateRangeStr;
   }
 
   if (range === 'Monthly') {
@@ -253,10 +262,25 @@ export function getOrderActivityPeriodLabel(
 
   if (range === 'Custom') {
     if (customStartDate && customEndDate) {
+      if (customStartDate > customEndDate) {
+        return '⚠️ Invalid Date Range: Start date cannot be after end date';
+      }
       const s = new Date(customStartDate);
       const e = new Date(customEndDate);
       if (!isNaN(s.getTime()) && !isNaN(e.getTime())) {
         return `${dateFnsFormat(s, 'MMMM d, yyyy')} – ${dateFnsFormat(e, 'MMMM d, yyyy')}`;
+      }
+    }
+    if (customStartDate) {
+      const s = new Date(customStartDate);
+      if (!isNaN(s.getTime())) {
+        return `From ${dateFnsFormat(s, 'MMMM d, yyyy')}`;
+      }
+    }
+    if (customEndDate) {
+      const e = new Date(customEndDate);
+      if (!isNaN(e.getTime())) {
+        return `Until ${dateFnsFormat(e, 'MMMM d, yyyy')}`;
       }
     }
     return 'Custom Range';
@@ -507,17 +531,42 @@ export function serviceVolumeByCanonical(orders: JobOrder[]) {
       })) {
         unique.add('Full Reglue');
       }
+      if (!unique.has('Minor Reglue') && allServicesAndAddons.some((s) => {
+        const l = s.toLowerCase();
+        return (l.includes('minor reglue') || l === 'mr') && !l.includes('full');
+      })) {
+        unique.add('Minor Reglue');
+      }
       if (!unique.has('Color Renewal') && allServicesAndAddons.some((s) => {
         const l = s.toLowerCase();
-        return l.includes('color renewal') || l.includes('2 color') || l.includes('3 color');
+        return l.includes('color renewal') || l.includes('2 color') || l.includes('3 color') || l === 'cor' || l === 'cr';
       })) {
         unique.add('Color Renewal');
       }
-      if (!unique.has('Basic Cleaning') && allServicesAndAddons.some((s) => {
-        const l = s.toLowerCase();
-        return l.includes('cleaning') || l.includes('unyellowing') || l.includes('white paint') || l.includes('retouch') || l.includes('restoration');
-      })) {
-        unique.add('Basic Cleaning');
+
+      // Solo / Primary Attribution: Included Basic Cleaning (with basic cleaning) is a complimentary prep step,
+      // not a separately counted pair. Only attribute Basic Cleaning if NO restorative service is present
+      // OR if cleaning was explicitly and separately purchased as a distinct service line.
+      const hasRestorative = unique.has('Full Reglue') || unique.has('Minor Reglue') || unique.has('Color Renewal');
+      const strippedCleanServices = allServicesAndAddons.map((s) =>
+        s.toLowerCase().replace(/\(with basic cleaning\)/g, '').replace(/with basic cleaning/g, '').trim()
+      );
+
+      if (!hasRestorative) {
+        if (!unique.has('Basic Cleaning') && strippedCleanServices.some((s) => {
+          return s.includes('cleaning') || s.includes('unyellowing') || s.includes('white paint') || s.includes('retouch') || s.includes('restoration') || s === 'bc';
+        })) {
+          unique.add('Basic Cleaning');
+        }
+      } else {
+        // If restorative exists, only add Basic Cleaning if there is a separate standalone cleaning service entry
+        const hasStandaloneCleaning = baseNames.some((n) => {
+          const l = String(n).toLowerCase().trim();
+          return l === 'basic cleaning' || l === 'cleaning' || l === 'deep cleaning' || l === 'bc';
+        });
+        if (hasStandaloneCleaning) {
+          unique.add('Basic Cleaning');
+        }
       }
 
       unique.forEach((canonical) => {
@@ -690,6 +739,7 @@ export function buildOrderActivityTrends(
   customStartDate = '',
   customEndDate = '',
   now = new Date(),
+  customSchedule?: OperatingScheduleData,
 ): ActivityPoint[] {
   const activeOrders = (orders || []).filter((order) => {
     return order && !isCancelledOrder(order);
@@ -712,27 +762,56 @@ export function buildOrderActivityTrends(
   };
 
   if (range === 'Daily') {
-    const hours = Array.from({ length: 24 }, (_, hour) => hour);
-    const dailyData = hours.map((hour) => {
+    const schedule = customSchedule || getOperatingSchedule();
+    const { startHour, endHour } = getOperatingHoursRange(schedule);
+
+    // Business operating hours derived from configured schedule
+    let minHour = startHour;
+    let maxHour = endHour;
+
+    // Expand boundary if any orders took place outside standard hours on this day
+    const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const dayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    activeOrders.forEach(order => {
+      const c = orderEventDate(order);
+      if (!isNaN(c.getTime()) && inBucket(c, dayStart, dayEnd)) {
+        minHour = Math.min(minHour, c.getHours());
+        maxHour = Math.max(maxHour, c.getHours());
+      }
+      const r = orderReleaseDate(order);
+      if (r && !isNaN(r.getTime()) && inBucket(r, dayStart, dayEnd)) {
+        minHour = Math.min(minHour, r.getHours());
+        maxHour = Math.max(maxHour, r.getHours());
+      }
+    });
+
+    const hours: number[] = [];
+    for (let h = minHour; h <= maxHour; h++) {
+      hours.push(h);
+    }
+
+    return hours.map((hour) => {
       const periodStart = new Date(now);
       periodStart.setHours(hour, 0, 0, 0);
       const periodEnd = new Date(now);
       periodEnd.setHours(hour, 59, 59, 999);
       const point = countIn(periodStart, periodEnd);
-      const militaryHour = `${String(hour).padStart(2, '0')}:00`;
-      return { hourIndex: hour, period: militaryHour, newOrders: point.newOrders, releasedOrders: point.releasedOrders };
+      const meridiem = hour >= 12 ? 'PM' : 'AM';
+      const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+      const formattedHour = `${hour12} ${meridiem}`;
+      return { period: formattedHour, newOrders: point.newOrders, releasedOrders: point.releasedOrders };
     });
-    const startHour = Math.min(9, dailyData.reduce((min, d) => (d.newOrders > 0 || d.releasedOrders > 0) ? Math.min(min, d.hourIndex) : min, 9));
-    const endHour = Math.max(21, dailyData.reduce((max, d) => (d.newOrders > 0 || d.releasedOrders > 0) ? Math.max(max, d.hourIndex) : max, 21));
-    return dailyData
-      .filter((data) => data.hourIndex >= startHour && data.hourIndex <= endHour)
-      .map(({ hourIndex, ...rest }) => rest);
   }
 
   if (range === 'Weekly') {
+    const schedule = customSchedule || getOperatingSchedule();
     const dayOfWeek = now.getDay();
     const distanceToMonday = (dayOfWeek + 6) % 7;
     const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - distanceToMonday);
+
+    const dayKeys: (keyof typeof schedule.weeklyDays)[] = [
+      'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'
+    ];
 
     return Array.from({ length: 7 }, (_, i) => {
       const date = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
@@ -741,8 +820,12 @@ export function buildOrderActivityTrends(
       const dayEnd = new Date(date);
       dayEnd.setHours(23, 59, 59, 999);
       const point = countIn(dayStart, dayEnd);
+      const dayKey = dayKeys[i];
+      const isOff = schedule.weeklyDays ? !schedule.weeklyDays[dayKey] : false;
+      const baseLabel = date.toLocaleDateString('en-US', { weekday: 'short' });
+
       return { 
-        period: date.toLocaleDateString('en-US', { weekday: 'short' }), 
+        period: isOff ? `${baseLabel} (Off)` : baseLabel, 
         newOrders: point.newOrders, 
         releasedOrders: point.releasedOrders 
       };
@@ -750,9 +833,9 @@ export function buildOrderActivityTrends(
   }
 
   if (range === 'Custom') {
-    if (!customStartDate || !customEndDate) return [];
-    const start = new Date(`${customStartDate}T00:00:00`);
-    const end = new Date(`${customEndDate}T23:59:59.999`);
+    if (!customStartDate && !customEndDate) return [];
+    const start = customStartDate ? new Date(`${customStartDate}T00:00:00`) : new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
+    const end = customEndDate ? new Date(`${customEndDate}T23:59:59.999`) : new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
     if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) return [];
     const points: ActivityPoint[] = [];
     const cursor = new Date(start);

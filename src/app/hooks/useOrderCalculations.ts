@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import type { ShoeEntry, Service } from '@/app/types';
 import { calculateOfficialReleaseBreakdown } from '@/app/lib/businessRules';
+import { getApplicableRushFee, isFullReglueSoleAddon } from '@/app/lib/serviceCompatibility';
 
 interface OrderCalculationParams {
     shoes: ShoeEntry[];
@@ -34,19 +35,19 @@ export function useOrderCalculations({
         return shoes.every(shoe => {
             const baseServicesArr = Array.isArray(shoe.baseService) ? shoe.baseService : [];
             const addOnsArr = Array.isArray(shoe.addOns) ? shoe.addOns : [];
-            return baseServicesArr.length === 1 && baseServicesArr[0] === 'Basic Cleaning' && addOnsArr.length === 0;
+            return !!getApplicableRushFee(baseServicesArr, addOnsArr, services);
         });
-    }, [shoes]);
+    }, [shoes, services]);
 
     const catalogDurations = useMemo(() => {
         const map: Record<string, string | number> = {};
-        [...baseServices, ...addOnServices].forEach((service) => {
+        services.forEach((service) => {
             if (service.name && service.durationDays !== undefined) {
                 map[service.name] = service.durationDays;
             }
         });
         return map;
-    }, [baseServices, addOnServices]);
+    }, [services]);
 
     const mlBreakdown = useMemo(
         () => calculateOfficialReleaseBreakdown(shoes, priorityLevel, basicCleaningRushReduction, catalogDurations),
@@ -68,6 +69,8 @@ export function useOrderCalculations({
         });
 
         const addOnsArr = Array.isArray(shoe.addOns) ? shoe.addOns : [];
+        const hasFR = servicesArr.includes('Full Reglue');
+        let soleCounted = 0;
         addOnsArr.forEach((addon: any) => {
             const addonName = typeof addon === 'string' ? addon : (addon.name || '');
             const addonQty = typeof addon === 'string' ? 1 : (addon.quantity || 1);
@@ -75,13 +78,24 @@ export function useOrderCalculations({
             const historicalAddOn = shoe.historicalAddOnPrices?.find(h => h.name === addonName);
             if (historicalAddOn) {
                 total += historicalAddOn.price * addonQty;
+            } else if (hasFR && isFullReglueSoleAddon(addonName)) {
+                if (soleCounted === 0) {
+                    soleCounted++;
+                } else {
+                    total += getAddonTotal(addonName, addonQty);
+                }
             } else {
                 total += getAddonTotal(addonName, addonQty);
             }
         });
 
-        if (priorityLevel === 'rush' && servicesArr.includes('Basic Cleaning')) {
-            total += 150;
+        if (priorityLevel === 'rush') {
+            const matchedRush = getApplicableRushFee(servicesArr, addOnsArr, services);
+            if (matchedRush) {
+                total += matchedRush.price;
+            } else if (servicesArr.includes('Basic Cleaning')) {
+                total += 150;
+            }
         }
 
         return total * (shoe.quantity || 1);
@@ -109,6 +123,8 @@ export function useOrderCalculations({
             });
 
             const addOnsArr = Array.isArray(shoe.addOns) ? shoe.addOns : [];
+            const hasFR = servicesArr.includes('Full Reglue');
+            let soleCounted = 0;
             addOnsArr.forEach((addon: any) => {
                 const addonName = typeof addon === 'string' ? addon : (addon.name || '');
                 const addonQty = typeof addon === 'string' ? 1 : (addon.quantity || 1);
@@ -116,13 +132,24 @@ export function useOrderCalculations({
                 const historicalAddOn = shoe.historicalAddOnPrices?.find(h => h.name === addonName);
                 if (historicalAddOn) {
                     addOnsTotal += (historicalAddOn.price * addonQty) * shoeQty;
+                } else if (hasFR && isFullReglueSoleAddon(addonName)) {
+                    if (soleCounted === 0) {
+                        soleCounted++;
+                    } else {
+                        addOnsTotal += getAddonTotal(addonName, addonQty) * shoeQty;
+                    }
                 } else {
                     addOnsTotal += getAddonTotal(addonName, addonQty) * shoeQty;
                 }
             });
 
-            if (priorityLevel === 'rush' && servicesArr.includes('Basic Cleaning')) {
-                rushFee += 150 * shoeQty;
+            if (priorityLevel === 'rush') {
+                const matchedRush = getApplicableRushFee(servicesArr, addOnsArr, services);
+                if (matchedRush) {
+                    rushFee += matchedRush.price * shoeQty;
+                } else if (servicesArr.includes('Basic Cleaning')) {
+                    rushFee += 150 * shoeQty;
+                }
             }
         });
 
@@ -134,7 +161,7 @@ export function useOrderCalculations({
         const remainingBalance = Math.max(0, grandTotal - depositAmt);
 
         return { baseTotal, addOnsTotal, rushFee, grandTotal, amountReceivedNum, remainingBalance, change };
-    }, [shoes, baseServices, addOnServices, priorityLevel, amountReceived, paymentStatus]);
+    }, [shoes, baseServices, addOnServices, priorityLevel, amountReceived, paymentStatus, services]);
 
     const calculatePredictedDays = () => {
         const hasServices = shoes.some(shoe => {

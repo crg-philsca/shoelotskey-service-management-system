@@ -1,0 +1,53 @@
+{
+  "generated_at": "2026-09-22T08:22:28.396525",
+  "dataset_total_n": 119,
+  "development_n": 93,
+  "development_date_range": [
+    "2025-08-15",
+    "2025-12-29"
+  ],
+  "final_test_n": 26,
+  "final_test_date_range": [
+    "2026-01-02",
+    "2026-01-27"
+  ],
+  "target_variable": "historical_order_to_claim_turnaround_days",
+  "target_formula": "(claimed_date - date_received).days",
+  "target_provenance": "CLAIM_DATE_CALCULATED",
+  "feature_set": "Feature Set B",
+  "features": [
+    "total_pairs",
+    "distinct_service_types",
+    "total_service_applications",
+    "rush_indicator",
+    "day_of_week_received",
+    "month_received",
+    "basic_cleaning_qty",
+    "full_reglue_qty",
+    "minor_reglue_qty",
+    "full_restoration_qty",
+    "minor_restoration_qty",
+    "color_renewal_qty",
+    "unyellowing_qty"
+  ],
+  "model_algorithm": "RandomForestRegressor",
+  "hyperparameters": {
+    "n_estimators": 200,
+    "max_depth": null,
+    "min_samples_split": 2,
+    "min_samples_leaf": 1,
+    "max_features": "sqrt",
+    "random_state": 42
+  },
+  "development_cv_method": "Expanding-Window TimeSeriesSplit (Date-Group-Aware, 5 Folds)",
+  "integrity_checks": {
+    "train_test_overlap": 0,
+    "duplicate_transactions": 0,
+    "archived_records": 0,
+    "leakage_features_excluded": [
+      "grand_total",
+      "expected_release_date",
+      "completion_days"
+    ]
+  }
+}

@@ -1,0 +1,143 @@
+Order_ID,Control_No,Date_Time,Client_Name,Contact_No,Branch,Model_and_Condition,Services,Price_Breakdown,Grand_Total,Payment_Details,Expected_Release_Date,Claimed_Date
+ORD-2025-11-03-001,,11/3/2025,Jake Pasion,0927 495 8972,Villamor,"Nike White / Orange 9"" | Jordan Air 10"" | Nike Courtvision 10"" | Keds | Tiger",UNY | UNY | UNY | BC | BC,450 | 450 | 450 | 325 | 325,2000.0,DP - 1000 - GCASH Bal - 1000,,
+ORD-2025-11-03-002,,"Nov 3, 2025",Sheila Mendoza,0964 940 9367,Villamor,Adidas Samba,BC,325,325.0,DP 200 GCASH BAL 125,,
+ORD-2025-11-03-003,,11/3/2025,Jojo Villar / Edward Rodriguez,0995 756 0697,Villamor,Asics Gel-Nimbus 9 | Converse,FR | FR,575 | 575,1150.0,DP - 600 GCASH BAL - 550,,
+ORD-2025-11-04-001,,11/4/2025,Elizabeth Aguiting,0915 757 6580,Villamor,Puma White | Nike Purple,BC + Rush | BC + Rush,325 + 150 | 325 + 150,950.0,Fully paid Cash,,
+ORD-2025-11-04-002,,11/4/2025,Malyn Santiago,0905 271 4017,Villamor,Birkenstock,BC | MR + MRES 11/19/2025,325 | 250 Pd.,325.0,,,
+ORD-2025-11-04-003,,11/04/2025,Josh Andrade,0898 007 1217,Villamor,Nike Air,FR (Back Tob),,,,Claimed 11/19/2025,
+ORD-2025-11-04-004,,Nov 4/2025,Nico V. Bondoc,0995 752 6947,Villamor,Zerogrande,FR,575,575.0,DP - 250 BAL - 325,,
+ORD-2025-11-04-005,,11/4/2025,Brian Miranda,0917 777 6219,Villamor,Sketchers | Quechua,MR | BC,450 | 325,775.0,Fully paid Gcash,,
+ORD-2025-11-04-006,,11/4/2025,Eric,0999 997 6727,Villamor,Air Jordan,BC,325,325.0,Fully paid CASH,,
+ORD-2025-11-04-007,,11/4/2025,Alexander Jenusa,0915 108 4134,Villamor,Nike Downshifter | Tiger Onitsuka,BC,325,325.0,Fully paid Gcash,,
+ORD-2025-11-04-008,,11/4/25,ILt Venson,09190739133,Villamor,Nike Airforce 1 | Nike Air Cortez,FR + UNY | FR + MRES,575 + 125 | 575 + 225,1500.0,NOT YET PAID,,
+ORD-2025-11-05-001,,11/5/2025,Lyndon Gaynilo,09989971325,Villamor,Nike Structure,BC,325,325.0,Fully paid gcash,,
+ORD-2025-11-05-002,,11/5/2025,Hiel,09158383818,Villamor,Onitsuka Tiger | Colehaan Yellow | Merrell | Zero Grated | UA,UNY (White Paint) + FR | BC | BC | PC (FREE) | FREE,450 + 225 | 325 | 325 | 0 | 0,1325.0,DP - 500 CASH Bal - 600 + 225 = 825,,Claimed
+ORD-2025-11-05-003,,11/5/2025,Jeffrey G. Santos,09457729450,Villamor,Nike Air Zoom,FR + FR Mid,575 + 150,725.0,Fully paid cash,,
+ORD-2025-11-05-004,,11/5/2025,Rey Cabatingan,09215752473,Villamor,Altama 8.5 | Altama 7.5,FR Mid + FR US | FR Mid + FR US,675 + 150 | 675 + 150,1650.0,Fully paid cash,,
+ORD-2025-11-05-005,,11/5/2025,Leo P. Bujawe,0930 597 0165,Villamor,Adidas Yeezy,FR,575,575.0,NOT YET PAID,11/30/2025,
+ORD-2025-11-06-001,,11/6/2025,Vhie Fortaleza,09187486702,Villamor,Adidas Pink | Adidas White Size 10 | Nike White | Nike Court Wight,BC | BC (Rush) | BC (Rush) | MR,325 | 325 + 150 | 325 + 150 | 450,1725.0,Fully paid cash,,
+ORD-2025-11-06-002,,"Nov 6, 2025",Archie Espena,0915-943-937,Villamor,Nike Air,FR,575,575.0,DP - 300 Bal - 275 CASH,,
+ORD-2025-11-06-003,,11/6/2025,Christian Fabroa,09276028485,Villamor,Zara White Size 41 | Nike Under Armor,BC | MRES (Rush),325 | 550 + 150,1025.0,Fully paid CASH,,
+ORD-2025-11-06-004,,11/6/2025,Jim Ray de Pedro,09171620579,Villamor,AF1 White | Nike Jordan 1,BC + 125 Restor | BC + 125 Restor,325 | 325,650.0,Fully paid gcash MSR = 150 + 125,,
+ORD-2025-11-07-001,,11/7/2025,Paul Harvey B. Brazan,09841746716,Villamor,Nike Gray Junite 8.5 | Adidas 6 1/2,BC (Rush) | BC (Rush),325 + 150 | 325 + 150,950.0,DP - 450 GCASH Bal - 500,,
+ORD-2025-11-07-002,,11/7/2025,Deo Paul Cruz,09189461019,Villamor,Nike Jordan | Nike Air Jordan Retro,FR + UNY | BC,575 + 125 | 325,1025.0,Fully paid gcash,,
+ORD-2025-11-07-003,,11/7/2025,Hma Ward,09177073878,Villamor,On Cloud,BC (Rush),325 + 150,475.0,NOT YET PAID c/o Ma'am H,,
+ORD-2025-11-08-001,,11/10/2025,Alvin Firmo,09929200154,Villamor,Sperry 10.5,MRES,325,325.0,Fully paid cash,,
+ORD-2025-11-08-002,,11/6/2025,Mary Gonong,09052306740,Villamor,Adidas Samba Blue | Adidas Samba Black,BC | BC,325 | 325,650.0,Fully paid CASH,,Claimed 11/29
+ORD-2025-11-08-003,,11/6/2025,Aubrey Reyes,09171482086,Villamor,Sandugo,BC,325,325.0,Fully paid CASH,,
+ORD-2025-11-08-004,,11/8/2025,Fen Bobadilla,Fb messenger,Villamor,Converse,BC,325,325.0,Fully paid gcash,11/18/2025,
+ORD-2025-11-08-005,,11/8/2025,Aldous John P. Roxas,09054312359,Villamor,Air Jordan Green 8 | Air Jordan Red 8.5,FR | FR,575 | 575,1150.0,Fully paid cash,,
+ORD-2025-11-08-006,,11/8/2025,Ollen Amante,09179743014,Villamor,Cloudtec Size 9 | AF1,BC | BC,325 | 325,650.0,Fully paid CASH,,Claimed 11/20/2025
+ORD-2025-11-08-007,,11/8/2025,Marlon G. Balalio,09776474905,Villamor,Nike,FR US + FR Mid,725,725.0,Fully paid cash,,
+ORD-2025-11-10-001,,11/10/2025,Dennis Mendoza,09858069967,Villamor,Onitsuka Tiger 2 pair | Jordan 12 Retro | Jordan Air 6 Retro,Full Reglue | Minor Reglue | Rush,"1,150 | 900 | 1,000",2150.0,Down Payment: 2000,,
+ORD-2025-11-10-002,,10/10/2025,Dennis Mendoza,0985 806 9467,Villamor,Onitsuka Tiger w/ lace 6 | Onitsuka Tiger Strap 9 | Jordan 12 | Jordan 6,FR (Rush) | FR (Rush) | Back job (Rush) | Back Job (Rush),575 + 250 | 575 + 250 | 250 | 250,2150.0,"DP - 2,000 Bal - 150",Nov 17 release,
+ORD-2025-11-10-003,,10 Nov. 2025,Isafah Thomas Veluz,0923-086-5889,Pasay,Converse All Size 11 White/Green,BC,325,325.0,Fully Paid Cash,,
+ORD-2025-11-10-004,,Nov 10 / 1:25,Malou Rosero,0939 526 745,Villamor,Air Force 1 Size 8,BC,325,325.0,Fully Paid,325.00,
+ORD-2025-11-10-005,,11/10/25,Romnick M. Dimarius,0919 - 5048401,Villamor,Adidas Ultra Boost Black/Gold Size 9,FR,575,575.0,Fully DP:300 Bal: 275,,
+ORD-2025-11-10-006,,11/10/2025,Neo Navares,0066 1777 518,Villamor,Nike Orange,BC,325,325.0,Fully paid cash,,
+ORD-2025-11-12-001,,11/12/2025,Maverick Harrielle E Harion,09279641749,Villamor,Converse,FR,575,575.0,Fully PAID GCASH,,
+ORD-2025-11-13-001,,11/13/2025,Cedric Ponce,0917 587 3378,Villamor,Nike Air Jordan Golf Shoes,FR Mid + FR US,725,725.0,DP - 350 CASH Bal - 375 fully PAID 12/2/25,,Claimed 12/2/25
+ORD-2025-11-13-002,,11/13/2025,Ray Jayson Jardeleza,0927 7111071,Villamor,On Cloud Size 5,BC (Rush),325 + 150,475.0,DP - 300 GCASH Bal - 175,,
+ORD-2025-11-13-003,,11/13/25,Maki Bullicer,0905 347 1365,Villamor,Converse All Star Size 3,BC | UNY,325 + 125,450.0,DP: 200 CASH BAL: 250,,
+ORD-2025-11-14-001,,11/14/2025,Justin Campos,0945 405 4480,Villamor,Adidas SL 72 size 11,FR,575,575.0,DP - 250 (Gcash) Bal - 325,,Claimed 12/12/25
+ORD-2025-11-14-002,,11/14/2025,Rey Mart A. Serrano,0928 940 9660,Villamor,Onitsuka White 7,BC,325,325.0,Fully paid cash,,
+ORD-2025-11-14-003,,11/14/2025,Romnick M. Dimacilis,0919 - 5048401,Villamor,Adidas Pink | Adidas White,BC | UNY,325 | 450,775.0,DP - 350 Bal - 425,,
+ORD-2025-11-14-004,,11/14/2025,Ricardo Artondi Jr.,0993 069 2045,Villamor,World Balance | Adidas,BC | MRES + UNY,325 | 550 + 125,1000.0,Fully paid gcash,,
+ORD-2025-11-14-005,,11/14/2025,Roderick Del Rosario,+63 778 378 8612,Villamor,Airmax Red/Black 6.5 | Air Force 1 Green 9.5 | Jordan 1 Blue/Yellow 7.5 | Adidas D.O.N. 3 1/2,BC | BC | BC | BC,325 | 325 | 325 | 325,1300.0,NOT YET PAID Fully paid,12/9/25,Claimed 12/9/25
+ORD-2025-11-15-002,,11/15/2025,Bernard Temporosa,09564779863,Villamor,Jordan Why Not (Airsole) Black,FR Mid + FR US,575 + 150,725.0,DP - 300 Bal - 425,,
+ORD-2025-11-15-003,,11/15/2025,Brendalyn Dela Cruz,0998-555-5428,Villamor,Skechers White | Black SM Shoes,BC | BC,325 | 325,650.0,Fully paid,,Claimed 11/19/2025
+ORD-2025-11-15-004,,11/15/2025,Jenilyn Ocay,0991 404 9985,Villamor,Nike Air Max 90 Size 5 | Adidas Ultra Boost 19 Black / Size 8,UNY | FR Mid + FR US + UNY,450 | 575 + 150 + 125,1300.0,DP : 1000 CASH BAL : 300,,
+ORD-2025-11-15-005,,11/15/2025,Mark Gerola,09296042229,Villamor,Air Jordan Grey Size 11,FR (Rush),575 + 250,825.0,Fully PAID CASH,,
+ORD-2025-11-15-006,,11/15/2025,Romeo Guzman,09430622285,Villamor,Nike Zoom Red Size 10.5,MRES,550,550.0,DP - 300 CASH Bal - 250,,
+ORD-2025-11-15-008,,11/15/2025,Basilico,09367136104,Villamor,Asics Size 11,BC,325,325.0,NOT YET PAID Fully Paid,,
+ORD-2025-11-16-003,,11/16/2025,Gringo Traglw,09195050082,Villamor,Jordan 1 Low OG Black Snake + insert new lace,BC,325,325.0,Fully paid cash,,Claimed 11/21/2025
+ORD-2025-11-16-004,,11/16/2025,Eleazar Potict,09109709121,Villamor,Asics Green,BC,325,325.0,Fully paid cash,,
+ORD-2025-11-17-004,,11/17/2025,Giselle Malicana,09759751340,Villamor,Fila | Airmax | Adidas White,BC | BC | MRES,325 | 325 | 550,1200.0,DP - 600 CASH Bal - 600,Fully paid,Claimed 11/29/25
+ORD-2025-11-17-005,,11/17/2025,Anne Claro,09272077271,Villamor,Roxy Surf,MRES,550,550.0,Fully paid CASH,,
+ORD-2025-11-17-006,,11/17/2025,Arvin Altura,09182264254,Villamor,Nike Resort,BC,325,325.0,NOT YET PAID Fully PAID 11/29/25,11/27/2025,
+ORD-2025-11-18-004,,11/18/2025,Den Lucis,09153041691,Villamor,On Cloud White/Green Size 6,BC,325,325.0,Fully paid GCASH,,Claimed 12/2/25
+ORD-2025-11-18-005,,11/18/2025,Din Lucis,09153041691,Villamor,On Cloud White/Green Size 6,BC,325,325.0,Fully Paid GCash,,Claimed 12/2/25
+ORD-2025-11-18-006,,11/18/2025,Albert Carpio,09162950353,Villamor,World Balance Black,BC (Rush) + UNY,325 + 150 + 125,600.0,Fully paid CASH,,
+ORD-2025-11-18-007,,11/18/2025,Mai Darling,Fb messenger,Villamor,Sketchers Black 7 | Sketchers Blue 10,BC | BC,325 | 325,650.0,Fully paid,Fully paid,Claimed 11/28/25
+ORD-2025-11-18-008,,11/18/2025,Marina,09398507224,Villamor,Sketchers,BC + UNY,325 + 125,400.0,Fully paid CASH,,
+ORD-2025-11-19-001,,11/19/2025,Rannie Pailagao,09619211072,Villamor,Jordan 5s White/Purple Size 10,MRES | FR,225 | 575,800.0,DP - 500 CASH Bal - 300,Fully paid,Claimed 11/19/25
+ORD-2025-11-19-002,,11/19/2025,Tonren B. Hermotany,09762668161,Villamor,NB Off White,BC,325 + 150,475.0,Fully PAID GCASH,,Claimed 11/20/25
+ORD-2025-11-19-003,,11/19/2025,Clove Torrenivs,09167851772,Villamor,Nike Air Max White/Brown 10,FR (Rush),575 + 250,825.0,DP 400 - 300 GCASH 100 CASH Bal - 400,,
+ORD-2025-11-19-004,,11/19/2025,Kathleen D. Pedroza,09338634397,Villamor,Palladium | Puma,BC | BC,325 + 250 | 325,875.0,Fully paid,,Claimed 12/2/25
+ORD-2025-11-20-001,,11/20/2025,Khulixi Patrick Basa,09912754495,Villamor,AF1,MRET + UNY,450 + 125,575.0,Fully PAID GCASH,,
+ORD-2025-11-20-002,,11/20/2025,Ryan Paolo Perez,09279064108,Villamor,Air Jordan 1 Low,BC (Rush),325 + 150,475.0,Fully PAID CASH,,Claimed 11/22/2025
+ORD-2025-11-20-003,,11/20/2025,Dollo Ordanez,09175257184,Villamor,NB,BC (Rush),325 + 150,475.0,DP - 250 CASH Bal - 325,,
+ORD-2025-11-20-004,,11/20/2025,Lloyd 09167957086,09167957086,Villamor,Nike Golf Shoes,FR Mid + FR US,575 + 150,725.0,Fully PAID GCASH,,Claimed 12/19/25
+ORD-2025-11-20-005,,11/20/2025,Darren Hernandez,09692577582,Villamor,Onitsuka Tiger Yellow 43 | Jordan Black/Red (Back Job),FR | FR,325 + 175,500.0,DP - 300 CASH Bal - 200,,
+ORD-2025-11-20-006,,11/20/2025,Lloyd Quisido,09052149196,Villamor,Samba 6 1/2 | Nike Air Jordan | Nike White Killsht | Air Force 1 10.5,BC | BC + UNY + MRET | MR | BC + UNY,325 | 450 + 125 | 450 | 325 + 125,1800.0,DP - 1000 CASH Bal - 800,,
+ORD-2025-11-20-007,,11/20/2025,John Nie Muni,9175330807,Villamor,"Jordan Meta-Morph Shoe White, Black & Gym Red",FR + MRES + UNY,575 + 225 + 125,925.0,NOT YET PAID Fully PAID GCASH,12/5/2025,
+ORD-2025-11-20-008,,11/20/2025,Tristan Baral,9279275710,Villamor,Jordan 23 Gray/Whte 10.5,FR + UNY + MRES,575 + 125 + 225,925.0,DP - 500 CASH Bal - 425,,
+ORD-2025-11-20-009,,11/20/2025,Francis Dela Cruz,9394467217,Villamor,Adidas Pulseboost,FR Mid + FR US + UNY,575 + 150 + 125,850.0,DP - 425 Bal - 425 Fully paid cash,,
+ORD-2025-11-20-010,,11/20/2025,Andy Villa,9175754402,Villamor,Jordan 11 Red | Adidas Red,FR | FR,575 | 575,1150.0,Fully paid cash,,Claimed 12/20/25
+ORD-2025-11-20-011,,11/20/2025,Aubrey Reyes,9171582086,Villamor,Circa,MRES,550,550.0,Fully paid cash,,Claimed 12/8/25
+ORD-2025-11-20-012,,11/20/2025,Shulalyn Ternida,9552868025,Villamor,Puma Red 4.5,BC,325,325.0,Fully paid cash,,
+ORD-2025-11-20-013,,11/20/2025,Olive Fernandez,9665765418,Villamor,Nike PG 4 Red,FR + Back Job,575,575.0,Fully paid cash,,
+ORD-2025-11-20-014,,11/20/2025,Alexis Acha,9277651641,Villamor,Red Bag,MRES,450,450.0,Fully paid CASH,,
+ORD-2025-11-20-015,,11/20/2025,Steve Zaw,09396929026,Villamor,Feng Chen Wang Size 9,Minor MRES,550,550.0,DP - 275 GCASH Bal - 275,,Claimed 12/10/25
+ORD-2025-11-21-001,,11/21/2025,Iah Joy Kahano,9919744564,Villamor,On Cloud 7.5,BC,325,325.0,Fully paid gcash,,
+ORD-2025-11-21-002,,11/21/2025,Kyle Manay,9498501000,Villamor,Jordan Stay Loyal 2 Size 11,BC,325,325.0,DP - 160 Bal - 165 Fully paid,,Claimed 12/2/25
+ORD-2025-11-21-003,,11/22/2025,Ruben C. Diokno,09293248285 / 09911039182 / 09272948340,Villamor,Jordan Jumpman 9 | Air Jordan Size 9 | Adidas R1 Size 8 | Adidas Black 8,FR + MREST | FR US + FR Mid | FR US + FR Mid | FR,575 + 225 | 575 + 150 | 575 + 150 | 575,2825.0,"DP - 1,000 CASH Bal - 1,825 Fully PAID 12/17/25",,
+ORD-2025-11-21-004,,11/21/2025,Benedict Dofitas,09952841752,Villamor,Nike Air Max 90 Size 9.5 | Nike Blazer Mid Size 9,MR + UNY + MRET | MR + UNY + MRET,450 + 125 + 125 | 450 + 125 + 125,1400.0,DP - 700 GCASH Bal - 700,,
+ORD-2025-11-21-005,,11/21/2025,Ruby Madeline Macarro,09175209410,Villamor,Nike Red / Black Size 42,FR US (Rush),575 + 250,825.0,DP - 425 GCASH Bal - 400,,
+ORD-2025-11-21-006,,11/21/2025,Jofari Asis Mejica,09059049113,Villamor,AF1 Black with green lace,FR,575,575.0,DP - 250 CASH Bal - 325 Fully Paid 12/17/25,,Claimed 12/17/25
+ORD-2025-11-21-007,,11/21/2025,Anna Christina F. Jose,0998 - 977 8894,Villamor,Nike White Size 8,BC (Rush) + Retouch,325 + 150 - 50,525.0,Fully paid,,
+ORD-2025-11-21-008,,11/21/2025,Dawson M. Vizzo,09082750061,Villamor,SB Dunk Black/White 11 | Adidas Yeezy 11 1/2 | Nike Zoom 10.5 | Air Jordan 11 | AF1 White Size 11,BC + UNY | FR US + FR Mid + MRES + UNY | FR + MRES | FR US | FR + UNY,325 + 125 | 575 + 150 + 225 + 125 | 575 + 225 | 575 | 575 + 125,3600.0,"DP - 1,500 - 300 GCASH Bal - 2,100",,
+ORD-2025-11-21-008,,11/24/2025,Van Golfo,09996604745,Villamor,Nike | Asics,BC (Rush) | BC (Rush),325 + 150 | 325 + 150,950.0,Fully paid gcash,,
+ORD-2025-11-21-009,,11/20/2025,Jenny Lyn Valdez,09932728453,Villamor,Nike White Size 4,BC,325,325.0,Fully paid cash,,
+ORD-2025-11-21-011,,11/21/2025,Guillermo Barlis Jr.,09911699136,Villamor,Under Armour Blue US 9,FR Mid + FR US,575 + 150,725.0,DP - 300 CASH Bal - 425,,Claimed 01/04/26
+ORD-2025-11-22-001,,11/22/2025,Ma'am Pon,Viber,Villamor,Adidas Stan Smith White,BC,325,325.0,Not yet paid,,Claimed 10/11/2025
+ORD-2025-11-22-002,,11/22/2025,Loiza Japos,09616281318,Villamor,NB Gray / Yellow Size 5 | Vans 4-5 | Anta White,BC | BC (Note minor reglue) | BC,325 | 325 | 325,975.0,DP - 500 CASH Bal - 475,,
+ORD-2025-11-22-004,,11/22/2025,"Romeo Dimapilis, Jr.",09172410008,Villamor,Adidas,FR US + FR Mid + FREE! UNY,575 + 150,725.0,DP - 300 CASH Bal - 425,,
+ORD-2025-11-22-005,,11/22/2025,Martin Macawile,09156201467,Villamor,NB 550 Size 9,BC + UNY,325 + 125,450.0,Fully paid cash,Claimed 12/5/25,
+ORD-2025-11-22-006,,11/22/2025,James Ervin F. Malasig,09204964587,Villamor,Nike Kyrie 5 Size 10 | Nike Jordan Why Not Size 10 | Sperry | Puma White Size 7,FR | FR | FR + UNY | MRET,575 | 575 | 575 + 125 | 450,2300.0,DP - 2000 CASH Bal - 300,,Claimed 12/27
+ORD-2025-11-22-007,,11/22/2025,Dollo Ordanez,09175257184,Villamor,NB 7.5 | Converse Black 6 | NB Black 7 | AF1 White/Red,BC | BC | BC + UNY | MR + UNY,325 | 325 | 325 + 125 | 450 + 125,1675.0,"DP - 1,000 GCASH Bal - 675",,
+ORD-2025-11-22-008,,11/22/2025,Yia Calderon,09425986023,Villamor,Nike Revolution 7 Size 10 | Nike Samba Size 10 | Jordan Series 9.5,BC | (FREE) BC | FR,325 | 0 | 575,900.0,DP - 400 GCASH Bal - 500,Fully paid,Claimed 12/1/25
+ORD-2025-11-22-009,,11/22/2025,Augustin Napoleon Balubar,FB Messenger,Villamor,Nike Lebron Black & Lagoon Colorway,FR US,575,575.0,DP - 400 GCASH Bal - 175,12/11/2025,Claimed 12/16/25
+ORD-2025-11-22-010,,11/22/2025,Taqui,09562605749,Villamor,Nike Precision Size 7 | HM Size 8,BC | BC,325 | 325,650.0,NOT YET PAID Fully paid cash,,
+ORD-2025-11-24-001,,11/24/2025,Waddor P. Vinay,09565103733,Villamor,Adidas 7.5,BC,325,325.0,Fully paid cash,,
+ORD-2025-11-24-002,,11/24/2025,Lahnie Valencia,09307161256,Villamor,Jordan 11 Gray | Jordan 11 Red,BC | BC (minor reglue),325 | 325,650.0,DP - Fully paid cash,,
+ORD-2025-11-24-003,,11/24/2025,Prince Noelle Santos,09054692194,Villamor,DC Black Size 9,FR Mid + MRES,575 + 225,800.0,Fully paid cash,,
+ORD-2025-11-24-004,,11/24/2025,Judi Mae F. Saavedra,0956-7185973,Villamor,NB 588 Green,BC,325,325.0,Fully paid cash,,
+ORD-2025-11-24-005,,11/24/2025,Jonathan Andre Bernad,09456203218,Villamor,Puma White 10 | Nike White 10 | Adidas Smith Blue 10 | Converse 10,BC | BC | BC (minor retouch) | BC,325 | 325 | 325 | 325,1300.0,DP - 650 Cash Bal - 650 + 125,,
+ORD-2025-11-24-006,,11/24/2025,Aezikiel Dame,09544763754,Villamor,Nike Black,FR + UNY,575 + 125,700.0,Fully paid,11/24/2025,Claimed 11/24/25
+ORD-2025-11-25-001,,11/25/2025,Dennise Azurin,09267402299,Villamor,Adidas Ultra Boost White & Yellow Size 9 | Adidas Ultra Boost Black / Gray Size 7,FR US + FR Mid + UNY | FR Mid + UNY,575 + 150 + 125 | 575 + 125,1550.0,DP - 500 GCASH Bal - 1050,,
+ORD-2025-11-25-002,,11/25/2025,Daphne Calalanga,09209780918,Villamor,Adidas 8 1/2,FR,575,575.0,Fully PAID GCASH,12/23/25,Claimed 12/23/25
+ORD-2025-11-25-003,,11/25/2025,Jefrhey Talag,09959229737,Villamor,Adidas Size 9,FR + UNY + MRET,575 + 125 + 125,825.0,NOT FULLY PAID,12/19/2025,
+ORD-2025-11-26-001,,11/26/2025,Emmanuel Abad,09776203294,Villamor,Nike Black Size 9.5,FR US + FR Mid,575 + 150,725.0,Fully PAID GCASH,,
+ORD-2025-11-26-002,,11/26/2025,Jhun Daguioag,0995 380 7694,Villamor,Nike Air Jordan Black/White/Violet,FR (Back Job),,,,,
+ORD-2025-11-26-003,,11/26/2025,John Edmhar Dumas,0977-328-1131,Villamor,Adidas Ash Pearl 11.5 | Nike Dunk 11,MR + MRES + UNY | MR + MRES,450 + 225 + 125 | 450 + 225,1475.0,DP - 740 GCASH Bal - 735,,
+ORD-2025-11-26-004,,11/26/2025,Manolet De Jesus,09175541832,Villamor,Nike Air Red / Beige Cre/2 | New Balance 6.5,BC | BC,325 | 325,650.0,DP - 325 GCASH Bal - 325,,
+ORD-2025-11-26-005,,11/20/2025,John Erickson Tolentino,09603696893,Villamor,NB Size | Smith,BC | MRES,325 | 550,875.0,DP - 500 CASH Bal - 375,,
+ORD-2025-11-27-017,,11/27/2025,Elgine Panamante,0970 999 3475,Villamor,Nike Skechers Black,FR US + FR Mid,575 + 150,725.0,DP - 300 CASH Bal - 425,,
+ORD-2025-11-27-018,,11/27/2025,Kenneth Fernando,0966 743 9416,Villamor,Adidas Blue 8.5 | Adidas Black 8.5,FR Mid + FR US + UNY | FR Mid + FR US,575 + 150 + 125 | 575 + 150,1575.0,DP - 900 GCASH Bal - 675,,
+ORD-2025-11-27-019,,11/27/2025,Vejay Boqued,09692699503,Villamor,Fila Gray Size 9,FR,575,575.0,DP - 300 GCASH Bal - 275,,
+ORD-2025-11-27-020,,11/27/2025,Jahan Johndell,Jahan Johndell,Villamor,Nike VS DNR Size 8.5 | New Balance 799 Size 8.5,BC (Rush) | BC (Rush),325 + 150 | 325 + 150,950.0,NOT YET PAID,December 7,
+ORD-2025-11-27-021,,11/27/2025,Mike Quero,0948 214 5305,Villamor,FR Jordan 11,FR (Back Job),,,,,Claimed 12/10/25
+ORD-2025-11-27-022,,11/27/2025,John Carlos B. Mariano,0928 301 2031,Villamor,Converse,FR (Back Job),,,,,Claimed 01/22/26
+ORD-2025-11-27-023,,11/27/2025,Xyrl M. Saus,0977 267 6046,Villamor,Timberland Boots | Jordan Midcut Red | Nike Red & White 7 | White Shoes with Black Lace,FR (MRES free) | FR + UNY + MRES | FR Mid + FR US | BC (Free),575 | 575 + 125 + 220 | 575 + 150 | 0,2220.0,DP - 500 (Cash) Bal - 1720,,
+ORD-2025-11-27-024,,11/27/2025,Toussine Aurelio,09947381259,Villamor,J1 Green 9,FR,575,575.0,Fully paid cash,,
+ORD-2025-11-28-001,,11/26/2025,Jay Jay Tippy,09159752293,Villamor,Nike SB Force Green Offwhite Size 9.5,FR (Rush),575 + 250,825.0,NOT YET PAID,12/13/2025,
+ORD-2025-11-28-008,,11/24/2025,Steve Zaw,09396929026,Villamor,Feng Chen Wang Size 9,Minor MRES,550,550.0,DP - 275 GCASH Bal - 275,12/10/25,Claimed 12/10/25
+ORD-2025-11-28-009,,11/28/2025,John Erickson Tolentino,09603696893,Villamor,NB | Smith,BC | MREST,325 | 550,875.0,DP - 500 CASH Bal - 375,,
+ORD-2025-11-28-010,,11/24/2025,Remedios Diaz,09399146153,Villamor,World Balance Size 6,BC,325,325.0,NOT YET PAID,12/8/2025,Claimed 12/30/25
+ORD-2025-11-28-011,,11/26/2025,John Erickson Tolentino,09603696893,Villamor,NB | Smith,BC | MRES,325 | 550,875.0,DP - 500 CASH Bal - 375,,
+ORD-2025-11-28-012,,11/28/2025,Jay Jay Tippy,09159752293,Villamor,Nike SB Force Green Offwhite Size 9.5,FR (Rush),575 + 250,825.0,NOT YET PAID,12/13/2025,
+ORD-2025-11-28-013,,11/28/2025,Jermaine Bacaron,09626934264,Villamor,White Sneakers Size 29 | Hoka Speedgoat 10.5,MRES (Rush) | BC (Rush),550 + 150 | 325 + 150,1175.0,Fully paid CASH,,
+ORD-2025-11-28-014,,11/28/2025,Robal Ituralde,09053672825,Villamor,Nike Kobe 6 White Delsol Sneakers Size 11 1/2 | Nike Air Max 2090 Size 11,FR + MRES (Rush) | BC,575 + 225 + 250 | 325,1375.0,Fully paid CASH,,Claimed 12/18/25
+ORD-2025-11-28-015,,11/20/2025,Denzelle Fabras,09764562316,Villamor,Adidas Size 6,MRES,550,550.0,DP - 275 GCASH Bal - 275 fully paid GCASH,,Claimed 12/20/25
+ORD-2025-11-28-016,,11/28/2025,Niño Celo,0917 878 8801,Villamor,Nike Brown,FR (Back Job),,,,,
+ORD-2025-11-28-017,,11/28/2025,Gerico Rye Baronda,09353226225,Villamor,Sapaio Black Size 22 | Converse Black,FR + MRES | FR + MRES + COR = 575,575 + 225 | 575 + 225 + 150 = 950,800.0,Fully paid CASH,,
+ORD-2025-11-29-002,,11/29/2025,Jenny Lyn Valdez,09932728453,Villamor,Nike White Size 4,BC,325,325.0,Fully paid cash,,
+ORD-2025-11-29-003,,11/29/2025,Eymard C. Villarba,09777385589,Villamor,J11,MR,450,450.0,Fully paid CASH,,
+ORD-2025-11-29-004,,11/29/2025,Karen Mercado,0927-6109790,Villamor,Sperry Size 9 | Nike Daybreak Size,BC + MRET | FR US + FR Mid,325 + 125 | 575 + 150,1175.0,Fully paid CASH,,
+ORD-2025-11-30-001,,11/30/2025,Angie Bulacan,0968 821 0458,Villamor,NB Leopard | NB Pink | NB Fresh Foam,BC | BC | BC,325 | 325 | 325,975.0,Fully paid gcash,,Claimed 12/8/25
+ORD-2025-11-30-002,,11/30/2025,Christian Levy,09664059723,Villamor,NB | Salomon,BC (Rush) | BC (Rush),325 + 150 | 325 + 150,950.0,Fully paid cash,,
+ORD-2025-11-30-003,,11/30/2025,Ferdin Beuara,09628365586,Villamor,Nike Jordan White | Nike Lion Black,FR Mid + FR US + MRET | FR Mid + FR US,575 + 150 + 125 | 575 + 150,1575.0,Fully paid cash,,11/30-25
+ORD-2025-11-30-004,,11/30/2025,Benedict Ds Jimenez,09496809667,Villamor,Nike Janoski Black Size 12,FR,575,575.0,Fully paid cash,,
+ORD-2025-11-30-005,,11/30/2025,Eloisa Garcia,09565340079,Villamor,Nike Zoom 4.5 | On Cloud Tilt 6.5 | Nike Jordan FS 4.5,FR | BC | BC,575 | 325 | 325,1225.0,DP - 100 GCASH Bal - 225,,
+ORD-2025-11-30-006,,11/30/2025,Yza Lazarh,09774698273,Villamor,Cross Trekka Size 7 | Converse Chuck Taylor Size 6.5 | Vans Old Skool 7 | Nike Infinity 8.5,BC | BC | BC | BC,325 | 325 | 325 | 325,1300.0,DP - 500 Bal - 800 Fully Paid Cash,,Claimed 12/9/25

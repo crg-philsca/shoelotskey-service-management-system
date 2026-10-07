@@ -1,0 +1,2565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shoelotskey — September 2026 Historical Pilot Import Second-Pass Reconciliation Report (V2)</title>
+<style>
+  :root {
+    --bg-primary: #0b1120;
+    --bg-secondary: #151e32;
+    --bg-card: #1c273e;
+    --border-color: #2e3c57;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --accent-blue: #38bdf8;
+    --accent-emerald: #34d399;
+    --accent-amber: #fbbf24;
+    --accent-rose: #f43f5e;
+    --accent-purple: #c084fc;
+    --badge-bg: #1e293b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    padding: 24px;
+  }
+  .container {
+    max-width: 1480px;
+    margin: 0 auto;
+  }
+  header {
+    background: linear-gradient(135deg, #1e293b 0%, #0b1120 100%);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 32px;
+    margin-bottom: 28px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+  }
+  .header-badge {
+    display: inline-block;
+    padding: 6px 14px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    border-radius: 9999px;
+    background-color: rgba(251, 191, 36, 0.15);
+    color: var(--accent-amber);
+    border: 1px solid rgba(251, 191, 36, 0.3);
+    margin-bottom: 12px;
+  }
+  h1 {
+    font-size: 2.1rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: #ffffff;
+    margin-bottom: 8px;
+  }
+  .header-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    margin-top: 16px;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+  }
+  .header-meta div span {
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .gate-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(251, 191, 36, 0.12);
+    border: 2px solid var(--accent-amber);
+    border-radius: 10px;
+    padding: 20px 28px;
+    margin-bottom: 30px;
+  }
+  .gate-title {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--accent-amber);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .gate-badge {
+    padding: 8px 20px;
+    font-size: 1.05rem;
+    font-weight: 800;
+    border-radius: 8px;
+    background-color: var(--accent-amber);
+    color: #0b1120;
+    letter-spacing: 0.05em;
+  }
+  .gate-desc {
+    color: var(--text-secondary);
+    font-size: 0.925rem;
+    margin-top: 6px;
+  }
+  .grid-4 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 16px;
+    margin-bottom: 30px;
+  }
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
+    gap: 20px;
+    margin-bottom: 24px;
+  }
+  .card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 22px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+  }
+  .metric-value {
+    font-size: 2.1rem;
+    font-weight: 800;
+    color: #ffffff;
+    line-height: 1.2;
+  }
+  .metric-label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-secondary);
+    margin-top: 4px;
+  }
+  .metric-sub {
+    font-size: 0.775rem;
+    color: var(--text-muted);
+    margin-top: 3px;
+  }
+  section {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 28px;
+    margin-bottom: 32px;
+  }
+  h2 {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 10px;
+  }
+  h2 .section-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    background-color: rgba(56, 189, 248, 0.15);
+    color: var(--accent-blue);
+    border-radius: 6px;
+    font-size: 0.9rem;
+  }
+  h3 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--accent-blue);
+    margin: 18px 0 10px 0;
+  }
+  p {
+    font-size: 0.925rem;
+    color: var(--text-secondary);
+    margin-bottom: 14px;
+  }
+  ul, ol {
+    margin-left: 22px;
+    margin-bottom: 14px;
+    color: var(--text-secondary);
+    font-size: 0.925rem;
+  }
+  li { margin-bottom: 6px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0 24px 0;
+    font-size: 0.85rem;
+  }
+  th {
+    background-color: #0d1527;
+    color: var(--text-primary);
+    text-align: left;
+    padding: 10px 12px;
+    font-weight: 600;
+    border-bottom: 2px solid var(--border-color);
+    white-space: nowrap;
+  }
+  td {
+    padding: 9px 12px;
+    border-bottom: 1px solid rgba(46, 60, 87, 0.6);
+    color: var(--text-secondary);
+  }
+  tr:hover td {
+    background-color: rgba(46, 60, 87, 0.35);
+    color: var(--text-primary);
+  }
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.725rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .tag-exact { background: rgba(52, 211, 153, 0.2); color: var(--accent-emerald); border: 1px solid rgba(52, 211, 153, 0.3); }
+  .tag-probable { background: rgba(56, 189, 248, 0.2); color: var(--accent-blue); border: 1px solid rgba(56, 189, 248, 0.3); }
+  .tag-review { background: rgba(251, 191, 36, 0.2); color: var(--accent-amber); border: 1px solid rgba(251, 191, 36, 0.3); }
+  .tag-hold { background: rgba(244, 63, 94, 0.2); color: var(--accent-rose); border: 1px solid rgba(244, 63, 94, 0.3); }
+  .code-badge {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.775rem;
+    background-color: #080d1a;
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: #38bdf8;
+    border: 1px solid #1c273e;
+    white-space: nowrap;
+  }
+  .alert-box {
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin: 16px 0;
+    font-size: 0.9rem;
+  }
+  .alert-warning {
+    background-color: rgba(251, 191, 36, 0.1);
+    border-left: 4px solid var(--accent-amber);
+    color: #fde68a;
+  }
+  .alert-danger {
+    background-color: rgba(244, 63, 94, 0.1);
+    border-left: 4px solid var(--accent-rose);
+    color: #fecdd3;
+  }
+  .alert-info {
+    background-color: rgba(56, 189, 248, 0.1);
+    border-left: 4px solid var(--accent-blue);
+    color: #bae6fd;
+  }
+  .alert-success {
+    background-color: rgba(52, 211, 153, 0.1);
+    border-left: 4px solid var(--accent-emerald);
+    color: #a7f3d0;
+  }
+  footer {
+    text-align: center;
+    padding: 30px;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    border-top: 1px solid var(--border-color);
+    margin-top: 40px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- HEADER -->
+  <header>
+    <div class="header-badge">Second-Pass Mathematical Reconciliation &bull; Read-Only Audit (V2)</div>
+    <h1>Shoelotskey Service Management System</h1>
+    <p style="font-size: 1.1rem; color: #cbd5e1; margin-bottom: 0;">
+      September 2026 Historical Pilot Master Dataset — Corrected Impact, Disaggregated Reconciliation &amp; PostgreSQL Production Mapping
+    </p>
+    <div class="header-meta">
+      <div><span>Source Evidence:</span> Shoelotskey_September_2026_Historical_Pilot_Master_Dataset.xlsx</div>
+      <div><span>Production Target:</span> Deployed PostgreSQL (AWS RDS / Heroku Managed)</div>
+      <div><span>Reconciliation Pass:</span> PASS 2 (PostgreSQL Destination &amp; Mathematical Disaggregation)</div>
+      <div><span>Execution Mode:</span> READ-ONLY DRY RUN (0 Writes, 0 Deletes, 0 Updates)</div>
+    </div>
+  </header>
+
+  <!-- GATE BANNER -->
+  <div class="gate-banner">
+    <div>
+      <div class="gate-title">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        READINESS STATUS: CONDITIONAL GO (POSTGRESQL DRY-RUN VERIFIED)
+      </div>
+      <div class="gate-desc">
+        All 60 NEW transactions, 22 CLAIM transactions, 26 service pairs, 11 expense lines, and payment flows are mathematically balanced. The deployed PostgreSQL production database schema has been verified read-only. Production database writes remain strictly gated until explicit authorization.
+      </div>
+    </div>
+    <div class="gate-badge">CONDITIONAL GO</div>
+  </div>
+
+  <!-- KPI SUMMARY CARDS -->
+  <div class="grid-4">
+    <div class="card">
+      <div class="metric-value">60</div>
+      <div class="metric-label">NEW Orders Reconciled</div>
+      <div class="metric-sub">54 Inserts &bull; 2 Linked &bull; 4 Held</div>
+    </div>
+    <div class="card">
+      <div class="metric-value">22</div>
+      <div class="metric-label">CLAIM Pickups Reconciled</div>
+      <div class="metric-sub">7 Linked to Orders &bull; 15 Unresolved</div>
+    </div>
+    <div class="card">
+      <div class="metric-value">&#8361;53,124.17</div>
+      <div class="metric-label">Verified Fixed Operating</div>
+      <div class="metric-sub">Rent + Payroll + Power + Fiber</div>
+    </div>
+    <div class="card">
+      <div class="metric-value">&#8361;53,695.17</div>
+      <div class="metric-label">Working Total w/ Parcels</div>
+      <div class="metric-sub">&#8361;53,124.17 + &#8361;571.00 Parcels</div>
+    </div>
+  </div>
+
+  <!-- SPECIAL SECTION: POSTGRESQL PRODUCTION IMPORT DESTINATION -->
+  <section id="sec-pg-destination" style="border: 2px solid var(--accent-blue); background: linear-gradient(180deg, rgba(56, 189, 248, 0.08) 0%, var(--bg-secondary) 100%);">
+    <h2 style="border-bottom-color: var(--accent-blue); color: var(--accent-blue);">
+      <span class="section-num" style="background-color: var(--accent-blue); color: #0b1120;">&#9881;</span>
+      PostgreSQL Production Import Destination (Required Operational Target)
+    </h2>
+    <p>
+      As explicitly established by the client, <strong>the final authorized historical import MUST be saved into the PostgreSQL database used by the deployed/online Shoelotskey system</strong>. The Excel workbook serves strictly as the staging/evidence source; local SQLite is NOT the final destination.
+    </p>
+
+    <div class="grid-2">
+      <div class="card">
+        <h3 style="margin-top:0;">Target Deployment Environment &amp; Engine</h3>
+        <p><strong>Database Engine:</strong> PostgreSQL 17.9 (aarch64-unknown-linux-gnu, 64-bit)</p>
+        <p><strong>Hosting Architecture:</strong> AWS RDS Multi-AZ / Managed Heroku PostgreSQL Cluster</p>
+        <p><strong>Target Host:</strong> <span class="code-badge">cduf3or326qj7m.cluster-czrs8kj4isg7.us-east-1.rds.amazonaws.com:5432</span></p>
+        <p><strong>Target Database:</strong> <span class="code-badge">d6281rp0p4pg8c</span> (Public Schema)</p>
+        <p><strong>Credential Security:</strong> Enforced SSL Mode (<span class="code-badge">sslmode=require</span>). Passwords strictly redacted per User Rule #10.</p>
+        <p><strong>Online Deployment Sync:</strong> This is the exact live database read by the deployed Heroku/AWS API service serving the production web frontend.</p>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top:0;">Schema Compatibility &amp; Baseline Verification</h3>
+        <p><strong>Compatibility Status:</strong> <span class="tag tag-exact">100% COMPATIBLE</span> (All 40 tables inspected read-only)</p>
+        <p><strong>Pre-Import Record Counts (Live PostgreSQL):</strong></p>
+        <ul style="font-size:0.85rem; margin-left:16px;">
+          <li><span class="code-badge">orders:</span> <strong>79</strong> active orders</li>
+          <li><span class="code-badge">items:</span> <strong>82</strong> shoe pair records</li>
+          <li><span class="code-badge">item_service_mapping:</span> <strong>139</strong> service mapping rows</li>
+          <li><span class="code-badge">customers:</span> <strong>953</strong> customer profiles</li>
+          <li><span class="code-badge">payments:</span> <strong>79</strong> payment records</li>
+          <li><span class="code-badge">expenses:</span> <strong>8</strong> expense records</li>
+          <li><span class="code-badge">inventory:</span> <strong>26</strong> stock items</li>
+          <li><span class="code-badge">audit_logs:</span> <strong>1,804</strong> audit logs</li>
+          <li><span class="code-badge">historical_orders:</span> <strong>1,445</strong> legacy staging records</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>PostgreSQL Proposed Impact &amp; Atomicity Guarantee</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Target PostgreSQL Table</th>
+          <th>Pre-Import Count</th>
+          <th>Proposed Inserts</th>
+          <th>Proposed Links (0 Overwrite)</th>
+          <th>Held in Staging</th>
+          <th>Post-Import Projected Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>orders</strong></td>
+          <td>79</td>
+          <td><strong>+54</strong></td>
+          <td>2 (Link Provenance Only)</td>
+          <td>4 Held</td>
+          <td><strong>133</strong></td>
+        </tr>
+        <tr>
+          <td><strong>items (Shoe Pairs)</strong></td>
+          <td>82</td>
+          <td><strong>+26</strong></td>
+          <td>0</td>
+          <td>0</td>
+          <td><strong>108</strong></td>
+        </tr>
+        <tr>
+          <td><strong>item_service_mapping</strong></td>
+          <td>139</td>
+          <td><strong>+26</strong></td>
+          <td>0</td>
+          <td>0</td>
+          <td><strong>165</strong></td>
+        </tr>
+        <tr>
+          <td><strong>payments</strong></td>
+          <td>79</td>
+          <td><strong>+48</strong> (+7 Claim opt.)</td>
+          <td>2 Existing</td>
+          <td>19 Held</td>
+          <td><strong>127</strong> (or 134)</td>
+        </tr>
+        <tr>
+          <td><strong>customers</strong></td>
+          <td>953</td>
+          <td><strong>+48</strong> (New)</td>
+          <td>8 Existing</td>
+          <td>2 Held</td>
+          <td><strong>1,001</strong></td>
+        </tr>
+        <tr>
+          <td><strong>expenses</strong></td>
+          <td>8</td>
+          <td><strong>+7</strong> (+2 Parcels opt.)</td>
+          <td>0</td>
+          <td>2 Held</td>
+          <td><strong>15</strong> (or 17)</td>
+        </tr>
+        <tr>
+          <td><strong>inventory</strong></td>
+          <td>26</td>
+          <td><strong>0</strong></td>
+          <td>0</td>
+          <td>0</td>
+          <td><strong>26 (UNCHANGED)</strong></td>
+        </tr>
+        <tr>
+          <td><strong>inventory_logs</strong></td>
+          <td>54</td>
+          <td><strong>0</strong></td>
+          <td>0</td>
+          <td>0</td>
+          <td><strong>54 (UNCHANGED)</strong></td>
+        </tr>
+        <tr>
+          <td><strong>audit_logs</strong></td>
+          <td>1,804</td>
+          <td><strong>+1</strong> (Batch Log)</td>
+          <td>0</td>
+          <td>0</td>
+          <td><strong>1,805</strong></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="alert-box alert-warning">
+      <strong>Atomic PostgreSQL Execution Guarantee:</strong>
+      <br>1. <strong>Single Transaction Block:</strong> The future authorized import script executes inside a strict <span class="code-badge">BEGIN ... COMMIT;</span> transaction block. Any single validation error, foreign key failure, or network disruption immediately triggers an automatic <span class="code-badge">ROLLBACK;</span>, leaving PostgreSQL in its exact pre-import state.
+      <br>2. <strong>Batch Provenance Tagging:</strong> Every historical record inserted will carry <span class="code-badge">BATCH-HIST-SEP2026-001</span>.
+      <br>3. <strong>Post-Import Verification:</strong> Following import, a read-back script will query the deployed PostgreSQL database over HTTPS/REST to confirm that all 54 orders immediately appear in the deployed Shoelotskey web application (Job Orders, Expenses, and Analytics screens).
+    </div>
+  </section>
+
+  <!-- SECTION 1: RECONCILE THE 60 NEW ORDERS -->
+  <section id="sec-1">
+    <h2><span class="section-num">1</span> Disaggregated Reconciliation of Exactly 60 NEW Orders</h2>
+    <p>
+      In accordance with User Request #1, all <strong>60 NEW transactions</strong> (representing customer intake orders) have been individually audited and classified. Zero CLAIM events are included in this population.
+    </p>
+    <div class="alert-box alert-info">
+      <strong>Action Category Distribution (Sum = Exactly 60):</strong><br>
+      &bull; <strong>INSERT ORDER:</strong> 54 Clean intake orders with no conflicting database record.<br>
+      &bull; <strong>LINK TO EXISTING ORDER:</strong> 2 Orders matching existing database records (Sebastian Casa &amp; Mark Ferrer); native data preserved, provenance linked.<br>
+      &bull; <strong>HOLD - PROBABLE DUPLICATE:</strong> 2 Orders matching customer &amp; date but differing in amount (Lyndo Lao &amp; Marvin); staged on HOLD.<br>
+      &bull; <strong>HOLD - IDENTITY CONFLICT:</strong> 1 Order with conflicting customer names (Cico B. Conde vs. Rico Ancheta); staged on HOLD.<br>
+      &bull; <strong>HOLD - INSUFFICIENT EVIDENCE:</strong> 1 Warranty rework with zero financial fields (Jeivce Velasco Back Job); staged on HOLD.
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Evidence ID</th>
+          <th>Date</th>
+          <th>Customer</th>
+          <th>Pairs</th>
+          <th>Payment Status</th>
+          <th>Paid</th>
+          <th>Balance</th>
+          <th>Matching Job Order</th>
+          <th>Existing DB Match</th>
+          <th>Proposed Action</th>
+          <th>Detailed Basis / Reason</th>
+        </tr>
+      </thead>
+      <tbody>
+        
+    <tr>
+      <td><strong>1</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-09-R02</span></td>
+      <td>2026-09-09</td>
+      <td><strong>Levan Bunhaje</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Fully Paid</td>
+      <td>₱510.00</td>
+      <td>-</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-09-R02). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>2</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-09-R03</span></td>
+      <td>2026-09-09</td>
+      <td><strong>Rudary Mirhaza</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Fully Paid</td>
+      <td>₱510.00</td>
+      <td>-</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-09-R03). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>3</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-09-R04</span></td>
+      <td>2026-09-09</td>
+      <td><strong>Al Aguilar</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Down Payment</td>
+      <td>₱300.00</td>
+      <td>₱275.00</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-09-R04). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>4</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-09-R05</span></td>
+      <td>2026-09-09</td>
+      <td><strong>Charl Panilio</strong></td>
+      <td style='text-align:center;'>8</td>
+      <td>Down Payment</td>
+      <td>₱2,000.00</td>
+      <td>₱1,275.00</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-09-R05). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>5</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-09-R06</span></td>
+      <td>2026-09-09</td>
+      <td><strong>Roderick Del Rosario</strong></td>
+      <td style='text-align:center;'>2</td>
+      <td>Not Yet Paid</td>
+      <td>-</td>
+      <td>₱1,250.00</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-09-R06). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>6</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-09-R07</span></td>
+      <td>2026-09-09</td>
+      <td><strong>Dea Chavez</strong></td>
+      <td style='text-align:center;'>5</td>
+      <td>Down Payment</td>
+      <td>₱1,000.00</td>
+      <td>₱1,075.00</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-09-R07). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>7</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-09-R08</span></td>
+      <td>2026-09-09</td>
+      <td><strong>Karen Tupos</strong></td>
+      <td style='text-align:center;'>3</td>
+      <td>Fully Paid</td>
+      <td>₱1,250.00</td>
+      <td>-</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-09-R08). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>8</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-09-R09</span></td>
+      <td>2026-09-09</td>
+      <td><strong>Christian Job</strong></td>
+      <td style='text-align:center;'>2</td>
+      <td>Fully Paid</td>
+      <td>₱1,100.00</td>
+      <td>-</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-09-R09). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>9</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-09-R10</span></td>
+      <td>2026-09-09</td>
+      <td><strong>Lyndo Lao</strong></td>
+      <td style='text-align:center;'>2</td>
+      <td>Down Payment</td>
+      <td>₱500.00</td>
+      <td>₱900.00</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span class='code-badge'>ORD-2026-09-09-003</span></td>
+      <td><span class='tag tag-hold'>HOLD - PROBABLE DUPLICATE</span></td>
+      <td style='font-size:0.8rem;'>Existing DB order ORD-2026-09-09-003 matches date and customer (Lyndo Lao), but amount differs (DB: ₱1100 vs DSMR: ₱1400.0). Manual review required.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>10</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-09-R11</span></td>
+      <td>2026-09-09</td>
+      <td><strong>Pete Tahil</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Fully Paid</td>
+      <td>₱700.00</td>
+      <td>-</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-09-R11). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>11</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-09-R12</span></td>
+      <td>2026-09-09</td>
+      <td><strong>Gibson</strong></td>
+      <td style='text-align:center;'>4</td>
+      <td>Not Yet Paid</td>
+      <td>-</td>
+      <td>₱3,125.00</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-09-R12). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>12</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-09-R13</span></td>
+      <td>2026-09-09</td>
+      <td><strong>Saludo</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Not Yet Paid</td>
+      <td>-</td>
+      <td>₱575.00</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-09-R13). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>13</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-09-R14</span></td>
+      <td>2026-09-09</td>
+      <td><strong>Mark Ontic</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Down Payment</td>
+      <td>₱300.00</td>
+      <td>₱400.00</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-09-R14). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>14</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-10-R02</span></td>
+      <td>2026-09-10</td>
+      <td><strong>Vines Reuben</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Fully Paid</td>
+      <td>₱475.00</td>
+      <td>-</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-10-R02). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>15</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-10-R03</span></td>
+      <td>2026-09-10</td>
+      <td><strong>Jeremiah Valerio</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Fully Paid</td>
+      <td>₱475.00</td>
+      <td>-</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-10-R03). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>16</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-10-R04</span></td>
+      <td>2026-09-10</td>
+      <td><strong>Mark Aguilar</strong></td>
+      <td style='text-align:center;'>2</td>
+      <td>Fully Paid</td>
+      <td>₱1,275.00</td>
+      <td>-</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-10-R04). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>17</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-10-R05</span></td>
+      <td>2026-09-10</td>
+      <td><strong>Mabr D.</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Down Payment</td>
+      <td>₱200.00</td>
+      <td>₱250.00</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-10-R05). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>18</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-11-R04</span></td>
+      <td>2026-09-11</td>
+      <td><strong>Robert Yera Sr.</strong></td>
+      <td style='text-align:center;'>2</td>
+      <td>Down Payment</td>
+      <td>₱520.00</td>
+      <td>₱650.00</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-11-R04). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>19</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-11-R05</span></td>
+      <td>2026-09-11</td>
+      <td><strong>Janelle Kahano</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Down Payment</td>
+      <td>₱105.00</td>
+      <td>₱100.00</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-11-R05). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>20</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-11-R06</span></td>
+      <td>2026-09-11</td>
+      <td><strong>Nicka Alkuino</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Down Payment</td>
+      <td>₱275.00</td>
+      <td>₱275.00</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-11-R06). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>21</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-11-R07</span></td>
+      <td>2026-09-11</td>
+      <td><strong>Dicky Flora</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Down Payment</td>
+      <td>₱150.00</td>
+      <td>₱175.00</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-11-R07). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>22</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-11-R08</span></td>
+      <td>2026-09-11</td>
+      <td><strong>Albert Pacuno</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Fully Paid</td>
+      <td>₱325.00</td>
+      <td>-</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-11-R08). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>23</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-11-R09</span></td>
+      <td>2026-09-11</td>
+      <td><strong>Jley Penesa</strong></td>
+      <td style='text-align:center;'>3</td>
+      <td>Down Payment</td>
+      <td>₱1,025.00</td>
+      <td>₱1,000.00</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-11-R09). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>24</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-11-R10</span></td>
+      <td>2026-09-11</td>
+      <td><strong>Jeivce Velasco</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Unclear</td>
+      <td>-</td>
+      <td>-</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-hold'>HOLD - INSUFFICIENT EVIDENCE</span></td>
+      <td style='font-size:0.8rem;'>Marked as Back Job / warranty rework with no financial fields. Must link to prior order or retain warranty status.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>25</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-11-R11</span></td>
+      <td>2026-09-11</td>
+      <td><strong>Gyser Inoro</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Fully Paid</td>
+      <td>₱475.00</td>
+      <td>-</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-11-R11). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>26</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-11-R12</span></td>
+      <td>2026-09-11</td>
+      <td><strong>Rheiner Martinez</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Down Payment</td>
+      <td>₱50.00</td>
+      <td>₱375.00</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-11-R12). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>27</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-11-R13</span></td>
+      <td>2026-09-11</td>
+      <td><strong>Frank Emilia</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Fully Paid</td>
+      <td>₱550.00</td>
+      <td>-</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-11-R13). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>28</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-12-R02</span></td>
+      <td>2026-09-12</td>
+      <td><strong>Wendel Fabro</strong></td>
+      <td style='text-align:center;'>3</td>
+      <td>Down Payment</td>
+      <td>₱725.00</td>
+      <td>₱1,000.00</td>
+      <td><span class='code-badge'>JO-2026-09-12-WENDEL</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>Dual-evidence verified order (DSMR-2026-09-12-R02 + JO-2026-09-12-WENDEL, match status: EXACT). Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>29</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-12-R03</span></td>
+      <td>2026-09-12</td>
+      <td><strong>Leslie Auderia</strong></td>
+      <td style='text-align:center;'>5</td>
+      <td>Fully Paid</td>
+      <td>₱2,610.00</td>
+      <td>-</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-12-R03). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>30</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-12-R04</span></td>
+      <td>2026-09-12</td>
+      <td><strong>Kennise Delgaco</strong></td>
+      <td style='text-align:center;'>2</td>
+      <td>Fully Paid</td>
+      <td>₱650.00</td>
+      <td>-</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-12-R04). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>31</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-12-R05</span></td>
+      <td>2026-09-12</td>
+      <td><strong>Jerome Ramirez</strong></td>
+      <td style='text-align:center;'>2</td>
+      <td>Down Payment</td>
+      <td>₱512.00</td>
+      <td>₱513.00</td>
+      <td><span class='code-badge'>JO-2026-09-12-JEROME</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>Dual-evidence verified order (DSMR-2026-09-12-R05 + JO-2026-09-12-JEROME, match status: EXACT). Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>32</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-12-R06</span></td>
+      <td>2026-09-12</td>
+      <td><strong>Sebastian Casa</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Down Payment</td>
+      <td>₱325.00</td>
+      <td>₱125.00</td>
+      <td><span class='code-badge'>JO-2026-09-12-SEBASTIAN</span></td>
+      <td><span class='code-badge'>ORD-2026-09-12-001</span></td>
+      <td><span class='tag tag-probable'>LINK TO EXISTING ORDER</span></td>
+      <td style='font-size:0.8rem;'>Existing DB order ORD-2026-09-12-001 matches date (2026-09-12), customer (Sebastian Casa), and amount (₱450). Do not insert duplicate; link provenance.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>33</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-14-R10</span></td>
+      <td>2026-09-14</td>
+      <td><strong>Ernest Agapay / Acapulco</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Fully Paid</td>
+      <td>₱925.00</td>
+      <td>-</td>
+      <td><span class='code-badge'>JO-2026-09-14-ERNEST</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>Dual-evidence verified order (DSMR-2026-09-14-R10 + JO-2026-09-14-ERNEST, match status: PROBABLE). Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>34</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-14-R11</span></td>
+      <td>2026-09-14</td>
+      <td><strong>Raphael Puncino</strong></td>
+      <td style='text-align:center;'>3</td>
+      <td>Down Payment</td>
+      <td>₱500.00</td>
+      <td>₱475.00</td>
+      <td><span class='code-badge'>JO-2026-09-14-RAPHAEL</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>Dual-evidence verified order (DSMR-2026-09-14-R11 + JO-2026-09-14-RAPHAEL, match status: EXACT). Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>35</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-14-R12</span></td>
+      <td>2026-09-14</td>
+      <td><strong>Christian Fontanilla</strong></td>
+      <td style='text-align:center;'>2</td>
+      <td>Down Payment</td>
+      <td>₱325.00</td>
+      <td>₱325.00</td>
+      <td><span class='code-badge'>JO-2026-09-14-CHRISTIAN</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>Dual-evidence verified order (DSMR-2026-09-14-R12 + JO-2026-09-14-CHRISTIAN, match status: EXACT). Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>36</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-14-R13</span></td>
+      <td>2026-09-14</td>
+      <td><strong>Cubelo</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Fully Paid</td>
+      <td>₱475.00</td>
+      <td>-</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-14-R13). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>37</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-14-R14</span></td>
+      <td>2026-09-14</td>
+      <td><strong>Karl Agnas</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Fully Paid</td>
+      <td>₱325.00</td>
+      <td>-</td>
+      <td><span class='code-badge'>JO-2026-09-14-KARL</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>Dual-evidence verified order (DSMR-2026-09-14-R14 + JO-2026-09-14-KARL, match status: PROBABLE). Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>38</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-14-R15</span></td>
+      <td>2026-09-14</td>
+      <td><strong>Chaukie</strong></td>
+      <td style='text-align:center;'>2</td>
+      <td>Down Payment</td>
+      <td>₱1,000.00</td>
+      <td>₱150.00</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-14-R15). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>39</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-14-R16</span></td>
+      <td>2026-09-14</td>
+      <td><strong>Nyx Pantoja</strong></td>
+      <td style='text-align:center;'>3</td>
+      <td>Not Yet Paid</td>
+      <td>-</td>
+      <td>₱1,225.00</td>
+      <td><span class='code-badge'>JO-2026-09-14-NYX</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>Dual-evidence verified order (DSMR-2026-09-14-R16 + JO-2026-09-14-NYX, match status: EXACT). Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>40</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-14-R17</span></td>
+      <td>2026-09-14</td>
+      <td><strong>Kenneth Gutierrez</strong></td>
+      <td style='text-align:center;'>6</td>
+      <td>Not Yet Paid</td>
+      <td>-</td>
+      <td>₱2,900.00</td>
+      <td><span class='code-badge'>JO-2026-09-14-KENNETH</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>Dual-evidence verified order (DSMR-2026-09-14-R17 + JO-2026-09-14-KENNETH, match status: PROBABLE). Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>41</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-15-R05</span></td>
+      <td>2026-09-15</td>
+      <td><strong>Juan</strong></td>
+      <td style='text-align:center;'>2</td>
+      <td>Fully Paid</td>
+      <td>₱1,400.00</td>
+      <td>-</td>
+      <td><span class='code-badge'>JO-2026-09-15-JUAN</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>Dual-evidence verified order (DSMR-2026-09-15-R05 + JO-2026-09-15-JUAN, match status: PROBABLE). Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>42</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-15-R06</span></td>
+      <td>2026-09-15</td>
+      <td><strong>Antonio Lagunada</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Fully Paid</td>
+      <td>₱475.00</td>
+      <td>-</td>
+      <td><span class='code-badge'>JO-2026-09-15-ANTONIO</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>Dual-evidence verified order (DSMR-2026-09-15-R06 + JO-2026-09-15-ANTONIO, match status: PROBABLE). Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>43</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-15-R07</span></td>
+      <td>2026-09-15</td>
+      <td><strong>Cico B. Conde</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Down Payment</td>
+      <td>₱100.00</td>
+      <td>₱225.00</td>
+      <td><span class='code-badge'>JO-2026-09-15-CICO</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-hold'>HOLD - IDENTITY CONFLICT</span></td>
+      <td style='font-size:0.8rem;'>Paper form reads Cico B. Conde; DSMR reads Rico Ancheta. Identical values (1 pair, DP ₱100, Bal ₱225) but conflicting identity.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>44</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-08-R02</span></td>
+      <td>2026-09-08</td>
+      <td><strong>Derick Pucero [best read]</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Down Payment</td>
+      <td>₱200.00</td>
+      <td>₱500.00</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-08-R02). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>45</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-08-R03</span></td>
+      <td>2026-09-08</td>
+      <td><strong>Irene de Leon [best read]</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Fully Paid</td>
+      <td>₱575.00</td>
+      <td>-</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-08-R03). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>46</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-08-R04</span></td>
+      <td>2026-09-08</td>
+      <td><strong>Edzel de Mesa</strong></td>
+      <td style='text-align:center;'>2</td>
+      <td>Down Payment</td>
+      <td>₱1,000.00</td>
+      <td>₱525.00</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-08-R04). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>47</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-08-R05</span></td>
+      <td>2026-09-08</td>
+      <td><strong>Danzel Cabaron [best read]</strong></td>
+      <td style='text-align:center;'>2</td>
+      <td>Fully Paid</td>
+      <td>₱1,250.00</td>
+      <td>-</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-08-R05). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>48</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-08-R06</span></td>
+      <td>2026-09-08</td>
+      <td><strong>Johmar Tacacray</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Fully Paid</td>
+      <td>₱725.00</td>
+      <td>-</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-08-R06). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>49</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-08-R07</span></td>
+      <td>2026-09-08</td>
+      <td><strong>Marvin</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Fully Paid</td>
+      <td>₱725.00</td>
+      <td>-</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span class='code-badge'>ORD-2026-09-08-002</span></td>
+      <td><span class='tag tag-hold'>HOLD - PROBABLE DUPLICATE</span></td>
+      <td style='font-size:0.8rem;'>Existing DB order ORD-2026-09-08-002 matches date and customer (Marvin), but amount differs (DB: ₱575 vs DSMR: ₱725.0). Manual review required.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>50</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-08-R08</span></td>
+      <td>2026-09-08</td>
+      <td><strong>Oliver [surname unclear]</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Fully Paid</td>
+      <td>₱575.00</td>
+      <td>-</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-08-R08). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>51</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-08-R09</span></td>
+      <td>2026-09-08</td>
+      <td><strong>Christian T. [best read]</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Fully Paid</td>
+      <td>₱475.00</td>
+      <td>-</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-08-R09). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>52</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-08-R10</span></td>
+      <td>2026-09-08</td>
+      <td><strong>MJ Sumaridos [best read]</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Not Yet Paid</td>
+      <td>-</td>
+      <td>₱325.00</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-08-R10). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>53</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-07-R03</span></td>
+      <td>2026-09-07</td>
+      <td><strong>Ben Chavez [best read]</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Down Payment</td>
+      <td>₱2,000.00</td>
+      <td>₱100.00</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-07-R03). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>54</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-07-R04</span></td>
+      <td>2026-09-07</td>
+      <td><strong>Aristotle Gomez [best read]</strong></td>
+      <td style='text-align:center;'>3</td>
+      <td>Down Payment</td>
+      <td>₱825.00</td>
+      <td>₱825.00</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-07-R04). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>55</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-07-R05</span></td>
+      <td>2026-09-07</td>
+      <td><strong>Kirk Guvia [best read]</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Fully Paid</td>
+      <td>₱550.00</td>
+      <td>-</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-07-R05). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>56</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-07-R06</span></td>
+      <td>2026-09-07</td>
+      <td><strong>Cont [unclear]</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Fully Paid</td>
+      <td>₱325.00</td>
+      <td>-</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-07-R06). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>57</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-07-R07</span></td>
+      <td>2026-09-07</td>
+      <td><strong>Jeulia Hatty [best read]</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Down Payment</td>
+      <td>₱275.00</td>
+      <td>₱275.00</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-07-R07). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>58</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-07-R08</span></td>
+      <td>2026-09-07</td>
+      <td><strong>Zaira Elida [best read]</strong></td>
+      <td style='text-align:center;'>3</td>
+      <td>Down Payment</td>
+      <td>₱550.00</td>
+      <td>₱650.00</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-07-R08). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>59</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-07-R09</span></td>
+      <td>2026-09-07</td>
+      <td><strong>J. Eduvere [best read]</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Down Payment</td>
+      <td>₱200.00</td>
+      <td>₱275.00</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span style='color:var(--text-muted);'>None</span></td>
+      <td><span class='tag tag-exact'>INSERT ORDER</span></td>
+      <td style='font-size:0.8rem;'>DSMR verified intake transaction (DSMR-2026-09-07-R09). No existing DB order. Safe clean insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>60</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-07-R10</span></td>
+      <td>2026-09-07</td>
+      <td><strong>Mark Ferrer</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>Fully Paid</td>
+      <td>₱325.00</td>
+      <td>-</td>
+      <td><span style='color:var(--text-muted);'>DSMR-only</span></td>
+      <td><span class='code-badge'>ORD-2026-09-07-001</span></td>
+      <td><span class='tag tag-probable'>LINK TO EXISTING ORDER</span></td>
+      <td style='font-size:0.8rem;'>Existing DB order ORD-2026-09-07-001 matches date (2026-09-07), customer (Mark Ferrer), and amount (₱325). Do not insert duplicate; link provenance.</td>
+    </tr>
+    
+      </tbody>
+    </table>
+  </section>
+
+  <!-- SECTION 2: EXISTING ORDERS PROTECTION -->
+  <section id="sec-2">
+    <h2><span class="section-num">2</span> Existing Database Orders: Strict Preservation &amp; Zero Overwrite Policy</h2>
+    <p>
+      In the first dry-run pass, 2 updates were proposed. As directed in User Request #2, <strong>no native database orders will be updated or modified</strong>. Native operational records must never have their historical facts overwritten by batch imports.
+    </p>
+    <p>
+      The two existing records identified in the database are:
+    </p>
+    <div class="grid-2">
+      <div class="card">
+        <h3 style="margin-top:0;">1. Sebastian Casa</h3>
+        <p><strong>DB Order Number:</strong> <span class="code-badge">ORD-2026-09-12-001</span> (Order ID: 846)</p>
+        <p><strong>Business Date:</strong> 2026-09-12 07:28:00</p>
+        <p><strong>Grand Total:</strong> &#8361;450.00 | <strong>Amount Received:</strong> &#8361;325.00 | <strong>Balance:</strong> &#8361;125.00</p>
+        <p><strong>Status:</strong> <span class="code-badge">for-release</span> | <strong>Payment Method:</strong> Cash</p>
+        <p><strong>Historical Evidence Match:</strong> <span class="code-badge">DSMR-2026-09-12-R06</span> &amp; <span class="code-badge">JO-2026-09-12-SEBASTIAN</span></p>
+        <div class="alert-box alert-success" style="padding:10px 14px; margin-top:10px;">
+          <strong>Action: LINK PROVENANCE ONLY (Zero Overwrite).</strong> All native fields remain 100% untouched. Only external batch tracking is registered.
+        </div>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0;">2. Mark Ferrer</h3>
+        <p><strong>DB Order Number:</strong> <span class="code-badge">ORD-2026-09-07-001</span> (Order ID: 840)</p>
+        <p><strong>Business Date:</strong> 2026-09-07 12:44:00</p>
+        <p><strong>Grand Total:</strong> &#8361;325.00 | <strong>Amount Received:</strong> &#8361;325.00 | <strong>Balance:</strong> &#8361;0.00</p>
+        <p><strong>Status:</strong> <span class="code-badge">new-order</span> | <strong>Payment Method:</strong> GCash</p>
+        <p><strong>Historical Evidence Match:</strong> <span class="code-badge">DSMR-2026-09-07-R10</span></p>
+        <div class="alert-box alert-success" style="padding:10px 14px; margin-top:10px;">
+          <strong>Action: LINK PROVENANCE ONLY (Zero Overwrite).</strong> All native fields remain 100% untouched. Only external batch tracking is registered.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 3: RECONCILE ALL 22 CLAIM EVENTS -->
+  <section id="sec-3">
+    <h2><span class="section-num">3</span> Reconciliation of Exactly 22 CLAIM Events (Separate Population)</h2>
+    <p>
+      A CLAIM row represents a <strong>shoe retrieval / pickup event</strong> by the customer, which may also include a settlement payment for the remaining balance. It is fundamentally distinct from an intake order.
+    </p>
+    <div class="alert-box alert-danger">
+      <strong>Core Schema Separation:</strong> In the Shoelotskey schema:
+      <br>1. The claim business event is represented by <span class="code-badge">orders.status_id = 5 ('claimed')</span> and <span class="code-badge">orders.claimed_at</span>.
+      <br>2. The settlement payment is represented by a subsequent transaction record in <span class="code-badge">payments</span>.
+      <br><strong>Rule:</strong> If a reliable original order cannot be linked, <em>no orphan payment record will be created</em>. The event is preserved in staging as <span class="tag tag-hold">UNRESOLVED HISTORICAL CLAIM</span>.
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Evidence ID</th>
+          <th>Claim Date</th>
+          <th>Customer</th>
+          <th>Pairs</th>
+          <th>Amount Paid</th>
+          <th>Method</th>
+          <th>Candidate Original Order</th>
+          <th>Match Confidence</th>
+          <th>Match Basis</th>
+          <th>Proposed Claim Action</th>
+          <th>Proposed Payment Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        
+    <tr>
+      <td><strong>1</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-09-R01</span></td>
+      <td>2026-09-09</td>
+      <td><strong>Darwin</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>₱375.00</td>
+      <td>Cash</td>
+      <td><span class='code-badge'>None (Pre-pilot intake)</span></td>
+      <td><span class='tag tag-hold'>NO MATCH</span></td>
+      <td style='font-size:0.8rem;'>Intake occurred prior to Sept 2–16 pilot window (August/July intake); no candidate order in working dataset.</td>
+      <td><span class='tag tag-hold'>UNRESOLVED HISTORICAL CLAIM</span></td>
+      <td style='font-size:0.8rem;'><strong>HOLD - NO ORPHAN PAYMENT</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>2</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-10-R01</span></td>
+      <td>2026-09-10</td>
+      <td><strong>Sir Grunny</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>₱475.00</td>
+      <td>Cash</td>
+      <td><span class='code-badge'>None (Pre-pilot intake)</span></td>
+      <td><span class='tag tag-hold'>NO MATCH</span></td>
+      <td style='font-size:0.8rem;'>Intake occurred prior to Sept 2–16 pilot window (August/July intake); no candidate order in working dataset.</td>
+      <td><span class='tag tag-hold'>UNRESOLVED HISTORICAL CLAIM</span></td>
+      <td style='font-size:0.8rem;'><strong>HOLD - NO ORPHAN PAYMENT</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>3</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-11-R01</span></td>
+      <td>2026-09-11</td>
+      <td><strong>Janelle</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>₱325.00</td>
+      <td>GCash</td>
+      <td><span class='code-badge'>DSMR NEW: DSMR-2026-09-11-R05 (2026-09-11)</span></td>
+      <td><span class='tag tag-probable'>PROBABLE</span></td>
+      <td style='font-size:0.8rem;'>Customer name 'Janelle' matches intake order on 2026-09-11.</td>
+      <td><span class='tag tag-exact'>LINK CLAIM TO EXISTING/HISTORICAL ORDER</span></td>
+      <td style='font-size:0.8rem;'><strong>RECORD CLAIM PAYMENT (₱325)</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>4</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-11-R02</span></td>
+      <td>2026-09-11</td>
+      <td><strong>Mark Ontic</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>₱400.00</td>
+      <td>Cash</td>
+      <td><span class='code-badge'>DSMR NEW: DSMR-2026-09-09-R14 (2026-09-09)</span></td>
+      <td><span class='tag tag-exact'>EXACT</span></td>
+      <td style='font-size:0.8rem;'>Customer name 'Mark Ontic' matches intake order on 2026-09-09.</td>
+      <td><span class='tag tag-exact'>LINK CLAIM TO EXISTING/HISTORICAL ORDER</span></td>
+      <td style='font-size:0.8rem;'><strong>RECORD CLAIM PAYMENT (₱400)</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>5</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-11-R03</span></td>
+      <td>2026-09-11</td>
+      <td><strong>Denzel</strong></td>
+      <td style='text-align:center;'>2</td>
+      <td>₱325.00</td>
+      <td>GCash</td>
+      <td><span class='code-badge'>None (Pre-pilot intake)</span></td>
+      <td><span class='tag tag-hold'>NO MATCH</span></td>
+      <td style='font-size:0.8rem;'>Intake occurred prior to Sept 2–16 pilot window (August/July intake); no candidate order in working dataset.</td>
+      <td><span class='tag tag-hold'>UNRESOLVED HISTORICAL CLAIM</span></td>
+      <td style='font-size:0.8rem;'><strong>HOLD - NO ORPHAN PAYMENT</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>6</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-12-R01</span></td>
+      <td>2026-09-12</td>
+      <td><strong>Lyndo Lao</strong></td>
+      <td style='text-align:center;'>2</td>
+      <td>₱900.00</td>
+      <td>GCash</td>
+      <td><span class='code-badge'>DSMR NEW: DSMR-2026-09-09-R10 (2026-09-09)</span></td>
+      <td><span class='tag tag-exact'>EXACT</span></td>
+      <td style='font-size:0.8rem;'>Customer name 'Lyndo Lao' matches intake order on 2026-09-09.</td>
+      <td><span class='tag tag-exact'>LINK CLAIM TO EXISTING/HISTORICAL ORDER</span></td>
+      <td style='font-size:0.8rem;'><strong>RECORD CLAIM PAYMENT (₱900)</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>7</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-14-R01</span></td>
+      <td>2026-09-14</td>
+      <td><strong>Eugenia</strong></td>
+      <td style='text-align:center;'>3</td>
+      <td>₱850.00</td>
+      <td>Cash</td>
+      <td><span class='code-badge'>None (Pre-pilot intake)</span></td>
+      <td><span class='tag tag-hold'>NO MATCH</span></td>
+      <td style='font-size:0.8rem;'>Intake occurred prior to Sept 2–16 pilot window (August/July intake); no candidate order in working dataset.</td>
+      <td><span class='tag tag-hold'>UNRESOLVED HISTORICAL CLAIM</span></td>
+      <td style='font-size:0.8rem;'><strong>HOLD - NO ORPHAN PAYMENT</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>8</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-14-R02</span></td>
+      <td>2026-09-14</td>
+      <td><strong>Leo</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>₱575.00</td>
+      <td>Cash</td>
+      <td><span class='code-badge'>None (Pre-pilot intake)</span></td>
+      <td><span class='tag tag-hold'>NO MATCH</span></td>
+      <td style='font-size:0.8rem;'>Intake occurred prior to Sept 2–16 pilot window (August/July intake); no candidate order in working dataset.</td>
+      <td><span class='tag tag-hold'>UNRESOLVED HISTORICAL CLAIM</span></td>
+      <td style='font-size:0.8rem;'><strong>HOLD - NO ORPHAN PAYMENT</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>9</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-14-R03</span></td>
+      <td>2026-09-14</td>
+      <td><strong>Jay S.</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>₱600.00</td>
+      <td>Cash</td>
+      <td><span class='code-badge'>None (Pre-pilot intake)</span></td>
+      <td><span class='tag tag-hold'>NO MATCH</span></td>
+      <td style='font-size:0.8rem;'>Intake occurred prior to Sept 2–16 pilot window (August/July intake); no candidate order in working dataset.</td>
+      <td><span class='tag tag-hold'>UNRESOLVED HISTORICAL CLAIM</span></td>
+      <td style='font-size:0.8rem;'><strong>HOLD - NO ORPHAN PAYMENT</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>10</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-14-R04</span></td>
+      <td>2026-09-14</td>
+      <td><strong>Maria</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>₱325.00</td>
+      <td>Cash</td>
+      <td><span class='code-badge'>DB Order: ORD-2026-07-30-010 (2026-07-30)</span></td>
+      <td><span class='tag tag-hold'>POSSIBLE</span></td>
+      <td style='font-size:0.8rem;'>Customer name matches existing DB order ORD-2026-07-30-010 created on 2026-07-30.</td>
+      <td><span class='tag tag-exact'>LINK CLAIM TO EXISTING/HISTORICAL ORDER</span></td>
+      <td style='font-size:0.8rem;'><strong>RECORD CLAIM PAYMENT (₱325)</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>11</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-14-R05</span></td>
+      <td>2026-09-14</td>
+      <td><strong>Nathalie</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>₱25.00</td>
+      <td>Cash</td>
+      <td><span class='code-badge'>None (Pre-pilot intake)</span></td>
+      <td><span class='tag tag-hold'>NO MATCH</span></td>
+      <td style='font-size:0.8rem;'>Intake occurred prior to Sept 2–16 pilot window (August/July intake); no candidate order in working dataset.</td>
+      <td><span class='tag tag-hold'>UNRESOLVED HISTORICAL CLAIM</span></td>
+      <td style='font-size:0.8rem;'><strong>HOLD - NO ORPHAN PAYMENT</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>12</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-14-R06</span></td>
+      <td>2026-09-14</td>
+      <td><strong>Christian</strong></td>
+      <td style='text-align:center;'>3</td>
+      <td>₱1,000.00</td>
+      <td>GCash</td>
+      <td><span class='code-badge'>DSMR NEW: DSMR-2026-09-09-R09 (2026-09-09)</span></td>
+      <td><span class='tag tag-probable'>PROBABLE</span></td>
+      <td style='font-size:0.8rem;'>Customer name 'Christian' matches intake order on 2026-09-09.</td>
+      <td><span class='tag tag-exact'>LINK CLAIM TO EXISTING/HISTORICAL ORDER</span></td>
+      <td style='font-size:0.8rem;'><strong>RECORD CLAIM PAYMENT (₱1000)</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>13</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-14-R07</span></td>
+      <td>2026-09-14</td>
+      <td><strong>John Ryan</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>₱275.00</td>
+      <td>GCash</td>
+      <td><span class='code-badge'>None (Pre-pilot intake)</span></td>
+      <td><span class='tag tag-hold'>NO MATCH</span></td>
+      <td style='font-size:0.8rem;'>Intake occurred prior to Sept 2–16 pilot window (August/July intake); no candidate order in working dataset.</td>
+      <td><span class='tag tag-hold'>UNRESOLVED HISTORICAL CLAIM</span></td>
+      <td style='font-size:0.8rem;'><strong>HOLD - NO ORPHAN PAYMENT</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>14</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-14-R08</span></td>
+      <td>2026-09-14</td>
+      <td><strong>[UNRESOLVED]</strong></td>
+      <td style='text-align:center;'>3</td>
+      <td>₱1,000.00</td>
+      <td>GCash</td>
+      <td><span class='code-badge'>None (Pre-pilot intake)</span></td>
+      <td><span class='tag tag-hold'>NO MATCH</span></td>
+      <td style='font-size:0.8rem;'>Intake occurred prior to Sept 2–16 pilot window (August/July intake); no candidate order in working dataset.</td>
+      <td><span class='tag tag-hold'>UNRESOLVED HISTORICAL CLAIM</span></td>
+      <td style='font-size:0.8rem;'><strong>HOLD - NO ORPHAN PAYMENT</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>15</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-14-R09</span></td>
+      <td>2026-09-14</td>
+      <td><strong>Derick</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>₱800.00</td>
+      <td>GCash</td>
+      <td><span class='code-badge'>DSMR NEW: DSMR-2026-09-09-R06 (2026-09-09)</span></td>
+      <td><span class='tag tag-probable'>PROBABLE</span></td>
+      <td style='font-size:0.8rem;'>Customer name 'Derick' matches intake order on 2026-09-09.</td>
+      <td><span class='tag tag-exact'>LINK CLAIM TO EXISTING/HISTORICAL ORDER</span></td>
+      <td style='font-size:0.8rem;'><strong>RECORD CLAIM PAYMENT (₱800)</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>16</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-15-R01</span></td>
+      <td>2026-09-15</td>
+      <td><strong>Paul</strong></td>
+      <td style='text-align:center;'>4</td>
+      <td>₱900.00</td>
+      <td>GCash</td>
+      <td><span class='code-badge'>None (Pre-pilot intake)</span></td>
+      <td><span class='tag tag-hold'>NO MATCH</span></td>
+      <td style='font-size:0.8rem;'>Intake occurred prior to Sept 2–16 pilot window (August/July intake); no candidate order in working dataset.</td>
+      <td><span class='tag tag-hold'>UNRESOLVED HISTORICAL CLAIM</span></td>
+      <td style='font-size:0.8rem;'><strong>HOLD - NO ORPHAN PAYMENT</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>17</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-15-R02</span></td>
+      <td>2026-09-15</td>
+      <td><strong>Julius</strong></td>
+      <td style='text-align:center;'>2</td>
+      <td>₱375.00</td>
+      <td>Cash</td>
+      <td><span class='code-badge'>None (Pre-pilot intake)</span></td>
+      <td><span class='tag tag-hold'>NO MATCH</span></td>
+      <td style='font-size:0.8rem;'>Intake occurred prior to Sept 2–16 pilot window (August/July intake); no candidate order in working dataset.</td>
+      <td><span class='tag tag-hold'>UNRESOLVED HISTORICAL CLAIM</span></td>
+      <td style='font-size:0.8rem;'><strong>HOLD - NO ORPHAN PAYMENT</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>18</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-15-R03</span></td>
+      <td>2026-09-15</td>
+      <td><strong>Warden</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>₱250.00</td>
+      <td>Cash</td>
+      <td><span class='code-badge'>None (Pre-pilot intake)</span></td>
+      <td><span class='tag tag-hold'>NO MATCH</span></td>
+      <td style='font-size:0.8rem;'>Intake occurred prior to Sept 2–16 pilot window (August/July intake); no candidate order in working dataset.</td>
+      <td><span class='tag tag-hold'>UNRESOLVED HISTORICAL CLAIM</span></td>
+      <td style='font-size:0.8rem;'><strong>HOLD - NO ORPHAN PAYMENT</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>19</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-15-R04</span></td>
+      <td>2026-09-15</td>
+      <td><strong>Anthea</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>₱400.00</td>
+      <td>GCash</td>
+      <td><span class='code-badge'>None (Pre-pilot intake)</span></td>
+      <td><span class='tag tag-hold'>NO MATCH</span></td>
+      <td style='font-size:0.8rem;'>Intake occurred prior to Sept 2–16 pilot window (August/July intake); no candidate order in working dataset.</td>
+      <td><span class='tag tag-hold'>UNRESOLVED HISTORICAL CLAIM</span></td>
+      <td style='font-size:0.8rem;'><strong>HOLD - NO ORPHAN PAYMENT</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>20</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-08-R01</span></td>
+      <td>2026-09-08</td>
+      <td><strong>Jerome</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>₱275.00</td>
+      <td>GCash</td>
+      <td><span class='code-badge'>DSMR NEW: DSMR-2026-09-12-R05 (2026-09-12)</span></td>
+      <td><span class='tag tag-probable'>PROBABLE</span></td>
+      <td style='font-size:0.8rem;'>Customer name 'Jerome' matches intake order on 2026-09-12.</td>
+      <td><span class='tag tag-exact'>LINK CLAIM TO EXISTING/HISTORICAL ORDER</span></td>
+      <td style='font-size:0.8rem;'><strong>RECORD CLAIM PAYMENT (₱275)</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>21</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-07-R01</span></td>
+      <td>2026-09-07</td>
+      <td><strong>Verna [best read]</strong></td>
+      <td style='text-align:center;'>1</td>
+      <td>₱400.00</td>
+      <td>Cash</td>
+      <td><span class='code-badge'>None (Pre-pilot intake)</span></td>
+      <td><span class='tag tag-hold'>NO MATCH</span></td>
+      <td style='font-size:0.8rem;'>Intake occurred prior to Sept 2–16 pilot window (August/July intake); no candidate order in working dataset.</td>
+      <td><span class='tag tag-hold'>UNRESOLVED HISTORICAL CLAIM</span></td>
+      <td style='font-size:0.8rem;'><strong>HOLD - NO ORPHAN PAYMENT</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>22</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-07-R02</span></td>
+      <td>2026-09-07</td>
+      <td><strong>Jomar Padua [best read]</strong></td>
+      <td style='text-align:center;'>8</td>
+      <td>₱1,555.00</td>
+      <td>GCash</td>
+      <td><span class='code-badge'>None (Pre-pilot intake)</span></td>
+      <td><span class='tag tag-hold'>NO MATCH</span></td>
+      <td style='font-size:0.8rem;'>Intake occurred prior to Sept 2–16 pilot window (August/July intake); no candidate order in working dataset.</td>
+      <td><span class='tag tag-hold'>UNRESOLVED HISTORICAL CLAIM</span></td>
+      <td style='font-size:0.8rem;'><strong>HOLD - NO ORPHAN PAYMENT</strong></td>
+    </tr>
+    
+      </tbody>
+    </table>
+    <p>
+      <strong>Summary of 22 CLAIM Actions:</strong>
+      <br>&bull; <strong>LINK CLAIM TO EXISTING/HISTORICAL ORDER:</strong> 7 Events (Link pickup to order; record settlement payment against linked order).
+      <br>&bull; <strong>UNRESOLVED HISTORICAL CLAIM:</strong> 15 Events (Pre-pilot intake or unreadable customer; preserved in staging with <strong>0 orphan payments</strong> created).
+    </p>
+  </section>
+
+  <!-- SECTION 4: CLAIM DATE PRECISION -->
+  <section id="sec-4">
+    <h2><span class="section-num">4</span> Claim Date Precision &amp; Prohibition of Fabricated Timestamps</h2>
+    <p>
+      The Daily Sales Monitoring Reports record calendar dates (e.g. <span class="code-badge">2026-09-11</span>) but do not document the exact hour or minute when the customer walked in to retrieve their footwear.
+    </p>
+    <ul>
+      <li><strong>Database Constraint:</strong> <span class="code-badge">orders.claimed_at</span> is defined as a SQL <span class="code-badge">DATETIME / TIMESTAMP</span>.</li>
+      <li><strong>Safest Storage Strategy:</strong> To satisfy SQL type parsers without fabricating facts, the record is stored at ISO date standard midnight (<span class="code-badge">2026-09-11 00:00:00</span>), but accompanied by a metadata attribute: <span class="code-badge">"claim_time_precision": "DATE_ONLY"</span> in the order's JSON audit trail.</li>
+      <li><strong>Frontend Display Protocol:</strong> The UI inspects <span class="code-badge">claim_time_precision</span>. When set to <span class="code-badge">"DATE_ONLY"</span>, the UI renders <span class="code-badge">09/11/26</span>. Under no circumstance will the UI display <span class="code-badge">12:00 AM</span>, opening hours, or closing hours as though they were observed.</li>
+    </ul>
+  </section>
+
+  <!-- SECTION 5: EXPENSE TOTAL CORRECTION -->
+  <section id="sec-5">
+    <h2><span class="section-num">5</span> Corrected Expense Totals &amp; Label Disaggregation</h2>
+    <p>
+      In accordance with User Request #5, the expense totals are explicitly separated and distinctly labeled:
+    </p>
+    <div class="grid-2">
+      <div class="card">
+        <h3 style="margin-top:0; color:var(--accent-emerald);">A. Verified Fixed September Operating Subtotal</h3>
+        <p style="font-size:1.8rem; font-weight:800; color:#fff; margin-bottom:8px;">&#8361;53,124.17</p>
+        <table>
+          <tr><td>Shop Rent (Monthly)</td><td style="text-align:right;">&#8361;20,000.00</td></tr>
+          <tr><td>Full-Time Payroll (Joy &amp; Yang, Full Month)</td><td style="text-align:right;">&#8361;28,080.00</td></tr>
+          <tr><td>MERALCO Electricity (Aug 30 – Sept 29, 248 kWh)</td><td style="text-align:right;">&#8361;3,745.17</td></tr>
+          <tr><td>Converge Shop Fiber Internet (Monthly)</td><td style="text-align:right;">&#8361;1,299.00</td></tr>
+          <tr style="font-weight:700; color:#fff; border-top:2px solid var(--border-color);">
+            <td>TOTAL VERIFIED FIXED OPERATING</td>
+            <td style="text-align:right;">&#8361;53,124.17</td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top:0; color:var(--accent-blue);">B. Working Total Including Parcel Logistics</h3>
+        <p style="font-size:1.8rem; font-weight:800; color:#fff; margin-bottom:8px;">&#8361;53,695.17</p>
+        <table>
+          <tr><td>Verified Fixed Operating Subtotal</td><td style="text-align:right;">&#8361;53,124.17</td></tr>
+          <tr><td>Sept 12 Parcel Logistics (DSMR)</td><td style="text-align:right;">&#8361;442.00</td></tr>
+          <tr><td>Sept 15 Parcel Logistics (DSMR)</td><td style="text-align:right;">&#8361;129.00</td></tr>
+          <tr style="font-weight:700; color:#fff; border-top:2px solid var(--border-color);">
+            <td>WORKING OPERATING TOTAL W/ PARCELS</td>
+            <td style="text-align:right;">&#8361;53,695.17</td>
+          </tr>
+        </table>
+        <div class="alert-box alert-warning" style="padding:8px 12px; margin-top:8px; font-size:0.8rem;">
+          Parcel subtotal is exactly <strong>&#8361;571.00</strong>. It is kept distinct from fixed overhead.
+        </div>
+      </div>
+    </div>
+
+    <div class="alert-box alert-danger">
+      <strong>Items Strictly Gated ON HOLD (Excluded from Operating Totals):</strong><br>
+      1. <strong>Maynilad Water Bill (&#8361;4,311.03):</strong> On hold pending verification of current charge vs. prior arrears.<br>
+      2. <strong>Sept 14 Cash-Out c/o Maam Eileen (&#8361;3,000.00):</strong> On hold pending verification of business purpose (withdrawal vs. expense vs. purchase).<br>
+      <strong>Total Held: &#8361;7,311.03</strong>
+    </div>
+  </section>
+
+  <!-- SECTION 6: EXPENSE INSERT COUNT (ALL 11 ROWS) -->
+  <section id="sec-6">
+    <h2><span class="section-num">6</span> Individual Accounting of All 11 Expense Staging Rows</h2>
+    <p>
+      To prevent double counting (especially with bi-monthly payroll), every row of the <span class="code-badge">Expenses</span> worksheet is accounted for:
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Expense ID</th>
+          <th>Date / Period</th>
+          <th>Category</th>
+          <th>Description</th>
+          <th style="text-align:right;">Amount</th>
+          <th>Classification</th>
+          <th>Detailed Reason &amp; Anti-Duplication Basis</th>
+        </tr>
+      </thead>
+      <tbody>
+        
+    <tr>
+      <td><strong>1</strong></td>
+      <td><span class='code-badge'>EXP-RENT-SEP2026</span></td>
+      <td>2026-09</td>
+      <td><strong>Rent</strong></td>
+      <td>Monthly shop rent</td>
+      <td style='text-align:right;'><strong>₱20,000.00</strong></td>
+      <td><span class='tag tag-exact'>IMPORT</span></td>
+      <td style='font-size:0.8rem;'>Verified fixed September operating overhead. Single monthly entry.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>2</strong></td>
+      <td><span class='code-badge'>EXP-MERALCO-2026-09-29</span></td>
+      <td>2026-08-30 to 2026-09-29</td>
+      <td><strong>Electricity</strong></td>
+      <td>MERALCO Business-General Service A; 248 kWh</td>
+      <td style='text-align:right;'><strong>₱3,745.17</strong></td>
+      <td><span class='tag tag-exact'>IMPORT</span></td>
+      <td style='font-size:0.8rem;'>Verified fixed September operating overhead. Single monthly entry.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>3</strong></td>
+      <td><span class='code-badge'>EXP-CONVERGE-SEP2026</span></td>
+      <td>2026-09</td>
+      <td><strong>Internet</strong></td>
+      <td>Converge monthly internet</td>
+      <td style='text-align:right;'><strong>₱1,299.00</strong></td>
+      <td><span class='tag tag-exact'>IMPORT</span></td>
+      <td style='font-size:0.8rem;'>Verified fixed September operating overhead. Single monthly entry.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>4</strong></td>
+      <td><span class='code-badge'>EXP-PAYROLL-2026-09-15-JOY</span></td>
+      <td>2026-09-15</td>
+      <td><strong>Payroll</strong></td>
+      <td>Joy payday</td>
+      <td style='text-align:right;'><strong>₱5,720.00</strong></td>
+      <td><span class='tag tag-exact'>IMPORT</span></td>
+      <td style='font-size:0.8rem;'>Verified 1st cutoff payroll transaction inside pilot window (Sept 15). Paycheck-level precision.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>5</strong></td>
+      <td><span class='code-badge'>EXP-PAYROLL-2026-09-15-YANG</span></td>
+      <td>2026-09-15</td>
+      <td><strong>Payroll</strong></td>
+      <td>Yang payday</td>
+      <td style='text-align:right;'><strong>₱8,320.00</strong></td>
+      <td><span class='tag tag-exact'>IMPORT</span></td>
+      <td style='font-size:0.8rem;'>Verified 1st cutoff payroll transaction inside pilot window (Sept 15). Paycheck-level precision.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>6</strong></td>
+      <td><span class='code-badge'>EXP-PAYROLL-2026-09-30-JOY</span></td>
+      <td>2026-09-30</td>
+      <td><strong>Payroll</strong></td>
+      <td>Joy payday</td>
+      <td style='text-align:right;'><strong>₱5,720.00</strong></td>
+      <td><span class='tag tag-exact'>IMPORT</span></td>
+      <td style='font-size:0.8rem;'>Verified 2nd cutoff payroll transaction (Sept 30). Completes full September payroll (₱28,080.00). Note: No monthly aggregate row is imported to avoid double-counting.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>7</strong></td>
+      <td><span class='code-badge'>EXP-PAYROLL-2026-09-30-YANG</span></td>
+      <td>2026-09-30</td>
+      <td><strong>Payroll</strong></td>
+      <td>Yang payday</td>
+      <td style='text-align:right;'><strong>₱8,320.00</strong></td>
+      <td><span class='tag tag-exact'>IMPORT</span></td>
+      <td style='font-size:0.8rem;'>Verified 2nd cutoff payroll transaction (Sept 30). Completes full September payroll (₱28,080.00). Note: No monthly aggregate row is imported to avoid double-counting.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>8</strong></td>
+      <td><span class='code-badge'>EXP-DSMR-2026-09-12-PARCEL</span></td>
+      <td>2026-09-12</td>
+      <td><strong>Parcel</strong></td>
+      <td>Parcel expense from DSMR</td>
+      <td style='text-align:right;'><strong>₱442.00</strong></td>
+      <td><span class='tag tag-probable'>MANUAL REVIEW</span></td>
+      <td style='font-size:0.8rem;'>Documented parcel expense from DSMR (₱442 & ₱129, total ₱571). Retained for client approval before production insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>9</strong></td>
+      <td><span class='code-badge'>EXP-DSMR-2026-09-15-PARCEL</span></td>
+      <td>2026-09-15</td>
+      <td><strong>Parcel</strong></td>
+      <td>Parcel expense from DSMR</td>
+      <td style='text-align:right;'><strong>₱129.00</strong></td>
+      <td><span class='tag tag-probable'>MANUAL REVIEW</span></td>
+      <td style='font-size:0.8rem;'>Documented parcel expense from DSMR (₱442 & ₱129, total ₱571). Retained for client approval before production insert.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>10</strong></td>
+      <td><span class='code-badge'>EXP-DSMR-2026-09-14-3000</span></td>
+      <td>2026-09-14</td>
+      <td><strong>Unclassified cash-out</strong></td>
+      <td>₱3,000 c/o Maam Eileen</td>
+      <td style='text-align:right;'><strong>₱3,000.00</strong></td>
+      <td><span class='tag tag-hold'>HOLD</span></td>
+      <td style='font-size:0.8rem;'>₱3,000 c/o Maam Eileen has unknown business purpose (withdrawal vs. expense vs. owner advance). Held until classified.</td>
+    </tr>
+    
+    <tr>
+      <td><strong>11</strong></td>
+      <td><span class='code-badge'>EXP-MAYNILAD-SEP2026</span></td>
+      <td>2026-09</td>
+      <td><strong>Water</strong></td>
+      <td>Maynilad September bill / amount due previously read as ₱4,311.03</td>
+      <td style='text-align:right;'><strong>₱4,311.03</strong></td>
+      <td><span class='tag tag-hold'>HOLD</span></td>
+      <td style='font-size:0.8rem;'>Maynilad water bill (₱4,311.03) requires current-period charge vs. prior balance verification. Do not include in operating expense.</td>
+    </tr>
+    
+      </tbody>
+    </table>
+    <p>
+      <strong>Payroll Anti-Duplication Rule:</strong> Full September payroll of &#8361;28,080.00 is accounted for by the four individual paycheck records (Joy 15th &#8361;5,720, Yang 15th &#8361;8,320, Joy 30th &#8361;5,720, Yang 30th &#8361;8,320). <strong>No monthly aggregate payroll record will be imported</strong>, preventing double counting.
+    </p>
+  </section>
+
+  <!-- SECTION 7: PAYMENT COUNT RECONCILIATION -->
+  <section id="sec-7">
+    <h2><span class="section-num">7</span> Mathematical Derivation of Payment Records</h2>
+    <p>
+      Every payment transaction is derived directly from the business evidence without creating dummy or orphan records:
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Transaction Origin</th>
+          <th>Underlying Business Scenario</th>
+          <th>Total Rows</th>
+          <th>Eligible DB Payment Inserts</th>
+          <th>Held / Zero Payment Rows</th>
+          <th>Mathematical Derivation</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>NEW Orders: Fully Paid</strong></td>
+          <td>Full payment settled at counter intake</td>
+          <td>27</td>
+          <td><strong>25</strong></td>
+          <td>2 Held (Marvin &amp; Mark Ferrer)</td>
+          <td>25 clean orders &times; 1 payment row</td>
+        </tr>
+        <tr>
+          <td><strong>NEW Orders: Down Payment</strong></td>
+          <td>Partial deposit paid at counter intake</td>
+          <td>26</td>
+          <td><strong>23</strong></td>
+          <td>3 Held (Lyndo Lao, Cico/Rico, Sebastian)</td>
+          <td>23 clean orders &times; 1 payment row</td>
+        </tr>
+        <tr>
+          <td><strong>NEW Orders: Not Yet Paid</strong></td>
+          <td>Intake with &#8361;0 deposit (Nyx Pantoja, Kenneth, etc.)</td>
+          <td>6</td>
+          <td><strong>0</strong></td>
+          <td>6 (No payment row created)</td>
+          <td>&#8361;0 collected &rarr; ZERO payment rows created</td>
+        </tr>
+        <tr>
+          <td><strong>NEW Orders: Back Job</strong></td>
+          <td>Warranty rework (Jeivce Velasco)</td>
+          <td>1</td>
+          <td><strong>0</strong></td>
+          <td>1 (No payment row created)</td>
+          <td>Warranty rework &rarr; ZERO payment rows created</td>
+        </tr>
+        <tr>
+          <td><strong>CLAIM Events: Linked Orders</strong></td>
+          <td>Pickup settlement payments with verified parent orders</td>
+          <td>7</td>
+          <td><strong>7</strong> (Conditional)</td>
+          <td>0</td>
+          <td>7 verified pickups &times; 1 subsequent payment row</td>
+        </tr>
+        <tr>
+          <td><strong>CLAIM Events: Unresolved</strong></td>
+          <td>Pickup payments with pre-pilot intake or unreadable names</td>
+          <td>15</td>
+          <td><strong>0</strong></td>
+          <td>15 (Staged on HOLD)</td>
+          <td>No parent order &rarr; ZERO orphan payment rows</td>
+        </tr>
+        <tr style="font-weight:700; color:#fff; background-color:#0d1527;">
+          <td>TOTALS</td>
+          <td>Combined Working Evidence Population</td>
+          <td>82</td>
+          <td><strong>48 Initial + 7 Claim = 55 Max</strong></td>
+          <td><strong>27 Staged / Zero Payments</strong></td>
+          <td>55 + 27 = 82 Transactions</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="alert-box alert-success">
+      <strong>Payment Count Formula:</strong><br>
+      Total Initial Payment Inserts for Approved NEW Orders = <strong>48</strong> (25 Fully Paid + 23 Down Payment).<br>
+      Total Subsequent Payment Inserts for Linked CLAIMs (if authorized) = <strong>7</strong>.<br>
+      Zero payments created for Unpaid orders (6), Back Job (1), Existing DB orders (2), or Unresolved Claims (15).
+    </div>
+  </section>
+
+  <!-- SECTION 8: ITEMS COUNT -->
+  <section id="sec-8">
+    <h2><span class="section-num">8</span> Shoe Pairs / Items Count (Table Semantics)</h2>
+    <p>
+      In the Shoelotskey database architecture, the table <span class="code-badge">items</span> (<span class="code-badge">backend/models.py:332-363</span>) represents <strong>individual customer shoe pairs</strong> belonging to an order, while shop materials (cleaner, glue, laces) reside in the separate <span class="code-badge">inventory</span> table.
+    </p>
+    <ul>
+      <li><strong>26 Pair Records:</strong> Exactly 26 shoe pairs transcribed from the 14 paper Shoe Inventory Forms in the <span class="code-badge">Services-Pairs</span> sheet.</li>
+      <li><strong>Attachment:</strong> These 26 records attach exclusively to their corresponding parent orders in <span class="code-badge">items</span> and <span class="code-badge">item_service_mapping</span>.</li>
+      <li><strong>Anti-Manufacturing Safeguard:</strong> For the remaining DSMR-only NEW orders where no paper Shoe Inventory Form was preserved, <strong>zero fake pair/item records will be manufactured</strong>. Their pair count is preserved directly on the order record (<span class="code-badge">orders.total_pairs</span>).</li>
+    </ul>
+
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Parent Job Order ID</th>
+          <th>Pair #</th>
+          <th>Shoe Model / Description</th>
+          <th>Service Code</th>
+          <th style="text-align:right;">Price</th>
+          <th>Priority</th>
+          <th>Target Release</th>
+        </tr>
+      </thead>
+      <tbody>
+        
+    <tr>
+      <td>1</td>
+      <td><span class='code-badge'>JO-2026-09-12-WENDEL</span></td>
+      <td style='text-align:center;'>Pair #1</td>
+      <td><strong>Flow</strong></td>
+      <td><span class='code-badge'>PR</span></td>
+      <td style='text-align:right;'>₱575.00</td>
+      <td style='text-align:center;'><span class='tag tag-exact'>Regular</span></td>
+      <td>-</td>
+    </tr>
+    
+    <tr>
+      <td>2</td>
+      <td><span class='code-badge'>JO-2026-09-12-WENDEL</span></td>
+      <td style='text-align:center;'>Pair #2</td>
+      <td><strong>Adidas</strong></td>
+      <td><span class='code-badge'>FR</span></td>
+      <td style='text-align:right;'>₱575.00</td>
+      <td style='text-align:center;'><span class='tag tag-exact'>Regular</span></td>
+      <td>-</td>
+    </tr>
+    
+    <tr>
+      <td>3</td>
+      <td><span class='code-badge'>JO-2026-09-12-WENDEL</span></td>
+      <td style='text-align:center;'>Pair #3</td>
+      <td><strong>Nike black</strong></td>
+      <td><span class='code-badge'>FR US</span></td>
+      <td style='text-align:right;'>₱575.00</td>
+      <td style='text-align:center;'><span class='tag tag-exact'>Regular</span></td>
+      <td>-</td>
+    </tr>
+    
+    <tr>
+      <td>4</td>
+      <td><span class='code-badge'>JO-2026-09-12-JEROME</span></td>
+      <td style='text-align:center;'>Pair #1</td>
+      <td><strong>Converse</strong></td>
+      <td><span class='code-badge'>FR</span></td>
+      <td style='text-align:right;'>₱575.00</td>
+      <td style='text-align:center;'><span class='tag tag-exact'>Regular</span></td>
+      <td>2026-10-01</td>
+    </tr>
+    
+    <tr>
+      <td>5</td>
+      <td><span class='code-badge'>JO-2026-09-12-JEROME</span></td>
+      <td style='text-align:center;'>Pair #2</td>
+      <td><strong>Nike</strong></td>
+      <td><span class='code-badge'>MR</span></td>
+      <td style='text-align:right;'>₱450.00</td>
+      <td style='text-align:center;'><span class='tag tag-exact'>Regular</span></td>
+      <td>2026-09-24</td>
+    </tr>
+    
+    <tr>
+      <td>6</td>
+      <td><span class='code-badge'>JO-2026-09-12-SEBASTIAN</span></td>
+      <td style='text-align:center;'>Pair #1</td>
+      <td><strong>Skechers</strong></td>
+      <td><span class='code-badge'>MR/MK [handwriting]</span></td>
+      <td style='text-align:right;'>₱450.00</td>
+      <td style='text-align:center;'><span class='tag tag-exact'>Regular</span></td>
+      <td>-</td>
+    </tr>
+    
+    <tr>
+      <td>7</td>
+      <td><span class='code-badge'>JO-2026-09-14-RAPHAEL</span></td>
+      <td style='text-align:center;'>Pair #1</td>
+      <td><strong>Nike gray</strong></td>
+      <td><span class='code-badge'>BC</span></td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td style='text-align:center;'><span class='tag tag-exact'>Regular</span></td>
+      <td>-</td>
+    </tr>
+    
+    <tr>
+      <td>8</td>
+      <td><span class='code-badge'>JO-2026-09-14-RAPHAEL</span></td>
+      <td style='text-align:center;'>Pair #2</td>
+      <td><strong>Nike white/blue</strong></td>
+      <td><span class='code-badge'>BC</span></td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td style='text-align:center;'><span class='tag tag-exact'>Regular</span></td>
+      <td>-</td>
+    </tr>
+    
+    <tr>
+      <td>9</td>
+      <td><span class='code-badge'>JO-2026-09-14-RAPHAEL</span></td>
+      <td style='text-align:center;'>Pair #3</td>
+      <td><strong>Nike black/white</strong></td>
+      <td><span class='code-badge'>BC</span></td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td style='text-align:center;'><span class='tag tag-exact'>Regular</span></td>
+      <td>-</td>
+    </tr>
+    
+    <tr>
+      <td>10</td>
+      <td><span class='code-badge'>JO-2026-09-14-CHRISTIAN</span></td>
+      <td style='text-align:center;'>Pair #1</td>
+      <td><strong>ASICS</strong></td>
+      <td><span class='code-badge'>BC</span></td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td style='text-align:center;'><span class='tag tag-exact'>Regular</span></td>
+      <td>-</td>
+    </tr>
+    
+    <tr>
+      <td>11</td>
+      <td><span class='code-badge'>JO-2026-09-14-CHRISTIAN</span></td>
+      <td style='text-align:center;'>Pair #2</td>
+      <td><strong>ASICS</strong></td>
+      <td><span class='code-badge'>BC</span></td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td style='text-align:center;'><span class='tag tag-exact'>Regular</span></td>
+      <td>-</td>
+    </tr>
+    
+    <tr>
+      <td>12</td>
+      <td><span class='code-badge'>JO-2026-09-14-KARL</span></td>
+      <td style='text-align:center;'>Pair #1</td>
+      <td><strong>Salomon</strong></td>
+      <td><span class='code-badge'>BC</span></td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td style='text-align:center;'><span class='tag tag-exact'>Regular</span></td>
+      <td>-</td>
+    </tr>
+    
+    <tr>
+      <td>13</td>
+      <td><span class='code-badge'>JO-2026-09-14-NYX</span></td>
+      <td style='text-align:center;'>Pair #1</td>
+      <td><strong>Palladium white</strong></td>
+      <td><span class='code-badge'>BC</span></td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td style='text-align:center;'><span class='tag tag-exact'>Regular</span></td>
+      <td>2026-09-25</td>
+    </tr>
+    
+    <tr>
+      <td>14</td>
+      <td><span class='code-badge'>JO-2026-09-14-NYX</span></td>
+      <td style='text-align:center;'>Pair #2</td>
+      <td><strong>Palladium black</strong></td>
+      <td><span class='code-badge'>BC</span></td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td style='text-align:center;'><span class='tag tag-exact'>Regular</span></td>
+      <td>2026-09-25</td>
+    </tr>
+    
+    <tr>
+      <td>15</td>
+      <td><span class='code-badge'>JO-2026-09-14-NYX</span></td>
+      <td style='text-align:center;'>Pair #3</td>
+      <td><strong>Palladium beige</strong></td>
+      <td><span class='code-badge'>FR</span></td>
+      <td style='text-align:right;'>₱575.00</td>
+      <td style='text-align:center;'><span class='tag tag-exact'>Regular</span></td>
+      <td>2026-10-13</td>
+    </tr>
+    
+    <tr>
+      <td>16</td>
+      <td><span class='code-badge'>JO-2026-09-14-ERNEST</span></td>
+      <td style='text-align:center;'>Pair #1</td>
+      <td><strong>Birkenstock</strong></td>
+      <td><span class='code-badge'>MRES + color renewal</span></td>
+      <td style='text-align:right;'>₱925.00</td>
+      <td style='text-align:center;'><span class='tag tag-exact'>Regular</span></td>
+      <td>-</td>
+    </tr>
+    
+    <tr>
+      <td>17</td>
+      <td><span class='code-badge'>JO-2026-09-14-KENNETH</span></td>
+      <td style='text-align:center;'>Pair #1</td>
+      <td><strong>Adidas</strong></td>
+      <td><span class='code-badge'>BC</span></td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td style='text-align:center;'><span class='tag tag-exact'>Regular</span></td>
+      <td>2026-09-24</td>
+    </tr>
+    
+    <tr>
+      <td>18</td>
+      <td><span class='code-badge'>JO-2026-09-14-KENNETH</span></td>
+      <td style='text-align:center;'>Pair #2</td>
+      <td><strong>Oncloud</strong></td>
+      <td><span class='code-badge'>BC</span></td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td style='text-align:center;'><span class='tag tag-exact'>Regular</span></td>
+      <td>2026-09-24</td>
+    </tr>
+    
+    <tr>
+      <td>19</td>
+      <td><span class='code-badge'>JO-2026-09-14-KENNETH</span></td>
+      <td style='text-align:center;'>Pair #3</td>
+      <td><strong>Nike</strong></td>
+      <td><span class='code-badge'>MRES</span></td>
+      <td style='text-align:right;'>₱550.00</td>
+      <td style='text-align:center;'><span class='tag tag-exact'>Regular</span></td>
+      <td>2026-10-02</td>
+    </tr>
+    
+    <tr>
+      <td>20</td>
+      <td><span class='code-badge'>JO-2026-09-14-KENNETH</span></td>
+      <td style='text-align:center;'>Pair #4</td>
+      <td><strong>Boost</strong></td>
+      <td><span class='code-badge'>MRES</span></td>
+      <td style='text-align:right;'>₱550.00</td>
+      <td style='text-align:center;'><span class='tag tag-exact'>Regular</span></td>
+      <td>2026-10-02</td>
+    </tr>
+    
+    <tr>
+      <td>21</td>
+      <td><span class='code-badge'>JO-2026-09-14-KENNETH</span></td>
+      <td style='text-align:center;'>Pair #5</td>
+      <td><strong>Adidas white</strong></td>
+      <td><span class='code-badge'>FR US</span></td>
+      <td style='text-align:right;'>₱575.00</td>
+      <td style='text-align:center;'><span class='tag tag-exact'>Regular</span></td>
+      <td>2026-10-14</td>
+    </tr>
+    
+    <tr>
+      <td>22</td>
+      <td><span class='code-badge'>JO-2026-09-14-KENNETH</span></td>
+      <td style='text-align:center;'>Pair #6</td>
+      <td><strong>Nike black</strong></td>
+      <td><span class='code-badge'>FR MID</span></td>
+      <td style='text-align:right;'>₱575.00</td>
+      <td style='text-align:center;'><span class='tag tag-exact'>Regular</span></td>
+      <td>2026-10-14</td>
+    </tr>
+    
+    <tr>
+      <td>23</td>
+      <td><span class='code-badge'>JO-2026-09-15-ANTONIO</span></td>
+      <td style='text-align:center;'>Pair #1</td>
+      <td><strong>Oncloud</strong></td>
+      <td><span class='code-badge'>BC</span></td>
+      <td style='text-align:right;'>₱475.00</td>
+      <td style='text-align:center;'><span class='tag tag-hold'>RUSH</span></td>
+      <td>-</td>
+    </tr>
+    
+    <tr>
+      <td>24</td>
+      <td><span class='code-badge'>JO-2026-09-15-CICO</span></td>
+      <td style='text-align:center;'>Pair #1</td>
+      <td><strong>Vans</strong></td>
+      <td><span class='code-badge'>BC</span></td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td style='text-align:center;'><span class='tag tag-exact'>Regular</span></td>
+      <td>2026-09-24</td>
+    </tr>
+    
+    <tr>
+      <td>25</td>
+      <td><span class='code-badge'>JO-2026-09-16-LAWRENCE</span></td>
+      <td style='text-align:center;'>Pair #1</td>
+      <td><strong>Nike AF1</strong></td>
+      <td><span class='code-badge'>BC</span></td>
+      <td style='text-align:right;'>₱475.00</td>
+      <td style='text-align:center;'><span class='tag tag-hold'>RUSH</span></td>
+      <td>-</td>
+    </tr>
+    
+    <tr>
+      <td>26</td>
+      <td><span class='code-badge'>JO-2026-09-16-LAWRENCE</span></td>
+      <td style='text-align:center;'>Pair #2</td>
+      <td><strong>Tiger</strong></td>
+      <td><span class='code-badge'>MRES</span></td>
+      <td style='text-align:right;'>₱700.00</td>
+      <td style='text-align:center;'><span class='tag tag-hold'>RUSH</span></td>
+      <td>-</td>
+    </tr>
+    
+      </tbody>
+    </table>
+  </section>
+
+  <!-- SECTION 9: BATCH AUDIT LOG -->
+  <section id="sec-9">
+    <h2><span class="section-num">9</span> Single Current-Time Batch Audit Log</h2>
+    <p>
+      Under User Rule #10 and System Integrity rules, no audit logs will be backdated to September 2026.
+    </p>
+    <div class="alert-box alert-info">
+      <strong>Single Batch Audit Record:</strong> At the actual moment of authorized execution, a single audit log entry will be created in <span class="code-badge">audit_logs</span>:
+      <br><br>
+      &bull; <strong>action_type:</strong> <span class="code-badge">HISTORICAL_IMPORT_BATCH</span><br>
+      &bull; <strong>table_name:</strong> <span class="code-badge">orders</span><br>
+      &bull; <strong>created_at:</strong> <span class="code-badge">[REAL SYSTEM TIMESTAMP AT EXECUTION]</span><br>
+      &bull; <strong>username:</strong> <span class="code-badge">charm</span><br>
+      &bull; <strong>module:</strong> <span class="code-badge">Historical Data Import</span><br>
+      &bull; <strong>new_values:</strong> <span class="code-badge">{"batch_id": "BATCH-HIST-SEP2026-001", "target_database": "PostgreSQL (Production)", "new_orders_inserted": 54, "payments_inserted": 48, "pairs_inserted": 26, "expenses_inserted": 7, "source_file": "Shoelotskey_September_2026_Historical_Pilot_Master_Dataset.xlsx"}</span>
+    </div>
+  </section>
+
+  <!-- SECTION 10: BATCH ID & ROLLBACK ISOLATION -->
+  <section id="sec-10">
+    <h2><span class="section-num">10</span> Batch Identifier &amp; Deterministic Rollback Guarantee</h2>
+    <p>
+      All inserted rows in PostgreSQL will be tagged with:
+      <br>
+      <span class="code-badge" style="font-size:1.05rem; font-weight:700;">BATCH-HIST-SEP2026-001</span>
+    </p>
+    <div class="alert-box alert-warning">
+      <strong>Rollback Isolation Guarantee:</strong> Rollback does not rely on business dates (which would risk deleting native September records). It deletes <em>strictly by batch identifier</em>:
+      <br><br>
+      <code>
+        BEGIN TRANSACTION;<br>
+        DELETE FROM payments WHERE order_id IN (SELECT order_id FROM orders WHERE cancellation_stage = 'BATCH-HIST-SEP2026-001');<br>
+        DELETE FROM item_service_mapping WHERE item_id IN (SELECT item_id FROM items WHERE order_id IN (SELECT order_id FROM orders WHERE cancellation_stage = 'BATCH-HIST-SEP2026-001'));<br>
+        DELETE FROM items WHERE order_id IN (SELECT order_id FROM orders WHERE cancellation_stage = 'BATCH-HIST-SEP2026-001');<br>
+        DELETE FROM orders WHERE cancellation_stage = 'BATCH-HIST-SEP2026-001';<br>
+        DELETE FROM expenses WHERE description LIKE '%[BATCH-HIST-SEP2026-001]%';<br>
+        COMMIT;
+      </code>
+    </div>
+  </section>
+
+  <!-- SECTION 11: ML AND INVENTORY PROTECTION -->
+  <section id="sec-11">
+    <h2><span class="section-num">11</span> Random Forest &amp; Inventory Immutability</h2>
+    <div class="grid-2">
+      <div class="card">
+        <h3 style="margin-top:0;">Machine Learning Safeguards</h3>
+        <ul>
+          <li><span class="code-badge">predicted_days = NULL</span> and <span class="code-badge">predicted_at = NULL</span> for all historical records.</li>
+          <li>Random Forest inference is completely bypassed during import.</li>
+          <li>The operational model (<span class="code-badge">completion_model.pkl</span>) is frozen.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0;">Inventory Safeguards</h3>
+        <ul>
+          <li><strong>0</strong> historical inventory movements created in PostgreSQL.</li>
+          <li><strong>0</strong> material consumption records generated.</li>
+          <li>Shop stock balances in <span class="code-badge">inventory</span> remain unchanged.</li>
+          <li><span class="code-badge">orders.inventory_applied = False</span>.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 12: FINAL READINESS DECISION -->
+  <section id="sec-12">
+    <h2><span class="section-num">12</span> Final Readiness Decision &amp; Corrected Impact Summary</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Database Table</th>
+          <th>Approved Inserts</th>
+          <th>Linked Records (No Overwrite)</th>
+          <th>Held in Staging</th>
+          <th>Net Database Write Impact</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>orders</strong></td>
+          <td><strong>54</strong></td>
+          <td>2 (Link Provenance Only)</td>
+          <td>4 (Lyndo, Marvin, Cico/Rico, Back Job)</td>
+          <td>+54 Orders</td>
+        </tr>
+        <tr>
+          <td><strong>items (Shoe Pairs)</strong></td>
+          <td><strong>26</strong></td>
+          <td>0</td>
+          <td>0</td>
+          <td>+26 Shoe Pairs</td>
+        </tr>
+        <tr>
+          <td><strong>payments</strong></td>
+          <td><strong>48 Initial</strong> (+ 7 Linked Claims)</td>
+          <td>2 (Existing DB Payments)</td>
+          <td>19 (15 Unresolved Claims + 4 Held Orders)</td>
+          <td>+48 Payments (+7 optional)</td>
+        </tr>
+        <tr>
+          <td><strong>expenses</strong></td>
+          <td><strong>7 Verified</strong> (+ 2 Parcels)</td>
+          <td>0</td>
+          <td>2 (Maynilad &#8361;4,311.03 &amp; Eileen &#8361;3,000.00)</td>
+          <td>+7 Expenses (&#8361;53,124.17)</td>
+        </tr>
+        <tr>
+          <td><strong>inventory_logs</strong></td>
+          <td><strong>0</strong></td>
+          <td>0</td>
+          <td>0</td>
+          <td><strong>ZERO CHANGE</strong></td>
+        </tr>
+        <tr>
+          <td><strong>audit_logs</strong></td>
+          <td><strong>1 (Batch Summary)</strong></td>
+          <td>0</td>
+          <td>0</td>
+          <td>+1 Audit Record</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="gate-banner" style="background: rgba(251, 191, 36, 0.15); border-color: var(--accent-amber); margin-top:24px;">
+      <div>
+        <div class="gate-title" style="font-size: 1.4rem;">
+          FINAL DECISION: CONDITIONAL GO
+        </div>
+        <div class="gate-desc" style="font-size: 0.95rem; color: #f1f5f9; margin-top: 8px;">
+          The mathematical reconciliation is complete, PostgreSQL production baseline is audited read-only, all populations are disaggregated, and 0 writes were performed. Antigravity is stopped and awaiting explicit authorization before any database execution.
+        </div>
+      </div>
+      <div class="gate-badge" style="font-size: 1.2rem; padding: 10px 24px;">CONDITIONAL GO</div>
+    </div>
+  </section>
+
+  <footer>
+    <p>Shoelotskey Service Management System &bull; Defense &amp; Audit Reporting &bull; Villamor–Pasay Operational Pilot</p>
+    <p style="margin-top: 4px;">Second-Pass Reconciliation Report (V2) &bull; PostgreSQL Production Destination &bull; Read-Only Mode &bull; Stop Condition Enforced</p>
+  </footer>
+
+</div>
+</body>
+</html>

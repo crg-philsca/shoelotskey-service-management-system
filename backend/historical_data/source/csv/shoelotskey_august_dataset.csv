@@ -1,0 +1,75 @@
+Order_ID,Control_No,Date_Time,Client_Name,Contact_No,Branch,Model_and_Condition,Services,Price_Breakdown,Grand_Total,Payment_Details,Expected_Release_Date,Claimed_Date
+ORD-2025-08-14-001,8/14,8/14,Morris Alton Guzman,0950 2371 626,Villamor,Puma Suede 9 | Puma White/Blue 9 | Puma White 9 | Converse White 8 | Converse Black 8.5,BC + MRET | BC | BC | BC | FREE,450 | 325 | 325 | 325 | 0,1425.00,DP 700.00 cash; Bal 725.00,,Texted
+ORD-2025-08-15-001,8/15,8/15,Andre Carl C. Espinosa,0976 389 5380,Villamor,Adidas Pure Boost White Size 8 | Adidas Ultraboost Black Size 9,BC | BC,276.25 | 276.25,552.00,DP 276 pd 08/15; Bal 276.50,,8/19
+ORD-2025-08-15-002,8/15/2025,8/15/2025,Lorelie S. Sevilla,0951 270 5565,Villamor,Gucci Shoes | Chanel Bag,BC | BC | Rush,276.25 | 525.00 | 100.00,901.25,,,Gucci 8/19; Bag 8/25
+ORD-2025-08-15-003,8/15/2025,8/15/2025,Brian Anlap,0917 943 0456,Villamor,Nike Dunk size 11,BC,276.25,276.25,Paid,,08/21
+ORD-2025-08-15-004,8/15/25,8/15/25,Sgt Vanessa Bravo,0977 809 5085,Villamor,Colehan - Womens 8 | MK small bag black w/ long strap,BC | BC,325.00 | 325.00 | Less 15%,552.50,,8/25/25,Claimed
+ORD-2025-08-15-005,8/15/25,8/15/25,Sgt Tere Reyes,0917 129 4876,Villamor,Asics - Both sole missing parts Blue Womens - US 7,FR,575.00 | Less 15% off 48.75,526.25,,9/9/2025,
+ORD-2025-08-16-001,8/16,8/16,Christian Paul Mabazza,0995 125 5539,Villamor,Nike Lebron | Nike Blue Black White Red,FR,2 x 575,1150.00,Fully paid Cash,,Claimed
+ORD-2025-08-16-002,8/16/2025,8/16/2025,Aiza Balonzo-Calumba,0977 827 0486,Villamor,Superga White 37 | Converse Black 37.5 | Anta White 42 | Nike Infinity 9.5 | Nike White 8.5 | Aero Pro 41,BC | BC | DC | BC | BC | BC,325.00 x 6,1950.00,DP 975.00 + 25 = 1000.00; Bal 950.00,,8/21/25
+ORD-2025-08-17-001,8/17/2025,8/17/2025,Kathleen B. Pedrosa,0933 863 4397,Villamor,Sperry Blue 7,FR + MRES,575 + 225,800.00,Fully Paid in cash,,
+ORD-2025-08-17-002,8/17/2025,8/17/2025,Mac Soliman,0945 273 4094,Villamor,ASICS DOU MAX,BC,325.00,325.00,Paid in cash,,8/20
+ORD-2025-08-17-003,8/17/2025,8/17/2025,Jefferson Vasquez,099 893 10573,Villamor,Nike Revolution 5 Black size 9,FR,575.00,575.00,Fully paid cash,,
+ORD-2025-08-17-004,8/17/2025,8/17/2025,John Gulla,0918 928 0823,Villamor,Colehaan ZeroGrand 9M,FR,575.00,575.00,Paid gcash,,
+ORD-2025-08-17-005,8/17/2025,8/17/2025,Elmer Benedict Jr,0916 412 6422,Villamor,Altama Boots,BC,325.00,325.00,DP 200 Cash; Bal 125,,8/21
+ORD-2025-08-18-001,8/18/2025,8/18/2025,Jerome Abada,0916 347 9797,Villamor,Nike G.T. Cut 3 size 9,BC,325.00,325.00,Fully paid Cash,,
+ORD-2025-08-18-002,8/18/2025,8/18/2025,Carla Din,0977 395 2109 / 0961 748 1444,Villamor,2 Sperry Crest,BC,325 x 2 = 650,650.00,DP 325 cash; Bal 325,,8/23
+ORD-2025-08-18-003,8/18/25,8/18/25,Liezl Padugar-Sun,0917 7120626,Villamor,NB Gray Green | Adidas Gazelle | Adidas Maroon (NMD),FR | FR | FR Mid + FR US + UNY,575 | 575 | 575+150+125,2000.00,DP 1000 cash; Bal 1000,,
+ORD-2025-08-19-001,081901,8/19 7:37 PM,Arnold R. Villamin,0915 965 3673,Villamor,Puma Nitro 12 (No lace),BC,325.00,325.00,DP 150.00 Gcash; Bal 175.00,,
+ORD-2025-08-19-002,081902,8/19/25 7:59 PM,Trixie Libunao,0920 532 4151,Villamor,Nike Blazer Low,BC + MR,325 + 125,450.00,Gcash 450.00,,8/24
+ORD-2025-08-19-003,081903,8/19/25 9:21 PM,Ralphrenz Hernandez,,Villamor,Adidas Gazelle US 9.5 | Puma,FR + MRES | FR Mid,575 + 225 | 575,1375.00,DP 500.00; Bal 875,9/13/2025,
+ORD-2025-08-19-004,081904,08/19 9:30 PM,MJ Sarmiento,0917-1574020,Villamor,Dr Martens UK 6 Woman Seaport | Sperry UK 6 | Nike Court Vision Low size 6,BC | BC | BC + UNY,325.00 | 325.00 | 450.00,1100.00,50% DP 550.00; Bal 550.00; Fully paid,8/29/2025,
+ORD-2025-08-20-001,082001,8/20 11:15,Bonne Dadis,09052479888 / 09694450719,Villamor,On cloud US M11 Cloudmonster Void,BC,325,325.00,Fully Paid thru GCash,,
+ORD-2025-08-20-002,082002,8/20 11:34,Bonne Dadis,09052479888 / 09694450719,Villamor,Tiger Onitsuka White Blue size 12 no lace | Onitsuka Mexico 66 11 | Onitsuka Gray size 12 | NB 327 size 12 Black,BC | BC | FR | FR,Free | 325 | 575 | 575,1475.00,Fully paid cash,,
+ORD-2025-08-20-003,082003,08/20/25 1841,Edrick Any,09453384608,Villamor,Nike Pegasus 12,BC,325,325.00,325 Fully paid Gcash,,
+ORD-2025-08-21-001,082101,08/21/2025,Bernard Temporosa,09564779863,Villamor,Nike Pink US 9,FR + 2 soles,725.00,725.00,200.00 DP cash; 525.00 Bal,,
+ORD-2025-08-21-002,082102,8/21/2025 3:33 PM,Alexander Oed Lopina,09693221675,Villamor,Nike AF 1 White,FR + UNY,575 + 125,700.00,DP 350 Gcash; Bal 350,,
+ORD-2025-08-21-003,082103,8/21/25 5:24 PM,Shin Elmoreen Natividad,09772741993,Villamor,NB 530,BC,325,325.00,Fully paid Gcash,,
+ORD-2025-08-21-004,082104,08/21 5:35 PM,Art,09351966848,Villamor,Adidas Advantage Black,FR Mid,575.00,575.00,DP - 250.00 Cash; Bal - 325.00,,
+ORD-2025-08-21-005,082105,8/21/25 1829,Edgar Mora,09204645623,Villamor,Nike LBJ Black 10.5 | Nike Air Jordan Flight Speed US 11 | Adidas Yeezy US 11,FR US + FR Mid | FR Mid | BC,575 + 150 | 575 | 325,1625.00,DP - 800 Cash; Bal - 825,,
+ORD-2025-08-21-006,082105,8/21/2025,John Erickson Tolentino,09603696893,Villamor,Adidas US 10 White | Adidas US 10 Black,FR US + FR Mid | FR Mid,575 + 150 | 575,1300.00,DP - 600 Cash; Bal - 700,,
+ORD-2025-08-22-001,082201,08/22/25 1:38 PM,Abby Alviar,09956798234,Villamor,Nike AF 1 White,UNY,450,450.00,DP - 225.00 Cash; Bal - 225.00,,
+ORD-2025-08-22-002,082202,8/22 2:56 PM,Mark Olaguer,0927 170 2886,Villamor,Forma Motorcycle Shoes,FR Mid,575,575.00,DP 280 Gcash; Bal 295,,Claimed
+ORD-2025-08-22-003,082203,8/22/25 7 PM,Sir Tadea,0926 659 5939,Villamor,Lacoste US 10 | Colehann 9.5 | Nike AF1 White US 6.5 | Adidas Samba US 6 | Louis Vuitton US 6 White,BC | BC | BC | BC | BC,Free | 325 | 325 | 325 | 325,1300.00,,8/29/25,
+ORD-2025-08-23-001,082301,8/23 12:30 PM,Katrina T. Lamela,0917-875-3253,Villamor,Converse Size 36 w/ pink color,BC,325,325.00,Fully paid cash,,
+ORD-2025-08-23-002,082302,8/23 1:00 PM,Isaac Dones,0917 612 9441,Villamor,Nike Sandals Yellow Green (Neon),FR + Rush,575 + 100,675.00,Fully paid cash,,Claimed
+ORD-2025-08-23-003,082303,8/23 2:10 PM,Roselle Villanueva,0966 062 2048,Villamor,Onitsuka Blue US 4 | NB 530 US 5 | Nike Airmax US 6.5,BC | BC | BC + MR,325 | 325 | 450,1100.00,DP 550 Gcash; Bal 550 Paid 9/1,,
+ORD-2025-08-23-004,082304,8/23 4:10 PM,Matthew Mendoza,0915 812 6814,,Nike Initiator size US 9,BC,325,325.00,Fully paid thru Gcash,,Claimed
+ORD-2025-08-23-005,082305,8/23/25 4:20 PM,Jerome Mulet,0919 009 2568,Villamor,Nike Air Jordan J1 Low Size 10 | Nike AF1 Size 10,BC + MR | UNY,450 | 450,900.00,DP 450 Gcash; Bal 450,,
+ORD-2025-08-23-006,082306,8/23/25 6:00 PM,Angelo Lawis,0917 143 9601,Villamor,Lacoste UK 7,BC,325,325.00,Fully paid cash,,
+ORD-2025-08-23-007,082307,8/23 6:45 PM,Jomhen Bobier,0947 543 5308,V,Adidas Stan Smith,UNY + MR,450 + 125,575.00,DP 280.00 (Gcash); Bal 295,,
+ORD-2025-08-23-008,082308,8/23 7:45 PM,Mark Arthur L. Pasaporte,0961 748 1494,Villamor,Nike V1 Midcut Pink and neon green size with Foxifoot,MRes,450,450.00,DP 200 Cash; Bal 250,,
+ORD-2025-08-23-009,082309,8/23 7:50 PM,Brian Anlap,0917 943 0456,Villamor,Sperry US 11 | Vans US 11,BC | BC,325 | 325,650.00,Fully paid Cash,,
+ORD-2025-08-25-001,082502,8/25 10:30 AM,Mark Arthur Pasaporte,0961 748 1494,Villamor,Tommy Hilfiger size 7 | Fila white size 8,BC | MRet,325 | 450,775.00,DP - 350 Cash; Bal - 425.00,,
+ORD-2025-08-25-002,082501,8/25/25 11:34 AM,Dennis Mendoza,0985 806 9467,Villamor,Nike Jordan red 12 (no lace) - US 9 | Nike Jordan red 6 (no lace) US 9,FR Mid | FR Mid,575 | 575,1150.00,DP - 575; Bal - 575,,
+ORD-2025-08-25-003,082503,8/25 12:29 PM,Aldrin Manuel,0905 2088391,Villamor,Converse 9,BC,325,325.00,Fully paid cash,,
+ORD-2025-08-25-004,082505,8/25/25 4:20 PM,Katherine Torio,0998 992 2725,Villamor,Adidas football shoes | Nike V2K v.5,BC | BC,325 | 325,650.00,DP - 375 Cash; Bal - 275,,Claimed paid
+ORD-2025-08-25-005,082504,8/25/25 4:25 PM,Ireneo V. Diaz I,0955 1184746,Villamor,Adidas Traxion | Adidas Blue,FR + MRES | FR + MRES,575 + 225 | 575 + 225,1600.00,DP - 800 (cash); Bal - 800,,
+ORD-2025-08-25-006,082506,8/25/2025,Dalie Salomon,fb messenger dalie salomon,Villamor,Adizero size 7 | Adidas NY 90 size 5,BC | FR,325 (release Sept 4) | 575 (release Sept 14),900.00,DP: 450 Gcash; Bal: 450,,
+ORD-2025-08-25-007,082507,8/25,Noel Pacoli,0999-926-6937,Villamor,Converse 8.5 | Sperry 8.5 | Tommy H 9,FR + UNY | BC + Inner Sole | MRes,575 + 125 (Sept 18) | 325 + Free | 550,1575.00,DP - 800 (Gcash); Bal - 775,,
+ORD-2025-08-26-001,082601,26 Aug 2025,Jiann Dominguez,,Villamor,Oncloud Orange Size 39 | Sperry Cream w/ flower design size 8 | Birkenstock W36 | Birkenstock M36,BC | BC | BC | BC,325 | 325 | 325 | 325,1300.00,,9/4/2025,
+ORD-2025-08-26-002,082602,8/26 4:15 PM,Mark Lawrence Copoba,0966 842 4905,Villamor,Lacoste Blue | Lacoste White,BC | BC,325 | 325,650.00,Fully paid Gcash,9/5/2025,
+ORD-2025-08-26-003,082603,8/26/2025,Aedrianne D. Acar,0915 363 0880,Villamor,Hoka Black 10.5 | Jordan yellow 10.5,BC | UNY,325 | 450,975.00,DP: 380.00; Bal: 595,,
+ORD-2025-08-26-004,082604,8/26/2025,John Erickson Tolentino,0960 369 6893,Villamor,Nike Ebernon UK 9,UNY,450,450.00,Fully paid,,
+ORD-2025-08-27-001,082701,8/27 1:40 PM,Mark Olaguer,0927 170 2886,Villamor,North face US 10,FR Mid,575,575.00,DP - 250.00 Cash; Bal - 325.00,,Claimed
+ORD-2025-08-27-002,082702,8/27 2:15,Mervin Mendoza,0956 5848496,Villamor,Adidas Gazelle US 10,BC,325,325.00,Fully paid cash,,
+ORD-2025-08-27-003,082703,8/27/2025,Von Rogacion,0961 626 8997,Villamor,Nike Orange 9.5,FR + M RES,575 + 225,800.00,DP - 400 Gcash; Bal - 400.00,,9/26
+ORD-2025-08-27-004,082704,8/27/2025,Kenneth A De Castro,0917 105 8461,Villamor,Adidas US 7 | Vans US 9 Green,MRes + UNY | BC,550 + 125 | 325,1000.00,DP - 500 Cash; Bal - 500,,9/26
+ORD-2025-08-27-005,082705,8/27,Kim Babaran Bulaong,fb messenger,Villamor,Nike PG4 Digi Camo US 9.5,FR,575,575.00,DP 280 Gcash; Bal 295,,
+ORD-2025-08-28-001,082801,8/28/2025,Ghea C De Mesa,0956 036 8643,Villamor,Nike US 7.5 Black | Adidas US 7 White | Adidas Black US 7 | Nike Gray US 5.5,BC | BC | BC | FR,325 | 325 | 325 | 575,1550.00,Fully paid cash,,
+ORD-2025-08-28-002,082802,8/28/25,Troy,0905 998 6994,Villamor,Adidas Ultraboost US 9 | Allbirds US 9,BC | BC,325 | 325,650.00,DP - 400; Bal - 250,,
+ORD-2025-08-28-003,082803,8/28/25,Rose Ann Badiola,0945 613 7341,Villamor,Nike Zoom Gravity Peach 6.5,FR + Additional Sole,575 + 150,725.00,500 DP Cash; 225 Bal,,
+ORD-2025-08-28-004,082804,8/28/2025,Chris,0994 881 0236,Villamor,Skechers 7,BC,325,325.00,,,,
+ORD-2025-08-28-005,082805,8/28,Rose Ann Badiola,0945 613 7341,Villamor,Adidas Pro Adversary Low Black White Yellow,FR,575,575.00,DP - 500 Cash; Bal 75,,
+ORD-2025-08-28-006,082806,8/28,Ramos Charles,0991 541 3798,Villamor,Nike Air Jordan 4 Winter Blue,FR,575,575.00,DP Fully paid cash,,Claimed 9/9
+ORD-2025-08-28-007,0828,8/28,Cecilia D. Acha,0917 179 5560,Villamor,Nike Black,MRes,550,550.00,Fully paid,,
+ORD-2025-08-29-001,082901,8/29/2025,Mark Arthur Pasaporte,0961 748 1494,Villamor,Adidas Samba Black 9.5 | Adidas Samba Blue 9.5 | Onitsuka Tiger 9.2,BC | BC | BC,325 | 325 | 325,975.00,DP - 450; Bal - 525 DP no payment yet,,
+ORD-2025-08-29-002,082902,8/29/2025,Moises Villaronte,0917 125 0081,Villamor,NB Gray 10.5,BC,325,325.00,Fully paid cash,,
+ORD-2025-08-29-003,082903,8/29/2025,Dan Quizon,0906 396 8551,Villamor,Nike US 10 Air Max Fusion,BC,325,325.00,Fully paid cash,,
+ORD-2025-08-29-004,082904,8/29/2025,Diana Mac Guzman,0945 832 4124,Villamor,Converse Black 5.5 | Nike Red 7.5,BC | UNY,325 | 450,775.00,DP - Fully paid Gcash,,Claimed
+ORD-2025-08-30-001,083001,8/30/25,Hubert James S Quita,0919 004 4043,Villamor,New Begin 45,BC,325,325.00,Fully paid gcash,,
+ORD-2025-08-30-002,083003,8/30/2025,Thea Soliman,0977 190 7251,Villamor,Asics US 7.5,FR Mid,575,575.00,Fully Paid,,
+ORD-2025-08-30-003,083004,8/30/2025,Paul Pedia,0917 159 1995,Villamor,Nike 10.5 Dual Fusion Blue,FR Mid + FR US,575 + 150,725.00,Fully paid cash,,
+ORD-2025-08-30-004,083005,8/30/25,Shin Elmoreen Natividad,0977 274 1993,Villamor,Nike React 6.5 | NB 6.,BC | BC,325 | 325,650.00,Fully paid gcash,,
+ORD-2025-08-31-001,083102,8/31/2025,Mark Christian Cruz,0906 822 1570,Villamor,Nike Air Jordan Gray,BC,325,325.00,Fully paid gcash,,
+ORD-2025-08-31-002,,8/31/25,Mark Justine Aquino,0999 342 2628,Villamor,NB Orange,BC | Rush,325.00 | 100.00,425.00,Fully paid cash,,

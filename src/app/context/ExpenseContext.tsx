@@ -87,7 +87,7 @@ export function ExpenseProvider({ children, user }: { children: ReactNode, user:
             if (cache) {
                 try {
                     const parsed = JSON.parse(cache);
-                    if (Array.isArray(parsed)) {
+                    if (Array.isArray(parsed) && parsed.length > 0) {
                         setExpenses(parsed.map((e: any) => ({
                             ...e,
                             frequency: (e.frequency || '').replace(/variable\s*\/\s*restock/i, 'Restock')
@@ -96,32 +96,46 @@ export function ExpenseProvider({ children, user }: { children: ReactNode, user:
                 } catch(e) {}
             }
 
-            fetch(`${API_BASE}/expenses?_t=${Date.now()}`, {
-                headers: { 'Authorization': `Bearer ${user.token}` }
-            })
-                .then(res => res.json())
-                .then(data => {
-                    if (Array.isArray(data)) {
-                        const mappedData = data.map((item: any) => {
-                            const parts = (item.description || '').split(' || ');
-                            return {
-                                id: item.expense_id || item.id,
-                                amount: item.amount,
-                                category: parts[0] || 'Misc Expense',
-                                notes: parts[1] || '',
-                                frequency: (parts[2] || (parts[0]?.toUpperCase() === 'INVENTORY' ? 'Restock' : (item.frequency || 'One-Time'))).replace(/variable\s*\/\s*restock/i, 'Restock'),
-                                group: parts[3] ? parts[3].trim() : undefined,
-                                date: item.expense_date || item.date
-                            };
-                        });
-                        mappedData.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
-                        setExpenses(mappedData);
-                        localStorage.setItem('expense_data_cache', JSON.stringify(mappedData));
-                    }
+            const doFetch = () => {
+                const isJobOrderForm = typeof window !== 'undefined' && window.location.pathname.startsWith('/job-order-form');
+                if (isJobOrderForm) {
+                    // Job Order Form never accesses expenses; skip network call
+                    return;
+                }
+
+                fetch(`${API_BASE}/expenses?_t=${Date.now()}`, {
+                    headers: { 'Authorization': `Bearer ${user.token}` }
                 })
-                .catch(err => {
-                    console.error("Expense fetch failed. Keeping cached data.", err);
-                });
+                    .then(res => res.json())
+                    .then(data => {
+                        if (Array.isArray(data)) {
+                            const mappedData = data.map((item: any) => {
+                                const parts = (item.description || '').split(' || ');
+                                return {
+                                    id: item.expense_id || item.id,
+                                    amount: item.amount,
+                                    category: parts[0] || 'Misc Expense',
+                                    notes: parts[1] || '',
+                                    frequency: (parts[2] || (parts[0]?.toUpperCase() === 'INVENTORY' ? 'Restock' : (item.frequency || 'One-Time'))).replace(/variable\s*\/\s*restock/i, 'Restock'),
+                                    group: parts[3] ? parts[3].trim() : undefined,
+                                    date: item.expense_date || item.date
+                                };
+                            });
+                            mappedData.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                            setExpenses(mappedData);
+                            localStorage.setItem('expense_data_cache', JSON.stringify(mappedData));
+                        }
+                    })
+                    .catch(err => {
+                        console.error("Expense fetch failed. Keeping cached data.", err);
+                    });
+            };
+
+            if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+                (window as any).requestIdleCallback(doFetch, { timeout: 2000 });
+            } else {
+                setTimeout(doFetch, 800);
+            }
         };
 
         initialFetch();

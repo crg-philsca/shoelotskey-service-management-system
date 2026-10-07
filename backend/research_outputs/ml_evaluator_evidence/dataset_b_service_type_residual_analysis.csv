@@ -1,0 +1,7 @@
+Service Type,Feature Column,N,Mean Actual Duration (Days),Mean Predicted Duration (Days),MAE (Days),RMSE (Days),Mean Residual (Days),Median Absolute Error (Days),SD Absolute Error (Days),Minimum Absolute Error (Days),Maximum Absolute Error (Days),±1 Day Accuracy (%),±2 Days Accuracy (%),±3 Days Accuracy (%),±5 Days Accuracy (%)
+Basic Cleaning,basic_cleaning_qty,1483,16.7653,16.7628,0.0806,0.4058,0.0025,0.0,0.3977,0.0,4.2411,97.17,98.92,99.53,100.0
+Full Reglue,full_reglue_qty,569,25.1898,25.2103,0.1123,0.462,-0.0205,0.0,0.4482,0.0,4.2411,95.61,98.77,99.47,100.0
+Minor Reglue,minor_reglue_qty,118,18.4661,18.4834,0.0835,0.4178,-0.0173,0.0,0.4094,0.0,3.9031,97.46,99.15,99.15,100.0
+Unyellowing,unyellowing_qty,185,22.1946,22.1846,0.1158,0.5419,0.01,0.0,0.5294,0.0,4.2411,95.68,98.38,98.92,100.0
+Minor Restoration,minor_restoration_qty,274,22.635,22.6317,0.1193,0.5363,0.0033,0.0,0.5228,0.0,4.1571,97.08,97.45,99.27,100.0
+Color Renewal,color_renewal_qty,35,25.2,25.1999,0.0006,0.0012,0.0001,0.0,0.0011,0.0,0.0033,100.0,100.0,100.0,100.0

@@ -1,0 +1,22 @@
+test_id,endpoint,method,role_tested,token_provided,expected_http_status,actual_http_status,data_exposed,passed,authorization_notes
+AC-01,/api/cash-register/summary,GET,Unauthenticated (Anonymous),None,401,401,NO,PASS,Rejected by JWT authentication barrier
+AC-02,/api/cash-register/summary,GET,Staff (role_id=2),Bearer Staff_JWT,403,403,NO,PASS,Correctly handled with HTTP 403
+AC-03,/api/cash-register/summary,GET,Owner (role_id=1),Bearer Owner_JWT,200,200,YES (Authorized),PASS,Authorized access granted with HTTP 200
+AC-04,/api/users,GET,Unauthenticated (Anonymous),None,401,401,NO,PASS,Rejected by JWT authentication barrier
+AC-05,/api/users,GET,Staff (role_id=2),Bearer Staff_JWT,403,403,NO,PASS,Correctly handled with HTTP 403
+AC-06,/api/users,GET,Owner (role_id=1),Bearer Owner_JWT,200,200,YES (Authorized),PASS,Authorized access granted with HTTP 200
+AC-07,/api/activities,GET,Unauthenticated (Anonymous),None,401,401,NO,PASS,Rejected by JWT authentication barrier
+AC-08,/api/activities,GET,Staff (role_id=2),Bearer Staff_JWT,403,403,NO,PASS,Correctly handled with HTTP 403
+AC-09,/api/activities,GET,Owner (role_id=1),Bearer Owner_JWT,200,200,YES (Authorized),PASS,Authorized access granted with HTTP 200
+AC-10,/api/users,POST,Unauthenticated (Anonymous),None,401,401,NO,PASS,Rejected by JWT authentication barrier
+AC-11,/api/users,POST,Staff (role_id=2),Bearer Staff_JWT,403,403,NO,PASS,Correctly handled with HTTP 403
+AC-12,/api/users,POST,Owner (role_id=1),Bearer Owner_JWT,400,422,NO,FAIL,Unexpected rejection for owner: 422
+AC-13,/api/reports/data,GET,Unauthenticated (Anonymous),None,401,401,NO,PASS,Rejected by JWT authentication barrier
+AC-14,/api/reports/data,GET,Staff (role_id=2),Bearer Staff_JWT,403,403,NO,PASS,Correctly handled with HTTP 403
+AC-15,/api/reports/data,GET,Owner (role_id=1),Bearer Owner_JWT,200,200,YES (Authorized),PASS,Authorized access granted with HTTP 200
+AC-16,/api/orders,GET,Unauthenticated (Anonymous),None,401,401,NO,PASS,Rejected by JWT authentication barrier
+AC-17,/api/orders,GET,Staff (role_id=2),Bearer Staff_JWT,200,200,NO,PASS,Correctly handled with HTTP 200
+AC-18,/api/orders,GET,Owner (role_id=1),Bearer Owner_JWT,200,200,YES (Authorized),PASS,Authorized access granted with HTTP 200
+AC-19,/api/inventory,GET,Unauthenticated (Anonymous),None,401,401,NO,PASS,Rejected by JWT authentication barrier
+AC-20,/api/inventory,GET,Staff (role_id=2),Bearer Staff_JWT,200,200,NO,PASS,Correctly handled with HTTP 200
+AC-21,/api/inventory,GET,Owner (role_id=1),Bearer Owner_JWT,200,200,YES (Authorized),PASS,Authorized access granted with HTTP 200

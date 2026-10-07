@@ -7,7 +7,7 @@ from fastapi import HTTPException, Depends, Security
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, or_
-from models import User, Role, UserSession
+from models import User, Role, UserSession, Permission, UserPermission
 from database import get_db
 
 # --- OWASP A02: UNUSED SECRETS HARDENING ---
@@ -30,6 +30,7 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 480 # 8-hour shift default
 
 security = HTTPBearer()
+optional_security = HTTPBearer(auto_error=False)
 
 # --- MULTI-SESSION ARCHITECTURE ---
 # All accounts support multiple independent concurrent sessions.
@@ -528,3 +529,319 @@ def local_vite_auth_redirect(host: str, path: str, query: str = "") -> Optional[
     if query:
         dest = f"{dest}?{query}"
     return dest
+
+
+# ==========================================
+# GRANULAR PERMISSION ENGINE (PoLP & SoD)
+# ==========================================
+
+CANONICAL_PERMISSIONS = [
+    {
+        "code": "job_orders.view",
+        "name": "View Job Orders",
+        "description": "Allows Staff to view the Job Orders page and permitted Job Order details.",
+        "category": "job_orders",
+        "default_enabled": True
+    },
+    {
+        "code": "job_orders.create",
+        "name": "Create Job Orders",
+        "description": "Allows Staff to create new Job Orders.",
+        "category": "job_orders",
+        "default_enabled": True
+    },
+    {
+        "code": "job_orders.update",
+        "name": "Update Job Orders",
+        "description": "Allows Staff to edit permitted Job Order information and perform permitted status updates.",
+        "category": "job_orders",
+        "default_enabled": True
+    },
+    {
+        "code": "job_orders.cancel",
+        "name": "Cancel Job Orders",
+        "description": "Allows Staff to initiate cancellation of an existing Job Order according to the system's cancellation rules.",
+        "category": "job_orders",
+        "default_enabled": True
+    },
+    {
+        "code": "job_orders.authorize_cancel",
+        "name": "Authorize Order Cancellations",
+        "description": "Allows trusted Staff or supervisor to self-authorize order cancellations without secondary approval.",
+        "category": "job_orders",
+        "default_enabled": False
+    },
+    {
+        "code": "job_orders.release",
+        "name": "Process Claim / Release",
+        "description": "Allows Staff to process claim verification and mark eligible Job Orders as claimed/released.",
+        "category": "job_orders",
+        "default_enabled": True
+    },
+    {
+        "code": "payments.process",
+        "name": "Process Payments",
+        "description": "Allows Staff to record/process customer payments using the existing payment workflow.",
+        "category": "payments",
+        "default_enabled": True
+    },
+    {
+        "code": "discounts.apply",
+        "name": "Allow Applying Discounts",
+        "description": "Allows Staff to view and select predefined discounts on job orders.",
+        "category": "discounts",
+        "default_enabled": True
+    },
+    {
+        "code": "discounts.authorize",
+        "name": "Authorize Standard Discounts",
+        "description": "Allows this Staff member to authorize predefined system discounts when authorization is required.",
+        "category": "discounts",
+        "default_enabled": False
+    },
+    {
+        "code": "discounts.use_auth_code",
+        "name": "Use Authorization Code",
+        "description": "Allows this Staff member to use the store authorization code for discounts and cancellations.",
+        "category": "discounts",
+        "default_enabled": False
+    },
+    {
+        "code": "inventory.view",
+        "name": "View Inventory",
+        "description": "Allows Staff to view inventory records and stock information.",
+        "category": "inventory",
+        "default_enabled": True
+    },
+    {
+        "code": "inventory.create_item",
+        "name": "Add Item",
+        "description": "Allows creating new inventory catalog items.",
+        "category": "inventory",
+        "default_enabled": True
+    },
+    {
+        "code": "inventory.add_stock",
+        "name": "Add Stock",
+        "description": "Recording incoming purchase restocks.",
+        "category": "inventory",
+        "default_enabled": True
+    },
+    {
+        "code": "inventory.use_stock",
+        "name": "Use Stock",
+        "description": "Allows deducting supplies used on job orders.",
+        "category": "inventory",
+        "default_enabled": True
+    },
+    {
+        "code": "inventory.adjust_balance",
+        "name": "Adjust Balances",
+        "description": "Adjusting physical inventory counts and balances.",
+        "category": "inventory",
+        "default_enabled": True
+    },
+    {
+        "code": "inventory.add",
+        "name": "Add Stock / Restock",
+        "description": "Allows Staff to add new stock, purchase restocking, and create new catalog items (Legacy).",
+        "category": "inventory",
+        "default_enabled": True
+    },
+    {
+        "code": "inventory.edit",
+        "name": "Use Stock & Adjust Balances",
+        "description": "Allows Staff to record stock usage (deductions), reconcile physical count balances, and edit item details (Legacy).",
+        "category": "inventory",
+        "default_enabled": True
+    },
+    {
+        "code": "inventory.deactivate",
+        "name": "Deactivate Inventory",
+        "description": "Allows Staff to deactivate/remove an eligible inventory item according to the safest existing inventory workflow.",
+        "category": "inventory",
+        "default_enabled": False
+    },
+]
+
+DEFAULT_STAFF_PERMISSIONS = {
+    p["code"]: p["default_enabled"] for p in CANONICAL_PERMISSIONS
+}
+
+def ensure_permissions_seeded(db: Session) -> List[Permission]:
+    """Ensures all canonical permissions exist in the permissions table."""
+    try:
+        all_perms = db.query(Permission).all()
+        existing_codes = {p.code for p in all_perms}
+        added = False
+        for p_def in CANONICAL_PERMISSIONS:
+            if p_def["code"] not in existing_codes:
+                p_row = Permission(
+                    code=p_def["code"],
+                    name=p_def["name"],
+                    description=p_def["description"],
+                    category=p_def["category"]
+                )
+                db.add(p_row)
+                added = True
+        if added:
+            db.commit()
+            all_perms = db.query(Permission).all()
+        return all_perms
+    except Exception:
+        db.rollback()
+        return db.query(Permission).all()
+
+def get_effective_user_permissions(db: Session, user: User) -> Dict[str, Any]:
+    """
+    Returns effective permissions dictionary and enabled codes list.
+    Owner/Admin accounts receive all permissions unconditionally.
+    """
+    role_name = (user.role.role_name if user.role else "").lower()
+    all_codes = [p["code"] for p in CANONICAL_PERMISSIONS]
+
+    if role_name in ("owner", "admin"):
+        return {
+            "permissions": all_codes,
+            "is_owner_or_admin": True,
+            "raw": {p["code"]: True for p in CANONICAL_PERMISSIONS},
+            "summary": "Full Access" if role_name == "owner" else "Protected"
+        }
+
+    # Fetch stored user permissions
+    stored_rows = (
+        db.query(Permission.code, UserPermission.enabled)
+        .join(UserPermission, UserPermission.permission_id == Permission.permission_id)
+        .filter(UserPermission.user_id == user.user_id)
+        .all()
+    )
+
+    perm_map: Dict[str, bool] = {}
+    if stored_rows:
+        for code, enabled in stored_rows:
+            perm_map[code] = bool(enabled)
+    else:
+        # Default staff assignment if no records exist yet
+        perm_map = {k: v for k, v in DEFAULT_STAFF_PERMISSIONS.items()}
+
+    # Enforce dependencies:
+    # If job_orders.view is False -> update, cancel, authorize_cancel, release cannot be effectively enabled
+    if not perm_map.get("job_orders.view", False):
+        perm_map["job_orders.update"] = False
+        perm_map["job_orders.cancel"] = False
+        perm_map["job_orders.authorize_cancel"] = False
+        perm_map["job_orders.release"] = False
+
+    # If inventory.view is False -> add, edit, deactivate cannot be effectively enabled
+    if not perm_map.get("inventory.view", False):
+        perm_map["inventory.add"] = False
+        perm_map["inventory.edit"] = False
+        perm_map["inventory.deactivate"] = False
+
+    enabled_codes = [code for code, enabled in perm_map.items() if enabled]
+    return {
+        "permissions": enabled_codes,
+        "is_owner_or_admin": False,
+        "raw": perm_map,
+        "summary": f"{len(enabled_codes)} / {len(CANONICAL_PERMISSIONS)} Enabled"
+    }
+
+def has_user_permission(user: User, permission_code: str, db: Optional[Session] = None) -> bool:
+    """
+    Live authoritative permission checker.
+    Owner: Always True.
+    Admin: Always True.
+    Staff: Evaluated against database state and dependency rules.
+    """
+    if not user or not user.is_active:
+        return False
+
+    role_name = (user.role.role_name if user.role else "").lower()
+    if role_name in ("owner", "admin"):
+        return True
+
+    if role_name not in ("staff", "front staff"):
+        return False
+
+    # If no db session passed, fallback to default for this code
+    if db is None:
+        return DEFAULT_STAFF_PERMISSIONS.get(permission_code, False)
+
+    # Dependency check 1: Job orders dependent on job_orders.view
+    if permission_code in ("job_orders.update", "job_orders.cancel", "job_orders.authorize_cancel", "job_orders.release"):
+        if not has_user_permission(user, "job_orders.view", db):
+            return False
+
+    # Dependency check 2: Inventory dependent on inventory.view
+    if permission_code in ("inventory.add", "inventory.edit", "inventory.deactivate", "inventory.create_item", "inventory.add_stock", "inventory.use_stock", "inventory.adjust_balance"):
+        if not has_user_permission(user, "inventory.view", db):
+            return False
+
+    # Direct query against DB for live authoritative status
+    row = (
+        db.query(UserPermission.enabled)
+        .join(Permission, UserPermission.permission_id == Permission.permission_id)
+        .filter(UserPermission.user_id == user.user_id, Permission.code == permission_code)
+        .first()
+    )
+
+    if row is not None:
+        return bool(row[0])
+
+    # Backward compatibility mappings
+    if permission_code in ("inventory.create_item", "inventory.add_stock"):
+        legacy_row = db.query(UserPermission.enabled).join(Permission).filter(UserPermission.user_id == user.user_id, Permission.code == "inventory.add").first()
+        if legacy_row is not None:
+            return bool(legacy_row[0])
+    if permission_code in ("inventory.use_stock", "inventory.adjust_balance"):
+        legacy_row = db.query(UserPermission.enabled).join(Permission).filter(UserPermission.user_id == user.user_id, Permission.code == "inventory.edit").first()
+        if legacy_row is not None:
+            return bool(legacy_row[0])
+    
+    # If not explicitly configured, fall back to canonical default
+    return DEFAULT_STAFF_PERMISSIONS.get(permission_code, False)
+
+def require_permission(permission_code: str):
+    """
+    OWASP A01: Authoritative Dependency for FastAPI Endpoints.
+    Guarantees immediate live enforcement without waiting for token expiration.
+    """
+    def permission_dependency(
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db)
+    ):
+        role_name = (current_user.role.role_name if current_user.role else "").lower()
+        if role_name in ("owner", "admin"):
+            return current_user
+
+        if not has_user_permission(current_user, permission_code, db):
+            print(f"[SECURITY] Permission denied: User '{current_user.username}' lacks permission '{permission_code}'.")
+            try:
+                from models import AuditLog
+                token_sid = getattr(current_user, '_current_token_sid', None)
+                db.add(AuditLog(
+                    user_id=current_user.user_id,
+                    username=current_user.username,
+                    role_at_time=role_name,
+                    action_type="AUTH_PERMISSION_DENIED",
+                    table_name="auth",
+                    new_values={
+                        "status": "denied",
+                        "attempted_permission": permission_code,
+                        "session_id": str(token_sid)[:8] + "..." if token_sid else ""
+                    },
+                    created_at=datetime.utcnow()
+                ))
+                db.commit()
+            except Exception:
+                try: db.rollback()
+                except Exception: pass
+
+            raise HTTPException(
+                status_code=403,
+                detail=f"Access Denied: You do not have permission to perform this action ({permission_code}). Contact the Owner if you believe access is required."
+            )
+        return current_user
+
+    return permission_dependency
+

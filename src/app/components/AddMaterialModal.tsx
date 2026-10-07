@@ -8,12 +8,14 @@ import { useInventory } from '@/app/context/InventoryContext';
 import { API_BASE } from '@/app/lib/apiBase';
 import { Package, Plus, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { hasPermission } from '@/app/lib/permissions';
 
 interface AddMaterialModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     orderId: string | number;
     orderNumber: string;
+    orderStatus?: string;
     itemId?: string | number;
     itemLabel?: string;
     onSuccess?: (material: any) => void;
@@ -25,6 +27,7 @@ export default function AddMaterialModal({
     onOpenChange,
     orderId,
     orderNumber,
+    orderStatus,
     itemId,
     itemLabel = "Pair #1",
     onSuccess,
@@ -32,7 +35,7 @@ export default function AddMaterialModal({
 }: AddMaterialModalProps) {
     const { inventoryData, refreshInventory } = useInventory();
     const [selectedItemId, setSelectedItemId] = useState<string>('');
-    const [quantity, setQuantity] = useState<string>('1');
+    const [quantity, setQuantity] = useState<string>('');
     const [notes, setNotes] = useState<string>('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [idempotencyKey, setIdempotencyKey] = useState<string>('');
@@ -42,7 +45,7 @@ export default function AddMaterialModal({
         if (open) {
             setIdempotencyKey(`mat-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`);
             setSelectedItemId('');
-            setQuantity('1');
+            setQuantity('');
             setNotes('');
         }
     }, [open]);
@@ -52,18 +55,25 @@ export default function AddMaterialModal({
 
     const selectedInventoryItem = availableItems.find(i => String(i.id) === selectedItemId);
 
-    // Auto-fill suggested consumption quantity when material is chosen
+    const normalizedOrderStatus = (orderStatus || '').toLowerCase().trim();
+    const isLockedOrder = ['claimed', 'cancelled'].includes(normalizedOrderStatus);
+
+    // Manual actual usage: Prompt user for actual recorded amount consumed
     const handleSelectMaterial = (val: string) => {
         setSelectedItemId(val);
-        const item = availableItems.find(i => String(i.id) === val);
-        if (item) {
-            const defaultQty = item.consumption_qty && item.consumption_qty > 0 ? item.consumption_qty : 1;
-            setQuantity(String(defaultQty));
-        }
+        setQuantity('');
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (isLockedOrder) {
+            toast.error(`Cannot record material usage on a locked order (${orderStatus || 'Locked'}). Material usage can only be recorded on active orders.`);
+            return;
+        }
+        if (user && !hasPermission(user, 'inventory.use_stock') && !hasPermission(user, 'inventory.edit')) {
+            toast.error("You do not have permission to deduct inventory materials.");
+            return;
+        }
         if (!selectedInventoryItem) {
             toast.error("Please select a material");
             return;
@@ -147,6 +157,17 @@ export default function AddMaterialModal({
 
                 {/* Form Body */}
                 <form onSubmit={handleSubmit} className="p-5 space-y-4 text-xs">
+                    {isLockedOrder && (
+                        <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-medium space-y-1">
+                            <p className="font-bold flex items-center gap-1.5 text-amber-800">
+                                🔒 Order is Locked ({orderStatus || 'Completed'})
+                            </p>
+                            <p className="text-[11px] text-amber-700 leading-relaxed">
+                                Actual material consumption can only be recorded on active orders (New Order, On-going, For Release). Claimed and cancelled orders cannot have new material usage recorded.
+                            </p>
+                        </div>
+                    )}
+
                     {/* Material Select */}
                     <div className="space-y-1.5">
                         <Label className="text-[10px] font-black uppercase tracking-wider text-slate-500">
@@ -178,9 +199,16 @@ export default function AddMaterialModal({
                     {/* Quantity & Unit Row */}
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
-                            <Label className="text-[10px] font-black uppercase tracking-wider text-slate-500">
-                                Quantity Used <span className="text-red-500">*</span>
-                            </Label>
+                            <div className="flex items-center justify-between">
+                                <Label className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                                    Actual Qty Used <span className="text-red-500">*</span>
+                                </Label>
+                                {selectedInventoryItem && (
+                                    <span className="text-[9.5px] font-mono text-slate-500">
+                                        Max: <strong className="text-slate-800">{selectedInventoryItem.stock}</strong>
+                                    </span>
+                                )}
+                            </div>
                             <Input
                                 type="text"
                                 inputMode="decimal"
@@ -189,7 +217,7 @@ export default function AddMaterialModal({
                                     const val = e.target.value;
                                     if (val === '' || /^\d*\.?\d*$/.test(val)) setQuantity(val);
                                 }}
-                                placeholder="1"
+                                placeholder="Enter qty used"
                                 className="h-9 border-slate-200 focus:border-red-500 rounded-lg text-xs font-bold font-mono"
                             />
                         </div>
@@ -241,7 +269,7 @@ export default function AddMaterialModal({
                         </Button>
                         <Button
                             type="submit"
-                            disabled={isSubmitting || !selectedItemId || !quantity || parseFloat(quantity) <= 0}
+                            disabled={isSubmitting || isLockedOrder || !selectedItemId || !quantity || parseFloat(quantity) <= 0}
                             className="h-9 px-5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg shadow-sm gap-1.5"
                         >
                             {isSubmitting ? (

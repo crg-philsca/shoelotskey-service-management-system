@@ -43,7 +43,7 @@ function withoutResolvedPilErrors(logs: ActivityLog[]): ActivityLog[] {
 interface ActivityContextType {
     activities: ActivityLog[];
     addActivity: (activity: Omit<ActivityLog, 'id' | 'timestamp'> & { timestamp?: string; table?: string; recordId?: number | string; oldValues?: any; newValues?: any }) => void;
-    refreshActivities: () => Promise<boolean>;
+    refreshActivities: (limit?: number) => Promise<boolean>;
 }
 
 const ActivityContext = createContext<ActivityContextType | undefined>(undefined);
@@ -55,7 +55,16 @@ const ActivityContext = createContext<ActivityContextType | undefined>(undefined
  * FALLBACK: Uses localStorage if backend is unreachable.
  */
 export function ActivityProvider({ children, user }: { children: ReactNode, user: { token: string } }) {
-    const [activities, setActivities] = useState<ActivityLog[]>([]);
+    const [activities, setActivities] = useState<ActivityLog[]>(() => {
+        try {
+            const saved = typeof window !== 'undefined' ? localStorage.getItem('shoelotskey_activities') : null;
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                return withoutResolvedPilErrors(Array.isArray(parsed) ? parsed : []);
+            }
+        } catch {}
+        return [];
+    });
 
     const normalizeRole = (role?: string, u?: string): string => {
         const r = (role || '').toLowerCase();
@@ -72,9 +81,9 @@ export function ActivityProvider({ children, user }: { children: ReactNode, user
         role: normalizeRole(d.role, d.user)
     })));
 
-    const refreshActivities = useCallback(async (): Promise<boolean> => {
+    const refreshActivities = useCallback(async (limit: number = 100): Promise<boolean> => {
         try {
-            const res = await fetch(`${API_BASE}/activities?limit=2000`, {
+            const res = await fetch(`${API_BASE}/activities?limit=${limit}`, {
                 headers: { 'Authorization': `Bearer ${user.token}` }
             });
             if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
@@ -95,16 +104,19 @@ export function ActivityProvider({ children, user }: { children: ReactNode, user
      * Pulls system logs from backend or local storage.
      */
     useEffect(() => {
+        let isMounted = true;
+        const isJobOrderForm = typeof window !== 'undefined' && window.location.pathname.startsWith('/job-order-form');
+        if (isJobOrderForm) {
+            // Job Order Form never displays audit logs; skip heavy 122KB fetch on page load
+            return;
+        }
+
         const fetchLogs = async () => {
             console.log('[DEBUG] ActivityContext: Fetching system logs...');
             const ok = await refreshActivities();
-            if (ok) return;
+            if (ok || !isMounted) return;
             console.warn("[DEBUG] ActivityContext: Backend unreachable. Using local cache if available.");
             try {
-                // P1-14 FIX: `shoelotskey_activities` in localStorage only ever contains
-                // a genuine previously-fetched snapshot from the backend (written above),
-                // so falling back to it while offline is legitimate cached real data, not
-                // fabricated history. If there is no such cache, show an empty state.
                 const saved = localStorage.getItem('shoelotskey_activities');
                 const parsed = saved ? JSON.parse(saved) : [];
                 const cleaned = withoutResolvedPilErrors(Array.isArray(parsed) ? parsed : []);
@@ -114,6 +126,25 @@ export function ActivityProvider({ children, user }: { children: ReactNode, user
                 setActivities([]);
             }
         };
+
+        if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+            const idleId = (window as any).requestIdleCallback(() => {
+                if (isMounted) fetchLogs();
+            }, { timeout: 2000 });
+            return () => {
+                isMounted = false;
+                (window as any).cancelIdleCallback(idleId);
+            };
+        } else {
+            const timer = setTimeout(() => {
+                if (isMounted) fetchLogs();
+            }, 800);
+            return () => {
+                isMounted = false;
+                clearTimeout(timer);
+            };
+        }
+
         // --- OFFLINE AUTO-SYNC logic ---
         const processSyncQueue = async () => {
             if (typeof window === 'undefined' || !navigator.onLine) return;
@@ -150,7 +181,6 @@ export function ActivityProvider({ children, user }: { children: ReactNode, user
             }
         };
 
-        fetchLogs();
         processSyncQueue();
         const syncInterval = setInterval(processSyncQueue, 30000); // Check every 30s
         return () => clearInterval(syncInterval);

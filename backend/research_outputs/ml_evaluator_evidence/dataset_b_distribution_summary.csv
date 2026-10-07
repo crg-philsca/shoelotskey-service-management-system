@@ -1,0 +1,14 @@
+feature,dtype,mean,std,min,p25,median,p75,max,unique
+total_pairs,int64,1.5788,0.9171,1.0,1.0,1.0,2.0,6.0,5
+basic_cleaning_qty,int64,1.5246,0.8694,0.0,1.0,1.0,2.0,5.0,6
+full_reglue_qty,int64,0.4278,0.6328,0.0,0.0,0.0,1.0,3.0,4
+minor_reglue_qty,int64,0.082,0.2744,0.0,0.0,0.0,0.0,1.0,2
+unyellowing_qty,int64,0.1481,0.4336,0.0,0.0,0.0,0.0,3.0,3
+minor_restoration_qty,int64,0.2064,0.4948,0.0,0.0,0.0,0.0,3.0,4
+color_renewal_qty,int64,0.0255,0.1576,0.0,0.0,0.0,0.0,1.0,2
+rush_indicator,int64,0.1202,0.3252,0.0,0.0,0.0,0.0,1.0,2
+distinct_service_types,int64,1.7703,0.8113,1.0,1.0,2.0,2.0,4.0,4
+total_service_applications,int64,2.4144,1.4887,1.0,1.0,2.0,3.0,9.0,8
+intake_day_of_week,int64,2.4764,1.7137,0.0,1.0,2.0,4.0,5.0,6
+intake_month,int64,6.5529,3.4373,1.0,4.0,7.0,10.0,12.0,12
+simulated_turnaround_days,int64,16.7944,8.174,1.0,10.0,20.0,25.0,30.0,19

@@ -1,0 +1,1304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shoelotskey — September 2026 Historical Pilot Master Dataset Import Dry-Run Report</title>
+<style>
+  :root {
+    --bg-primary: #0f172a;
+    --bg-secondary: #1e293b;
+    --bg-card: #182234;
+    --border-color: #334155;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --accent-blue: #38bdf8;
+    --accent-emerald: #34d399;
+    --accent-amber: #fbbf24;
+    --accent-rose: #f43f5e;
+    --accent-purple: #c084fc;
+    --badge-bg: #1e293b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    padding: 30px;
+  }
+  .container {
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  header {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 32px;
+    margin-bottom: 30px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+  }
+  .header-badge {
+    display: inline-block;
+    padding: 6px 14px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    border-radius: 9999px;
+    background-color: rgba(251, 191, 36, 0.15);
+    color: var(--accent-amber);
+    border: 1px solid rgba(251, 191, 36, 0.3);
+    margin-bottom: 12px;
+  }
+  h1 {
+    font-size: 2rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: #ffffff;
+    margin-bottom: 10px;
+  }
+  .header-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    margin-top: 16px;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+  }
+  .header-meta div span {
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .gate-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(251, 191, 36, 0.1);
+    border: 2px solid var(--accent-amber);
+    border-radius: 10px;
+    padding: 20px 28px;
+    margin-bottom: 35px;
+  }
+  .gate-title {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--accent-amber);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .gate-badge {
+    padding: 6px 16px;
+    font-size: 1rem;
+    font-weight: 800;
+    border-radius: 8px;
+    background-color: var(--accent-amber);
+    color: #0f172a;
+    letter-spacing: 0.05em;
+  }
+  .gate-desc {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-top: 6px;
+  }
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+    gap: 24px;
+    margin-bottom: 30px;
+  }
+  .grid-3 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+  }
+  .grid-4 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+    margin-bottom: 30px;
+  }
+  .card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 24px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+  }
+  .card-metric {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .metric-value {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #ffffff;
+    line-height: 1.2;
+  }
+  .metric-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    margin-top: 4px;
+  }
+  .metric-sub {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+  section {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 28px;
+    margin-bottom: 35px;
+  }
+  h2 {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 10px;
+  }
+  h2 .section-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background-color: rgba(56, 189, 248, 0.15);
+    color: var(--accent-blue);
+    border-radius: 6px;
+    font-size: 0.85rem;
+  }
+  h3 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--accent-blue);
+    margin: 18px 0 10px 0;
+  }
+  p {
+    font-size: 0.925rem;
+    color: var(--text-secondary);
+    margin-bottom: 14px;
+  }
+  ul, ol {
+    margin-left: 20px;
+    margin-bottom: 14px;
+    color: var(--text-secondary);
+    font-size: 0.925rem;
+  }
+  li { margin-bottom: 6px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0 24px 0;
+    font-size: 0.875rem;
+  }
+  th {
+    background-color: #0f172a;
+    color: var(--text-primary);
+    text-align: left;
+    padding: 12px 14px;
+    font-weight: 600;
+    border-bottom: 2px solid var(--border-color);
+    white-space: nowrap;
+  }
+  td {
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(51, 65, 85, 0.6);
+    color: var(--text-secondary);
+  }
+  tr:hover td {
+    background-color: rgba(51, 65, 85, 0.3);
+    color: var(--text-primary);
+  }
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  .tag-exact { background: rgba(52, 211, 153, 0.2); color: var(--accent-emerald); border: 1px solid rgba(52, 211, 153, 0.3); }
+  .tag-probable { background: rgba(56, 189, 248, 0.2); color: var(--accent-blue); border: 1px solid rgba(56, 189, 248, 0.3); }
+  .tag-review { background: rgba(251, 191, 36, 0.2); color: var(--accent-amber); border: 1px solid rgba(251, 191, 36, 0.3); }
+  .tag-hold { background: rgba(244, 63, 94, 0.2); color: var(--accent-rose); border: 1px solid rgba(244, 63, 94, 0.3); }
+  .tag-claim { background: rgba(192, 132, 252, 0.2); color: var(--accent-purple); border: 1px solid rgba(192, 132, 252, 0.3); }
+  .code-badge {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.8rem;
+    background-color: #090d16;
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: #38bdf8;
+    border: 1px solid #1e293b;
+  }
+  .alert-box {
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin: 16px 0;
+    font-size: 0.9rem;
+  }
+  .alert-warning {
+    background-color: rgba(251, 191, 36, 0.1);
+    border-left: 4px solid var(--accent-amber);
+    color: #fde68a;
+  }
+  .alert-danger {
+    background-color: rgba(244, 63, 94, 0.1);
+    border-left: 4px solid var(--accent-rose);
+    color: #fecdd3;
+  }
+  .alert-info {
+    background-color: rgba(56, 189, 248, 0.1);
+    border-left: 4px solid var(--accent-blue);
+    color: #bae6fd;
+  }
+  .alert-success {
+    background-color: rgba(52, 211, 153, 0.1);
+    border-left: 4px solid var(--accent-emerald);
+    color: #a7f3d0;
+  }
+  footer {
+    text-align: center;
+    padding: 30px;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    border-top: 1px solid var(--border-color);
+    margin-top: 40px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- HEADER -->
+  <header>
+    <div class="header-badge">Comprehensive Dry-Run Assessment &bull; Read-Only Audit</div>
+    <h1>Shoelotskey Service Management System</h1>
+    <p style="font-size: 1.1rem; color: #cbd5e1; margin-bottom: 0;">
+      September 2026 Historical Pilot Master Dataset Import Readiness &amp; Deduplication Report
+    </p>
+    <div class="header-meta">
+      <div><span>Source File:</span> Shoelotskey_September_2026_Historical_Pilot_Master_Dataset.xlsx</div>
+      <div><span>Audit Date:</span> October 7, 2026 (System Local Time)</div>
+      <div><span>Target Database:</span> backend/db/shoelotskey.db (SQLite) &bull; Postgres Compatible</div>
+      <div><span>Execution Mode:</span> READ-ONLY DRY RUN (Zero Writes)</div>
+    </div>
+  </header>
+
+  <!-- GATE BANNER -->
+  <div class="gate-banner">
+    <div>
+      <div class="gate-title">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        IMPORT GATE STATUS: CONDITIONAL GO
+      </div>
+      <div class="gate-desc">
+        The workbook is structurally sound and fully reconciled. Production database writes are held pending resolution of identity conflicts (Cico vs. Rico), unreadable claim customer names, and expense verification (Maynilad &amp; Eileen cash-out).
+      </div>
+    </div>
+    <div class="gate-badge">CONDITIONAL GO</div>
+  </div>
+
+  <!-- KPI SUMMARY CARDS -->
+  <div class="grid-4">
+    <div class="card card-metric">
+      <div class="metric-value">82</div>
+      <div class="metric-label">DSMR Transactions</div>
+      <div class="metric-sub">60 NEW Orders &bull; 22 CLAIM Pickups</div>
+    </div>
+    <div class="card card-metric">
+      <div class="metric-value">148</div>
+      <div class="metric-label">Total Pairs Tracked</div>
+      <div class="metric-sub">107 NEW Pairs &bull; 41 CLAIM Pairs</div>
+    </div>
+    <div class="card card-metric">
+      <div class="metric-value">&#8361;47,397.00</div>
+      <div class="metric-label">DSMR Revenue Collected</div>
+      <div class="metric-sub">&#8361;33,962.00 Cash &bull; &#8361;13,435.00 GCash</div>
+    </div>
+    <div class="card card-metric">
+      <div class="metric-value">&#8361;53,124.17</div>
+      <div class="metric-label">Fixed Operating Expenses</div>
+      <div class="metric-sub">Rent + Full Payroll + Power + Net</div>
+    </div>
+  </div>
+
+  <!-- SECTION 1: EXECUTIVE SUMMARY -->
+  <section id="sec-1">
+    <h2><span class="section-num">1</span> Executive Summary</h2>
+    <p>
+      This audit constitutes a comprehensive, <strong>read-only dry-run evaluation</strong> of the reconstructed and reconciled historical operational pilot dataset for the <strong>Shoelotskey Villamor–Pasay branch</strong>. The dataset covers the operational pilot window from <strong>September 2, 2026 to September 16, 2026</strong>, plus post-pilot survey and operational periods through September 22, 2026.
+    </p>
+    <div class="alert-box alert-info">
+      <strong>Core Audit Principle:</strong> Absolute preservation of source business evidence. In strict adherence to User Rules, no database inserts, updates, deletes, backdated timestamps, fabricated status transitions, synthetic inventory deductions, or Random Forest model retraining operations were performed during this dry run.
+    </div>
+    <p>
+      The staging workbook contains 82 Daily Sales Monitoring Report (DSMR) transaction rows, 14 physical Shoe Inventory Form job orders, 26 granular service-pair records, and 11 expense records. The audit confirms that the operational database already contains 103 orders (including 47 September-dated records from prior manual or test entries), making rigorous deduplication and claim-linking safeguards essential.
+    </p>
+    <p>
+      <strong>Final Gate Verdict: <span class="tag tag-review" style="font-size:0.85rem;">CONDITIONAL GO</span></strong>. Automatic import is safe for 56 verified NEW job orders, 6 exactly matched dual-evidence pairs, and 8 verified operating expense lines. However, execution must remain halted until high-risk identity disputes, unreadable claims, and held expense items are reviewed and staged according to client policy.
+    </p>
+  </section>
+
+  <!-- SECTION 2: WORKBOOK ROW COUNTS -->
+  <section id="sec-2">
+    <h2><span class="section-num">2</span> Workbook Row Counts Read &amp; Verified</h2>
+    <p>
+      Every worksheet in <span class="code-badge">Shoelotskey_September_2026_Historical_Pilot_Master_Dataset.xlsx</span> was opened, fully parsed, and verified without skipping rows. Zero rows were silently omitted.
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Worksheet Name</th>
+          <th>Raw Non-Empty Rows</th>
+          <th>Data Rows Read</th>
+          <th>Key Content &amp; Scope</th>
+          <th>Verification Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>README</strong></td>
+          <td>9</td>
+          <td>8</td>
+          <td>Core historical rules, provenance definitions, chronological pilot boundaries, and inventory policy.</td>
+          <td><span class="tag tag-exact">CONFIRMED</span></td>
+        </tr>
+        <tr>
+          <td><strong>DSMR Transactions</strong></td>
+          <td>83</td>
+          <td>82</td>
+          <td>8 Daily Sales Monitoring Reports: 60 NEW intake transactions, 22 CLAIM pickup/payment events. Total 148 pairs.</td>
+          <td><span class="tag tag-exact">CONFIRMED</span></td>
+        </tr>
+        <tr>
+          <td><strong>Job Orders</strong></td>
+          <td>15</td>
+          <td>14</td>
+          <td>14 physical Shoe Inventory Forms transcribed from paper forms (Sept 12–16, 2026).</td>
+          <td><span class="tag tag-exact">CONFIRMED</span></td>
+        </tr>
+        <tr>
+          <td><strong>Services-Pairs</strong></td>
+          <td>27</td>
+          <td>26</td>
+          <td>26 granular pairs/services transcribed with specific prices, service abbreviations, and rush flags.</td>
+          <td><span class="tag tag-exact">CONFIRMED</span></td>
+        </tr>
+        <tr>
+          <td><strong>Expenses</strong></td>
+          <td>12</td>
+          <td>11</td>
+          <td>Rent, Meralco electricity bill, Converge internet, bi-monthly payroll, parcel logistics, water bill, and cash-outs.</td>
+          <td><span class="tag tag-exact">CONFIRMED</span></td>
+        </tr>
+        <tr>
+          <td><strong>Evidence Matching</strong></td>
+          <td>13</td>
+          <td>12</td>
+          <td>Reconciliation matrix matching paper Job Order forms against DSMR transactions (6 EXACT, 5 PROBABLE, 1 REVIEW).</td>
+          <td><span class="tag tag-exact">CONFIRMED</span></td>
+        </tr>
+        <tr>
+          <td><strong>Unresolved Items</strong></td>
+          <td>10</td>
+          <td>9</td>
+          <td>Explicit inventory of items that must NOT be guessed (U-001 through U-009).</td>
+          <td><span class="tag tag-exact">CONFIRMED</span></td>
+        </tr>
+        <tr>
+          <td><strong>Reconciliation Summary</strong></td>
+          <td>15</td>
+          <td>14</td>
+          <td>Official reconciliation KPIs, category subtotals, and the formal CONDITIONAL GO staging gate definition.</td>
+          <td><span class="tag tag-exact">CONFIRMED</span></td>
+        </tr>
+        <tr>
+          <td><strong>Import Instructions</strong></td>
+          <td>13</td>
+          <td>12</td>
+          <td>12 strict operational instructions governing Antigravity database ingestion and rollback safeguards.</td>
+          <td><span class="tag tag-exact">CONFIRMED</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- SECTION 3: CURRENT DATABASE SCHEMA MAPPING -->
+  <section id="sec-3">
+    <h2><span class="section-num">3</span> Current Database Schema Mapping</h2>
+    <p>
+      An exhaustive inspection of <span class="code-badge">backend/models.py</span>, <span class="code-badge">backend/main.py</span>, <span class="code-badge">backend/schemas.py</span>, and the active SQLite/PostgreSQL schema was performed. The exact tables and fields supporting the historical dataset are documented below.
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Business Domain Entity</th>
+          <th>Physical Database Table</th>
+          <th>Key Fields &amp; Data Types</th>
+          <th>Code References</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Job Orders (Operational)</strong></td>
+          <td><span class="code-badge">orders</span></td>
+          <td><span class="code-badge">order_id</span> (INT PK), <span class="code-badge">order_number</span> (VARCHAR), <span class="code-badge">customer_id</span> (INT FK), <span class="code-badge">status_id</span> (INT FK), <span class="code-badge">priority_id</span> (INT FK), <span class="code-badge">grand_total</span> (DECIMAL), <span class="code-badge">rush_reduction_days</span> (INT), <span class="code-badge">expected_at</span> (DATETIME), <span class="code-badge">released_at</span> (DATETIME), <span class="code-badge">claimed_at</span> (DATETIME), <span class="code-badge">user_id</span> (INT FK), <span class="code-badge">created_at</span> (TIMESTAMP), <span class="code-badge">predicted_at</span> (TIMESTAMP), <span class="code-badge">predicted_days</span> (INT)</td>
+          <td><span class="code-badge">backend/models.py:204-245</span><br><span class="code-badge">backend/main.py:4830-4980</span></td>
+        </tr>
+        <tr>
+          <td><strong>Job Orders (Historical Staging)</strong></td>
+          <td><span class="code-badge">historical_orders</span></td>
+          <td><span class="code-badge">historical_order_id</span> (INT PK), <span class="code-badge">order_id</span> (VARCHAR), <span class="code-badge">customer_id</span> (INT FK), <span class="code-badge">date_received</span> (DATETIME), <span class="code-badge">original_estimated_release_date</span> (DATETIME), <span class="code-badge">claimed_date</span> (DATETIME), <span class="code-badge">total_pairs</span> (INT), <span class="code-badge">grand_total</span> (DECIMAL), <span class="code-badge">source_type</span> (VARCHAR), <span class="code-badge">import_batch_id</span> (VARCHAR), <span class="code-badge">target_provenance</span> (VARCHAR), <span class="code-badge">reconciliation_status</span> (VARCHAR), <span class="code-badge">audit_trail</span> (JSON)</td>
+          <td><span class="code-badge">backend/models.py:460-520</span><br><span class="code-badge">backend/historical_ocr_import.py</span></td>
+        </tr>
+        <tr>
+          <td><strong>Customers</strong></td>
+          <td><span class="code-badge">customers</span></td>
+          <td><span class="code-badge">customer_id</span> (INT PK), <span class="code-badge">customer_name</span> (VARCHAR(100)), <span class="code-badge">contact_number</span> (VARCHAR(20)), <span class="code-badge">created_at</span> (TIMESTAMP)</td>
+          <td><span class="code-badge">backend/models.py:165-175</span></td>
+        </tr>
+        <tr>
+          <td><strong>Shoe Pairs / Items</strong></td>
+          <td><span class="code-badge">items</span></td>
+          <td><span class="code-badge">item_id</span> (INT PK), <span class="code-badge">order_id</span> (INT FK), <span class="code-badge">item_type</span> (VARCHAR), <span class="code-badge">brand</span> (VARCHAR), <span class="code-badge">color</span> (VARCHAR), <span class="code-badge">notes</span> (TEXT), <span class="code-badge">created_at</span> (TIMESTAMP)</td>
+          <td><span class="code-badge">backend/models.py:250-270</span></td>
+        </tr>
+        <tr>
+          <td><strong>Item Services Mapping</strong></td>
+          <td><span class="code-badge">item_service_mapping</span></td>
+          <td><span class="code-badge">mapping_id</span> (INT PK), <span class="code-badge">item_id</span> (INT FK), <span class="code-badge">service_id</span> (INT FK), <span class="code-badge">custom_price</span> (DECIMAL(10,2))</td>
+          <td><span class="code-badge">backend/models.py:275-290</span></td>
+        </tr>
+        <tr>
+          <td><strong>Payments &amp; Balances</strong></td>
+          <td><span class="code-badge">payments</span></td>
+          <td><span class="code-badge">payment_id</span> (INT PK), <span class="code-badge">order_id</span> (INT FK), <span class="code-badge">method_id</span> (INT FK: 1=Cash, 2=GCash, 3=Bank, 4=Maya), <span class="code-badge">status_id</span> (INT FK: 1=Fully Paid, 2=Downpayment, 3=Pending), <span class="code-badge">amount_received</span> (DECIMAL), <span class="code-badge">balance</span> (DECIMAL), <span class="code-badge">deposit_amount</span> (DECIMAL), <span class="code-badge">reference_no</span> (VARCHAR), <span class="code-badge">created_at</span> (TIMESTAMP)</td>
+          <td><span class="code-badge">backend/models.py:340-365</span><br><span class="code-badge">backend/main.py:5300-5380</span></td>
+        </tr>
+        <tr>
+          <td><strong>Expenses</strong></td>
+          <td><span class="code-badge">expenses</span></td>
+          <td><span class="code-badge">expense_id</span> (INT PK), <span class="code-badge">amount</span> (DECIMAL), <span class="code-badge">description</span> (TEXT), <span class="code-badge">expense_date</span> (DATETIME), <span class="code-badge">user_id</span> (INT FK), <span class="code-badge">created_at</span> (TIMESTAMP)</td>
+          <td><span class="code-badge">backend/models.py:380-395</span><br><span class="code-badge">backend/main.py:6500-6600</span></td>
+        </tr>
+        <tr>
+          <td><strong>Audit Logs</strong></td>
+          <td><span class="code-badge">audit_logs</span></td>
+          <td><span class="code-badge">audit_log_id</span> (INT PK), <span class="code-badge">user_id</span> (INT FK), <span class="code-badge">username</span> (VARCHAR), <span class="code-badge">role</span> (VARCHAR), <span class="code-badge">action_type</span> (VARCHAR), <span class="code-badge">module</span> (VARCHAR), <span class="code-badge">table_name</span> (VARCHAR), <span class="code-badge">record_id</span> (INT), <span class="code-badge">old_values</span> (JSON), <span class="code-badge">new_values</span> (JSON), <span class="code-badge">created_at</span> (TIMESTAMP)</td>
+          <td><span class="code-badge">backend/models.py:420-455</span></td>
+        </tr>
+        <tr>
+          <td><strong>Batch Imports &amp; Conflicts</strong></td>
+          <td><span class="code-badge">csv_import_batches</span> &amp; <span class="code-badge">historical_reconciliation_conflicts</span></td>
+          <td><span class="code-badge">batch_id</span> (VARCHAR), <span class="code-badge">source_filename</span> (VARCHAR), <span class="code-badge">exact_duplicates</span> (INT), <span class="code-badge">conflicts</span> (INT), <span class="code-badge">details_json</span> (JSON), <span class="code-badge">resolution_action</span> (VARCHAR)</td>
+          <td><span class="code-badge">backend/models.py:530-580</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- SECTION 4: JOB ORDER IMPORT MAPPING -->
+  <section id="sec-4">
+    <h2><span class="section-num">4</span> Job Order Import Mapping (NEW vs. CLAIM &amp; Dual-Evidence Merging)</h2>
+    <p>
+      The foundational rule of historical reconciliation is that <strong>a CLAIM row must NEVER become a new job order</strong>. In the DSMR working dataset:
+    </p>
+    <ul>
+      <li><strong>60 NEW Rows:</strong> Represent actual intake transactions (potential received job orders).</li>
+      <li><strong>22 CLAIM Rows:</strong> Represent customer pickup and final balance payment events for orders previously received.</li>
+    </ul>
+    <div class="alert-box alert-warning">
+      <strong>Dual-Evidence Deduplication:</strong> A DSMR NEW row and its matching Shoe Inventory Form represent <em>one single business transaction</em> supported by two distinct physical evidence artifacts. They must NEVER be inserted as two separate orders.
+    </div>
+    <p>
+      Based on the <span class="code-badge">Evidence Matching</span> sheet, 12 paired candidate transactions have been audited:
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Job Order ID</th>
+          <th>DSMR Evidence ID</th>
+          <th>Customer Name</th>
+          <th>Classification</th>
+          <th>Reconciliation Basis</th>
+          <th>Import Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="code-badge">JO-2026-09-12-WENDEL</span></td>
+          <td><span class="code-badge">DSMR-2026-09-12-R02</span></td>
+          <td>Wendel Fabro</td>
+          <td><span class="tag tag-exact">EXACT</span></td>
+          <td>Date (Sept 12) + 3 pairs + DP &#8361;725 + Balance &#8361;1,000</td>
+          <td>Merge into 1 order; attach both evidence IDs.</td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">JO-2026-09-12-JEROME</span></td>
+          <td><span class="code-badge">DSMR-2026-09-12-R05</span></td>
+          <td>Jerome Ramirez</td>
+          <td><span class="tag tag-exact">EXACT</span></td>
+          <td>Date (Sept 12) + 2 pairs + Total &#8361;1,025 + DP &#8361;512</td>
+          <td>Merge into 1 order; attach both evidence IDs.</td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">JO-2026-09-12-SEBASTIAN</span></td>
+          <td><span class="code-badge">DSMR-2026-09-12-R06</span></td>
+          <td>Sebastian Casa</td>
+          <td><span class="tag tag-exact">EXACT</span></td>
+          <td>Date (Sept 12) + 1 pair + Total &#8361;450 + Paid &#8361;325 (Bal &#8361;125)</td>
+          <td>Merge into 1 order; attach both evidence IDs.</td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">JO-2026-09-14-RAPHAEL</span></td>
+          <td><span class="code-badge">DSMR-2026-09-14-R11</span></td>
+          <td>Raphael Puncino</td>
+          <td><span class="tag tag-exact">EXACT</span></td>
+          <td>Date (Sept 14) + 3 pairs + Total &#8361;975 + DP &#8361;500 (Bal &#8361;475)</td>
+          <td>Merge into 1 order; attach both evidence IDs.</td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">JO-2026-09-14-CHRISTIAN</span></td>
+          <td><span class="code-badge">DSMR-2026-09-14-R12</span></td>
+          <td>Christian Fontanilla</td>
+          <td><span class="tag tag-exact">EXACT</span></td>
+          <td>Date (Sept 14) + 2 pairs + Total &#8361;650 + DP &#8361;325</td>
+          <td>Merge into 1 order; attach both evidence IDs.</td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">JO-2026-09-14-NYX</span></td>
+          <td><span class="code-badge">DSMR-2026-09-14-R16</span></td>
+          <td>Nyx Pantoja</td>
+          <td><span class="tag tag-exact">EXACT</span></td>
+          <td>Date (Sept 14) + 3 pairs + Total &#8361;1,225 + Not Yet Paid</td>
+          <td>Merge into 1 order; attach both evidence IDs.</td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">JO-2026-09-14-KARL</span></td>
+          <td><span class="code-badge">DSMR-2026-09-14-R14</span></td>
+          <td>Karl Kevin Agnas</td>
+          <td><span class="tag tag-probable">PROBABLE</span></td>
+          <td>Name variant Karl Kevin vs. Karl; 1 pair, &#8361;325 cash fully paid</td>
+          <td>Stage on HOLD; require spelling confirmation before linking.</td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">JO-2026-09-14-ERNEST</span></td>
+          <td><span class="code-badge">DSMR-2026-09-14-R10</span></td>
+          <td>Ernest Agapay / Acapulco</td>
+          <td><span class="tag tag-probable">PROBABLE</span></td>
+          <td>Date (Sept 14) + 1 pair + &#8361;925 GCash; surname handwriting variant</td>
+          <td>Stage on HOLD; require manual surname verification.</td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">JO-2026-09-14-KENNETH</span></td>
+          <td><span class="code-badge">DSMR-2026-09-14-R17</span></td>
+          <td>Kenneth Gutierrez / Enriquez</td>
+          <td><span class="tag tag-probable">PROBABLE</span></td>
+          <td>Date (Sept 14) + 6 pairs + &#8361;2,900; surname variant</td>
+          <td>Stage on HOLD; require manual surname verification.</td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">JO-2026-09-15-JUAN</span></td>
+          <td><span class="code-badge">DSMR-2026-09-15-R05</span></td>
+          <td>Juan</td>
+          <td><span class="tag tag-probable">PROBABLE</span></td>
+          <td>Date (Sept 15) + 2 pairs + &#8361;1,400 cash; surname unclear</td>
+          <td>Stage on HOLD; verify services and surname.</td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">JO-2026-09-15-ANTONIO</span></td>
+          <td><span class="code-badge">DSMR-2026-09-15-R06</span></td>
+          <td>Antonio Lagunada</td>
+          <td><span class="tag tag-probable">PROBABLE</span></td>
+          <td>Date (Sept 15) + 1 pair + &#8361;475 cash; minor handwriting check</td>
+          <td>Stage on HOLD; verify spelling before auto-import.</td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">JO-2026-09-15-CICO</span></td>
+          <td><span class="code-badge">DSMR-2026-09-15-R07</span></td>
+          <td>Cico B. Conde / Rico Ancheta</td>
+          <td><span class="tag tag-review">MANUAL REVIEW</span></td>
+          <td>Paper form reads "Cico B. Conde" (&#8361;100 DP, &#8361;225 Bal, Vans), but DSMR reads "Rico Ancheta"</td>
+          <td><strong>STRICT BLOCK:</strong> Do NOT merge. Two distinct names with identical financial figures. Must be verified.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- SECTION 5: SERVICE/PAIR MAPPING -->
+  <section id="sec-5">
+    <h2><span class="section-num">5</span> Service &amp; Pair Mapping</h2>
+    <p>
+      The <span class="code-badge">Services-Pairs</span> worksheet documents <strong>26 individual shoe pairs</strong> transcribed directly from the paper Shoe Inventory Forms. All service codes are strictly preserved as recorded on paper:
+    </p>
+    <ul>
+      <li><span class="code-badge">BC</span> &rarr; Basic Cleaning (Standard Price: &#8361;325.00 – &#8361;475.00 depending on footwear material)</li>
+      <li><span class="code-badge">FR</span> &rarr; Full Restoration (Standard Price: &#8361;825.00)</li>
+      <li><span class="code-badge">MRES</span> &rarr; Midsole Restoration (Standard Price: &#8361;550.00 – &#8361;700.00)</li>
+      <li><span class="code-badge">MR</span> &rarr; Minor Repair (Standard Price: &#8361;200.00 – &#8361;350.00)</li>
+      <li><span class="code-badge">PR</span> &rarr; Premium Restoration (Standard Price: &#8361;925.00)</li>
+      <li><span class="code-badge">FR US</span> &rarr; Full Restoration + Unyellowing Sole (Price: &#8361;575.00)</li>
+      <li><span class="code-badge">FR MID</span> &rarr; Full Restoration + Midsole (Price: &#8361;575.00)</li>
+    </ul>
+    <div class="alert-box alert-danger">
+      <strong>Strict Anti-Hallucination Policy:</strong> For DSMR rows where no paper Shoe Inventory Form exists, the system records the observed pair count and total price, but <em>does NOT invent shoe brands, models, or service breakdowns</em>. Those records enter the database with pair count preserved and services tagged as <span class="code-badge">UNSPECIFIED_HISTORICAL_SERVICE</span>.
+    </div>
+  </section>
+
+  <!-- SECTION 6: PAYMENT MAPPING -->
+  <section id="sec-6">
+    <h2><span class="section-num">6</span> Payment Mapping &amp; Multi-Stage Balances</h2>
+    <p>
+      Payments are mapped into the <span class="code-badge">payments</span> table with strict adherence to the paper evidence:
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Payment Scenario</th>
+          <th>Target Method ID</th>
+          <th>Target Status ID</th>
+          <th>Amount Stored</th>
+          <th>Balance Stored</th>
+          <th>Business Date vs. System Timestamp</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Full Payment at Intake</strong></td>
+          <td>1 (Cash) or 2 (GCash)</td>
+          <td>1 (fully-paid)</td>
+          <td>Total Order Amount</td>
+          <td>&#8361;0.00</td>
+          <td>Date: September intake date &bull; Created: Real current timestamp</td>
+        </tr>
+        <tr>
+          <td><strong>Downpayment at Intake</strong></td>
+          <td>1 (Cash) or 2 (GCash)</td>
+          <td>2 (downpayment)</td>
+          <td>Amount actually paid</td>
+          <td>Documented remaining balance</td>
+          <td>Date: September intake date &bull; Created: Real current timestamp</td>
+        </tr>
+        <tr>
+          <td><strong>Not Yet Paid at Intake</strong></td>
+          <td>1 (Cash default)</td>
+          <td>3 (pending)</td>
+          <td>&#8361;0.00</td>
+          <td>Full Order Amount</td>
+          <td>Date: September intake date &bull; Created: Real current timestamp</td>
+        </tr>
+        <tr>
+          <td><strong>Claim Payment (Pickup)</strong></td>
+          <td>1 (Cash) or 2 (GCash)</td>
+          <td>1 (fully-paid update)</td>
+          <td>Amount paid at pickup</td>
+          <td>&#8361;0.00 (settled)</td>
+          <td>Date: September pickup date &bull; Created: Real current timestamp</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>
+      Claim payments are recorded as distinct subsequent transactions against the parent order. They do NOT inflate total sales revenue by generating new orders.
+    </p>
+  </section>
+
+  <!-- SECTION 7: CLAIM LINKING ANALYSIS -->
+  <section id="sec-7">
+    <h2><span class="section-num">7</span> Claim Linking Analysis (22 CLAIM Rows)</h2>
+    <p>
+      The 22 CLAIM transactions across the 8 DSMR reports were analyzed against historical intake transactions:
+    </p>
+    <ul>
+      <li><strong>Linkable Claims (Inside Pilot Window):</strong> 1 claim (e.g. Darwin, Joey Ruiz, Samantha Eris) where matching intake customer names and balances exist.</li>
+      <li><strong>Pre-Pilot Order Claims:</strong> 20 claims where shoes were picked up in September, but the initial intake took place in August or late July (prior to the September 2 pilot window start).</li>
+      <li><strong>Unresolved Claims:</strong> 1 claim on September 14 (Row 8, Claim &#8361;325) where the customer name is completely unreadable from the scan.</li>
+    </ul>
+    <div class="alert-box alert-warning">
+      <strong>Treatment Rule:</strong> Pre-pilot and unreadable claims are classified as <span class="tag tag-claim">UNRESOLVED HISTORICAL CLAIM</span>. They are retained in staging tables and must NOT be arbitrarily forced onto unrelated September intake orders.
+    </div>
+  </section>
+
+  <!-- SECTION 8: DUPLICATE DETECTION RESULTS -->
+  <section id="sec-8">
+    <h2><span class="section-num">8</span> Duplicate Detection Results (Operational Database Audit)</h2>
+    <p>
+      An audit of the live <span class="code-badge">orders</span> table in <span class="code-badge">backend/db/shoelotskey.db</span> revealed 47 existing September 2026 records. Every row of the workbook was matched against these existing records:
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Category</th>
+          <th>Count</th>
+          <th>Description &amp; Examples</th>
+          <th>Recommended Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="tag tag-exact">EXISTING EXACT MATCH</span></td>
+          <td><strong>2</strong></td>
+          <td>
+            &bull; Sebastian Casa (ORD-2026-09-12-001, &#8361;450 total, &#8361;325 paid, 2026-09-12)<br>
+            &bull; Mark Ferrer (ORD-2026-09-07-001, &#8361;325 total, &#8361;325 paid, 2026-09-07)
+          </td>
+          <td><strong>DO NOT INSERT.</strong> Update existing record with provenance metadata (<span class="code-badge">batch_id</span>, source evidence link).</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-probable">POSSIBLE DUPLICATE</span></td>
+          <td><strong>3</strong></td>
+          <td>
+            &bull; Lyndo Lao (ORD-2026-09-09-003, &#8361;1,100 total vs. DSMR &#8361;500 paid)<br>
+            &bull; Marvin (ORD-2026-09-08-002, &#8361;575 total vs. DSMR &#8361;725 paid)<br>
+            &bull; Maria Clara (ORD-2026-09-22-006 vs. DSMR Sept 14 Maria &#8361;325)
+          </td>
+          <td><strong>HOLD.</strong> Compare order lines, downpayment amounts, and notes before touching.</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-exact">SAFE NEW HISTORICAL RECORD</span></td>
+          <td><strong>56</strong></td>
+          <td>56 NEW intake orders documented in DSMR that have zero conflicting records in the current database.</td>
+          <td><strong>APPROVED FOR STAGING.</strong> Clean candidates for historical batch insertion.</td>
+        </tr>
+        <tr>
+          <td><span class="tag tag-claim">UNRESOLVED HISTORICAL CLAIM</span></td>
+          <td><strong>21</strong></td>
+          <td>CLAIM rows with no matching intake order in the database (originated in August or unreadable).</td>
+          <td><strong>STAGE AS CLAIM EVENTS ONLY.</strong> Do not create orders.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- SECTION 9: DATE/TIME PRESERVATION ANALYSIS -->
+  <section id="sec-9">
+    <h2><span class="section-num">9</span> Date/Time Preservation Analysis (Date-Only vs. Timestamp)</h2>
+    <p>
+      Historical evidence frequently records only a <strong>calendar date</strong> (e.g. <span class="code-badge">2026-09-14</span>) without a specific minute or hour of intake.
+    </p>
+    <div class="alert-box alert-danger">
+      <strong>Prohibition of Artificial Midnight:</strong> The system must NEVER fabricate timestamps such as <span class="code-badge">12:00:00 AM</span> or <span class="code-badge">12:00:00 PM</span> and present them as observed business transaction times.
+    </div>
+    <ul>
+      <li><strong>Database Representation:</strong> In SQLite/Postgres <span class="code-badge">DATETIME</span> fields, store the business date at standard ISO midnight for query compatibility (<span class="code-badge">2026-09-14 00:00:00</span>), BUT accompany it with provenance metadata: <span class="code-badge">"time_precision": "DATE_ONLY"</span> in the order's JSON metadata.</li>
+      <li><strong>UI Presentation:</strong> If <span class="code-badge">time_precision == "DATE_ONLY"</span>, the frontend displays <span class="code-badge">09/14/26</span>. It only renders clock times (e.g. <span class="code-badge">09/14/26 12:31 PM</span>) when an actual timestamp was verified.</li>
+    </ul>
+  </section>
+
+  <!-- SECTION 10: ESTIMATED VS PREDICTED VS ACTUAL RELEASE ANALYSIS -->
+  <section id="sec-10">
+    <h2><span class="section-num">10</span> Estimated vs. Predicted vs. Actual Release Analysis</h2>
+    <p>
+      The operational workflow and research evaluation require strict semantic isolation of five dates:
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Date Concept</th>
+          <th>Database Field</th>
+          <th>Definition &amp; Operational Role</th>
+          <th>Historical Import Rule</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Intake Date</strong></td>
+          <td><span class="code-badge">orders.created_at</span> / <span class="code-badge">date_received</span></td>
+          <td>When shoes were handed over at the counter.</td>
+          <td>Set to verified September date.</td>
+        </tr>
+        <tr>
+          <td><strong>Estimated Release Date</strong></td>
+          <td><span class="code-badge">orders.expected_at</span></td>
+          <td>Target promised date written on paper form.</td>
+          <td>Populate from paper form if written; else leave null.</td>
+        </tr>
+        <tr>
+          <td><strong>ML Predicted Release Date</strong></td>
+          <td><span class="code-badge">orders.predicted_at</span> / <span class="code-badge">predicted_days</span></td>
+          <td>Completion estimate output by Random Forest model.</td>
+          <td><strong>DO NOT GENERATE</strong> during historical import.</td>
+        </tr>
+        <tr>
+          <td><strong>Actual Ready Date</strong></td>
+          <td><span class="code-badge">orders.released_at</span></td>
+          <td>Timestamp when shoe servicing actually completed.</td>
+          <td><strong>DO NOT SUBSTITUTE ESTIMATED DATE.</strong> Leave null unless paper explicitly logs ready date.</td>
+        </tr>
+        <tr>
+          <td><strong>Claimed Date</strong></td>
+          <td><span class="code-badge">orders.claimed_at</span></td>
+          <td>Timestamp when customer physically retrieved shoes.</td>
+          <td>Populate only when supported by a linked CLAIM transaction.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- SECTION 11: ML IMPORT SAFETY ANALYSIS -->
+  <section id="sec-11">
+    <h2><span class="section-num">11</span> Random Forest / ML Import Safety Analysis</h2>
+    <p>
+      An audit of <span class="code-badge">backend/main.py</span> (lines 4855–4935) and <span class="code-badge">backend/ml/ml_engine.py</span> revealed that invoking the standard <span class="code-badge">POST /api/orders/</span> endpoint automatically triggers <span class="code-badge">calculate_release_estimate()</span>, which queries the Random Forest model (<span class="code-badge">completion_model.pkl</span>) and logs an <span class="code-badge">ML_PREDICTION_COMPLETED</span> audit log.
+    </p>
+    <div class="alert-box alert-danger">
+      <strong>CRITICAL SAFETY FINDING:</strong> If historical orders are ingested via the standard API endpoint, the system would manufacture synthetic September 2026 predictions and backdate ML audit logs.
+    </div>
+    <p>
+      <strong>Mitigation Protocol:</strong>
+    </p>
+    <ol>
+      <li>Historical batch import must execute via a dedicated batch ingestion script bypassing the interactive prediction pipeline.</li>
+      <li>Imported orders must have <span class="code-badge">predicted_days = None</span> and <span class="code-badge">predicted_at = None</span>.</li>
+      <li>The finalized operational Random Forest model (<span class="code-badge">completion_model.pkl</span>, v1.2) must remain 100% frozen. No automated retraining shall occur on historical records.</li>
+    </ol>
+  </section>
+
+  <!-- SECTION 12: INVENTORY IMPORT SAFETY ANALYSIS -->
+  <section id="sec-12">
+    <h2><span class="section-num">12</span> Inventory Import Safety Analysis (Zero Synthetic Consumption)</h2>
+    <p>
+      In accordance with the finalized client business rule, <strong>Shoelotskey does not use fixed automatic material consumption per service</strong>.
+    </p>
+    <div class="alert-box alert-success">
+      <strong>Inventory Status:</strong> All inventory items in <span class="code-badge">backend/db/shoelotskey.db</span> have <span class="code-badge">auto_deduct = False</span>. The historical pilot workbook documents services, but provides no evidence of exact milliliters or grams of cleaner, paint, or glue consumed per shoe.
+    </div>
+    <p>
+      Therefore:
+    </p>
+    <ul>
+      <li><strong>Zero inventory movements (<span class="code-badge">inventory_logs</span>)</strong> will be created for historical orders.</li>
+      <li>Current stock levels in <span class="code-badge">inventory</span> will NOT be deducted or adjusted.</li>
+      <li><span class="code-badge">orders.inventory_applied</span> will be set to <span class="code-badge">False</span> with <span class="code-badge">inventory_used = None</span>.</li>
+    </ul>
+  </section>
+
+  <!-- SECTION 13: EXPENSE IMPORT ANALYSIS -->
+  <section id="sec-13">
+    <h2><span class="section-num">13</span> Expense Import Analysis &amp; Pilot Subtotals</h2>
+    <p>
+      The 11 expense lines in the <span class="code-badge">Expenses</span> worksheet were audited to distinguish standard operating overhead from pilot-specific transactions:
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Expense ID</th>
+          <th>Category</th>
+          <th>Description</th>
+          <th>Amount</th>
+          <th>Period / Date</th>
+          <th>Treatment / Staging Gate</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="code-badge">EXP-RENT-SEP2026</span></td>
+          <td>Rent</td>
+          <td>Monthly shop rent</td>
+          <td>&#8361;20,000.00</td>
+          <td>2026-09</td>
+          <td><span class="tag tag-exact">CONFIRMED OPERATING</span></td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">EXP-MERALCO-2026-09-29</span></td>
+          <td>Electricity</td>
+          <td>Meralco General Service A (248 kWh)</td>
+          <td>&#8361;3,745.17</td>
+          <td>Aug 30 – Sept 29</td>
+          <td><span class="tag tag-exact">CONFIRMED OPERATING</span></td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">EXP-CONVERGE-SEP2026</span></td>
+          <td>Internet</td>
+          <td>Converge shop fiber internet</td>
+          <td>&#8361;1,299.00</td>
+          <td>2026-09</td>
+          <td><span class="tag tag-exact">CONFIRMED OPERATING</span></td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">EXP-PAYROLL-2026-09-15-JOY</span></td>
+          <td>Payroll</td>
+          <td>Joy 1st cutoff</td>
+          <td>&#8361;5,720.00</td>
+          <td>2026-09-15</td>
+          <td><span class="tag tag-exact">CONFIRMED OPERATING</span> (Inside Pilot)</td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">EXP-PAYROLL-2026-09-15-YANG</span></td>
+          <td>Payroll</td>
+          <td>Yang 1st cutoff</td>
+          <td>&#8361;8,320.00</td>
+          <td>2026-09-15</td>
+          <td><span class="tag tag-exact">CONFIRMED OPERATING</span> (Inside Pilot)</td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">EXP-PAYROLL-2026-09-30-JOY</span></td>
+          <td>Payroll</td>
+          <td>Joy 2nd cutoff</td>
+          <td>&#8361;5,720.00</td>
+          <td>2026-09-30</td>
+          <td><span class="tag tag-exact">CONFIRMED OPERATING</span> (Full Month)</td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">EXP-PAYROLL-2026-09-30-YANG</span></td>
+          <td>Payroll</td>
+          <td>Yang 2nd cutoff</td>
+          <td>&#8361;8,320.00</td>
+          <td>2026-09-30</td>
+          <td><span class="tag tag-exact">CONFIRMED OPERATING</span> (Full Month)</td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">EXP-DSMR-2026-09-12-PARCEL</span></td>
+          <td>Parcel</td>
+          <td>Parcel logistics expense</td>
+          <td>&#8361;442.00</td>
+          <td>2026-09-12</td>
+          <td><span class="tag tag-probable">VERIFY SOURCE</span> (Inside Pilot)</td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">EXP-DSMR-2026-09-15-PARCEL</span></td>
+          <td>Parcel</td>
+          <td>Parcel logistics expense</td>
+          <td>&#8361;129.00</td>
+          <td>2026-09-15</td>
+          <td><span class="tag tag-probable">VERIFY SOURCE</span> (Inside Pilot)</td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">EXP-DSMR-2026-09-14-3000</span></td>
+          <td>Cash-out</td>
+          <td>&#8361;3,000 c/o Maam Eileen</td>
+          <td>&#8361;3,000.00</td>
+          <td>2026-09-14</td>
+          <td><span class="tag tag-hold">HOLD / UNCLASSIFIED</span> (Do NOT import as operating)</td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">EXP-MAYNILAD-SEP2026</span></td>
+          <td>Water</td>
+          <td>Maynilad water bill (possible arrears)</td>
+          <td>&#8361;4,311.03</td>
+          <td>2026-09</td>
+          <td><span class="tag tag-hold">HOLD</span> (Arrears verification required)</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>
+      <strong>Summary Subtotals:</strong>
+    </p>
+    <ul>
+      <li><strong>Known Fixed September Operating Subtotal:</strong> &#8361;53,124.17 (Rent &#8361;20k + Full Payroll &#8361;28,080 + Meralco &#8361;3,745.17 + Converge &#8361;1,299).</li>
+      <li><strong>Direct Payroll Paid Inside Pilot Window:</strong> &#8361;14,040.00 (Sept 15 payout).</li>
+      <li><strong>Total Held from Production Import:</strong> &#8361;7,311.03 (Maynilad &#8361;4,311.03 + Eileen Cash-Out &#8361;3,000.00).</li>
+    </ul>
+  </section>
+
+  <!-- SECTION 14: PROVENANCE STRATEGY -->
+  <section id="sec-14">
+    <h2><span class="section-num">14</span> Provenance Strategy</h2>
+    <p>
+      Historical records must be instantly distinguishable from live system transactions:
+    </p>
+    <ul>
+      <li><span class="tag tag-exact">PAPER_SOURCE</span>: Primary historical evidence directly supported by paper scans (Job Orders, DSMRs, physical utility receipts).</li>
+      <li><span class="tag tag-probable">IMPORTED_HISTORICAL</span>: System records synthesized and migrated during this batch ingestion process.</li>
+      <li><span class="tag tag-claim">SYSTEM_GENERATED</span>: Real native transactions created by staff through standard UI workflows.</li>
+      <li><span class="tag tag-review">CONTROLLED_TEST</span>: Technical verification transactions used to test RBAC, overrides, security, and ML pipelines.</li>
+    </ul>
+    <p>
+      In the current schema, provenance is natively preserved via <span class="code-badge">historical_orders.target_provenance</span>, <span class="code-badge">historical_orders.source_type</span>, and the JSON <span class="code-badge">audit_trail</span> column.
+    </p>
+  </section>
+
+  <!-- SECTION 15: AUDIT-TRAIL STRATEGY -->
+  <section id="sec-15">
+    <h2><span class="section-num">15</span> Audit-Trail Strategy (Zero Backdating)</h2>
+    <p>
+      Under User Rule #10, the system must <strong>NEVER fabricate backdated audit logs</strong>. Creating an audit entry with a timestamp of <span class="code-badge">2026-09-14 11:27:00</span> when the import actually happens in October would compromise digital forensics.
+    </p>
+    <div class="alert-box alert-info">
+      <strong>Real Execution Audit Log:</strong> The historical batch import will generate one single atomic audit log entry at the <em>real moment of execution</em>:
+      <br><br>
+      <span class="code-badge">action_type: "HISTORICAL_IMPORT_BATCH"</span> &bull; 
+      <span class="code-badge">table_name: "orders"</span> &bull; 
+      <span class="code-badge">created_at: [CURRENT REAL TIMESTAMP]</span> &bull; 
+      <span class="code-badge">username: "charm"</span> &bull; 
+      <span class="code-badge">new_values: {"batch_id": "BATCH-HIST-SEP2026-001", "records_imported": 56, "source_file": "Shoelotskey_September_2026_Historical_Pilot_Master_Dataset.xlsx"}</span>
+    </div>
+  </section>
+
+  <!-- SECTION 16: UNRESOLVED RECORDS -->
+  <section id="sec-16">
+    <h2><span class="section-num">16</span> Unresolved Records (Explicit Staging Registry)</h2>
+    <p>
+      The 9 items from the <span class="code-badge">Unresolved Items</span> sheet are registered below. These items will remain locked in staging until explicitly cleared:
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Item ID</th>
+          <th>Operational Area</th>
+          <th>Identified Ambiguity / Conflict</th>
+          <th>Risk if Guessed</th>
+          <th>Resolution Requirement</th>
+          <th>Current Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="code-badge">U-001</span></td>
+          <td>DSMR Sept 14</td>
+          <td>Claim row 8 customer name is completely unreadable.</td>
+          <td>Could misattribute &#8361;325 payment to the wrong customer.</td>
+          <td>Retain as UNRESOLVED HISTORICAL CLAIM in staging.</td>
+          <td><span class="tag tag-hold">OPEN</span></td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">U-002</span></td>
+          <td>Back Job</td>
+          <td>Sept 11 Jeivce Velasco marked Back Job; no financial fields.</td>
+          <td>Could artificially inflate revenue from warranty rework.</td>
+          <td>Link to prior order if found; otherwise retain Back Job tag.</td>
+          <td><span class="tag tag-hold">OPEN</span></td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">U-003</span></td>
+          <td>Water Expense</td>
+          <td>Maynilad &#8361;4,311.03 bill may include prior unpaid arrears.</td>
+          <td>Overstates September operating costs and distorts ROI.</td>
+          <td>Verify current-period charge vs. arrears on physical bill.</td>
+          <td><span class="tag tag-hold">OPEN</span></td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">U-004</span></td>
+          <td>Part-time Payroll</td>
+          <td>Kylane &amp; Ela: &#8361;40/hr &times; 8 hrs/wk conflicts with stated &#8361;800.</td>
+          <td>Distorts operating payroll calculation.</td>
+          <td>Confirm whether 8 hours is per person and what &#8361;800 represents.</td>
+          <td><span class="tag tag-hold">OPEN</span></td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">U-005</span></td>
+          <td>Cash-Out</td>
+          <td>Sept 14 &#8361;3,000 cash-out c/o Maam Eileen has unknown purpose.</td>
+          <td>Incorrectly reduces profit if it was an owner advance.</td>
+          <td>Confirm whether withdrawal, reimbursement, or purchase.</td>
+          <td><span class="tag tag-hold">OPEN</span></td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">U-006</span></td>
+          <td>Identity Conflict</td>
+          <td>Cico B. Conde (Job Order) vs. Rico Ancheta (DSMR row).</td>
+          <td>Merges two completely different customers.</td>
+          <td>Do NOT auto-merge. Require visual re-check of original scan.</td>
+          <td><span class="tag tag-hold">OPEN</span></td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">U-007</span></td>
+          <td>Handwriting</td>
+          <td>Sept 7 DSMR customer names are best-read estimates.</td>
+          <td>Customer duplication or search failures.</td>
+          <td>Perform visual verification before production import.</td>
+          <td><span class="tag tag-hold">OPEN</span></td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">U-008</span></td>
+          <td>Release Dates</td>
+          <td>Paper forms document estimated release only, not actual ready date.</td>
+          <td>Contaminates ML turnaround target ground truth.</td>
+          <td>Leave actual ready date null; never copy estimated date.</td>
+          <td><span class="tag tag-hold">OPEN</span></td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">U-009</span></td>
+          <td>Status History</td>
+          <td>Paper evidence does not prove intermediate New&rarr;On-going timestamps.</td>
+          <td>Fabricates fake system activity.</td>
+          <td>Import business facts only; do not create fake status transitions.</td>
+          <td><span class="tag tag-hold">OPEN</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- SECTION 17: PROPOSED INSERT/UPDATE/SKIP/HOLD COUNTS -->
+  <section id="sec-17">
+    <h2><span class="section-num">17</span> Proposed Insert, Update, Skip &amp; Hold Counts</h2>
+    <p>
+      The complete, table-by-table impact of the proposed historical import is quantified below:
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Target Database Table</th>
+          <th>Proposed Inserts</th>
+          <th>Proposed Updates</th>
+          <th>Records Skipped</th>
+          <th>Records on Hold</th>
+          <th>Net Change to DB</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>orders (Operational)</strong></td>
+          <td>56</td>
+          <td>2 (Link Provenance)</td>
+          <td>0</td>
+          <td>2 (Cico/Rico, Sept 14 Claim)</td>
+          <td>+56 Orders</td>
+        </tr>
+        <tr>
+          <td><strong>order_items / items</strong></td>
+          <td>26</td>
+          <td>0</td>
+          <td>0</td>
+          <td>0</td>
+          <td>+26 Pairs/Shoes</td>
+        </tr>
+        <tr>
+          <td><strong>payments</strong></td>
+          <td>58</td>
+          <td>2</td>
+          <td>0</td>
+          <td>22 (Unresolved Claims)</td>
+          <td>+58 Payments</td>
+        </tr>
+        <tr>
+          <td><strong>customers</strong></td>
+          <td>48 (New Customers)</td>
+          <td>8 (Link Existing)</td>
+          <td>0</td>
+          <td>2</td>
+          <td>+48 Customers</td>
+        </tr>
+        <tr>
+          <td><strong>expenses</strong></td>
+          <td>8 (Verified Operating)</td>
+          <td>0</td>
+          <td>0</td>
+          <td>2 (Maynilad &amp; Eileen)</td>
+          <td>+8 Expenses (&#8361;53,695.17)</td>
+        </tr>
+        <tr>
+          <td><strong>inventory</strong></td>
+          <td>0</td>
+          <td>0</td>
+          <td>0</td>
+          <td>0</td>
+          <td>Zero Change</td>
+        </tr>
+        <tr>
+          <td><strong>inventory_logs</strong></td>
+          <td>0</td>
+          <td>0</td>
+          <td>0</td>
+          <td>0</td>
+          <td>Zero Change</td>
+        </tr>
+        <tr>
+          <td><strong>audit_logs</strong></td>
+          <td>1 (Batch Summary)</td>
+          <td>0</td>
+          <td>0</td>
+          <td>0</td>
+          <td>+1 Audit Log</td>
+        </tr>
+        <tr>
+          <td><strong>csv_import_batches</strong></td>
+          <td>1 (Batch Record)</td>
+          <td>0</td>
+          <td>0</td>
+          <td>0</td>
+          <td>+1 Batch Record</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- SECTION 18: ROLLBACK STRATEGY -->
+  <section id="sec-18">
+    <h2><span class="section-num">18</span> Rollback Strategy &amp; Reversibility Guarantee</h2>
+    <p>
+      To ensure complete non-destructive reversibility, all imported records will be tagged with a distinct batch identifier:
+      <br>
+      <span class="code-badge" style="font-size:1rem; font-weight:700;">BATCH-HIST-SEP2026-001</span>
+    </p>
+    <p>
+      If a rollback is requested by the user, the entire import can be undone in a single atomic transaction without affecting live system records:
+    </p>
+    <div style="background-color: #090d16; padding: 18px; border-radius: 8px; border: 1px solid #1e293b; font-family: monospace; font-size: 0.85rem; color: #94a3b8;">
+      -- DETERMINISTIC ROLLBACK SCRIPT<br>
+      BEGIN TRANSACTION;<br><br>
+      DELETE FROM payments WHERE order_id IN (SELECT order_id FROM orders WHERE cancellation_stage = 'BATCH-HIST-SEP2026-001');<br>
+      DELETE FROM item_service_mapping WHERE item_id IN (SELECT item_id FROM items WHERE order_id IN (SELECT order_id FROM orders WHERE cancellation_stage = 'BATCH-HIST-SEP2026-001'));<br>
+      DELETE FROM items WHERE order_id IN (SELECT order_id FROM orders WHERE cancellation_stage = 'BATCH-HIST-SEP2026-001');<br>
+      DELETE FROM orders WHERE cancellation_stage = 'BATCH-HIST-SEP2026-001';<br>
+      DELETE FROM expenses WHERE description LIKE '%[BATCH-HIST-SEP2026-001]%';<br>
+      DELETE FROM historical_orders WHERE import_batch_id = 'BATCH-HIST-SEP2026-001';<br>
+      UPDATE csv_import_batches SET status = 'ROLLED_BACK' WHERE batch_id = 'BATCH-HIST-SEP2026-001';<br><br>
+      COMMIT;
+    </div>
+  </section>
+
+  <!-- SECTION 19: CONTROLLED-TEST PLAN -->
+  <section id="sec-19">
+    <h2><span class="section-num">19</span> Controlled-Test Plan (Separation of Test vs. History)</h2>
+    <p>
+      Historical records must prove historical business facts. They must <strong>never be used to fabricate audit events</strong> for system capabilities that did not produce digital logs in September 2026.
+    </p>
+    <p>
+      All modern software capabilities are verified through dedicated, isolated <strong>Controlled Test Suites</strong> executing with real-time timestamps and tagged as <span class="tag tag-review">CONTROLLED_TEST</span>:
+    </p>
+    <ul>
+      <li><strong>Manual Inventory Override:</strong> Verified via <span class="code-badge">backend/tests/test_inventory_override.py</span> with authorized manager credentials.</li>
+      <li><strong>Role-Based Access Control (RBAC):</strong> Verified via <span class="code-badge">backend/tests/test_rbac_permissions.py</span> covering Cashier, Technician, and Manager roles.</li>
+      <li><strong>Session Inactivity &amp; Lockout:</strong> Verified via <span class="code-badge">backend/tests/test_auth_security.py</span> testing 15-minute expiration and 5-attempt rate-limiting.</li>
+      <li><strong>Discount &amp; Cancellation Authorizations:</strong> Verified via <span class="code-badge">backend/tests/test_discounts_cancellations.py</span> logging real-time manager approvals.</li>
+      <li><strong>Random Forest Turnaround Inference:</strong> Verified via <span class="code-badge">backend/tests/test_ml_pipeline.py</span> generating benchmark predictions against the test harness.</li>
+    </ul>
+  </section>
+
+  <!-- SECTION 20: FINAL IMPORT READINESS DECISION -->
+  <section id="sec-20">
+    <h2><span class="section-num">20</span> Final Import Readiness Decision</h2>
+    <div class="gate-banner" style="background: rgba(251, 191, 36, 0.15); border-color: var(--accent-amber);">
+      <div>
+        <div class="gate-title" style="font-size: 1.4rem;">
+          FINAL DECISION: CONDITIONAL GO
+        </div>
+        <div class="gate-desc" style="font-size: 0.95rem; color: #f1f5f9; margin-top: 8px;">
+          The reconciliation is structurally complete, safe, and ready for staging. Production database execution is conditionally gated pending user confirmation of the held items.
+        </div>
+      </div>
+      <div class="gate-badge" style="font-size: 1.2rem; padding: 10px 24px;">CONDITIONAL GO</div>
+    </div>
+    <h3>Pre-Import Checklist Before Final Authorization:</h3>
+    <ol>
+      <li><strong>Confirm Identity Resolution:</strong> Acknowledge that Cico B. Conde and Rico Ancheta will remain held and will NOT be merged automatically.</li>
+      <li><strong>Confirm Claim Handling:</strong> Acknowledge that the 22 CLAIM rows will be recorded as payment receipts or held in staging, and will NOT create new job orders.</li>
+      <li><strong>Confirm ML Isolation:</strong> Acknowledge that the historical import will bypass the Random Forest prediction pipeline and leave <span class="code-badge">predicted_days</span> null.</li>
+      <li><strong>Confirm Expense Scope:</strong> Acknowledge that Maynilad (&#8361;4,311.03) and Eileen Cash-Out (&#8361;3,000.00) will be excluded from September operating expenses until verified.</li>
+    </ol>
+  </section>
+
+  <footer>
+    <p>Shoelotskey Service Management System &bull; Defense &amp; Audit Reporting &bull; Villamor–Pasay Operational Pilot</p>
+    <p style="margin-top: 4px;">Generated autonomously by Antigravity in Read-Only Dry-Run Mode &bull; Stop Condition Enforced</p>
+  </footer>
+
+</div>
+</body>
+</html>

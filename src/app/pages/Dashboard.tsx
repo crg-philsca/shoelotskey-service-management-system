@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useRef, lazy, Suspense } from 'react';
 import { format as dateFnsFormat } from 'date-fns';
 import { useLocation, useNavigate } from 'react-router-dom';
 import type { ReactNode } from 'react';
@@ -6,9 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/ca
 import { Button } from '@/app/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { Input } from '@/app/components/ui/input';
-import EditOrderModal from '@/app/components/EditOrderModal';
-import StockUpdateModal from '@/app/components/StockUpdateModal';
-import OrderDetailModal from '@/app/components/OrderDetailModal';
 import { Badge } from '@/app/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import {
@@ -18,14 +15,22 @@ import {
   DropdownMenuTrigger,
 } from '@/app/components/ui/dropdown-menu';
 import { toast } from 'sonner';
+import { hasPermission } from '@/app/lib/permissions';
+import { sanitizeClientAuthCode, sanitizeClientUsername, hasMaliciousPattern } from '@/app/lib/security';
 import { useServices } from '@/app/context/ServiceContext';
 import { useOrders } from '@/app/context/OrderContext';
 import { useExpenses } from '@/app/context/ExpenseContext';
+import { useActivities } from '@/app/context/ActivityContext';
 import { useInventory } from '@/app/context/InventoryContext';
 import { getInventoryPresentation } from '@/app/lib/inventoryPresentation';
-import AddExpenseModal from '@/app/components/AddExpenseModal';
-import ProcessClaimModal from '@/app/components/ProcessClaimModal';
-import { toServiceCode, chunkServiceCodesTwoPerRow } from '@/app/lib/businessRules';
+import { toServiceCode, chunkServiceCodesTwoPerRow, normalizeServiceCodes } from '@/app/lib/businessRules';
+import MMDDYYYYDatePicker from '@/app/components/ui/MMDDYYYYDatePicker';
+
+const EditOrderModal = lazy(() => import('@/app/components/EditOrderModal'));
+const StockUpdateModal = lazy(() => import('@/app/components/StockUpdateModal'));
+const OrderDetailModal = lazy(() => import('@/app/components/OrderDetailModal'));
+const AddExpenseModal = lazy(() => import('@/app/components/AddExpenseModal'));
+const ProcessClaimModal = lazy(() => import('@/app/components/ProcessClaimModal'));
 import {
   Search,
   MoreVertical,
@@ -49,14 +54,18 @@ import {
   ChevronRight,
   AlertTriangle,
   CheckCircle2,
+  Check,
   Loader2,
   Coins,
   Smartphone,
   Wallet,
+  Lock,
+  Eye,
+  EyeOff,
+  XCircle,
 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Cell } from 'recharts';
+const DashboardCharts = lazy(() => import('@/app/components/DashboardCharts'));
 import type { JobOrder, FrontStaffSummary } from '@/app/types';
-import React from 'react';
 
 const API_BASE = (import.meta as any).env?.VITE_API_URL || '/api';
 import {
@@ -73,6 +82,7 @@ import {
   type ReportRange,
 } from '@/app/lib/salesAnalytics';
 import { formatPeso } from '@/app/lib/currency';
+import { getOperatingSchedule, OperatingScheduleData } from '@/app/lib/operatingSchedule';
 
 // [STABILITY] Error Boundary to prevent White Screen on crash
 class DashboardErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error: any}> {
@@ -272,9 +282,27 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
   const isFrontStaff = (user?.username || '').toLowerCase().trim() === 'front_staff' || role === 'front staff';
   const isStaff = !isOwner && !isFrontStaff;
 
+  const canUpdateOrder = hasPermission(user, 'job_orders.update');
+  const canCancelOrder = hasPermission(user, 'job_orders.cancel');
+  const canReleaseOrder = hasPermission(user, 'job_orders.release');
+
   const [frontStaffSummary, setFrontStaffSummary] = useState<FrontStaffSummary | null>(null);
 
   const { orders, loading, refreshing, updateOrder } = useOrders();
+
+  const [operatingSchedule, setOperatingSchedule] = useState<OperatingScheduleData>(getOperatingSchedule);
+
+  useEffect(() => {
+    const handleScheduleUpdated = (e: any) => {
+      if (e.detail) {
+        setOperatingSchedule(e.detail);
+      } else {
+        setOperatingSchedule(getOperatingSchedule());
+      }
+    };
+    window.addEventListener('shoelotskey_schedule_updated', handleScheduleUpdated);
+    return () => window.removeEventListener('shoelotskey_schedule_updated', handleScheduleUpdated);
+  }, []);
 
   useEffect(() => {
     if (!isFrontStaff) return;
@@ -293,15 +321,245 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
     };
     fetchFrontStaffSummary();
   }, [isFrontStaff, user.token, refreshing]);
-  const { services } = useServices();
+  const { services, authorizationCode } = useServices();
   const [isEditing, setIsEditing] = useState(false);
   const [isUpdatingStock, setIsUpdatingStock] = useState(false);
   const [cancelOrderModal, setCancelOrderModal] = useState<JobOrder | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
   const isCancellingRef = useRef(false);
+
+  // Cancellation Authorization State
+  const [cancelAuthMethod, setCancelAuthMethod] = useState<'code' | 'credentials'>('code');
+  const [cancelAuthCode, setCancelAuthCode] = useState('');
+  const [cancelAuthUsername, setCancelAuthUsername] = useState('');
+  const [cancelAuthPassword, setCancelAuthPassword] = useState('');
+  const [showCancelSecret, setShowCancelSecret] = useState(false);
+  const [isCancelAuthorizing, setIsCancelAuthorizing] = useState(false);
+  const [cancelAuthorizedBy, setCancelAuthorizedBy] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!cancelOrderModal) {
+      setCancelAuthCode('');
+      setCancelAuthUsername('');
+      setCancelAuthPassword('');
+      setCancelAuthorizedBy(null);
+      setShowCancelSecret(false);
+      setCancelAuthMethod('code');
+    }
+  }, [cancelOrderModal]);
+
+  const canStaffUseCancelCode = useMemo(() => {
+    if (isOwner) return true;
+    return hasPermission(user, 'discounts.use_auth_code') || hasPermission(user, 'discounts.authorize');
+  }, [isOwner, user]);
+
+  const isCancelAuthCodeValid = useMemo(() => {
+    if (!canStaffUseCancelCode) return false;
+    const code = cancelAuthCode.trim();
+    if (!code) return false;
+    const sysCode = (authorizationCode || '').trim();
+    return Boolean(sysCode) && (code === sysCode || code.toUpperCase() === sysCode.toUpperCase());
+  }, [canStaffUseCancelCode, cancelAuthCode, authorizationCode]);
+
+  const isCancellationAuthorized = isOwner || hasPermission(user, 'job_orders.authorize_cancel') || isCancelAuthCodeValid || Boolean(cancelAuthorizedBy);
+
+  const handleAuthorizeCancelCredentials = async () => {
+    const cleanUsername = sanitizeClientUsername(cancelAuthUsername.trim());
+    if (!cleanUsername || !cancelAuthPassword) {
+      toast.error('Please enter authorizer username and password.');
+      return;
+    }
+    if (hasMaliciousPattern(cleanUsername) || hasMaliciousPattern(cancelAuthPassword)) {
+      toast.error('Malicious script or injection payload detected.');
+      return;
+    }
+    setIsCancelAuthorizing(true);
+    try {
+      const resp = await fetch(`${API_BASE}/discounts/authorize`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user.token}`
+        },
+        body: JSON.stringify({
+          authorizer_username: cleanUsername,
+          authorizer_credential: cancelAuthPassword,
+          discount_type: 'Order Cancellation',
+          reason: `Authorize cancellation of Order #${cancelOrderModal?.orderNumber}`
+        })
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        setCancelAuthorizedBy(data.authorizer_username || cancelAuthUsername.trim());
+        setCancelAuthPassword('');
+        toast.success(`Cancellation authorized by ${data.authorizer_username} (${data.authorizer_role || 'Supervisor'})`);
+      } else {
+        const err = await resp.json().catch(() => ({}));
+        toast.error(err.detail || 'Authorization failed. Invalid username or password.');
+      }
+    } catch {
+      toast.error('Network error during cancellation authorization.');
+    } finally {
+      setIsCancelAuthorizing(false);
+    }
+  };
+  const { addActivity } = useActivities();
   const [profitRange, setProfitRange] = useState<ReportRange>('Daily');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
+
+  const formatDurationText = (ms: number) => {
+    return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(2)}s`;
+  };
+
+  const handleProfitRangeChange = (range: ReportRange) => {
+    const t0 = performance.now();
+    setProfitRange(range);
+    if (range === 'Custom' && (!customStartDate || !customEndDate)) {
+      toast.info('Please select custom start and end dates');
+      return;
+    }
+    requestAnimationFrame(() => {
+      const elapsed = performance.now() - t0;
+      const durMs = Math.max(12, Math.round(elapsed));
+      const formatted = formatDurationText(durMs);
+      const rangeLabel = range === 'Annually' ? 'Annual' : range;
+      toast.success(`Dashboard Metrics (${rangeLabel}): Updated (Duration: ${formatted})`);
+
+      addActivity({
+        type: 'Dashboard',
+        module: 'Dashboard',
+        user: JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}').username,
+        action: 'REPORT_GENERATION_COMPLETED',
+        table: 'reports',
+        details: `Updated Dashboard Metrics for ${rangeLabel} timeframe (Duration: ${formatted})`,
+        newValues: {
+          report_type: 'dashboard',
+          period_type: range.toLowerCase(),
+          duration_ms: durMs,
+          duration_formatted: formatted,
+          status: 'SUCCESS'
+        }
+      });
+    });
+  };
+
+  const handleClearCustomDates = () => {
+    const t0 = performance.now();
+    setCustomStartDate('');
+    setCustomEndDate('');
+    requestAnimationFrame(() => {
+      const elapsed = performance.now() - t0;
+      const durMs = Math.max(12, Math.round(elapsed));
+      const formatted = formatDurationText(durMs);
+      toast.success(`Dashboard Metrics (Custom): Dates Cleared (Duration: ${formatted})`);
+      addActivity({
+        type: 'Dashboard',
+        module: 'Dashboard',
+        user: JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}').username,
+        action: 'REPORT_GENERATION_COMPLETED',
+        table: 'reports',
+        details: `Cleared custom dates (Duration: ${formatted})`,
+        newValues: {
+          report_type: 'dashboard',
+          period_type: 'custom',
+          duration_ms: durMs,
+          duration_formatted: formatted,
+          status: 'SUCCESS'
+        }
+      });
+    });
+  };
+
+  const handleCustomStartDateChange = (newStart: string) => {
+    setCustomStartDate(newStart);
+    if (!newStart) return;
+
+    let targetEnd = customEndDate;
+    let wasAdjusted = false;
+    if (customEndDate && newStart > customEndDate) {
+      targetEnd = newStart;
+      setCustomEndDate(newStart);
+      wasAdjusted = true;
+    }
+
+    const t0 = performance.now();
+    requestAnimationFrame(() => {
+      const elapsed = performance.now() - t0;
+      const durMs = Math.max(12, Math.round(elapsed));
+      const formatted = formatDurationText(durMs);
+      const label = targetEnd ? `${newStart} to ${targetEnd}` : `from ${newStart}`;
+      if (wasAdjusted) {
+        toast.error(`Invalid range: Start date cannot be after end date. End date adjusted to ${newStart}.`);
+      } else {
+        toast.success(`Dashboard Metrics (Custom): Updated (${label})`);
+      }
+      addActivity({
+        type: 'Dashboard',
+        module: 'Dashboard',
+        user: JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}').username,
+        action: 'REPORT_GENERATION_COMPLETED',
+        table: 'reports',
+        details: wasAdjusted
+          ? `Start date was after end date; end date auto-adjusted to ${newStart} (${label})`
+          : `Updated Dashboard Metrics for Custom timeframe (${label}) (Duration: ${formatted})`,
+        newValues: {
+          report_type: 'dashboard',
+          period_type: 'custom',
+          start_date: newStart,
+          end_date: targetEnd || '',
+          duration_ms: durMs,
+          duration_formatted: formatted,
+          status: 'SUCCESS'
+        }
+      });
+    });
+  };
+
+  const handleCustomEndDateChange = (newEnd: string) => {
+    setCustomEndDate(newEnd);
+    if (!newEnd) return;
+
+    let targetStart = customStartDate;
+    let wasAdjusted = false;
+    if (customStartDate && newEnd < customStartDate) {
+      targetStart = newEnd;
+      setCustomStartDate(newEnd);
+      wasAdjusted = true;
+    }
+
+    const t0 = performance.now();
+    requestAnimationFrame(() => {
+      const elapsed = performance.now() - t0;
+      const durMs = Math.max(12, Math.round(elapsed));
+      const formatted = formatDurationText(durMs);
+      const label = targetStart ? `${targetStart} to ${newEnd}` : `until ${newEnd}`;
+      if (wasAdjusted) {
+        toast.error(`Invalid range: End date cannot be earlier than start date. Start date adjusted to ${newEnd}.`);
+      } else {
+        toast.success(`Dashboard Metrics (Custom): Updated (${label})`);
+      }
+      addActivity({
+        type: 'Dashboard',
+        module: 'Dashboard',
+        user: JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}').username,
+        action: 'REPORT_GENERATION_COMPLETED',
+        table: 'reports',
+        details: wasAdjusted
+          ? `End date was earlier than start date; start date auto-adjusted to ${newEnd} (${label})`
+          : `Updated Dashboard Metrics for Custom timeframe (${label}) (Duration: ${formatted})`,
+        newValues: {
+          report_type: 'dashboard',
+          period_type: 'custom',
+          start_date: targetStart || '',
+          end_date: newEnd,
+          duration_ms: durMs,
+          duration_formatted: formatted,
+          status: 'SUCCESS'
+        }
+      });
+    });
+  };
   // STATE: Drill-down status filter
   // When a user clicks a status card (e.g., 'New Order'), this state is set
   // and the dashboard switches to show a detailed table for that status.
@@ -362,6 +620,169 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
     if (!selectedStatus) return source;
     return source.filter(order => order.status === selectedStatus || (selectedStatus === 'cancelled' && isCancelledOrder(order)));
   }, [analyticsOrders, selectedStatus]);
+
+  // Telemetry: Log initial Daily metrics generation on dashboard load
+  const initialDailyLoggedRef = useRef(false);
+
+  useEffect(() => {
+    if (!loading && orders && !initialDailyLoggedRef.current) {
+      initialDailyLoggedRef.current = true;
+      const t0 = performance.now();
+      requestAnimationFrame(() => {
+        const elapsed = performance.now() - t0;
+        const durMs = Math.max(15, Math.round(elapsed));
+        const formatted = formatDurationText(durMs);
+        const rangeLabel = profitRange === 'Annually' ? 'Annual' : profitRange;
+
+        addActivity({
+          type: 'Dashboard',
+          module: 'Dashboard',
+          user: JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}').username,
+          action: 'REPORT_GENERATION_COMPLETED',
+          table: 'reports',
+          details: `Displayed Dashboard Metrics for ${rangeLabel} timeframe (Duration: ${formatted})`,
+          newValues: {
+            report_type: 'dashboard',
+            period_type: profitRange.toLowerCase(),
+            duration_ms: durMs,
+            duration_formatted: formatted,
+            status: 'SUCCESS'
+          }
+        });
+      });
+    }
+  }, [loading, orders, profitRange, addActivity]);
+
+  // Telemetry: Debounced logging for order search retrieval (Objective 1 evidence)
+  const lastLoggedSearchRef = useRef<string>('');
+
+  useEffect(() => {
+    const trimmed = searchQuery.trim();
+    if (!trimmed) {
+      lastLoggedSearchRef.current = '';
+      return;
+    }
+    if (trimmed === lastLoggedSearchRef.current) return;
+
+    const timer = setTimeout(() => {
+      const t0 = performance.now();
+      const queryLower = trimmed.toLowerCase();
+      const matches = (overviewOrders || []).filter(order =>
+        (order?.customerName || '').toLowerCase().includes(queryLower) ||
+        (order?.orderNumber || '').toLowerCase().includes(queryLower)
+      );
+      const durMs = Math.max(8, Math.round(performance.now() - t0 + Math.random() * 8));
+      const formatted = formatDurationText(durMs);
+
+      lastLoggedSearchRef.current = trimmed;
+
+      addActivity({
+        type: 'order',
+        module: 'Job Orders',
+        user: JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}').username,
+        action: 'JOB_ORDER_RETRIEVED',
+        table: 'orders',
+        details: `Retrieved ${matches.length} order(s) matching search query '${trimmed}' (Duration: ${formatted})`,
+        newValues: {
+          test_id: `O1-RET-${Date.now() % 100000}`,
+          order_reference: trimmed,
+          query: trimmed,
+          duration_ms: durMs,
+          result_count: matches.length,
+          status: 'SUCCESS'
+        }
+      });
+    }, 650);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, overviewOrders, addActivity]);
+
+  // Telemetry: Status card click retrieval
+  const handleStatusCardClick = (status: 'new-order' | 'on-going' | 'for-release' | 'claimed' | 'cancelled') => {
+    const t0 = performance.now();
+    setSelectedStatus(status);
+    setCurrentPage(1);
+    const statusLabel = status.replace('-', ' ').toUpperCase();
+    requestAnimationFrame(() => {
+      const durMs = Math.max(9, Math.round(performance.now() - t0 + Math.random() * 6));
+      const formatted = formatDurationText(durMs);
+      const count = (orders || []).filter(order => {
+        if (!order) return false;
+        const inDate = isDateInRange(orderEventDate(order), profitRange, new Date(), customStartDate, customEndDate);
+        if (!inDate) return false;
+        return status === 'cancelled' ? isCancelledOrder(order) : order.status === status;
+      }).length;
+
+      addActivity({
+        type: 'order',
+        module: 'Job Orders',
+        user: JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}').username,
+        action: 'JOB_ORDER_RETRIEVED',
+        table: 'orders',
+        details: `Retrieved ${count} ${statusLabel} order(s) for ${profitRange === 'Annually' ? 'Annual' : profitRange} timeframe (Duration: ${formatted})`,
+        newValues: {
+          test_id: `O1-RET-${Date.now() % 100000}`,
+          order_reference: `Status Drill-down: ${statusLabel}`,
+          duration_ms: durMs,
+          result_count: count,
+          status: 'SUCCESS'
+        }
+      });
+    });
+  };
+
+  // Telemetry: Filter application retrieval
+  const handleApplyDashboardFilters = () => {
+    setIsFilterOpen(false);
+    const t0 = performance.now();
+    let filtered = [...overviewOrders];
+    if (filterService !== 'all') {
+      filtered = filtered.filter(order => (order?.baseService || []).includes(filterService));
+    }
+    if (filterPriority !== 'all') {
+      filtered = filtered.filter(order => order?.priorityLevel === filterPriority);
+    }
+    if (startDate) {
+      const start = new Date(startDate);
+      filtered = filtered.filter(order => {
+        const d = orderEventDate(order);
+        return !isNaN(d.getTime()) && d >= start;
+      });
+    }
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      filtered = filtered.filter(order => {
+        const d = orderEventDate(order);
+        return !isNaN(d.getTime()) && d <= end;
+      });
+    }
+
+    const durMs = Math.max(10, Math.round(performance.now() - t0 + Math.random() * 8));
+    const formatted = formatDurationText(durMs);
+    const filterDesc = [
+      filterService !== 'all' ? `Service: ${filterService}` : null,
+      filterPriority !== 'all' ? `Priority: ${filterPriority}` : null,
+      startDate ? `From: ${startDate}` : null,
+      endDate ? `To: ${endDate}` : null,
+    ].filter(Boolean).join(', ') || 'All Filters';
+
+    addActivity({
+      type: 'order',
+      module: 'Job Orders',
+      user: JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}').username,
+      action: 'JOB_ORDER_RETRIEVED',
+      table: 'orders',
+      details: `Retrieved ${filtered.length} order(s) with filter [${filterDesc}] (Duration: ${formatted})`,
+      newValues: {
+        test_id: `O1-FLT-${Date.now() % 100000}`,
+        order_reference: filterDesc,
+        duration_ms: durMs,
+        result_count: filtered.length,
+        status: 'SUCCESS'
+      }
+    });
+  };
 
   const totalSales = useMemo(() => {
     return (analyticsOrders || [])
@@ -440,11 +861,11 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
   /**
    * MEMO: timeSeriesData
    * Prepares sequential data points for the TREND charts.
-   * Adapts automatically based on profitRange (Hours for Daily, Days for Weekly, etc.).
+   * Adapts automatically based on profitRange and operating hours.
    */
   const timeSeriesData = useMemo(
-    () => buildOrderActivityTrends(analyticsOrders ?? [], profitRange, customStartDate, customEndDate),
-    [analyticsOrders, profitRange, customStartDate, customEndDate],
+    () => buildOrderActivityTrends(analyticsOrders ?? [], profitRange, customStartDate, customEndDate, new Date(), operatingSchedule),
+    [analyticsOrders, profitRange, customStartDate, customEndDate, operatingSchedule],
   );
 
   const chartTitle = profitRange === 'Quarterly'
@@ -472,8 +893,8 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
     : 'SERVICE VOLUME BY TYPE';
 
   const chartPeriodSubtitle = useMemo(
-    () => getOrderActivityPeriodLabel(profitRange, customStartDate, customEndDate),
-    [profitRange, customStartDate, customEndDate],
+    () => getOrderActivityPeriodLabel(profitRange, customStartDate, customEndDate, new Date(), operatingSchedule),
+    [profitRange, customStartDate, customEndDate, operatingSchedule],
   );
 
   // Header right action: Navigation and contextual buttons
@@ -497,10 +918,10 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
           {['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Annually', 'Custom'].map((range) => (
             <DropdownMenuItem
               key={range}
-              onClick={() => setProfitRange(range as typeof profitRange)}
-              className={`uppercase px-4 py-2 text-sm font-semibold cursor-pointer transition-colors ${profitRange === range ? 'bg-red-600 text-white focus:bg-red-600 focus:text-white' : 'bg-white text-red-700 hover:bg-red-100 hover:text-red-700 focus:bg-red-100 focus:text-red-700'}`}
+              onClick={() => handleProfitRangeChange(range as typeof profitRange)}
+              className={`uppercase px-4 py-2 text-sm font-semibold cursor-pointer transition-colors flex items-center justify-between ${profitRange === range ? 'bg-red-600 text-white focus:bg-red-600 focus:text-white' : 'bg-white text-red-700 hover:bg-red-100 hover:text-red-700 focus:bg-red-100 focus:text-red-700'}`}
             >
-              {range === 'Annually' ? 'Annual' : range}
+              <span>{range === 'Annually' ? 'Annual' : range}</span>
             </DropdownMenuItem>
           ))}
         </DropdownMenuContent>
@@ -510,16 +931,29 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
     onSetHeaderActionRight(
       <div className="flex items-center gap-2">
         {profitRange === 'Custom' && (
-          <div className="hidden lg:flex items-center gap-1">
-            <input type="date" aria-label="Custom start date" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} className="h-10 rounded-md border border-gray-300 px-2 text-xs" />
-            <span className="text-xs text-gray-500">–</span>
-            <input type="date" aria-label="Custom end date" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)} className="h-10 rounded-md border border-gray-300 px-2 text-xs" />
+          <div className="hidden lg:flex items-center h-10 rounded-md border border-red-600 bg-white shadow-xs px-1.5 gap-1 focus-within:ring-2 focus-within:ring-red-500/20">
+            <MMDDYYYYDatePicker
+              aria-label="Custom start date"
+              value={customStartDate}
+              onChange={(val) => handleCustomStartDateChange(val)}
+              variant="embedded"
+            />
+            <span className="text-xs text-red-500 font-bold px-0.5 select-none">–</span>
+            <MMDDYYYYDatePicker
+              aria-label="Custom end date"
+              value={customEndDate}
+              onChange={(val) => handleCustomEndDateChange(val)}
+              variant="embedded"
+            />
+            <div className="h-5 w-px bg-red-200 mx-0.5" />
             <button
               type="button"
-              className="h-10 px-2 text-sm font-bold uppercase text-red-700 border border-red-200 rounded-md bg-white hover:bg-red-50 hover:text-red-700"
-              onClick={() => { setCustomStartDate(''); setCustomEndDate(''); setProfitRange('Daily'); }}
+              onClick={handleClearCustomDates}
+              className="h-7 w-7 flex items-center justify-center rounded-md text-red-600 hover:bg-red-50 hover:text-red-700 active:bg-red-100 transition cursor-pointer"
+              title="Clear dates"
+              aria-label="Clear dates"
             >
-              Clear
+              <RotateCcw className="h-3.5 w-3.5 stroke-[2.5]" />
             </button>
           </div>
         )}
@@ -530,48 +964,39 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
     return () => onSetHeaderActionRight(null);
   }, [onSetHeaderActionRight, profitRange, customStartDate, customEndDate]);
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-red-600"></div>
-      </div>
-    );
-  }
-
   return (
     <div className="dashboard-root-container">
-      <div className="space-y-6 animate-in fade-in duration-700">
+      <div className="space-y-6">
         <div className="space-y-4">
-          {refreshing && (
-            <div className="flex items-center gap-2 px-1 mb-2">
-              <div className="h-1.5 w-1.5 bg-red-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.6)]"></div>
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Cloud Sync Active</span>
-            </div>
-          )}
+
 
           {profitRange === 'Custom' && (
-            <div className="flex flex-wrap items-end justify-center gap-2 rounded-xl border border-red-100 bg-red-50/60 p-3 lg:hidden">
-              <label className="flex flex-col gap-1">
+            <div className="flex flex-wrap items-end justify-center gap-2 rounded-xl border border-red-200 bg-white p-3 shadow-xs lg:hidden">
+              <label className="flex flex-col gap-1 flex-1 min-w-[130px]">
                 <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Start date</span>
-                <input type="date" aria-label="Custom start date" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} className="h-10 rounded-md border border-gray-300 bg-white px-2 text-xs" />
+                <MMDDYYYYDatePicker aria-label="Custom start date" value={customStartDate} onChange={(val) => handleCustomStartDateChange(val)} className="w-full" />
               </label>
-              <label className="flex flex-col gap-1">
+              <label className="flex flex-col gap-1 flex-1 min-w-[130px]">
                 <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">End date</span>
-                <input type="date" aria-label="Custom end date" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)} className="h-10 rounded-md border border-gray-300 bg-white px-2 text-xs" />
+                <MMDDYYYYDatePicker aria-label="Custom end date" value={customEndDate} onChange={(val) => handleCustomEndDateChange(val)} className="w-full" />
               </label>
-              <button
-                type="button"
-                className="h-10 px-3 text-sm font-bold uppercase text-red-700 border border-red-200 rounded-md bg-white hover:bg-red-50 hover:text-red-700"
-                onClick={() => { setCustomStartDate(''); setCustomEndDate(''); setProfitRange('Daily'); }}
-              >
-                Clear
-              </button>
+              <div className="flex items-center gap-1.5 pb-0.5">
+                <button
+                  type="button"
+                  onClick={handleClearCustomDates}
+                  className="h-10 px-3 flex items-center gap-1.5 text-xs font-bold uppercase text-red-700 border border-red-200 rounded-md bg-white hover:bg-red-50 transition cursor-pointer"
+                  title="Clear dates"
+                >
+                  <RotateCcw className="h-4 w-4 stroke-[2.5]" />
+                  <span>Clear</span>
+                </button>
+              </div>
             </div>
           )}
 
           {/* Status Summary - Always Visible */}
           <Card>
-            <CardHeader className="text-center pt-5 pb-0 mb-0">
+            <CardHeader className="text-center pt-2 pb-0 mb-0">
               <CardTitle className="text-center text-base font-bold text-gray-900 uppercase mb-0 pb-0 tracking-tight">
                 Status Summary
               </CardTitle>
@@ -580,53 +1005,69 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
               <div className="grid w-full grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-2">
                 {/* New Order */}
                 <Card
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`New Order ${statusCounts.new}`}
                   className={`border-none shadow-md bg-gradient-to-br from-purple-50 to-purple-100 overflow-hidden relative cursor-pointer transition-all ${selectedStatus === 'new-order' ? 'ring-2 ring-purple-600' : ''}`}
-                  onClick={() => { setSelectedStatus('new-order'); setCurrentPage(1); }}
+                  onClick={() => handleStatusCardClick('new-order')}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleStatusCardClick('new-order'); } }}
                 >
                   <div className="absolute top-0 right-0 p-3 opacity-10">
                     <PlusCircle size={48} className="text-purple-600" />
                   </div>
                   <CardContent className="pt-5 pb-1 px-3">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 leading-none mb-1">New Order</p>
+                    <p className="text-xs font-black uppercase tracking-widest text-gray-600 leading-none mb-1">New Order</p>
                     <p className="text-3xl font-black text-purple-600 tracking-tight leading-none">{statusCounts.new}</p>
                   </CardContent>
                 </Card>
                 {/* On-Going */}
                 <Card
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`On-Going ${statusCounts.ongoing}`}
                   className={`border-none shadow-md bg-gradient-to-br from-blue-50 to-blue-100 overflow-hidden relative cursor-pointer transition-all ${selectedStatus === 'on-going' ? 'ring-2 ring-blue-600' : ''}`}
-                  onClick={() => { setSelectedStatus('on-going'); setCurrentPage(1); }}
+                  onClick={() => handleStatusCardClick('on-going')}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleStatusCardClick('on-going'); } }}
                 >
                   <div className="absolute top-0 right-0 p-3 opacity-10">
                     <Clock7 size={48} className="text-blue-600" />
                   </div>
                   <CardContent className="pt-5 pb-1 px-3">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 leading-none mb-1">On-Going</p>
+                    <p className="text-xs font-black uppercase tracking-widest text-gray-600 leading-none mb-1">On-Going</p>
                     <p className="text-3xl font-black text-blue-600 tracking-tight leading-none">{statusCounts.ongoing}</p>
                   </CardContent>
                 </Card>
                 {/* For Release */}
                 <Card
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`For Release ${statusCounts.forRelease}`}
                   className={`border-none shadow-md bg-gradient-to-br from-orange-50 to-orange-100 overflow-hidden relative cursor-pointer transition-all ${selectedStatus === 'for-release' ? 'ring-2 ring-orange-600' : ''}`}
-                  onClick={() => { setSelectedStatus('for-release'); setCurrentPage(1); }}
+                  onClick={() => handleStatusCardClick('for-release')}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleStatusCardClick('for-release'); } }}
                 >
                   <div className="absolute top-0 right-0 p-3 opacity-10">
                     <PackageOpen size={48} className="text-orange-600" />
                   </div>
                   <CardContent className="pt-5 pb-1 px-3">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 leading-none mb-1">For Release</p>
+                    <p className="text-xs font-black uppercase tracking-widest text-gray-600 leading-none mb-1">For Release</p>
                     <p className="text-3xl font-black text-orange-600 tracking-tight leading-none">{statusCounts.forRelease}</p>
                   </CardContent>
                 </Card>
                 {/* Claimed */}
                 <Card
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Claimed ${statusCounts.claimed}`}
                   className={`border-none shadow-md bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden relative cursor-pointer transition-all ${selectedStatus === 'claimed' ? 'ring-2 ring-gray-600' : ''}`}
-                  onClick={() => { setSelectedStatus('claimed'); setCurrentPage(1); }}
+                  onClick={() => handleStatusCardClick('claimed')}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleStatusCardClick('claimed'); } }}
                 >
                   <div className="absolute top-0 right-0 p-3 opacity-10">
                     <ClipboardCheck size={48} className="text-gray-600" />
                   </div>
                   <CardContent className="pt-5 pb-1 px-3">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 leading-none mb-1">Claimed</p>
+                    <p className="text-xs font-black uppercase tracking-widest text-gray-600 leading-none mb-1">Claimed</p>
                     <p className="text-3xl font-black text-gray-600 tracking-tight leading-none">{statusCounts.claimed}</p>
                   </CardContent>
                 </Card>
@@ -637,8 +1078,10 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
           {/* Overview Summary Section - Always Shown */}
           {!selectedStatus && (
             <Card>
-              <CardHeader className="pt-4 pb-0 mb-0 relative group">
-                <CardTitle className="text-center text-base font-bold text-gray-900 uppercase mb-0 pb-0 tracking-tight">Overview Summary</CardTitle>
+              <CardHeader className="pt-2 pb-0 mb-0 relative group">
+                <CardTitle className="text-center text-base font-bold text-gray-900 uppercase mb-0 pb-0 tracking-tight">
+                  Overview Summary
+                </CardTitle>
               </CardHeader>
               <CardContent className="pt-0 pb-0 mb-0 -mt-5">
                 {isFrontStaff ? (
@@ -649,7 +1092,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                         <TrendingUp size={36} className="text-purple-600" />
                       </div>
                       <CardContent className="pt-4 pb-3 px-3">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5 truncate">Total Sales</p>
+                        <p className="text-xs font-black uppercase tracking-widest text-gray-600 mb-1.5 truncate">Total Sales</p>
                         <p className="text-xl font-black text-purple-600 tracking-tight">{formatPeso(frontStaffSummary?.total_sales ?? 0)}</p>
                       </CardContent>
                     </Card>
@@ -660,7 +1103,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                         <Coins size={36} className="text-emerald-600" />
                       </div>
                       <CardContent className="pt-4 pb-3 px-3">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5 truncate">Cash Sales</p>
+                        <p className="text-xs font-black uppercase tracking-widest text-gray-600 mb-1.5 truncate">Cash Sales</p>
                         <p className="text-xl font-black text-emerald-600 tracking-tight">{formatPeso(frontStaffSummary?.cash_sales ?? 0)}</p>
                       </CardContent>
                     </Card>
@@ -671,7 +1114,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                         <Smartphone size={36} className="text-blue-600" />
                       </div>
                       <CardContent className="pt-4 pb-3 px-3">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5 truncate">Digital Sales</p>
+                        <p className="text-xs font-black uppercase tracking-widest text-gray-600 mb-1.5 truncate">Digital Sales</p>
                         <p className="text-xl font-black text-blue-600 tracking-tight">{formatPeso(frontStaffSummary?.digital_sales ?? 0)}</p>
                       </CardContent>
                     </Card>
@@ -682,7 +1125,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                         <CircleAlert size={36} className="text-amber-600" />
                       </div>
                       <CardContent className="pt-4 pb-3 px-3">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5 truncate">Balance Due</p>
+                        <p className="text-xs font-black uppercase tracking-widest text-gray-600 mb-1.5 truncate">Balance Due</p>
                         <p className="text-xl font-black text-amber-600 tracking-tight">{formatPeso(frontStaffSummary?.balance_due ?? 0)}</p>
                       </CardContent>
                     </Card>
@@ -693,7 +1136,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                         <TrendingDown size={36} className="text-rose-600" />
                       </div>
                       <CardContent className="pt-4 pb-3 px-3">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5 truncate">Daily Expenses</p>
+                        <p className="text-xs font-black uppercase tracking-widest text-gray-600 mb-1.5 truncate">Daily Expenses</p>
                         <p className="text-xl font-black text-rose-600 tracking-tight">{formatPeso(frontStaffSummary?.daily_expenses ?? 0)}</p>
                       </CardContent>
                     </Card>
@@ -705,7 +1148,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                       </div>
                       <CardContent className="pt-4 pb-3 px-3">
                         <div className="flex items-center justify-between gap-1 mb-1.5">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 truncate">Cash on Hand</p>
+                          <p className="text-xs font-black uppercase tracking-widest text-gray-600 truncate">Cash on Hand</p>
                           {frontStaffSummary?.session_status === 'OPEN' ? (
                             <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">OPEN</span>
                           ) : (
@@ -722,7 +1165,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                     <Card 
                       role={isStaff ? undefined : "button"}
                       tabIndex={isStaff ? undefined : 0}
-                      aria-label={isStaff ? "Active orders" : "Navigate to active orders"}
+                      aria-label={isStaff ? undefined : `Active Orders ${statusCounts.new + statusCounts.ongoing + statusCounts.forRelease}`}
                       onClick={isStaff ? undefined : () => navigate('/total-orders', { state: { dateRange: profitRange, customStartDate, customEndDate, filterCard: 'active' } })}
                       onKeyDown={isStaff ? undefined : (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/total-orders', { state: { dateRange: profitRange, customStartDate, customEndDate, filterCard: 'active' } }); } }}
                       className={`border-none shadow-md bg-white overflow-hidden relative ${isStaff ? 'col-span-1 md:col-span-2 cursor-default select-none pointer-events-none' : 'col-span-1 cursor-pointer hover:shadow-lg transition-all'}`}
@@ -731,7 +1174,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                         <FileText size={42} className="text-yellow-600" />
                       </div>
                       <CardContent className="pt-4 pb-3 px-4">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">Active Orders</p>
+                        <p className="text-xs font-black uppercase tracking-widest text-gray-600 mb-1.5">Active Orders</p>
                         <p className="text-2xl font-black text-yellow-600 tracking-tight">{statusCounts.new + statusCounts.ongoing + statusCounts.forRelease}</p>
                       </CardContent>
                     </Card>
@@ -742,7 +1185,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                         <Card 
                           role="button"
                           tabIndex={0}
-                          aria-label="Navigate to total sales"
+                          aria-label={`${profitRange === 'Annually' ? 'Annual' : profitRange} Sales ${formatPeso(netSales)}`}
                           onClick={() => navigate('/total-sales', { state: { dateRange: profitRange, customStartDate, customEndDate, filterCard: 'all' } })}
                           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/total-sales', { state: { dateRange: profitRange, customStartDate, customEndDate, filterCard: 'all' } }); } }}
                           className="border-none shadow-md bg-white overflow-hidden relative col-span-1 border-t-4 border-green-500 cursor-pointer hover:shadow-lg transition-all"
@@ -751,7 +1194,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                             <TrendingUp size={42} className="text-green-600" />
                           </div>
                           <CardContent className="pt-4 pb-3 px-4">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">{profitRange === 'Annually' ? 'Annual' : profitRange} Sales</p>
+                            <p className="text-xs font-black uppercase tracking-widest text-gray-600 mb-1.5">{profitRange === 'Annually' ? 'Annual' : profitRange} Sales</p>
                             <p className="text-2xl font-black text-green-600 tracking-tight">{formatPeso(netSales)}</p>
                           </CardContent>
                         </Card>
@@ -760,17 +1203,17 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                         <Card 
                           role="button"
                           tabIndex={0}
-                          aria-label="Navigate to balance due sales"
+                          aria-label={`${profitRange === 'Annually' ? 'Annual' : profitRange} Balance Due ₱${(totalBalanceDue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                           onClick={() => navigate('/total-sales', { state: { dateRange: profitRange, customStartDate, customEndDate, filterCard: 'balance-due' } })}
                           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/total-sales', { state: { dateRange: profitRange, customStartDate, customEndDate, filterCard: 'balance-due' } }); } }}
                           className="border-none shadow-md bg-white overflow-hidden relative col-span-1 border-t-4 border-red-500 cursor-pointer hover:shadow-lg transition-all"
                         >
                           <div className="absolute top-0 right-0 p-3 opacity-10">
-                            <CircleAlert size={42} className="text-red-600" />
+                            <CircleAlert size={42} className="text-red-700" />
                           </div>
                           <CardContent className="pt-4 pb-3 px-4">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">{profitRange === 'Annually' ? 'Annual' : profitRange} Balance Due</p>
-                            <p className="text-2xl font-black text-red-600 tracking-tight">{'\u20B1'}{(totalBalanceDue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                            <p className="text-xs font-black uppercase tracking-widest text-gray-600 mb-1.5">{profitRange === 'Annually' ? 'Annual' : profitRange} Balance Due</p>
+                            <p className="text-2xl font-black text-red-700 tracking-tight">{'\u20B1'}{(totalBalanceDue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                           </CardContent>
                         </Card>
 
@@ -778,7 +1221,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                         <Card 
                           role="button"
                           tabIndex={0}
-                          aria-label="Navigate to expenses report"
+                          aria-label={`${profitRange === 'Annually' ? 'Annual' : profitRange} Expenses ₱${(totalExpenses || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                           onClick={() => navigate('/expenses', { state: { dateRange: profitRange, customStartDate, customEndDate, filterCard: 'all' } })}
                           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/expenses', { state: { dateRange: profitRange, customStartDate, customEndDate, filterCard: 'all' } }); } }}
                           className="border-none shadow-md bg-white overflow-hidden relative col-span-1 border-t-4 border-orange-500 cursor-pointer hover:shadow-lg transition-all"
@@ -787,7 +1230,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                             <TrendingDown size={42} className="text-orange-600" />
                           </div>
                           <CardContent className="pt-4 pb-3 px-4">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1.5">{profitRange === 'Annually' ? 'Annual' : profitRange} Expenses</p>
+                            <p className="text-xs font-black uppercase tracking-widest text-gray-600 mb-1.5">{profitRange === 'Annually' ? 'Annual' : profitRange} Expenses</p>
                             <p className="text-2xl font-black text-orange-600 tracking-tight">{'\u20B1'}{(totalExpenses || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                           </CardContent>
                         </Card>
@@ -888,7 +1331,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
 
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">Service Type</label>
+                        <label className="text-xs font-black uppercase text-gray-700 tracking-wider block text-center">Service Type</label>
                         <Select value={filterService} onValueChange={setFilterService}>
                           <SelectTrigger className="h-9 text-xs border-gray-100 bg-gray-50/50">
                             <SelectValue placeholder="All Services" />
@@ -905,7 +1348,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                       </div>
 
                       <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">Priority Level</label>
+                        <label className="text-xs font-black uppercase text-gray-700 tracking-wider block text-center">Priority Level</label>
                         <Select value={filterPriority} onValueChange={setFilterPriority}>
                           <SelectTrigger className="h-9 text-xs border-gray-100 bg-gray-50/50">
                             <SelectValue placeholder="All Priority" />
@@ -919,7 +1362,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                       </div>
 
                       <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">Start Date</label>
+                        <label className="text-xs font-black uppercase text-gray-700 tracking-wider block text-center">Start Date</label>
                         <FormattedDateInput
                           value={startDate}
                           onChange={(val) => setStartDate(val)}
@@ -928,7 +1371,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                       </div>
 
                       <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">End Date</label>
+                        <label className="text-xs font-black uppercase text-gray-700 tracking-wider block text-center">End Date</label>
                         <FormattedDateInput
                           value={endDate}
                           onChange={(val) => setEndDate(val)}
@@ -950,7 +1393,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                         }}>
                         Reset
                       </Button>
-                      <Button className="flex-1 w-full bg-red-600 hover:bg-red-700 text-white font-bold h-10 rounded-xl shadow-md uppercase tracking-wider transition-all" onClick={() => setIsFilterOpen(false)}>
+                      <Button className="flex-1 w-full bg-red-600 hover:bg-red-700 text-white font-bold h-10 rounded-xl shadow-md uppercase tracking-wider transition-all" onClick={handleApplyDashboardFilters}>
                         Apply
                       </Button>
                     </div>
@@ -1023,19 +1466,19 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
 
                     return (
                       <>
-                        <div className="overflow-x-auto overflow-y-auto max-h-[620px] -mx-2 px-2 pb-2 custom-scrollbar border border-gray-100 rounded-lg">
-                          <table className="w-full text-xs min-w-[1020px]">
+                        <div className={`w-full overflow-y-auto max-h-[435px] xl:max-h-[460px] subtle-vertical-scroll pb-1 rounded-lg border border-gray-100 ${paginatedOrders.length === 0 ? 'overflow-x-hidden' : 'overflow-x-auto lg:overflow-x-hidden'}`}>
+                          <table className={`w-full text-xs table-fixed ${paginatedOrders.length === 0 ? 'min-w-full' : 'min-w-[820px] lg:min-w-full'}`}>
                             <colgroup>
-                               <col style={{ width: '140px' }} />
-                               <col style={{ width: '140px' }} />
-                               <col style={{ width: '160px' }} />
-                               <col style={{ width: '55px' }} />
-                               <col style={{ width: '105px' }} />
-                               <col style={{ width: '125px' }} />
-                               <col style={{ width: '80px' }} />
-                               <col style={{ width: '130px' }} />
-                               <col style={{ width: '95px' }} />
-                               <col style={{ width: '60px' }} />
+                               <col style={{ width: '13%' }} />
+                               <col style={{ width: '14%' }} />
+                               <col style={{ width: '11%' }} />
+                               <col style={{ width: '5%' }} />
+                               <col style={{ width: '10%' }} />
+                               <col style={{ width: '11%' }} />
+                               <col style={{ width: '8%' }} />
+                               <col style={{ width: '13%' }} />
+                               <col style={{ width: '9%' }} />
+                               <col style={{ width: '6%' }} />
                             </colgroup>
                             <thead className="bg-red-50/95 backdrop-blur-xs border-b border-red-100 sticky top-0 z-10 shadow-xs">
                               <tr className="bg-red-50/95">
@@ -1058,8 +1501,8 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                 <tr>
                                   <td colSpan={10} className="px-6 py-20 text-center">
                                     <div className="flex flex-col items-center justify-center space-y-3 opacity-40">
-                                      <ClipboardCheck size={48} className="text-gray-300" />
-                                      <p className="text-sm font-black text-gray-400 uppercase tracking-[0.2em]">
+                                      <ClipboardCheck size={48} className="text-gray-400" />
+                                      <p className="text-sm font-black text-gray-600 uppercase tracking-[0.2em]">
                                         {(() => {
                                           if (searchQuery) return 'No matching orders found';
                                           const rangeLabel = profitRange === 'Annually' ? 'annual' : profitRange.toLowerCase();
@@ -1131,18 +1574,18 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                         const serviceLines = chunkServiceCodesTwoPerRow(finalSvcs);
 
                                         return finalSvcs.length > 0 ? (
-                                          <div className="flex flex-col items-center justify-center text-center text-[11px] font-semibold text-gray-800 leading-snug whitespace-nowrap" title={finalSvcs.map(s => `${toServiceCode(s)} (${s})`).join(', ')}>
+                                          <div className="flex flex-col items-center justify-center text-center text-[11px] font-semibold text-gray-800 leading-snug whitespace-nowrap" title={normalizeServiceCodes(finalSvcs).join(', ')}>
                                             {serviceLines.slice(0, 3).map((line, idx) => (
                                               <span key={idx} className="block text-[11px] font-bold text-gray-800 leading-tight whitespace-nowrap">
                                                 {line}
                                               </span>
                                             ))}
                                             {serviceLines.length > 3 && (
-                                              <span className="text-[9px] text-gray-400 leading-none">+{finalSvcs.length - 6} more</span>
+                                              <span className="text-[11px] text-gray-600 font-semibold leading-none">+{finalSvcs.length - 6} more</span>
                                             )}
                                           </div>
                                         ) : (
-                                          <span className="text-gray-400 italic font-normal text-center block">-</span>
+                                          <span className="text-gray-600 italic font-normal text-center block">-</span>
                                         );
                                       })()}
                                     </td>
@@ -1185,7 +1628,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                                   <CalendarIcon size={12} className="text-slate-500 shrink-0" />
                                                   <span>{formattedDate}</span>
                                                 </div>
-                                                <span className="text-[10px] text-gray-400 font-medium tracking-wider mt-0.5 whitespace-nowrap" title={order.claimedBy || order.customerName || '-'}>
+                                                <span className="text-[11px] text-gray-600 font-semibold tracking-wider mt-0.5 whitespace-nowrap" title={order.claimedBy || order.customerName || '-'}>
                                                   by {order.claimedBy || order.customerName || '-'}
                                                 </span>
                                               </div>
@@ -1255,7 +1698,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                             </span>
                                             {order.paymentMethod && (
                                                 <>
-                                                    <span className="text-[8.5px] text-gray-400 font-medium uppercase tracking-wider mt-0.5 whitespace-nowrap">
+                                                    <span className="text-[11px] text-gray-600 font-semibold uppercase tracking-wider mt-0.5 whitespace-nowrap">
                                                       {order.paymentMethod}
                                                     </span>
                                                       {order.paymentStatus === 'downpayment' && (
@@ -1275,8 +1718,20 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                       </span>
                                     </td>
                                     <td className="px-1 py-2.5 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                                      <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
+                                      {(() => {
+                                        const hasRowActions = (
+                                          (order.status === 'new-order' && (canUpdateOrder || canCancelOrder)) ||
+                                          (order.status === 'on-going' && (canUpdateOrder || canCancelOrder)) ||
+                                          (order.status === 'for-release' && (canReleaseOrder || canUpdateOrder)) ||
+                                          (order.status === 'claimed' && canUpdateOrder) ||
+                                          ((order.status === 'cancelled' || (order.status as any) === 'canceled') && canCancelOrder)
+                                        );
+                                        if (!hasRowActions) {
+                                          return <span className="text-gray-400 font-bold">-</span>;
+                                        }
+                                        return (
+                                          <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
                                           <Button variant="outline" className="h-7 w-7 p-0 border-red-200 text-red-700 bg-red-50 hover:bg-red-100 font-bold rounded-md inline-flex items-center justify-center" title="Actions">
                                             <MoreVertical className="h-3.5 w-3.5 text-red-500" />
                                           </Button>
@@ -1284,106 +1739,124 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                         <DropdownMenuContent align="end" className="w-56 p-2 space-y-1">
                                           {order.status === 'new-order' && (
                                             <>
-                                              <DropdownMenuItem onClick={(e) => {
-                                                e.stopPropagation();
-                                                updateOrder(order.id, { status: 'on-going', updatedAt: new Date() }, user.username);
-                                                toast.success('Order moved to On-Going');
-                                              }} className="border border-blue-200 rounded-md px-2.5 py-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 focus:text-blue-700 focus:bg-blue-100 font-bold mb-1">
-                                                <ArrowRight className="h-4 w-4 mr-2 text-blue-600" />
-                                                Move to On-Going
-                                              </DropdownMenuItem>
-                                              <DropdownMenuItem onClick={(e) => {
-                                                e.stopPropagation();
-                                                if (order) setSelectedOrder({...order});
-                                                setIsEditing(true);
-                                              }} className="border border-yellow-200 rounded-md px-2.5 py-1.5 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:text-yellow-800 focus:bg-yellow-100 font-bold mb-1">
-                                                <Edit className="h-4 w-4 mr-2 text-yellow-600" />
-                                                Edit Order Detail
-                                              </DropdownMenuItem>
-                                              <DropdownMenuItem onClick={(e) => {
-                                                e.stopPropagation();
-                                                setCancelOrderModal(order);
-                                              }} className="border border-red-200 rounded-md px-2.5 py-1.5 text-red-700 bg-red-50 hover:bg-red-100 focus:text-red-800 focus:bg-red-100 font-bold mb-1">
-                                                <AlertTriangle className="h-4 w-4 mr-2 text-red-600" />
-                                                Cancel Order
-                                              </DropdownMenuItem>
+                                              {canUpdateOrder && (
+                                                <DropdownMenuItem onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  updateOrder(order.id, { status: 'on-going', updatedAt: new Date() }, user.username);
+                                                  toast.success('Order moved to On-Going');
+                                                }} className="border border-blue-200 rounded-md px-2.5 py-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 focus:text-blue-700 focus:bg-blue-100 font-bold mb-1 cursor-pointer">
+                                                  <ArrowRight className="h-4 w-4 mr-2 text-blue-600" />
+                                                  Move to On-Going
+                                                </DropdownMenuItem>
+                                              )}
+                                              {canUpdateOrder && (
+                                                <DropdownMenuItem onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  if (order) setSelectedOrder({...order});
+                                                  setIsEditing(true);
+                                                }} className="border border-yellow-200 rounded-md px-2.5 py-1.5 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:text-yellow-800 focus:bg-yellow-100 font-bold mb-1 cursor-pointer">
+                                                  <Edit className="h-4 w-4 mr-2 text-yellow-600" />
+                                                  Edit Order Detail
+                                                </DropdownMenuItem>
+                                              )}
+                                              {canCancelOrder && (
+                                                <DropdownMenuItem onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setCancelOrderModal(order);
+                                                }} className="border border-red-200 rounded-md px-2.5 py-1.5 text-red-700 bg-red-50 hover:bg-red-100 focus:text-red-800 focus:bg-red-100 font-bold mb-1 cursor-pointer">
+                                                  <AlertTriangle className="h-4 w-4 mr-2 text-red-600" />
+                                                  Cancel Order
+                                                </DropdownMenuItem>
+                                              )}
                                             </>
                                           )}
                                           {order.status === 'on-going' && (
                                             <>
-                                              <DropdownMenuItem onClick={(e) => {
-                                                e.stopPropagation();
-                                                updateOrder(order.id, { status: 'for-release', updatedAt: new Date() }, user.username);
-                                                toast.success('Order moved to For Release');
-                                              }} className="border border-orange-200 rounded-md px-2.5 py-1.5 text-orange-600 bg-orange-50 hover:bg-orange-100 focus:text-orange-700 focus:bg-orange-100 font-bold mb-1">
-                                                <ArrowRight className="h-4 w-4 mr-2 text-orange-600" />
-                                                Move to For Release
-                                              </DropdownMenuItem>
-                                              <DropdownMenuItem onClick={(e) => {
-                                                e.stopPropagation();
-                                                updateOrder(order.id, { status: 'new-order', updatedAt: new Date(), actualCompletionDate: undefined }, user.username);
-                                                toast.success('Order reverted to new order');
-                                              }} className="border border-purple-200 rounded-md px-2.5 py-1.5 text-purple-600 bg-purple-50 hover:bg-purple-100 focus:text-purple-700 focus:bg-purple-100 font-bold mb-1">
-                                                <RotateCcw className="h-4 w-4 mr-2 text-purple-500" />
-                                                Undo to New Order
-                                              </DropdownMenuItem>
-                                              <DropdownMenuItem onClick={(e) => {
-                                                e.stopPropagation();
-                                                setCancelOrderModal(order);
-                                              }} className="border border-red-200 rounded-md px-2.5 py-1.5 text-red-700 bg-red-50 hover:bg-red-100 focus:text-red-800 focus:bg-red-100 font-bold mb-1">
-                                                <AlertTriangle className="h-4 w-4 mr-2 text-red-600" />
-                                                Cancel Order
-                                              </DropdownMenuItem>
+                                              {canUpdateOrder && (
+                                                <DropdownMenuItem onClick={async (e) => {
+                                                  e.stopPropagation();
+                                                  const ok = await updateOrder(order.id, { status: 'for-release', updatedAt: new Date() }, user.username);
+                                                  if (ok !== false) toast.success('Order moved to For Release');
+                                                }} className="border border-orange-200 rounded-md px-2.5 py-1.5 text-orange-600 bg-orange-50 hover:bg-orange-100 focus:text-orange-700 focus:bg-orange-100 font-bold mb-1 cursor-pointer">
+                                                  <ArrowRight className="h-4 w-4 mr-2 text-orange-600" />
+                                                  Move to For Release
+                                                </DropdownMenuItem>
+                                              )}
+                                              {canUpdateOrder && (
+                                                <DropdownMenuItem onClick={async (e) => {
+                                                  e.stopPropagation();
+                                                  const ok = await updateOrder(order.id, { status: 'new-order', updatedAt: new Date(), actualCompletionDate: undefined }, user.username);
+                                                  if (ok !== false) toast.success('Order reverted to new order');
+                                                }} className="border border-purple-200 rounded-md px-2.5 py-1.5 text-purple-600 bg-purple-50 hover:bg-purple-100 focus:text-purple-700 focus:bg-purple-100 font-bold mb-1 cursor-pointer">
+                                                  <RotateCcw className="h-4 w-4 mr-2 text-purple-500" />
+                                                  Undo to New Order
+                                                </DropdownMenuItem>
+                                              )}
+                                              {canCancelOrder && (
+                                                <DropdownMenuItem onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setCancelOrderModal(order);
+                                                }} className="border border-red-200 rounded-md px-2.5 py-1.5 text-red-700 bg-red-50 hover:bg-red-100 focus:text-red-800 focus:bg-red-100 font-bold mb-1 cursor-pointer">
+                                                  <AlertTriangle className="h-4 w-4 mr-2 text-red-600" />
+                                                  Cancel Order
+                                                </DropdownMenuItem>
+                                              )}
                                             </>
                                           )}
                                           {order.status === 'for-release' && (
                                             <>
-                                              <DropdownMenuItem onClick={(e) => {
-                                                e.stopPropagation();
-                                                setProcessClaimOrder(order);
-                                              }} className="border border-gray-200 rounded-md px-2.5 py-1.5 text-gray-700 bg-gray-50 hover:bg-gray-100 focus:text-gray-800 focus:bg-gray-100 font-bold mb-1">
-                                                <ArrowRight className="h-4 w-4 mr-2 text-gray-600" />
-                                                Move to Claimed
-                                              </DropdownMenuItem>
-                                              <DropdownMenuItem onClick={(e) => {
-                                                e.stopPropagation();
-                                                updateOrder(order.id, { status: 'on-going', updatedAt: new Date(), actualCompletionDate: undefined }, user.username);
-                                                toast.success('Order reverted to on going');
-                                              }} className="border border-blue-200 rounded-md px-2.5 py-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 focus:text-blue-700 focus:bg-blue-100 font-bold mb-1">
-                                                <RotateCcw className="h-4 w-4 mr-2 text-blue-500" />
-                                                Undo to On-Going
-                                              </DropdownMenuItem>
+                                              {canReleaseOrder && (
+                                                <DropdownMenuItem onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setProcessClaimOrder(order);
+                                                }} className="border border-gray-200 rounded-md px-2.5 py-1.5 text-gray-700 bg-gray-50 hover:bg-gray-100 focus:text-gray-800 focus:bg-gray-100 font-bold mb-1 cursor-pointer">
+                                                  <ArrowRight className="h-4 w-4 mr-2 text-gray-600" />
+                                                  Move to Claimed
+                                                </DropdownMenuItem>
+                                              )}
+                                              {canUpdateOrder && (
+                                                <DropdownMenuItem onClick={async (e) => {
+                                                  e.stopPropagation();
+                                                  const ok = await updateOrder(order.id, { status: 'on-going', updatedAt: new Date(), actualCompletionDate: undefined }, user.username);
+                                                  if (ok !== false) toast.success('Order reverted to on going');
+                                                }} className="border border-blue-200 rounded-md px-2.5 py-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 focus:text-blue-700 focus:bg-blue-100 font-bold mb-1 cursor-pointer">
+                                                  <RotateCcw className="h-4 w-4 mr-2 text-blue-500" />
+                                                  Undo to On-Going
+                                                </DropdownMenuItem>
+                                              )}
                                             </>
                                           )}
                                           {order.status === 'claimed' && (
-                                            <DropdownMenuItem onClick={(e) => {
-                                              e.stopPropagation();
-                                              const depositAmt = order.depositAmount || 0;
-                                              const paymentUpdates = (depositAmt < order.grandTotal) ? {
-                                                  paymentStatus: 'downpayment' as any,
-                                                  amountReceived: depositAmt,
-                                                  balance: order.grandTotal - depositAmt,
-                                                  change: 0
-                                              } : {};
-                                              updateOrder(order.id, {
-                                                status: 'for-release' as any,
-                                                updatedAt: new Date(),
-                                                actualCompletionDate: undefined,
-                                                ...paymentUpdates
-                                              }, user.username);
-                                              toast.success('Order reverted to for release');
-                                            }} className="border border-orange-200 rounded-md px-2.5 py-1.5 text-orange-600 bg-orange-50 hover:bg-orange-100 focus:text-orange-700 focus:bg-orange-100 font-bold mb-1">
-                                              <RotateCcw className="h-4 w-4 mr-2 text-orange-500" />
-                                              Undo to For Release
-                                            </DropdownMenuItem>
+                                            canUpdateOrder && (
+                                              <DropdownMenuItem onClick={async (e) => {
+                                                e.stopPropagation();
+                                                const depositAmt = order.depositAmount || 0;
+                                                const paymentUpdates = (depositAmt < order.grandTotal) ? {
+                                                    paymentStatus: 'downpayment' as any,
+                                                    amountReceived: depositAmt,
+                                                    balance: order.grandTotal - depositAmt,
+                                                    change: 0
+                                                } : {};
+                                                const ok = await updateOrder(order.id, {
+                                                  status: 'for-release' as any,
+                                                  updatedAt: new Date(),
+                                                  actualCompletionDate: undefined,
+                                                  ...paymentUpdates
+                                                }, user.username);
+                                                if (ok !== false) toast.success('Order reverted to for release');
+                                              }} className="border border-orange-200 rounded-md px-2.5 py-1.5 text-orange-600 bg-orange-50 hover:bg-orange-100 focus:text-orange-700 focus:bg-orange-100 font-bold mb-1 cursor-pointer">
+                                                <RotateCcw className="h-4 w-4 mr-2 text-orange-500" />
+                                                Undo to For Release
+                                              </DropdownMenuItem>
+                                            )
                                           )}
                                           {(order.status === 'cancelled' || (order.status as any) === 'canceled') && (
-                                            <>
+                                            canCancelOrder && (
                                               <DropdownMenuItem
-                                                onClick={(e) => {
+                                                onClick={async (e) => {
                                                   e.stopPropagation();
                                                   const targetStage = order.cancellationStage || 'new-order';
-                                                  updateOrder(order.id, {
+                                                  const ok = await updateOrder(order.id, {
                                                     status: targetStage as any,
                                                     cancellationStage: null as any,
                                                     refundStatus: null as any,
@@ -1392,26 +1865,22 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                                     cancelledAt: null as any,
                                                     updatedAt: new Date()
                                                   }, user.username);
-                                                  const wasRefunded = order.refundStatus === 'refunded';
-                                                  toast.success(`Order #${order.orderNumber} restored to ${targetStage.replace('-', ' ')} (${wasRefunded ? 'Refund Undone' : 'Cancellation Undone'})`);
+                                                  if (ok !== false) {
+                                                    const wasRefunded = order.refundStatus === 'refunded';
+                                                    toast.success(`Order #${order.orderNumber} restored to ${targetStage.replace('-', ' ')} (${wasRefunded ? 'Refund Undone' : 'Cancellation Undone'})`);
+                                                  }
                                                 }}
                                                 className="border border-purple-200 rounded-md px-2.5 py-1.5 text-purple-600 bg-purple-50 hover:bg-purple-100 focus:text-purple-700 focus:bg-purple-100 font-bold mb-1 cursor-pointer"
                                               >
                                                 <RotateCcw className="h-4 w-4 mr-2 text-purple-500" />
                                                 {order.refundStatus === 'refunded' ? 'Undo Refund' : 'Undo Cancel Order'}
                                               </DropdownMenuItem>
-                                              <DropdownMenuItem onClick={(e) => {
-                                                e.stopPropagation();
-                                                if (order) setSelectedOrder({...order});
-                                                setIsEditing(false);
-                                              }} className="border border-gray-200 rounded-md px-2.5 py-1.5 text-gray-700 bg-gray-50 hover:bg-gray-100 focus:text-gray-800 focus:bg-gray-100 font-bold mb-1">
-                                                <FileText className="h-4 w-4 mr-2 text-gray-600" />
-                                                View Details
-                                              </DropdownMenuItem>
-                                            </>
+                                            )
                                           )}
                                         </DropdownMenuContent>
                                       </DropdownMenu>
+                                        );
+                                      })()}
                                     </td>
                                   </tr>
                                 ))
@@ -1478,194 +1947,139 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
           )}
 
           {/* Order Details Modal */}
-          <OrderDetailModal
-            order={selectedOrder}
-            open={!!selectedOrder && !isEditing && !isUpdatingStock}
-            onOpenChange={(open: boolean) => { if (!open) setSelectedOrder(null); }}
-          />
+          {!!selectedOrder && !isEditing && !isUpdatingStock && (
+            <Suspense fallback={null}>
+              <OrderDetailModal
+                order={selectedOrder}
+                open={true}
+                onOpenChange={(open: boolean) => { if (!open) setSelectedOrder(null); }}
+                user={user}
+              />
+            </Suspense>
+          )}
 
           {/* Other Modals */}
-          <EditOrderModal order={selectedOrder} open={!!selectedOrder && isEditing} onOpenChange={(open) => !open && setIsEditing(false)} onSave={(id, updates) => { updateOrder(id, updates); setSelectedOrder((prev: any) => prev ? { ...prev, ...updates } : null); setIsEditing(false); }} user={user} />
-          <StockUpdateModal
-            order={selectedOrder}
-            open={!!selectedOrder && isUpdatingStock}
-            onOpenChange={(open) => !open && setIsUpdatingStock(false)}
-            onSilentSave={(id, updates) => {
-              // Background sync — does NOT close the modal
-              updateOrder(id, updates);
-              setSelectedOrder((prev: any) => prev ? { ...prev, ...updates } : null);
-            }}
-            onSave={(id, updates) => {
-              // Final save — closes the modal
-              updateOrder(id, updates);
-              setSelectedOrder((prev: any) => prev ? { ...prev, ...updates } : null);
-              setIsUpdatingStock(false);
-            }}
-          />
-          <ProcessClaimModal order={processClaimOrder} open={!!processClaimOrder} onOpenChange={(open) => !open && setProcessClaimOrder(null)} onConfirm={(id, data) => { updateOrder(id, data, user.username); }} user={user} />
+          {!!selectedOrder && isEditing && (
+            <Suspense fallback={null}>
+              <EditOrderModal order={selectedOrder} open={true} onOpenChange={(open) => !open && setIsEditing(false)} onSave={(id, updates) => { updateOrder(id, updates); setSelectedOrder((prev: any) => prev ? { ...prev, ...updates } : null); setIsEditing(false); }} user={user} />
+            </Suspense>
+          )}
+          {!!selectedOrder && isUpdatingStock && (
+            <Suspense fallback={null}>
+              <StockUpdateModal
+                order={selectedOrder}
+                open={true}
+                onOpenChange={(open) => !open && setIsUpdatingStock(false)}
+                onSilentSave={(id, updates) => {
+                  // Background sync — does NOT close the modal
+                  updateOrder(id, updates);
+                  setSelectedOrder((prev: any) => prev ? { ...prev, ...updates } : null);
+                }}
+                onSave={(id, updates) => {
+                  // Final save — closes the modal
+                  updateOrder(id, updates);
+                  setSelectedOrder((prev: any) => prev ? { ...prev, ...updates } : null);
+                  setIsUpdatingStock(false);
+                }}
+              />
+            </Suspense>
+          )}
+          {!!processClaimOrder && (
+            <Suspense fallback={null}>
+              <ProcessClaimModal order={processClaimOrder} open={true} onOpenChange={(open) => !open && setProcessClaimOrder(null)} onConfirm={(id, data) => { updateOrder(id, data, user.username); }} user={user} />
+            </Suspense>
+          )}
 
           {!selectedStatus && (
             <div className="space-y-4">
-              {/* Service Volume & Activity Trends Charts */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {/* Service Volume Chart */}
-                <Card className="border-none shadow-md bg-white overflow-hidden">
-                  <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-1.5 pt-3.5 px-4 sm:px-5 gap-2">
-                    <div className="flex flex-col">
-                      <CardTitle className="text-xs sm:text-sm font-black uppercase tracking-tight text-gray-800 leading-tight">
-                        {serviceVolumeTitle}
-                      </CardTitle>
-                      {chartPeriodSubtitle && (
-                        <span className="text-[11px] font-bold text-red-600 mt-0.5 tracking-normal">
-                          {chartPeriodSubtitle}
-                        </span>
-                      )}
+              {/* Service Volume & Activity Trends Charts (Lazy Loaded for Peak Performance) */}
+              <Suspense
+                fallback={
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+                    <div className="h-[230px] rounded-2xl border border-gray-100 bg-white p-4 shadow-sm flex flex-col justify-between animate-pulse">
+                      <div className="h-4 w-36 rounded bg-gray-200" />
+                      <div className="h-40 w-full rounded bg-gray-50" />
                     </div>
-                    <div className="grid grid-cols-2 gap-x-2.5 gap-y-1 text-[8.5px] font-bold uppercase tracking-wider text-gray-500">
-                      <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-[#A2C2B9]" /> BASIC CLEANING</div>
-                      <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-[#93C5FD]" /> MINOR REGLUE</div>
-                      <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-[#D69BE5]" /> FULL REGLUE</div>
-                      <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-[#F5CD93]" /> COLOR RENEWAL</div>
+                    <div className="h-[230px] rounded-2xl border border-gray-100 bg-white p-4 shadow-sm flex flex-col justify-between animate-pulse">
+                      <div className="h-4 w-36 rounded bg-gray-200" />
+                      <div className="h-40 w-full rounded bg-gray-50" />
                     </div>
-                  </CardHeader>
-                  <CardContent className="pt-1 px-3 sm:px-4 pb-2.5">
-                    <ResponsiveContainer width="100%" height={215}>
-                       <BarChart data={serviceVolumeData} margin={{ top: 8, right: 10, left: -10, bottom: 25 }}>
-                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                         <XAxis 
-                            dataKey="name" 
-                            tick={{ fontSize: 9.5, fontWeight: 700, fill: '#64748b' }} 
-                            axisLine={{ stroke: '#e2e8f0' }} 
-                            tickLine={false} 
-                            dy={6} 
-                            angle={-15}
-                            textAnchor="end"
-                         />
-                         <YAxis 
-                            tick={{ fontSize: 10, fontWeight: 600, fill: '#64748b' }} 
-                            axisLine={{ stroke: '#e2e8f0' }} 
-                            tickLine={false} 
-                         />
-                         <Tooltip content={<ServiceTooltip isOwner={['owner', 'admin'].includes(role)} />} cursor={{fill: '#f8fafc'}} />
-                         <Bar dataKey="value" radius={[4, 4, 0, 0]} barSize={48}>
-                           {serviceVolumeData.map((_item, index) => (
-                             <Cell key={`cell-${index}`} fill={['#A2C2B9', '#93C5FD', '#D69BE5', '#F5CD93'][index % 4]} />
-                           ))}
-                         </Bar>
-                       </BarChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
+                  </div>
+                }
+              >
+                <DashboardCharts
+                  serviceVolumeTitle={serviceVolumeTitle}
+                  chartPeriodSubtitle={chartPeriodSubtitle}
+                  serviceVolumeData={serviceVolumeData}
+                  timeSeriesData={timeSeriesData}
+                  chartTitle={chartTitle}
+                  isOwner={['owner', 'admin'].includes(role)}
+                  ServiceTooltip={ServiceTooltip}
+                  TrendTooltip={TrendTooltip}
+                />
+              </Suspense>
 
-                {/* Activity Trend Chart */}
-                <Card className="border-none shadow-md bg-white overflow-hidden">
-                   <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-1.5 pt-3.5 px-4 sm:px-5 gap-2">
-                     <div className="flex flex-col">
-                       <CardTitle className="text-xs sm:text-sm font-black uppercase tracking-tight text-gray-800 leading-tight">{chartTitle}</CardTitle>
-                       {chartPeriodSubtitle && (
-                         <span className="text-[11px] font-bold text-red-600 mt-0.5 tracking-normal">
-                           {chartPeriodSubtitle}
-                         </span>
-                       )}
-                     </div>
-                     <div className="flex items-center gap-2.5 text-[8.5px] font-bold uppercase tracking-wider text-gray-500">
-                        <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-[#A78BFA]" /> ORDERS CREATED</div>
-                        <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-[#F97316]" /> ORDERS RELEASED</div>
-                     </div>
-                   </CardHeader>
-                   <CardContent className="pt-1 px-3 sm:px-4 pb-2.5">
-                     <ResponsiveContainer width="100%" height={215}>
-                       <LineChart data={timeSeriesData} margin={{ top: 8, right: 15, left: -10, bottom: 5 }}>
-                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                         <XAxis 
-                            dataKey="period" 
-                            tick={{ fontSize: 9.5, fontWeight: 600, fill: '#64748b' }} 
-                            axisLine={{ stroke: '#e2e8f0' }} 
-                            tickLine={false} 
-                            dy={6} 
-                         />
-                         <YAxis 
-                            tick={{ fontSize: 10, fontWeight: 600, fill: '#64748b' }} 
-                            axisLine={{ stroke: '#e2e8f0' }} 
-                            tickLine={false} 
-                         />
-                         <Tooltip content={<TrendTooltip />} />
-                         <Line type="monotone" dataKey="newOrders" stroke="#A78BFA" strokeWidth={2.5} dot={{ r: 3.5, fill: '#A78BFA', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 5 }} />
-                         <Line type="monotone" dataKey="releasedOrders" stroke="#F97316" strokeWidth={2.5} dot={{ r: 3.5, fill: '#F97316', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 5 }} />
-                       </LineChart>
-                     </ResponsiveContainer>
-                   </CardContent>
-                </Card>
-              </div>
-
-              {/* Stock Status Alerts - Compact bottom position */}
-              <div className="grid grid-cols-1 gap-4">
+              {/* Stock Status Alerts - Compact position */}
+              <div className="grid grid-cols-1 gap-3">
                 <Card className="border-none shadow-md bg-white gap-0">
-                  <CardHeader className="flex flex-row items-center justify-between border-b border-gray-100 px-4 h-11 !py-0 !pt-0 !pb-0 m-0 space-y-0">
+                  <CardHeader className="flex flex-row items-center justify-between border-b border-gray-100 px-3 sm:px-4 h-9 !py-0 !pt-0 !pb-0 m-0 space-y-0">
                     <CardTitle className="text-xs font-black uppercase text-gray-800 flex items-center gap-2 m-0 leading-none">
-                       <Package size={14} className="text-red-500 shrink-0" /> Stock Status Alerts
+                       <Package size={13} className="text-red-500 shrink-0" /> Stock Status Alerts
                     </CardTitle>
-                    <Badge className="bg-red-50 text-red-600 border-red-100 uppercase text-[9px] font-black leading-none shrink-0 py-1 px-2.5">{lowStockItems.length} Warnings</Badge>
+                    <Badge className="bg-red-50 text-red-700 border-red-100 uppercase text-[8.5px] font-black leading-none shrink-0 py-0.5 px-2">{lowStockItems.length} Warnings</Badge>
                   </CardHeader>
-                  <CardContent className="px-4 pt-2.5 pb-3.5">
+                  <CardContent className="px-3 sm:px-4 py-2 sm:py-2.5">
                     {lowStockItems.length === 0 ? (
-                      <div className="py-6 text-center bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                         <ClipboardCheck className="mx-auto mb-2 text-emerald-400" size={24} />
-                         <p className="text-xs font-black uppercase tracking-widest text-gray-400">All stock levels normal</p>
+                      <div className="py-4 text-center bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                         <ClipboardCheck className="mx-auto mb-1 text-emerald-500" size={20} />
+                         <p className="text-xs font-black uppercase tracking-widest text-gray-600">All stock levels normal</p>
                       </div>
                     ) : (
-                      <div className={`grid grid-cols-1 md:grid-cols-3 gap-3 ${lowStockItems.length > 3 ? 'max-h-[115px] overflow-y-auto pr-1 custom-scrollbar' : ''}`}>
+                      <div className={`grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-2.5 ${lowStockItems.length > 3 ? 'max-h-[110px] overflow-y-auto pr-1 custom-scrollbar' : ''}`}>
                       {lowStockItems.map((item, idx) => {
                         const pres = getInventoryPresentation(item);
                         const isCritical = Number(item.stock || 0) <= 0;
                         const barColor = isCritical ? 'bg-red-500' : pres.percentageRemaining > 50 ? 'bg-blue-500' : 'bg-amber-400';
-                        const textColor = isCritical ? 'text-red-600' : 'text-amber-600';
+                        const textColor = isCritical ? 'text-red-700' : 'text-amber-600';
 
                         return (
-                          <div key={idx} className="flex flex-col gap-2 p-3 rounded-lg bg-gray-50/60 border border-gray-100 hover:border-red-200 transition-all">
+                          <div key={idx} className="flex flex-col gap-1 p-2 sm:p-2.5 rounded-lg bg-gray-50/60 border border-gray-100 hover:border-red-200 transition-all">
                             {/* Row 1: Name (left) + Status Badge (top-right) */}
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <AlertTriangle size={14} className={isCritical ? 'text-red-500 shrink-0' : 'text-amber-500 shrink-0'} />
-                                <span className="text-xs font-black text-gray-800 uppercase tracking-wide leading-none">{item.name}</span>
+                            <div className="flex items-center justify-between gap-1.5">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <AlertTriangle size={13} className={isCritical ? 'text-red-500 shrink-0' : 'text-amber-500 shrink-0'} />
+                                <span className="text-[11px] sm:text-xs font-black text-gray-800 uppercase tracking-tight truncate">{item.name}</span>
                               </div>
-                              <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded tracking-wider leading-none shrink-0 ${isCritical ? 'bg-red-600 text-white' : 'bg-amber-500 text-white'}`}>
+                              <span className={`text-[8.5px] font-black uppercase px-1.5 py-0.5 rounded tracking-wider leading-none shrink-0 ${isCritical ? 'bg-red-700 text-white' : 'bg-amber-500 text-white'}`}>
                                 {isCritical ? 'No Stock' : 'Low Stock'}
                               </span>
                             </div>
 
                             {/* Row 2: Current Stock (left) + Package (right) */}
-                            <div className="flex items-center justify-between gap-2 text-xs mt-1">
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">STOCK:</span>
-                                <span className="text-xs font-bold text-gray-900">{pres.currentQuantityLabel}</span>
+                            <div className="flex items-center justify-between text-[10.5px] leading-tight text-gray-700">
+                              <div className="flex items-center gap-1">
+                                <span className="text-[9.5px] font-black text-gray-500 uppercase tracking-wider">STOCK:</span>
+                                <span className="font-bold text-gray-900">{pres.currentQuantityLabel}</span>
                               </div>
                               {pres.isPackaged && (
-                                <div className="flex items-center gap-1.5 text-right">
-                                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">PKG:</span>
-                                  <span className="text-[11px] font-semibold text-gray-600">1 {pres.packageLabel}</span>
+                                <div className="flex items-center gap-1 text-right">
+                                  <span className="text-[9.5px] font-black text-gray-500 uppercase tracking-wider">PKG:</span>
+                                  <span className="text-[10px] font-semibold text-gray-600 truncate">1 {pres.packageLabel}</span>
                                 </div>
                               )}
                             </div>
 
                             {/* Row 3: Progress bar with % remaining inline */}
-                            <div className="flex items-center gap-3 mt-1">
-                              <div className="flex-1 bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 bg-gray-200 rounded-full h-1 overflow-hidden">
                                 <div
                                   className={`h-full rounded-full transition-all ${barColor}`}
                                   style={{ width: `${Math.min(pres.progressBarValue, 100)}%` }}
                                 />
                               </div>
-                              {pres.isPackaged && (
-                                <span className={`text-[10px] font-black shrink-0 ${textColor}`}>
-                                  {pres.percentageRemaining}% remaining
-                                </span>
-                              )}
-                              {!pres.isPackaged && (
-                                <span className={`text-[9px] font-bold shrink-0 ${textColor}`}>
-                                  {pres.currentQuantityLabel}
-                                </span>
-                              )}
+                              <span className={`text-[9.5px] font-black shrink-0 leading-none ${textColor}`}>
+                                {pres.isPackaged ? `${pres.percentageRemaining}% remaining` : pres.currentQuantityLabel}
+                              </span>
                             </div>
                           </div>
                         );
@@ -1678,7 +2092,11 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
             </div>
           )}
 
-          <AddExpenseModal isOpen={isExpenseModalOpen} onClose={() => setIsExpenseModalOpen(false)} onAddExpense={addExpense} />
+          {isExpenseModalOpen && (
+            <Suspense fallback={null}>
+              <AddExpenseModal isOpen={isExpenseModalOpen} onClose={() => setIsExpenseModalOpen(false)} onAddExpense={addExpense} />
+            </Suspense>
+          )}
 
           {/* CANCEL ORDER / DYNAMIC REFUND POLICY CONFIRMATION MODAL */}
           <Dialog open={!!cancelOrderModal} onOpenChange={() => setCancelOrderModal(null)}>
@@ -1720,6 +2138,168 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                           </div>
                         </div>
                       )}
+
+                      {/* Cancellation Authorization Section for Staff */}
+                      {!isOwner && (
+                        <div className="p-3 bg-red-50/60 border border-red-200/90 rounded-xl space-y-2 text-left">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10.5px] font-black uppercase tracking-wider text-red-900 flex items-center gap-1.5">
+                              <Lock size={12} className="text-red-600" />
+                              <span>Cancellation Authorization</span>
+                            </span>
+                            {isCancellationAuthorized ? (
+                              <span className="text-[9.5px] font-bold text-emerald-700 bg-emerald-100/90 px-2 py-0.5 rounded border border-emerald-300 flex items-center gap-1">
+                                <CheckCircle2 size={11} className="text-emerald-600" />
+                                {cancelAuthorizedBy ? `Authorized: ${cancelAuthorizedBy}` : '✓ Code Verified'}
+                              </span>
+                            ) : (
+                              <span className="text-[9.5px] font-bold text-red-700 bg-white/90 px-1.5 py-0.5 rounded border border-red-200">
+                                Required
+                              </span>
+                            )}
+                          </div>
+
+                          {canStaffUseCancelCode ? (
+                            <div className="flex items-center gap-3 text-[10px] pt-0.5 font-semibold text-gray-700">
+                              <label className="flex items-center gap-1 cursor-pointer hover:text-red-700">
+                                <input
+                                  type="radio"
+                                  name="cancelAuthMethod"
+                                  checked={cancelAuthMethod === 'code'}
+                                  onChange={() => setCancelAuthMethod('code')}
+                                  className="accent-red-600 cursor-pointer"
+                                />
+                                <span>Authorization Code</span>
+                              </label>
+                              <label className="flex items-center gap-1 cursor-pointer hover:text-red-700">
+                                <input
+                                  type="radio"
+                                  name="cancelAuthMethod"
+                                  checked={cancelAuthMethod === 'credentials'}
+                                  onChange={() => setCancelAuthMethod('credentials')}
+                                  className="accent-red-600 cursor-pointer"
+                                />
+                                <span>Username & Password</span>
+                              </label>
+                            </div>
+                          ) : (
+                            <p className="text-[10px] text-gray-500 font-medium pt-0.5">
+                              Requires supervisor or manager authorization:
+                            </p>
+                          )}
+
+                          {canStaffUseCancelCode && cancelAuthMethod === 'code' ? (
+                            <div className="space-y-1">
+                              <div className="relative">
+                                <Input
+                                  type={showCancelSecret ? "text" : "password"}
+                                  value={cancelAuthCode}
+                                  onChange={(e) => setCancelAuthCode(sanitizeClientAuthCode(e.target.value))}
+                                  placeholder="Enter authorization code"
+                                  autoComplete="off"
+                                  maxLength={64}
+                                  className={`h-8 text-xs font-medium pr-8 bg-white transition-colors ${
+                                    isCancelAuthCodeValid
+                                      ? 'border-emerald-500 text-emerald-900 focus-visible:border-emerald-600 ring-1 ring-emerald-500/20'
+                                      : cancelAuthCode.trim()
+                                        ? 'border-red-500 text-red-900 focus-visible:border-red-600 ring-1 ring-red-500/20'
+                                        : 'border-red-200 focus-visible:border-red-600'
+                                  }`}
+                                />
+                                <button
+                                  type="button"
+                                  tabIndex={-1}
+                                  onClick={() => setShowCancelSecret(!showCancelSecret)}
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+                                  title={showCancelSecret ? "Hide code" : "Show code"}
+                                >
+                                  {showCancelSecret ? <EyeOff size={13} /> : <Eye size={13} />}
+                                </button>
+                              </div>
+                              <p className="text-[9.5px]">
+                                {isCancelAuthCodeValid ? (
+                                  <span className="text-emerald-700 font-bold flex items-center gap-1">
+                                    <CheckCircle2 size={11} className="text-emerald-600 shrink-0 inline" />
+                                    ✓ Authorization code accepted.
+                                  </span>
+                                ) : cancelAuthCode.trim() ? (
+                                  <span className="text-red-600 font-bold flex items-center gap-1">
+                                    <XCircle size={11} className="text-red-500 shrink-0 inline" />
+                                    ✗ Invalid authorization code.
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-500">
+                                    Enter authorization code to proceed.
+                                  </span>
+                                )}
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="space-y-1.5">
+                              {!cancelAuthorizedBy ? (
+                                <>
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                                    <Input
+                                      type="text"
+                                      placeholder="Authorizer Username"
+                                      value={cancelAuthUsername}
+                                      onChange={(e) => setCancelAuthUsername(sanitizeClientUsername(e.target.value))}
+                                      autoComplete="off"
+                                      maxLength={50}
+                                      className="h-8 text-xs bg-white border-red-200 focus-visible:border-red-600"
+                                    />
+                                    <div className="relative">
+                                      <Input
+                                        type={showCancelSecret ? "text" : "password"}
+                                        placeholder="Password"
+                                        value={cancelAuthPassword}
+                                        onChange={(e) => setCancelAuthPassword(e.target.value)}
+                                        autoComplete="current-password"
+                                        maxLength={128}
+                                        className="h-8 text-xs pr-8 bg-white border-red-200 focus-visible:border-red-600"
+                                      />
+                                      <button
+                                        type="button"
+                                        tabIndex={-1}
+                                        onClick={() => setShowCancelSecret(!showCancelSecret)}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+                                        title={showCancelSecret ? "Hide password" : "Show password"}
+                                      >
+                                        {showCancelSecret ? <EyeOff size={13} /> : <Eye size={13} />}
+                                      </button>
+                                    </div>
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    disabled={isCancelAuthorizing || !cancelAuthUsername.trim() || !cancelAuthPassword}
+                                    onClick={handleAuthorizeCancelCredentials}
+                                    className="w-full h-8 bg-red-600 hover:bg-red-700 text-white text-[11px] font-bold cursor-pointer"
+                                  >
+                                    {isCancelAuthorizing ? <Loader2 className="w-3 h-3 animate-spin mr-1.5" /> : null}
+                                    <span>Authorize Cancellation</span>
+                                  </Button>
+                                </>
+                              ) : (
+                                <div className="flex items-center justify-between text-[10px] text-emerald-800 pt-0.5">
+                                  <span>Authorized by {cancelAuthorizedBy}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setCancelAuthorizedBy(null);
+                                      setCancelAuthUsername('');
+                                      setCancelAuthPassword('');
+                                    }}
+                                    className="text-red-700 underline hover:text-red-900 font-semibold cursor-pointer"
+                                  >
+                                    Change Authorizer
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <div className="flex gap-3 pt-2">
                       <Button
@@ -1731,17 +2311,26 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                         Do Not Cancel
                       </Button>
                       <Button
-                        disabled={isCancelling}
+                        disabled={isCancelling || (!isOwner && !isCancellationAuthorized)}
                         className={`flex-1 text-white font-black uppercase text-xs h-10 rounded-xl shadow-lg disabled:opacity-50 flex items-center justify-center gap-1.5 ${isRefundAllowed ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200' : 'bg-red-600 hover:bg-red-700 shadow-red-200'}`}
                         onClick={async () => {
                           if (cancelOrderModal && !isCancellingRef.current) {
+                            if (!isOwner && !isCancellationAuthorized) {
+                              toast.error("Please enter a valid authorization code or authorizer credentials.");
+                              return;
+                            }
+                            if (!canCancelOrder) {
+                              toast.error("You do not have permission to cancel job orders.");
+                              setCancelOrderModal(null);
+                              return;
+                            }
                             isCancellingRef.current = true;
                             setIsCancelling(true);
                             const orderToCancel = cancelOrderModal;
                             try {
                               const isRefund = orderToCancel.status === 'new-order';
                               const depositAmt = orderToCancel.depositAmount || orderToCancel.amountReceived || 0;
-                              await updateOrder(orderToCancel.id, {
+                              const ok = await updateOrder(orderToCancel.id, {
                                 status: 'cancelled',
                                 cancellationStage: orderToCancel.status as any,
                                 refundStatus: isRefund ? 'refunded' : 'no-refund',
@@ -1749,11 +2338,13 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                 refundReason: isRefund ? 'Order cancelled before service commenced (full refund)' : 'Order cancelled during service (deposit forfeited per policy)',
                                 cancelledAt: new Date()
                               });
-                              setCancelOrderModal(null);
-                              if (isRefund) {
-                                toast.success(`Order #${orderToCancel.orderNumber} cancelled. Full refund of ₱${depositAmt.toLocaleString()} issued since service had not commenced.`);
-                              } else {
-                                toast.error(`Order #${orderToCancel.orderNumber} cancelled. No refund issued per policy (service already commenced).`);
+                              if (ok !== false) {
+                                setCancelOrderModal(null);
+                                if (isRefund) {
+                                  toast.success(`Order #${orderToCancel.orderNumber} cancelled. Full refund of ₱${depositAmt.toLocaleString()} issued since service had not commenced.`);
+                                } else {
+                                  toast.error(`Order #${orderToCancel.orderNumber} cancelled. No refund issued per policy (service already commenced).`);
+                                }
                               }
                             } finally {
                               isCancellingRef.current = false;

@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Technical Artifact Maintainability Inspection Report - Shoelotskey Service Management System</title>
+    <style>
+        :root {
+            --primary: #1e3a8a;
+            --primary-light: #3b82f6;
+            --primary-dark: #172554;
+            --accent: #d97706;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #475569;
+            --border: #e2e8f0;
+            --border-dark: #cbd5e1;
+            
+            --satisfactory: #15803d;
+            --satisfactory-bg: #dcfce7;
+            --satisfactory-border: #86efac;
+            
+            --minor: #b45309;
+            --minor-bg: #fef3c7;
+            --minor-border: #fcd34d;
+            
+            --improvement: #b91c1c;
+            --improvement-bg: #fee2e2;
+            --improvement-border: #fca5a5;
+            
+            --insufficient: #4b5563;
+            --insufficient-bg: #f3f4f6;
+            --insufficient-border: #d1d5db;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            line-height: 1.6;
+            padding: 30px 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%);
+            color: #ffffff;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+        }
+
+        header h1 {
+            font-size: 2.1rem;
+            font-weight: 800;
+            letter-spacing: -0.025em;
+            margin-bottom: 12px;
+            line-height: 1.25;
+        }
+
+        header .subtitle {
+            font-size: 1.15rem;
+            color: #93c5fd;
+            font-weight: 400;
+            margin-bottom: 24px;
+        }
+
+        .metadata-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 16px;
+            background: rgba(255, 255, 255, 0.08);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            font-size: 0.9rem;
+        }
+
+        .meta-item strong {
+            display: block;
+            color: #bfdbfe;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 4px;
+        }
+
+        .meta-item span {
+            color: #ffffff;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            word-break: break-all;
+        }
+
+        section {
+            background: var(--card-bg);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            padding: 32px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+        }
+
+        h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary-dark);
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        h3 {
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: #1e293b;
+            margin-top: 24px;
+            margin-bottom: 12px;
+        }
+
+        p {
+            margin-bottom: 14px;
+            color: var(--text-main);
+        }
+
+        ul, ol {
+            margin-left: 24px;
+            margin-bottom: 16px;
+        }
+
+        li {
+            margin-bottom: 8px;
+            color: var(--text-main);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .badge-satisfactory {
+            background-color: var(--satisfactory-bg);
+            color: var(--satisfactory);
+            border: 1px solid var(--satisfactory-border);
+        }
+
+        .badge-minor {
+            background-color: var(--minor-bg);
+            color: var(--minor);
+            border: 1px solid var(--minor-border);
+        }
+
+        .badge-improvement {
+            background-color: var(--improvement-bg);
+            color: var(--improvement);
+            border: 1px solid var(--improvement-border);
+        }
+
+        .badge-insufficient {
+            background-color: var(--insufficient-bg);
+            color: var(--insufficient);
+            border: 1px solid var(--insufficient-border);
+        }
+
+        .alert-box {
+            padding: 16px 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            font-size: 0.95rem;
+        }
+
+        .alert-info {
+            background-color: #eff6ff;
+            border-left: 4px solid var(--primary-light);
+            color: #1e40af;
+        }
+
+        .alert-warning {
+            background-color: #fffbeb;
+            border-left: 4px solid var(--accent);
+            color: #92400e;
+        }
+
+        .alert-danger {
+            background-color: #fef2f2;
+            border-left: 4px solid #ef4444;
+            color: #991b1b;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 0.88rem;
+        }
+
+        th, td {
+            padding: 12px 14px;
+            text-align: left;
+            border: 1px solid var(--border);
+            vertical-align: top;
+        }
+
+        th {
+            background-color: #f1f5f9;
+            color: #334155;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+        }
+
+        tr:nth-child(even) td {
+            background-color: #f8fafc;
+        }
+
+        code {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            background-color: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            color: #0f172a;
+            border: 1px solid #e2e8f0;
+        }
+
+        .evidence-tag {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 0.75rem;
+            color: var(--primary);
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            padding: 2px 6px;
+            border-radius: 4px;
+            display: inline-block;
+            margin-bottom: 4px;
+        }
+
+        .artifact-card {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 24px;
+            background: #ffffff;
+            transition: all 0.2s ease;
+        }
+
+        .artifact-card:hover {
+            border-color: var(--border-dark);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        }
+
+        .artifact-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .artifact-header h3 {
+            margin: 0;
+            font-size: 1.15rem;
+            color: var(--primary-dark);
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin: 20px 0;
+        }
+
+        .stat-card {
+            background: #f8fafc;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+        }
+
+        .stat-card .val {
+            font-size: 1.6rem;
+            font-weight: 800;
+            color: var(--primary);
+            line-height: 1.2;
+        }
+
+        .stat-card .lbl {
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-top: 4px;
+        }
+
+        .disclaimer-box {
+            background-color: #f1f5f9;
+            border: 2px dashed #94a3b8;
+            padding: 24px;
+            border-radius: 8px;
+            text-align: center;
+            font-style: italic;
+            color: #334155;
+            margin-top: 40px;
+            font-size: 0.95rem;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 15px 10px;
+            }
+            header {
+                padding: 24px;
+            }
+            section {
+                padding: 20px;
+            }
+            .metadata-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <header>
+        <h1>Technical Artifact Inspection for System Maintainability</h1>
+        <div class="subtitle">Objective, Evidence-Based Read-Only Maintainability Audit under ISO/IEC 25010 Quality Model</div>
+        <div class="metadata-grid">
+            <div class="meta-item">
+                <strong>Project Title</strong>
+                <span>Shoelotskey Service Management System</span>
+            </div>
+            <div class="meta-item">
+                <strong>Inspection Date / Time</strong>
+                <span>2026-10-06 11:37:00 PST (UTC+8)</span>
+            </div>
+            <div class="meta-item">
+                <strong>Git Branch & Commit Hash</strong>
+                <span>main (commit: 20032ac217ac65e2bb2b342a9c27cc121144b64f)</span>
+            </div>
+            <div class="meta-item">
+                <strong>Evaluation Standard</strong>
+                <span>ISO/IEC 25010:2011 & ISO/IEC 25010:2023 (Maintainability)</span>
+            </div>
+            <div class="meta-item">
+                <strong>Auditor Role</strong>
+                <span>Senior Software QA Engineer & Research Evidence Auditor</span>
+            </div>
+            <div class="meta-item">
+                <strong>Inspection Mode</strong>
+                <span>100% Read-Only Local Workspace Static Code & Schema Audit</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- SECTION 1: SCOPE AND METHODOLOGY -->
+    <section id="methodology">
+        <h2>1. Scope and Methodology</h2>
+        <p>
+            In response to the Capstone Evaluation Panel's directive, this inspection provides an empirical, artifact-based evaluation of system maintainability under <strong>ISO/IEC 25010</strong>. Academic software quality evaluations frequently rely solely on questionnaire-based expert ratings (e.g., Likert scales), which capture subjective perception rather than technical source-level properties. To provide rigorous defense-ready evidence, this technical audit directly inspects the source-code artifacts, database schemas, dependency configurations, test suites, and documentation residing in the official repository.
+        </p>
+
+        <div class="stat-grid">
+            <div class="stat-card">
+                <div class="val">1,193</div>
+                <div class="lbl">Backend Files Scanned</div>
+            </div>
+            <div class="stat-card">
+                <div class="val">140</div>
+                <div class="lbl">Frontend Files Scanned</div>
+            </div>
+            <div class="stat-card">
+                <div class="val">37</div>
+                <div class="lbl">SQLAlchemy Models</div>
+            </div>
+            <div class="stat-card">
+                <div class="val">49</div>
+                <div class="lbl">Backend Test Scripts</div>
+            </div>
+            <div class="stat-card">
+                <div class="val">63</div>
+                <div class="lbl">Audit Trail Calls</div>
+            </div>
+        </div>
+
+        <h3>Inspection Protocol Rules</h3>
+        <ul>
+            <li><strong>Strict Zero Fabrication:</strong> Every metric, line count, table mapping, dependency, and finding is verified directly against repository files.</li>
+            <li><strong>Non-Destructive Read-Only Operation:</strong> No source code was altered, deleted, or refactored during the inspection.</li>
+            <li><strong>Objective Flaw Reporting:</strong> Weaknesses, architectural anti-patterns, duplicated logic, dead dependencies, and large files are reported transparently.</li>
+            <li><strong>Explicit Boundary Documentation:</strong> The production PostgreSQL database is a live remote cloud instance; local inspection is strictly limited to the authoritative SQLAlchemy ORM definitions (<code>backend/models.py</code>), database connection handlers (<code>backend/db/database.py</code>), and the local development SQLite database (<code>backend/db/shoelotskey.db</code>).</li>
+        </ul>
+    </section>
+
+    <!-- SECTION 2: SYSTEM ENVIRONMENT & ARCHITECTURE OVERVIEW -->
+    <section id="environment">
+        <h2>2. System Environment and Technology Stack</h2>
+        <p>The inspected repository consists of a decoupled single-page application (SPA) and an asynchronous REST API server:</p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Component Layer</th>
+                    <th>Technology</th>
+                    <th>Runtime / Framework Details</th>
+                    <th>Key Implementation Files</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Frontend User Interface</strong></td>
+                    <td>React, TypeScript, Vite, Tailwind CSS</td>
+                    <td>React 18.3, Vite 6.4, Tailwind CSS v4, Lucide Icons, Radix UI Primitives</td>
+                    <td><code>src/main.tsx</code>, <code>src/app/AuthenticatedApp.tsx</code>, <code>src/styles/index.css</code></td>
+                </tr>
+                <tr>
+                    <td><strong>Backend REST API</strong></td>
+                    <td>FastAPI, Python, Uvicorn</td>
+                    <td>Python 3.12+, FastAPI 0.115+, Starlette, Pydantic v2</td>
+                    <td><code>backend/main.py</code>, <code>backend/auth_utils.py</code>, <code>backend/schemas.py</code></td>
+                </tr>
+                <tr>
+                    <td><strong>Database ORM Layer</strong></td>
+                    <td>SQLAlchemy 2.0</td>
+                    <td>Declarative 3NF relational mapping, connection pooling, psycopg v3 driver</td>
+                    <td><code>backend/models.py</code>, <code>backend/db/database.py</code></td>
+                </tr>
+                <tr>
+                    <td><strong>Database Storage</strong></td>
+                    <td>PostgreSQL (Production) / SQLite (Dev)</td>
+                    <td>Production cloud PostgreSQL; local <code>shoelotskey.db</code> with offline fallback</td>
+                    <td><code>backend/db/shoelotskey.db</code>, <code>backend/db/database.py</code></td>
+                </tr>
+                <tr>
+                    <td><strong>Machine Learning Engine</strong></td>
+                    <td>Scikit-learn, Random Forest Regressor</td>
+                    <td>Historical Random Forest Regressor, Pandas, NumPy, joblib serialization</td>
+                    <td><code>backend/ml/ml_engine.py</code>, <code>backend/ml/historical_ml_engine.py</code></td>
+                </tr>
+                <tr>
+                    <td><strong>Security & Auth</strong></td>
+                    <td>JWT Bearer, bcrypt, Custom RBAC</td>
+                    <td>Fine-grained permission bitmasks, 3-attempt brute-force lockout, denormalized audit trails</td>
+                    <td><code>backend/auth_utils.py</code>, <code>backend/rate_limiter.py</code>, <code>backend/security_utils.py</code></td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- SECTION 3: COMPLETE ARTIFACT INSPECTION FINDINGS -->
+    <section id="findings">
+        <h2>3. Detailed Artifact Inspection Findings</h2>
+
+        <!-- ARTIFACT A -->
+        <div class="artifact-card" id="artifact-a">
+            <div class="artifact-header">
+                <div>
+                    <h3>Artifact A: Source-Code Structure</h3>
+                    <small>Aspect Examined: Modularity and organization | Evidence: React/TypeScript frontend and FastAPI/Python backend</small>
+                </div>
+                <span class="badge badge-improvement">Needs Improvement</span>
+            </div>
+            <p><strong>Inspected Files:</strong> <code>backend/main.py</code> (10,944 lines), <code>backend/report_service.py</code> (1,606 lines), <code>backend/api/historical_processing.py</code> (2,084 lines), <code>backend/ml/ml_engine.py</code> (583 lines), <code>src/app/components/JobOrderForm.tsx</code> (4,645 lines), <code>src/app/pages/HistoricalRecords.tsx</code> (3,972 lines), <code>src/app/components/OrderDetailModal.tsx</code> (3,690 lines), <code>src/app/pages/HistoricalValidationQueue.tsx</code> (3,506 lines).</p>
+            <p><strong>Observed Strengths:</strong></p>
+            <ul>
+                <li>Clear top-level physical separation between the client application (<code>src/</code>) and backend API (<code>backend/</code>).</li>
+                <li>Specialized domains are extracted into dedicated services: reporting logic in <code>backend/report_service.py</code>, database session lifecycle in <code>backend/db/database.py</code>, and ML model training/inference in <code>backend/ml/ml_engine.py</code> and <code>backend/ml/historical_ml_engine.py</code>.</li>
+                <li>Reusable UI primitives in <code>src/app/components/ui/</code> leverage headless Radix UI components with centralized Tailwind styling.</li>
+            </ul>
+            <p><strong>Identified Weaknesses & Anti-Patterns:</strong></p>
+            <ul>
+                <li><span class="evidence-tag">backend/main.py (10,944 lines, 522 KB)</span> <strong>Monolithic Controller:</strong> The primary backend entrypoint contains 104 route handlers attached directly to <code>app = FastAPI()</code>. It intermingles routing, database session handling, status transitions, inline SQL/ORM queries, business validations, and historical ETL triggers without modular APIRouter decomposition for core entities (Orders, Inventory, Users, Expenses, Payments).</li>
+                <li><span class="evidence-tag">backend/api/historical_processing.py:22-24</span> <strong>Dead / Unmounted Modular Router:</strong> An entire 2,084-line module defining an APIRouter explicitly contains the comment: <code># NOTE: This router is NOT currently include_router()'d — live routes live in main.py</code>. This confirms architectural drift where modularization was drafted but bypassed in favor of placing routes directly in the monolithic <code>main.py</code>.</li>
+                <li><span class="evidence-tag">src/app/components/JobOrderForm.tsx (4,645 lines, 325 KB)</span> <strong>Oversized Frontend Component:</strong> This massive single component encapsulates intake form state, camera hardware capture, customer auto-completion, service pricing calculations, discount authorizations, ML lead-time estimations, and image compression in one file.</li>
+                <li><span class="evidence-tag">backend/main.py (82 function-scoped imports)</span> <strong>Inline / Lazy Imports:</strong> Main.py contains 82 lazy imports inside functions (e.g., <code>create_engine</code> and <code>sessionmaker</code> at lines 1148, 1177, 2102, 2103) indicating circular import workarounds and tight coupling between request handlers and database engine instantiation.</li>
+            </ul>
+            <div class="alert-box alert-warning">
+                <strong>Maintainability Impact:</strong> High file complexity in <code>backend/main.py</code> and <code>JobOrderForm.tsx</code> increases cognitive load during code reviews, creates risk of merge conflicts during team collaboration, and complicates isolated unit testing.
+            </div>
+        </div>
+
+        <!-- ARTIFACT B -->
+        <div class="artifact-card" id="artifact-b">
+            <div class="artifact-header">
+                <div>
+                    <h3>Artifact B: Source-Code Naming</h3>
+                    <small>Aspect Examined: Readability and analyzability | Evidence: Components, functions, classes, variables, and routes</small>
+                </div>
+                <span class="badge badge-minor">Satisfactory with Minor Improvements</span>
+            </div>
+            <p><strong>Inspected Files:</strong> <code>backend/models.py</code> (831 lines), <code>backend/schemas.py</code> (813 lines), <code>src/app/types/index.ts</code> (375 lines), <code>backend/auth_utils.py</code> (847 lines), <code>src/app/pages/JobOrderForm.tsx</code>.</p>
+            <p><strong>Observed Strengths:</strong></p>
+            <ul>
+                <li>Consistent adherence to standard naming conventions: Python modules, functions, and variables follow PEP 8 (snake_case); classes use PascalCase; TypeScript files follow PascalCase for components and camelCase for functions.</li>
+                <li>Pydantic schemas in <code>backend/schemas.py</code> use clear, self-documenting suffixes (e.g., <code>OrderCreateSchema</code>, <code>UserUpdateSchema</code>, <code>DiscountAuthorizeRequestSchema</code>).</li>
+                <li>TypeScript domain interfaces in <code>src/app/types/index.ts</code> (e.g., <code>JobOrder</code>, <code>ShoeItem</code>, <code>PaymentRecord</code>, <code>CashSession</code>) match backend models and reflect clear domain-driven terminology.</li>
+                <li>RESTful API route paths are predominantly semantic and descriptive (e.g., <code>/api/orders/{order_id}</code>, <code>/api/inventory/{item_id}/logs</code>, <code>/api/auth/login</code>).</li>
+            </ul>
+            <p><strong>Identified Weaknesses & Ambiguities:</strong></p>
+            <ul>
+                <li><span class="evidence-tag">backend/models.py:335 & 427</span> <strong>Primary Key Collision (<code>item_id</code>):</strong> Both the <code>Item</code> model (table <code>items</code>, representing a customer repair shoe) and the <code>Inventory</code> model (table <code>inventory</code>, representing consumable warehouse stock) define their primary key column as <code>item_id</code>. This creates significant confusion in join queries, audit logs, and developer maintenance when distinguishing shoe line-items from raw materials.</li>
+                <li><span class="evidence-tag">backend/models.py (Mixed PK conventions)</span> <strong>Inconsistent Primary Key Naming:</strong> Operational tables use prefixed primary keys (<code>user_id</code>, <code>role_id</code>, <code>order_id</code>, <code>customer_id</code>), whereas auxiliary tables switch to generic <code>id</code> (<code>cash_sessions.id</code>, <code>material_consumptions.id</code>, <code>csv_import_batches.id</code>, <code>research_test_runs.id</code>).</li>
+                <li><span class="evidence-tag">src/app/pages/JobOrderForm.tsx vs src/app/components/JobOrderForm.tsx</span> <strong>Shadowing Component and Page Names:</strong> The page shell and the component have identical filenames, forcing an aliased import: <code>import JobOrderFormComponent from '../components/JobOrderForm'</code>.</li>
+                <li><span class="evidence-tag">backend/scripts/</span> <strong>Ambiguous Script Filenames:</strong> Maintenance scripts contain redundant and ambiguous names such as <code>fix_db.py</code>, <code>fix_database_columns.py</code>, <code>fix_db_columns_final.py</code>, <code>inspect_db.py</code>, and <code>inspect_db_state.py</code>.</li>
+            </ul>
+        </div>
+
+        <!-- ARTIFACT C -->
+        <div class="artifact-card" id="artifact-c">
+            <div class="artifact-header">
+                <div>
+                    <h3>Artifact C: Database Schema</h3>
+                    <small>Aspect Examined: Structural organization and modifiability | Evidence: SQLAlchemy models, SQLite local DB, schema scripts</small>
+                </div>
+                <span class="badge badge-minor">Satisfactory with Minor Improvements</span>
+            </div>
+            <p><strong>Inspected Files:</strong> <code>backend/models.py</code> (37 models, 831 lines), <code>backend/db/database.py</code> (471 lines), <code>backend/db/shoelotskey.db</code> (local SQLite database), <code>docs/02_System_Architecture_and_Specifications/ENTITY_RELATIONSHIP_AND_LOGICAL_DATABASE_DESIGN.html</code> (247 KB).</p>
+            <div class="alert-box alert-info">
+                <strong>Explicit Audit Scope Boundary:</strong> As mandated by the inspection protocol, the remote Heroku PostgreSQL production cluster was NOT directly queried. This finding is derived strictly from the authoritative SQLAlchemy ORM model definitions, the active local SQLite database (<code>shoelotskey.db</code>), and project architectural specifications.
+            </div>
+            <p><strong>Observed Strengths:</strong></p>
+            <ul>
+                <li>Strong relational normalization adhering to Third Normal Form (3NF) across operational entities: separate tables for <code>roles</code>, <code>permissions</code>, <code>user_permissions</code>, <code>users</code>, <code>customers</code>, <code>orders</code>, <code>items</code>, <code>services</code>, <code>service_categories</code>, <code>conditions</code>, <code>payments</code>, <code>deliveries</code>, and <code>expenses</code>.</li>
+                <li>Proper composite primary keys and foreign keys for many-to-many bridge tables: <code>item_service_mapping</code> (composite PK: <code>item_id</code>, <code>service_id</code>) and <code>item_condition_mapping</code> (composite PK: <code>item_id</code>, <code>condition_id</code>).</li>
+                <li>Explicit foreign key constraints with <code>ondelete="CASCADE"</code> on child order elements (<code>items.order_id</code>, <code>payments.order_id</code>, <code>status_log.order_id</code>) preventing orphan records.</li>
+                <li>Forensic design in <code>audit_logs</code> (table <code>audit_logs</code>): Explicitly denormalizes <code>username</code> and <code>role</code> at event capture time with extensive code comments citing NIST SP 800-92 forensic integrity standards, ensuring audit trails remain immutable even if user records are subsequently modified or deleted.</li>
+            </ul>
+            <p><strong>Identified Weaknesses & Modifiability Constraints:</strong></p>
+            <ul>
+                <li><span class="evidence-tag">Repository Root / backend/</span> <strong>Absence of Alembic Database Migrations:</strong> The repository does not utilize Alembic (no <code>alembic/</code> directory, no <code>alembic.ini</code>). Database schema evolution has been conducted through imperative, ad-hoc Python scripts in <code>backend/scripts/</code> (e.g., <code>migrate_historical_schema.py</code>, <code>migrate_inventory_sync_uuid.py</code>, <code>safe_migrate.py</code>), creating a risk of schema drift between local SQLite and remote PostgreSQL environments.</li>
+                <li><span class="evidence-tag">backend/models.py:345</span> <strong>Hybrid Relational/Unstructured Storage:</strong> The <code>items</code> table contains a <code>inventory_used = Column(JSON, nullable=True)</code> column while a separate relational <code>material_consumptions</code> table also exists, introducing slight schema redundancy in how material deductions are recorded.</li>
+                <li><span class="evidence-tag">backend/models.py:335 & 427</span> <strong>Identical PK Naming:</strong> Shared <code>item_id</code> primary key between repair shoe line items (<code>items</code>) and consumable inventory items (<code>inventory</code>).</li>
+            </ul>
+        </div>
+
+        <!-- ARTIFACT D -->
+        <div class="artifact-card" id="artifact-d">
+            <div class="artifact-header">
+                <div>
+                    <h3>Artifact D: Dependency Organization</h3>
+                    <small>Aspect Examined: Dependency maintainability | Evidence: package.json, requirements.txt, pyproject.toml, vite.config.ts</small>
+                </div>
+                <span class="badge badge-improvement">Needs Improvement</span>
+            </div>
+            <p><strong>Inspected Files:</strong> <code>package.json</code> (61 dependencies, 12 devDependencies), <code>package-lock.json</code>, <code>requirements.txt</code> (34 dependencies), <code>pyproject.toml</code>, <code>requirements-ocr-local.txt</code>, <code>vite.config.ts</code>.</p>
+            <p><strong>Observed Strengths:</strong></p>
+            <ul>
+                <li>Strict physical segregation between frontend Node.js packages (<code>package.json</code>) and backend Python packages (<code>requirements.txt</code>).</li>
+                <li>Backend libraries specify explicit minimum semantic versions (e.g., <code>fastapi>=0.115.0</code>, <code>SQLAlchemy>=2.0.0</code>, <code>scikit-learn>=1.3.0</code>, <code>pydantic>=2.0.0</code>, <code>bcrypt>=4.0.1</code>).</li>
+                <li>Vite configuration (<code>vite.config.ts</code>) cleanly incorporates path aliases (<code>@ -> src</code>) and reverse-proxy forwarding for <code>/api</code> endpoints.</li>
+            </ul>
+            <p><strong>Identified Weaknesses & Bloat:</strong></p>
+            <ul>
+                <li><span class="evidence-tag">package.json (13 Unused Dependencies)</span> <strong>Unused Frontend Packages:</strong> Static analysis of all <code>src/</code> imports verified that 13 declared packages in <code>package.json</code> are completely unreferenced in frontend code:
+                    <code>@emotion/react</code>, <code>@emotion/styled</code>, <code>@popperjs/core</code>, <code>@types/qrcode</code>, <code>axios</code>, <code>html2pdf.js</code>, <code>ml-random-forest</code>, <code>next-themes</code>, <code>react-dnd</code>, <code>react-dnd-html5-backend</code>, <code>react-popper</code>, <code>react-responsive-masonry</code>, and <code>react-slick</code>.
+                </li>
+                <li><span class="evidence-tag">package.json:ml-random-forest</span> <strong>Dead Client-Side Machine Learning Dependency:</strong> The package <code>ml-random-forest</code> is declared in <code>package.json</code>, despite the Random Forest Regressor being implemented and served exclusively on the Python backend (<code>backend/ml/historical_ml_engine.py</code>).</li>
+                <li><span class="evidence-tag">package.json:dependencies</span> <strong>Misplaced Type Definition:</strong> <code>@types/qrcode</code> is placed under production <code>dependencies</code> rather than <code>devDependencies</code>.</li>
+                <li><span class="evidence-tag">requirements.txt:PyMySQL</span> <strong>Unused Backend Database Driver:</strong> <code>PyMySQL>=1.1.0</code> is declared in <code>requirements.txt</code>, but static grep of all backend code confirmed zero occurrences of MySQL imports; the system exclusively uses PostgreSQL and SQLite.</li>
+                <li><span class="evidence-tag">requirements.txt (Duplicate Postgres Drivers)</span> <strong>Redundant Driver Declarations:</strong> Both <code>psycopg[binary]>=3.1.18</code> (Psycopg 3) and legacy <code>psycopg2-binary</code> are declared simultaneously, despite <code>backend/db/database.py</code> standardizing on Psycopg 3.</li>
+                <li><span class="evidence-tag">package.json:name</span> <strong>Default Template Metadata:</strong> Package name remains <code>"@figma/my-make-file"</code> (version 0.0.1), reflecting an inherited starter project configuration.</li>
+            </ul>
+        </div>
+
+        <!-- ARTIFACT E -->
+        <div class="artifact-card" id="artifact-e">
+            <div class="artifact-header">
+                <div>
+                    <h3>Artifact E: Technical Documentation</h3>
+                    <small>Aspect Examined: Analyzability | Evidence: README.md, docs/ specifications, in-code docstrings</small>
+                </div>
+                <span class="badge badge-minor">Satisfactory with Minor Improvements</span>
+            </div>
+            <p><strong>Inspected Files:</strong> <code>README.md</code> (root, 54 lines), <code>docs/02_System_Architecture_and_Specifications/ENTITY_RELATIONSHIP_AND_LOGICAL_DATABASE_DESIGN.html</code> (247 KB), <code>docs/02_System_Architecture_and_Specifications/DISASTER_RECOVERY_AND_BACKUP_PROCEDURE.md</code> (7.9 KB), <code>docs/03_Use_Case_Testing_and_Manuals/CAPSTONE_USE_CASE_TEST_SUITE.html</code> (141 KB), in-code docstrings in <code>backend/main.py</code>, <code>backend/models.py</code>, <code>backend/db/database.py</code>.</p>
+            <p><strong>Observed Strengths:</strong></p>
+            <ul>
+                <li>Exemplary database architecture documentation: <code>ENTITY_RELATIONSHIP_AND_LOGICAL_DATABASE_DESIGN.html</code> provides an exhaustive, 247 KB interactive reference documenting tables, 3NF justification, data dictionary types, foreign key cascades, and indexing strategies.</li>
+                <li>Detailed disaster recovery and backup documentation in <code>DISASTER_RECOVERY_AND_BACKUP_PROCEDURE.md</code>, explaining dual-backup strategies, JSON table snapshots, and restore procedures.</li>
+                <li>Automated interactive API documentation: FastAPI automatically generates OpenAPI schema specifications accessible via <code>/docs</code> (Swagger UI) and <code>/redoc</code>, utilizing the type annotations in <code>backend/schemas.py</code>.</li>
+                <li>Rich docstrings inside key backend modules (e.g., <code>backend/models.py</code>, <code>backend/auth_utils.py</code>, <code>backend/api/research.py</code>) explaining security rationales and business rule constraints.</li>
+            </ul>
+            <p><strong>Identified Weaknesses & Documentation Gaps:</strong></p>
+            <ul>
+                <li><span class="evidence-tag">README.md:44</span> <strong>Non-Existent Script Reference:</strong> The root README instructs running <code>.un_backend.bat</code>, which does not exist in the repository (the actual operational batch script is <code>run.bat</code> or <code>run_backend.py</code>).</li>
+                <li><span class="evidence-tag">README.md:48-51</span> <strong>Severely Incomplete Environment Variable Documentation:</strong> The README lists only <code>DATABASE_URL</code>, omitting 16 other environment variables actively utilized by the backend (<code>ALLOW_REMOTE_DB</code>, <code>DISABLE_AUTO_SYNC</code>, <code>DYNO</code>, <code>ENV</code>, <code>EXPOSE_HISTORICAL_STATIC</code>, <code>FRONTEND_URL</code>, <code>GEMINI_API_KEY</code>, <code>GEMINI_MODEL_NAME</code>, <code>JWT_SECRET</code>, <code>MAILGUN_API_KEY</code>, <code>PORT</code>, <code>PUBLIC_APP_URL</code>, <code>REDIS_URL</code>, <code>REMOTE_DATABASE_URL</code>, <code>TESSERACT_CMD</code>, <code>TZ</code>).</li>
+                <li><span class="evidence-tag">docs/ directory (265 files)</span> <strong>Unstructured Repository Archive:</strong> The <code>docs/</code> folder contains redundant drafts, duplicate subdirectories (e.g. <code>docs/Defense/</code> vs <code>docs/Official Documentation/Documentation Reports/</code>), and temporary scratch notes (<code>text.txt</code>, <code>text 2.txt</code>).</li>
+            </ul>
+        </div>
+
+        <!-- ARTIFACT F -->
+        <div class="artifact-card" id="artifact-f">
+            <div class="artifact-header">
+                <div>
+                    <h3>Artifact F: Test Documentation</h3>
+                    <small>Aspect Examined: Testability | Evidence: backend/tests/ (49 scripts), HTML testing reports</small>
+                </div>
+                <span class="badge badge-minor">Satisfactory with Minor Improvements</span>
+            </div>
+            <p><strong>Inspected Files:</strong> <code>backend/tests/</code> (49 Python test scripts, 8,920 total lines), <code>objective_iso_technical_testing_report.html</code> (80.8 KB), <code>analytics_dashboard_reproducibility_evidence_report.html</code> (76.8 KB), <code>docs/03_Use_Case_Testing_and_Manuals/CAPSTONE_USE_CASE_TEST_SUITE.html</code> (141 KB).</p>
+            <p><strong>Observed Strengths:</strong></p>
+            <ul>
+                <li>Substantial backend testing assets: 49 individual test and verification scripts targeting critical system features:
+                    granular RBAC permissions (<code>test_granular_permissions.py</code>), cash session tracking (<code>test_cash_register_and_roles.py</code>), cyberattack/brute-force defense (<code>test_cyberattack_defense.py</code>), concurrency/session isolation (<code>test_concurrency_and_multi_session.py</code>), ML pipeline evaluation (<code>evaluate_119_ml_baselines.py</code>), and offline database synchronization (<code>test_heroku_offline_sync.py</code>).
+                </li>
+                <li>Detailed technical testing reports: <code>objective_iso_technical_testing_report.html</code> documents reproducible trials, response times, concurrency measurements, failed-login lockout thresholds, and backup restoration validations with exact pass/fail acceptance criteria.</li>
+                <li>Comprehensive end-to-end use-case manual in <code>CAPSTONE_USE_CASE_TEST_SUITE.html</code> covering 100% of user interface workflows.</li>
+            </ul>
+            <p><strong>Identified Weaknesses & Coverage Gaps:</strong></p>
+            <ul>
+                <li><span class="evidence-tag">src/ (0 test files)</span> <strong>Complete Absence of Automated Frontend Unit Tests:</strong> The frontend contains 0 unit or component test files (no <code>.test.tsx</code>, <code>.spec.tsx</code>). Package.json defines no <code>"test"</code> script. Client-side state transitions, custom hooks, and UI rendering rely entirely on manual testing.</li>
+                <li><span class="evidence-tag">backend/tests/</span> <strong>Heterogeneous Test Framework Conventions:</strong> Test scripts lack a unified runner convention: 5 scripts inherit from <code>unittest.TestCase</code>, 4 scripts use <code>pytest</code>, and the remaining 40 scripts are standalone execution scripts relying on top-level <code>if __name__ == '__main__':</code> blocks and raw <code>assert</code> statements.</li>
+                <li><span class="evidence-tag">Repository Root</span> <strong>Missing CI/CD & Automated Coverage Tracking:</strong> The repository lacks continuous integration pipeline definitions (no <code>.github/workflows/</code> directory) and automated code-coverage configuration (no <code>.coveragerc</code> or pytest-cov metrics).</li>
+            </ul>
+        </div>
+
+        <!-- ARTIFACT G -->
+        <div class="artifact-card" id="artifact-g">
+            <div class="artifact-header">
+                <div>
+                    <h3>Artifact G: Error and Audit Logging</h3>
+                    <small>Aspect Examined: Analyzability | Evidence: Audit models, log_audit() calls, /api/activities endpoint, ActivityHistory.tsx</small>
+                </div>
+                <span class="badge badge-satisfactory">Satisfactory</span>
+            </div>
+            <p><strong>Inspected Files:</strong> <code>backend/models.py:381-420</code> (AuditLog model), <code>backend/main.py:1003</code> (log_audit function), <code>backend/main.py:6966</code> (/api/activities route), <code>src/app/pages/ActivityHistory.tsx</code> (2,703 lines), <code>backend/models.py:368</code> (StatusLog model), <code>backend/models.py:465</code> (InventoryLog model).</p>
+            <p><strong>Observed Strengths & End-to-End Traceability:</strong></p>
+            <ul>
+                <li><strong>Source Code -> Database -> UI Traceability:</strong> Every critical business and security event is routed through the centralized <code>log_audit()</code> helper in <code>backend/main.py</code> (called 63 distinct times across the backend).
+                    <ul>
+                        <li><strong>1. Source Code Invocation:</strong> Operations such as order creation, status transitions, cash session opening/closing, payments, stock changes, and user management invoke <code>log_audit(db, action_type=..., table_name=..., record_id=..., user_id=..., username=..., role=..., old_values=..., new_values=...)</code>.</li>
+                        <li><strong>2. Database Persistence:</strong> The <code>AuditLog</code> entity in <code>backend/models.py</code> writes directly to table <code>audit_logs</code>, recording the action type, table name, affected record ID, old/new JSON value diffs, timestamp, IP address, user agent, and a denormalized snapshot of actor username and role.</li>
+                        <li><strong>3. Secure Retrieval:</strong> The endpoint <code>@app.get("/api/activities")</code> (<code>backend/main.py:6966</code>) queries <code>audit_logs</code> with role-based restriction (<code>require_role(["owner", "admin"])</code>), filtering (by module, action, username, date range), and pagination (limit/offset).</li>
+                        <li><strong>4. User Interface Rendering:</strong> The Owner-only <code>ActivityHistory.tsx</code> page provides an administrative dashboard to inspect, filter, and audit all recorded events.</li>
+                    </ul>
+                </li>
+                <li><strong>Specialized Domain Audit Trails:</strong>
+                    <ul>
+                        <li><strong>Inventory Stock Movements:</strong> Recorded in table <code>inventory_logs</code> (<code>InventoryLog</code> model) tracking <code>item_id</code>, <code>change_qty</code>, <code>reason</code>, <code>user_id</code>, and <code>created_at</code>; exposed via <code>/api/inventory/{item_id}/logs</code> and rendered in <code>InventoryDetailModal.tsx</code>.</li>
+                        <li><strong>Workflow Status History:</strong> Recorded in table <code>status_log</code> (<code>StatusLog</code> model) capturing every order progression with <code>status_id</code>, <code>user_id</code>, and <code>changed_at</code>.</li>
+                    </ul>
+                </li>
+                <li><strong>Forensic Integrity Compliance:</strong> Actor identities in <code>audit_logs</code> are denormalized snapshots rather than live foreign key joins, preserving historical integrity if a user account is deleted or modified.</li>
+            </ul>
+            <p><strong>Identified Minor Limitations:</strong></p>
+            <ul>
+                <li>Standard application runtime logging (Python <code>logging</code>) relies on console standard output/stderr rather than a structured, rotating disk file logger (e.g., <code>RotatingFileHandler</code>).</li>
+                <li>Server exceptions caught by generic <code>except Exception as e:</code> blocks are occasionally written into <code>audit_logs</code> as <code>action_type="SERVER_ERROR"</code>, mixing runtime error traces into the business audit table.</li>
+            </ul>
+        </div>
+
+    </section>
+
+    <!-- SECTION 4: EVIDENCE MATRIX -->
+    <section id="evidence-matrix">
+        <h2>4. Evidence Matrix</h2>
+        <p>The following matrix maps each inspected technical artifact, aspect examined, verified repository artifacts, concrete evidence, observed limitations, and resulting maintainability classification:</p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Technical Artifact</th>
+                    <th>Aspect Examined</th>
+                    <th>Files / Artifacts Inspected</th>
+                    <th>Specific Evidence</th>
+                    <th>Issues / Limitations Found</th>
+                    <th>Classification</th>
+                    <th>Evidence Location</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Source-Code Structure</strong></td>
+                    <td>Modularity and organization</td>
+                    <td><code>backend/main.py</code>, <code>backend/report_service.py</code>, <code>backend/api/historical_processing.py</code>, <code>src/app/components/JobOrderForm.tsx</code></td>
+                    <td>Clean frontend/backend split; modular ML engine and reporting services; 104 route handlers in <code>main.py</code></td>
+                    <td>Monolithic <code>main.py</code> (10,944 lines); <code>JobOrderForm.tsx</code> (4,645 lines); unmounted APIRouter in <code>historical_processing.py</code> (2,084 lines); 82 lazy imports</td>
+                    <td><span class="badge badge-improvement">Needs Improvement</span></td>
+                    <td><code>backend/main.py:22-24</code>, <code>src/app/components/JobOrderForm.tsx:1-50</code></td>
+                </tr>
+                <tr>
+                    <td><strong>Source-Code Naming</strong></td>
+                    <td>Readability and analyzability</td>
+                    <td><code>backend/models.py</code>, <code>backend/schemas.py</code>, <code>src/app/types/index.ts</code>, <code>src/app/pages/JobOrderForm.tsx</code></td>
+                    <td>PEP 8 compliance in Python; PascalCase/camelCase in React; self-documenting Pydantic schemas (41 schemas)</td>
+                    <td>PK collision: <code>item_id</code> used in both <code>items</code> and <code>inventory</code>; mixed PK conventions (<code>id</code> vs <code>entity_id</code>); shadowed page/component names</td>
+                    <td><span class="badge badge-minor">Satisfactory with Minor Improvements</span></td>
+                    <td><code>backend/models.py:335,427</code>, <code>src/app/types/index.ts:1-50</code></td>
+                </tr>
+                <tr>
+                    <td><strong>Database Schema</strong></td>
+                    <td>Structural organization and modifiability</td>
+                    <td><code>backend/models.py</code>, <code>backend/db/database.py</code>, <code>backend/db/shoelotskey.db</code>, <code>docs/02_System_Architecture_and_Specifications/</code></td>
+                    <td>37 models in 3NF; 38 FKs; 56 relationships; cascade deletes; forensic denormalization in <code>audit_logs</code>; local SQLite verified</td>
+                    <td>No Alembic migrations (ad-hoc Python scripts); remote PostgreSQL not accessible locally; dual <code>item_id</code> PK; JSON column redundancy</td>
+                    <td><span class="badge badge-minor">Satisfactory with Minor Improvements</span></td>
+                    <td><code>backend/models.py:1-450</code>, <code>backend/db/database.py:24-67</code></td>
+                </tr>
+                <tr>
+                    <td><strong>Dependency Organization</strong></td>
+                    <td>Dependency maintainability</td>
+                    <td><code>package.json</code>, <code>requirements.txt</code>, <code>pyproject.toml</code>, <code>vite.config.ts</code></td>
+                    <td>Frontend/backend dependencies cleanly separated; pinned Python packages; Vite proxy and aliases configured</td>
+                    <td>13 unused frontend packages (e.g. <code>@emotion/*</code>, <code>axios</code>, <code>ml-random-forest</code>); unused <code>PyMySQL</code> and duplicate <code>psycopg</code> in Python; default package name</td>
+                    <td><span class="badge badge-improvement">Needs Improvement</span></td>
+                    <td><code>package.json:20-80</code>, <code>requirements.txt:1-34</code></td>
+                </tr>
+                <tr>
+                    <td><strong>Technical Documentation</strong></td>
+                    <td>Analyzability</td>
+                    <td><code>README.md</code>, <code>docs/</code> (265 documents), in-code docstrings, FastAPI OpenAPI schemas</td>
+                    <td>247 KB interactive schema doc (3NF); disaster recovery guide; automated <code>/docs</code> OpenAPI specifications</td>
+                    <td>Root <code>README.md</code> has broken script reference (<code>run_backend.bat</code>); 16 of 17 env vars undocumented; duplicate/unindexed draft files in <code>docs/</code></td>
+                    <td><span class="badge badge-minor">Satisfactory with Minor Improvements</span></td>
+                    <td><code>README.md:35-52</code>, <code>docs/02_System_Architecture_and_Specifications/</code></td>
+                </tr>
+                <tr>
+                    <td><strong>Test Documentation</strong></td>
+                    <td>Testability</td>
+                    <td><code>backend/tests/</code> (49 scripts, 8,920 lines), <code>objective_iso_technical_testing_report.html</code></td>
+                    <td>49 backend test scripts covering RBAC, lockout, concurrency, ML, and sync; reproducible objective testing reports</td>
+                    <td>0 frontend automated unit tests; lack of unified test runner (mixed unittest/pytest/asserts); no CI/CD pipeline or code coverage setup</td>
+                    <td><span class="badge badge-minor">Satisfactory with Minor Improvements</span></td>
+                    <td><code>backend/tests/</code>, <code>package.json:scripts</code></td>
+                </tr>
+                <tr>
+                    <td><strong>Error and Audit Logging</strong></td>
+                    <td>Analyzability</td>
+                    <td><code>backend/models.py</code>, <code>backend/main.py:1003,6966</code>, <code>src/app/pages/ActivityHistory.tsx</code></td>
+                    <td>Centralized <code>log_audit()</code> called 63 times; <code>audit_logs</code> with NIST SP 800-92 snapshots; UI in <code>ActivityHistory.tsx</code>; inventory/status logs</td>
+                    <td>Application error logging relies on stdout without disk log rotation; server error stack traces occasionally stored in business audit table</td>
+                    <td><span class="badge badge-satisfactory">Satisfactory</span></td>
+                    <td><code>backend/main.py:1003,6966-7020</code>, <code>backend/models.py:381-420</code></td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- SECTION 5: FINAL MANUSCRIPT-READY TABLE -->
+    <section id="manuscript-table">
+        <h2>5. Final Manuscript-Ready Table</h2>
+        <p>The following table provides verified, evidence-based findings formatted specifically for direct insertion into the Capstone Manuscript under the Maintainability section of Chapter 4 / Chapter 5:</p>
+        
+        <table style="border: 2px solid var(--primary-dark);">
+            <thead style="background: var(--primary-dark); color: #ffffff;">
+                <tr>
+                    <th style="color: #ffffff; width: 18%;">Technical Artifact</th>
+                    <th style="color: #ffffff; width: 20%;">Aspect Examined</th>
+                    <th style="color: #ffffff; width: 27%;">Evidence Inspected</th>
+                    <th style="color: #ffffff; width: 35%;">Expert Finding</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Source-Code Structure</strong></td>
+                    <td>Modularity and organization</td>
+                    <td>React/TypeScript frontend and FastAPI/Python backend</td>
+                    <td>The system cleanly decouples client and server tiers with dedicated modules for ML inference and reporting. However, maintainability is constrained by a monolithic backend controller (<code>backend/main.py</code>: 10,944 lines, 104 route handlers), an unmounted 2,084-line router in <code>backend/api/historical_processing.py</code>, and oversized UI components (<code>JobOrderForm.tsx</code>: 4,645 lines).</td>
+                </tr>
+                <tr>
+                    <td><strong>Source-Code Naming</strong></td>
+                    <td>Readability and analyzability</td>
+                    <td>Components, functions, classes, variables, and routes</td>
+                    <td>Source code adheres consistently to PEP 8, React, and domain-driven naming standards across models and schemas. Minor maintainability issues include a primary key name collision between repair items and stock inventory (both named <code>item_id</code>), inconsistent PK conventions (<code>id</code> vs. <code>&lt;entity&gt;_id</code>), and shadowed component/page names.</td>
+                </tr>
+                <tr>
+                    <td><strong>Database Schema</strong></td>
+                    <td>Structural organization and modifiability</td>
+                    <td>SQLAlchemy ORM models, local SQLite database, and schema documentation</td>
+                    <td>The data tier demonstrates rigorous Third Normal Form (3NF) relational design across 37 tables with explicit foreign key cascades and forensic audit denormalization. Modifiability is hindered by the absence of an automated migration framework (Alembic), relying instead on ad-hoc Python scripts, and dual <code>item_id</code> PK naming. Production PostgreSQL was not directly accessible.</td>
+                </tr>
+                <tr>
+                    <td><strong>Dependency Organization</strong></td>
+                    <td>Dependency maintainability</td>
+                    <td>Frontend and backend dependency files</td>
+                    <td>Frontend and backend dependencies are cleanly separated with pinned backend versions. However, dependency bloat is evident: 13 unused frontend packages exist in <code>package.json</code> (including dead client-side <code>ml-random-forest</code>), unreferenced MySQL drivers (<code>PyMySQL</code>) and duplicate Postgres drivers are declared in <code>requirements.txt</code>, and package metadata retains starter defaults.</td>
+                </tr>
+                <tr>
+                    <td><strong>Technical Documentation</strong></td>
+                    <td>Analyzability</td>
+                    <td>System and implementation documentation</td>
+                    <td>Comprehensive documentation exists for database architecture (247 KB 3NF design specification), disaster recovery, and automated OpenAPI (Swagger) endpoints. However, the root <code>README.md</code> references a non-existent batch script (<code>run_backend.bat</code>), documents only 1 of 17 active environment variables, and the documentation repository contains redundant unindexed drafts.</td>
+                </tr>
+                <tr>
+                    <td><strong>Test Documentation</strong></td>
+                    <td>Testability</td>
+                    <td>Test cases, scripts, and testing reports</td>
+                    <td>Backend testability is substantiated by 49 automated test scripts (8,920 lines) and reproducible testing reports validating RBAC, security lockouts, and ML performance. Conversely, frontend testability is deficient with zero automated unit tests, backend test execution lacks a unified runner framework, and automated CI/CD coverage pipelines are absent.</td>
+                </tr>
+                <tr>
+                    <td><strong>Error and Audit Logging</strong></td>
+                    <td>Analyzability</td>
+                    <td>Application logs and audit trail implementation</td>
+                    <td>Audit logging is comprehensively implemented and traceable from source code invocation (63 <code>log_audit()</code> calls) to persistent database storage (<code>audit_logs</code> with NIST SP 800-92 denormalized actor snapshots and JSON diffs) and administrative UI display (<code>ActivityHistory.tsx</code>). Runtime application error logging relies on console output without persistent log rotation.</td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- SECTION 6: OVERALL CONCLUSION & DISCLAIMER -->
+    <section id="conclusion">
+        <h2>6. Overall Maintainability Artifact-Inspection Conclusion</h2>
+        <p>
+            The objective technical inspection confirms that the <strong>Shoelotskey Service Management System</strong> exhibits a solid foundational architecture with notable strengths in relational database normalization (3NF), forensic audit logging, and backend domain testing. However, from an ISO/IEC 25010 Maintainability standpoint (specifically addressing Modularity, Analyzability, Modifiability, and Testability), the codebase contains clear, quantifiable technical debt:
+        </p>
+        <ol>
+            <li><strong>Modularity Deficit:</strong> Overconcentration of routing and controller logic in a single 10,944-line <code>backend/main.py</code> file and UI presentation in a 4,645-line <code>JobOrderForm.tsx</code> component. Modularizing routes via FastAPI's <code>APIRouter</code> and decomposing complex UI views into focused sub-components represents the single highest-impact maintainability improvement.</li>
+            <li><strong>Dependency Hygiene:</strong> Pruning 13 dead frontend dependencies, removing unused database drivers (<code>PyMySQL</code>), and rationalizing PostgreSQL drivers to Psycopg 3 will reduce build sizes and maintenance overhead.</li>
+            <li><strong>Database Migration Tooling:</strong> Introducing Alembic for declarative database versioning will eliminate schema drift risks between development (SQLite) and production (PostgreSQL).</li>
+            <li><strong>Test Automation Balance:</strong> Supplementing the 49 backend test scripts with automated frontend component testing (Vitest / React Testing Library) and configuring a continuous integration pipeline will provide true end-to-end regression protection.</li>
+        </ol>
+
+        <div class="disclaimer-box">
+            “This technical artifact inspection provides supplementary evidence for the maintainability evaluation of the developed system. The findings describe the artifacts inspected and conditions observed during the inspection and should not be interpreted as formal ISO/IEC 25010 certification.”
+        </div>
+    </section>
+
+</div>
+
+</body>
+</html>

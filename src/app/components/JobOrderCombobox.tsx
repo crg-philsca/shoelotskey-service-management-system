@@ -4,7 +4,7 @@ import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { useOrders } from '@/app/context/OrderContext';
 import { API_BASE } from '@/app/lib/apiBase';
-import { Search, ChevronDown, Check, X, Wrench, Loader2, Filter } from 'lucide-react';
+import { Search, ChevronDown, Check, X, Loader2, Filter } from 'lucide-react';
 
 export type OrderFilterType = 'active' | 'new_order' | 'on_going' | 'for_release' | 'claimed' | 'all';
 
@@ -35,13 +35,15 @@ interface JobOrderComboboxProps {
     onChange: (orderId: string, order?: ComboboxOrderItem) => void;
     placeholder?: string;
     className?: string;
+    align?: 'start' | 'center' | 'end';
 }
 
 export default function JobOrderCombobox({
     value,
     onChange,
-    placeholder = "None (Workshop / Internal)",
-    className = ""
+    placeholder = "Select Job Order (Optional)",
+    className = "",
+    align = "end"
 }: JobOrderComboboxProps) {
     const { orders: contextOrders } = useOrders();
     const [open, setOpen] = useState(false);
@@ -202,9 +204,8 @@ export default function JobOrderCombobox({
                                 <span className="text-slate-400 font-normal">({selectedOrder.customerName})</span>
                             </>
                         ) : (
-                            <span className="text-slate-500 flex items-center gap-1.5">
-                                <Wrench className="h-3 w-3 text-slate-400 shrink-0" />
-                                <span>{placeholder}</span>
+                            <span className="text-slate-400 font-normal truncate">
+                                {placeholder}
                             </span>
                         )}
                     </div>
@@ -215,7 +216,7 @@ export default function JobOrderCombobox({
                                 role="button"
                                 tabIndex={0}
                                 onClick={handleClear}
-                                title="Clear selection (use Workshop / Internal)"
+                                title="Clear selected order"
                                 className="h-5 w-5 rounded-full hover:bg-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-700 cursor-pointer"
                             >
                                 <X className="h-3 w-3" />
@@ -227,9 +228,10 @@ export default function JobOrderCombobox({
             </PopoverTrigger>
 
             <PopoverContent
-                align="start"
+                align={align}
                 sideOffset={4}
-                className="w-[var(--radix-popover-trigger-width)] min-w-[300px] max-w-[calc(100vw-2rem)] p-0 rounded-xl border border-slate-200 bg-white shadow-xl z-[9999]"
+                collisionPadding={12}
+                className="w-[min(320px,calc(100vw-2.5rem))] p-0 rounded-xl border border-slate-200 bg-white shadow-xl z-[9999]"
             >
                 {/* Search Header */}
                 <div className="p-2.5 border-b border-slate-100 bg-slate-50/50 rounded-t-xl">
@@ -240,7 +242,7 @@ export default function JobOrderCombobox({
                                 ref={searchInputRef}
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="Search order # or customer name..."
+                                placeholder="Search order # or customer..."
                                 className="h-8 pl-8 pr-7 text-xs bg-white border-slate-200 focus:border-red-500 rounded-md w-full"
                             />
                             {isSearching ? (
@@ -256,19 +258,22 @@ export default function JobOrderCombobox({
                             ) : null}
                         </div>
 
-                        {/* Compact Filter Menu Button */}
+                        {/* Compact Filter Menu Icon Button */}
                         <div className="relative">
                             <button
                                 type="button"
                                 onClick={() => setIsFilterMenuOpen(!isFilterMenuOpen)}
-                                className="h-8 inline-flex items-center gap-1.5 px-2.5 text-[11px] font-bold rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-red-200 transition-colors shadow-2xs shrink-0"
-                                title="Filter by order status"
+                                className={`h-8 w-8 inline-flex items-center justify-center rounded-md border transition-colors shadow-2xs shrink-0 relative ${
+                                    selectedFilter !== 'all'
+                                        ? 'border-red-200 bg-red-50/70 text-red-600 hover:bg-red-100/60'
+                                        : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+                                }`}
+                                title={`Filter: ${FILTER_OPTIONS.find(f => f.id === selectedFilter)?.label || 'Filter Orders'}`}
                             >
-                                <Filter size={12} className="text-red-600 shrink-0" />
-                                <span className="hidden xs:inline sm:inline truncate max-w-[70px]">
-                                    {FILTER_OPTIONS.find(f => f.id === selectedFilter)?.label.replace(' Orders', '') || 'Filter'}
-                                </span>
-                                <ChevronDown size={11} className="text-slate-400 shrink-0" />
+                                <Filter size={13} className="shrink-0" />
+                                {selectedFilter !== 'all' && (
+                                    <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-red-600 ring-2 ring-white" />
+                                )}
                             </button>
 
                             {isFilterMenuOpen && (
@@ -297,25 +302,6 @@ export default function JobOrderCombobox({
 
                 {/* Options List */}
                 <div className="max-h-60 overflow-y-auto p-1.5 space-y-1 text-xs overscroll-contain touch-pan-y scroll-smooth">
-                    {/* Always visible Workshop / Internal option */}
-                    <div
-                        onClick={() => handleSelect('', undefined)}
-                        className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors ${
-                            !value || value === 'none'
-                                ? 'bg-red-50 text-red-700 font-bold border border-red-100'
-                                : 'hover:bg-slate-100 text-slate-700'
-                        }`}
-                    >
-                        <div className="flex items-center gap-2">
-                            <Wrench className="h-4 w-4 text-slate-400 shrink-0" />
-                            <div>
-                                <p className="font-bold text-slate-900">None (Workshop / Internal)</p>
-                                <p className="text-[10.5px] text-slate-500 font-normal">General inventory usage not billed to a customer order</p>
-                            </div>
-                        </div>
-                        {(!value || value === 'none') && <Check className="h-4 w-4 text-red-600 shrink-0 ml-2" />}
-                    </div>
-
                     {/* Order Results */}
                     {combinedOrders.length > 0 ? (
                         combinedOrders.map(order => {

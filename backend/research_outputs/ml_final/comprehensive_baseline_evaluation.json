@@ -1,0 +1,114 @@
+{
+  "evaluated_at": "2026-09-30T10:45:58.565742",
+  "dataset": {
+    "total": 119,
+    "development": 93,
+    "test": 26,
+    "target": "historical_order_to_claim_turnaround_days",
+    "provenance": "CLAIM_DATE_CALCULATED"
+  },
+  "metrics": {
+    "Mean Baseline": {
+      "mae": 9.3371,
+      "rmse": 10.1255,
+      "r2": -0.0006,
+      "med_ae": 9.5,
+      "mean_signed_error": 0.2486,
+      "tol_1_pct": 3.85,
+      "tol_1_cnt": 1,
+      "tol_2_pct": 3.85,
+      "tol_2_cnt": 1,
+      "tol_3_pct": 7.69,
+      "tol_3_cnt": 2,
+      "tol_5_pct": 11.54,
+      "tol_5_cnt": 3
+    },
+    "Median Baseline": {
+      "mae": 8.9615,
+      "rmse": 10.3571,
+      "r2": -0.0469,
+      "med_ae": 8.5,
+      "mean_signed_error": -2.1923,
+      "tol_1_pct": 7.69,
+      "tol_1_cnt": 2,
+      "tol_2_pct": 7.69,
+      "tol_2_cnt": 2,
+      "tol_3_pct": 15.38,
+      "tol_3_cnt": 4,
+      "tol_5_pct": 34.62,
+      "tol_5_cnt": 9
+    },
+    "Shop's Business Rules": {
+      "mae": 6.6154,
+      "rmse": 8.4489,
+      "r2": 0.3033,
+      "med_ae": 6.0,
+      "mean_signed_error": -1.2308,
+      "tol_1_pct": 23.08,
+      "tol_1_cnt": 6,
+      "tol_2_pct": 30.77,
+      "tol_2_cnt": 8,
+      "tol_3_pct": 38.46,
+      "tol_3_cnt": 10,
+      "tol_5_pct": 42.31,
+      "tol_5_cnt": 11
+    },
+    "Linear Regression": {
+      "mae": 18.5039,
+      "rmse": 20.5125,
+      "r2": -3.1065,
+      "med_ae": 17.114,
+      "mean_signed_error": -17.6333,
+      "tol_1_pct": 0.0,
+      "tol_1_cnt": 0,
+      "tol_2_pct": 0.0,
+      "tol_2_cnt": 0,
+      "tol_3_pct": 0.0,
+      "tol_3_cnt": 0,
+      "tol_5_pct": 7.69,
+      "tol_5_cnt": 2
+    },
+    "Decision Tree": {
+      "mae": 10.2308,
+      "rmse": 13.2897,
+      "r2": -0.7237,
+      "med_ae": 7.5,
+      "mean_signed_error": -9.6923,
+      "tol_1_pct": 19.23,
+      "tol_1_cnt": 5,
+      "tol_2_pct": 23.08,
+      "tol_2_cnt": 6,
+      "tol_3_pct": 26.92,
+      "tol_3_cnt": 7,
+      "tol_5_pct": 42.31,
+      "tol_5_cnt": 11
+    },
+    "Random Forest": {
+      "mae": 8.3488,
+      "rmse": 10.1857,
+      "r2": -0.0125,
+      "med_ae": 8.0063,
+      "mean_signed_error": -4.9105,
+      "tol_1_pct": 11.54,
+      "tol_1_cnt": 3,
+      "tol_2_pct": 19.23,
+      "tol_2_cnt": 5,
+      "tol_3_pct": 26.92,
+      "tol_3_cnt": 7,
+      "tol_5_pct": 30.77,
+      "tol_5_cnt": 8
+    }
+  },
+  "dev_statistics": {
+    "mean_days": 18.44,
+    "median_days": 16.0,
+    "min_days": 1.0,
+    "max_days": 56.0
+  },
+  "test_statistics": {
+    "mean_days": 18.19,
+    "median_days": 14.0,
+    "min_days": 2.0,
+    "max_days": 34.0
+  }
+}

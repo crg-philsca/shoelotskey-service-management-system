@@ -1,0 +1,100 @@
+{
+  "dataset_b_hyperparameter_search": {
+    "title": "Dataset B Random Forest Hyperparameter Search and Selected Configuration",
+    "status": "FOUND & VERIFIED",
+    "target_dataset": "Dataset B (10,000 Simulated Operational Records)",
+    "training_split": "7,000 records (dataset_b_train_7000.csv)",
+    "validation_split": "1,500 records (dataset_b_validation_1500.csv)",
+    "test_split": "1,500 records sealed (dataset_b_test_1500.csv)",
+    "search_method": "Exhaustive Pre-declared ParameterGrid Search",
+    "selection_criterion": "Lowest validation MAE; tie-breakers: lower RMSE, lower absolute bias",
+    "split_strategy_during_tuning": "7,000 Training / 1,500 Holdout Validation Split",
+    "total_combinations_evaluated": 324,
+    "source_code_file": "backend/research_outputs/ml_final/run_phase3a_modeling.py",
+    "source_code_lines": "Lines 221-236, 245-260",
+    "correction_refit_script": "backend/research_outputs/ml_final/run_phase3a1_correction.py",
+    "validation_artifact": "backend/research_outputs/ml_final/dataset_b_phase3a_validation_report.json",
+    "final_report_artifact": "backend/research_outputs/ml_final/dataset_b_phase3b_final_report_corrected.md",
+    "serialized_model_artifact": "backend/completion_model.pkl (and dataset_b_selected_model.pkl)",
+    "search_space": {
+      "n_estimators": [
+        100,
+        200,
+        300
+      ],
+      "max_depth": [
+        null,
+        8,
+        12,
+        16
+      ],
+      "min_samples_split": [
+        2,
+        5,
+        10
+      ],
+      "min_samples_leaf": [
+        1,
+        2,
+        4
+      ],
+      "max_features": [
+        "sqrt",
+        0.7,
+        1.0
+      ]
+    },
+    "selected_parameters": {
+      "n_estimators": 300,
+      "max_depth": 12,
+      "min_samples_split": 10,
+      "min_samples_leaf": 4,
+      "max_features": 1.0,
+      "bootstrap": true,
+      "criterion": "squared_error",
+      "random_state": 20261002,
+      "n_jobs": -1
+    },
+    "validation_performance": {
+      "mae": 0.0641,
+      "rmse": 0.2994,
+      "r2": 0.9987,
+      "tolerance_1_day_pct": 97.73
+    },
+    "final_test_performance": {
+      "mae": 0.0815,
+      "rmse": 0.4042,
+      "r2": 0.9976,
+      "tolerance_1_day_pct": 97.2
+    }
+  },
+  "dataset_a_configuration_status": {
+    "title": "Dataset A Random Forest Configuration (Historical Baseline)",
+    "status": "FOUND & VERIFIED (Pre-fixed Baseline / No Hyperparameter Search)",
+    "target_dataset": "Dataset A (119 Validated Historical Orders)",
+    "hyperparameter_search_conducted": false,
+    "explanation": "No hyperparameter grid search was ever performed on Historical Dataset A. Dataset A used a pre-fixed standard Random Forest ensemble baseline configuration (200 trees, max_features='sqrt', random_state=42) to establish an empirical benchmark against central tendency baselines. Attribution of the 324-combination grid search belongs strictly to Dataset B.",
+    "source_code_file": "backend/research_outputs/ml_final/01_experiment_specification.json",
+    "source_code_lines": "Lines 34-41",
+    "parameters": {
+      "n_estimators": 200,
+      "max_depth": null,
+      "min_samples_split": 2,
+      "min_samples_leaf": 1,
+      "max_features": "sqrt",
+      "random_state": 42
+    },
+    "holdout_test_performance": {
+      "continuous_raw": {
+        "mae": 8.5554,
+        "rmse": 10.2272,
+        "r2": -0.0208
+      },
+      "earlier_baseline_comparison": {
+        "mae": 8.3488,
+        "rmse": 10.1857,
+        "r2": -0.0125
+      }
+    }
+  }
+}

@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shoelotskey SMS - Inventory Override & Confidentiality Controls Implementation Evidence</title>
+    <style>
+        :root {
+            --bg-primary: #0a0f1d;
+            --bg-secondary: #111827;
+            --bg-card: #1e293b;
+            --bg-card-hover: #24344d;
+            --border-color: #334155;
+            --border-accent: #dc2626;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent-red: #ef4444;
+            --accent-green: #10b981;
+            --accent-blue: #3b82f6;
+            --accent-purple: #8b5cf6;
+            --accent-amber: #f59e0b;
+            --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: var(--font-sans);
+            line-height: 1.6;
+            padding: 2rem 1rem;
+        }
+
+        .container {
+            max-width: 1300px;
+            margin: 0 auto;
+        }
+
+        /* Header */
+        header {
+            background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 50%, #1e293b 100%);
+            border: 1px solid var(--border-color);
+            border-left: 6px solid var(--accent-red);
+            padding: 2rem;
+            border-radius: 1rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        h1 {
+            font-size: 1.85rem;
+            font-weight: 900;
+            letter-spacing: -0.025em;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            margin-top: 0.25rem;
+        }
+
+        .badge-grid {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.35rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .badge-green { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .badge-red { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+        .badge-blue { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+        .badge-purple { background: rgba(139, 92, 246, 0.15); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3); }
+        .badge-amber { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+
+        /* KPI Cards */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .kpi-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            padding: 1.25rem;
+            border-radius: 0.75rem;
+            transition: all 0.2s ease;
+        }
+
+        .kpi-card:hover {
+            border-color: var(--accent-red);
+            transform: translateY(-2px);
+        }
+
+        .kpi-title {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .kpi-value {
+            font-size: 1.75rem;
+            font-weight: 900;
+            color: #ffffff;
+            margin: 0.35rem 0;
+            font-family: var(--font-mono);
+        }
+
+        .kpi-subtext {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* Section Layout */
+        .section {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 1rem;
+            padding: 1.75rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.25rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 800;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Tables */
+        .table-responsive {
+            overflow-x: auto;
+            border-radius: 0.5rem;
+            border: 1px solid var(--border-color);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.85rem;
+        }
+
+        thead {
+            background: #1e293b;
+        }
+
+        th {
+            padding: 0.75rem 1rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #cbd5e1;
+            font-size: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid rgba(51, 65, 85, 0.6);
+            color: #e2e8f0;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background-color: rgba(30, 41, 59, 0.5);
+        }
+
+        /* Code & Pre */
+        pre {
+            background: #0f172a;
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            overflow-x: auto;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            color: #cbd5e1;
+            line-height: 1.5;
+        }
+
+        code {
+            font-family: var(--font-mono);
+            background: rgba(15, 23, 42, 0.8);
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-size: 0.8em;
+            color: #f472b6;
+        }
+
+        .alert-box {
+            padding: 1rem 1.25rem;
+            border-radius: 0.75rem;
+            margin-bottom: 1.25rem;
+            border-left: 4px solid;
+            font-size: 0.875rem;
+        }
+
+        .alert-info {
+            background: rgba(59, 130, 246, 0.1);
+            border-color: var(--accent-blue);
+            color: #93c5fd;
+        }
+
+        .alert-warning {
+            background: rgba(245, 158, 11, 0.1);
+            border-color: var(--accent-amber);
+            color: #fde68a;
+        }
+
+        .alert-success {
+            background: rgba(16, 185, 129, 0.1);
+            border-color: var(--accent-green);
+            color: #a7f3d0;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .card-inner {
+            background: #1e293b;
+            border: 1px solid var(--border-color);
+            border-radius: 0.75rem;
+            padding: 1.25rem;
+        }
+
+        .card-inner h3 {
+            font-size: 0.95rem;
+            font-weight: 800;
+            color: #ffffff;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .status-pill {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.7rem;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        .status-pass { background: #065f46; color: #6ee7b7; }
+        .status-block { background: #7f1d1d; color: #fca5a5; }
+        .status-warn { background: #78350f; color: #fcd34d; }
+
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            border-top: 1px solid var(--border-color);
+            margin-top: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- HEADER -->
+        <header>
+            <div class="header-top">
+                <div>
+                    <h1>
+                        <span style="color: var(--accent-red);">🛡️</span> 
+                        Shoelotskey SMS — Inventory Security & Override Architecture
+                    </h1>
+                    <p class="subtitle">Implementation Evidence, Authorization Governance, Role Matrix & Auto-Deduct Provenance Audit</p>
+                </div>
+                <div class="badge-grid">
+                    <span class="badge badge-green">✔ 16/16 Test Cases Passed</span>
+                    <span class="badge badge-purple">✔ Staff Confidentiality Enforced</span>
+                    <span class="badge badge-blue">✔ Dual-Actor Accountability Active</span>
+                    <span class="badge badge-amber">✔ Production Bundle Verified</span>
+                </div>
+            </div>
+            <div style="font-size: 0.8rem; color: var(--text-secondary); display: flex; gap: 2rem; flex-wrap: wrap;">
+                <div><strong>System:</strong> Shoelotskey SMS v2.0 (FastAPI + React 18 + SQLite/Postgres)</div>
+                <div><strong>Environment:</strong> Production Localhost Mode</div>
+                <div><strong>Audit Timestamp:</strong> October 7, 2026</div>
+                <div><strong>Audit Target:</strong> Phase 1 & Phase 2 Complete Verification</div>
+            </div>
+        </header>
+
+        <!-- KPI SUMMARY -->
+        <div class="kpi-grid">
+            <div class="kpi-card">
+                <div class="kpi-title">Security Test Suite</div>
+                <div class="kpi-value" style="color: var(--accent-green);">16 / 16</div>
+                <div class="kpi-subtext">All permission & override controls passed</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-title">Cost Confidentiality</div>
+                <div class="kpi-value" style="color: var(--accent-purple);">100% BLOCKED</div>
+                <div class="kpi-subtext">unit_price stripped at DB serialization & UI</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-title">Stock History Access</div>
+                <div class="kpi-value" style="color: var(--accent-red);">403 FORBIDDEN</div>
+                <div class="kpi-subtext">Staff restricted from item movement logs</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-title">Auto-Deduct Provenance</div>
+                <div class="kpi-value" style="color: var(--accent-amber);">NOT VERIFIED</div>
+                <div class="kpi-subtext">Client formulas proprietary / Manual usage recorded</div>
+            </div>
+        </div>
+
+        <!-- SECTION 1: DOMAIN LOGIC FIX & STATUS TABLE EXPLANATION -->
+        <div class="section">
+            <div class="section-header">
+                <div class="section-title">
+                    <span>🔄</span> Order Lifecycle Domain Logic & Status Table Fix
+                </div>
+                <span class="badge badge-green">Issue Resolved</span>
+            </div>
+
+            <div class="alert-box alert-info">
+                <strong>User Inquiry Resolved:</strong> <em>"why in some status table such as new order, on-going add material, add retail item not showing also what should be the logic of it also should it show in claimed status table. also how should it behaved for owner and staff users account"</em>
+            </div>
+
+            <div class="grid-2">
+                <div class="card-inner">
+                    <h3>1. Root Cause Analysis of Previous Limitation</h3>
+                    <p style="font-size: 0.85rem; color: #cbd5e1; margin-bottom: 0.75rem;">
+                        In <code>OrderDetailModal.tsx</code>, the action controls were erroneously restricted by strict equality to <code>isForRelease</code>:
+                    </p>
+                    <pre><code>// PREVIOUS ERRONEOUS RESTRICTIONS:
+const isForRelease = normalizedOrderStatus === 'for-release';
+const canAddRetail = isForRelease && !isClaimed;
+const canAddMaterial = isItemForRelease && !isItemClaimed && canUserUseStock;
+// In JSX:
+{order && materialModalTarget && (isForRelease && !isClaimed) && ( &lt;AddMaterialModal ... /&gt; )}</code></pre>
+                    <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                        Because <code>isForRelease</code> strictly required the status to be <em>For Release</em>, orders in <code>new-order</code> and <code>on-going</code> were completely hidden from adding materials or retail products!
+                    </p>
+                </div>
+
+                <div class="card-inner">
+                    <h3>2. Operational Workflow Logic (Shoe Restoration Business)</h3>
+                    <ul style="font-size: 0.85rem; color: #cbd5e1; list-style-type: none; space-y: 0.5rem;">
+                        <li style="margin-bottom: 0.5rem;">
+                            <strong style="color: #60a5fa;">• New Order (Intake):</strong> Material usage allowed for pre-inspection, initial spot test, or intake prep. Retail allowed because customers frequently purchase shoelaces or cleaner at drop-off.
+                        </li>
+                        <li style="margin-bottom: 0.5rem;">
+                            <strong style="color: #34d399;">• On-going (Active Workshop Servicing):</strong> <em>PRIMARY WORKSTAGE</em>. Technicians actively clean, reglue, paint, stitch, and condition shoes. It is essential that materials can be consumed and recorded here!
+                        </li>
+                        <li style="margin-bottom: 0.5rem;">
+                            <strong style="color: #a78bfa;">• For Release (Ready for Pickup):</strong> Allowed for final buffing, deodorizer spray, and impulse counter retail purchases at pickup.
+                        </li>
+                        <li>
+                            <strong style="color: #f87171;">• Claimed (Completed & Settled):</strong> <em>STRICTLY LOCKED</em>. The customer has paid in full, received their claim slip/official receipt, and taken their shoes. Financial totals and material records are closed.
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <div style="margin-top: 1.5rem;" class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Order Status</th>
+                            <th>Add Material (Supplies Used)</th>
+                            <th>Add Retail Item</th>
+                            <th>Staff Behavior</th>
+                            <th>Owner / Admin Behavior</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>New Order</strong> (<code>new-order</code>)</td>
+                            <td><span class="status-pill status-pass">Allowed</span></td>
+                            <td><span class="status-pill status-pass">Allowed</span></td>
+                            <td>Deducts stock; purchase cost hidden; retail price shown</td>
+                            <td>Full access; all financial data visible</td>
+                        </tr>
+                        <tr>
+                            <td><strong>On-going</strong> (<code>on-going</code>)</td>
+                            <td><span class="status-pill status-pass">Allowed</span> (Core Workstage)</td>
+                            <td><span class="status-pill status-pass">Allowed</span></td>
+                            <td>Records consumable usage; insufficient stock rejected</td>
+                            <td>Full access; can view batch usage</td>
+                        </tr>
+                        <tr>
+                            <td><strong>For Release</strong> (<code>for-release</code>)</td>
+                            <td><span class="status-pill status-pass">Allowed</span> (Touch-up)</td>
+                            <td><span class="status-pill status-pass">Allowed</span> (Checkout sale)</td>
+                            <td>Applies counter sales; updates order grand total</td>
+                            <td>Full access; can adjust pricing/discounts</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Claimed</strong> (<code>claimed</code>)</td>
+                            <td><span class="status-pill status-block">Locked / Read-Only</span></td>
+                            <td><span class="status-pill status-block">Locked / Read-Only</span></td>
+                            <td>Historical view only; no "+ Add" buttons displayed</td>
+                            <td>Read-only past records (prevents invoice mutation)</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Cancelled</strong> (<code>cancelled</code>)</td>
+                            <td><span class="status-pill status-block">Locked</span></td>
+                            <td><span class="status-pill status-block">Locked</span></td>
+                            <td>All actions disabled</td>
+                            <td>Read-only audit record</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- SECTION 2: ACCESS & ROLE CONTROL MATRIX -->
+        <div class="section">
+            <div class="section-header">
+                <div class="section-title">
+                    <span>📋</span> Inventory Role & Access Control Matrix (Before vs After)
+                </div>
+                <span class="badge badge-purple">RBAC + Confidentiality</span>
+            </div>
+
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Capability / Endpoint</th>
+                            <th>Staff (Previous)</th>
+                            <th>Staff (Enforced Architecture)</th>
+                            <th>Owner / Admin</th>
+                            <th>Enforcement Layer</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>View Inventory List</strong> (<code>GET /api/inventory</code>)</td>
+                            <td>Allowed (Saw <code>unit_price</code>)</td>
+                            <td><span class="status-pill status-pass">Allowed</span> (<code>unit_price: null</code>)</td>
+                            <td><span class="status-pill status-pass">Allowed</span> (True cost visible)</td>
+                            <td>Backend Pydantic Serialization + UI colgroup</td>
+                        </tr>
+                        <tr>
+                            <td><strong>View Retail Price</strong> (<code>retail_price</code>)</td>
+                            <td>Allowed</td>
+                            <td><span class="status-pill status-pass">Allowed</span> (For retail checkout)</td>
+                            <td><span class="status-pill status-pass">Allowed</span></td>
+                            <td>Frontend Table & Detail Modal</td>
+                        </tr>
+                        <tr>
+                            <td><strong>View Stock Movement Logs</strong> (<code>GET /api/inventory/{id}/logs</code>)</td>
+                            <td>Previous: Already Owner/Admin restricted</td>
+                            <td><span class="status-pill status-block">403 Forbidden</span></td>
+                            <td><span class="status-pill status-pass">Allowed (200 OK)</span></td>
+                            <td>FastAPI <code>require_role(["owner", "admin"])</code></td>
+                        </tr>
+                        <tr>
+                            <td><strong>View Global Activity Logs</strong> (<code>GET /api/activities</code>)</td>
+                            <td>Previous: Enforced Owner/Admin-only (Backend)</td>
+                            <td><span class="status-pill status-block">403 Forbidden</span></td>
+                            <td><span class="status-pill status-pass">Allowed (200 OK)</span></td>
+                            <td>FastAPI Activity Audit Gateway</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Normal Stock Restock</strong> (<code>POST /api/inventory/adjust</code>)</td>
+                            <td>Allowed</td>
+                            <td><span class="status-pill status-pass">Allowed (No Override)</span></td>
+                            <td><span class="status-pill status-pass">Allowed</span></td>
+                            <td>Base RBAC (<code>inventory.add_stock</code>)</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Normal Stock Usage</strong> (<code>POST /api/inventory/adjust</code>)</td>
+                            <td>Allowed</td>
+                            <td><span class="status-pill status-pass">Allowed (No Override)</span></td>
+                            <td><span class="status-pill status-pass">Allowed</span></td>
+                            <td>Base RBAC (<code>inventory.use_stock</code>); Insufficient stock blocked</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Manual Balance Override</strong> (<code>set_balance</code>)</td>
+                            <td>Allowed without auth</td>
+                            <td><span class="status-pill status-warn">Requires Owner Authorization</span></td>
+                            <td><span class="status-pill status-pass">Direct Execution</span></td>
+                            <td>Method A (Owner Creds) OR Method B (Auth Code) + Mandatory Reason</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Bypass Insufficient Physical Stock</strong></td>
+                            <td>Blocked</td>
+                            <td><span class="status-pill status-block">STRICTLY BLOCKED</span></td>
+                            <td><span class="status-pill status-block">STRICTLY BLOCKED</span></td>
+                            <td>Physical stock reality enforcement (cannot bypass)</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Master Data: Create Item</strong> (<code>POST /api/inventory</code>)</td>
+                            <td>Allowed</td>
+                            <td><span class="status-pill status-block">403 Forbidden</span></td>
+                            <td><span class="status-pill status-pass">Allowed</span></td>
+                            <td>Backend Role Guard + UI button hidden</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Master Data: Edit Item / Cost / Unit</strong> (<code>PUT /api/inventory/{id}</code>)</td>
+                            <td>Allowed</td>
+                            <td><span class="status-pill status-block">403 Forbidden</span></td>
+                            <td><span class="status-pill status-pass">Allowed</span></td>
+                            <td>Backend Role Guard + UI button hidden</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Master Data: Deactivate Item</strong> (<code>DELETE /api/inventory/{id}</code>)</td>
+                            <td>Allowed</td>
+                            <td><span class="status-pill status-block">403 Forbidden</span></td>
+                            <td><span class="status-pill status-pass">Allowed</span></td>
+                            <td>Backend Role Guard + UI button hidden</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Historical InventoryLog Records</strong></td>
+                            <td>Immutable</td>
+                            <td><span class="status-pill status-pass">Immutable (Append-Only)</span></td>
+                            <td><span class="status-pill status-pass">Immutable (Append-Only)</span></td>
+                            <td>No PUT/DELETE endpoints; permanent ledger audit trail</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- SECTION 3: AUTOMATED TEST SUITE EXECUTION RESULTS -->
+        <div class="section">
+            <div class="section-header">
+                <div class="section-title">
+                    <span>🧪</span> Verification Test Suite Execution Results (16/16 Passed)
+                </div>
+                <span class="badge badge-green">100% Passing Score</span>
+            </div>
+
+            <div class="alert-box alert-success">
+                <strong>Test Execution Summary:</strong> Verified via <code>backend/tests/test_inventory_override_security.py</code> on October 7, 2026 against active local database and live FastAPI router. Zero regressions detected.
+                <div style="margin-top: 0.5rem; font-size: 0.82rem; color: var(--text-secondary); border-top: 1px solid rgba(255,255,255,0.1); pt-2;">
+                    <strong>Chronological Evidence Separation:</strong><br />
+                    • <strong>September 2–16, 2026:</strong> Operational pilot & business transaction records<br />
+                    • <strong>September 17–22, 2026:</strong> TAM & ISO/IEC 25010 questionnaire administration<br />
+                    • <strong>October 7, 2026:</strong> Inventory security & confidentiality verification testing (technical defense validation, not operational pilot activity)
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Test Description</th>
+                            <th>Actor / Payload</th>
+                            <th>Expected Behavior</th>
+                            <th>Observed Result</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>01</td>
+                            <td>Stock Movement History Confidentiality</td>
+                            <td>Staff token &rarr; <code>GET /api/inventory/99/logs</code></td>
+                            <td>HTTP 403 Forbidden</td>
+                            <td><code>403 Forbidden</code> ("Unauthorized access attempt")</td>
+                            <td><span class="status-pill status-pass">PASS</span></td>
+                        </tr>
+                        <tr>
+                            <td>02</td>
+                            <td>Owner Stock Movement History Access</td>
+                            <td>Owner token &rarr; <code>GET /api/inventory/99/logs</code></td>
+                            <td>HTTP 200 OK + full history</td>
+                            <td><code>200 OK</code> (Logs array returned)</td>
+                            <td><span class="status-pill status-pass">PASS</span></td>
+                        </tr>
+                        <tr>
+                            <td>03</td>
+                            <td>Activity History Movement Log Protection</td>
+                            <td>Staff token &rarr; <code>GET /api/activities</code></td>
+                            <td>HTTP 403 Forbidden</td>
+                            <td><code>403 Forbidden</code> (Prevents backdoor data leak)</td>
+                            <td><span class="status-pill status-pass">PASS</span></td>
+                        </tr>
+                        <tr>
+                            <td>04</td>
+                            <td>Unit Price Confidentiality Stripping</td>
+                            <td>Staff token &rarr; <code>GET /api/inventory</code></td>
+                            <td><code>unit_price: null</code>, retail preserved</td>
+                            <td><code>unit_price=None, retail_price=750.00</code></td>
+                            <td><span class="status-pill status-pass">PASS</span></td>
+                        </tr>
+                        <tr>
+                            <td>05</td>
+                            <td>Normal Staff Restock (No Override)</td>
+                            <td>Staff &rarr; <code>action="restock", amount=25.0</code></td>
+                            <td>HTTP 200 OK &rarr; Stock increases</td>
+                            <td><code>200 OK</code> (Stock: 100.0 &rarr; 125.0)</td>
+                            <td><span class="status-pill status-pass">PASS</span></td>
+                        </tr>
+                        <tr>
+                            <td>06</td>
+                            <td>Normal Staff Actual Usage (No Override)</td>
+                            <td>Staff &rarr; <code>action="use_stock", amount=15.0</code></td>
+                            <td>HTTP 200 OK &rarr; Stock decreases</td>
+                            <td><code>200 OK</code> (Stock: 125.0 &rarr; 110.0)</td>
+                            <td><span class="status-pill status-pass">PASS</span></td>
+                        </tr>
+                        <tr>
+                            <td>07</td>
+                            <td>Excessive Deduction Stock Reality Guard</td>
+                            <td>Staff &rarr; <code>action="use_stock", amount=99999.0</code></td>
+                            <td>HTTP 400 Bad Request</td>
+                            <td><code>400 Bad Request</code> ("Insufficient stock")</td>
+                            <td><span class="status-pill status-pass">PASS</span></td>
+                        </tr>
+                        <tr>
+                            <td>08</td>
+                            <td>Owner Override Cannot Bypass Stock Reality</td>
+                            <td>Staff with Auth Code &rarr; <code>amount=99999.0</code></td>
+                            <td>HTTP 400 Bad Request</td>
+                            <td><code>400 Bad Request</code> (Override blocked)</td>
+                            <td><span class="status-pill status-pass">PASS</span></td>
+                        </tr>
+                        <tr>
+                            <td>09</td>
+                            <td>Manual Set Balance Requires Authorization</td>
+                            <td>Staff &rarr; <code>action="set_balance", amount=80.0</code> (no auth)</td>
+                            <td>HTTP 403 Forbidden</td>
+                            <td><code>403 Forbidden</code> ("Owner authorization required")</td>
+                            <td><span class="status-pill status-pass">PASS</span></td>
+                        </tr>
+                        <tr>
+                            <td>10</td>
+                            <td>Manual Set Balance Mandatory Reason Guard</td>
+                            <td>Staff &rarr; <code>reason="   "</code> with Auth Code</td>
+                            <td>HTTP 400 Bad Request</td>
+                            <td><code>400 Bad Request</code> ("A mandatory reason is required")</td>
+                            <td><span class="status-pill status-pass">PASS</span></td>
+                        </tr>
+                        <tr>
+                            <td>11</td>
+                            <td>Negative Proposed Balance Rejected</td>
+                            <td>Staff &rarr; <code>action="set_balance", amount=-5.0</code></td>
+                            <td>HTTP 400 Bad Request</td>
+                            <td><code>400 Bad Request</code> ("Proposed balance cannot be negative")</td>
+                            <td><span class="status-pill status-pass">PASS</span></td>
+                        </tr>
+                        <tr>
+                            <td>12</td>
+                            <td>Method B: Store Authorization Code Override</td>
+                            <td>Staff &rarr; <code>authorization_code="SECURE-CODE-2026"</code></td>
+                            <td>HTTP 200 OK &rarr; Stock reconciled</td>
+                            <td><code>200 OK</code> (Stock reconciled to 85.0 mL)</td>
+                            <td><span class="status-pill status-pass">PASS</span></td>
+                        </tr>
+                        <tr>
+                            <td>13</td>
+                            <td>Method A: Owner Credentials Override</td>
+                            <td>Staff &rarr; <code>authorizer_username="owner"</code> + bcrypt</td>
+                            <td>HTTP 200 OK &rarr; Stock reconciled</td>
+                            <td><code>200 OK</code> (Stock reconciled to 90.0 mL)</td>
+                            <td><span class="status-pill status-pass">PASS</span></td>
+                        </tr>
+                        <tr>
+                            <td>14</td>
+                            <td>Dual-Actor Accountability Auditing</td>
+                            <td>Verify <code>InventoryLog</code> and <code>AuditLog</code> in DB</td>
+                            <td>Both actors persisted</td>
+                            <td><code>performed_by=staff, authorized_by=owner/code</code></td>
+                            <td><span class="status-pill status-pass">PASS</span></td>
+                        </tr>
+                        <tr>
+                            <td>15</td>
+                            <td>Master Data Operations Guard</td>
+                            <td>Staff token &rarr; <code>POST</code>, <code>PUT</code>, <code>DELETE /inventory</code></td>
+                            <td>HTTP 403 Forbidden on all</td>
+                            <td><code>403 Forbidden</code> on create, update, deactivate</td>
+                            <td><span class="status-pill status-pass">PASS</span></td>
+                        </tr>
+                        <tr>
+                            <td>16</td>
+                            <td>Ledger Immutability Enforcement</td>
+                            <td>Caller &rarr; <code>PUT</code>, <code>DELETE /inventory/{id}/logs/{log_id}</code></td>
+                            <td>HTTP 404 / 405 Method Not Allowed</td>
+                            <td><code>404 / 405</code> (No mutation routes exist)</td>
+                            <td><span class="status-pill status-pass">PASS</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- SECTION 4: AUTO-DEDUCT PROVENANCE AUDIT -->
+        <div class="section">
+            <div class="section-header">
+                <div class="section-title">
+                    <span>🔬</span> Auto-Deduct Provenance Audit & Findings Table
+                </div>
+                <span class="badge badge-amber">Provenance Status: NOT VERIFIED</span>
+            </div>
+
+            <div class="alert-box alert-warning">
+                <strong>Critical Provenance Assessment:</strong> An exhaustive forensic audit of <code>backend/db/shoelotskey.db</code> and <code>backend/main.py</code> (lines 1937–1976) reveals that the default consumption figures were hardcoded developer placeholders. The business owner explicitly declared that chemical formulas, mixing ratios, and material quantities are <strong>strictly proprietary and confidential</strong>. Standardized consumption quantities have not been provided by the client. Therefore, auto-deduct provenance is formally categorized as <strong>NOT VERIFIED</strong>. Actual material usage must be recorded manually by technicians per pair/order.
+            </div>
+
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Item ID</th>
+                            <th>Material Name</th>
+                            <th>Category</th>
+                            <th>Current Stock</th>
+                            <th>DB auto_deduct</th>
+                            <th>Configured Consumption</th>
+                            <th>Code Provenance Source</th>
+                            <th>Audit Verdict</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>7</td>
+                            <td>Cleaner</td>
+                            <td>Chemical</td>
+                            <td>4,750.0 mL</td>
+                            <td><code>0 (False)</code></td>
+                            <td>2,000.0 mL</td>
+                            <td><code>main.py:1941</code> ("2000 mL/day usage")</td>
+                            <td><span class="status-pill status-warn">NOT VERIFIED</span></td>
+                        </tr>
+                        <tr>
+                            <td>8</td>
+                            <td>Bleach</td>
+                            <td>Chemical</td>
+                            <td>950.0 mL</td>
+                            <td><code>0 (False)</code></td>
+                            <td>1,000.0 mL</td>
+                            <td><code>main.py:1947</code> ("1000 mL/day usage")</td>
+                            <td><span class="status-pill status-warn">NOT VERIFIED</span></td>
+                        </tr>
+                        <tr>
+                            <td>9</td>
+                            <td>Stain Remover</td>
+                            <td>Chemical</td>
+                            <td>0.0 mL</td>
+                            <td><code>0 (False)</code></td>
+                            <td>1,000.0 mL</td>
+                            <td><code>main.py:1953</code> ("1000 mL/day usage")</td>
+                            <td><span class="status-pill status-warn">NOT VERIFIED</span></td>
+                        </tr>
+                        <tr>
+                            <td>10</td>
+                            <td>Deodorizer</td>
+                            <td>Chemical</td>
+                            <td>4,290.0 mL</td>
+                            <td><code>0 (False)</code></td>
+                            <td>180.0 mL</td>
+                            <td><code>main.py:1959</code> ("180 mL per order")</td>
+                            <td><span class="status-pill status-warn">NOT VERIFIED</span></td>
+                        </tr>
+                        <tr>
+                            <td>11</td>
+                            <td>Leather Conditioner</td>
+                            <td>Chemical</td>
+                            <td>35.0 g</td>
+                            <td><code>0 (False)</code></td>
+                            <td>5.0 g</td>
+                            <td><code>main.py:1965</code> ("5 g/day (1 swipe)")</td>
+                            <td><span class="status-pill status-warn">NOT VERIFIED</span></td>
+                        </tr>
+                        <tr>
+                            <td>68</td>
+                            <td>Shoe Laces</td>
+                            <td>Supplies</td>
+                            <td>4.0 pcs</td>
+                            <td><code>0 (False)</code></td>
+                            <td>0.0 pcs</td>
+                            <td>Manual retail sales inventory</td>
+                            <td><span class="status-pill status-pass">MANUAL RETAIL</span></td>
+                        </tr>
+                        <tr>
+                            <td>78</td>
+                            <td>Brush</td>
+                            <td>Tools</td>
+                            <td>5.0 pcs</td>
+                            <td><code>0 (False)</code></td>
+                            <td>0.0 pcs</td>
+                            <td>Shop equipment tool</td>
+                            <td><span class="status-pill status-pass">SHOP ASSET</span></td>
+                        </tr>
+                        <tr>
+                            <td>84</td>
+                            <td>Black Paint</td>
+                            <td>Paints</td>
+                            <td>700.0 mL</td>
+                            <td><code>0 (False)</code></td>
+                            <td>0.0 mL</td>
+                            <td>Manual restoration consumable</td>
+                            <td><span class="status-pill status-pass">MANUAL CONSUMABLE</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- SECTION 5: IMPLEMENTATION EVIDENCE & ARCHITECTURE CODE -->
+        <div class="section">
+            <div class="section-header">
+                <div class="section-title">
+                    <span>💻</span> Core Implementation Code References
+                </div>
+                <span class="badge badge-blue">Production Code</span>
+            </div>
+
+            <div class="grid-2">
+                <div class="card-inner">
+                    <h3>Backend: Confidentiality & Stock Override Gateway</h3>
+                    <pre><code>act = str(action or "").lower().strip()
+if act in ("use_stock", "use", "deduct", "usage"):
+    act = "deduction"
+elif act in ("add_stock", "add", "purchase"):
+    act = "restock"
+
+# Operation-Specific Validation:
+# 1. Deduction: Cannot exceed current available stock (reality invariant)
+if act == "deduction":
+    if (old_stock - effective_amount) < 0:
+        raise HTTPException(status_code=400, detail="Insufficient stock on hand.")
+
+# 2. Set Balance: Primary INVENTORY OVERRIDE (Proposed balance cannot be negative)
+elif act == "set_balance":
+    if proposed_balance < 0:
+        raise HTTPException(status_code=400, detail="Proposed balance cannot be negative.")
+    if not is_owner_admin:
+        if not (has_user_permission(current_user, "inventory.adjust_balance", db)):
+            raise HTTPException(status_code=403, detail="Staff account lacks permission.")
+        # Dual-Actor Authorization: Method A (Owner Creds) OR Method B (Auth Code)
+        if authorizer_username and authorizer_password:
+            authorized_by = authorizer.username
+        elif authorization_code:
+            authorized_by = "Store Owner (Authorization Code)"
+        else:
+            raise HTTPException(status_code=403, detail="Owner authorization required.")</code></pre>
+                </div>
+
+                <div class="card-inner">
+                    <h3>Frontend: Order Lifecycle & UI Guards</h3>
+                    <pre><code>// src/app/components/OrderDetailModal.tsx
+// Operational Principle: Material usage may be recorded for an active job order whenever actual consumption occurs.
+// The system does not assume that consumption necessarily occurs at a particular status.
+const normalizedOrderStatus = (order.status || '').toLowerCase().trim();
+const isClaimed = normalizedOrderStatus === 'claimed';
+const isCancelled = normalizedOrderStatus === 'cancelled';
+const isActiveOrder = ['new-order', 'pending', 'on-going', 'in-progress', 'for-release'].includes(normalizedOrderStatus);
+
+// Allowed across all active stages; locked in Claimed
+const canAddRetail = isActiveOrder && !isClaimed && !isCancelled;
+
+// Per-pair material usage:
+const isItemActive = ['new-order', 'pending', 'on-going', 'in-progress', 'for-release'].includes(normalizedItemStatus);
+const canAddMaterial = isItemActive && !isItemClaimed && !isItemCancelled && canUserUseStock;
+
+// src/app/pages/Inventory.tsx:
+// Unit Price strictly hidden from Staff table
+&lt;colgroup&gt;
+    &lt;col className={isOwnerOrAdmin ? "w-[19%]" : "w-[24%]"} /&gt;
+    {isOwnerOrAdmin && &lt;col className="w-[9%]" /&gt;}
+&lt;/colgroup&gt;</code></pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- FOOTER -->
+        <footer>
+            <p><strong>Shoelotskey Service Management System</strong> • Phase 1 & Phase 2 Technical Implementation Report</p>
+            <p style="margin-top: 0.35rem;">Audit conducted in strict compliance with User Development Rules, Zero Regressions, and Full Ledger Immutability.</p>
+        </footer>
+    </div>
+</body>
+</html>

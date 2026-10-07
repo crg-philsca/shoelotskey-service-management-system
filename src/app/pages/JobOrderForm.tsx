@@ -23,6 +23,7 @@ export default function JobOrderForm({ user, onSetHeaderActionRight }: JobOrderF
         <div className="flex items-center gap-2">
             {/* Status Table button */}
             <Button 
+                aria-label="Status Table"
                 className="w-10 h-10 sm:w-40 flex items-center justify-center rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-sm font-bold uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500"
                 onClick={() => navigate('/dashboard', { state: { status: 'new-order' } })}
             >
@@ -36,8 +37,8 @@ export default function JobOrderForm({ user, onSetHeaderActionRight }: JobOrderF
     }, [onSetHeaderActionRight, navigate]);
 
     return (
-        <div className="min-h-screen bg-[#F8F9FA] pb-20">
-            <div className="max-w-5xl mx-auto px-6 py-1">
+        <div className="w-full bg-[#F8F9FA] pb-6">
+            <div className="max-w-5xl mx-auto px-1 sm:px-4 pt-0 sm:pt-0.5 pb-2">
                 <JobOrderFormComponent
                     user={user}
                     onSuccess={() => navigate('/dashboard')}

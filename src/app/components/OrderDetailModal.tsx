@@ -54,6 +54,7 @@ import ImagePreviewModal from '@/app/components/ImagePreviewModal';
 import ClaimSlipModal from '@/app/components/ClaimSlipModal';
 import EditOrderModal from '@/app/components/EditOrderModal';
 import { compressImageFile, saveOrderAttachments, enrichOrderWithAttachments } from '@/app/lib/imageUtils';
+import { hasPermission } from '@/app/lib/permissions';
 
 interface OrderDetailModalProps {
   order: JobOrder | null;
@@ -111,6 +112,30 @@ function DateValue({ colorClass, children }: { colorClass: string; children: Rea
       <p className="text-sm font-mono font-bold text-slate-900">{children}</p>
     </div>
   );
+}
+
+function formatStandardTime(timeOrDate: any): string {
+  if (!timeOrDate) return '';
+  if (typeof timeOrDate === 'string') {
+    const trimmed = timeOrDate.trim();
+    const timeMatch = trimmed.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+    if (timeMatch) {
+      let hours = parseInt(timeMatch[1], 10);
+      const minutes = parseInt(timeMatch[2], 10);
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12;
+      hours = hours ? hours : 12;
+      return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${ampm}`;
+    }
+  }
+  const d = new Date(timeOrDate);
+  if (isNaN(d.getTime())) return '';
+  let hours = d.getHours();
+  const minutes = d.getMinutes();
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12;
+  hours = hours ? hours : 12;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${ampm}`;
 }
 
 function ScheduleDateInput({
@@ -455,6 +480,26 @@ export default function OrderDetailModal({
   user,
 }: OrderDetailModalProps) {
   const { orders, updateOrder, refreshOrders } = useOrders();
+
+  // Resolve authenticated user from props or session/local storage
+  const activeUser = useMemo(() => {
+    if (user && (user.role || user.username)) return user;
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('user') || sessionStorage.getItem('user');
+        if (saved) return JSON.parse(saved);
+      } catch (e) {
+        console.warn('Failed to parse cached user in OrderDetailModal:', e);
+      }
+    }
+    return user || null;
+  }, [user]);
+
+  const userRole = String(activeUser?.role || '').toLowerCase().trim();
+  const userName = String(activeUser?.username || '').toLowerCase().trim();
+  // Strictly Admin accounts only (excludes Owner, Staff, etc.)
+  const isAdminAccount = userRole === 'admin' || userName === 'admin';
+
   const [copied, setCopied] = useState(false);
   const [estimate, setEstimate] = useState<{
     business_rule_days?: number;
@@ -804,13 +849,13 @@ export default function OrderDetailModal({
     return 25;
   }, [officialBreakdown, order]);
 
-  // 3. Authoritative Official Release Date (Strictly: Received Date + BR Duration using calendar-day math)
+  // 3. Authoritative Standard Release Date (Strictly: Received Date + BR Duration using calendar-day math)
   const authoritativeOfficialReleaseDate = useMemo(() => {
     if (!order || !authoritativeBrDays) return null;
     return addCalendarDays(receivedDate, authoritativeBrDays);
   }, [order, receivedDate, authoritativeBrDays]);
 
-  // 4. Advisory ML Predicted Duration & Date
+  // 4. Active ML Predicted Duration & Date
   const mlDays = useMemo(() => {
     if (!order) return null;
     const d = (order.predictedDays != null ? Number(order.predictedDays) : null)
@@ -1129,7 +1174,7 @@ export default function OrderDetailModal({
   };
 
   const handleStartEditSchedule = () => {
-    if (!order) return;
+    if (!isAdminAccount || !order) return;
 
     // 1. Order Date & Time (Counter Logging)
     const ordDate = order.transactionDate ? new Date(order.transactionDate) : (order.createdAt ? new Date(order.createdAt) : null);
@@ -1251,7 +1296,7 @@ export default function OrderDetailModal({
   };
 
   const handleSaveSchedule = async () => {
-    if (!order) return;
+    if (!isAdminAccount || !order) return;
     setIsSavingSchedule(true);
     try {
       const updates: Partial<JobOrder> & Record<string, any> = {};
@@ -1259,17 +1304,20 @@ export default function OrderDetailModal({
       // 1. Order Date & Time
       if (scheduleOrderDate.trim()) {
         const oTime = scheduleOrderTime.trim() ? `${scheduleOrderTime.trim()}:00` : '00:00:00';
-        const finalOrderDate = new Date(`${scheduleOrderDate.trim()}T${oTime}`);
-        updates.transactionDate = finalOrderDate;
-        updates.createdAt = finalOrderDate;
+        const finalOrderDateIso = `${scheduleOrderDate.trim()}T${oTime}`;
+        updates.transactionDate = finalOrderDateIso;
+        updates.createdAt = finalOrderDateIso;
+        updates.orderDate = scheduleOrderDate.trim();
+        updates.orderTime = scheduleOrderTime.trim();
+        updates.isExplicitDateEdit = true;
       }
 
       // 2. Target Release Date & Time
       if (scheduleTargetReleaseDate.trim()) {
         const tTime = scheduleTargetReleaseTime.trim() ? `${scheduleTargetReleaseTime.trim()}:00` : '00:00:00';
-        const finalTargetDate = new Date(`${scheduleTargetReleaseDate.trim()}T${tTime}`);
-        updates.predictedCompletionDate = finalTargetDate;
-        updates.expected_at = `${scheduleTargetReleaseDate.trim()}T${tTime}`;
+        const finalTargetDateIso = `${scheduleTargetReleaseDate.trim()}T${tTime}`;
+        updates.predictedCompletionDate = finalTargetDateIso;
+        updates.expected_at = finalTargetDateIso;
         if (scheduleTargetReleaseTime.trim()) {
           updates.releaseTime = scheduleTargetReleaseTime.trim();
         }
@@ -1348,7 +1396,12 @@ export default function OrderDetailModal({
   const baseTotal = order.baseServiceFee || 0;
   const addOnsTotal = order.addOnsTotal || 0;
   const calculatedRushFee = Math.max(0, (order.grandTotal || 0) - (baseTotal + addOnsTotal));
-  const isClaimed = order.status === 'claimed';
+  const normalizedOrderStatus = (order.status || '').toLowerCase().trim();
+  const isClaimed = normalizedOrderStatus === 'claimed';
+  const isCancelled = normalizedOrderStatus === 'cancelled';
+  const isActiveOrder = ['new-order', 'pending', 'on-going', 'in-progress', 'for-release', 'for release'].includes(normalizedOrderStatus);
+  const isForRelease = normalizedOrderStatus === 'for-release' || normalizedOrderStatus === 'for release';
+  const canAddRetail = isActiveOrder && !isClaimed && !isCancelled;
 
 
   const resolveEntryMethod = (m?: string, ref?: string) => {
@@ -1447,36 +1500,108 @@ export default function OrderDetailModal({
     return history;
   })();
 
+  const safeInventoryUsed: any[] = Array.isArray(order?.inventoryUsed)
+    ? order.inventoryUsed
+    : (typeof order?.inventoryUsed === 'string'
+      ? (() => { try { const p = JSON.parse(order.inventoryUsed); return Array.isArray(p) ? p : []; } catch { return []; } })()
+      : []);
+
+  const retailProducts = safeInventoryUsed.filter((item: any) => Boolean(item.isRetail));
+  const retailTotal = retailProducts.reduce((sum: number, item: any) => sum + ((Number(item.quantity) || 0) * (Number(item.price) || 0)), 0);
+
+  // Compute item fees
+  const rawBaseFee = Number(order?.baseServiceFee || 0);
+  const rawAddOnsFee = Number(order?.addOnsTotal || 0);
+  let computedBaseFromItems = 0;
+  let computedAddOnsFromItems = 0;
+  if (Array.isArray(order?.items) && order.items.length > 0) {
+    order.items.forEach((it: any) => {
+      const itemQty = Number(it.quantity) || 1;
+      if (Array.isArray(it.historicalBasePrices) && it.historicalBasePrices.length > 0) {
+        computedBaseFromItems += it.historicalBasePrices.reduce((sum: number, p: any) => sum + (Number(p.price) || 0) * itemQty, 0);
+      } else if (Array.isArray(it.services)) {
+        it.services.forEach((s: any) => {
+          const cat = (s.category?.category_name || s.category || '').toLowerCase();
+          const p = Number(s.base_price || s.actual_price || s.price || 0);
+          if (cat === 'addon') computedAddOnsFromItems += p * itemQty;
+          else computedBaseFromItems += p * itemQty;
+        });
+      }
+      if (Array.isArray(it.historicalAddOnPrices) && it.historicalAddOnPrices.length > 0) {
+        computedAddOnsFromItems += it.historicalAddOnPrices.reduce((sum: number, p: any) => sum + (Number(p.price) || 0) * itemQty, 0);
+      }
+    });
+  }
+  const baseFee = rawBaseFee > 0 ? rawBaseFee : computedBaseFromItems;
+  const addOnsFee = rawAddOnsFee > 0 ? rawAddOnsFee : computedAddOnsFromItems;
+  const rushFee = order?.priorityLevel === 'rush' ? calculatedRushFee : 0;
+  const grossSubtotal = Number((order as any)?.grossTotal) || (baseFee + addOnsFee + retailTotal + rushFee);
+
+  const directDiscount = Number((order as any)?.discountAmount || (order as any)?.discount || 0);
+  const directDiscountPercent = Number((order as any)?.discountPercent || 0);
+  let calculatedDiscount = directDiscount;
+
+  if (directDiscountPercent > 0) {
+    calculatedDiscount = Math.round(grossSubtotal * (directDiscountPercent / 100));
+  } else if (order?.discountType === 'senior' || order?.discountType === 'pwd') {
+    calculatedDiscount = Math.round(grossSubtotal * 0.20);
+  } else if (order?.discountType === 'student') {
+    calculatedDiscount = Math.round(grossSubtotal * 0.10);
+  } else if (directDiscount <= 0 && grossSubtotal > Number(order?.grandTotal || 0)) {
+    calculatedDiscount = grossSubtotal - Number(order?.grandTotal || 0);
+  }
+  calculatedDiscount = Math.min(calculatedDiscount, grossSubtotal);
+
+  const discountPercent = grossSubtotal > 0 && calculatedDiscount > 0.01
+    ? Math.round((calculatedDiscount / grossSubtotal) * 100)
+    : 0;
+
+  const dynamicGrandTotal = Number(order?.grandTotal) || Math.max(0, grossSubtotal - calculatedDiscount);
+
+  const totalPaidFromHistory = Array.isArray(paymentHistory) && paymentHistory.length > 0
+    ? paymentHistory.reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0)
+    : 0;
+
+  const depositAmountValue = Number(
+    (order as any)?.depositAmount ||
+    (paymentHistory.find((p: any) => p.paymentType === 'downpayment')?.amount) ||
+    (order?.paymentStatus === 'downpayment' ? order?.amountReceived : 0) ||
+    totalPaidFromHistory ||
+    0
+  );
+
   const effectivePaid = (() => {
-    if (order.paymentStatus === 'fully-paid' || isClaimed) return Number(order.grandTotal || 0);
-    if (paymentHistory.length > 0) {
-      return Math.min(Number(order.grandTotal || 0), paymentHistory.reduce((sum, p) => sum + (Number(p.amount) || 0), 0));
+    if (order?.paymentStatus === 'fully-paid' || isClaimed || order?.status === 'claimed') return dynamicGrandTotal;
+    if (totalPaidFromHistory > 0) {
+      return Math.min(dynamicGrandTotal, totalPaidFromHistory);
     }
-    const dp = Number(order.depositAmount);
-    if (Number.isFinite(dp) && dp > 0) return Math.min(Number(order.grandTotal || 0), dp);
-    const recv = Number(order.amountReceived);
-    if (Number.isFinite(recv) && recv > 0 && recv < Number(order.grandTotal || 0)) return recv;
-    return Number(order.grandTotal || 0) > 0 ? Number(order.grandTotal) / 2 : 0;
+    if (depositAmountValue > 0) return Math.min(dynamicGrandTotal, depositAmountValue);
+    const recv = Number(order?.amountReceived);
+    if (Number.isFinite(recv) && recv > 0 && recv < dynamicGrandTotal) return recv;
+    return dynamicGrandTotal > 0 ? dynamicGrandTotal / 2 : 0;
   })();
 
-  const remainingBalance = (order.paymentStatus === 'fully-paid' || isClaimed)
+  const remainingBalance = (order?.paymentStatus === 'fully-paid' || isClaimed || order?.status === 'claimed')
     ? 0
-    : Math.max(
-        0,
-        (order as any).balance !== undefined && (order as any).balance !== null && !isNaN(Number((order as any).balance))
-          ? Number((order as any).balance)
-          : (Number(order.grandTotal) || 0) - effectivePaid
-      );
+    : Math.max(0, dynamicGrandTotal - effectivePaid);
+
+  const depositPercent = dynamicGrandTotal > 0 && effectivePaid > 0
+    ? Math.round((effectivePaid / dynamicGrandTotal) * 100)
+    : (order?.paymentStatus === 'downpayment' ? 50 : 0);
+
+  const isMoreThan50Deposit = dynamicGrandTotal > 0 && effectivePaid > (dynamicGrandTotal * 0.5) + 0.5;
+  const isExact50Deposit = dynamicGrandTotal > 0 && Math.abs(effectivePaid - (dynamicGrandTotal * 0.5)) <= 0.5;
 
   const effectiveCustomerChange = (() => {
-    if (order.change != null && !isNaN(Number(order.change)) && Number(order.change) >= 0) {
+    if (order?.change != null && !isNaN(Number(order.change)) && Number(order.change) >= 0) {
       return Number(order.change);
     }
-    const rawTendered = Number(order.amountReceived || 0);
+    const rawTendered = Number(order?.amountReceived || 0);
     return rawTendered > effectivePaid ? rawTendered - effectivePaid : 0;
   })();
 
   const effectivePaymentMethod = (() => {
+    if (!order) return 'Cash';
     if (paymentHistory.length > 1) {
       const uniqueMethods = Array.from(new Set(paymentHistory.map(p => resolveEntryMethod(p.method, p.referenceNo).toLowerCase()))).join(', ');
       return uniqueMethods;
@@ -1487,17 +1612,12 @@ export default function OrderDetailModal({
     return resolveEntryMethod(order.initialPaymentMethod || order.paymentMethod, order.referenceNo);
   })();
 
-  const safeInventoryUsed: any[] = Array.isArray(order?.inventoryUsed)
-    ? order.inventoryUsed
-    : (typeof order?.inventoryUsed === 'string'
-      ? (() => { try { const p = JSON.parse(order.inventoryUsed); return Array.isArray(p) ? p : []; } catch { return []; } })()
-      : []);
-
-  const retailProducts = safeInventoryUsed.filter((item: any) => Boolean(item.isRetail));
-  const retailTotal = retailProducts.reduce((sum: number, item: any) => sum + ((Number(item.quantity) || 0) * (Number(item.price) || 0)), 0);
-
   const handleAddRetailProduct = async () => {
     if (!order) return;
+    if (!canAddRetail) {
+      toast.error('Retail products can only be added to active orders (New Order, On-going, or For Release)');
+      return;
+    }
     const item = inventoryData.find(i => i.id.toString() === selectedRetailId);
     if (!item) {
       toast.error('Please select a retail product');
@@ -1547,16 +1667,43 @@ export default function OrderDetailModal({
         .filter(u => Boolean(u.isRetail))
         .reduce((s, u) => s + ((Number(u.quantity) || 0) * (Number(u.price) || 0)), 0);
 
-      const serviceSubtotal = (Number(order.baseServiceFee) || 0) + (Number(order.addOnsTotal) || 0) + calculatedRushFee;
-      const newGrandTotal = serviceSubtotal + newRetailTotal;
+      const rFee = order.priorityLevel === 'rush' ? calculatedRushFee : 0;
+      const newGrossTotal = baseFee + addOnsFee + newRetailTotal + rFee;
+
+      let newDiscountAmount = 0;
+      if (directDiscountPercent > 0) {
+        newDiscountAmount = Math.round(newGrossTotal * (directDiscountPercent / 100));
+      } else if (order.discountType === 'senior' || order.discountType === 'pwd') {
+        newDiscountAmount = Math.round(newGrossTotal * 0.20);
+      } else if (order.discountType === 'student') {
+        newDiscountAmount = Math.round(newGrossTotal * 0.10);
+      } else if (directDiscount > 0) {
+        newDiscountAmount = Math.min(directDiscount, newGrossTotal);
+      }
+      const newGrandTotal = Math.max(0, newGrossTotal - newDiscountAmount);
+
+      const alreadyPaid = (order.paymentStatus === 'fully-paid' || isClaimed || order.status === 'claimed')
+        ? newGrandTotal
+        : (totalPaidFromHistory > 0 ? totalPaidFromHistory : depositAmountValue);
+
+      const newBalance = (order.paymentStatus === 'fully-paid' || isClaimed || order.status === 'claimed')
+        ? 0
+        : Math.max(0, newGrandTotal - alreadyPaid);
 
       const orderDbId = parseInt(order.id);
       updateStock(item.id, qty, isNaN(orderDbId) ? undefined : orderDbId);
 
       await updateOrder(order.id, {
         inventoryUsed: updatedUsed,
+        baseServiceFee: baseFee,
+        addOnsTotal: addOnsFee,
+        grossTotal: newGrossTotal,
+        retailTotal: newRetailTotal,
+        discountAmount: newDiscountAmount,
         grandTotal: newGrandTotal,
-      }, user?.username || 'Staff');
+        balance: newBalance,
+      } as any, user?.username || 'Staff');
+      await refreshOrders();
 
       setSelectedRetailId('');
       setRetailQty('1');
@@ -1571,6 +1718,10 @@ export default function OrderDetailModal({
 
   const handleRemoveRetailProduct = async (itemId: number) => {
     if (!order) return;
+    if (!canAddRetail) {
+      toast.error('Cannot modify retail products for this order');
+      return;
+    }
     try {
       const currentUsed = Array.isArray(safeInventoryUsed) ? [...safeInventoryUsed] : [];
       const targetProd = currentUsed.find(u => u.itemId === itemId && u.isRetail);
@@ -1581,16 +1732,43 @@ export default function OrderDetailModal({
         .filter(u => Boolean(u.isRetail))
         .reduce((s, u) => s + ((Number(u.quantity) || 0) * (Number(u.price) || 0)), 0);
 
-      const serviceSubtotal = (Number(order.baseServiceFee) || 0) + (Number(order.addOnsTotal) || 0) + calculatedRushFee;
-      const newGrandTotal = serviceSubtotal + newRetailTotal;
+      const rFee = order.priorityLevel === 'rush' ? calculatedRushFee : 0;
+      const newGrossTotal = baseFee + addOnsFee + newRetailTotal + rFee;
+
+      let newDiscountAmount = 0;
+      if (directDiscountPercent > 0) {
+        newDiscountAmount = Math.round(newGrossTotal * (directDiscountPercent / 100));
+      } else if (order.discountType === 'senior' || order.discountType === 'pwd') {
+        newDiscountAmount = Math.round(newGrossTotal * 0.20);
+      } else if (order.discountType === 'student') {
+        newDiscountAmount = Math.round(newGrossTotal * 0.10);
+      } else if (directDiscount > 0) {
+        newDiscountAmount = Math.min(directDiscount, newGrossTotal);
+      }
+      const newGrandTotal = Math.max(0, newGrossTotal - newDiscountAmount);
+
+      const alreadyPaid = (order.paymentStatus === 'fully-paid' || isClaimed || order.status === 'claimed')
+        ? newGrandTotal
+        : (totalPaidFromHistory > 0 ? totalPaidFromHistory : depositAmountValue);
+
+      const newBalance = (order.paymentStatus === 'fully-paid' || isClaimed || order.status === 'claimed')
+        ? 0
+        : Math.max(0, newGrandTotal - alreadyPaid);
 
       const orderDbId = parseInt(order.id);
       updateStock(itemId, -(Number(targetProd.quantity) || 0), isNaN(orderDbId) ? undefined : orderDbId);
 
       await updateOrder(order.id, {
         inventoryUsed: updatedUsed,
+        baseServiceFee: baseFee,
+        addOnsTotal: addOnsFee,
+        grossTotal: newGrossTotal,
+        retailTotal: newRetailTotal,
+        discountAmount: newDiscountAmount,
         grandTotal: newGrandTotal,
-      }, user?.username || 'Staff');
+        balance: newBalance,
+      } as any, user?.username || 'Staff');
+      await refreshOrders();
 
       toast.success(`Removed ${targetProd.name} from retail products`);
     } catch (err: any) {
@@ -1798,6 +1976,7 @@ export default function OrderDetailModal({
                 </div>
               </div>
             </div>
+
           </div>
 
           {/* Card 2: Customer Details */}
@@ -1837,71 +2016,79 @@ export default function OrderDetailModal({
                   Schedule & Tracking
                 </h4>
               </div>
-              {!isEditingSchedule ? (
-                <button
-                  type="button"
-                  onClick={handleStartEditSchedule}
-                  className="h-7 w-7 rounded-lg border border-red-200 hover:bg-red-50 text-red-600 flex items-center justify-center shadow-2xs cursor-pointer transition-all hover:scale-105 active:scale-95"
-                  title="Edit Schedule & Tracking Dates"
-                  aria-label="Edit Schedule & Tracking Dates"
-                >
-                  <Pencil size={13} />
-                </button>
-              ) : (
-                <div className="flex items-center gap-1.5">
-                  <Button
+              {isAdminAccount && (
+                !isEditingSchedule ? (
+                  <button
                     type="button"
-                    size="sm"
-                    onClick={handleSaveSchedule}
-                    disabled={isSavingSchedule}
-                    className="h-7 px-3 text-[11px] font-bold bg-red-600 hover:bg-red-700 text-white rounded-lg shadow-2xs gap-1 cursor-pointer transition-all disabled:opacity-50"
+                    onClick={handleStartEditSchedule}
+                    className="h-7 w-7 rounded-lg border border-red-200 hover:bg-red-50 text-red-600 flex items-center justify-center shadow-2xs cursor-pointer transition-all hover:scale-105 active:scale-95"
+                    title="Edit Schedule & Tracking Dates"
+                    aria-label="Edit Schedule & Tracking Dates"
                   >
-                    {isSavingSchedule ? (
-                      <>
-                        <Loader2 size={12} className="animate-spin" />
-                        <span>Saving...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Check size={12} />
-                        <span>Save</span>
-                      </>
-                    )}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsEditingSchedule(false)}
-                    disabled={isSavingSchedule}
-                    className="h-7 px-2.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-100 rounded-lg shadow-2xs cursor-pointer transition-all disabled:opacity-50"
-                  >
-                    Cancel
-                  </Button>
-                </div>
+                    <Pencil size={13} />
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleSaveSchedule}
+                      disabled={isSavingSchedule}
+                      className="h-7 px-3 text-[11px] font-bold bg-red-600 hover:bg-red-700 text-white rounded-lg shadow-2xs gap-1 cursor-pointer transition-all disabled:opacity-50"
+                    >
+                      {isSavingSchedule ? (
+                        <>
+                          <Loader2 size={12} className="animate-spin" />
+                          <span>Saving...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check size={12} />
+                          <span>Save</span>
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsEditingSchedule(false)}
+                      disabled={isSavingSchedule}
+                      className="h-7 px-2.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-100 rounded-lg shadow-2xs cursor-pointer transition-all disabled:opacity-50"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                )
               )}
             </div>
 
-            {/* Row 1: Target Timeline (Order Date, Official Release, ML Predicted) */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* Unified 6-Card Timeline Grid (Strictly Equal Size) */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
               {/* 1. Order Date (Logged at counter) */}
-              <div className="p-3 rounded-lg bg-white border border-slate-200/70 shadow-2xs min-w-0 flex flex-col justify-between">
+              <div className="p-3 rounded-xl bg-purple-50/40 border border-purple-200/80 shadow-2xs min-w-0 flex flex-col justify-between h-full min-h-[114px]">
                 <div className="flex items-center justify-between mb-1">
-                  <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block truncate">
+                  <Label className="text-[10px] font-bold text-purple-800 uppercase tracking-wider block truncate">
                     Order Date
                   </Label>
                 </div>
                 {!isEditingSchedule ? (
                   <>
-                    <div className="flex items-baseline gap-2 flex-wrap min-w-0">
-                      <DateValue colorClass="text-purple-600">
-                        {formatDate(receivedDate, 'MM/dd/yy')}
-                      </DateValue>
-                      <span className="text-[11px] text-slate-500 font-mono font-medium">
-                        {formatDate(receivedDate, 'HH:mm')}
-                      </span>
+                    <div className="space-y-1 my-0.5 min-w-0">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <CalendarIcon size={12} className="text-purple-600 shrink-0" />
+                        <span className="text-sm font-mono font-bold text-slate-900 leading-none">
+                          {formatDate(receivedDate, 'MM/dd/yy')}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[11px] font-mono font-semibold text-purple-700 min-w-0">
+                        <Clock size={11} className="text-purple-500 shrink-0" />
+                        <span>
+                          {formatStandardTime(order.orderTime || receivedDate) || '—'}
+                        </span>
+                      </div>
                     </div>
-                    <p className="text-[10px] text-slate-400 mt-1 font-medium truncate">
+                    <p className="text-[10px] text-purple-700 mt-1 font-medium truncate">
                       Order logged at counter
                     </p>
                   </>
@@ -1943,26 +2130,34 @@ export default function OrderDetailModal({
                       >
                         <Clock size={10} /> Set to Now
                       </button>
-                      <span className="text-[9.5px] text-slate-400 font-medium truncate text-right">Counter intake</span>
+                      <span className="text-[9.5px] text-purple-700 font-medium truncate text-right">Counter intake</span>
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* 2. Official Release Date (Derived from authoritative Business Rule duration) */}
-              <div className="p-3 rounded-lg bg-emerald-50/40 border border-emerald-200/60 shadow-2xs min-w-0 flex flex-col justify-between">
+              {/* 2. Business Rules (Derived from authoritative Business Rule duration) */}
+              <div className="p-3 rounded-xl bg-emerald-50/40 border border-emerald-200/80 shadow-2xs min-w-0 flex flex-col justify-between h-full min-h-[114px]">
                 <div className="flex items-center justify-between mb-1">
                   <Label className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block truncate">
-                    Release Date
+                    Business Rules
                   </Label>
                 </div>
                 {!isEditingSchedule ? (
                   <>
-                    <div className="flex items-baseline gap-1.5 flex-wrap min-w-0">
-                      <DateValue colorClass="text-emerald-700">
-                        {formatDate(authoritativeOfficialReleaseDate, 'MM/dd/yy')}
-                        {order.releaseTime ? ` ${order.releaseTime}` : ''}
-                      </DateValue>
+                    <div className="space-y-1 my-0.5 min-w-0">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <CalendarIcon size={12} className="text-emerald-600 shrink-0" />
+                        <span className="text-sm font-mono font-bold text-slate-900 leading-none">
+                          {authoritativeOfficialReleaseDate ? formatDate(authoritativeOfficialReleaseDate, 'MM/dd/yy') : '—'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[11px] font-mono font-semibold text-emerald-700 min-w-0">
+                        <Clock size={11} className="text-emerald-500 shrink-0" />
+                        <span>
+                          {formatStandardTime(order.releaseTime || authoritativeOfficialReleaseDate) || '—'}
+                        </span>
+                      </div>
                     </div>
                     <p className="text-[10px] text-emerald-700 mt-1 font-semibold truncate">
                       Business Rules: {authoritativeBrDays} {authoritativeBrDays === 1 ? 'day' : 'days'}
@@ -2003,61 +2198,73 @@ export default function OrderDetailModal({
                 )}
               </div>
 
-              {/* 3. ML Predicted Date (Turnaround duration estimation) */}
-              <div className="p-3 rounded-lg bg-blue-50/40 border border-blue-200/60 shadow-2xs min-w-0 flex flex-col justify-between">
-                <Label className="text-[10px] font-bold text-blue-800 uppercase tracking-wider mb-1 block truncate">
-                  ML Predicted Date
-                </Label>
-                <div className="flex items-baseline gap-1.5 flex-wrap min-w-0">
-                  <DateValue colorClass="text-blue-700">
-                    {predictionLoading ? (
-                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600">
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                        Predicting...
-                      </span>
-                    ) : mlDate ? (
-                      formatDate(mlDate, 'MM/dd/yy')
-                    ) : predictionError ? (
-                      <span className="text-amber-600 text-xs font-medium">Error</span>
-                    ) : (
-                      <span className="text-slate-400 text-xs font-medium">Unavailable</span>
-                    )}
-                  </DateValue>
+              {/* 3. ML Prediction (Active Random Forest model) */}
+              <div className="p-3 rounded-xl bg-blue-50/40 border border-blue-200/80 shadow-2xs min-w-0 flex flex-col justify-between h-full min-h-[114px]">
+                <div className="flex items-center justify-between mb-1">
+                  <Label className="text-[10px] font-bold text-blue-800 uppercase tracking-wider block truncate">
+                    ML Prediction
+                  </Label>
+                </div>
+                <div className="space-y-1 my-0.5 min-w-0">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <CalendarIcon size={12} className="text-blue-600 shrink-0" />
+                    <span className="text-sm font-mono font-bold text-slate-900 leading-none">
+                      {predictionLoading ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600">
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          Predicting...
+                        </span>
+                      ) : mlDate ? (
+                        formatDate(mlDate, 'MM/dd/yy')
+                      ) : predictionError ? (
+                        <span className="text-amber-600 text-xs font-medium">Error</span>
+                      ) : (
+                        <span className="text-slate-400 text-xs font-medium">Unavailable</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[11px] font-mono font-semibold text-blue-700 min-w-0">
+                    <Clock size={11} className="text-blue-500 shrink-0" />
+                    <span>
+                      {(mlDate && hasExplicitTime(mlDate) ? formatStandardTime(mlDate) : formatStandardTime(order.releaseTime)) || '—'}
+                    </span>
+                  </div>
                 </div>
                 <p className="text-[10px] text-blue-700 mt-1 font-semibold truncate">
                   {predictionLoading ? (
                     'ML: Calculating...'
                   ) : mlDays != null ? (
-                    `ML Estimate: ${mlDays} ${mlDays === 1 ? 'day' : 'days'}`
+                    `Random Forest: ${mlDays} ${mlDays === 1 ? 'day' : 'days'}`
                   ) : (
-                    'ML: Unavailable'
+                    'Random Forest: Unavailable'
                   )}
                 </p>
               </div>
-            </div>
 
-            {/* Row 2: Actual Execution & Claim Timeline (Actual Release, Claimed, Turnaround) */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {/* 4. Actual Release Date (Strictly from released_at) */}
-              <div className="p-3 rounded-lg bg-white border border-slate-200/70 shadow-2xs min-w-0 flex flex-col justify-between">
+              <div className="p-3 rounded-xl bg-amber-50/40 border border-amber-200/80 shadow-2xs min-w-0 flex flex-col justify-between h-full min-h-[114px]">
                 <div className="flex items-center justify-between mb-1">
-                  <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block truncate">
+                  <Label className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block truncate">
                     Actual Release Date
                   </Label>
                 </div>
                 {!isEditingSchedule ? (
                   <>
-                    <div className="flex items-baseline gap-2 flex-wrap min-w-0">
-                      <DateValue colorClass={actualReleaseDate ? "text-orange-600" : "text-slate-400"}>
-                        {actualReleaseDate ? formatDate(actualReleaseDate, 'MM/dd/yy') : '—'}
-                      </DateValue>
-                      {actualReleaseDate && hasExplicitTime(actualReleaseDate) && (
-                        <span className="text-[11px] text-slate-500 font-mono font-medium">
-                          {formatDate(actualReleaseDate, 'HH:mm')}
+                    <div className="space-y-1 my-0.5 min-w-0">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <CalendarIcon size={12} className={actualReleaseDate ? "text-amber-600 shrink-0" : "text-slate-400 shrink-0"} />
+                        <span className="text-sm font-mono font-bold text-slate-900 leading-none">
+                          {actualReleaseDate ? formatDate(actualReleaseDate, 'MM/dd/yy') : '—'}
                         </span>
-                      )}
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[11px] font-mono font-semibold text-amber-700 min-w-0">
+                        <Clock size={11} className="text-amber-500 shrink-0" />
+                        <span>
+                          {actualReleaseDate && hasExplicitTime(actualReleaseDate) ? formatStandardTime(actualReleaseDate) : '—'}
+                        </span>
+                      </div>
                     </div>
-                    <p className="text-[10px] text-slate-500 mt-1 font-medium truncate">
+                    <p className="text-[10px] text-amber-700 mt-1 font-medium truncate">
                       {actualReleaseDate ? 'Released from workshop' : 'Not yet released'}
                     </p>
                   </>
@@ -2122,32 +2329,36 @@ export default function OrderDetailModal({
                           </button>
                         )}
                       </div>
-                      <span className="text-[9.5px] text-slate-400 font-medium truncate text-right">Workshop</span>
+                      <span className="text-[9.5px] text-amber-700 font-medium truncate text-right">Workshop</span>
                     </div>
                   </div>
                 )}
               </div>
 
               {/* 5. Claimed Date (Strictly from claimed_at - separate from release) */}
-              <div className="p-3 rounded-lg bg-white border border-slate-200/70 shadow-2xs min-w-0 flex flex-col justify-between">
+              <div className="p-3 rounded-xl bg-teal-50/40 border border-teal-200/80 shadow-2xs min-w-0 flex flex-col justify-between h-full min-h-[114px]">
                 <div className="flex items-center justify-between mb-1">
-                  <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block truncate">
+                  <Label className="text-[10px] font-bold text-teal-800 uppercase tracking-wider block truncate">
                     Claimed Date
                   </Label>
                 </div>
                 {!isEditingSchedule ? (
                   <>
-                    <div className="flex items-baseline gap-2 flex-wrap min-w-0">
-                      <DateValue colorClass={actualClaimedDate ? "text-slate-700" : "text-slate-400"}>
-                        {actualClaimedDate ? formatDate(actualClaimedDate, 'MM/dd/yy') : '—'}
-                      </DateValue>
-                      {actualClaimedDate && hasExplicitTime(actualClaimedDate) && (
-                        <span className="text-[11px] text-slate-500 font-mono font-medium">
-                          {formatDate(actualClaimedDate, 'HH:mm')}
+                    <div className="space-y-1 my-0.5 min-w-0">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <CalendarIcon size={12} className={actualClaimedDate ? "text-teal-600 shrink-0" : "text-slate-400 shrink-0"} />
+                        <span className="text-sm font-mono font-bold text-slate-900 leading-none">
+                          {actualClaimedDate ? formatDate(actualClaimedDate, 'MM/dd/yy') : '—'}
                         </span>
-                      )}
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[11px] font-mono font-semibold text-teal-700 min-w-0">
+                        <Clock size={11} className="text-teal-500 shrink-0" />
+                        <span>
+                          {actualClaimedDate && hasExplicitTime(actualClaimedDate) ? formatStandardTime(actualClaimedDate) : '—'}
+                        </span>
+                      </div>
                     </div>
-                    <p className="text-[10px] text-slate-500 mt-1 font-medium truncate">
+                    <p className="text-[10px] text-teal-700 mt-1 font-medium truncate">
                       {actualClaimedDate ? 'Claimed by customer' : 'Not yet claimed'}
                     </p>
                   </>
@@ -2185,7 +2396,7 @@ export default function OrderDetailModal({
                             setScheduleClaimedDate(`${y}-${m}-${d}`);
                             setScheduleClaimedTime(`${hh}:${mm}`);
                           }}
-                          className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 px-1.5 py-0.5 rounded-md shadow-2xs cursor-pointer transition-all active:scale-95 shrink-0"
+                          className="inline-flex items-center gap-1 text-[10px] font-bold text-teal-800 bg-teal-100 hover:bg-teal-200 border border-teal-300 px-1.5 py-0.5 rounded-md shadow-2xs cursor-pointer transition-all active:scale-95 shrink-0"
                           title="Set to Current Date and Time"
                         >
                           <Clock size={10} /> Set Now
@@ -2204,29 +2415,38 @@ export default function OrderDetailModal({
                           </button>
                         )}
                       </div>
-                      <span className="text-[9.5px] text-slate-400 font-medium truncate text-right">Customer handover</span>
+                      <span className="text-[9.5px] text-teal-700 font-medium truncate text-right">Customer handover</span>
                     </div>
                   </div>
                 )}
               </div>
 
               {/* 6. Actual Turnaround (Renamed from Total Days: released_at - received) */}
-              <div className="p-3 rounded-lg bg-white border border-slate-200/70 shadow-2xs min-w-0 flex flex-col justify-between">
-                <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block truncate">
-                  Actual Turnaround
-                </Label>
-                <div className="flex items-baseline gap-1.5 flex-wrap min-w-0">
-                  {actualTurnaroundDays != null ? (
-                    <DateValue colorClass="text-slate-900">
-                      {actualTurnaroundDays} {actualTurnaroundDays === 1 ? 'day' : 'days'}
-                    </DateValue>
-                  ) : (
-                    <DateValue colorClass="text-slate-400 text-xs">
-                      In progress
-                    </DateValue>
-                  )}
+              <div className="p-3 rounded-xl bg-indigo-50/40 border border-indigo-200/80 shadow-2xs min-w-0 flex flex-col justify-between h-full min-h-[114px]">
+                <div className="flex items-center justify-between mb-1">
+                  <Label className="text-[10px] font-bold text-indigo-800 uppercase tracking-wider block truncate">
+                    Actual Turnaround
+                  </Label>
                 </div>
-                <p className="text-[10px] text-slate-500 mt-1 font-medium truncate">
+                <div className="space-y-1 my-0.5 min-w-0">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <CalendarIcon size={12} className="text-indigo-600 shrink-0" />
+                    <span className="text-sm font-mono font-bold text-slate-900 leading-none">
+                      {actualTurnaroundDays != null ? (
+                        `${actualTurnaroundDays} ${actualTurnaroundDays === 1 ? 'day' : 'days'}`
+                      ) : (
+                        <span className="text-slate-400 text-xs font-normal">In progress</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[11px] font-mono font-semibold text-indigo-700 min-w-0">
+                    <Clock size={11} className="text-indigo-400 shrink-0" />
+                    <span className={actualTurnaroundDays != null ? "text-indigo-700" : "text-slate-400 font-normal"}>
+                      {actualTurnaroundDays != null ? 'Completed' : 'Pending release'}
+                    </span>
+                  </div>
+                </div>
+                <p className="text-[10px] text-indigo-700 mt-1 font-medium truncate">
                   {actualTurnaroundDays != null ? 'Received to actual release' : 'Order in progress'}
                 </p>
               </div>
@@ -2499,8 +2719,9 @@ export default function OrderDetailModal({
                     </div>
                   </div>
 
-                  {/* Before & After Shoe Condition Photos (Collapsible) */}
-                  <div className="pt-2.5 border-t border-slate-200/60 space-y-2">
+                  {/* Before & After Shoe Condition Photos (Collapsible) - Admin Accounts Only */}
+                  {isAdminAccount && (
+                    <div className="pt-2.5 border-t border-slate-200/60 space-y-2">
                     <button
                       type="button"
                       onClick={() => setExpandedPhotos(prev => ({ ...prev, [index]: !prev[index] }))}
@@ -2690,143 +2911,146 @@ export default function OrderDetailModal({
                       </div>
                     )}
                   </div>
+                  )}
 
-                  {/* Pair Status & Tracking (Collapsible Accordion) */}
-                  <div className="pt-2.5 border-t border-slate-200/60 space-y-2">
-                    {/* Collapsible Header Button */}
-                    {(() => {
-                      const itemSt = (item.status || order.status || 'pending').toLowerCase();
-                      const badgeColors: Record<string, string> = {
-                        'pending': 'bg-amber-100 text-amber-800 border-amber-300',
-                        'new-order': 'bg-amber-100 text-amber-800 border-amber-300',
-                        'new order': 'bg-amber-100 text-amber-800 border-amber-300',
-                        'in-progress': 'bg-blue-100 text-blue-800 border-blue-300',
-                        'on-going': 'bg-blue-100 text-blue-800 border-blue-300',
-                        'for-release': 'bg-emerald-100 text-emerald-800 border-emerald-300',
-                        'claimed': 'bg-slate-900 text-white border-slate-900',
-                        'cancelled': 'bg-red-100 text-red-800 border-red-300',
-                      };
-                      const statusDisplayNames: Record<string, string> = {
-                        'pending': 'New Order',
-                        'new-order': 'New Order',
-                        'new order': 'New Order',
-                        'in-progress': 'On-Going',
-                        'on-going': 'On-Going',
-                        'for-release': 'For Release',
-                        'claimed': 'Claimed',
-                        'cancelled': 'Cancelled',
-                      };
-                      const currentStyle = badgeColors[itemSt] || 'bg-gray-100 text-gray-800 border-gray-200';
-                      const selectVal = itemSt === 'in-progress' ? 'on-going' : (itemSt === 'new-order' || itemSt === 'new order') ? 'pending' : itemSt;
-                      const currentLabel = statusDisplayNames[itemSt] || itemSt.replace(/-/g, ' ');
+                  {/* Pair Status & Tracking (Collapsible Accordion) - Admin Accounts Only & Multi-Pair Orders Only */}
+                  {isAdminAccount && itemsToDisplay.length > 1 && (
+                    <div className="pt-2.5 border-t border-slate-200/60 space-y-2">
+                      {/* Collapsible Header Button */}
+                      {(() => {
+                        const itemSt = (item.status || order.status || 'pending').toLowerCase();
+                        const badgeColors: Record<string, string> = {
+                          'pending': 'bg-amber-100 text-amber-800 border-amber-300',
+                          'new-order': 'bg-amber-100 text-amber-800 border-amber-300',
+                          'new order': 'bg-amber-100 text-amber-800 border-amber-300',
+                          'in-progress': 'bg-blue-100 text-blue-800 border-blue-300',
+                          'on-going': 'bg-blue-100 text-blue-800 border-blue-300',
+                          'for-release': 'bg-emerald-100 text-emerald-800 border-emerald-300',
+                          'claimed': 'bg-slate-900 text-white border-slate-900',
+                          'cancelled': 'bg-red-100 text-red-800 border-red-300',
+                        };
+                        const statusDisplayNames: Record<string, string> = {
+                          'pending': 'New Order',
+                          'new-order': 'New Order',
+                          'new order': 'New Order',
+                          'in-progress': 'On-Going',
+                          'on-going': 'On-Going',
+                          'for-release': 'For Release',
+                          'claimed': 'Claimed',
+                          'cancelled': 'Cancelled',
+                        };
+                        const currentStyle = badgeColors[itemSt] || 'bg-gray-100 text-gray-800 border-gray-200';
+                        const selectVal = itemSt === 'in-progress' ? 'on-going' : (itemSt === 'new-order' || itemSt === 'new order') ? 'pending' : itemSt;
+                        const currentLabel = statusDisplayNames[itemSt] || itemSt.replace(/-/g, ' ');
 
-                      return (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => setExpandedPairTracking(prev => ({ ...prev, [index]: !prev[index] }))}
-                            className="w-full flex items-center justify-between p-2 rounded-xl bg-slate-50/80 hover:bg-slate-100/90 border border-slate-200/80 transition-all cursor-pointer text-left group"
-                            title="Click to toggle pair status and tracking"
-                          >
-                            <div className="flex items-center gap-2">
-                              <div className="p-1 rounded-md bg-white border border-slate-200 text-red-500 group-hover:text-red-600 shadow-2xs">
-                                <Package size={13} />
+                        return (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setExpandedPairTracking(prev => ({ ...prev, [index]: !prev[index] }))}
+                              className="w-full flex items-center justify-between p-2 rounded-xl bg-slate-50/80 hover:bg-slate-100/90 border border-slate-200/80 transition-all cursor-pointer text-left group"
+                              title="Click to toggle pair status and tracking"
+                            >
+                              <div className="flex items-center gap-2">
+                                <div className="p-1 rounded-md bg-white border border-slate-200 text-red-500 group-hover:text-red-600 shadow-2xs">
+                                  <Package size={13} />
+                                </div>
+                                <span className="text-[11px] font-black text-slate-700 uppercase tracking-wider">
+                                  {itemsToDisplay.length > 1 ? `Pair #${index + 1} Status & Tracking` : 'Pair Status & Tracking'}
+                                </span>
+                                {/* Read-only status badge on collapsed header */}
+                                <span className={`text-[8.5px] font-bold uppercase px-1.5 py-0.5 rounded-full border shadow-2xs tracking-wider ${currentStyle}`}>
+                                  {currentLabel}
+                                </span>
                               </div>
-                              <span className="text-[11px] font-black text-slate-700 uppercase tracking-wider">
-                                {itemsToDisplay.length > 1 ? `Pair #${index + 1} Status & Tracking` : 'Pair Status & Tracking'}
-                              </span>
-                              {/* Read-only status badge on collapsed header */}
-                              <span className={`text-[8.5px] font-bold uppercase px-1.5 py-0.5 rounded-full border shadow-2xs tracking-wider ${currentStyle}`}>
-                                {currentLabel}
-                              </span>
-                            </div>
 
-                            <div className="flex items-center gap-1.5 text-slate-400">
-                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                                {expandedPairTracking[index] ? 'Hide' : 'Expand'}
-                              </span>
-                              {expandedPairTracking[index] ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                            </div>
-                          </button>
+                              <div className="flex items-center gap-1.5 text-slate-400">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                  {expandedPairTracking[index] ? 'Hide' : 'Expand'}
+                                </span>
+                                {expandedPairTracking[index] ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                              </div>
+                            </button>
 
-                          {/* Expanded Content: Editable Status Selector, Update Pair Button & Tracking Dates */}
-                          {expandedPairTracking[index] && (
-                            <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-3 animate-in fade-in duration-200">
-                              <div className="flex items-center justify-between gap-2 flex-wrap pb-2.5 border-b border-slate-100">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Status:</span>
-                                  <div className="relative inline-block">
-                                    <Select value={selectVal} onValueChange={(newVal) => handleDirectPairStatusChange(index, newVal)}>
-                                      <SelectTrigger className={`w-auto min-w-[86px] h-6 px-2 text-[9.5px] font-bold uppercase tracking-wider border rounded-md shadow-2xs gap-1 cursor-pointer [&_svg]:size-3 ${currentStyle}`}>
-                                        <SelectValue />
-                                      </SelectTrigger>
-                                      <SelectContent className="z-[120]">
-                                        <SelectItem value="pending" className="text-[11px] font-semibold text-amber-700 py-1">New Order</SelectItem>
-                                        <SelectItem value="on-going" className="text-[11px] font-semibold text-blue-700 py-1">On-Going</SelectItem>
-                                        <SelectItem value="for-release" className="text-[11px] font-semibold text-emerald-700 py-1">For Release</SelectItem>
-                                        <SelectItem value="claimed" className="text-[11px] font-semibold text-slate-900 py-1">Claimed</SelectItem>
-                                        <SelectItem value="cancelled" className="text-[11px] font-semibold text-red-600 py-1">Cancelled</SelectItem>
-                                      </SelectContent>
-                                    </Select>
+                            {/* Expanded Content: Editable Status Selector, Update Pair Button & Tracking Dates */}
+                            {expandedPairTracking[index] && (
+                              <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-3 animate-in fade-in duration-200">
+                                <div className="flex items-center justify-between gap-2 flex-wrap pb-2.5 border-b border-slate-100">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Status:</span>
+                                    <div className="relative inline-block">
+                                      <Select value={selectVal} onValueChange={(newVal) => handleDirectPairStatusChange(index, newVal)}>
+                                        <SelectTrigger className={`w-auto min-w-[86px] h-6 px-2 text-[9.5px] font-bold uppercase tracking-wider border rounded-md shadow-2xs gap-1 cursor-pointer [&_svg]:size-3 ${currentStyle}`}>
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent className="z-[120]">
+                                          <SelectItem value="pending" className="text-[11px] font-semibold text-amber-700 py-1">New Order</SelectItem>
+                                          <SelectItem value="on-going" className="text-[11px] font-semibold text-blue-700 py-1">On-Going</SelectItem>
+                                          <SelectItem value="for-release" className="text-[11px] font-semibold text-emerald-700 py-1">For Release</SelectItem>
+                                          <SelectItem value="claimed" className="text-[11px] font-semibold text-slate-900 py-1">Claimed</SelectItem>
+                                          <SelectItem value="cancelled" className="text-[11px] font-semibold text-red-600 py-1">Cancelled</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  </div>
+
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleOpenUpdatePair(item, index)}
+                                    className="h-6 w-6 p-0 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 shadow-2xs rounded-md cursor-pointer flex items-center justify-center"
+                                    title="Update Pair Tracking Dates"
+                                  >
+                                    <Edit3 size={12} />
+                                  </Button>
+                                </div>
+
+                                {/* Dates Tracking Details */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                                  <div className="bg-slate-50/80 p-2.5 rounded-lg border border-slate-100">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                                      Release Date
+                                    </span>
+                                    {item.actualReleaseDate ? (
+                                      <div className="flex items-center gap-1.5 text-emerald-700 font-mono font-bold text-xs">
+                                        <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
+                                        <span>{formatDate(item.actualReleaseDate, hasExplicitTime(item.actualReleaseDate) ? 'MM/dd/yy hh:mm a' : 'MM/dd/yy')}</span>
+                                      </div>
+                                    ) : (
+                                      <span className="text-slate-400 font-medium italic text-[11px]">
+                                        {['for-release', 'claimed'].includes((item.status || order.status || '').toLowerCase()) && releaseTimestamp(order)
+                                          ? `${formatDate(releaseTimestamp(order), hasExplicitTime(releaseTimestamp(order)) ? 'MM/dd/yy hh:mm a' : 'MM/dd/yy')} (Order Batch)`
+                                          : 'Pending completion'}
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div className="bg-slate-50/80 p-2.5 rounded-lg border border-slate-100">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                                      Claimed Date
+                                    </span>
+                                    {item.actualCompletionDate ? (
+                                      <div className="flex items-center gap-1.5 text-slate-900 font-mono font-bold text-xs">
+                                        <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
+                                        <span>{formatDate(item.actualCompletionDate, hasExplicitTime(item.actualCompletionDate) ? 'MM/dd/yy hh:mm a' : 'MM/dd/yy')}</span>
+                                      </div>
+                                    ) : (
+                                      <span className="text-slate-400 font-medium italic text-[11px]">
+                                        {(item.status || order.status || '').toLowerCase() === 'claimed' && order.actualCompletionDate
+                                          ? `${formatDate(order.actualCompletionDate, hasExplicitTime(order.actualCompletionDate) ? 'MM/dd/yy hh:mm a' : 'MM/dd/yy')} (Order Batch)`
+                                          : 'Pending customer claim'}
+                                      </span>
+                                    )}
                                   </div>
                                 </div>
-
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleOpenUpdatePair(item, index)}
-                                  className="h-6 w-6 p-0 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 shadow-2xs rounded-md cursor-pointer flex items-center justify-center"
-                                  title="Update Pair Tracking Dates"
-                                >
-                                  <Edit3 size={12} />
-                                </Button>
                               </div>
-
-                              {/* Dates Tracking Details */}
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                                <div className="bg-slate-50/80 p-2.5 rounded-lg border border-slate-100">
-                                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
-                                    Release Date
-                                  </span>
-                                  {item.actualReleaseDate ? (
-                                    <div className="flex items-center gap-1.5 text-emerald-700 font-mono font-bold text-xs">
-                                      <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
-                                      <span>{formatDate(item.actualReleaseDate, hasExplicitTime(item.actualReleaseDate) ? 'MM/dd/yy hh:mm a' : 'MM/dd/yy')}</span>
-                                    </div>
-                                  ) : (
-                                    <span className="text-slate-400 font-medium italic text-[11px]">
-                                      {['for-release', 'claimed'].includes((item.status || order.status || '').toLowerCase()) && releaseTimestamp(order)
-                                        ? `${formatDate(releaseTimestamp(order), hasExplicitTime(releaseTimestamp(order)) ? 'MM/dd/yy hh:mm a' : 'MM/dd/yy')} (Order Batch)`
-                                        : 'Pending completion'}
-                                    </span>
-                                  )}
-                                </div>
-
-                                <div className="bg-slate-50/80 p-2.5 rounded-lg border border-slate-100">
-                                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
-                                    Claimed Date
-                                  </span>
-                                  {item.actualCompletionDate ? (
-                                    <div className="flex items-center gap-1.5 text-slate-900 font-mono font-bold text-xs">
-                                      <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
-                                      <span>{formatDate(item.actualCompletionDate, hasExplicitTime(item.actualCompletionDate) ? 'MM/dd/yy hh:mm a' : 'MM/dd/yy')}</span>
-                                    </div>
-                                  ) : (
-                                    <span className="text-slate-400 font-medium italic text-[11px]">
-                                      {(item.status || order.status || '').toLowerCase() === 'claimed' && order.actualCompletionDate
-                                        ? `${formatDate(order.actualCompletionDate, hasExplicitTime(order.actualCompletionDate) ? 'MM/dd/yy hh:mm a' : 'MM/dd/yy')} (Order Batch)`
-                                        : 'Pending customer claim'}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </>
-                      );
-                    })()}
-                  </div>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
 
                   {/* Materials / Supplies Used (Collapsible Accordion inside Pair) */}
                   {(() => {
@@ -2834,6 +3058,12 @@ export default function OrderDetailModal({
                       ? item.inventoryUsed
                       : (itemsToDisplay.length === 1 ? safeInventoryUsed.filter((u: any) => !u.isRetail) : []);
                     const activeMaterials = pairUsed.filter((u: any) => (u.quantity || u.amount) > 0);
+                    const normalizedItemStatus = (item.status || order.status || '').toLowerCase().trim();
+                    const isItemClaimed = normalizedItemStatus === 'claimed';
+                    const isItemCancelled = normalizedItemStatus === 'cancelled';
+                    const isItemActive = ['new-order', 'pending', 'on-going', 'in-progress', 'for-release', 'for release'].includes(normalizedItemStatus);
+                    const canUserUseStock = user ? (hasPermission(user, 'inventory.use_stock') || hasPermission(user, 'inventory.edit')) : true;
+                    const canAddMaterial = isItemActive && !isItemClaimed && !isItemCancelled && canUserUseStock;
 
                     return (
                       <div className="pt-2.5 border-t border-slate-200/60 space-y-2">
@@ -2867,21 +3097,23 @@ export default function OrderDetailModal({
                         {/* Expanded Content: Add Material Button + Recorded Materials List */}
                         {expandedPairMaterials[index] && (
                           <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-2.5 animate-in fade-in duration-200">
-                            <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-100">
-                              <span className="text-[11px] font-bold text-slate-600 uppercase tracking-tight">
-                                Recorded Supplies ({activeMaterials.length})
-                              </span>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() => setMaterialModalTarget({ itemId: item.id || (itemsToDisplay.length === 1 ? order.id : undefined), label: itemsToDisplay.length > 1 ? `Pair #${index + 1}` : 'Pair' })}
-                                className="h-7 px-3 text-xs font-bold text-emerald-700 border-emerald-200 bg-emerald-50/80 hover:bg-emerald-100 gap-1.5 rounded-lg shadow-2xs cursor-pointer"
-                              >
-                                <Plus size={12} strokeWidth={2.5} />
-                                <span>Add Material</span>
-                              </Button>
-                            </div>
+                              <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-100">
+                                <span className="text-[11px] font-bold text-slate-600 uppercase tracking-tight">
+                                  Recorded Supplies ({activeMaterials.length})
+                                </span>
+                                {canAddMaterial && (
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => setMaterialModalTarget({ itemId: item.id || (itemsToDisplay.length === 1 ? order.id : undefined), label: itemsToDisplay.length > 1 ? `Pair #${index + 1}` : 'Pair' })}
+                                    className="h-7 px-3 text-xs font-bold text-emerald-700 border-emerald-200 bg-emerald-50/80 hover:bg-emerald-100 gap-1.5 rounded-lg shadow-2xs cursor-pointer"
+                                  >
+                                    <Plus size={12} strokeWidth={2.5} />
+                                    <span>Add Material</span>
+                                  </Button>
+                                )}
+                              </div>
 
                             {activeMaterials.length > 0 ? (
                               <div className="space-y-1.5">
@@ -2911,157 +3143,6 @@ export default function OrderDetailModal({
               );
             })}
           </div>
-
-          {/* Card 6: Payment Details */}
-          <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-100 space-y-3">
-            <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
-              <div className="flex items-center gap-2">
-                <Wallet size={15} className="text-red-500" />
-                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  Payment Details
-                </h4>
-              </div>
-              <div className="flex items-center gap-2">
-                <span
-                  className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase border ${
-                    order.paymentStatus === 'fully-paid'
-                      ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                      : order.paymentStatus === 'downpayment'
-                      ? 'bg-amber-100 text-amber-800 border-amber-200'
-                      : 'bg-red-100 text-red-800 border-red-200'
-                  }`}
-                >
-                  {order.paymentStatus === 'fully-paid'
-                    ? 'Fully Paid'
-                    : order.paymentStatus === 'downpayment'
-                    ? (() => {
-                        const gt = Number(order.grandTotal || 0);
-                        const dp = Number((order as any).depositAmount || (order.paymentHistory?.find((p: any) => p.paymentType === 'downpayment')?.amount) || 0);
-                        const pct = gt > 0 && dp > 0 ? Math.round((dp / gt) * 100) : 50;
-                        return `${pct}% Downpayment`;
-                      })()
-                    : 'Unpaid'}
-                </span>
-              </div>
-            </div>
-
-            <div className={`grid gap-4 ${['gcash', 'maya'].includes(effectivePaymentMethod.toLowerCase()) && order.referenceNo && paymentHistory.length <= 1 ? 'grid-cols-3' : 'grid-cols-2'}`}>
-              <div className="text-left">
-                <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block">
-                  Method
-                </Label>
-                <p className="text-sm font-bold text-slate-800 uppercase">
-                  {effectivePaymentMethod}
-                </p>
-              </div>
-
-              <div className={['gcash', 'maya'].includes(effectivePaymentMethod.toLowerCase()) && order.referenceNo && paymentHistory.length <= 1 ? 'text-center' : 'text-right'}>
-                <Label className={`text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block ${['gcash', 'maya'].includes(effectivePaymentMethod.toLowerCase()) && order.referenceNo && paymentHistory.length <= 1 ? 'text-center' : 'text-right'}`}>
-                  Amount Received
-                </Label>
-                <p className="text-sm font-bold text-slate-800">
-                  ₱{(order.amountReceived || 0).toLocaleString('en-US', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
-                </p>
-              </div>
-
-              {['gcash', 'maya'].includes(effectivePaymentMethod.toLowerCase()) && order.referenceNo && paymentHistory.length <= 1 && (
-                <div className="text-right">
-                  <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block text-right">
-                    Reference Number
-                  </Label>
-                  <p className="text-sm font-mono font-bold text-slate-900 tracking-tight">
-                    {order.referenceNo}
-                  </p>
-                </div>
-              )}
-
-              {/* Payment History Breakdown Section */}
-              {paymentHistory.length > 0 && (
-                <div className="pt-2 border-t border-slate-200/60 col-span-full space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
-                      Payment History
-                    </Label>
-                    <span className="text-[10px] font-bold text-slate-500">
-                      {paymentHistory.length} transaction{paymentHistory.length > 1 ? 's' : ''}
-                    </span>
-                  </div>
-                  <div className="space-y-1.5">
-                    {paymentHistory.map((p, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-2.5 rounded-lg bg-white border border-slate-200/80 shadow-2xs">
-                        <div className="flex items-center gap-2.5">
-                          <div className={`p-1.5 rounded-md ${p.paymentType === 'downpayment' ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                            {p.paymentType === 'downpayment' ? <Wallet size={14} /> : <CheckCircle2 size={14} />}
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-xs font-bold text-slate-800">
-                                {p.paymentType === 'downpayment' ? 'Downpayment' : p.paymentType === 'final-payment' ? 'Balance Settled (Claim)' : 'Payment'}
-                              </span>
-                              <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
-                                {p.method}
-                              </span>
-                            </div>
-                            <div className="text-[10px] text-slate-400 flex flex-wrap items-center gap-2 mt-0.5">
-                              {p.referenceNo && (
-                                <span>Ref: <span className="font-mono font-bold text-slate-600">{p.referenceNo}</span></span>
-                              )}
-                              {p.date && (
-                                <span>• {new Date(p.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                              )}
-                              {p.processedBy && (
-                                <span>• By: {p.processedBy}</span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-xs font-black text-slate-900">
-                            ₱{Number(p.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {effectiveCustomerChange > 0 && (
-                <div className="text-left col-span-full">
-                  <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block">
-                    Customer Change
-                  </Label>
-                  <p className="text-sm font-bold text-emerald-600">
-                    ₱{effectiveCustomerChange.toLocaleString('en-US', {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
-                  </p>
-                </div>
-              )}
-
-              <div className="pt-3 border-t border-slate-200/60 col-span-full flex justify-between items-center">
-                <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
-                  Remaining Balance
-                </Label>
-                <p
-                  className={`text-sm font-black ${
-                    remainingBalance > 0.01 ? 'text-red-500' : 'text-emerald-600'
-                  }`}
-                >
-                  ₱{remainingBalance.toLocaleString('en-US', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
-                </p>
-              </div>
-            </div>
-          </div>
-
-
 
           {/* Card: Retail Products (Shoelaces, Cleaner, Insoles, etc., Collapsible) */}
           <div className="bg-sky-50/40 p-3.5 rounded-xl border border-sky-100/90 space-y-2.5">
@@ -3115,14 +3196,16 @@ export default function OrderDetailModal({
                           <span className="font-mono font-black text-emerald-700 text-xs">
                             ₱{((Number(prod.quantity) || 1) * (Number(prod.price) || 0)).toFixed(2)}
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveRetailProduct(prod.itemId)}
-                            title="Remove retail product and restock"
-                            className="text-slate-300 hover:text-rose-500 p-1 transition-colors cursor-pointer"
-                          >
-                            <Trash2 size={13} />
-                          </button>
+                          {canAddRetail && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveRetailProduct(prod.itemId)}
+                              title="Remove retail product and restock"
+                              className="text-slate-300 hover:text-rose-500 p-1 transition-colors cursor-pointer"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -3133,9 +3216,10 @@ export default function OrderDetailModal({
                   </p>
                 )}
 
-                {/* Inline Add Retail Product Form */}
-                {!showAddRetailForm ? (
-                  <div className="flex justify-end pt-1">
+                {/* Inline Add Retail Product Form (Only when order is For Release) */}
+                {canAddRetail && (
+                  !showAddRetailForm ? (
+                    <div className="flex justify-end pt-1">
                     <Button
                       type="button"
                       size="sm"
@@ -3223,130 +3307,254 @@ export default function OrderDetailModal({
                       </div>
                     </div>
                   </div>
-                )}
+                ))}
               </div>
             )}
           </div>
 
-          {/* Card 8: Pricing & Grand Total Breakdown Card */}
-          {(() => {
-            const baseFee = Number(order.baseServiceFee || 0);
-            const addOnsFee = Number(order.addOnsTotal || 0);
-            const rushFee = order.priorityLevel === 'rush' ? calculatedRushFee : 0;
-            const grossSubtotal = Number((order as any).grossTotal || (baseFee + addOnsFee + retailTotal + rushFee));
-            const grandTotalValue = Number(order.grandTotal || 0);
+          {/* Unified Card: Pricing Breakdown & Payment Details */}
+          <div className="bg-slate-50/60 p-4 rounded-xl border border-slate-200/80 space-y-3.5 shadow-2xs">
+            {/* Header: Title and Payment Status Badge */}
+            <div className="flex items-center justify-between border-b border-slate-200/70 pb-2.5">
+              <div className="flex items-center gap-2">
+                <Wallet size={15} className="text-red-500" />
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Payment & Pricing Details
+                </h4>
+              </div>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase border ${
+                    order.paymentStatus === 'fully-paid' || isClaimed
+                      ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                      : order.paymentStatus === 'downpayment'
+                      ? 'bg-amber-100 text-amber-800 border-amber-200'
+                      : 'bg-red-100 text-red-800 border-red-200'
+                  }`}
+                >
+                  {order.paymentStatus === 'fully-paid' || isClaimed
+                    ? 'Fully Paid'
+                    : order.paymentStatus === 'downpayment'
+                    ? `${depositPercent}% Downpayment`
+                    : 'Unpaid'}
+                </span>
+              </div>
+            </div>
 
-            const directDiscount = Number((order as any).discountAmount || (order as any).discount || 0);
-            const derivedDiscount = grossSubtotal > grandTotalValue ? (grossSubtotal - grandTotalValue) : 0;
-            const discountAmount = directDiscount > 0 ? directDiscount : derivedDiscount;
-            const discountPercent = grossSubtotal > 0 && discountAmount > 0.01 
-              ? Math.round((discountAmount / grossSubtotal) * 100) 
-              : 0;
-
-            const depositAmountValue = Number((order as any).depositAmount || (order.paymentHistory?.find((p: any) => p.paymentType === 'downpayment')?.amount) || order.amountReceived || 0);
-            const isMoreThan50Deposit = grandTotalValue > 0 && depositAmountValue > (grandTotalValue * 0.5) + 0.5;
-            const isExact50Deposit = grandTotalValue > 0 && Math.abs(depositAmountValue - (grandTotalValue * 0.5)) <= 0.5;
-            const depositPercent = grandTotalValue > 0 ? Math.round((depositAmountValue / grandTotalValue) * 100) : 0;
-
-            const computedRemainingBalance = Math.max(0, grandTotalValue - depositAmountValue);
-            const finalRemainingBalance = order.balance !== undefined && order.balance !== null 
-              ? Number(order.balance) 
-              : (remainingBalance !== undefined ? remainingBalance : computedRemainingBalance);
-
-            return (
-              <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-200/80 space-y-2">
-                <div className="flex justify-between items-center text-slate-600">
-                  <span className="text-xs font-medium uppercase tracking-wide">Total Quantity</span>
-                  <span className="text-sm font-bold text-slate-800">
-                    {order.quantity || 1} {(order.quantity || 1) === 1 ? 'Pair' : 'Pairs'}
-                  </span>
+            {/* PART 1: Pricing Breakdown */}
+            <div className="space-y-2">
+              <div className="flex justify-between items-center text-slate-600">
+                <span className="text-xs font-medium uppercase tracking-wide">Total Quantity</span>
+                <span className="text-sm font-bold text-slate-800">
+                  {order.quantity || 1} {(order.quantity || 1) === 1 ? 'Pair' : 'Pairs'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-slate-600">
+                <span className="text-xs font-medium uppercase tracking-wide">Base Service Fee</span>
+                <span className="text-sm font-bold text-slate-800">
+                  ₱{baseFee.toFixed(2)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-slate-600">
+                <span className="text-xs font-medium uppercase tracking-wide">Add-ons Total</span>
+                <span className="text-sm font-bold text-slate-800">
+                  ₱{addOnsFee.toFixed(2)}
+                </span>
+              </div>
+              {retailTotal > 0 && (
+                <div className="flex justify-between items-center text-slate-600 animate-in fade-in duration-150">
+                  <span className="text-xs font-medium uppercase tracking-wide">Retail Products Total</span>
+                  <span className="text-sm font-bold text-emerald-700">₱{retailTotal.toFixed(2)}</span>
                 </div>
+              )}
+              {rushFee > 0 && (
                 <div className="flex justify-between items-center text-slate-600">
-                  <span className="text-xs font-medium uppercase tracking-wide">Base Service Fee</span>
-                  <span className="text-sm font-bold text-slate-800">
-                    ₱{baseFee.toFixed(2)}
-                  </span>
+                  <span className="text-xs font-medium uppercase tracking-wide">Rush Fee</span>
+                  <span className="text-sm font-bold text-slate-800">₱{rushFee.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between items-center text-slate-600">
-                  <span className="text-xs font-medium uppercase tracking-wide">Add-ons Total</span>
-                  <span className="text-sm font-bold text-slate-800">
-                    ₱{addOnsFee.toFixed(2)}
-                  </span>
-                </div>
-                {retailTotal > 0 && (
-                  <div className="flex justify-between items-center text-slate-600">
-                    <span className="text-xs font-medium uppercase tracking-wide">Retail Products Total</span>
-                    <span className="text-sm font-bold text-emerald-700">₱{retailTotal.toFixed(2)}</span>
-                  </div>
-                )}
-                {rushFee > 0 && (
-                  <div className="flex justify-between items-center text-slate-600">
-                    <span className="text-xs font-medium uppercase tracking-wide">Rush Fee</span>
-                    <span className="text-sm font-bold text-slate-800">₱{rushFee.toFixed(2)}</span>
-                  </div>
-                )}
+              )}
 
-                {/* Discount Indicator */}
-                {discountAmount > 0.01 && (
+              {/* Discount Indicator */}
+              {calculatedDiscount > 0.01 && (
+                <div className="space-y-1 pt-0.5">
                   <div className="flex justify-between items-center text-emerald-700 bg-emerald-50 px-2.5 py-1.5 rounded-lg border border-emerald-200">
-                    <span className="text-xs font-bold uppercase tracking-wide flex items-center gap-1.5">
-                      <span>Discount</span>
+                    <span className="text-xs font-bold uppercase tracking-wide flex items-center gap-1.5 flex-wrap">
+                      <span>{order.discountName || (order.discountType ? `${order.discountType.toUpperCase()} Discount` : 'Discount')}</span>
                       {discountPercent > 0 && (
                         <span className="text-[10px] bg-emerald-600 text-white font-black px-1.5 py-0.2 rounded-full">
                           {discountPercent}% OFF
                         </span>
                       )}
-                    </span>
-                    <span className="text-sm font-black">-₱{discountAmount.toFixed(2)}</span>
-                  </div>
-                )}
-
-                <div className="flex justify-between items-center pt-2.5 border-t border-slate-200 mt-1">
-                  <span className="text-sm font-black text-slate-900 uppercase tracking-tight">
-                    Grand Total
-                  </span>
-                  <span className="text-lg font-black text-red-600 tracking-tight">
-                    ₱{grandTotalValue.toFixed(2)}
-                  </span>
-                </div>
-
-                {/* Amount Deposited */}
-                {depositAmountValue > 0 && (
-                  <div className="flex justify-between items-center text-slate-700 pt-2 border-t border-slate-200/60">
-                    <span className="text-xs font-bold uppercase tracking-wide flex items-center gap-1.5">
-                      <span>Amount Deposited</span>
-                      {isMoreThan50Deposit && (
-                        <span className="text-[9.5px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200 px-1.5 py-0.5 rounded-md">
-                          &gt; 50% Deposit ({depositPercent}%)
-                        </span>
-                      )}
-                      {isExact50Deposit && (
-                        <span className="text-[9.5px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200 px-1.5 py-0.5 rounded-md">
-                          50% Deposit
+                      {order.discountIdNumber && (
+                        <span className="text-[10px] font-mono font-normal text-emerald-800 bg-white/80 px-1.5 py-0.2 rounded border border-emerald-300">
+                          ID: {order.discountIdNumber}
                         </span>
                       )}
                     </span>
-                    <span className="text-sm font-bold text-slate-900">
-                      ₱{depositAmountValue.toFixed(2)}
-                    </span>
+                    <span className="text-sm font-black font-mono">-₱{calculatedDiscount.toFixed(2)}</span>
                   </div>
-                )}
-
-                {/* Remaining Balance */}
-                <div className="flex justify-between items-center text-slate-700 pt-1">
-                  <span className="text-xs font-bold uppercase tracking-wide">Remaining Balance</span>
-                  <span className={`text-sm font-black ${finalRemainingBalance > 0.01 ? 'text-red-600' : 'text-emerald-600'}`}>
-                    ₱{finalRemainingBalance.toFixed(2)}
-                  </span>
+                  {order.authorized_by_username && (
+                    <div className="flex justify-end text-[10px] text-slate-500 font-medium px-1">
+                      Authorized by: <span className="font-bold text-slate-700 ml-1">{order.authorized_by_username}</span>
+                    </div>
+                  )}
                 </div>
+              )}
+
+              <div className="flex justify-between items-center pt-2.5 border-t border-slate-200 mt-1">
+                <span className="text-sm font-black text-slate-900 uppercase tracking-tight">
+                  Grand Total
+                </span>
+                <span className="text-lg font-black text-red-600 tracking-tight">
+                  ₱{dynamicGrandTotal.toFixed(2)}
+                </span>
               </div>
-            );
-          })()}
+            </div>
+
+            {/* PART 2: Payment & Settlement Details */}
+            <div className="pt-3 border-t border-slate-200/80 space-y-3">
+              <div className={`grid gap-4 ${['gcash', 'maya'].includes(effectivePaymentMethod.toLowerCase()) && order.referenceNo && paymentHistory.length <= 1 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                <div className="text-left">
+                  <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block">
+                    Method
+                  </Label>
+                  <p className="text-sm font-bold text-slate-800 uppercase">
+                    {effectivePaymentMethod}
+                  </p>
+                </div>
+
+                <div className={['gcash', 'maya'].includes(effectivePaymentMethod.toLowerCase()) && order.referenceNo && paymentHistory.length <= 1 ? 'text-center' : 'text-right'}>
+                  <Label className={`text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block ${['gcash', 'maya'].includes(effectivePaymentMethod.toLowerCase()) && order.referenceNo && paymentHistory.length <= 1 ? 'text-center' : 'text-right'}`}>
+                    Amount Received
+                  </Label>
+                  <p className="text-sm font-bold text-slate-800">
+                    ₱{(order.amountReceived || 0).toLocaleString('en-US', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </p>
+                </div>
+
+                {['gcash', 'maya'].includes(effectivePaymentMethod.toLowerCase()) && order.referenceNo && paymentHistory.length <= 1 && (
+                  <div className="text-right">
+                    <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1 block text-right">
+                      Reference Number
+                    </Label>
+                    <p className="text-sm font-mono font-bold text-slate-900 tracking-tight">
+                      {order.referenceNo}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Payment History Breakdown Section */}
+              {paymentHistory.length > 0 && (
+                <div className="pt-2 border-t border-slate-200/60 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                      Payment History
+                    </Label>
+                    <span className="text-[10px] font-bold text-slate-500">
+                      {paymentHistory.length} transaction{paymentHistory.length > 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {paymentHistory.map((p, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-2.5 rounded-lg bg-white border border-slate-200/80 shadow-2xs">
+                        <div className="flex items-center gap-2.5">
+                          <div className={`p-1.5 rounded-md ${p.paymentType === 'downpayment' ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                            {p.paymentType === 'downpayment' ? <Wallet size={14} /> : <CheckCircle2 size={14} />}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-bold text-slate-800">
+                                {p.paymentType === 'downpayment' ? 'Downpayment' : p.paymentType === 'final-payment' ? 'Balance Settled (Claim)' : 'Payment'}
+                              </span>
+                              <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                                {p.method}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-slate-400 flex flex-wrap items-center gap-2 mt-0.5">
+                              {p.referenceNo && (
+                                <span>Ref: <span className="font-mono font-bold text-slate-600">{p.referenceNo}</span></span>
+                              )}
+                              {p.date && (
+                                <span>• {new Date(p.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                              )}
+                              {p.processedBy && (
+                                <span>• By: {p.processedBy}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-xs font-black text-slate-900 font-mono">
+                            ₱{Number(p.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Customer Change */}
+              {effectiveCustomerChange > 0 && (
+                <div className="flex justify-between items-center text-slate-600 pt-1">
+                  <Label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                    Customer Change
+                  </Label>
+                  <p className="text-sm font-bold text-emerald-600 font-mono">
+                    ₱{effectiveCustomerChange.toLocaleString('en-US', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </p>
+                </div>
+              )}
+
+              {/* Amount Deposited */}
+              {effectivePaid > 0 && (
+                <div className="flex justify-between items-center text-slate-700 pt-2 border-t border-slate-200/60">
+                  <span className="text-xs font-bold uppercase tracking-wide flex items-center gap-1.5">
+                    <span>Amount Deposited</span>
+                    {isMoreThan50Deposit && (
+                      <span className="text-[9.5px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200 px-1.5 py-0.5 rounded-md">
+                        &gt; 50% Deposit ({depositPercent}%)
+                      </span>
+                    )}
+                    {isExact50Deposit && (
+                      <span className="text-[9.5px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200 px-1.5 py-0.5 rounded-md">
+                        50% Deposit
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-sm font-bold text-slate-900 font-mono">
+                    ₱{effectivePaid.toFixed(2)}
+                  </span>
+                </div>
+              )}
+
+              {/* Remaining Balance */}
+              <div className="pt-2.5 border-t border-slate-200/80 flex justify-between items-center">
+                <Label className="text-xs font-bold text-slate-600 uppercase tracking-wide block">
+                  Remaining Balance
+                </Label>
+                <p
+                  className={`text-base font-black font-mono ${
+                    remainingBalance > 0.01 ? 'text-red-600' : 'text-emerald-600'
+                  }`}
+                >
+                  ₱{remainingBalance.toFixed(2)}
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
 
-      {editingPairIndex !== null && (() => {
+      {editingPairIndex !== null && isAdminAccount && itemsToDisplay.length > 1 && (() => {
         const currentItem = itemsToDisplay[editingPairIndex];
         return (
           <Dialog open={editingPairIndex !== null} onOpenChange={(isOpen) => !isOpen && setEditingPairIndex(null)}>
@@ -3460,12 +3668,13 @@ export default function OrderDetailModal({
         );
       })()}
 
-      {order && materialModalTarget && (
+      {order && materialModalTarget && (isActiveOrder && !isClaimed && !isCancelled) && (
         <AddMaterialModal
           open={materialModalTarget !== null}
           onOpenChange={(open) => !open && setMaterialModalTarget(null)}
           orderId={order.id}
           orderNumber={order.orderNumber}
+          orderStatus={order.status}
           itemId={materialModalTarget.itemId}
           itemLabel={materialModalTarget.label}
           onSuccess={() => {
@@ -3520,7 +3729,7 @@ export default function OrderDetailModal({
         order={order}
         open={showClaimSlip}
         onOpenChange={setShowClaimSlip}
-        user={user}
+        user={activeUser}
       />
 
       {/* Edit Full Order Modal */}

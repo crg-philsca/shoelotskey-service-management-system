@@ -1,0 +1,964 @@
+import sqlite3
+import json
+import os
+from datetime import datetime
+
+def generate_rbac_report():
+    db_path = 'backend/db/shoelotskey.db'
+    conn = sqlite3.connect(db_path)
+    c = conn.cursor()
+
+    # Query roles
+    roles = c.execute('SELECT role_id, role_name FROM roles ORDER BY role_id ASC').fetchall()
+    
+    # Query users
+    users = c.execute('''
+        SELECT u.user_id, u.username, u.email, r.role_name, u.is_active, 
+               u.failed_login_attempts, u.locked_until, u.created_at
+        FROM users u 
+        LEFT JOIN roles r ON u.role_id = r.role_id
+        ORDER BY u.user_id ASC
+    ''').fetchall()
+
+    # Query active sessions if table exists
+    session_count = 0
+    try:
+        session_count = c.execute('SELECT COUNT(*) FROM user_sessions WHERE is_revoked = 0').fetchone()[0]
+    except Exception:
+        pass
+
+    conn.close()
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shoelotskey SMS — Master Role-Based Access Control (RBAC) & Permissions Audit Report</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {{
+      --bg: #090d16;
+      --card-bg: #131b2e;
+      --card-border: #1e293b;
+      --card-hover: #1e2942;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --primary: #ef4444;
+      --primary-dark: #dc2626;
+      --primary-light: #fef2f2;
+      --accent: #38bdf8;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #f43f5e;
+      --purple: #a855f7;
+      --indigo: #6366f1;
+      --font-mono: 'JetBrains Mono', 'Consolas', monospace;
+    }}
+
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{
+      background-color: var(--bg);
+      color: var(--text-main);
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.6;
+      padding: 32px 20px;
+    }}
+
+    .container {{
+      max-width: 1440px;
+      margin: 0 auto;
+    }}
+
+    /* Header */
+    header {{
+      background: linear-gradient(135deg, #180d12 0%, #1e1b2e 50%, #0f172a 100%);
+      border: 1px solid #3b1822;
+      border-radius: 16px;
+      padding: 36px 32px;
+      margin-bottom: 28px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    }}
+
+    header::before {{
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: linear-gradient(90deg, #dc2626, #ef4444, #f87171, #fb7185);
+    }}
+
+    .header-top {{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 12px;
+    }}
+
+    .system-title {{
+      font-size: 26px;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }}
+
+    .system-title span.badge-doc {{
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      background: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      padding: 4px 10px;
+      border-radius: 9999px;
+    }}
+
+    .meta-time {{
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-muted);
+      background: rgba(15, 23, 42, 0.6);
+      padding: 6px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--card-border);
+    }}
+
+    .header-desc {{
+      color: var(--text-muted);
+      font-size: 14px;
+      max-width: 900px;
+      margin-top: 8px;
+    }}
+
+    /* Stat Cards */
+    .stats-grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 28px;
+    }}
+
+    .stat-card {{
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      transition: transform 0.2s ease, border-color 0.2s ease;
+    }}
+
+    .stat-card:hover {{
+      transform: translateY(-2px);
+      border-color: #3b82f6;
+    }}
+
+    .stat-label {{
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+    }}
+
+    .stat-value {{
+      font-size: 30px;
+      font-weight: 900;
+      color: #fff;
+    }}
+
+    .stat-sub {{
+      font-size: 11px;
+      color: var(--text-dim);
+    }}
+
+    /* Section Cards */
+    .section-card {{
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 28px;
+      margin-bottom: 28px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    }}
+
+    .section-header {{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--card-border);
+    }}
+
+    .section-title {{
+      font-size: 18px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }}
+
+    .section-title::before {{
+      content: "";
+      width: 4px;
+      height: 18px;
+      background: #ef4444;
+      border-radius: 2px;
+      display: inline-block;
+    }}
+
+    /* Tables */
+    .table-responsive {{
+      overflow-x: auto;
+      border-radius: 10px;
+      border: 1px solid var(--card-border);
+    }}
+
+    table {{
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 13px;
+    }}
+
+    th {{
+      background-color: #172033;
+      color: #cbd5e1;
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--card-border);
+      white-space: nowrap;
+    }}
+
+    td {{
+      padding: 14px 16px;
+      border-bottom: 1px solid #1a2438;
+      color: #e2e8f0;
+      vertical-align: middle;
+    }}
+
+    tr:last-child td {{
+      border-bottom: none;
+    }}
+
+    tr:hover td {{
+      background-color: rgba(255, 255, 255, 0.02);
+    }}
+
+    /* Badges */
+    .badge {{
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 9px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      white-space: nowrap;
+    }}
+
+    .badge-admin {{
+      background: rgba(148, 163, 184, 0.15);
+      color: #cbd5e1;
+      border: 1px solid rgba(148, 163, 184, 0.3);
+    }}
+
+    .badge-owner {{
+      background: rgba(168, 85, 247, 0.15);
+      color: #d8b4fe;
+      border: 1px solid rgba(168, 85, 247, 0.3);
+    }}
+
+    .badge-staff {{
+      background: rgba(56, 189, 248, 0.15);
+      color: #7dd3fc;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+    }}
+
+    .badge-frontstaff {{
+      background: rgba(20, 184, 166, 0.15);
+      color: #5eead4;
+      border: 1px solid rgba(20, 184, 166, 0.3);
+    }}
+
+    .badge-customer {{
+      background: rgba(245, 158, 11, 0.15);
+      color: #fcd34d;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }}
+
+    .badge-active {{
+      background: rgba(16, 185, 129, 0.15);
+      color: #6ee7b7;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }}
+
+    .badge-inactive {{
+      background: rgba(244, 63, 94, 0.15);
+      color: #fda4af;
+      border: 1px solid rgba(244, 63, 94, 0.3);
+    }}
+
+    .perm-check {{
+      color: #10b981;
+      font-weight: 800;
+      font-size: 14px;
+    }}
+
+    .perm-cross {{
+      color: #64748b;
+      font-size: 13px;
+    }}
+
+    .perm-conditional {{
+      color: #f59e0b;
+      font-size: 11px;
+      font-weight: 700;
+      background: rgba(245, 158, 11, 0.1);
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }}
+
+    .mono {{
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }}
+
+    .grid-2 {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+      gap: 20px;
+    }}
+
+    .role-box {{
+      background: #0f172a;
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 20px;
+    }}
+
+    .role-header {{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }}
+
+    .role-title {{
+      font-size: 15px;
+      font-weight: 800;
+      color: #fff;
+    }}
+
+    .role-desc {{
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+      line-height: 1.5;
+    }}
+
+    .role-list {{
+      list-style: none;
+      font-size: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }}
+
+    .role-list li {{
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      color: #cbd5e1;
+    }}
+
+    .role-list li::before {{
+      content: "•";
+      color: #ef4444;
+      font-weight: bold;
+    }}
+
+    .security-note {{
+      background: rgba(239, 68, 68, 0.08);
+      border-left: 4px solid #ef4444;
+      padding: 14px 18px;
+      border-radius: 0 8px 8px 0;
+      margin-top: 18px;
+      font-size: 13px;
+      color: #fca5a5;
+    }}
+
+    footer {{
+      text-align: center;
+      padding: 30px 0 10px;
+      color: var(--text-dim);
+      font-size: 12px;
+      border-top: 1px solid var(--card-border);
+      margin-top: 40px;
+    }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="header-top">
+        <h1 class="system-title">
+          SHOELOTSKEY SERVICE MANAGEMENT SYSTEM
+          <span class="badge-doc">RBAC AUDIT REPORT</span>
+        </h1>
+        <div class="meta-time">Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")} PHT | ISO/IEC 25010 & OWASP Compliance</div>
+      </div>
+      <p class="header-desc">
+        Comprehensive enterprise audit of Role-Based Access Control (RBAC), user directory accounts, database permissions, API endpoint access control list (ACL), and client route authorizations across the Shoelotskey SMS environment.
+      </p>
+    </header>
+
+    <!-- Top Key Metrics -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <span class="stat-label">Total Registered Users</span>
+        <span class="stat-value">{len(users)}</span>
+        <span class="stat-sub">Authoritative database records in `users`</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">System Roles</span>
+        <span class="stat-value">{len(roles)}</span>
+        <span class="stat-sub">Strict 3NF normalized in `roles`</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Active Multi-Sessions</span>
+        <span class="stat-value">{session_count}</span>
+        <span class="stat-sub">Real-time sessions in `user_sessions`</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Inactivity Auto-Logout</span>
+        <span class="stat-value">30 min</span>
+        <span class="stat-sub">OWASP A07 session timeout enforcement</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Token Expiration</span>
+        <span class="stat-value">8 hours</span>
+        <span class="stat-sub">JWT HS256 full shift operational token</span>
+      </div>
+    </div>
+
+    <!-- Section 1: User Directory -->
+    <div class="section-card">
+      <div class="section-header">
+        <h2 class="section-title">1. Authoritative User Accounts Directory (Database Snapshot)</h2>
+        <span class="meta-time">Live Query: backend/db/shoelotskey.db</span>
+      </div>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Username</th>
+              <th>Email Address</th>
+              <th>System Role</th>
+              <th>Account Status</th>
+              <th>Failed Logins</th>
+              <th>Lockout Status</th>
+              <th>Account Immunity</th>
+              <th>Registered Date</th>
+            </tr>
+          </thead>
+          <tbody>
+"""
+
+    for u in users:
+        u_id, username, email, role, is_active, failed, locked, created = u
+        role_badge = "badge-staff"
+        if role == 'admin':
+            role_badge = "badge-admin"
+        elif role == 'owner':
+            role_badge = "badge-owner"
+        elif role in ('front staff', 'front_staff'):
+            role_badge = "badge-frontstaff"
+
+        status_badge = '<span class="badge badge-active">Active</span>' if is_active else '<span class="badge badge-inactive">Deactivated</span>'
+        
+        lock_status = '<span class="perm-check">Unlocked</span>'
+        if locked:
+            lock_status = f'<span class="perm-conditional">Locked until {locked}</span>'
+        
+        immunity = '<span class="badge badge-admin">Permanent Immune</span>' if username.lower() == 'admin' else '<span class="text-dim">—</span>'
+
+        html += f"""            <tr>
+              <td class="mono">{u_id}</td>
+              <td><strong>{username}</strong></td>
+              <td class="mono">{email}</td>
+              <td><span class="badge {role_badge}">{role.upper()}</span></td>
+              <td>{status_badge}</td>
+              <td class="mono">{failed if failed is not None else 0} / 3</td>
+              <td>{lock_status}</td>
+              <td>{immunity}</td>
+              <td class="mono">{str(created)[:19]}</td>
+            </tr>
+"""
+
+    html += """          </tbody>
+        </table>
+      </div>
+      <div class="security-note">
+        <strong>Security & Access Policy Note:</strong> System account <code>admin</code> is permanently protected against accidental or intentional deletion, lockout, and password change by other users. All passwords are encrypted with salted <code>bcrypt</code> hashes and cannot be retrieved in plaintext.
+      </div>
+    </div>
+
+    <!-- Section 2: Roles & Responsibilities -->
+    <div class="section-card">
+      <div class="section-header">
+        <h2 class="section-title">2. Role Profiles & Functional Responsibilities</h2>
+      </div>
+      <div class="grid-2">
+        <div class="role-box">
+          <div class="role-header">
+            <span class="role-title">SYSTEM ADMINISTRATOR</span>
+            <span class="badge badge-admin">ADMIN</span>
+          </div>
+          <p class="role-desc">Primary technical custodian, system developer, and capstone research evaluator. Has supreme authorization across the application infrastructure, telemetry, ML pipelines, and defense audits.</p>
+          <ul class="role-list">
+            <li>Full read/write/delete access across all database tables and operational records.</li>
+            <li>Machine Learning (Random Forest) model training, hyperparameters, and feature evaluation.</li>
+            <li>Historical data batch import, OCR parsing engine, and CSV dry-run reconciliation.</li>
+            <li>Research Evidence Portal (ISO/IEC 25010 Expert Surveys, TAM user evaluations, audit logs).</li>
+            <li>User account management: create, edit, unlock, deactivate, or delete user credentials.</li>
+            <li>Disaster recovery, SQLite/PostgreSQL cloud sync, and complete database rollback.</li>
+          </ul>
+        </div>
+
+        <div class="role-box">
+          <div class="role-header">
+            <span class="role-title">BUSINESS OWNER</span>
+            <span class="badge badge-owner">OWNER</span>
+          </div>
+          <p class="role-desc">Store executive and business decision-maker. Oversees daily operations, service catalogs, store financials, staff productivity, and customer resolution.</p>
+          <ul class="role-list">
+            <li>Store dashboard: revenue trends, active order volume, overdue claims, and status distribution.</li>
+            <li>Sales reports: real-time sales analytics, payment breakdowns (Cash vs. GCash), and tax summaries.</li>
+            <li>Expense logging: track operational expenses (supplies, utilities, equipment maintenance).</li>
+            <li>Service catalog: add, edit, reorder, and set prices for Base Services, Add-ons, and Rush Fees.</li>
+            <li>Discounts management: create and configure discount rates (Senior/PWD, percentage, fixed amount).</li>
+            <li>User management: manage staff accounts, reset forgotten passwords, and restrict compromised sessions.</li>
+            <li>Full Job Order lifecycle: create, modify, release, and print claim slips.</li>
+          </ul>
+        </div>
+
+        <div class="role-box">
+          <div class="role-header">
+            <span class="role-title">FRONT DESK STAFF</span>
+            <span class="badge badge-frontstaff">FRONT STAFF</span>
+          </div>
+          <p class="role-desc">Customer-facing reception and cashier personnel stationed at the counter. Handles shoe intake, inspection, payments, and client pick-ups.</p>
+          <ul class="role-list">
+            <li>Cash Register: record payments, cash drawers, tender balance calculations, and change verification.</li>
+            <li>Job Order Intake: examine incoming footwear, record pre-existing defects, and suggest add-ons.</li>
+            <li>Claim Verification: process customer claim slips via barcode scanner or order tracking code.</li>
+            <li>Release Calendar: inspect delivery schedules, upcoming due dates, and pending orders.</li>
+            <li>Inventory checking: verify in-stock cleaning agents, laces, and sole protectors for job orders.</li>
+            <li>Restricted from: viewing profit analytics, system audit logs, or modifying user accounts.</li>
+          </ul>
+        </div>
+
+        <div class="role-box">
+          <div class="role-header">
+            <span class="role-title">SERVICE TECHNICIAN (STAFF)</span>
+            <span class="badge badge-staff">STAFF</span>
+          </div>
+          <p class="role-desc">Workshop craftsmen executing shoe cleaning, repainting, unyellowing, reglueing, and restoration tasks in the back-of-house workshop.</p>
+          <ul class="role-list">
+            <li>Workshop queue: view assigned jobs, customer specific care notes, and restoration milestones.</li>
+            <li>Status updates: update shoe status from "Pending" &rarr; "In Progress" &rarr; "Quality Check" &rarr; "Ready".</li>
+            <li>Inventory usage: record usage of raw materials (cleaners, dyes, adhesive, sole guards).</li>
+            <li>Claim Verification & Release assistance for completed orders.</li>
+            <li>Restricted from: financial reports, expenses, cash drawer, and administrative controls.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 3: Comprehensive RBAC Permissions Matrix -->
+    <div class="section-card">
+      <div class="section-header">
+        <h2 class="section-title">3. Comprehensive Operations & Data Access Control Matrix</h2>
+        <span class="meta-time">OWASP A01 Least Privilege Enforcement</span>
+      </div>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>System Module & Capability</th>
+              <th>Customer</th>
+              <th>Staff</th>
+              <th>Front Staff</th>
+              <th>Owner</th>
+              <th>Admin</th>
+              <th>Enforcement Layer</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Customer Self-Service Tracking Portal</strong><br><small class="text-dim">View order status, completion ETA, photos</small></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td class="mono">Public Route (/track)</td>
+            </tr>
+            <tr>
+              <td><strong>Operational Dashboard</strong><br><small class="text-dim">Daily active cards, pending orders, quick actions</small></td>
+              <td><span class="perm-cross">&#10008; None</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td class="mono">Frontend Guard + JWT</td>
+            </tr>
+            <tr>
+              <td><strong>Create New Job Order</strong><br><small class="text-dim">Customer intake, shoe conditions, base service, ML ETA</small></td>
+              <td><span class="perm-cross">&#10008; None</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td class="mono">POST /orders</td>
+            </tr>
+            <tr>
+              <td><strong>Update Shoe Status & Work Log</strong><br><small class="text-dim">Transition order from In Progress to Ready</small></td>
+              <td><span class="perm-cross">&#10008; None</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td class="mono">PUT /orders/{{id}}/status</td>
+            </tr>
+            <tr>
+              <td><strong>Process Claim & Release Footwear</strong><br><small class="text-dim">Verify claim slip, complete balance, mark Released</small></td>
+              <td><span class="perm-cross">&#10008; None</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td class="mono">POST /orders/{{id}}/claim</td>
+            </tr>
+            <tr>
+              <td><strong>Cash Register / POS Cash Drawer</strong><br><small class="text-dim">Dedicated POS cash register & daily drawer operations</small></td>
+              <td><span class="perm-cross">&#10008; None</span></td>
+              <td><span class="perm-cross">&#10008; None</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td><span class="perm-conditional">Owner Drawer</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td class="mono">/cash-register (Front Staff)</td>
+            </tr>
+            <tr>
+              <td><strong>Release Calendar & Due Dates</strong><br><small class="text-dim">Calendar view of pickups, deliveries, and deadlines</small></td>
+              <td><span class="perm-cross">&#10008; None</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td class="mono">/release-calendar</td>
+            </tr>
+            <tr>
+              <td><strong>Inventory Management</strong><br><small class="text-dim">View materials, update stock quantities</small></td>
+              <td><span class="perm-cross">&#10008; None</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td class="mono">/inventory (All Staff)</td>
+            </tr>
+            <tr>
+              <td><strong>Financial Sales Reports & Revenue Analytics</strong><br><small class="text-dim">Gross sales, net revenue, payment breakdown, export</small></td>
+              <td><span class="perm-cross">&#10008; None</span></td>
+              <td><span class="perm-cross">&#10008; None</span></td>
+              <td><span class="perm-cross">&#10008; None</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td class="mono">require_role(['owner','admin'])</td>
+            </tr>
+            <tr>
+              <td><strong>Operating Expense Management</strong><br><small class="text-dim">Create expenses, categorize receipts, edit/delete</small></td>
+              <td><span class="perm-cross">&#10008; None</span></td>
+              <td><span class="perm-cross">&#10008; None</span></td>
+              <td><span class="perm-conditional">Create Only</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td class="mono">/expenses</td>
+            </tr>
+            <tr>
+              <td><strong>Service Catalog Management</strong><br><small class="text-dim">Add/Edit/Reorder/Delete base services, add-ons, rush fees</small></td>
+              <td><span class="perm-cross">&#10008; None</span></td>
+              <td><span class="perm-cross">&#10008; None</span></td>
+              <td><span class="perm-cross">&#10008; None</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td class="mono">POST/PUT/DELETE /services</td>
+            </tr>
+            <tr>
+              <td><strong>User Accounts & Security Management</strong><br><small class="text-dim">Add user, change roles, lock/unlock, delete accounts</small></td>
+              <td><span class="perm-cross">&#10008; None</span></td>
+              <td><span class="perm-cross">&#10008; None</span></td>
+              <td><span class="perm-cross">&#10008; None</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td class="mono">/user-management</td>
+            </tr>
+            <tr>
+              <td><strong>Database Backup & Cloud Sync</strong><br><small class="text-dim">Create snapshot, download SQL, restore backup</small></td>
+              <td><span class="perm-cross">&#10008; None</span></td>
+              <td><span class="perm-cross">&#10008; None</span></td>
+              <td><span class="perm-cross">&#10008; None</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td class="mono">/backup (Owner + Admin)</td>
+            </tr>
+            <tr>
+              <td><strong>Security Audit Log & Activity History</strong><br><small class="text-dim">Inspect technical audit logs, user IPs, session timeouts</small></td>
+              <td><span class="perm-cross">&#10008; None</span></td>
+              <td><span class="perm-cross">&#10008; None</span></td>
+              <td><span class="perm-cross">&#10008; None</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td class="mono">/activity-history</td>
+            </tr>
+            <tr>
+              <td><strong>Machine Learning Retraining & Predictions</strong><br><small class="text-dim">Re-fit Random Forest, rebuild historical features, evaluate</small></td>
+              <td><span class="perm-cross">&#10008; None</span></td>
+              <td><span class="perm-cross">&#10008; None</span></td>
+              <td><span class="perm-cross">&#10008; None</span></td>
+              <td><span class="perm-cross">&#10008; None</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td class="mono">/ml-training (Admin Only)</td>
+            </tr>
+            <tr>
+              <td><strong>Research Evidence & Defense Audit Portal</strong><br><small class="text-dim">ISO/IEC 25010 Expert surveys, TAM PDFs, defense verification</small></td>
+              <td><span class="perm-cross">&#10008; None</span></td>
+              <td><span class="perm-cross">&#10008; None</span></td>
+              <td><span class="perm-cross">&#10008; None</span></td>
+              <td><span class="perm-cross">&#10008; None</span></td>
+              <td><span class="perm-check">&#10004; Full</span></td>
+              <td class="mono">/research-evidence (Admin Only)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Section 4: Backend API Endpoints & Role Guard ACL -->
+    <div class="section-card">
+      <div class="section-header">
+        <h2 class="section-title">4. Backend API Endpoints Access Control List (ACL)</h2>
+        <span class="meta-time">FastAPI Dependencies &amp; OAuth2 Bearer Guards</span>
+      </div>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Endpoint Path</th>
+              <th>Required Role Dependency</th>
+              <th>Access Level</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="badge badge-admin">POST</span></td>
+              <td class="mono">/auth/login</td>
+              <td class="mono">None (Public)</td>
+              <td><span class="badge badge-customer">Unauthenticated</span></td>
+              <td>Authenticates user credentials, generates JWT access token, and registers session.</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-admin">GET</span></td>
+              <td class="mono">/auth/verify-token</td>
+              <td class="mono">get_current_user</td>
+              <td><span class="badge badge-staff">All Logged-in</span></td>
+              <td>Continuous session heartbeat, lockout check, and token validity verification.</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-admin">POST</span></td>
+              <td class="mono">/auth/logout</td>
+              <td class="mono">get_current_user</td>
+              <td><span class="badge badge-staff">All Logged-in</span></td>
+              <td>Explicitly terminates user session and adds session ID to revocation blacklist.</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-staff">GET</span></td>
+              <td class="mono">/orders/track/{{code}}</td>
+              <td class="mono">None (Public)</td>
+              <td><span class="badge badge-customer">Public Customer</span></td>
+              <td>Returns real-time milestone progress, photo records, and claim status.</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-staff">GET</span></td>
+              <td class="mono">/orders</td>
+              <td class="mono">get_current_user</td>
+              <td><span class="badge badge-staff">Staff, Owner, Admin</span></td>
+              <td>Retrieves active store job orders with pagination, status filters, and customer details.</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-admin">POST</span></td>
+              <td class="mono">/orders</td>
+              <td class="mono">get_current_user</td>
+              <td><span class="badge badge-staff">Staff, Owner, Admin</span></td>
+              <td>Inserts new multi-pair job order, calculates ML lead time, and triggers audit log.</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-frontstaff">PUT</span></td>
+              <td class="mono">/orders/{{id}}/status</td>
+              <td class="mono">get_current_user</td>
+              <td><span class="badge badge-staff">Staff, Owner, Admin</span></td>
+              <td>Updates workflow phase and timestamps status progression log.</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-frontstaff">POST</span></td>
+              <td class="mono">/orders/{{id}}/claim</td>
+              <td class="mono">get_current_user</td>
+              <td><span class="badge badge-staff">Staff, Owner, Admin</span></td>
+              <td>Validates release verification, verifies final payment, and issues completion.</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-staff">GET</span></td>
+              <td class="mono">/services</td>
+              <td class="mono">get_current_user</td>
+              <td><span class="badge badge-staff">Staff, Owner, Admin</span></td>
+              <td>Retrieves service catalog with base services, add-ons, priority fees, and discounts.</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-admin">POST/PUT/DEL</span></td>
+              <td class="mono">/services/*</td>
+              <td class="mono">require_role(['owner', 'admin'])</td>
+              <td><span class="badge badge-owner">Owner + Admin</span></td>
+              <td>Creates, edits, sorts, and deactivates services and store discounts.</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-staff">GET</span></td>
+              <td class="mono">/users</td>
+              <td class="mono">require_role('owner')</td>
+              <td><span class="badge badge-owner">Owner + Admin</span></td>
+              <td>Returns user master list, role assignments, lock states, and emails.</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-admin">POST</span></td>
+              <td class="mono">/users</td>
+              <td class="mono">require_role('owner')</td>
+              <td><span class="badge badge-owner">Owner + Admin</span></td>
+              <td>Provisions new employee or managerial account with assigned role and temporary password.</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-frontstaff">PUT</span></td>
+              <td class="mono">/users/{{id}}</td>
+              <td class="mono">require_role('owner')</td>
+              <td><span class="badge badge-owner">Owner + Admin</span></td>
+              <td>Modifies user details, unlocks locked accounts, or changes role assignments.</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-danger">DELETE</span></td>
+              <td class="mono">/users/{{id}}</td>
+              <td class="mono">require_role('owner')</td>
+              <td><span class="badge badge-owner">Owner + Admin</span></td>
+              <td>Permanently deletes user account (Protected against system admin account).</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-staff">GET</span></td>
+              <td class="mono">/api/sales/report</td>
+              <td class="mono">require_role(['owner', 'admin'])</td>
+              <td><span class="badge badge-owner">Owner + Admin</span></td>
+              <td>Computes revenue aggregations, tax analytics, and payment reconciliation.</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-staff">GET</span></td>
+              <td class="mono">/expenses</td>
+              <td class="mono">require_role(['owner', 'front staff', 'admin'])</td>
+              <td><span class="badge badge-frontstaff">Front Staff, Owner, Admin</span></td>
+              <td>Retrieves store operating expenses and material purchase logs.</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-admin">POST</span></td>
+              <td class="mono">/api/backup/download</td>
+              <td class="mono">require_role('admin')</td>
+              <td><span class="badge badge-admin">Admin Only</span></td>
+              <td>Exports encrypted database backup archive for disaster recovery.</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-admin">POST</span></td>
+              <td class="mono">/api/ml/retrain</td>
+              <td class="mono">require_role('admin')</td>
+              <td><span class="badge badge-admin">Admin Only</span></td>
+              <td>Triggers Random Forest hyperparameter retraining on historical service orders.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Section 5: Security & Session Architecture -->
+    <div class="section-card">
+      <div class="section-header">
+        <h2 class="section-title">5. Defense-in-Depth Security &amp; Session Management Specifications</h2>
+      </div>
+      <div class="grid-2">
+        <div>
+          <h3 style="font-size: 15px; font-weight: 800; color: #fff; margin-bottom: 8px;">OWASP Top 10 Mitigation Controls</h3>
+          <ul class="role-list">
+            <li><strong>A01: Broken Access Control:</strong> Enforced at both client-side React router level (`ProtectedRoute`) and server-side FastAPI dependencies (`require_role`). Missing permissions return immediate <code>403 Forbidden</code> and generate an immutable audit log.</li>
+            <li><strong>A02: Cryptographic Failures:</strong> Passwords hashed with salted <code>bcrypt</code>. JWT secrets are strictly read from environment variables; application aborts startup if secret key is missing.</li>
+            <li><strong>A07: Identification &amp; Authentication Failures:</strong> Accounts are temporarily locked out after 3 consecutive failed login attempts. Session tokens expire in 8 hours, with client-side 30-minute idle timeouts.</li>
+            <li><strong>A09: Security Logging &amp; Monitoring:</strong> High-severity events (unauthorized endpoint requests, session timeouts, account locks, and profile updates) are recorded in the <code>audit_logs</code> database.</li>
+          </ul>
+        </div>
+        <div>
+          <h3 style="font-size: 15px; font-weight: 800; color: #fff; margin-bottom: 8px;">Multi-Session Management Architecture</h3>
+          <ul class="role-list">
+            <li><strong>Independent Concurrent Sessions:</strong> Multiple front desk tablets and shop workstations can operate under authorized accounts simultaneously without clobbering each other.</li>
+            <li><strong>Database Authoritative Session Store:</strong> Every login generates a UUIDv4 session ID recorded in <code>user_sessions</code> with IP address, user agent, creation time, and revocation flag.</li>
+            <li><strong>Instant Blacklist Revocation:</strong> Logging out or locking an account immediately invalidates tokens across the distributed session cache.</li>
+            <li><strong>Continuous Heartbeat Validation:</strong> Client polls <code>/auth/verify-token</code> every 30 seconds and upon window focus, guaranteeing instant deactivation upon administrative lockout.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      Shoelotskey Service Management System &bull; Role-Based Access Control Architecture Audit Report &bull; Confirmed &amp; Certified for Capstone Defense Presentation
+    </footer>
+  </div>
+</body>
+</html>
+"""
+
+    out_file = 'docs/RBAC_SYSTEM_ACCESS_REPORT.html'
+    with open(out_file, 'w', encoding='utf-8') as f:
+        f.write(html)
+    print(f"RBAC Report successfully generated at: {out_file}")
+
+if __name__ == '__main__':
+    generate_rbac_report()

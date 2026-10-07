@@ -20,6 +20,7 @@ Supported Periods:
 
 import io
 import os
+import re
 import csv
 import time
 from datetime import datetime, date, timedelta
@@ -43,6 +44,58 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOGO_PATH = os.path.join(BASE_DIR, "static", "logo.png")
 if not os.path.exists(LOGO_PATH):
     LOGO_PATH = os.path.join(os.path.dirname(BASE_DIR), "public", "logo.png")
+
+
+def to_service_code(name_or_code: str) -> str:
+    """
+    Standardizes a service name to its authoritative Shoelotskey service code.
+    E.g., 'Basic Cleaning' -> 'BC', 'Full Reglue' -> 'FR', 'Full Reglue Midsole' -> 'FRMID'
+    """
+    if not name_or_code:
+        return ""
+    trimmed = str(name_or_code).strip()
+    upper = trimmed.upper()
+    valid_codes = {"BC", "FR", "MR", "BR", "COR", "WPT", "UNY", "MRES", "MRET", "FRMID", "FRUND", "COR2", "COR3"}
+    if upper in valid_codes:
+        return upper
+    if upper == "CR":
+        return "COR"
+    if upper == "UY":
+        return "UNY"
+    if upper == "FRUS":
+        return "FRUND"
+    
+    lower = trimmed.lower()
+    lower = re.sub(r"\s*\(\d+(?:\.\d+)?\)\s*$", "", lower)
+    lower = re.sub(r"[\s\-]+rush(?:\s*service)?$", "", lower, flags=re.I).strip()
+    
+    if "midsole" in lower or lower in ("fr mid", "frmid"):
+        return "FRMID"
+    if "undersole" in lower or lower in ("frunder", "frund", "frus"):
+        return "FRUND"
+    if "3 color" in lower or "3 colors" in lower:
+        return "COR3"
+    if "2 color" in lower or "2 colors" in lower:
+        return "COR2"
+    if "color renewal" in lower or "color restoration" in lower or lower in ("cor", "cr"):
+        return "COR"
+    if "white paint" in lower or lower == "wpt":
+        return "WPT"
+    if "unyellowing" in lower or lower in ("uny", "uy"):
+        return "UNY"
+    if "minor restoration" in lower or lower == "mres":
+        return "MRES"
+    if "minor retouch" in lower or lower == "mret":
+        return "MRET"
+    if "minor reglue" in lower or lower == "mr":
+        return "MR"
+    if "basic reglue" in lower or lower == "br":
+        return "BR"
+    if "full reglue" in lower or "full restoration" in lower or lower == "fr":
+        return "FR"
+    if "basic cleaning" in lower or "cleaning" in lower or lower == "bc":
+        return "BC"
+    return upper
 
 
 # ---------------------------------------------------------------------------
@@ -247,6 +300,7 @@ def calculate_report_data(
     sales_total = 0.0
     payments_received = 0.0
     balance_due = 0.0
+    total_discounts = 0.0
     eligible_orders_count = 0
     total_orders_count = len(orders)
 
@@ -257,15 +311,31 @@ def calculate_report_data(
         gt = float(o.grand_total or 0.0)
         col = collected_sales(o)
         bal = max(0.0, gt - col) if not is_cancelled(o) else 0.0
+        disc_amt = float(getattr(o, "discount_amount", 0.0) or 0.0)
 
-        # Extract services string
-        services_list = []
+        # Extract services string & pair quantity
+        service_codes = []
+        raw_svc_names = []
+        total_pair_cnt = sum(int(getattr(itm, "quantity", 1) or 1) for itm in o.items) if o.items else 1
+        pair_label = f"{total_pair_cnt} PR"
+
         if o.items:
             for itm in o.items:
                 if itm.services:
                     for svc in itm.services:
-                        services_list.append(svc.service_name)
-        svc_str = ", ".join(dict.fromkeys(services_list)) if services_list else "Standard Care"
+                        s_name = (svc.service_name or "").strip()
+                        clean_name = re.sub(r"\s*\(with basic cleaning\)", "", s_name, flags=re.I).strip()
+                        code = to_service_code(clean_name)
+                        if code:
+                            service_codes.append(code)
+                        if clean_name:
+                            raw_svc_names.append(clean_name)
+
+        unique_codes = list(dict.fromkeys(service_codes)) if service_codes else ["BC"]
+        codes_str = ", ".join(unique_codes)
+        svc_str = f"{codes_str} × {pair_label}"
+        svc_display = codes_str
+        pair_cnt = total_pair_cnt
 
         # Extract payment method & status
         p_method = "Cash"
@@ -297,8 +367,14 @@ def calculate_report_data(
             "customer_contact": contact_str,
             "shoe_details": shoe_str,
             "services": svc_str,
+            "service_codes": codes_str,
+            "services_display": svc_display,
+            "raw_services": ", ".join(raw_svc_names),
+            "pair_count": pair_cnt,
+            "qty_label": pair_label,
             "priority": priority_str,
             "grand_total": gt,
+            "discount_amount": disc_amt,
             "amount_paid": col,
             "balance_due": bal,
             "payment_method": p_method,
@@ -314,6 +390,7 @@ def calculate_report_data(
             sales_total += gt
             payments_received += col
             balance_due += bal
+            total_discounts += disc_amt
 
     # Cancellations adjustments
     total_refunds = 0.0
@@ -406,6 +483,7 @@ def calculate_report_data(
             "refunds_issued": total_refunds,
             "retained_payments": total_retained,
             "retained_deposits": total_retained,
+            "discounts_granted": total_discounts,
             "net_sales": net_sales,
             "net_payments": net_payments,
             "total_expenses": total_expenses,
@@ -463,10 +541,10 @@ def generate_report_csv(report_data: Dict[str, Any], report_type: str) -> str:
         writer.writerow(["ROI (%)", '=IF(B14>0,(B15/B14)*100,0)'])
         writer.writerow([])
         
-        # Row 18: Table Headers (12 columns: Payment Method excluded)
+        # Row 18: Table Headers (13 columns: Payment Method excluded)
         writer.writerow([
             "Order Number", "Order Date", "Customer Name", "Contact Number", 
-            "Shoe Details", "Services", "Priority", "Total Sales", 
+            "Shoe Details", "Services", "Qty", "Priority", "Total Sales", 
             "Amount Paid", "Balance Due", "Payment Status", "Order Status"
         ])
         for idx, item in enumerate(sales_items):
@@ -477,7 +555,8 @@ def generate_report_csv(report_data: Dict[str, Any], report_type: str) -> str:
                 item.get("customer_name", ""),
                 item.get("customer_contact", ""),
                 item.get("shoe_details", ""),
-                item.get("services", ""),
+                item.get("service_codes", item.get("services", "")),
+                item.get("qty_label", f"{item.get('pair_count', 1)} PR"),
                 item.get("priority", "Regular"),
                 f"{item.get('grand_total', 0):.2f}",
                 f"{item.get('amount_paid', 0):.2f}",
@@ -643,10 +722,10 @@ def generate_report_xlsx(report_data: Dict[str, Any], report_type: str) -> bytes
             ("Balance Due", f"=SUM(J{first_row}:J{last_row})" if has_items else float(s["balance_due"]), FMT_CURRENCY, False),
             ("Refunds Issued", float(s["refunds_issued"]), FMT_CURRENCY, False),
             ("Retained Payments", float(s.get("retained_payments", s.get("retained_deposits", 0.0))), FMT_CURRENCY, False),
-            ("Net Sales", "=B7+B12", FMT_CURRENCY, True),
+            ("Net Sales", "=B7+B12", FMT_CURRENCY, False),
             ("Total Expenses", float(s["total_expenses"]), FMT_CURRENCY, False),
-            ("Net Profit", "=B13-B14", FMT_CURRENCY, True),
-            ("ROI", '=IF(B14>0,B15/B14,0)', FMT_PERCENT, True),
+            ("Net Profit", "=B13-B14", FMT_CURRENCY, False),
+            ("ROI", '=IF(B14>0,B15/B14,0)', FMT_PERCENT, False),
         ]
 
         for idx, (label, val, fmt, is_bold) in enumerate(summary_rows, start=7):
@@ -660,10 +739,10 @@ def generate_report_xlsx(report_data: Dict[str, Any], report_type: str) -> bytes
             ws[f"B{idx}"].alignment = Alignment(horizontal="right", vertical="center")
             ws.row_dimensions[idx].height = 20
 
-        # 5. Table Headers (Row 18 - 12 columns)
+        # 5. Table Headers (Row 18 - 13 columns)
         headers = [
             "Order Number", "Order Date", "Customer Name", "Contact Number", 
-            "Shoe Details", "Services", "Priority", "Total Sales", 
+            "Shoe Details", "Services", "Qty", "Priority", "Total Sales", 
             "Amount Paid", "Balance Due", "Payment Status", "Order Status"
         ]
         ws.row_dimensions[18].height = 26
@@ -684,12 +763,13 @@ def generate_report_xlsx(report_data: Dict[str, Any], report_type: str) -> bytes
                 (item.get("order_date", ""), "center", None),
                 (item.get("customer_name", ""), "center", None),
                 (item.get("customer_contact", ""), "center", None),
-                (item.get("shoe_details", ""), "left", None),
-                (item.get("services", ""), "left", None),
+                (item.get("shoe_details", ""), "center", None),
+                (item.get("service_codes", item.get("services", "")), "center", None),
+                (item.get("qty_label", f"{item.get('pair_count', 1)} PR"), "center", None),
                 (item.get("priority", "Regular"), "center", None),
                 (float(item.get("grand_total", 0)), "right", FMT_CURRENCY),
                 (float(item.get("amount_paid", 0)), "right", FMT_CURRENCY),
-                (f'=IF(ISNUMBER(SEARCH("cancel",L{r})),0,MAX(0,H{r}-I{r}))', "right", FMT_CURRENCY),
+                (f'=IF(ISNUMBER(SEARCH("cancel",M{r})),0,MAX(0,I{r}-J{r}))', "right", FMT_CURRENCY),
                 (item.get("payment_status", "Unpaid"), "center", None),
                 (item.get("status", ""), "center", None),
             ]
@@ -848,9 +928,9 @@ def generate_report_xlsx(report_data: Dict[str, Any], report_type: str) -> bytes
             ("Net Sales", "=B7+B9", FMT_CURRENCY, True),
             ("Payments Received", float(s["payments_received"]), FMT_CURRENCY, False),
             ("Balance Due", float(s["balance_due"]), FMT_CURRENCY, False),
-            ("Total Expenses", float(s["total_expenses"]), FMT_CURRENCY, True),
-            ("Net Profit", "=B10-B13", FMT_CURRENCY, True),
-            ("ROI", '=IF(B13>0,B14/B13,0)', FMT_PERCENT, True),
+            ("Total Expenses", float(s["total_expenses"]), FMT_CURRENCY, False),
+            ("Net Profit", "=B10-B13", FMT_CURRENCY, False),
+            ("ROI", '=IF(B13>0,B14/B13,0)', FMT_PERCENT, False),
         ]
 
         for idx, (label, val, fmt, is_bold) in enumerate(metrics, start=7):
@@ -1067,7 +1147,9 @@ def generate_report_pdf(report_data: Dict[str, Any], report_type: str) -> bytes:
 
         y = margin_y + 58
         # Financial Summary Card (Exact 2-column key-value layout of Print View)
-        card_h = 108 if s.get("retained_deposits", 0) > 0 else 94
+        retained_val = s.get("retained_payments", s.get("retained_deposits", 0))
+        has_retained = retained_val > 0
+        card_h = 110 if has_retained else 98
         page.draw_rect(pymupdf.Rect(margin_x, y, page_width - margin_x, y + card_h), fill=WHITE, color=RED, width=1)
         page.draw_rect(pymupdf.Rect(margin_x, y, page_width - margin_x, y + 17), fill=LIGHT_GRAY, color=RED, width=0.5)
         
@@ -1077,44 +1159,48 @@ def generate_report_pdf(report_data: Dict[str, Any], report_type: str) -> bytes:
         col1_r = margin_x + 242
         col2_x = margin_x + 265
         col2_r = page_width - margin_x - 12
-        step_y = 13.5
-        c1_y = y + 31
-        c2_y = y + 31
+        step_y = 12.8 if has_retained else 13.8
+        c1_y = y + 29
+        c2_y = y + 29
 
-        # Col 1: Total Sales, Refunds Issued, Net Sales, (Retained Deposits), Total Orders
-        draw_kv_line(page, col1_x, col1_r, c1_y, "Total Sales:", f"\u20b1{s['sales']:,.2f}", lbl_bold=False, val_bold=True)
+        # Col 1: Total Sales, Refunds Issued, Net Sales, (Retained Payments), Total Orders, Discounts Granted (last row left)
+        draw_kv_line(page, col1_x, col1_r, c1_y, "Total Sales:", f"\u20b1{s['sales']:,.2f}", lbl_bold=True, val_bold=True)
         draw_kv_line(page, col1_x, col1_r, c1_y + step_y, "Refunds Issued:", f"\u20b1{s['refunds_issued']:,.2f}", lbl_bold=False, val_bold=True)
-        draw_kv_line(page, col1_x, col1_r, c1_y + 2 * step_y, "Net Sales:", f"\u20b1{s['net_sales']:,.2f}", lbl_bold=True, val_bold=True)
+        draw_kv_line(page, col1_x, col1_r, c1_y + 2 * step_y, "Net Sales:", f"\u20b1{s['net_sales']:,.2f}", lbl_bold=False, val_bold=True)
         
         c1_idx = 3
-        retained_val = s.get("retained_payments", s.get("retained_deposits", 0))
-        if retained_val > 0:
+        if has_retained:
             draw_kv_line(page, col1_x, col1_r, c1_y + c1_idx * step_y, "Retained Payments:", f"\u20b1{retained_val:,.2f}", lbl_bold=False, val_bold=True)
             c1_idx += 1
         draw_kv_line(page, col1_x, col1_r, c1_y + c1_idx * step_y, "Total Orders:", str(s['orders_count']), lbl_bold=False, val_bold=True)
+        c1_idx += 1
+
+        disc_val = s.get("discounts_granted", 0.0)
+        draw_kv_line(page, col1_x, col1_r, c1_y + c1_idx * step_y, "Discounts Granted:", f"-\u20b1{disc_val:,.2f}" if disc_val > 0 else "\u20b10.00", lbl_bold=False, val_bold=True, val_color=GREEN if disc_val > 0 else DARK_GRAY)
 
         # Col 2: Payments Received, Balance Due, Total Expenses, Net Profit, ROI
         draw_kv_line(page, col2_x, col2_r, c2_y, "Payments Received:", f"\u20b1{s['payments_received']:,.2f}", lbl_bold=False, val_bold=True)
         draw_kv_line(page, col2_x, col2_r, c2_y + step_y, "Balance Due:", f"\u20b1{s['balance_due']:,.2f}", lbl_bold=False, val_bold=True)
         draw_kv_line(page, col2_x, col2_r, c2_y + 2 * step_y, "Total Expenses:", f"\u20b1{s['total_expenses']:,.2f}", lbl_bold=False, val_bold=True, val_color=DARK_GRAY)
-        draw_kv_line(page, col2_x, col2_r, c2_y + 3 * step_y, "Net Profit:", f"\u20b1{s['net_profit']:,.2f}", lbl_bold=True, val_bold=True)
-        draw_kv_line(page, col2_x, col2_r, c2_y + 4 * step_y, "Return on Investment (ROI):", str(s['roi_display']), lbl_bold=True, val_bold=True)
+        draw_kv_line(page, col2_x, col2_r, c2_y + 3 * step_y, "Net Profit:", f"\u20b1{s['net_profit']:,.2f}", lbl_bold=False, val_bold=True)
+        draw_kv_line(page, col2_x, col2_r, c2_y + 4 * step_y, "Return on Investment (ROI):", str(s['roi_display']), lbl_bold=False, val_bold=True)
 
         y += card_h + 12
         page.insert_text(pymupdf.Point(margin_x, y), "SALES RECORDS", fontsize=9.5, fontname=bold_font, fontfile=bold_file, color=RED)
         y += 6
 
         # Itemized Table Columns
-        # Total Width: 80 + 55 + 95 + 95 + 45 + 48 + 48 + 49 = 515 pt
+        # Total Width: 70 + 60 + 85 + 95 + 35 + 40 + 45 + 42 + 43 = 515 pt
         cols = [
-            ("Order #", 80, 0),
-            ("Date", 55, 1),
-            ("Customer", 95, 0),
-            ("Shoe Details", 95, 0),
-            ("Priority", 45, 1),
-            ("Total", 48, 2),
-            ("Paid", 48, 2),
-            ("Balance", 49, 2),
+            ("Order #", 70, 0),
+            ("Order Date", 60, 1),
+            ("Customer", 85, 0),
+            ("Shoe Details", 95, 1),
+            ("Qty", 35, 1),
+            ("Priority", 40, 1),
+            ("Total", 45, 2),
+            ("Paid", 42, 2),
+            ("Balance", 43, 2),
         ]
 
         def draw_table_header(p, top_y):
@@ -1160,10 +1246,11 @@ def generate_report_pdf(report_data: Dict[str, Any], report_type: str) -> bytes:
                     (date_display, cols[1][1], cols[1][2]),
                     (str(item.get("customer_name", "Guest")), cols[2][1], cols[2][2]),
                     (str(item.get("shoe_details", "Shoes")), cols[3][1], cols[3][2]),
-                    (str(item.get("priority", "Regular")).title(), cols[4][1], cols[4][2]),
-                    (f"\u20b1{item.get('grand_total', 0):,.2f}", cols[5][1], cols[5][2]),
-                    (f"\u20b1{item.get('amount_paid', 0):,.2f}", cols[6][1], cols[6][2]),
-                    (f"\u20b1{item.get('balance_due', 0):,.2f}", cols[7][1], cols[7][2]),
+                    (item.get("qty_label", f"{item.get('pair_count', 1)} PR"), cols[4][1], cols[4][2]),
+                    (str(item.get("priority", "Regular")).title(), cols[5][1], cols[5][2]),
+                    (f"\u20b1{item.get('grand_total', 0):,.2f}", cols[6][1], cols[6][2]),
+                    (f"\u20b1{item.get('amount_paid', 0):,.2f}", cols[7][1], cols[7][2]),
+                    (f"\u20b1{item.get('balance_due', 0):,.2f}", cols[8][1], cols[8][2]),
                 ]
 
                 cx = margin_x
@@ -1181,21 +1268,23 @@ def generate_report_pdf(report_data: Dict[str, Any], report_type: str) -> bytes:
 
                 status_str = f"Status: {item.get('status', 'New Order')}"
                 contact_str = str(item.get('customer_contact', '') or 'N/A')
-                svc_str = f"Services: {item.get('services', 'Standard Care')}"
+                svc_codes = item.get("service_codes", item.get("services_display", "BC"))
                 pay_method = str(item.get('payment_method', 'Cash')).title()
                 pay_status = str(item.get('payment_status', 'Unpaid')).title()
                 pay_str = f"{pay_method} \u2022 {pay_status}"
 
-                # Subline segments (Total 515 pt matching Print view - no 'Contact:' or 'Payment:' labels):
-                # 1. Status: 110 pt
-                # 2. Contact: 95 pt
-                # 3. Services: 180 pt
-                # 4. Payment: 130 pt
+                # Subline segments (Total 515 pt matching columns above):
+                # 1. Status: 130 pt (cols 0+1: Order # + Date, align 0)
+                # 2. Contact: 85 pt (col 2: Customer, align 0)
+                # 3. Service codes: 95 pt (col 3: Shoe Details, align 1 CENTERED!)
+                # 4. Qty spacer: 35 pt (col 4: Qty, align 1)
+                # 5. Payment: 170 pt (cols 5+6+7+8: Priority + Financials, align 2)
                 sub_segments = [
-                    (status_str, 110, 0),
-                    (contact_str, 95, 0),
-                    (svc_str, 180, 0),
-                    (pay_str, 130, 2),
+                    (status_str, 130, 0),
+                    (contact_str, 85, 0),
+                    (svc_codes, 95, 1),
+                    ("", 35, 1),
+                    (pay_str, 170, 2),
                 ]
 
                 cx = margin_x
@@ -1297,7 +1386,9 @@ def generate_report_pdf(report_data: Dict[str, Any], report_type: str) -> bytes:
 
         y = margin_y + 58
         # Financial Performance Card (Exact 2-column key-value layout of Print View)
-        perf_h = 108 if s.get("retained_deposits", 0) > 0 else 94
+        retained_val = s.get("retained_deposits", s.get("retained_payments", 0))
+        has_retained = retained_val > 0
+        perf_h = 110 if has_retained else 98
         page.draw_rect(pymupdf.Rect(margin_x, y, page_width - margin_x, y + perf_h), fill=WHITE, color=RED, width=1)
         page.draw_rect(pymupdf.Rect(margin_x, y, page_width - margin_x, y + 17), fill=LIGHT_GRAY, color=RED, width=0.5)
         page.insert_text(pymupdf.Point(margin_x + 10, y + 12), "EXECUTIVE FINANCIAL PERFORMANCE SUMMARY", fontsize=9, fontname=bold_font, fontfile=bold_file, color=RED)
@@ -1306,26 +1397,30 @@ def generate_report_pdf(report_data: Dict[str, Any], report_type: str) -> bytes:
         col1_r = margin_x + 242
         col2_x = margin_x + 265
         col2_r = page_width - margin_x - 12
-        step_y = 13.5
-        c1_y = y + 31
-        c2_y = y + 31
+        step_y = 12.8 if has_retained else 13.8
+        c1_y = y + 29
+        c2_y = y + 29
 
-        # Col 1
+        # Col 1: Total Sales, Refunds Issued, Net Sales, (Retained Deposits), Total Orders, Discounts Granted (last row left)
         draw_kv_line(page, col1_x, col1_r, c1_y, "Total Sales:", f"\u20b1{s['sales']:,.2f}", lbl_bold=False, val_bold=True)
         draw_kv_line(page, col1_x, col1_r, c1_y + step_y, "Refunds Issued:", f"\u20b1{s['refunds_issued']:,.2f}", lbl_bold=False, val_bold=True)
-        draw_kv_line(page, col1_x, col1_r, c1_y + 2 * step_y, "Net Sales:", f"\u20b1{s['net_sales']:,.2f}", lbl_bold=True, val_bold=True)
+        draw_kv_line(page, col1_x, col1_r, c1_y + 2 * step_y, "Net Sales:", f"\u20b1{s['net_sales']:,.2f}", lbl_bold=False, val_bold=True)
         
         c1_idx = 3
-        if s.get("retained_deposits", 0) > 0:
-            draw_kv_line(page, col1_x, col1_r, c1_y + c1_idx * step_y, "Retained Deposits:", f"\u20b1{s['retained_deposits']:,.2f}", lbl_bold=False, val_bold=True)
+        if has_retained:
+            draw_kv_line(page, col1_x, col1_r, c1_y + c1_idx * step_y, "Retained Deposits:", f"\u20b1{retained_val:,.2f}", lbl_bold=False, val_bold=True)
             c1_idx += 1
         draw_kv_line(page, col1_x, col1_r, c1_y + c1_idx * step_y, "Total Orders:", str(s['orders_count']), lbl_bold=False, val_bold=True)
+        c1_idx += 1
 
-        # Col 2
+        disc_val = s.get("discounts_granted", 0.0)
+        draw_kv_line(page, col1_x, col1_r, c1_y + c1_idx * step_y, "Discounts Granted:", f"-\u20b1{disc_val:,.2f}" if disc_val > 0 else "\u20b10.00", lbl_bold=False, val_bold=True, val_color=GREEN if disc_val > 0 else DARK_GRAY)
+
+        # Col 2: Payments Received, Balance Due, Total Expenses, Net Profit, Return on Investment (ROI)
         draw_kv_line(page, col2_x, col2_r, c2_y, "Payments Received:", f"\u20b1{s['payments_received']:,.2f}", lbl_bold=False, val_bold=True)
         draw_kv_line(page, col2_x, col2_r, c2_y + step_y, "Balance Due:", f"\u20b1{s['balance_due']:,.2f}", lbl_bold=False, val_bold=True)
         draw_kv_line(page, col2_x, col2_r, c2_y + 2 * step_y, "Total Expenses:", f"\u20b1{s['total_expenses']:,.2f}", lbl_bold=False, val_bold=True, val_color=DARK_GRAY)
-        draw_kv_line(page, col2_x, col2_r, c2_y + 3 * step_y, "Net Profit:", f"\u20b1{s['net_profit']:,.2f}", lbl_bold=True, val_bold=True)
+        draw_kv_line(page, col2_x, col2_r, c2_y + 3 * step_y, "Net Profit:", f"\u20b1{s['net_profit']:,.2f}", lbl_bold=False, val_bold=True)
         draw_kv_line(page, col2_x, col2_r, c2_y + 4 * step_y, "Return on Investment (ROI):", str(s['roi_display']), lbl_bold=True, val_bold=True)
 
         y += perf_h + 10
@@ -1341,36 +1436,34 @@ def generate_report_pdf(report_data: Dict[str, Any], report_type: str) -> bytes:
             page.insert_text(pymupdf.Point(margin_x + 12, y + 54), f"• Calculation: (\u20b1{s['net_profit']:,.2f} \u00f7 \u20b1{s['total_expenses']:,.2f}) \u00d7 100 = {s['roi_display']}", fontsize=8, fontname=body_font, fontfile=body_file, color=DARK_GRAY)
 
         y += form_h + 12
-        # 1. Service Revenue & Performance Analytics Table
-        page.insert_text(pymupdf.Point(margin_x, y), "SERVICE REVENUE & PERFORMANCE ANALYTICS", fontsize=9.5, fontname=bold_font, fontfile=bold_file, color=RED)
+        # 1. Primary Service Revenue & Pair Volume Table
+        page.insert_text(pymupdf.Point(margin_x, y), "PRIMARY SERVICE REVENUE & PAIR VOLUME", fontsize=9.5, fontname=bold_font, fontfile=bold_file, color=RED)
         y += 6
 
-        # Calculate canonical service aggregates from sales_details
+        # Calculate canonical service aggregates from sales_details (Solo/Primary service classification)
         svc_counts = {"Basic Cleaning": 0, "Minor Reglue": 0, "Full Reglue": 0, "Color Renewal": 0}
         svc_rev = {"Basic Cleaning": 0.0, "Minor Reglue": 0.0, "Full Reglue": 0.0, "Color Renewal": 0.0}
 
         for item in report_data.get("sales_details", []):
             if not item.get("is_eligible", False):
                 continue
-            s_name = str(item.get("services", "")).lower()
+            s_name = str(item.get("raw_services", "") or item.get("services", "")).lower()
             amt = float(item.get("amount_paid", 0.0) or item.get("grand_total", 0.0))
+            pair_cnt = int(item.get("pair_count", 1) or 1)
             
-            matched = []
-            if "basic" in s_name or "cleaning" in s_name:
-                matched.append("Basic Cleaning")
-            if "minor reglue" in s_name:
-                matched.append("Minor Reglue")
-            if "full reglue" in s_name:
-                matched.append("Full Reglue")
-            if "color" in s_name or "renewal" in s_name or "paint" in s_name:
-                matched.append("Color Renewal")
-            if not matched:
-                matched.append("Basic Cleaning")
+            # Solo/Primary Classification: Check major restorative services first
+            codes = [c.strip().upper() for c in str(item.get("services", "")).split("×")[0].split(",") if c.strip()]
+            if any(c in ("FR", "FRMID", "FRUND") for c in codes) or "full reglue" in s_name:
+                target_svc = "Full Reglue"
+            elif any(c in ("MR", "BR") for c in codes) or "minor reglue" in s_name or "basic reglue" in s_name:
+                target_svc = "Minor Reglue"
+            elif any(c in ("COR", "COR2", "COR3", "WPT") for c in codes) or "color" in s_name or "renewal" in s_name or "paint" in s_name:
+                target_svc = "Color Renewal"
+            else:
+                target_svc = "Basic Cleaning"
             
-            share = amt / len(matched)
-            for m in matched:
-                svc_counts[m] += 1
-                svc_rev[m] += share
+            svc_counts[target_svc] += pair_cnt
+            svc_rev[target_svc] += amt
 
         svc_cols = [
             ("Service Category", 185, 0),
@@ -1402,9 +1495,9 @@ def generate_report_pdf(report_data: Dict[str, Any], report_type: str) -> bytes:
             draw_cell(page, pymupdf.Rect(margin_x + 405, y, page_width - margin_x, y + 14), f"{pct:.1f}%", font_size=7.0, font_color=DARK_GRAY, align=2)
             y += 14
 
-        # Total canonical row
+        # Total services row
         page.draw_rect(pymupdf.Rect(margin_x, y, page_width - margin_x, y + 15), fill=LIGHT_GRAY, color=LINE_GRAY, width=0.8)
-        draw_cell(page, pymupdf.Rect(margin_x, y, margin_x + 185, y + 15), "Total Canonical Services", font_size=7.0, font_color=DARK_GRAY, align=0, is_bold=True)
+        draw_cell(page, pymupdf.Rect(margin_x, y, margin_x + 185, y + 15), "Total Services", font_size=7.0, font_color=DARK_GRAY, align=0, is_bold=True)
         draw_cell(page, pymupdf.Rect(margin_x + 185, y, margin_x + 285, y + 15), f"{tot_svc_cnt} pairs", font_size=7.0, font_color=DARK_GRAY, align=1, is_bold=True)
         draw_cell(page, pymupdf.Rect(margin_x + 285, y, margin_x + 405, y + 15), f"\u20b1{tot_svc_rev:,.2f}", font_size=7.0, font_color=DARK_GRAY, align=2, is_bold=True)
         draw_cell(page, pymupdf.Rect(margin_x + 405, y, page_width - margin_x, y + 15), "100.0%", font_size=7.0, font_color=DARK_GRAY, align=2, is_bold=True)

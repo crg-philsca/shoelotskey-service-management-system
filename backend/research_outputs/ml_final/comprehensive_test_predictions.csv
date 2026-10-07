@@ -1,0 +1,27 @@
+Order #,Date Received,Claimed Date,Actual Turnaround,Services,Priority,Mean Baseline,Median Baseline,Business Rules,Linear Reg,Decision Tree,Random Forest,RF Error,RF Abs Error
+ORD-2026-01-02-002,2026-01-02,2026-01-14,12,"Basic Cleaning, Minor Reglue, Full Reglue, Basic Cleaning",Regular,18.4,16.0,25,8.1,12.0,21.8,9.8,9.8
+ORD-2026-01-02-003,2026-01-02,2026-01-13,11,Basic Cleaning,Regular,18.4,16.0,10,-4.8,6.0,6.5,-4.5,4.5
+ORD-2026-01-02-004,2026-01-02,2026-01-04,2,Basic Cleaning,Rush,18.4,16.0,1,-14.3,2.0,3.7,1.7,1.7
+ORD-2026-01-02-006,2026-01-02,2026-01-15,13,"Basic Cleaning, Minor Reglue, Minor Retouch",Regular,18.4,16.0,20,-3.8,6.0,13.7,0.7,0.7
+ORD-2026-01-03-005,2026-01-03,2026-02-03,31,"Color Renewal, Basic Cleaning",Regular,18.4,16.0,25,-12.1,6.0,11.8,-19.2,19.2
+ORD-2026-01-03-006,2026-01-03,2026-01-15,12,"Basic Cleaning, Basic Cleaning",Regular,18.4,16.0,10,-6.3,4.0,6.4,-5.6,5.6
+ORD-2026-01-04-003,2026-01-04,2026-02-05,32,"Full Reglue, Basic Cleaning, Basic Cleaning, Full Reglue Undersole, Full Reglue Midsole",Regular,18.4,16.0,25,13.2,12.0,20.3,-11.7,11.7
+ORD-2026-01-07-002,2026-01-07,2026-01-17,10,"Basic Cleaning, Full Reglue Midsole, Minor Restoration, Unyellowing, Basic Cleaning",Regular,18.4,16.0,25,21.3,14.0,24.7,14.7,14.7
+ORD-2026-01-07-005,2026-01-07,2026-02-04,28,Basic Cleaning,Regular,18.4,16.0,10,-4.2,5.0,7.2,-20.8,20.8
+ORD-2026-01-04-011,2026-01-08,2026-01-18,10,Basic Cleaning,Regular,18.4,16.0,10,-4.5,6.0,7.1,-2.9,2.9
+ORD-2026-01-08-001,2026-01-08,2026-02-05,28,"Full Reglue, Color Renewal, Basic Cleaning",Regular,18.4,16.0,25,1.6,12.0,22.7,-5.3,5.3
+ORD-2026-01-08-002,2026-01-08,2026-02-08,31,"Full Reglue, Basic Cleaning, Basic Cleaning, Minor Restoration",Regular,18.4,16.0,25,17.2,12.0,23.0,-8.0,8.0
+ORD-2026-01-08-004,2026-01-08,2026-02-11,34,"Basic Cleaning, Unyellowing",Regular,18.4,16.0,20,-0.8,6.0,16.7,-17.3,17.3
+ORD-2026-01-09-002,2026-01-09,2026-02-10,32,"Basic Cleaning, Full Reglue",Regular,18.4,16.0,25,8.2,12.0,18.9,-13.1,13.1
+ORD-2026-01-11-001,2026-01-11,2026-02-12,32,"Full Reglue, Basic Cleaning",Regular,18.4,16.0,25,7.5,12.0,18.2,-13.8,13.8
+ORD-2026-01-11-003,2026-01-11,2026-01-22,11,"Basic Cleaning, Full Reglue, Basic Cleaning",Regular,18.4,16.0,25,6.4,12.0,16.8,5.8,5.8
+ORD-2026-01-11-006,2026-01-13,2026-01-22,9,Basic Cleaning,Regular,18.4,16.0,10,-3.9,5.0,7.0,-2.0,2.0
+ORD-2026-01-11-013,2026-01-13,2026-01-24,11,"Basic Cleaning, Basic Cleaning",Regular,18.4,16.0,10,-5.0,4.0,10.5,-0.5,0.5
+ORD-2026-01-14-008,2026-01-14,2026-02-02,19,Basic Cleaning,Regular,18.4,16.0,10,-4.2,5.0,7.2,-11.8,11.8
+ORD-2026-01-15-001,2026-01-18,2026-02-12,25,"Full Reglue, Basic Cleaning",Regular,18.4,16.0,25,7.5,12.0,18.2,-6.8,6.8
+ORD-2026-01-20-003,2026-01-20,2026-01-28,8,Basic Cleaning,Regular,18.4,16.0,10,-3.9,5.0,7.0,-1.0,1.0
+ORD-2026-01-21-002,2026-01-21,2026-01-28,7,Basic Cleaning,Regular,18.4,16.0,10,-4.2,5.0,7.2,0.2,0.2
+ORD-2026-01-22-002,2026-01-22,2026-02-20,29,"Basic Cleaning, Minor Restoration, Basic Cleaning, Minor Restoration",Regular,18.4,16.0,20,4.4,30.0,18.4,-10.6,10.6
+ORD-2026-01-11-009,2026-01-24,2026-01-29,5,"Basic Cleaning, Unyellowing",Regular,18.4,16.0,20,-1.4,6.0,16.9,11.9,11.9
+ORD-2026-01-27-004,2026-01-27,2026-02-11,15,Basic Cleaning,Regular,18.4,16.0,10,-3.9,5.0,7.0,-8.0,8.0
+ORD-2026-01-27-005,2026-01-27,2026-02-12,16,Basic Cleaning,Regular,18.4,16.0,10,-3.9,5.0,7.0,-9.0,9.0

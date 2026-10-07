@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shoelotskey SMS — Checkpoint 3: Chapters 1 to 3 Manuscript Audit & Alignment</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #0284c7;
+      --primary-dark: #0369a1;
+      --primary-light: #e0f2fe;
+      --accent: #f59e0b;
+      --accent-light: #fef3c7;
+      --success: #10b981;
+      --success-light: #dcfce7;
+      --danger: #ef4444;
+      --danger-light: #fee2e2;
+      --purple: #8b5cf6;
+      --purple-light: #ede9fe;
+      --teal: #0d9488;
+      --teal-light: #ccfbf1;
+      --slate-900: #0f172a;
+      --slate-800: #1e293b;
+      --slate-700: #334155;
+      --slate-600: #475569;
+      --slate-500: #64748b;
+      --slate-100: #f1f5f9;
+      --slate-50: #f8fafc;
+      --border: #e2e8f0;
+      --card-bg: #ffffff;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.08);
+      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: #f8fafc;
+      color: var(--slate-900);
+      line-height: 1.6;
+      padding: 24px 16px;
+    }
+
+    .container {
+      max-width: 1480px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg);
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    .header-banner {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 45%, #0369a1 100%);
+      color: #ffffff;
+      padding: 38px 36px;
+      border-bottom: 4px solid var(--accent);
+    }
+
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .badge-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 14px;
+      border-radius: 9999px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .badge-cp3 { background: rgba(59, 130, 246, 0.25); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.45); }
+    .badge-iso { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); }
+    .badge-audit { background: rgba(245, 158, 11, 0.2); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.4); }
+
+    .header-title {
+      font-size: 2.15rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 10px;
+    }
+
+    .header-subtitle {
+      font-size: 1.02rem;
+      color: #cbd5e1;
+      max-width: 1200px;
+      margin-bottom: 22px;
+      line-height: 1.6;
+    }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+      background: rgba(255, 255, 255, 0.08);
+      padding: 18px 22px;
+      border-radius: var(--radius-md);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      font-size: 0.85rem;
+    }
+
+    .meta-item strong {
+      display: block;
+      color: #94a3b8;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 2px;
+    }
+
+    .meta-item span { color: #f8fafc; font-weight: 600; }
+
+    /* Content Body */
+    .content-body { padding: 36px 34px; }
+
+    h2 {
+      font-size: 1.38rem;
+      font-weight: 800;
+      color: var(--slate-900);
+      margin: 34px 0 16px 0;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    h2:first-of-type { margin-top: 0; }
+
+    h3 {
+      font-size: 1.12rem;
+      font-weight: 700;
+      color: var(--primary-dark);
+      margin: 22px 0 12px 0;
+    }
+
+    p { margin-bottom: 14px; color: var(--slate-700); font-size: 0.93rem; }
+
+    /* Callouts */
+    .callout {
+      padding: 16px 20px;
+      border-radius: var(--radius-md);
+      margin: 18px 0;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      border: 1px solid transparent;
+      font-size: 0.91rem;
+    }
+
+    .callout-success { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
+    .callout-warning { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+    .callout-danger { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+    .callout-info { background: #f0f9ff; border-color: #bae6fd; color: #075985; }
+
+    .callout-icon { font-size: 1.3rem; line-height: 1; flex-shrink: 0; margin-top: 2px; }
+    .callout-content strong { display: block; margin-bottom: 4px; font-size: 0.95rem; }
+
+    /* KPI Cards */
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 16px;
+      margin: 20px 0 28px 0;
+    }
+
+    .kpi-card {
+      background: var(--slate-50);
+      border-radius: var(--radius-md);
+      padding: 18px 20px;
+      border: 1px solid var(--border);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .kpi-card::before { content: ''; position: absolute; top: 0; left: 0; width: 5px; height: 100%; }
+    .kpi-card.blue::before { background: var(--primary); }
+    .kpi-card.green::before { background: var(--success); }
+    .kpi-card.amber::before { background: var(--accent); }
+    .kpi-card.purple::before { background: var(--purple); }
+
+    .kpi-title { font-size: 0.74rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--slate-500); margin-bottom: 5px; }
+    .kpi-value { font-size: 1.7rem; font-weight: 800; color: var(--slate-900); line-height: 1.1; margin-bottom: 4px; }
+    .kpi-sub { font-size: 0.78rem; color: var(--slate-600); }
+
+    /* Tables */
+    .table-responsive {
+      overflow-x: auto;
+      margin: 18px 0 24px 0;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
+    }
+
+    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.88rem; }
+    thead { background: #f1f5f9; color: var(--slate-800); }
+    th { padding: 12px 14px; font-weight: 700; font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 2px solid var(--border); }
+    td { padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: top; color: var(--slate-700); }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f8fafc; }
+
+    /* Badges */
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .tag-critical { background: var(--danger-light); color: #991b1b; border: 1px solid #fecaca; }
+    .tag-major { background: var(--accent-light); color: #92400e; border: 1px solid #fde68a; }
+    .tag-aligned { background: var(--success-light); color: #065f46; border: 1px solid #a7f3d0; }
+    .tag-info { background: var(--primary-light); color: #075985; border: 1px solid #bae6fd; }
+
+    /* Replacement Cards */
+    .replacement-card {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 22px;
+      margin-bottom: 20px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .replacement-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .page-tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      color: #0369a1;
+      background: var(--primary-light);
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 0.80rem;
+    }
+
+    .diff-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 12px 0;
+    }
+
+    @media (max-width: 900px) {
+      .diff-grid { grid-template-columns: 1fr; }
+    }
+
+    .diff-box {
+      padding: 16px;
+      border-radius: var(--radius-sm);
+      font-size: 0.88rem;
+      line-height: 1.6;
+    }
+
+    .diff-before {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #991b1b;
+    }
+
+    .diff-after {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      color: #166534;
+    }
+
+    .diff-label {
+      font-size: 0.74rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+
+    .card-meta {
+      font-size: 0.82rem;
+      color: var(--slate-600);
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--border);
+    }
+
+    .card-meta strong { color: var(--slate-800); }
+
+    pre, code { font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; }
+    code:not(pre code) { background: #f1f5f9; color: #0369a1; padding: 2px 6px; border-radius: 4px; border: 1px solid #e2e8f0; }
+
+    .footer {
+      background: #f8fafc;
+      padding: 20px 34px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 14px;
+      font-size: 0.82rem;
+      color: var(--slate-500);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    
+    <header class="header-banner">
+      <div class="badge-row">
+        <span class="badge-pill badge-cp3">CHECKPOINT 3 — CHAPTERS 1 TO 3 AUDIT</span>
+        <span class="badge-pill badge-iso">ISO/IEC 25010:2023 Parity</span>
+        <span class="badge-pill badge-audit">CRITICAL TERMINOLOGY & SDLC HARMONIZATION</span>
+      </div>
+
+      <h1 class="header-title">Checkpoint 3: Chapters 1 to 3 Manuscript Audit & Defense Alignment</h1>
+      <p class="header-subtitle">
+        Rigorous audit of the conceptual and methodological foundation of the Shoelotskey Service Management System manuscript. Resolves core semantic confusion between service completion vs. order-to-claim turnaround duration, removes unsupported continuous learning claims, verifies research timeline feasibility, and provides copy-ready replacement cards.
+      </p>
+
+      <div class="meta-grid">
+        <div class="meta-item">
+          <strong>Audited Manuscript</strong>
+          <span>Authoritative 155-Page Document</span>
+        </div>
+        <div class="meta-item">
+          <strong>Core Semantic Audit</strong>
+          <span>Completion Date vs. Turnaround Duration Target</span>
+        </div>
+        <div class="meta-item">
+          <strong>Timeline Audit</strong>
+          <span>11 Research Milestones Chronologically Validated</span>
+        </div>
+        <div class="meta-item">
+          <strong>ML Feature Contract</strong>
+          <span>13 Non-Leaking Features (Feature Set B)</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="content-body">
+
+      <!-- Executive Overview -->
+      <div class="kpi-row">
+        <div class="kpi-card green">
+          <div class="kpi-title">Core Alignment</div>
+          <div class="kpi-value">100%</div>
+          <div class="kpi-sub">RQ 1–6 mapped to Objectives 1–6</div>
+        </div>
+        <div class="kpi-card blue">
+          <div class="kpi-title">Timeline Feasibility</div>
+          <div class="kpi-value">Verified</div>
+          <div class="kpi-sub">1 Anachronism Flagged in Old Draft</div>
+        </div>
+        <div class="kpi-card amber">
+          <div class="kpi-title">Semantic Defect</div>
+          <div class="kpi-value">Resolved</div>
+          <div class="kpi-sub">Completion vs Turnaround Duration</div>
+        </div>
+        <div class="kpi-card purple">
+          <div class="kpi-title">Quality Model</div>
+          <div class="kpi-value">ISO 2023</div>
+          <div class="kpi-sub">Updated to 9 Quality Characteristics</div>
+        </div>
+      </div>
+
+      <!-- Critical Semantic Audit -->
+      <h2>1. Critical Terminology Audit: Completion Date vs. Historical Target</h2>
+
+      <div class="callout callout-danger">
+        <div class="callout-icon">⚡</div>
+        <div class="callout-content">
+          <strong>Root Semantic Confusion Identified in Chapter 1:</strong>
+          Throughout Chapter 1 (Problem Statement, Purpose, Objectives), the manuscript repeatedly uses phrases such as <em>"service completion date estimation"</em>, <em>"completion duration"</em>, and <em>"predicting completion time"</em>.
+          <br><br>
+          <strong>Empirical Reality from Level 1 Code & Level 2 Data:</strong>
+          Historical paper logbooks at Shoelotskey did <strong>NOT</strong> record technician completion timestamps (the moment cleaning or reglue was finished). They recorded only <code>Date Received</code> (order intake) and <code>Claimed Date</code> (when the customer picked up their shoes). Therefore:
+          <ul style="margin: 6px 0 6px 18px; line-height: 1.6;">
+            <li>The historical ML target is strictly: <code>historical_order_to_claim_turnaround_days = (claimed_date - date_received).days</code>.</li>
+            <li>This target reflects <strong>customer pickup/turnaround behavior</strong>, not pure technician bench time.</li>
+            <li>The developed digital system separately captures <code>released_at</code> timestamps, providing the empirical foundation for true completion modeling in future research.</li>
+            <li>The production ML prediction must be framed as an <strong>advisory turnaround estimate</strong> under the Option B dual-date architecture, while official promised dates remain deterministic business rules.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Conceptual Framework Audit -->
+      <h2>2. Conceptual Framework Audit: Removal of Continuous Learning Fallacy</h2>
+      <div class="callout callout-warning">
+        <div class="callout-icon">⚠</div>
+        <div class="callout-content">
+          <strong>Unsupported Claim in Original Conceptual Framework (Figure 1 narrative, p. 9):</strong>
+          <em>"The feedback loop allows the system to learn from its mistakes in real-time. If an ML prediction was wrong, the actual completion time is fed back in real-time to automatically improve future accuracy."</em>
+          <br><br>
+          <strong>Why This Must Be Removed:</strong>
+          <ul style="margin: 6px 0 6px 18px; line-height: 1.6;">
+            <li>The production Scikit-Learn model is statically serialized in <code>backend/completion_model.pkl</code>. Automatic online backpropagation / continuous streaming learning does not exist in standard tabular Random Forest regressors.</li>
+            <li>In production micro-enterprise systems, uncontrolled automatic retraining introduces catastrophic data leakage and model drift from anomalous inputs.</li>
+            <li><strong>Authoritative Replacement Concept:</strong> Validated operational records are archived upon customer pickup. The business owner/administrator can periodically trigger a controlled batch retraining routine via <code>/api/historical/train</code>, with new models evaluated and validated before deployment.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Research Timeline Verification -->
+      <h2>3. Research Timeline Feasibility Verification</h2>
+      <p>
+        Every research activity was audited against its operational prerequisites to verify chronological feasibility:
+      </p>
+
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Research Activity</th>
+              <th>Claimed Date Range</th>
+              <th>Prerequisite Artifact</th>
+              <th>Chronologically Possible?</th>
+              <th>Conflict / Anachronism Audit</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Initial Shop Observation & FGD</strong></td>
+              <td>March 12–15, 2025</td>
+              <td>Shop partnership agreement</td>
+              <td><span class="tag tag-aligned">YES</span></td>
+              <td>Authentic baseline observation of manual workflow.</td>
+            </tr>
+            <tr>
+              <td><strong>Historical Receipts Ingestion Period</strong></td>
+              <td>August 2025 – January 2026</td>
+              <td>Daily shop operational orders</td>
+              <td><span class="tag tag-aligned">YES</span></td>
+              <td>6 monthly volumes, 714 raw receipts, 119 validated orders.</td>
+            </tr>
+            <tr>
+              <td><strong>Requirements Analysis & DB Normalization</strong></td>
+              <td>April – July 2025</td>
+              <td>Initial observation data</td>
+              <td><span class="tag tag-aligned">YES</span></td>
+              <td>Waterfall SDLC: Requirements engineering & 3NF database design.</td>
+            </tr>
+            <tr>
+              <td><strong>System Development (React + FastAPI)</strong></td>
+              <td>July 2025 – August 2026</td>
+              <td>Approved DB schema</td>
+              <td><span class="tag tag-aligned">YES</span></td>
+              <td>Full-stack implementation of 25 frontend pages and 92 API routes.</td>
+            </tr>
+            <tr>
+              <td><strong>ML Development (5-Fold Expanding CV)</strong></td>
+              <td>August – December 2025</td>
+              <td>93 development historical orders</td>
+              <td><span class="tag tag-aligned">YES</span></td>
+              <td>Chronological validation window strictly within 2025 data.</td>
+            </tr>
+            <tr>
+              <td><strong>Locked Holdout Test Set Evaluation</strong></td>
+              <td>January 2026</td>
+              <td>Frozen model + 26 Jan 2026 orders</td>
+              <td><span class="tag tag-aligned">YES</span></td>
+              <td>Authoritative evaluation: MAE 8.50, RMSE 10.11, R² 0.129.</td>
+            </tr>
+            <tr>
+              <td><strong>Production Retraining on 119 Records</strong></td>
+              <td>Post-Evaluation (Sept 2026)</td>
+              <td>Evaluation freeze complete</td>
+              <td><span class="tag tag-aligned">YES</span></td>
+              <td>Retrained on full 119 records for production deployment.</td>
+            </tr>
+            <tr>
+              <td><strong>Faculty Content Validity Testing (CVI)</strong></td>
+              <td>August 2026</td>
+              <td>Drafted survey instruments</td>
+              <td><span class="tag tag-aligned">YES</span></td>
+              <td>S-CVI = 1.00 confirmed prior to field deployment.</td>
+            </tr>
+            <tr>
+              <td><strong>System User Pilot Testing (TAM)</strong></td>
+              <td>September 2–16, 2026</td>
+              <td>Deployed production system</td>
+              <td><span class="tag tag-aligned">YES</span></td>
+              <td>2-week hands-on shop pilot with owner and staff (N=6).</td>
+            </tr>
+            <tr>
+              <td><strong>IT Expert Quality Evaluation (ISO)</strong></td>
+              <td>September 9–19, 2026</td>
+              <td>Working production system</td>
+              <td><span class="tag tag-aligned">YES</span></td>
+              <td>Evaluated by 5 external IT experts.</td>
+            </tr>
+            <tr>
+              <td><strong>Preliminary Presentation Testing Claim</strong></td>
+              <td>June 1–10, 2025</td>
+              <td>Full system completed</td>
+              <td><span class="tag tag-critical">NO (Anachronism)</span></td>
+              <td>Erronous date from early proposal template. Correct to Sept 2–16, 2026.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Chapter 1 Exact Replacement Cards -->
+      <h2>4. Chapter 1 Exact Copy-Paste Replacement Cards</h2>
+
+      <!-- Card 1 -->
+      <div class="replacement-card">
+        <div class="replacement-header">
+          <span class="page-tag">Page 9 &bull; Figure 1 Conceptual Framework</span>
+          <span class="tag tag-critical">Critical Defect</span>
+        </div>
+        <div class="diff-grid">
+          <div class="diff-box diff-before">
+            <div class="diff-label">❌ Original Manuscript Flaw</div>
+            <strong>INPUT:</strong> 6. Transaction reocords [TYPO]<br>
+            <strong>PROCESS:</strong> 7. ISO/IEC 25010: Functional suitability, usability, reliability, performance, security, maintainability, portability. [OBSOLETE 2011 MODEL - 7 TRAITS]<br>
+            <strong>FEEDBACK LOOP:</strong> "The feedback loop allows the system to learn from its mistakes in real-time. If an ML prediction was wrong, the actual completion time is fed back in real-time to improve future accuracy." [MISLEADING ONLINE BACKPROP CLAIM]
+          </div>
+          <div class="diff-box diff-after">
+            <div class="diff-label">✔ Exact Approved Replacement Text</div>
+            <strong>INPUT:</strong> 6. Transaction records [CORRECTED]<br>
+            <strong>PROCESS:</strong> 7. ISO/IEC 25010:2023: Functional Suitability, Performance Efficiency, Compatibility, Interaction Capability, Reliability, Security, Maintainability, Flexibility, Safety. TAM: Perceived Usefulness, Perceived Ease of Use, Behavioral Intention to Use, Actual System Use.<br>
+            <strong>FEEDBACK LOOP:</strong> "The conceptual framework incorporates a closed-loop historical data ingestion pipeline. As job orders are completed and claimed, their validated operational attributes are archived. The business owner can periodically trigger an administrative batch model retraining routine via <code>/api/historical/train</code>, enabling the Random Forest model to ingest newly validated empirical records and adjust to long-term shop trends over time."
+          </div>
+        </div>
+        <div class="card-meta">
+          <strong>Rationale:</strong> Fixes typographical error, adopts official ISO/IEC 25010:2023 9-characteristic framework, and aligns ML retraining claim with actual codebase batch architecture. &bull; <strong>Source:</strong> <code>backend/ml/historical_ml_engine.py</code>.
+        </div>
+      </div>
+
+      <!-- Card 2 -->
+      <div class="replacement-card">
+        <div class="replacement-header">
+          <span class="page-tag">Page 5 &bull; Research Question 4 (RQ4)</span>
+          <span class="tag tag-critical">Critical Defect</span>
+        </div>
+        <div class="diff-grid">
+          <div class="diff-box diff-before">
+            <div class="diff-label">❌ Original Manuscript Flaw</div>
+            "4. To what extent does the developed system meet ISO/IEC 25010 software quality standards in terms of: 4.1 Functional suitability, 4.2 Performance efficiency, 4.3 Usability, 4.4 Reliability, 4.5 Security, 4.6 Maintainability, and 4.7 Portability?"
+          </div>
+          <div class="diff-box diff-after">
+            <div class="diff-label">✔ Exact Approved Replacement Text</div>
+            "4. To what extent does the developed system comply with ISO/IEC 25010:2023 software product quality standards across the following characteristics: 4.1 Functional Suitability, 4.2 Performance Efficiency, 4.3 Compatibility, 4.4 Interaction Capability, 4.5 Reliability, 4.6 Security, 4.7 Maintainability, 4.8 Flexibility, and 4.9 Safety?"
+          </div>
+        </div>
+        <div class="card-meta">
+          <strong>Rationale:</strong> Aligns Research Question 4 with the validated 45-item evaluation instrument and ISO/IEC 25010:2023 standard, eliminating missing characteristics (Compatibility, Safety) and outdated 2011 terms. &bull; <strong>Source:</strong> <code>ISO-25010_Survey-Questionnaire_FINAL-PAPER.pdf</code>.
+        </div>
+      </div>
+
+      <!-- Card 3 -->
+      <div class="replacement-card">
+        <div class="replacement-header">
+          <span class="page-tag">Pages 10–11 &bull; Specific Objectives Alignment</span>
+          <span class="tag tag-major">Major Alignment Fix</span>
+        </div>
+        <div class="diff-grid">
+          <div class="diff-box diff-before">
+            <div class="diff-label">❌ Incomplete 4 Objectives in Draft</div>
+            1. Develop centralized digital job order entry (&lt; 5 min retrieval).<br>
+            2. Implement ML model for predicting completion (target 85% accuracy).<br>
+            3. Generate real-time analytics dashboard (&lt; 1 hr monthly report).<br>
+            4. Evaluate effectiveness based on ISO/IEC 25010.<br>
+            <em>[TAM user acceptance and future enhancements missing from numbered list]</em>
+          </div>
+          <div class="diff-box diff-after">
+            <div class="diff-label">✔ Authoritative 6-Objective Full Alignment</div>
+            1. Conduct a comparative analysis between the existing manual paper logbook and the developed digital system regarding record accessibility, retrieval time, and data accuracy.<br>
+            2. Train, evaluate, and integrate an advisory Random Forest machine learning turnaround estimation model using historical intake records based on regression metrics (MAE, RMSE, R²).<br>
+            3. Determine the impact of real-time analytics in the Sales Report Module on reporting efficiency by assessing generation time for sales, expense, and ROI reports.<br>
+            4. Evaluate the technical software product quality across 9 characteristics using ISO/IEC 25010:2023 with external IT expert evaluators.<br>
+            5. Measure operational end-user acceptance among management and staff using the Technology Acceptance Model (TAM) across PU, PEOU, BI, and ASU.<br>
+            6. Formulate evidence-based system enhancement recommendations based on qualitative evaluator feedback for future researchers.
+          </div>
+        </div>
+        <div class="card-meta">
+          <strong>Rationale:</strong> Establishes strict 1:1 parity between Research Questions 1–6 and Specific Objectives 1–6, preventing panel construct-drift critique. &bull; <strong>Source:</strong> <code>02_RESEARCH_TRACEABILITY.html</code>.
+        </div>
+      </div>
+
+      <!-- Chapter 2 Review of Related Literature Audit -->
+      <h2>5. Chapter 2 Review of Related Literature & Theoretical Defense</h2>
+      <div class="callout callout-info">
+        <div class="callout-icon">📖</div>
+        <div class="callout-content">
+          <strong>Chapter 2 RRL Theme Mapping to Specific Objectives:</strong>
+          <ul style="margin: 6px 0 6px 18px; line-height: 1.6;">
+            <li><strong>Theme 1 (Digital Service Records & Cloud Storage):</strong> Directly supports Objective 1 (record retrieval reduction from 5.20m to 0.41m).</li>
+            <li><strong>Theme 2 (Supervised Machine Learning in Service Turnaround):</strong> Cites Random Forest (Breiman 2001) for small tabular datasets ($N=119$). Clarifies that historical target represents order-to-claim turnaround rather than bench time. Explains data leakage prevention (excluding grand total and promised release date).</li>
+            <li><strong>Theme 3 (Real-Time Dashboards in MSME Decision Support):</strong> Grounds Objective 3 (reporting acceleration from 43.71m to 0.43s).</li>
+            <li><strong>Theme 4 (Software Quality Measurement via ISO/IEC 25010:2023):</strong> Justifies transition from 2011 (8 traits) to 2023 (9 traits, adding Safety, replacing Usability with Interaction Capability).</li>
+            <li><strong>Theme 5 (Technology Acceptance Model in Small Business Digitization):</strong> Theoretical backing for Davis (1989) TAM constructs (PU, PEOU, BI, ASU).</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Chapter 3 Methodology & Calculation Fixes -->
+      <h2>6. Chapter 3 Methodology & Calculation Fixes</h2>
+
+      <!-- Card 4 -->
+      <div class="replacement-card">
+        <div class="replacement-header">
+          <span class="page-tag">Pages 52 & 58 &bull; Table 1 & Cost Computation</span>
+          <span class="tag tag-critical">Critical Computation Typo</span>
+        </div>
+        <div class="diff-grid">
+          <div class="diff-box diff-before">
+            <div class="diff-label">❌ Flawed Original Computation</div>
+            "Total Phase 1 Cost:<br>
+            1,500 + 2,200 + 1,000 +7 20 = ₱5,420"<br><br>
+            Table 1 Column Header: <code>"Quantity/Assum ption"</code>
+          </div>
+          <div class="diff-box diff-after">
+            <div class="diff-label">✔ Corrected Computation Line</div>
+            "Total Phase 1 Cost:<br>
+            ₱1,500 + ₱2,200 + ₱1,000 + ₱720 = ₱5,420"<br><br>
+            Table 1 Column Header: <code>"Quantity / Assumption"</code>
+          </div>
+        </div>
+        <div class="card-meta">
+          <strong>Rationale:</strong> Corrects typographical error "+7 20" to "+ ₱720" and fixes broken word hyphenation. &bull; <strong>Source:</strong> Manuscript Page 52.
+        </div>
+      </div>
+
+      <!-- Gate Decision -->
+      <h2>7. Checkpoint 3 Gate Decision & Summary</h2>
+      <p>
+        The conceptual, theoretical, and methodological foundation of Chapters 1 to 3 is thoroughly audited, verified against actual codebase artifacts, and harmonized with institutional requirements. All four critical defects have copy-ready exact replacement text.
+      </p>
+
+      <div class="callout callout-success">
+        <div class="callout-icon">✓</div>
+        <div class="callout-content">
+          <strong>Checkpoint 3 Status: VERIFIED & COMPLETE</strong>
+          <br>
+          We are ready to proceed to <strong>Checkpoint 4: Numerical Revalidation Audit</strong> (<code>04_NUMERICAL_REVALIDATION.html</code>), where we will mathematically recompute all ML metrics ($MAE, RMSE, R^2$, Median AE, ±1 to ±3 day accuracy), TAM means and SDs, ISO/IEC 25010 ratings, and timing percentages from raw source files.
+        </div>
+      </div>
+
+    </main>
+
+    <footer class="footer">
+      <div><strong>Shoelotskey Service Management System</strong> · Institute of Computer Studies</div>
+      <div>National Aviation Academy of the Philippines (PhilSCA) · Academic Year 2025–2026</div>
+      <div>Checkpoint 3 Manuscript Audit Report · Generated September 24, 2026</div>
+    </footer>
+
+  </div>
+
+</body>
+</html>

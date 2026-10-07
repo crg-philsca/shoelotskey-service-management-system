@@ -12,12 +12,50 @@ import os
 from ml.historical_ml_engine import (
     historical_ml_engine,
     build_features_from_live_order,
+    build_features_from_live_order_v3,
+    extract_feature_set_c_vector,
     FEATURE_COLS as HISTORICAL_FEATURE_COLS,
+    FEATURE_SET_C_COLS,
     LIVE_COMPLETION_MODEL_PATH,
 )
 from ml.business_rules import calculate_official_release_days, collect_service_flags, combo_override_days
 
 import time
+
+# Owner-confirmed shop closure dates:
+# 1. Weekly closure: Sunday (d.weekday() == 6)
+# 2. Holy Week (owner-confirmed): April 16–19, 2025 (Holy Wednesday through Black Saturday; Easter Sunday covered by weekly rule)
+# 3. Christmas: December 24 & December 25
+# 4. New Year: December 31 & January 1
+# Note: Ordinary Philippine national holidays remain OPEN unless explicitly confirmed by the owner.
+
+HOLY_WEEK_2025_CLOSURES = {
+    (2025, 4, 16), (2025, 4, 17), (2025, 4, 18), (2025, 4, 19),
+}
+
+ANNUAL_OWNER_CLOSURES = {
+    (12, 24),  # Christmas Eve
+    (12, 25),  # Christmas Day
+    (12, 31),  # New Year's Eve
+    (1, 1),    # New Year's Day
+}
+
+def is_shop_closed_on_date(d: datetime) -> bool:
+    """True if Sunday (weekday 6) or matches owner-confirmed closure dates."""
+    if d.weekday() == 6:
+        return True
+    if (d.year, d.month, d.day) in HOLY_WEEK_2025_CLOSURES:
+        return True
+    if (d.month, d.day) in ANNUAL_OWNER_CLOSURES:
+        return True
+    return False
+
+def next_open_release_date(target_dt: datetime) -> datetime:
+    """Advance date until an open business day (Mon-Sat, non-closure) is reached."""
+    cur = target_dt
+    while is_shop_closed_on_date(cur):
+        cur += timedelta(days=1)
+    return cur
 
 # In-memory service & condition catalog cache (5-minute TTL) to make /api/predict sub-millisecond
 _CATALOG_CACHE: Dict[str, Any] = {
@@ -94,6 +132,8 @@ class ShoelotskeyPredictor:
         self.model_path = model_path or self.DEFAULT_MODEL_PATH
         self.metadata = self._load_metadata()
         self.model = self._load_model()
+        if isinstance(self.model, RandomForestRegressor):
+            self.model.n_jobs = 1
         self.last_prediction_source = "heuristic_fallback" if self.model is None else "random_forest"
         self.last_fallback_reason = None if self.model is not None else "No activated Random Forest model is loaded."
         self.last_predicted_days = None
@@ -129,7 +169,7 @@ class ShoelotskeyPredictor:
 
     def _load_model(self):
         if self.metadata is not None and self.metadata.get("activated") is False:
-            print("[ML] Model artifact exists but is marked not-activated. Serving heuristic fallback.")
+            print("[ML] Model artifact exists but is marked not-activated. Serving standard fallback.")
             return None
 
         for path in (self.model_path, historical_ml_engine.model_path):
@@ -139,8 +179,14 @@ class ShoelotskeyPredictor:
                 with open(path, "rb") as f:
                     model = pickle.load(f)
                 if isinstance(model, RandomForestRegressor):
+                    n_feats = getattr(model, "n_features_in_", None)
+                    if n_feats != 12:
+                        print(f"[ML] WARNING: {path} has {n_feats} features, expected 12 for Feature Set C.")
+                        continue
                     if path != self.model_path:
                         print(f"[ML] Loaded RandomForestRegressor from fallback path: {path}")
+                    # In-memory latency optimization: single-sample inference does not need thread-pool spawning
+                    model.n_jobs = 1
                     return model
                 print(f"[ML] WARNING: {path} is not a RandomForestRegressor ({type(model).__name__})")
             except Exception as e:
@@ -148,15 +194,19 @@ class ShoelotskeyPredictor:
         return None
 
     def get_status(self) -> dict:
-        """Honest model-availability status for /api/ml/status and Job Order UI."""
+        """Active model-availability status for /api/ml/status and Job Order UI."""
         is_rf = isinstance(self.model, RandomForestRegressor)
         return {
             **(self.metadata or {}),
             "model_loaded": is_rf,
             "model_path": self.model_path,
-            "algorithm": "Random Forest Regressor" if is_rf else "Heuristic (rule-based) fallback",
+            "algorithm": "Random Forest Regressor" if is_rf else "Standard (rule-based) calculation",
             "model_type": type(self.model).__name__ if self.model is not None else None,
-            "prediction_mode": "random_forest" if is_rf else "heuristic_fallback",
+            "prediction_mode": "random_forest" if is_rf else "standard_fallback",
+            "model_status": "Active" if is_rf else "Unavailable",
+            "model_role": "OPERATIONAL_PREDICTION",
+            "prediction_target": "Ready-for-Release Duration",
+            "features": 12,
             "last_prediction_source": self.last_prediction_source,
             "last_fallback_reason": self.last_fallback_reason,
         }
@@ -206,10 +256,12 @@ class ShoelotskeyPredictor:
 
     def get_rule_override(self, order_data: dict) -> Optional[int]:
         """Deployed Job Order Form combination table. Same values as the live form."""
-        return combo_override_days(collect_service_flags(order_data.get("items") or []))
+        return combo_override_days(collect_service_flags(order_data.get("items") or order_data.get("shoes") or []))
 
     def _parse_base_date(self, order_data: dict) -> datetime:
-        base_date = datetime.now()
+        from datetime import timezone, timedelta
+        ph_tz = timezone(timedelta(hours=8))
+        base_date = datetime.now(timezone.utc).astimezone(ph_tz).replace(tzinfo=None)
         td_iso = (
             order_data.get("transactionDate")
             or order_data.get("orderDate")
@@ -221,9 +273,14 @@ class ShoelotskeyPredictor:
         if not td_iso:
             return base_date
         try:
-            dt = datetime.fromisoformat(str(td_iso).replace("Z", "+00:00"))
+            raw_str = str(td_iso).strip()
+            # If plain date YYYY-MM-DD
+            if len(raw_str) == 10 and "-" in raw_str:
+                parts = raw_str.split("-")
+                return datetime(int(parts[0]), int(parts[1]), int(parts[2]), 0, 0, 0)
+            dt = datetime.fromisoformat(raw_str.replace("Z", "+00:00"))
             if dt.tzinfo is not None:
-                return dt.astimezone().replace(tzinfo=None)
+                return dt.astimezone(ph_tz).replace(tzinfo=None)
             return dt
         except Exception:
             return base_date
@@ -243,7 +300,7 @@ class ShoelotskeyPredictor:
             return 0
 
     def _collect_item_services(self, order_data: dict):
-        items = order_data.get("items") or []
+        items = order_data.get("items") or order_data.get("shoes") or []
         flags = {
             "has_basic_cleaning": False,
             "has_minor_reglue": False,
@@ -307,138 +364,149 @@ class ShoelotskeyPredictor:
 
     def calculate_ml_prediction(self, db: Session, order_data: dict) -> Dict[str, Any]:
         """
-        Independent Random Forest prediction. Never used as expected_at.
-        Returns raw model days even when validation rejects them.
+        Active Random Forest prediction of Received-to-Ready-for-Release Turnaround.
+        Uses the frozen 12-feature Feature Set C schema with strict validation and Sunday/closure rollover guardrails.
         """
         result = {
             "ml_predicted_days": None,
+            "ml_predicted_date": None,
             "ml_status": "unavailable",
             "ml_source": "random_forest",
             "ml_model": "Random Forest Regression",
+            "model_status": "Unavailable",
+            "model_role": "OPERATIONAL_PREDICTION",
+            "prediction_target": "Ready-for-Release Turnaround",
             "ml_reason": None,
         }
         if not isinstance(self.model, RandomForestRegressor):
-            result["ml_reason"] = "No activated Random Forest model is loaded."
-            self.last_prediction_source = "heuristic_fallback"
+            result["ml_reason"] = "No active Random Forest model is loaded."
+            self.last_prediction_source = "standard_fallback"
             self.last_fallback_reason = result["ml_reason"]
             self.last_ml_days = None
             self.last_ml_status = "unavailable"
             self.last_ml_reason = result["ml_reason"]
             return result
 
-        cat = _get_cached_catalog(db)
-        svc_by_name = cat.get("service_by_name", {})
-        cond_by_name = cat.get("condition_by_name", {})
-
-        all_service_ids = []
-        all_condition_ids = []
-        primary_material = "Unknown"
-        items = order_data.get("items") or []
-        for i, item in enumerate(items):
-            if i == 0:
-                primary_material = item.get("shoeMaterial", "Unknown")
-            b_srvs = item.get("baseService") or []
-            if isinstance(b_srvs, str):
-                b_srvs = [s.strip() for s in b_srvs.split(",") if s.strip()]
-            elif not isinstance(b_srvs, list):
-                b_srvs = []
-            a_srvs = item.get("addOns") or []
-            if isinstance(a_srvs, str):
-                a_srvs = [s.strip() for s in a_srvs.split(",") if s.strip()]
-            elif not isinstance(a_srvs, list):
-                a_srvs = []
-            s_names = list(b_srvs) + [a.get("name") if isinstance(a, dict) else a for a in a_srvs if a]
-            s_names = [s for s in s_names if s]
-            for sname in s_names:
-                sid = svc_by_name.get(sname)
-                if sid:
-                    all_service_ids.append(sid)
-            c_data = item.get("condition") or {}
-            if isinstance(c_data, dict):
-                c_map = {
-                    "scratches": "scratches",
-                    "yellowing": "yellowing",
-                    "ripsHoles": "rips/holes",
-                    "deepStains": "deep stains",
-                    "soleSeparation": "sole separation",
-                    "wornOut": "worn out",
-                }
-                for k, target_key in c_map.items():
-                    if c_data.get(k):
-                        cid = cond_by_name.get(target_key)
-                        if cid:
-                            all_condition_ids.append(cid)
-
-        heuristic_days = self.calculate_heuristic_days(
-            db, list(set(all_service_ids)), list(set(all_condition_ids)), primary_material
-        )
-        features = build_features_from_live_order(order_data)
-        row = [features.get(col, 0) for col in HISTORICAL_FEATURE_COLS]
-        rf_days = float(self.model.predict([row])[0])
-        priority = str(order_data.get("priorityLevel") or "").lower()
-        
-        # Genuine Random Forest prediction without artificial business-rule clamping.
-        # Bounded only by physiological service duration limits: min 1 day, max MAX_ML_COMPLETION_DAYS (60 days).
-        MAX_ESTIMATED_DAYS = 60.0
-
-        if priority == "rush":
-            rush_red = float(order_data.get("rushReductionDays") or 9)
-            rf_days = max(1.0, rf_days - rush_red)
-        
-        predicted_days = max(1, int(round(rf_days)))
-
-        result["ml_predicted_days"] = predicted_days
-        self.last_ml_days = result["ml_predicted_days"]
-        self.last_prediction_source = "random_forest"
-
-        if rf_days < 1 or rf_days > MAX_ESTIMATED_DAYS:
-            result["ml_status"] = "invalid"
-            result["ml_reason"] = (
-                f"Prediction outside valid service-duration range "
-                f"(1–{MAX_ESTIMATED_DAYS:.0f} days). Random Forest predicted {rf_days:.1f} days."
-            )
+        if getattr(self.model, "n_features_in_", 0) != 12:
+            result["ml_reason"] = f"Model feature dimension mismatch: expected 12, got {getattr(self.model, 'n_features_in_', 0)}"
+            result["ml_status"] = "error"
+            self.last_prediction_source = "standard_fallback"
             self.last_fallback_reason = result["ml_reason"]
-            self.last_ml_status = "invalid"
-            self.last_ml_reason = result["ml_reason"]
             return result
 
-        result["ml_status"] = "valid"
-        result["ml_reason"] = None
-        self.last_fallback_reason = None
-        self.last_ml_status = "valid"
-        self.last_ml_reason = None
-        return result
+        try:
+            vector = extract_feature_set_c_vector(order_data)
+            if len(vector) != 12:
+                raise ValueError(f"Feature Set C vector must contain exactly 12 items, got {len(vector)}")
+            if not np.all(np.isfinite(vector)):
+                raise ValueError("Feature vector contains NaN or infinite values")
+        except Exception as e:
+            result["ml_status"] = "error"
+            result["ml_reason"] = f"Feature extraction failed: {e}"
+            self.last_prediction_source = "standard_fallback"
+            self.last_fallback_reason = result["ml_reason"]
+            return result
+
+        try:
+            rf_days = float(self.model.predict([vector])[0])
+            MAX_ESTIMATED_DAYS = 60.0
+            rf_elapsed_days = max(1, int(round(rf_days)))
+
+            base_date = self._parse_base_date(order_data)
+            ml_predicted_date = base_date + timedelta(days=rf_elapsed_days)
+            # Narrowly defined safety check: ensure the predicted release date does not land on Sunday or confirmed closure
+            final_target_date = next_open_release_date(ml_predicted_date)
+            final_operational_days = max(1, (final_target_date.date() - base_date.date()).days)
+            safety_rollover_days = max(0, final_operational_days - rf_elapsed_days)
+
+            # Phase 4B.6 Final ML Target-Semantics & UI Fields
+            result["ml_raw_prediction_days"] = rf_days
+            result["ml_elapsed_days"] = rf_elapsed_days
+            result["ml_predicted_turnaround_days"] = final_operational_days
+            result["ml_predicted_release_date"] = final_target_date
+            result["ml_safety_rollover_days"] = safety_rollover_days
+            result["ml_has_safety_rollover"] = safety_rollover_days > 0
+
+            # Backward-compatible fields
+            result["ml_base_days"] = rf_elapsed_days
+            result["ml_rollover_days"] = safety_rollover_days
+            result["ml_has_rollover"] = safety_rollover_days > 0
+            result["ml_predicted_days"] = final_operational_days
+            result["ml_predicted_date"] = final_target_date
+            result["ml_raw_turnaround_days"] = rf_elapsed_days
+            result["ml_status"] = "valid"
+            result["model_status"] = "Active"
+            result["model_role"] = "OPERATIONAL_PREDICTION"
+            result["prediction_target"] = "Received-to-Ready-for-Release Elapsed Turnaround"
+            result["ml_reason"] = None
+
+            self.last_ml_days = final_operational_days
+            self.last_prediction_source = "random_forest"
+            self.last_fallback_reason = None
+            self.last_ml_status = "valid"
+            self.last_ml_reason = None
+            return result
+        except Exception as e:
+            result["ml_status"] = "error"
+            result["ml_reason"] = f"Inference exception: {e}"
+            self.last_prediction_source = "standard_fallback"
+            self.last_fallback_reason = result["ml_reason"]
+            return result
 
     def estimate_order_release(self, db: Session, order_data: dict) -> Dict[str, Any]:
         """
-        Dual result: official business-rule date + independent Random Forest prediction.
-        The official operational date is always the business-rule date.
+        Dual result: Standard Release Date (Business Rules) + ML Predicted Release Date (Active Random Forest).
+        The Standard Release Date represents the shop's established customer commitment.
+        The ML Predicted Release Date represents the active model's Ready-for-Release turnaround prediction.
         """
         base_date = self._parse_base_date(order_data)
-        official_days = self.calculate_business_rule_days(db, order_data)
+        try:
+            official_days = self.calculate_business_rule_days(db, order_data)
+        except Exception as e:
+            print(f"[BusinessRules] Warning: calculation error ({e}), serving 10-day fallback.")
+            official_days = 10
         if official_days < 0:
             official_days = 0
-        official_date = base_date + timedelta(days=official_days)
+        raw_official_date = base_date + timedelta(days=official_days)
+        official_date = next_open_release_date(raw_official_date) if official_days > 0 else base_date
+        final_official_days = max(1, (official_date.date() - base_date.date()).days) if official_days > 0 else 0
+        official_rollover_days = max(0, final_official_days - official_days) if official_days > 0 else 0
+
         ml = self.calculate_ml_prediction(db, order_data)
         ml_days = ml.get("ml_predicted_days")
-        ml_date = None
-        if ml.get("ml_status") == "valid" and ml_days is not None:
-            ml_date = base_date + timedelta(days=float(ml_days))
+        ml_date = ml.get("ml_predicted_date")
 
         estimate = {
             "authoritative": "business_rule",
+            "standard_base_days": official_days,
+            "standard_release_days": final_official_days,
+            "standard_release_date": official_date,
+            "standard_rollover_days": official_rollover_days,
+            "standard_has_rollover": official_rollover_days > 0,
             "business_rule_days": official_days,
             "business_rule_date": official_date,
+            "ml_raw_prediction_days": ml.get("ml_raw_prediction_days"),
+            "ml_elapsed_days": ml.get("ml_elapsed_days", ml.get("ml_base_days")),
+            "ml_predicted_turnaround_days": ml.get("ml_predicted_turnaround_days", ml_days),
+            "ml_base_days": ml.get("ml_base_days"),
+            "ml_predicted_release_date": ml.get("ml_predicted_release_date"),
+            "ml_rollover_days": ml.get("ml_rollover_days", 0),
+            "ml_has_rollover": ml.get("ml_has_rollover", False),
+            "ml_safety_rollover_days": ml.get("ml_safety_rollover_days", 0),
+            "ml_has_safety_rollover": ml.get("ml_has_safety_rollover", False),
             "ml_predicted_days": ml_days,
             "ml_predicted_date": ml_date,
             "ml_model": ml.get("ml_model") or "Random Forest Regression",
             "ml_status": ml.get("ml_status") or "unavailable",
-            "ml_source": ml.get("ml_source") or "random_forest",
+            "model_status": ml.get("model_status") or ("Active" if isinstance(self.model, RandomForestRegressor) else "Unavailable"),
+            "model_role": "OPERATIONAL_PREDICTION",
+            "prediction_target": "Received-to-Ready-for-Release Elapsed Turnaround",
+            "ml_source": "random_forest",
             "ml_reason": ml.get("ml_reason"),
             "model_loaded": isinstance(self.model, RandomForestRegressor),
         }
-        self.last_official_days = official_days
-        self.last_predicted_days = official_days
+        self.last_official_days = final_official_days
+        self.last_predicted_days = final_official_days
         self.last_estimate = estimate
         return estimate
 

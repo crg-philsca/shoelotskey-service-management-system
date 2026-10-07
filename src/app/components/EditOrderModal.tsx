@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/app/components/ui/dialog';
 import { Label } from '@/app/components/ui/label';
 import { Input } from '@/app/components/ui/input';
@@ -14,7 +14,7 @@ import { useServices } from '../context/ServiceContext';
 import { useOrderCalculations } from '../hooks/useOrderCalculations';
 import { CreatableCombobox } from './ui/creatable-combobox';
 import { CUSTOM_OPTION_KEYS } from '@/app/lib/customOptions';
-import { isAddonVisibleForBaseServices, applyColorCountExclusive, syncColorRenewalAddons, isColorCountAddon } from '@/app/lib/serviceCompatibility';
+import { isAddonVisibleForBaseServices, applyColorCountExclusive, syncColorRenewalAddons, syncFullReglueAddons, isColorCountAddon, isFullReglueSoleAddon } from '@/app/lib/serviceCompatibility';
 import { validateCustomerName, CUSTOMER_NAME_MAX_LENGTH } from '@/app/lib/customerValidation';
 
 // Dropdown options
@@ -273,6 +273,78 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
 
     const formatPeso = (val: number) => `₱${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+    // Dynamic calculations accounting for existing retail products and discounts
+    const existingRetailProducts = useMemo(() => {
+        if (!order?.inventoryUsed) return [];
+        const inv = Array.isArray(order.inventoryUsed)
+            ? order.inventoryUsed
+            : (typeof order.inventoryUsed === 'string'
+                ? (() => { try { const p = JSON.parse(order.inventoryUsed); return Array.isArray(p) ? p : []; } catch { return []; } })()
+                : []);
+        return inv.filter((item: any) => Boolean(item.isRetail));
+    }, [order?.inventoryUsed]);
+
+    const existingRetailTotal = useMemo(() => {
+        return existingRetailProducts.reduce((sum: number, item: any) => sum + ((Number(item.quantity) || 0) * (Number(item.price) || 0)), 0);
+    }, [existingRetailProducts]);
+
+    const rushFeeTotal = priorityLevel === 'rush' ? calculations.totals.rushFee : 0;
+    const grossSubtotal = (shoes.length === 0 && (Number(order?.grandTotal) || 0) > 0)
+        ? (Number(order?.grandTotal) || 0)
+        : (calculations.totals.baseTotal + calculations.totals.addOnsTotal + existingRetailTotal + rushFeeTotal);
+
+    const discountAmount = useMemo(() => {
+        if (!order) return 0;
+        const directDiscount = Number((order as any).discountAmount || (order as any).discount || 0);
+        const directDiscountPercent = Number((order as any).discountPercent || 0);
+        if (directDiscountPercent > 0) {
+            return Math.round(grossSubtotal * (directDiscountPercent / 100));
+        }
+        if (order.discountType === 'senior' || order.discountType === 'pwd') {
+            return Math.round(grossSubtotal * 0.20);
+        }
+        if (order.discountType === 'student') {
+            return Math.round(grossSubtotal * 0.10);
+        }
+        return Math.min(directDiscount, grossSubtotal);
+    }, [order, grossSubtotal]);
+
+    const finalGrandTotal = Math.max(0, grossSubtotal - discountAmount);
+
+    const alreadyDeposited = useMemo(() => {
+        if (!order) return 0;
+        if (Array.isArray(order.paymentHistory) && order.paymentHistory.length > 0) {
+            return order.paymentHistory.reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0);
+        }
+        const dp = Number((order as any).depositAmount);
+        if (Number.isFinite(dp) && dp > 0) return dp;
+        if (order.paymentStatus === 'downpayment') {
+            return Number(order.amountReceived) || (Number(order.grandTotal) / 2);
+        }
+        return 0;
+    }, [order]);
+
+    const dynamicBalance = useMemo(() => {
+        if (paymentStatus === 'fully-paid') return 0;
+        if (paymentStatus === 'downpayment') {
+            const depositToUse = alreadyDeposited > 0 ? alreadyDeposited : (finalGrandTotal / 2);
+            return Math.max(0, finalGrandTotal - depositToUse);
+        }
+        return finalGrandTotal;
+    }, [paymentStatus, finalGrandTotal, alreadyDeposited]);
+
+    const dynamicChange = useMemo(() => {
+        const rawRcv = parseFloat(amountReceived) || 0;
+        if (paymentStatus === 'fully-paid') {
+            return Math.max(0, rawRcv - finalGrandTotal);
+        }
+        if (paymentStatus === 'downpayment') {
+            const requiredDp = alreadyDeposited > 0 ? alreadyDeposited : (finalGrandTotal / 2);
+            return Math.max(0, rawRcv - requiredDp);
+        }
+        return 0;
+    }, [amountReceived, paymentStatus, finalGrandTotal, alreadyDeposited]);
+
 
     const formatContactNumber = (value: string) => {
         const digitsOnly = value.replace(/\D/g, '').slice(0, 11);
@@ -327,9 +399,45 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
             }
 
             // Material, Size, Color, and Model are optional when editing order details
-            const hasMissingService = shoes.some((shoe) => !shoe.baseService || shoe.baseService.length === 0);
-            if (hasMissingService) {
-                toast.error('At least one Base Service must be selected for every item.');
+            if (shoes.length > 0) {
+                const hasMissingService = shoes.some((shoe) => !shoe.baseService || shoe.baseService.length === 0);
+                if (hasMissingService) {
+                    toast.error('At least one Base Service must be selected for every item.');
+                    isSubmittingRef.current = false;
+                    setIsSubmitting(false);
+                    return;
+                }
+            }
+
+            // Color Renewal specification validation: requires 2 Colors or 3 Colors, never both
+            const shoeMissingColorCount = shoes.find(shoe => {
+                const base = shoe.baseService || [];
+                if (base.includes('Color Renewal')) {
+                    const addOns = shoe.addOns || [];
+                    const has2 = addOns.some(a => (typeof a === 'string' ? a : a.name) === '2 Colors');
+                    const has3 = addOns.some(a => (typeof a === 'string' ? a : a.name) === '3 Colors');
+                    return !has2 && !has3;
+                }
+                return false;
+            });
+            if (shoeMissingColorCount) {
+                toast.error('Color Renewal requires specifying the color option (2 Colors or 3 Colors).');
+                isSubmittingRef.current = false;
+                setIsSubmitting(false);
+                return;
+            }
+
+            // Full Reglue specification validation: requires at least one sole section (Midsole, Undersole, or both)
+            const shoeMissingFullReglueSpec = shoes.find(shoe => {
+                const base = shoe.baseService || [];
+                if (base.includes('Full Reglue')) {
+                    const addOns = shoe.addOns || [];
+                    return !addOns.some(a => isFullReglueSoleAddon(typeof a === 'string' ? a : a.name));
+                }
+                return false;
+            });
+            if (shoeMissingFullReglueSpec) {
+                toast.error('Full Reglue requires specifying the reglue section (Midsole, Undersole, or both).');
                 isSubmittingRef.current = false;
                 setIsSubmitting(false);
                 return;
@@ -409,9 +517,13 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
             
             baseServiceFee: calculations.totals.baseTotal,
             addOnsTotal: calculations.totals.addOnsTotal,
-            grandTotal: calculations.totals.grandTotal,
-            balance: calculations.totals.remainingBalance,
-            change: calculations.totals.change
+            grossTotal: grossSubtotal,
+            retailTotal: existingRetailTotal,
+            discountAmount: discountAmount,
+            grandTotal: finalGrandTotal,
+            balance: dynamicBalance,
+            change: dynamicChange,
+            depositAmount: paymentStatus === 'downpayment' ? (alreadyDeposited > 0 ? alreadyDeposited : (finalGrandTotal / 2)) : undefined,
         };
         
         if (updates.items && updates.items.length > 0) {
@@ -651,19 +763,10 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                             {shoes.map((shoe, index) => {
                                 const isExpanded = expandedShoeId === shoe.id.toString() || shoes.length === 1;
                                 
-                                const allowedAddons = calculations.addOnServices.filter(addon => isAddonVisibleForBaseServices(addon.name, shoe.baseService || [], services)).sort((a, b) => {
-                                    const baseServicesArr = shoe.baseService || [];
-                                    const hasColorRenewal = baseServicesArr.some((s: string) => s.includes('Color Renewal'));
-                                    const hasReglue = baseServicesArr.some((s: string) => s.toLowerCase().includes('reglue'));
-                                    
-                                    const getPriority = (addonName: string) => {
-                                        if (hasColorRenewal && (addonName === '2 Colors' || addonName === '3 Colors')) return 2;
-                                        if (hasReglue && (addonName.toLowerCase().includes('midsole') || addonName.toLowerCase().includes('undersole'))) return 1;
-                                        return 0;
-                                    };
-                                    
-                                    return getPriority(b.name) - getPriority(a.name);
-                                }).map(a => a.name);
+                                const allowedAddons = calculations.addOnServices
+                                    .filter(addon => isAddonVisibleForBaseServices(addon.name, shoe.baseService || [], services))
+                                    .sort((a, b) => (Number(a.sortOrder) || 999) - (Number(b.sortOrder) || 999))
+                                    .map(a => a.name);
                                 
                                 return (
                                     <div key={shoe.id} className="bg-white rounded-xl shadow-sm border border-gray-50 overflow-hidden">
@@ -846,14 +949,22 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                                                                     if (s.name === 'Full Reglue') {
                                                                                         newServices = newServices.filter((srv: string) => srv !== 'Minor Reglue');
                                                                                     }
+                                                                                    const requiresCleaning = ['Minor Reglue', 'Full Reglue', 'Color Renewal'];
+                                                                                    if (requiresCleaning.includes(s.name) && !newServices.includes('Basic Cleaning')) {
+                                                                                        newServices.push('Basic Cleaning');
+                                                                                    }
                                                                                 } else {
                                                                                     newServices = newServices.filter((srv: string) => srv !== s.name);
+                                                                                    if (s.name === 'Basic Cleaning') {
+                                                                                        const requiresCleaning = ['Minor Reglue', 'Full Reglue', 'Color Renewal'];
+                                                                                        newServices = newServices.filter((srv: string) => !requiresCleaning.includes(srv));
+                                                                                    }
                                                                                 }
                                                                                 
                                                                                 const newAllowedAddons = calculations.addOnServices.filter(addon => isAddonVisibleForBaseServices(addon.name, newServices, services)).map(a => a.name);
                                                                                 
-                                                                                let newAddons = [...(shoe.addOns || [])].filter((a: any) => newAllowedAddons.includes(a.name));
-                                                                                newAddons = syncColorRenewalAddons(newAddons, newServices);
+                                                                                let newAddons = [...(shoe.addOns || [])].filter((a: any) => newAllowedAddons.includes(typeof a === 'string' ? a : a.name));
+                                                                                newAddons = syncFullReglueAddons(syncColorRenewalAddons(newAddons, newServices), newServices);
                                                                                 
                                                                                 updateShoe(shoe.id, { baseService: newServices, addOns: newAddons });
                                                                             }}
@@ -939,24 +1050,41 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                                                                             {addonName}
                                                                                         </label>
                                                                                         <div className="flex items-center justify-between gap-2 mt-1.5 min-w-0">
-                                                                                            <input
-                                                                                                type="number"
-                                                                                                min="1"
-                                                                                                value={quantity}
-                                                                                                onChange={(e) => {
-                                                                                                    const val = e.target.value;
-                                                                                                    const newQuantity = val === '' ? 1 : Math.max(1, parseInt(val));
-                                                                                                    const newAddOns = (shoe.addOns || []).map((a: any) => {
-                                                                                                        const aName = typeof a === 'string' ? a : a.name;
-                                                                                                        return aName === addonName ? { name: addonName, quantity: newQuantity } : a;
-                                                                                                    });
-                                                                                                    updateShoe(shoe.id, { addOns: newAddOns });
-                                                                                                }}
-                                                                                                className="w-9 h-5 border border-gray-200 rounded text-[10px] font-bold text-center focus:outline-none focus:border-red-500 bg-white [&::-webkit-inner-spin-button]:opacity-100 [&::-webkit-inner-spin-button]:h-[16px] [&::-webkit-inner-spin-button]:my-auto px-0"
-                                                                                            />
-                                                                                            <span className="text-[10px] font-black text-red-600 shrink-0">
-                                                                                                ₱{addonData.price * quantity}
-                                                                                            </span>
+                                                                                            {Boolean(addonData.hasSpinner ?? (addonName.toLowerCase() === 'unyellowing' || addonName.toLowerCase() === 'white paint')) ? (
+                                                                                                <input
+                                                                                                    type="number"
+                                                                                                    min="1"
+                                                                                                    value={quantity}
+                                                                                                    onChange={(e) => {
+                                                                                                        const val = e.target.value;
+                                                                                                        const newQuantity = val === '' ? 1 : Math.max(1, parseInt(val));
+                                                                                                        const newAddOns = (shoe.addOns || []).map((a: any) => {
+                                                                                                            const aName = typeof a === 'string' ? a : a.name;
+                                                                                                            return aName === addonName ? { name: addonName, quantity: newQuantity } : a;
+                                                                                                        });
+                                                                                                        updateShoe(shoe.id, { addOns: newAddOns });
+                                                                                                    }}
+                                                                                                    className="w-9 h-5 border border-gray-200 rounded text-[10px] font-bold text-center focus:outline-none focus:border-red-500 bg-white [&::-webkit-inner-spin-button]:opacity-100 [&::-webkit-inner-spin-button]:h-[16px] [&::-webkit-inner-spin-button]:my-auto px-0"
+                                                                                                />
+                                                                                            ) : <div />}
+                                                                                            {(() => {
+                                                                                                const isFR = (shoe.baseService || []).includes('Full Reglue');
+                                                                                                const isSole = isFullReglueSoleAddon(addonName);
+                                                                                                const soleAddons = (shoe.addOns || []).filter((a: any) => isFullReglueSoleAddon(typeof a === 'string' ? a : a.name));
+                                                                                                const isFirstSole = (typeof soleAddons[0] === 'string' ? soleAddons[0] : soleAddons[0]?.name) === addonName;
+                                                                                                if (isFR && isSole && (soleAddons.length === 1 || isFirstSole)) {
+                                                                                                    return (
+                                                                                                        <span className="text-[10px] font-black text-red-600 shrink-0 ml-auto">
+                                                                                                            ₱0.00
+                                                                                                        </span>
+                                                                                                    );
+                                                                                                }
+                                                                                                return (
+                                                                                                    <span className="text-[10px] font-black text-red-600 shrink-0 ml-auto">
+                                                                                                        ₱{Number(addonData.price * quantity).toFixed(2)}
+                                                                                                    </span>
+                                                                                                );
+                                                                                            })()}
                                                                                         </div>
                                                                                     </div>
                                                                                 </div>
@@ -1027,13 +1155,20 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                 );
                             })}
                             
+                            {shoes.length === 0 && (
+                                <div className="p-4 border border-dashed border-gray-200 rounded-xl text-center bg-gray-50/50 my-2">
+                                    <p className="text-xs text-gray-500 font-medium">No shoe or service items currently recorded for this order.</p>
+                                    <p className="text-[11px] text-gray-400 mt-0.5">Click below to add a pair and select services from the Service Management catalog.</p>
+                                </div>
+                            )}
+
                             <Button 
                                 type="button" 
                                 variant="outline" 
                                 onClick={addShoe}
                                 className="w-full h-10 border-dashed border-gray-200 text-gray-500 hover:text-red-600 hover:bg-red-50 hover:border-red-200 transition-colors bg-transparent rounded-xl text-xs font-black uppercase tracking-widest mt-2"
                             >
-                                <Plus className="w-3.5 h-3.5 mr-2" /> Add Another Shoe
+                                <Plus className="w-3.5 h-3.5 mr-2" /> {shoes.length === 0 ? 'Add Shoe / Pair' : 'Add Another Shoe'}
                             </Button>
                         </div>
                     </div>
@@ -1049,9 +1184,10 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                         onValueChange={(value) => {
                                             setPaymentStatus(value);
                                             if (value === 'downpayment') {
-                                                setAmountReceived((calculations.totals.grandTotal / 2).toFixed(2));
+                                                const target = alreadyDeposited > 0 ? alreadyDeposited : (finalGrandTotal / 2);
+                                                setAmountReceived(target.toFixed(2));
                                             } else if (value === 'fully-paid') {
-                                                setAmountReceived(calculations.totals.grandTotal.toFixed(2));
+                                                setAmountReceived(finalGrandTotal.toFixed(2));
                                             }
                                         }}
                                     >
@@ -1104,7 +1240,7 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                             readOnly
                                             type="text"
                                             className={`${INPUT_STYLE} !text-xs font-bold pl-6 ${paymentStatus === 'downpayment' ? 'bg-gray-100/50 text-gray-500 cursor-not-allowed border-gray-100/50' : 'bg-white text-gray-900 border-gray-100'}`}
-                                            value={formatPeso(paymentStatus === 'downpayment' ? calculations.totals.grandTotal / 2 : calculations.totals.grandTotal).replace('₱', '')}
+                                            value={formatPeso(paymentStatus === 'downpayment' ? (alreadyDeposited > 0 ? alreadyDeposited : finalGrandTotal / 2) : finalGrandTotal).replace('₱', '')}
                                         />
                                     </div>
                                 </div>
@@ -1153,7 +1289,7 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                             readOnly
                                             type="text"
                                             className={`${INPUT_STYLE} !text-xs font-bold text-green-600 pl-6 bg-green-50/50 border-green-100 cursor-default`}
-                                            value={formatPeso(calculations.totals.change).replace('₱', '')}
+                                            value={formatPeso(dynamicChange).replace('₱', '')}
                                         />
                                     </div>
                                 </div>
@@ -1167,7 +1303,7 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                                 readOnly
                                                 type="text"
                                                 className={`${INPUT_STYLE} !text-xs font-bold text-red-500 pl-6 bg-red-50/50 border-red-100 cursor-default`}
-                                                value={formatPeso(calculations.totals.remainingBalance).replace('₱', '')}
+                                                value={formatPeso(dynamicBalance).replace('₱', '')}
                                             />
                                         </div>
                                     </div>
@@ -1180,23 +1316,37 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                 <span className="text-gray-500 font-medium">Base Service Total</span>
                                 <span className="font-bold text-gray-800">{formatPeso(calculations.totals.baseTotal)}</span>
                             </div>
-                            {calculations.totals.rushFee > 0 && (
+                            {rushFeeTotal > 0 && (
                                 <div className="flex justify-between items-center text-[13px]">
                                     <span className="text-gray-500 font-medium">{shoes.length > 1 ? 'Rush Fee Total' : 'Rush Fee'}</span>
-                                    <span className="font-bold text-gray-800">{formatPeso(calculations.totals.rushFee)}</span>
+                                    <span className="font-bold text-gray-800">{formatPeso(rushFeeTotal)}</span>
                                 </div>
                             )}
                             <div className="flex justify-between items-center text-[13px]">
                                 <span className="text-gray-500 font-medium">Add-ons Subtotal</span>
                                 <span className="font-bold text-gray-800">{formatPeso(calculations.totals.addOnsTotal)}</span>
                             </div>
+                            {existingRetailTotal > 0 && (
+                                <div className="flex justify-between items-center text-[13px]">
+                                    <span className="text-gray-500 font-medium">Retail Products Total</span>
+                                    <span className="font-bold text-emerald-700">{formatPeso(existingRetailTotal)}</span>
+                                </div>
+                            )}
+                            {discountAmount > 0.01 && (
+                                <div className="flex justify-between items-center text-[13px] text-emerald-700 bg-emerald-50 px-2.5 py-1.5 rounded-lg border border-emerald-200">
+                                    <span className="text-xs font-bold uppercase tracking-wide flex items-center gap-1.5">
+                                        <span>{order?.discountName || (order?.discountType ? `${order.discountType.toUpperCase()} Discount` : 'Discount')}</span>
+                                    </span>
+                                    <span className="font-black font-mono text-xs">-{formatPeso(discountAmount)}</span>
+                                </div>
+                            )}
                             <div className="flex justify-between items-center text-[13px] pt-2 border-t border-gray-100">
                                 <span className="text-gray-500 font-medium">Total Quantity (Per Unit)</span>
                                 <span className="font-bold text-gray-800">{shoes.reduce((sum, s) => sum + (s.quantity || 1), 0)} {shoes.reduce((sum, s) => sum + (s.quantity || 1), 0) === 1 ? 'Pair' : 'Pairs'}</span>
                             </div>
                             <div className="pt-3 mt-auto border-t border-solid border-gray-500 flex justify-between items-baseline">
                                 <span className="text-sm font-black text-gray-700 uppercase tracking-tight">Grand Total</span>
-                                <span className="text-2xl font-black text-red-600 leading-none">{formatPeso(calculations.totals.grandTotal)}</span>
+                                <span className="text-2xl font-black text-red-600 leading-none">{formatPeso(finalGrandTotal)}</span>
                             </div>
                         </div>
                     </div>

@@ -5,17 +5,18 @@ import { Input } from '@/app/components/ui/input';
 import { useInventory } from '@/app/context/InventoryContext';
 import JobOrderCombobox from '@/app/components/JobOrderCombobox';
 import InventoryItemCombobox from '@/app/components/InventoryItemCombobox';
-import { Scale, AlertTriangle, ArrowDownRight, ArrowUpRight, ShoppingCart, RotateCcw, SlidersHorizontal, Edit3, X, Loader2, Package, ChevronDown, Check } from 'lucide-react';
+import { Scale, AlertTriangle, ArrowDownRight, ArrowUpRight, ShoppingCart, RotateCcw, SlidersHorizontal, Edit3, X, Loader2, Package, ChevronDown, Check, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { getInventoryPresentation } from '@/app/lib/inventoryPresentation';
 import { formatPeso } from '@/app/lib/currency';
+import { hasPermission } from '@/app/lib/permissions';
 
 interface UpdateStockModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     initialItem?: any;
     initialOrder?: any;
-    user?: { username?: string; token?: string; role?: string };
+    user?: { username?: string; token?: string; role?: string; permissions?: string[] };
 }
 
 type TabMode = 'use' | 'add' | 'balance';
@@ -38,7 +39,7 @@ const ADD_REASON_PRESETS = [
 ] as const;
 
 const BALANCE_REASON_PRESETS = [
-    'Physical Count Reconciliation',
+    'Manual Stock Adjustment',
     'Periodic Audit Recount',
     'Discrepancy Correction',
 ] as const;
@@ -156,9 +157,22 @@ export default function UpdateStockModal({ open, onOpenChange, initialItem, init
     const [balancePackageQty, setBalancePackageQty] = useState<string>('');
     const [balanceRemainder, setBalanceRemainder] = useState<string>('');
     const [physicalCount, setPhysicalCount] = useState<string>('');
-    const [balanceReason, setBalanceReason] = useState<string>('Physical Count Reconciliation');
+    const [balanceReason, setBalanceReason] = useState<string>('Manual Stock Adjustment');
+
+    const userRole = ((_user?.role || '') as string).toLowerCase().trim();
+    const userUsername = ((_user?.username || '') as string).toLowerCase().trim();
+    const isOwnerOrAdmin = userRole === 'owner' || userRole === 'admin' || userUsername === 'admin';
+
+    // Staff Balance Override authorization state
+    const [authMethod, setAuthMethod] = useState<'code' | 'credentials'>('code');
+    const [authCode, setAuthCode] = useState<string>('');
+    const [authUsername, setAuthUsername] = useState<string>('');
+    const [authPassword, setAuthPassword] = useState<string>('');
 
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const canUseStock = _user ? hasPermission(_user, 'inventory.use_stock') : true;
+    const canAddStock = _user ? hasPermission(_user, 'inventory.add_stock') : true;
+    const canSetBalance = _user ? hasPermission(_user, 'inventory.adjust_balance') : true;
 
     // Initialize state on modal open
     useEffect(() => {
@@ -177,7 +191,15 @@ export default function UpdateStockModal({ open, onOpenChange, initialItem, init
                 setSelectedOrderId('');
             }
 
-            setTab('use');
+            if (canUseStock) {
+                setTab('use');
+            } else if (canAddStock) {
+                setTab('add');
+            } else if (canSetBalance) {
+                setTab('balance');
+            } else {
+                setTab('use');
+            }
             setUseUnitMode('base');
             setUseAmount('1');
             setUsePackageQty('1');
@@ -188,9 +210,13 @@ export default function UpdateStockModal({ open, onOpenChange, initialItem, init
             setRecordExpense(true);
             setAddReason('New Stock Purchase');
             setBalanceUnitMode('base');
-            setBalanceReason('Physical Count Reconciliation');
+            setBalanceReason('Manual Stock Adjustment');
+            setAuthCode('');
+            setAuthUsername('');
+            setAuthPassword('');
+            setAuthMethod('code');
         }
-    }, [open, initialItem, initialOrder, inventoryData]);
+    }, [open, initialItem, initialOrder, inventoryData, canUseStock, canAddStock, canSetBalance]);
 
     const activeItem = useMemo(() => {
         return inventoryData.find(i => String(i.id) === selectedItemId) || null;
@@ -334,11 +360,40 @@ export default function UpdateStockModal({ open, onOpenChange, initialItem, init
                     return;
                 }
 
+                if (!effectiveBalanceReason || !effectiveBalanceReason.trim()) {
+                    toast.error('A non-empty reason is mandatory for manual balance adjustments.');
+                    setIsSubmitting(false);
+                    return;
+                }
+
+                if (!isOwnerOrAdmin) {
+                    if (authMethod === 'code' && !authCode.trim()) {
+                        toast.error('Store Owner authorization code is required for Staff balance adjustments.');
+                        setIsSubmitting(false);
+                        return;
+                    }
+                    if (authMethod === 'credentials') {
+                        if (!authUsername.trim()) {
+                            toast.error('Owner username is required.');
+                            setIsSubmitting(false);
+                            return;
+                        }
+                        if (!authPassword) {
+                            toast.error('Owner password is required.');
+                            setIsSubmitting(false);
+                            return;
+                        }
+                    }
+                }
+
                 await updateStock(activeItem.id, physicalCountNum, {
                     action: 'set_balance',
-                    reason: effectiveBalanceReason,
+                    reason: effectiveBalanceReason.trim(),
                     unit_mode: balanceUnitMode,
-                    packages: balanceUnitMode === 'package' ? (parseFloat(balancePackageQty) || 0) : undefined
+                    packages: balanceUnitMode === 'package' ? (parseFloat(balancePackageQty) || 0) : undefined,
+                    authorization_code: !isOwnerOrAdmin && authMethod === 'code' ? authCode.trim() : undefined,
+                    authorizer_username: !isOwnerOrAdmin && authMethod === 'credentials' ? authUsername.trim() : undefined,
+                    authorizer_password: !isOwnerOrAdmin && authMethod === 'credentials' ? authPassword : undefined,
                 } as any);
 
                 toast.success(`Stock balance for ${activeItem.name} reconciled to ${physicalCountNum.toLocaleString()} ${stockUnit} (${balanceDifference >= 0 ? '+' : ''}${balanceDifference.toLocaleString()} adjustment).`);
@@ -454,11 +509,15 @@ export default function UpdateStockModal({ open, onOpenChange, initialItem, init
                                 <div className="grid grid-cols-3 gap-1.5 p-1 bg-gray-100 rounded-xl border border-gray-200/60">
                                     <button
                                         type="button"
+                                        disabled={!canUseStock}
                                         onClick={() => setTab('use')}
-                                        className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                                            tab === 'use'
-                                                ? 'bg-white text-red-600 shadow-sm font-black'
-                                                : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
+                                        title={canUseStock ? "Record stock usage" : "Permission required: Edit Inventory (Use Stock)"}
+                                        className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                                            !canUseStock
+                                                ? 'opacity-40 cursor-not-allowed text-gray-400'
+                                                : tab === 'use'
+                                                    ? 'bg-white text-red-600 shadow-sm font-black cursor-pointer'
+                                                    : 'text-gray-600 hover:text-gray-900 hover:bg-white/50 cursor-pointer'
                                         }`}
                                     >
                                         <ArrowDownRight className="h-3.5 w-3.5 text-red-500" />
@@ -466,11 +525,15 @@ export default function UpdateStockModal({ open, onOpenChange, initialItem, init
                                     </button>
                                     <button
                                         type="button"
+                                        disabled={!canAddStock}
                                         onClick={() => setTab('add')}
-                                        className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                                            tab === 'add'
-                                                ? 'bg-white text-emerald-600 shadow-sm font-black'
-                                                : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
+                                        title={canAddStock ? "Add or restock items" : "Permission required: Add / Restock Inventory"}
+                                        className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                                            !canAddStock
+                                                ? 'opacity-40 cursor-not-allowed text-gray-400'
+                                                : tab === 'add'
+                                                    ? 'bg-white text-emerald-600 shadow-sm font-black cursor-pointer'
+                                                    : 'text-gray-600 hover:text-gray-900 hover:bg-white/50 cursor-pointer'
                                         }`}
                                     >
                                         <ArrowUpRight className="h-3.5 w-3.5 text-emerald-500" />
@@ -478,11 +541,15 @@ export default function UpdateStockModal({ open, onOpenChange, initialItem, init
                                     </button>
                                     <button
                                         type="button"
+                                        disabled={!canSetBalance}
                                         onClick={() => setTab('balance')}
-                                        className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                                            tab === 'balance'
-                                                ? 'bg-white text-indigo-600 shadow-sm font-black'
-                                                : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
+                                        title={canSetBalance ? "Reconcile physical stock count" : "Permission required: Edit Inventory (Set Balance)"}
+                                        className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                                            !canSetBalance
+                                                ? 'opacity-40 cursor-not-allowed text-gray-400'
+                                                : tab === 'balance'
+                                                    ? 'bg-white text-indigo-600 shadow-sm font-black cursor-pointer'
+                                                    : 'text-gray-600 hover:text-gray-900 hover:bg-white/50 cursor-pointer'
                                         }`}
                                     >
                                         <Scale className="h-3.5 w-3.5 text-indigo-500" />
@@ -911,15 +978,92 @@ export default function UpdateStockModal({ open, onOpenChange, initialItem, init
                                         {/* Reason Dropdown + Direct Typing Field */}
                                         <div className="space-y-1.5">
                                             <label className="text-[10px] font-black uppercase text-gray-500">
-                                                Reason for Count Update / Note <span className="text-gray-400 font-normal lowercase">(choose preset or type directly)</span>
+                                                Reason for Count Update / Note <span className="text-red-500">*</span> <span className="text-gray-400 font-normal lowercase">(mandatory)</span>
                                             </label>
                                             <ReasonCombobox
                                                 value={balanceReason}
                                                 onChange={setBalanceReason}
                                                 presets={BALANCE_REASON_PRESETS}
-                                                placeholder="Select preset or type reconciliation reason..."
+                                                placeholder="Select preset or type adjustment reason..."
                                             />
                                         </div>
+
+                                        {/* Staff Balance Override: Owner Authorization Requirement */}
+                                        {!isOwnerOrAdmin && (
+                                            <div className="p-3 bg-red-50/70 border border-red-200 rounded-xl space-y-3">
+                                                <div className="flex items-center justify-between pb-1.5 border-b border-red-200/60">
+                                                    <div className="flex items-center gap-1.5 text-xs font-black uppercase text-red-700 tracking-wider">
+                                                        <Lock className="h-3.5 w-3.5 text-red-600" />
+                                                        <span>Owner Only Verification</span>
+                                                    </div>
+                                                    <div className="flex items-center bg-white border border-red-200 rounded-lg p-0.5">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setAuthMethod('code')}
+                                                            className={`px-2 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
+                                                                authMethod === 'code' ? 'bg-red-600 text-white' : 'text-gray-600 hover:bg-gray-50'
+                                                            }`}
+                                                        >
+                                                            Auth Code
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setAuthMethod('credentials')}
+                                                            className={`px-2 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
+                                                                authMethod === 'credentials' ? 'bg-red-600 text-white' : 'text-gray-600 hover:bg-gray-50'
+                                                            }`}
+                                                        >
+                                                            Credentials
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                {authMethod === 'code' ? (
+                                                    <div className="space-y-1">
+                                                        <label className="text-[10px] font-black uppercase text-gray-600">
+                                                            Store Authorization Code <span className="text-red-500">*</span>
+                                                        </label>
+                                                        <Input
+                                                            type="password"
+                                                            value={authCode}
+                                                            onChange={(e) => setAuthCode(e.target.value)}
+                                                            placeholder="Enter store authorization code"
+                                                            className="h-8 border-red-200 bg-white focus:border-red-500 rounded-lg text-xs font-semibold"
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                        <div className="space-y-1">
+                                                            <label className="text-[10px] font-black uppercase text-gray-600">
+                                                                Owner Username <span className="text-red-500">*</span>
+                                                            </label>
+                                                            <Input
+                                                                type="text"
+                                                                value={authUsername}
+                                                                onChange={(e) => setAuthUsername(e.target.value)}
+                                                                placeholder="e.g. admin or owner"
+                                                                className="h-8 border-red-200 bg-white focus:border-red-500 rounded-lg text-xs font-semibold"
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <label className="text-[10px] font-black uppercase text-gray-600">
+                                                                Owner Password <span className="text-red-500">*</span>
+                                                            </label>
+                                                            <Input
+                                                                type="password"
+                                                                value={authPassword}
+                                                                onChange={(e) => setAuthPassword(e.target.value)}
+                                                                placeholder="Owner password"
+                                                                className="h-8 border-red-200 bg-white focus:border-red-500 rounded-lg text-xs font-semibold"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                <p className="text-[9.5px] text-red-600/90 font-medium leading-tight">
+                                                    Manual stock adjustment overwrites ledger balance and requires explicit Owner-only verification.
+                                                </p>
+                                            </div>
+                                        )}
 
                                         {/* Live Reconciliation Math */}
                                         <div className="p-3 bg-red-50/40 border border-red-100 rounded-xl space-y-1.5 text-xs">

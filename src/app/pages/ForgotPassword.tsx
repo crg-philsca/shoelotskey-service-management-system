@@ -18,8 +18,16 @@ export default function ForgotPassword() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) {
+    const cleanEmail = email.trim();
+    if (!cleanEmail) {
       toast.error('Please enter your email.');
+      return;
+    }
+
+    // Security Inspection: Block script and injection patterns
+    const INJECTION_REGEX = /<[^>]*>|javascript:|data:|on\w+\s*=|('|--|;|\/\*)/i;
+    if (INJECTION_REGEX.test(cleanEmail)) {
+      toast.error('Security Warning: Illegal characters or script tags are not allowed.');
       return;
     }
 
@@ -51,13 +59,15 @@ export default function ForgotPassword() {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-gradient-to-r from-red-200 via-white to-red-200 overflow-y-auto">
+    <main className="h-screen flex flex-col bg-gradient-to-r from-red-200 via-white to-red-200 overflow-y-auto" role="main">
       <div className="flex flex-col flex-grow items-center justify-center w-full py-8 px-2 sm:px-4 md:px-6 mt-10">
         <Card className="w-full max-w-xs sm:max-w-sm md:max-w-md shadow-2xl mx-auto">
           <CardHeader className="space-y-0 text-center pb-0 mb-0" style={{ marginBottom: '-4px', paddingBottom: 0 }}>
             <img
-              src="/logo.png"
+              src="/logo.webp"
               alt="Shoelotskey logo"
+              width="144"
+              height="144"
               className="h-24 xs:h-28 sm:h-32 md:h-36 w-auto object-contain mx-auto transform -translate-x-0.5"
               loading="eager"
               decoding="async"
@@ -93,7 +103,7 @@ export default function ForgotPassword() {
                     />
                   </div>
                 </div>
-                <Button type="submit" disabled={loading} className="w-full bg-red-600 hover:bg-red-700 cursor-pointer text-base mt-2">
+                <Button type="submit" disabled={loading} className="w-full bg-red-700 hover:bg-red-800 text-white cursor-pointer text-base mt-2">
                   {loading ? 'Sending...' : 'Send'}
                 </Button>
               </form>
@@ -101,7 +111,7 @@ export default function ForgotPassword() {
             <div className="mt-4 flex justify-center">
               <button
                 type="button"
-                className="text-sm text-black hover:text-red-600 hover:underline transition-colors font-normal cursor-pointer"
+                className="text-sm text-black hover:text-red-700 hover:underline transition-colors font-normal cursor-pointer"
                 onClick={() => { navigate('/login', { replace: true }); }}
               >
                 Back to Login
@@ -113,6 +123,6 @@ export default function ForgotPassword() {
       <div className="flex-shrink-0">
         <p className="text-xs text-gray-700 text-center py-4">© 2026 Shoelotskey Villamor-Pasay • Developed by AGS AviaTech</p>
       </div>
-    </div>
+    </main>
   );
 }

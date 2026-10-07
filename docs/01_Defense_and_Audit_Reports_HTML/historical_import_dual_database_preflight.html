@@ -1,0 +1,1356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shoelotskey — Dual-Database Historical Import &amp; Offline Defense Preflight Report</title>
+  <style>
+    :root {
+      --primary: #0f172a;
+      --accent: #2563eb;
+      --success: #16a34a;
+      --warning: #ca8a04;
+      --danger: #dc2626;
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --border: #e2e8f0;
+      --text: #1e293b;
+      --text-muted: #64748b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 30px 20px;
+    }
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    header {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: #fff;
+      padding: 32px 40px;
+      border-radius: 12px;
+      box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.2);
+      margin-bottom: 28px;
+    }
+    .header-badge {
+      display: inline-block;
+      background: rgba(37, 99, 235, 0.3);
+      color: #93c5fd;
+      border: 1px solid rgba(147, 197, 253, 0.3);
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 4px 12px;
+      border-radius: 9999px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 12px;
+    }
+    header h1 {
+      font-size: 1.85rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+    }
+    header p {
+      color: #cbd5e1;
+      font-size: 0.95rem;
+      max-width: 900px;
+    }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .meta-item { font-size: 0.85rem; }
+    .meta-label { color: #94a3b8; font-weight: 500; font-size: 0.75rem; text-transform: uppercase; }
+    .meta-val { color: #f8fafc; font-weight: 600; margin-top: 2px; }
+
+    .gate-banner {
+      background: linear-gradient(135deg, #15803d 0%, #166534 100%);
+      color: white;
+      padding: 24px 32px;
+      border-radius: 10px;
+      margin-bottom: 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 4px 15px rgba(22, 101, 52, 0.25);
+    }
+    .gate-title { font-size: 1.4rem; font-weight: 800; }
+    .gate-desc { font-size: 0.9rem; color: #dcfce7; margin-top: 4px; }
+    .gate-badge {
+      background: rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      padding: 8px 18px;
+      border-radius: 8px;
+      font-weight: 800;
+      font-size: 1.1rem;
+      letter-spacing: 0.05em;
+    }
+
+    section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 24px 28px;
+      margin-bottom: 24px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    }
+    section h2 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 2px solid #f1f5f9;
+      padding-bottom: 10px;
+    }
+    .section-num {
+      background: var(--accent);
+      color: white;
+      font-size: 0.75rem;
+      font-weight: 800;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+
+    .stat-box {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+    }
+    .stat-val { font-size: 1.6rem; font-weight: 800; color: var(--primary); }
+    .stat-lbl { font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; margin-top: 4px; }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+      margin: 14px 0;
+    }
+    th {
+      background: #f1f5f9;
+      color: #334155;
+      font-weight: 700;
+      text-align: left;
+      padding: 10px 12px;
+      border-top: 1px solid var(--border);
+      border-bottom: 2px solid var(--border);
+    }
+    td {
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    tr:hover td { background: #f8fafc; }
+
+    .tag {
+      display: inline-block;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .tag-exact { background: #dcfce7; color: #15803d; }
+    .tag-probable { background: #fef9c3; color: #854d0e; }
+    .tag-hold { background: #fee2e2; color: #991b1b; }
+    .tag-neutral { background: #f1f5f9; color: #475569; }
+    .tag-new { background: #e0e7ff; color: #3730a3; }
+
+    .code-badge {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.8rem;
+      background: #f1f5f9;
+      color: #0f172a;
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid #e2e8f0;
+    }
+
+    .callout {
+      background: #eff6ff;
+      border-left: 4px solid var(--accent);
+      padding: 14px 18px;
+      border-radius: 0 8px 8px 0;
+      margin: 14px 0;
+      font-size: 0.9rem;
+    }
+    .callout.danger { background: #fef2f2; border-left-color: var(--danger); }
+    .callout.success { background: #f0fdf4; border-left-color: var(--success); }
+
+    footer {
+      text-align: center;
+      padding: 24px;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      border-top: 1px solid var(--border);
+      margin-top: 30px;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="header-badge">DUAL-DATABASE DEFENSE ARCHITECTURE PREFLIGHT</div>
+    <h1>Shoelotskey — Dual-Database Historical Import &amp; Offline Defense Audit</h1>
+    <p>Comprehensive pre-import evidence and verification establishing parallel defense readiness across <strong>PostgreSQL 17.9 (Production Online)</strong> and <strong>shoelotskey.db (SQLite 3.50.4 Offline Capstone Defense)</strong>.</p>
+    
+    <div class="meta-grid">
+      <div class="meta-item">
+        <div class="meta-label">Online Production Target</div>
+        <div class="meta-val">PostgreSQL 17.9 (AWS RDS / Heroku)</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Offline Defense Target</div>
+        <div class="meta-val">SQLite 3.50.4 (backend/db/shoelotskey.db)</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Verified Backup Hash</div>
+        <div class="meta-val"><span class="code-badge">f0b1c2ed0be71b9e...</span> (Exact Match)</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Execution Mode</div>
+        <div class="meta-val">STRICT READ-ONLY AUDIT (0 Writes)</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- GATE BANNER -->
+  <div class="gate-banner">
+    <div>
+      <div class="gate-title">DUAL-DATABASE PREFLIGHT GATE: READY FOR AUTHORIZATION</div>
+      <div class="gate-desc">Both PostgreSQL online and SQLite offline targets are audited, verified schema-compatible, customer-deduplicated, and backed up with verified SHA-256 hashes.</div>
+    </div>
+    <div class="gate-badge">DUAL-TARGET READY</div>
+  </div>
+
+  <!-- SECTION 1: EXECUTIVE SUMMARY -->
+  <section id="sec-1">
+    <h2><span class="section-num">1</span> Executive Summary: Dual-Target Strategy</h2>
+    <div class="grid-2">
+      <div class="stat-box" style="text-align:left;">
+        <h3 style="font-size:1.05rem; color:var(--primary); margin-bottom:8px;">1. Online Production Target (PostgreSQL)</h3>
+        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">Authoritative deployed database on AWS RDS / Heroku. Serves the primary cloud deployment and production web evaluation.</p>
+        <ul style="font-size:0.85rem; padding-left:20px; line-height:1.6;">
+          <li>Baseline Orders: <strong>79</strong> &rarr; Expected Post-Import: <strong>133</strong> (+54)</li>
+          <li>Baseline Customers: <strong>953</strong> &rarr; Expected Post-Import: <strong>1,005</strong> (+52)</li>
+          <li>Baseline Expenses: <strong>8</strong> &rarr; Expected Post-Import: <strong>15</strong> (+7)</li>
+          <li>Expenses Total: <strong>₱53,124.17</strong> (Fixed September Overhead)</li>
+        </ul>
+      </div>
+
+      <div class="stat-box" style="text-align:left;">
+        <h3 style="font-size:1.05rem; color:var(--primary); margin-bottom:8px;">2. Offline Capstone Defense Target (SQLite)</h3>
+        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">Authoritative local offline database at <span class="code-badge">backend/db/shoelotskey.db</span>. Guaranteed zero-internet continuity during oral presentation.</p>
+        <ul style="font-size:0.85rem; padding-left:20px; line-height:1.6;">
+          <li>Baseline Orders: <strong>103</strong> &rarr; Expected Post-Import: <strong>157</strong> (+54)</li>
+          <li>Baseline Customers: <strong>1,048</strong> &rarr; Expected Post-Import: <strong>1,100</strong> (+52)</li>
+          <li>Baseline Expenses: <strong>11</strong> &rarr; Expected Post-Import: <strong>18</strong> (+7)</li>
+          <li>Expenses Total: <strong>₱53,124.17</strong> (Fixed September Overhead)</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 2 & 3: TARGET AUDIT & ROW COUNTS -->
+  <section id="sec-2">
+    <h2><span class="section-num">2</span> Target Database Comparison &amp; Expected Pre-/Post-Import Row Counts</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Table Name</th>
+          <th style="text-align:center;">PostgreSQL Baseline</th>
+          <th style="text-align:center;">1st Batch Delta</th>
+          <th style="text-align:center;">PostgreSQL Expected</th>
+          <th style="text-align:center;">SQLite Baseline</th>
+          <th style="text-align:center;">1st Batch Delta</th>
+          <th style="text-align:center;">SQLite Expected</th>
+        </tr>
+      </thead>
+      <tbody>
+        
+    <tr>
+      <td><strong>orders</strong></td>
+      <td style="text-align:center; font-weight:700;">79</td>
+      <td style="text-align:center; color:var(--accent); font-weight:700;">+54</td>
+      <td style="text-align:center; font-weight:700; color:var(--success);">133</td>
+      <td style="text-align:center; font-weight:700;">103</td>
+      <td style="text-align:center; color:var(--accent); font-weight:700;">+54</td>
+      <td style="text-align:center; font-weight:700; color:var(--success);">157</td>
+    </tr>
+    
+    <tr>
+      <td><strong>customers</strong></td>
+      <td style="text-align:center; font-weight:700;">953</td>
+      <td style="text-align:center; color:var(--accent); font-weight:700;">+52 (PG & SQLite)</td>
+      <td style="text-align:center; font-weight:700; color:var(--success);">1005</td>
+      <td style="text-align:center; font-weight:700;">1048</td>
+      <td style="text-align:center; color:var(--accent); font-weight:700;">+52 (PG & SQLite)</td>
+      <td style="text-align:center; font-weight:700; color:var(--success);">1100</td>
+    </tr>
+    
+    <tr>
+      <td><strong>items</strong></td>
+      <td style="text-align:center; font-weight:700;">82</td>
+      <td style="text-align:center; color:var(--accent); font-weight:700;">+22</td>
+      <td style="text-align:center; font-weight:700; color:var(--success);">104</td>
+      <td style="text-align:center; font-weight:700;">127</td>
+      <td style="text-align:center; color:var(--accent); font-weight:700;">+22</td>
+      <td style="text-align:center; font-weight:700; color:var(--success);">149</td>
+    </tr>
+    
+    <tr>
+      <td><strong>item_service_mapping</strong></td>
+      <td style="text-align:center; font-weight:700;">139</td>
+      <td style="text-align:center; color:var(--accent); font-weight:700;">+22</td>
+      <td style="text-align:center; font-weight:700; color:var(--success);">161</td>
+      <td style="text-align:center; font-weight:700;">239</td>
+      <td style="text-align:center; color:var(--accent); font-weight:700;">+22</td>
+      <td style="text-align:center; font-weight:700; color:var(--success);">261</td>
+    </tr>
+    
+    <tr>
+      <td><strong>payments</strong></td>
+      <td style="text-align:center; font-weight:700;">79</td>
+      <td style="text-align:center; color:var(--accent); font-weight:700;">+48</td>
+      <td style="text-align:center; font-weight:700; color:var(--success);">127</td>
+      <td style="text-align:center; font-weight:700;">105</td>
+      <td style="text-align:center; color:var(--accent); font-weight:700;">+48</td>
+      <td style="text-align:center; font-weight:700; color:var(--success);">153</td>
+    </tr>
+    
+    <tr>
+      <td><strong>expenses</strong></td>
+      <td style="text-align:center; font-weight:700;">8</td>
+      <td style="text-align:center; color:var(--accent); font-weight:700;">+7</td>
+      <td style="text-align:center; font-weight:700; color:var(--success);">15</td>
+      <td style="text-align:center; font-weight:700;">11</td>
+      <td style="text-align:center; color:var(--accent); font-weight:700;">+7</td>
+      <td style="text-align:center; font-weight:700; color:var(--success);">18</td>
+    </tr>
+    
+    <tr>
+      <td><strong>inventory</strong></td>
+      <td style="text-align:center; font-weight:700;">26</td>
+      <td style="text-align:center; color:var(--accent); font-weight:700;">+0</td>
+      <td style="text-align:center; font-weight:700; color:var(--success);">26</td>
+      <td style="text-align:center; font-weight:700;">30</td>
+      <td style="text-align:center; color:var(--accent); font-weight:700;">+0</td>
+      <td style="text-align:center; font-weight:700; color:var(--success);">30</td>
+    </tr>
+    
+    <tr>
+      <td><strong>inventory_logs</strong></td>
+      <td style="text-align:center; font-weight:700;">54</td>
+      <td style="text-align:center; color:var(--accent); font-weight:700;">+0</td>
+      <td style="text-align:center; font-weight:700; color:var(--success);">54</td>
+      <td style="text-align:center; font-weight:700;">113</td>
+      <td style="text-align:center; color:var(--accent); font-weight:700;">+0</td>
+      <td style="text-align:center; font-weight:700; color:var(--success);">113</td>
+    </tr>
+    
+    <tr>
+      <td><strong>material_consumptions</strong></td>
+      <td style="text-align:center; font-weight:700;">0</td>
+      <td style="text-align:center; color:var(--accent); font-weight:700;">+0</td>
+      <td style="text-align:center; font-weight:700; color:var(--success);">0</td>
+      <td style="text-align:center; font-weight:700;">2</td>
+      <td style="text-align:center; color:var(--accent); font-weight:700;">+0</td>
+      <td style="text-align:center; font-weight:700; color:var(--success);">2</td>
+    </tr>
+    
+    <tr>
+      <td><strong>audit_logs</strong></td>
+      <td style="text-align:center; font-weight:700;">1804</td>
+      <td style="text-align:center; color:var(--accent); font-weight:700;">+1</td>
+      <td style="text-align:center; font-weight:700; color:var(--success);">1805</td>
+      <td style="text-align:center; font-weight:700;">1995</td>
+      <td style="text-align:center; color:var(--accent); font-weight:700;">+1</td>
+      <td style="text-align:center; font-weight:700; color:var(--success);">1996</td>
+    </tr>
+    
+    <tr>
+      <td><strong>csv_import_batches</strong></td>
+      <td style="text-align:center; font-weight:700;">1</td>
+      <td style="text-align:center; color:var(--accent); font-weight:700;">+1</td>
+      <td style="text-align:center; font-weight:700; color:var(--success);">2</td>
+      <td style="text-align:center; font-weight:700;">1</td>
+      <td style="text-align:center; color:var(--accent); font-weight:700;">+1</td>
+      <td style="text-align:center; font-weight:700; color:var(--success);">2</td>
+    </tr>
+    
+      </tbody>
+    </table>
+  </section>
+
+  <!-- SECTION 4: SCHEMA COMPATIBILITY -->
+  <section id="sec-4">
+    <h2><span class="section-num">3</span> Schema Compatibility Matrix (PostgreSQL vs. SQLite)</h2>
+    <p>Every core operational table was audited across column counts, types, constraints, and defaults between PostgreSQL 17.9 and SQLite 3.50.4.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Table Name</th>
+          <th style="text-align:center;">PostgreSQL Columns</th>
+          <th style="text-align:center;">SQLite Columns</th>
+          <th style="text-align:center;">Status</th>
+          <th>Schema Parity Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        
+    <tr>
+      <td><strong>orders</strong></td>
+      <td style="text-align:center;">24 cols</td>
+      <td style="text-align:center;">31 cols</td>
+      <td style="text-align:center;"><span class="tag tag-exact">COMPATIBLE</span></td>
+      <td>SQLite has extra columns: ['add_ons_total', 'authorized_by_username', 'base_service_fee', 'discount_amount', 'discount_id_number', 'discount_name', 'discount_type']</td>
+    </tr>
+    
+    <tr>
+      <td><strong>customers</strong></td>
+      <td style="text-align:center;">4 cols</td>
+      <td style="text-align:center;">4 cols</td>
+      <td style="text-align:center;"><span class="tag tag-exact">COMPATIBLE</span></td>
+      <td>Identical column names</td>
+    </tr>
+    
+    <tr>
+      <td><strong>items</strong></td>
+      <td style="text-align:center;">19 cols</td>
+      <td style="text-align:center;">19 cols</td>
+      <td style="text-align:center;"><span class="tag tag-exact">COMPATIBLE</span></td>
+      <td>Identical column names</td>
+    </tr>
+    
+    <tr>
+      <td><strong>item_service_mapping</strong></td>
+      <td style="text-align:center;">3 cols</td>
+      <td style="text-align:center;">3 cols</td>
+      <td style="text-align:center;"><span class="tag tag-exact">COMPATIBLE</span></td>
+      <td>Identical column names</td>
+    </tr>
+    
+    <tr>
+      <td><strong>payments</strong></td>
+      <td style="text-align:center;">11 cols</td>
+      <td style="text-align:center;">9 cols</td>
+      <td style="text-align:center;"><span class="tag tag-probable">ATTENTION</span></td>
+      <td>PG has extra columns: ['payment_method', 'payment_status']</td>
+    </tr>
+    
+    <tr>
+      <td><strong>expenses</strong></td>
+      <td style="text-align:center;">6 cols</td>
+      <td style="text-align:center;">6 cols</td>
+      <td style="text-align:center;"><span class="tag tag-exact">COMPATIBLE</span></td>
+      <td>Identical column names</td>
+    </tr>
+    
+    <tr>
+      <td><strong>services</strong></td>
+      <td style="text-align:center;">11 cols</td>
+      <td style="text-align:center;">12 cols</td>
+      <td style="text-align:center;"><span class="tag tag-probable">ATTENTION</span></td>
+      <td>PG has extra columns: ['category']; SQLite has extra columns: ['connected_base_services', 'has_spinner']</td>
+    </tr>
+    
+    <tr>
+      <td><strong>inventory</strong></td>
+      <td style="text-align:center;">24 cols</td>
+      <td style="text-align:center;">24 cols</td>
+      <td style="text-align:center;"><span class="tag tag-exact">COMPATIBLE</span></td>
+      <td>Identical column names</td>
+    </tr>
+    
+    <tr>
+      <td><strong>inventory_logs</strong></td>
+      <td style="text-align:center;">9 cols</td>
+      <td style="text-align:center;">10 cols</td>
+      <td style="text-align:center;"><span class="tag tag-exact">COMPATIBLE</span></td>
+      <td>SQLite has extra columns: ['authorized_by']</td>
+    </tr>
+    
+    <tr>
+      <td><strong>material_consumptions</strong></td>
+      <td style="text-align:center;">7 cols</td>
+      <td style="text-align:center;">7 cols</td>
+      <td style="text-align:center;"><span class="tag tag-exact">COMPATIBLE</span></td>
+      <td>Identical column names</td>
+    </tr>
+    
+    <tr>
+      <td><strong>audit_logs</strong></td>
+      <td style="text-align:center;">13 cols</td>
+      <td style="text-align:center;">13 cols</td>
+      <td style="text-align:center;"><span class="tag tag-exact">COMPATIBLE</span></td>
+      <td>Identical column names</td>
+    </tr>
+    
+    <tr>
+      <td><strong>csv_import_batches</strong></td>
+      <td style="text-align:center;">18 cols</td>
+      <td style="text-align:center;">18 cols</td>
+      <td style="text-align:center;"><span class="tag tag-exact">COMPATIBLE</span></td>
+      <td>Identical column names</td>
+    </tr>
+    
+    <tr>
+      <td><strong>users</strong></td>
+      <td style="text-align:center;">12 cols</td>
+      <td style="text-align:center;">12 cols</td>
+      <td style="text-align:center;"><span class="tag tag-exact">COMPATIBLE</span></td>
+      <td>Identical column names</td>
+    </tr>
+    
+    <tr>
+      <td><strong>permissions</strong></td>
+      <td style="text-align:center;">7 cols</td>
+      <td style="text-align:center;">7 cols</td>
+      <td style="text-align:center;"><span class="tag tag-exact">COMPATIBLE</span></td>
+      <td>Identical column names</td>
+    </tr>
+    
+    <tr>
+      <td><strong>user_permissions</strong></td>
+      <td style="text-align:center;">6 cols</td>
+      <td style="text-align:center;">6 cols</td>
+      <td style="text-align:center;"><span class="tag tag-exact">COMPATIBLE</span></td>
+      <td>Identical column names</td>
+    </tr>
+    
+      </tbody>
+    </table>
+  </section>
+
+  <!-- SECTION 5 & 6: DEDUPLICATION & SEBASTIAN/MARK -->
+  <section id="sec-5">
+    <h2><span class="section-num">4</span> Database-Specific Deduplication Analysis</h2>
+    <div class="callout success">
+      <strong>Cross-Source Policy Applied Independently:</strong><br>
+      • <strong>Sebastian Casa</strong> (`DSMR-2026-09-12-R06`): Existed in local SQLite as a pilot test record; absent from PostgreSQL. Reclassified as <span class="tag tag-probable">EXCLUDED FROM PRODUCTION INSERT — EXISTING PILOT/TEST RECORD BY CROSS-SOURCE POLICY</span>. Zero duplicate order created in either engine.<br>
+      • <strong>Mark Ferrer</strong> (`DSMR-2026-09-07-R10`): Existed in local SQLite as an unverified test record; absent from PostgreSQL. Reclassified as <span class="tag tag-probable">EXCLUDED FROM PRODUCTION INSERT — EXISTING PILOT/TEST RECORD BY CROSS-SOURCE POLICY</span>. Zero duplicate order created in either engine.<br>
+      • In both databases, exactly <strong>54 SAFE NEW orders</strong> will be inserted.
+    </div>
+
+    <div class="grid-2" style="margin-top:14px;">
+      <div class="stat-box" style="text-align:left;">
+        <h4>PostgreSQL Customer Resolution:</h4>
+        <p style="font-size:0.85rem; margin-top:4px;">
+          • Existing linked: <strong>2</strong> (Roderick Del Rosario ID 1340, Kenneth Gutierrez ID 1289)<br>
+          • Genuinely new: <strong>52</strong><br>
+          • Ambiguous held: <strong>0</strong><br>
+          • Post-import customers: <strong>953 &rarr; 1,005</strong>
+        </p>
+      </div>
+      <div class="stat-box" style="text-align:left;">
+        <h4>SQLite Customer Resolution:</h4>
+        <p style="font-size:0.85rem; margin-top:4px;">
+          • Existing linked: <strong>2</strong> (Roderick Del Rosario ID 994, Kenneth Gutierrez ID 943)<br>
+          • Genuinely new: <strong>52</strong><br>
+          • Ambiguous held: <strong>0</strong><br>
+          • Post-import customers: <strong>1,048 &rarr; 1,100</strong>
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 7: CANONICAL ORDER NUMBERING -->
+  <section id="sec-7">
+    <h2><span class="section-num">5</span> Canonical Order Numbering Comparison (54 Orders)</h2>
+    <p>Native sequence generation (<span class="code-badge">ORD-YYYY-MM-DD-NNN</span>) was simulated independently on each database's existing date sequences.</p>
+    <table style="max-height:450px; display:block; overflow-y:auto;">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Historical Evidence ID</th>
+          <th>Customer</th>
+          <th>Date</th>
+          <th>PostgreSQL Order Number</th>
+          <th>SQLite Order Number</th>
+          <th>Collision Check</th>
+          <th>Sequence Parity</th>
+        </tr>
+      </thead>
+      <tbody>
+        
+    <tr>
+      <td style="text-align:center;"><strong>1</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-07-R03</span></td>
+      <td><strong>Ben Chavez [best read]</strong></td>
+      <td style="text-align:center;">2026-09-07</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-07-001</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-07-002</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>2</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-07-R04</span></td>
+      <td><strong>Aristotle Gomez [best read]</strong></td>
+      <td style="text-align:center;">2026-09-07</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-07-002</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-07-003</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>3</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-07-R05</span></td>
+      <td><strong>Kirk Guvia [best read]</strong></td>
+      <td style="text-align:center;">2026-09-07</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-07-003</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-07-004</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>4</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-07-R06</span></td>
+      <td><strong>Cont [unclear]</strong></td>
+      <td style="text-align:center;">2026-09-07</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-07-004</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-07-005</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>5</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-07-R07</span></td>
+      <td><strong>Jeulia Hatty [best read]</strong></td>
+      <td style="text-align:center;">2026-09-07</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-07-005</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-07-006</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>6</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-07-R08</span></td>
+      <td><strong>Zaira Elida [best read]</strong></td>
+      <td style="text-align:center;">2026-09-07</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-07-006</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-07-007</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>7</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-07-R09</span></td>
+      <td><strong>J. Eduvere [best read]</strong></td>
+      <td style="text-align:center;">2026-09-07</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-07-007</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-07-008</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>8</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-08-R02</span></td>
+      <td><strong>Derick Pucero [best read]</strong></td>
+      <td style="text-align:center;">2026-09-08</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-08-001</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-08-003</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>9</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-08-R03</span></td>
+      <td><strong>Irene de Leon [best read]</strong></td>
+      <td style="text-align:center;">2026-09-08</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-08-002</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-08-004</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>10</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-08-R04</span></td>
+      <td><strong>Edzel de Mesa</strong></td>
+      <td style="text-align:center;">2026-09-08</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-08-003</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-08-005</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>11</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-08-R05</span></td>
+      <td><strong>Danzel Cabaron [best read]</strong></td>
+      <td style="text-align:center;">2026-09-08</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-08-004</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-08-006</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>12</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-08-R06</span></td>
+      <td><strong>Johmar Tacacray</strong></td>
+      <td style="text-align:center;">2026-09-08</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-08-005</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-08-007</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>13</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-08-R08</span></td>
+      <td><strong>Oliver [surname unclear]</strong></td>
+      <td style="text-align:center;">2026-09-08</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-08-006</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-08-008</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>14</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-08-R09</span></td>
+      <td><strong>Christian T. [best read]</strong></td>
+      <td style="text-align:center;">2026-09-08</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-08-007</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-08-009</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>15</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-08-R10</span></td>
+      <td><strong>MJ Sumaridos [best read]</strong></td>
+      <td style="text-align:center;">2026-09-08</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-08-008</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-08-010</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>16</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-09-R02</span></td>
+      <td><strong>Levan Bunhaje</strong></td>
+      <td style="text-align:center;">2026-09-09</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-09-002</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-09-004</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>17</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-09-R03</span></td>
+      <td><strong>Rudary Mirhaza</strong></td>
+      <td style="text-align:center;">2026-09-09</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-09-003</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-09-005</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>18</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-09-R04</span></td>
+      <td><strong>Al Aguilar</strong></td>
+      <td style="text-align:center;">2026-09-09</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-09-004</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-09-006</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>19</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-09-R05</span></td>
+      <td><strong>Charl Panilio</strong></td>
+      <td style="text-align:center;">2026-09-09</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-09-005</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-09-007</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>20</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-09-R06</span></td>
+      <td><strong>Roderick Del Rosario</strong></td>
+      <td style="text-align:center;">2026-09-09</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-09-006</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-09-008</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>21</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-09-R07</span></td>
+      <td><strong>Dea Chavez</strong></td>
+      <td style="text-align:center;">2026-09-09</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-09-007</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-09-009</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>22</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-09-R08</span></td>
+      <td><strong>Karen Tupos</strong></td>
+      <td style="text-align:center;">2026-09-09</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-09-008</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-09-010</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>23</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-09-R09</span></td>
+      <td><strong>Christian Job</strong></td>
+      <td style="text-align:center;">2026-09-09</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-09-009</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-09-011</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>24</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-09-R11</span></td>
+      <td><strong>Pete Tahil</strong></td>
+      <td style="text-align:center;">2026-09-09</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-09-010</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-09-012</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>25</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-09-R12</span></td>
+      <td><strong>Gibson</strong></td>
+      <td style="text-align:center;">2026-09-09</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-09-011</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-09-013</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>26</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-09-R13</span></td>
+      <td><strong>Saludo</strong></td>
+      <td style="text-align:center;">2026-09-09</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-09-012</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-09-014</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>27</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-09-R14</span></td>
+      <td><strong>Mark Ontic</strong></td>
+      <td style="text-align:center;">2026-09-09</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-09-013</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-09-015</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>28</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-10-R02</span></td>
+      <td><strong>Vines Reuben</strong></td>
+      <td style="text-align:center;">2026-09-10</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-10-006</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-10-002</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>29</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-10-R03</span></td>
+      <td><strong>Jeremiah Valerio</strong></td>
+      <td style="text-align:center;">2026-09-10</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-10-007</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-10-003</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>30</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-10-R04</span></td>
+      <td><strong>Mark Aguilar</strong></td>
+      <td style="text-align:center;">2026-09-10</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-10-008</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-10-004</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>31</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-10-R05</span></td>
+      <td><strong>Mabr D.</strong></td>
+      <td style="text-align:center;">2026-09-10</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-10-009</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-10-005</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>32</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-11-R04</span></td>
+      <td><strong>Robert Yera Sr.</strong></td>
+      <td style="text-align:center;">2026-09-11</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-11-002</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-11-003</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>33</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-11-R05</span></td>
+      <td><strong>Janelle Kahano</strong></td>
+      <td style="text-align:center;">2026-09-11</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-11-003</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-11-004</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>34</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-11-R06</span></td>
+      <td><strong>Nicka Alkuino</strong></td>
+      <td style="text-align:center;">2026-09-11</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-11-004</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-11-005</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>35</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-11-R07</span></td>
+      <td><strong>Dicky Flora</strong></td>
+      <td style="text-align:center;">2026-09-11</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-11-005</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-11-006</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>36</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-11-R08</span></td>
+      <td><strong>Albert Pacuno</strong></td>
+      <td style="text-align:center;">2026-09-11</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-11-006</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-11-007</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>37</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-11-R09</span></td>
+      <td><strong>Jley Penesa</strong></td>
+      <td style="text-align:center;">2026-09-11</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-11-007</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-11-008</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>38</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-11-R11</span></td>
+      <td><strong>Gyser Inoro</strong></td>
+      <td style="text-align:center;">2026-09-11</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-11-008</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-11-009</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>39</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-11-R12</span></td>
+      <td><strong>Rheiner Martinez</strong></td>
+      <td style="text-align:center;">2026-09-11</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-11-009</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-11-010</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>40</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-11-R13</span></td>
+      <td><strong>Frank Emilia</strong></td>
+      <td style="text-align:center;">2026-09-11</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-11-010</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-11-011</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>41</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-12-R02</span></td>
+      <td><strong>Wendel Fabro</strong></td>
+      <td style="text-align:center;">2026-09-12</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-12-001</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-12-002</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>42</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-12-R03</span></td>
+      <td><strong>Leslie Auderia</strong></td>
+      <td style="text-align:center;">2026-09-12</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-12-002</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-12-003</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>43</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-12-R04</span></td>
+      <td><strong>Kennise Delgaco</strong></td>
+      <td style="text-align:center;">2026-09-12</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-12-003</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-12-004</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>44</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-12-R05</span></td>
+      <td><strong>Jerome Ramirez</strong></td>
+      <td style="text-align:center;">2026-09-12</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-12-004</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-12-005</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>45</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-14-R10</span></td>
+      <td><strong>Ernest Agapay / Acapulco</strong></td>
+      <td style="text-align:center;">2026-09-14</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-14-003</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-14-008</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>46</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-14-R11</span></td>
+      <td><strong>Raphael Puncino</strong></td>
+      <td style="text-align:center;">2026-09-14</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-14-004</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-14-009</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>47</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-14-R12</span></td>
+      <td><strong>Christian Fontanilla</strong></td>
+      <td style="text-align:center;">2026-09-14</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-14-005</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-14-010</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>48</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-14-R13</span></td>
+      <td><strong>Cubelo</strong></td>
+      <td style="text-align:center;">2026-09-14</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-14-006</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-14-011</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>49</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-14-R14</span></td>
+      <td><strong>Karl Agnas</strong></td>
+      <td style="text-align:center;">2026-09-14</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-14-007</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-14-012</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>50</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-14-R15</span></td>
+      <td><strong>Chaukie</strong></td>
+      <td style="text-align:center;">2026-09-14</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-14-008</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-14-013</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>51</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-14-R16</span></td>
+      <td><strong>Nyx Pantoja</strong></td>
+      <td style="text-align:center;">2026-09-14</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-14-009</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-14-014</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>52</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-14-R17</span></td>
+      <td><strong>Kenneth Gutierrez</strong></td>
+      <td style="text-align:center;">2026-09-14</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-14-010</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-14-015</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>53</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-15-R05</span></td>
+      <td><strong>Juan</strong></td>
+      <td style="text-align:center;">2026-09-15</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-15-001</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-15-003</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+    <tr>
+      <td style="text-align:center;"><strong>54</strong></td>
+      <td><span class="code-badge">DSMR-2026-09-15-R06</span></td>
+      <td><strong>Antonio Lagunada</strong></td>
+      <td style="text-align:center;">2026-09-15</td>
+      <td><span class="code-badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">ORD-2026-09-15-002</span></td>
+      <td><span class="code-badge" style="background:#fef3c7; color:#92400e; font-weight:700;">ORD-2026-09-15-004</span></td>
+      <td style="text-align:center;"><span class="tag tag-exact">0 Collisions</span></td>
+      <td style="text-align:center;"><span class="tag tag-neutral">INDEPENDENT SEQ</span></td>
+    </tr>
+    
+      </tbody>
+    </table>
+    <div class="callout">
+      <strong>Integrity Rule Preserved:</strong> Because local SQLite already contained earlier pilot test orders on certain September dates, SQLite numbering naturally increments to avoid collision. Source Evidence IDs remain permanently tied via the batch manifest.
+    </div>
+  </section>
+
+  <!-- SECTION 8: ML ISOLATION & OFFLINE CAPABILITY -->
+  <section id="sec-8">
+    <h2><span class="section-num">6</span> Machine Learning Isolation &amp; Offline Defense Demonstration</h2>
+    <div class="grid-3" style="margin: 14px 0;">
+      <div class="stat-box">
+        <div class="stat-val" style="color:var(--success);">OFFLINE</div>
+        <div class="stat-lbl">ML Model Availability</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val" style="color:var(--accent);">ZERO</div>
+        <div class="stat-lbl">Internet Connection Required</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val" style="color:var(--primary);">NULL</div>
+        <div class="stat-lbl">Historical Order ML Values</div>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>ML Parameter</th>
+          <th>Audit Finding</th>
+          <th>Defense Significance</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Authoritative Model File</strong></td>
+          <td><span class="code-badge">backend/completion_model.pkl</span> (also linked to dataset_b_selected_model.pkl)</td>
+          <td>Loaded directly by Python via joblib/pickle.</td>
+        </tr>
+        <tr>
+          <td><strong>Model SHA-256 Hash</strong></td>
+          <td><span class="code-badge">9ce390ca5f0197fe0eef86086ccfd78b79b18b37c19eae76fca7d518bbfeac3b</span></td>
+          <td>100% exact match against verified research evaluator report.</td>
+        </tr>
+        <tr>
+          <td><strong>Model Size</strong></td>
+          <td>3,071,905 bytes (~3.07 MB)</td>
+          <td>Completely self-contained; zero external cloud weights needed.</td>
+        </tr>
+        <tr>
+          <td><strong>External Dependencies</strong></td>
+          <td><strong>NONE</strong> (No internet, No AWS, No Heroku, No remote API)</td>
+          <td>Works 100% on localhost during offline capstone defense.</td>
+        </tr>
+        <tr>
+          <td><strong>Historical Imported Orders</strong></td>
+          <td><span class="code-badge">predicted_days = NULL</span>, <span class="code-badge">predicted_at = NULL</span></td>
+          <td>No fake historical predictions manufactured.</td>
+        </tr>
+        <tr>
+          <td><strong>Live Defense Demonstration</strong></td>
+          <td>Create a NEW DEMO Job Order live in the UI</td>
+          <td>Demonstrates genuine real-time inference using scikit-learn.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- SECTION 9: OFFLINE ANALYTICS -->
+  <section id="sec-9">
+    <h2><span class="section-num">7</span> Offline Analytics &amp; Reporting Engine Parity</h2>
+    <p>Audited <span class="code-badge">backend/report_service.py</span> and <span class="code-badge">backend/main.py</span> for PostgreSQL-specific SQL syntax vs. SQLite compatibility:</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Reporting Feature</th>
+          <th>SQLite Offline Mode</th>
+          <th>PostgreSQL Online Mode</th>
+          <th>Parity Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Sales Report (Daily, Weekly, Monthly)</strong></td>
+          <td><span class="tag tag-exact">FULL SUPPORT</span></td>
+          <td><span class="tag tag-exact">FULL SUPPORT</span></td>
+          <td>SQLAlchemy ORM aggregation; 100% database engine agnostic.</td>
+        </tr>
+        <tr>
+          <td><strong>Expenses Report</strong></td>
+          <td><span class="tag tag-exact">FULL SUPPORT</span></td>
+          <td><span class="tag tag-exact">FULL SUPPORT</span></td>
+          <td>Evaluates <span class="code-badge">expenses</span> table and categories identically.</td>
+        </tr>
+        <tr>
+          <td><strong>ROI &amp; Profit Summaries</strong></td>
+          <td><span class="tag tag-exact">FULL SUPPORT</span></td>
+          <td><span class="tag tag-exact">FULL SUPPORT</span></td>
+          <td>Pure Python financial delta calculations.</td>
+        </tr>
+        <tr>
+          <td><strong>Front Staff Dashboard Summary</strong></td>
+          <td><span class="tag tag-exact">FULL SUPPORT</span></td>
+          <td><span class="tag tag-exact">FULL SUPPORT</span></td>
+          <td>Computes 6 core KPIs using SQLAlchemy datetime combining.</td>
+        </tr>
+        <tr>
+          <td><strong>Export Formats (PDF, XLSX, CSV)</strong></td>
+          <td><span class="tag tag-exact">FULL SUPPORT</span></td>
+          <td><span class="tag tag-exact">FULL SUPPORT</span></td>
+          <td>Generated in-memory via PyMuPDF, openpyxl, and csv module.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- SECTION 10: BACKUP & INTEGRITY -->
+  <section id="sec-10">
+    <h2><span class="section-num">8</span> SQLite Backup Security &amp; Launcher Script</h2>
+    <div class="callout success">
+      <strong>Immutable Backup Created and Hash-Verified:</strong><br>
+      • Original SQLite Path: <span class="code-badge">backend/db/shoelotskey.db</span><br>
+      • Backup SQLite Path: <span class="code-badge">backend/db/shoelotskey_pre_historical_import_backup.db</span><br>
+      • Original File SHA-256: <span class="code-badge">f0b1c2ed0be71b9ee730063819a87f41900d1eb2ec9bab0d0b68579123d41d97</span><br>
+      • Backup File SHA-256: <span class="code-badge">f0b1c2ed0be71b9ee730063819a87f41900d1eb2ec9bab0d0b68579123d41d97</span><br>
+      • <strong>Status: 100% EXACT MATCH. Safe recovery point established.</strong>
+    </div>
+
+    <div class="callout" style="background:#f8fafc; border-left-color:#475569;">
+      <strong>Offline Defense Launcher Created:</strong><br>
+      Script: <span class="code-badge">START_SHOELOTSKEY_OFFLINE_DEFENSE.bat</span><br>
+      • Sets <span class="code-badge">ALLOW_REMOTE_DB=false</span> and clears <span class="code-badge">DATABASE_URL</span>.<br>
+      • Triggers backend P0-2 Guard to strictly refuse remote connections.<br>
+      • Confirms <span class="code-badge">shoelotskey.db</span> exists and displays active database mode in the console.<br>
+      • Launches FastAPI (port 8000) and Vite (port 5173) for defense presentation without internet.
+    </div>
+  </section>
+
+  <!-- SECTION 11: FINAL DECISION -->
+  <section id="sec-11">
+    <h2><span class="section-num">9</span> Final Dual-Target Gate Verdict</h2>
+    <div class="gate-banner">
+      <div>
+        <div class="gate-title">DUAL-TARGET STATUS SUMMARY</div>
+        <div class="gate-desc">
+          <strong>POSTGRESQL IMPORT:</strong> READY FOR AUTHORIZATION<br>
+          <strong>SQLITE OFFLINE IMPORT:</strong> READY FOR AUTHORIZATION<br>
+          <strong>OFFLINE DEFENSE MODE:</strong> READY FOR DEMONSTRATION<br>
+          <em>(Strict read-only verification complete. ZERO database writes executed. Awaiting your separate authorization.)</em>
+        </div>
+      </div>
+      <div class="gate-badge">ALL AUDITS PASSED</div>
+    </div>
+  </section>
+
+  <footer>
+    <p>Shoelotskey Service Management System &bull; Dual-Database Defense Preflight Report &bull; Villamor–Pasay Operational Pilot</p>
+    <p style="margin-top:4px;">Strict Read-Only Mode &bull; Stop Condition Enforced &bull; Immutable SQLite Backup Verified</p>
+  </footer>
+
+</div>
+</body>
+</html>

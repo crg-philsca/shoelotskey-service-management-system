@@ -1,0 +1,102 @@
+{
+  "dataset_name": "Simulated Operational Dataset",
+  "sample_size": 10000,
+  "seed": 20261002,
+  "target_variable": "simulated_turnaround_days",
+  "file_hashes_sha256": {
+    "dataset_b_10000.csv": "bffe2f45043c97262471fbca02fd2f5a52163735c452f4a25a8045e6977e91bb",
+    "dataset_b_train_7000.csv": "4dab063f029936a2788454a013539294eff13f29036bff6ba30e9701c45c2aed",
+    "dataset_b_validation_1500.csv": "d2dc915946435d85448a3bde6f4981177e8c4ebf710908c3bf8e8fa7c30ed0c3",
+    "dataset_b_test_1500.csv": "caaa2774868ce0657020cb1cfb2f153bc2fe56dee99af9cb2c6e38342e906a5f",
+    "dataset_b_generator_config.json": "e5d7f34c805f123886c68daeb91f10e8ef32dd5daa2f7f586875446ddf30eb51"
+  },
+  "partition_counts": {
+    "train": 7000,
+    "validation": 1500,
+    "test": 1500
+  },
+  "target_distribution": {
+    "min": 1,
+    "max": 30,
+    "mean": 16.7944,
+    "median": 20.0,
+    "value_counts": {
+      "25": 3142,
+      "10": 3041,
+      "20": 1284,
+      "1": 722,
+      "26": 639,
+      "11": 609,
+      "21": 282,
+      "2": 138,
+      "27": 37,
+      "30": 21,
+      "28": 16,
+      "14": 15,
+      "22": 13,
+      "3": 10,
+      "12": 10,
+      "13": 9,
+      "24": 6,
+      "6": 3,
+      "23": 3
+    }
+  },
+  "base_tier_distribution": {
+    "25": 3850,
+    "10": 3684,
+    "20": 1593,
+    "1": 873
+  },
+  "rush_distribution": {
+    "rush_total": 1202,
+    "regular_total": 8798,
+    "one_day_rush_eligible": 873,
+    "rush_retaining_standard_tier": 329
+  },
+  "pair_distribution": {
+    "1": 6174,
+    "2": 2633,
+    "3": 594,
+    "4": 514,
+    "6": 85
+  },
+  "template_counts": {
+    "CT02": 2429,
+    "CT09": 1733,
+    "CT14": 1456,
+    "CT05": 526,
+    "CT03": 328,
+    "CT12": 325,
+    "CT18": 187,
+    "CT04": 176,
+    "CT06": 175,
+    "CT19": 168,
+    "CT26": 166,
+    "CT07": 163,
+    "CT21": 157,
+    "CT23": 156,
+    "CT30": 153,
+    "CT24": 103,
+    "CT32": 100,
+    "CT16": 96,
+    "CT25": 94,
+    "CT17": 93,
+    "CT20": 92,
+    "CT10": 88,
+    "CT34": 88,
+    "CT31": 87,
+    "CT27": 86,
+    "CT33": 86,
+    "CT35": 85,
+    "CT01": 83,
+    "CT11": 79,
+    "CT15": 78,
+    "CT22": 76,
+    "CT29": 75,
+    "CT13": 74,
+    "CT28": 70,
+    "CT08": 69
+  },
+  "mret_provenance_count": 240
+}

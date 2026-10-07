@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Residual and Error Analysis by Service Type — Dataset B Final Test Set</title>
+  <style>
+    :root {
+      --bg-main: #f8fafc;
+      --bg-card: #ffffff;
+      --text-main: #0f172a;
+      --text-muted: #475569;
+      --border-color: #e2e8f0;
+      --primary: #1e3a8a;
+      --primary-light: #eff6ff;
+      --primary-border: #bfdbfe;
+      --verified-green: #15803d;
+      --verified-bg: #f0fdf4;
+      --verified-border: #bbf7d0;
+      --warning-amber: #b45309;
+      --warning-bg: #fffbeb;
+      --warning-border: #fde68a;
+      --danger-red: #b91c1c;
+      --navy: #0f172a;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: var(--bg-main);
+      color: var(--text-main);
+      line-height: 1.55;
+      padding: 2.5rem 1.5rem;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    header {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 2.25rem;
+      margin-bottom: 2rem;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+    }
+    .header-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 0.85rem;
+    }
+    .header-badge {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+    }
+    .badge-blue {
+      background: var(--primary-light);
+      color: var(--primary);
+      border: 1px solid var(--primary-border);
+    }
+    .badge-green {
+      background: var(--verified-bg);
+      color: var(--verified-green);
+      border: 1px solid var(--verified-border);
+    }
+    .badge-amber {
+      background: var(--warning-bg);
+      color: var(--warning-amber);
+      border: 1px solid var(--warning-border);
+    }
+    h1 {
+      font-size: 1.85rem;
+      font-weight: 800;
+      color: var(--navy);
+      letter-spacing: -0.02em;
+      margin-bottom: 0.5rem;
+      line-height: 1.25;
+    }
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 1.02rem;
+      font-weight: 500;
+      margin-bottom: 1.25rem;
+    }
+    .meta-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid var(--border-color);
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+    .meta-item strong {
+      color: var(--text-main);
+      display: block;
+      font-size: 0.88rem;
+    }
+    .section-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 2rem;
+      margin-bottom: 2rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+    }
+    h2 {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--navy);
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      border-bottom: 2px solid var(--primary-light);
+      padding-bottom: 0.5rem;
+    }
+    h3 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--text-main);
+      margin: 1.5rem 0 0.75rem 0;
+    }
+    p {
+      margin-bottom: 1rem;
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      line-height: 1.65;
+    }
+    .callout {
+      background: var(--primary-light);
+      border-left: 4px solid var(--primary);
+      padding: 1rem 1.25rem;
+      border-radius: 0 8px 8px 0;
+      margin: 1.25rem 0;
+      font-size: 0.92rem;
+      color: #1e293b;
+    }
+    .callout-success {
+      background: var(--verified-bg);
+      border-left-color: var(--verified-green);
+      color: #064e3b;
+    }
+    .callout-warning {
+      background: var(--warning-bg);
+      border-left-color: var(--warning-amber);
+      color: #78350f;
+    }
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1.25rem;
+      margin: 1.25rem 0;
+    }
+    .kpi-card {
+      background: #f8fafc;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 1.25rem;
+      text-align: center;
+    }
+    .kpi-val {
+      font-size: 2.1rem;
+      font-weight: 800;
+      color: var(--navy);
+      line-height: 1.1;
+      margin: 0.5rem 0 0.25rem 0;
+    }
+    .kpi-sub {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      margin: 1rem 0;
+    }
+    th {
+      background-color: #f1f5f9;
+      color: var(--navy);
+      font-weight: 600;
+      text-align: left;
+      padding: 0.75rem 0.85rem;
+      border: 1px solid var(--border-color);
+      vertical-align: middle;
+    }
+    td {
+      padding: 0.65rem 0.85rem;
+      border: 1px solid var(--border-color);
+      vertical-align: middle;
+      color: var(--text-main);
+    }
+    tbody tr:nth-child(even) {
+      background-color: #fafafa;
+    }
+    tbody tr:hover {
+      background-color: #f8fafc;
+    }
+    .font-mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.84rem;
+    }
+    .font-bold {
+      font-weight: 700;
+    }
+    .text-center {
+      text-align: center;
+    }
+    .text-right {
+      text-align: right;
+    }
+    .badge {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 0.2rem 0.55rem;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+    .badge-success {
+      background: #dcfce7;
+      color: #166534;
+      border: 1px solid #bbf7d0;
+    }
+    .badge-match {
+      background: #e0f2fe;
+      color: #0369a1;
+      border: 1px solid #bae6fd;
+    }
+    .col-tag code {
+      font-size: 0.75rem;
+      background: #e2e8f0;
+      padding: 2px 5px;
+      border-radius: 4px;
+      color: #334155;
+    }
+    .academic-box {
+      background: #fdfdfd;
+      border: 1px solid #cbd5e1;
+      border-left: 4px solid #0f172a;
+      padding: 1.5rem;
+      border-radius: 4px;
+      margin: 1.25rem 0;
+      font-size: 0.94rem;
+      line-height: 1.75;
+      color: #1e293b;
+    }
+    .academic-box p {
+      color: #1e293b;
+      margin-bottom: 1rem;
+      text-align: justify;
+    }
+    .academic-box p:last-child {
+      margin-bottom: 0;
+    }
+    .signoff-box {
+      margin-top: 2rem;
+      padding: 1.5rem;
+      background: #f8fafc;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .signoff-signature {
+      font-family: "Georgia", serif;
+      font-size: 1.3rem;
+      font-style: italic;
+      color: var(--navy);
+      font-weight: bold;
+    }
+    .check-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 0.75rem;
+      margin: 1rem 0;
+    }
+    .check-item {
+      background: #f8fafc;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: flex-start;
+      gap: 0.6rem;
+    }
+    .check-icon {
+      color: var(--verified-green);
+      font-weight: 800;
+      font-size: 1rem;
+      line-height: 1;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <!-- HEADER -->
+  <header>
+    <div class="header-badges">
+      <span class="header-badge badge-blue">Evaluator Requirement Evidence</span>
+      <span class="header-badge badge-green">Dataset B Subgroup Audit</span>
+      <span class="header-badge badge-amber">Frozen Test Verification</span>
+    </div>
+    <h1>Residual and Error Analysis by Service Type</h1>
+    <div class="subtitle">
+      Defensive Evaluation of Random Forest Predictive Performance Across Operational Service Categories (Dataset B Final Test Set, N = 1,500)
+    </div>
+    <div class="meta-bar">
+      <div class="meta-item">
+        <strong>Dataset B Test Source:</strong>
+        <code>backend/research_outputs/ml_final/dataset_b_test_1500.csv</code>
+      </div>
+      <div class="meta-item">
+        <strong>Frozen Model Artifact:</strong>
+        <code>backend/research_outputs/ml_final/dataset_b_selected_model.pkl</code>
+      </div>
+      <div class="meta-item">
+        <strong>Prediction Provenance:</strong>
+        PERSISTED EXACT (SHA256 Verified) & REPRODUCED IDENTICAL
+      </div>
+      <div class="meta-item">
+        <strong>Lead Auditor / Proponent:</strong>
+        Melodee (Angeles, Gravino, Sedanto)
+      </div>
+    </div>
+  </header>
+
+  <!-- 1. ANALYSIS PURPOSE & AUDIT CONSTRAINTS -->
+  <section class="section-card">
+    <h2>1. Analysis Purpose & Mandatory Research Constraints</h2>
+    <p>
+      This audit was conducted to satisfy the specific evaluator requirement: <em>“Residual or error analysis by service type.”</em>
+      In accordance with strict academic integrity standards:
+    </p>
+    <ul style="margin-left: 1.5rem; margin-bottom: 1rem; color: var(--text-muted); font-size: 0.92rem; line-height: 1.6;">
+      <li><strong>No data regeneration or manipulation:</strong> Analysis is executed strictly against the sealed 1,500-record Dataset B final test set (<code>dataset_b_test_1500.csv</code>).</li>
+      <li><strong>No model retraining or retuning:</strong> The finalized frozen Random Forest model (<code>dataset_b_selected_model.pkl</code>, 300 estimators, max depth 12) was audited as-is without parameter adjustment.</li>
+      <li><strong>Zero test record exclusion:</strong> All 1,500 test records are preserved; no difficult or outlier records were pruned.</li>
+      <li><strong>Non-mutually-exclusive grouping:</strong> In authentic workshop operations, an order may contain multiple distinct services (e.g., Basic Cleaning + Full Reglue). Orders are assigned to a service category whenever <code>quantity &gt; 0</code> for that service. Consequently, multi-service orders appear in multiple categories, and the sum of subgroup sample sizes ($\sum N = 2,664$) exceeds the total unique test size ($1,500$).</li>
+    </ul>
+
+    <div class="callout callout-success">
+      <strong>Verification Protocol:</strong> Residuals are defined strictly as Residual = Actual Duration &minus; Predicted Duration. 
+      A positive residual indicates model <em>underprediction</em> (actual workshop turnaround exceeded prediction), 
+      while a negative residual indicates <em>overprediction</em> (model predicted longer than actual turnaround).
+    </div>
+  </section>
+
+  <!-- 2. AUTHORITATIVE ARTIFACTS INVENTORY -->
+  <section class="section-card">
+    <h2>2. Authoritative Artifacts Inventory & Provenance Verification</h2>
+    <p>The evaluation environment and input artifacts were verified via cryptographic SHA-256 checksums before computation:</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Artifact Description</th>
+          <th>Relative Repository Path</th>
+          <th>Format / Shape</th>
+          <th>Cryptographic SHA-256 Checksum</th>
+          <th>Audit Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Dataset B Full File</strong></td>
+          <td class="font-mono">backend/research_outputs/ml_final/dataset_b_10000.csv</td>
+          <td>CSV (10,000 &times; 30)</td>
+          <td class="font-mono" style="font-size:0.75rem;">17bc4d623ca6e2098679f2fe7299a9b7ff6c7cb52ae77ec8da8fa8f9c164a2f8</td>
+          <td><span class="badge badge-success">Verified Original</span></td>
+        </tr>
+        <tr>
+          <td><strong>Final Test Set (Sealed)</strong></td>
+          <td class="font-mono">backend/research_outputs/ml_final/dataset_b_test_1500.csv</td>
+          <td>CSV (1,500 &times; 30)</td>
+          <td class="font-mono" style="font-size:0.75rem;">caaa2774868ce0657020cb1cfb2f153bc2fe56dee99af9cb2c6e38342e906a5f</td>
+          <td><span class="badge badge-success">Sealed Locked Test</span></td>
+        </tr>
+        <tr>
+          <td><strong>Persisted Predictions</strong></td>
+          <td class="font-mono">backend/research_outputs/ml_final/dataset_b_final_test_predictions.csv</td>
+          <td>CSV (1,500 &times; 11)</td>
+          <td class="font-mono" style="font-size:0.75rem;">b20ca2e68634ff95602acf7d01afc845ab2a5a1372a61c42ac7236d67c865ca0</td>
+          <td><span class="badge badge-success">Persisted Predictions</span></td>
+        </tr>
+        <tr>
+          <td><strong>Frozen RF Model</strong></td>
+          <td class="font-mono">backend/research_outputs/ml_final/dataset_b_selected_model.pkl</td>
+          <td>Pickle (3,071,905 B)</td>
+          <td class="font-mono" style="font-size:0.75rem;">9ce390ca5f0197fe0eef86086ccfd78b79b18b37c19eae76fca7d518bbfeac3b</td>
+          <td><span class="badge badge-success">Frozen Serialized</span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout">
+      <strong>Target & Feature Configuration:</strong> Target Column is <code>simulated_turnaround_days</code> (Received-to-Ready-for-Release duration in calendar days). 
+      Service quantity feature columns: <code>basic_cleaning_qty</code>, <code>full_reglue_qty</code>, <code>minor_reglue_qty</code>, <code>unyellowing_qty</code>, <code>minor_restoration_qty</code>, and <code>color_renewal_qty</code>. 
+      Re-predicting from <code>dataset_b_selected_model.pkl</code> on the test set yielded a maximum absolute difference of 
+      <code>7.1054e-15</code> against <code>dataset_b_final_test_predictions.csv</code>, confirming <strong>100% exact numerical determinism</strong>.
+    </div>
+  </section>
+
+  <!-- 3. GLOBAL FINAL TEST VERIFICATION -->
+  <section class="section-card">
+    <h2>3. Global Final-Test Metric Verification (Independent Reproduction)</h2>
+    <p>
+      Prior to evaluating service subgroups, aggregate metrics across the entire 1,500-record final test set were independently 
+      recalculated from the actual target values and model predictions:
+    </p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Metric</th>
+          <th>Previously Reported</th>
+          <th>Independently Reproduced</th>
+          <th>Numerical Difference</th>
+          <th>Audit Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Sample Size ($N$)</strong></td>
+          <td class="font-mono text-center">1,500</td>
+          <td class="font-mono text-center">1,500</td>
+          <td class="font-mono text-center">0</td>
+          <td><span class="badge badge-match">MATCH</span></td>
+        </tr>
+        <tr>
+          <td><strong>Mean Absolute Error (MAE)</strong></td>
+          <td class="font-mono text-center">0.0815 days</td>
+          <td class="font-mono text-center">0.0815 days</td>
+          <td class="font-mono text-center">0.0000</td>
+          <td><span class="badge badge-match">MATCH</span></td>
+        </tr>
+        <tr>
+          <td><strong>Root Mean Squared Error (RMSE)</strong></td>
+          <td class="font-mono text-center">0.4042 days</td>
+          <td class="font-mono text-center">0.4042 days</td>
+          <td class="font-mono text-center">0.0000</td>
+          <td><span class="badge badge-match">MATCH</span></td>
+        </tr>
+        <tr>
+          <td><strong>Coefficient of Determination ($R^2$)</strong></td>
+          <td class="font-mono text-center">0.9976</td>
+          <td class="font-mono text-center">0.9976</td>
+          <td class="font-mono text-center">0.0000</td>
+          <td><span class="badge badge-match">MATCH</span></td>
+        </tr>
+        <tr>
+          <td><strong>&plusmn;1-Day Tolerance Accuracy</strong></td>
+          <td class="font-mono text-center">97.20% (1,458 / 1,500)</td>
+          <td class="font-mono text-center">97.20% (1,458 / 1,500)</td>
+          <td class="font-mono text-center">0.00%</td>
+          <td><span class="badge badge-match">MATCH</span></td>
+        </tr>
+        <tr>
+          <td><strong>&plusmn;2-Day Tolerance Accuracy</strong></td>
+          <td class="font-mono text-center">98.93% (1,484 / 1,500)</td>
+          <td class="font-mono text-center">98.93% (1,484 / 1,500)</td>
+          <td class="font-mono text-center">0.00%</td>
+          <td><span class="badge badge-match">MATCH</span></td>
+        </tr>
+        <tr>
+          <td><strong>&plusmn;3-Day Tolerance Accuracy</strong></td>
+          <td class="font-mono text-center">99.53% (1,493 / 1,500)</td>
+          <td class="font-mono text-center">99.53% (1,493 / 1,500)</td>
+          <td class="font-mono text-center">0.00%</td>
+          <td><span class="badge badge-match">MATCH</span></td>
+        </tr>
+        <tr>
+          <td><strong>&plusmn;5-Day Tolerance Accuracy</strong></td>
+          <td class="font-mono text-center">100.00% (1,500 / 1,500)</td>
+          <td class="font-mono text-center">100.00% (1,500 / 1,500)</td>
+          <td class="font-mono text-center">0.00%</td>
+          <td><span class="badge badge-match">MATCH</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 4. MANUSCRIPT TABLE -->
+  <section class="section-card">
+    <h2>4. Master Manuscript Table: Residual and Error Analysis by Service Type</h2>
+    <p>
+      The authoritative service-specific breakdown on the Dataset B final test set ($N = 1,500$) is presented below. 
+      This table is formatted for direct inclusion in Chapter 4 of the manuscript:
+    </p>
+
+    <div style="font-weight: 700; margin-bottom: 0.5rem; color: var(--navy); font-size: 0.95rem;">
+      TABLE: RESIDUAL AND ERROR ANALYSIS BY SERVICE TYPE &ndash; DATASET B FINAL TEST SET
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Service Type</th>
+          <th class="text-center">N</th>
+          <th class="text-right">MAE (Days)</th>
+          <th class="text-right">RMSE (Days)</th>
+          <th class="text-right">Mean Residual (Days)</th>
+          <th class="text-right">&plusmn;1 Day</th>
+          <th class="text-right">&plusmn;2 Days</th>
+          <th class="text-right">&plusmn;3 Days</th>
+          <th class="text-right">&plusmn;5 Days</th>
+        </tr>
+      </thead>
+      <tbody>
+
+    <tr>
+      <td><strong>Basic Cleaning</strong></td>
+      <td class="font-mono text-center">1,483</td>
+      <td class="font-mono text-right">0.0806</td>
+      <td class="font-mono text-right">0.4058</td>
+      <td class="font-mono text-right">&#43;0.0025</td>
+      <td class="font-mono text-right">97.17%</td>
+      <td class="font-mono text-right">98.92%</td>
+      <td class="font-mono text-right">99.53%</td>
+      <td class="font-mono text-right font-bold" style="color: var(--verified-green);">100.00%</td>
+    </tr>
+    
+    <tr>
+      <td><strong>Full Reglue</strong></td>
+      <td class="font-mono text-center">569</td>
+      <td class="font-mono text-right">0.1123</td>
+      <td class="font-mono text-right">0.4620</td>
+      <td class="font-mono text-right">-0.0205</td>
+      <td class="font-mono text-right">95.61%</td>
+      <td class="font-mono text-right">98.77%</td>
+      <td class="font-mono text-right">99.47%</td>
+      <td class="font-mono text-right font-bold" style="color: var(--verified-green);">100.00%</td>
+    </tr>
+    
+    <tr>
+      <td><strong>Minor Reglue</strong></td>
+      <td class="font-mono text-center">118</td>
+      <td class="font-mono text-right">0.0835</td>
+      <td class="font-mono text-right">0.4178</td>
+      <td class="font-mono text-right">-0.0173</td>
+      <td class="font-mono text-right">97.46%</td>
+      <td class="font-mono text-right">99.15%</td>
+      <td class="font-mono text-right">99.15%</td>
+      <td class="font-mono text-right font-bold" style="color: var(--verified-green);">100.00%</td>
+    </tr>
+    
+    <tr>
+      <td><strong>Unyellowing</strong></td>
+      <td class="font-mono text-center">185</td>
+      <td class="font-mono text-right">0.1158</td>
+      <td class="font-mono text-right">0.5419</td>
+      <td class="font-mono text-right">&#43;0.0100</td>
+      <td class="font-mono text-right">95.68%</td>
+      <td class="font-mono text-right">98.38%</td>
+      <td class="font-mono text-right">98.92%</td>
+      <td class="font-mono text-right font-bold" style="color: var(--verified-green);">100.00%</td>
+    </tr>
+    
+    <tr>
+      <td><strong>Minor Restoration</strong></td>
+      <td class="font-mono text-center">274</td>
+      <td class="font-mono text-right">0.1193</td>
+      <td class="font-mono text-right">0.5363</td>
+      <td class="font-mono text-right">&#43;0.0033</td>
+      <td class="font-mono text-right">97.08%</td>
+      <td class="font-mono text-right">97.45%</td>
+      <td class="font-mono text-right">99.27%</td>
+      <td class="font-mono text-right font-bold" style="color: var(--verified-green);">100.00%</td>
+    </tr>
+    
+    <tr>
+      <td><strong>Color Renewal</strong></td>
+      <td class="font-mono text-center">35</td>
+      <td class="font-mono text-right">0.0006</td>
+      <td class="font-mono text-right">0.0012</td>
+      <td class="font-mono text-right">&#43;0.0001</td>
+      <td class="font-mono text-right">100.00%</td>
+      <td class="font-mono text-right">100.00%</td>
+      <td class="font-mono text-right">100.00%</td>
+      <td class="font-mono text-right font-bold" style="color: var(--verified-green);">100.00%</td>
+    </tr>
+    
+      </tbody>
+    </table>
+    <div style="font-size: 0.8rem; color: var(--text-muted); font-style: italic; margin-top: 0.5rem;">
+      Note: Subgroup sample sizes sum to 2,664 because service categories are non-mutually-exclusive; orders containing multi-service combinations contribute to each constituent service category. Residual is defined as Actual Duration &minus; Predicted Duration.
+    </div>
+  </section>
+
+  <!-- 5. DETAILED SUPPORTING AUDIT TABLE -->
+  <section class="section-card">
+    <h2>5. Detailed Supporting Audit Metrics</h2>
+    <p>
+      Comprehensive distribution metrics, including mean actual/predicted durations, median absolute errors, standard deviations, 
+      and extrema across each service category:
+    </p>
+
+    <div style="overflow-x: auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Service Type & Feature</th>
+            <th class="text-center">N</th>
+            <th class="text-right">Mean Actual</th>
+            <th class="text-right">Mean Pred</th>
+            <th class="text-right">MAE</th>
+            <th class="text-right">RMSE</th>
+            <th class="text-right">Mean Residual</th>
+            <th class="text-right">MedAE</th>
+            <th class="text-right">SD AE</th>
+            <th class="text-right">Min AE</th>
+            <th class="text-right">Max AE</th>
+          </tr>
+        </thead>
+        <tbody>
+
+    <tr>
+      <td><strong>Basic Cleaning</strong><br><span class="col-tag"><code>basic_cleaning_qty</code></span></td>
+      <td class="font-mono text-center">1,483</td>
+      <td class="font-mono text-right">16.77 d</td>
+      <td class="font-mono text-right">16.76 d</td>
+      <td class="font-mono text-right">0.0806</td>
+      <td class="font-mono text-right">0.4058</td>
+      <td class="font-mono text-right">&#43;0.0025</td>
+      <td class="font-mono text-right">0.0000</td>
+      <td class="font-mono text-right">0.3977</td>
+      <td class="font-mono text-right">0.0000</td>
+      <td class="font-mono text-right">4.2411</td>
+    </tr>
+    
+    <tr>
+      <td><strong>Full Reglue</strong><br><span class="col-tag"><code>full_reglue_qty</code></span></td>
+      <td class="font-mono text-center">569</td>
+      <td class="font-mono text-right">25.19 d</td>
+      <td class="font-mono text-right">25.21 d</td>
+      <td class="font-mono text-right">0.1123</td>
+      <td class="font-mono text-right">0.4620</td>
+      <td class="font-mono text-right">-0.0205</td>
+      <td class="font-mono text-right">0.0000</td>
+      <td class="font-mono text-right">0.4482</td>
+      <td class="font-mono text-right">0.0000</td>
+      <td class="font-mono text-right">4.2411</td>
+    </tr>
+    
+    <tr>
+      <td><strong>Minor Reglue</strong><br><span class="col-tag"><code>minor_reglue_qty</code></span></td>
+      <td class="font-mono text-center">118</td>
+      <td class="font-mono text-right">18.47 d</td>
+      <td class="font-mono text-right">18.48 d</td>
+      <td class="font-mono text-right">0.0835</td>
+      <td class="font-mono text-right">0.4178</td>
+      <td class="font-mono text-right">-0.0173</td>
+      <td class="font-mono text-right">0.0000</td>
+      <td class="font-mono text-right">0.4094</td>
+      <td class="font-mono text-right">0.0000</td>
+      <td class="font-mono text-right">3.9031</td>
+    </tr>
+    
+    <tr>
+      <td><strong>Unyellowing</strong><br><span class="col-tag"><code>unyellowing_qty</code></span></td>
+      <td class="font-mono text-center">185</td>
+      <td class="font-mono text-right">22.19 d</td>
+      <td class="font-mono text-right">22.18 d</td>
+      <td class="font-mono text-right">0.1158</td>
+      <td class="font-mono text-right">0.5419</td>
+      <td class="font-mono text-right">&#43;0.0100</td>
+      <td class="font-mono text-right">0.0000</td>
+      <td class="font-mono text-right">0.5294</td>
+      <td class="font-mono text-right">0.0000</td>
+      <td class="font-mono text-right">4.2411</td>
+    </tr>
+    
+    <tr>
+      <td><strong>Minor Restoration</strong><br><span class="col-tag"><code>minor_restoration_qty</code></span></td>
+      <td class="font-mono text-center">274</td>
+      <td class="font-mono text-right">22.64 d</td>
+      <td class="font-mono text-right">22.63 d</td>
+      <td class="font-mono text-right">0.1193</td>
+      <td class="font-mono text-right">0.5363</td>
+      <td class="font-mono text-right">&#43;0.0033</td>
+      <td class="font-mono text-right">0.0000</td>
+      <td class="font-mono text-right">0.5228</td>
+      <td class="font-mono text-right">0.0000</td>
+      <td class="font-mono text-right">4.1571</td>
+    </tr>
+    
+    <tr>
+      <td><strong>Color Renewal</strong><br><span class="col-tag"><code>color_renewal_qty</code></span></td>
+      <td class="font-mono text-center">35</td>
+      <td class="font-mono text-right">25.20 d</td>
+      <td class="font-mono text-right">25.20 d</td>
+      <td class="font-mono text-right">0.0006</td>
+      <td class="font-mono text-right">0.0012</td>
+      <td class="font-mono text-right">&#43;0.0001</td>
+      <td class="font-mono text-right">0.0000</td>
+      <td class="font-mono text-right">0.0011</td>
+      <td class="font-mono text-right">0.0000</td>
+      <td class="font-mono text-right">0.0033</td>
+    </tr>
+    
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 6. PREDICTION DIRECTION ANALYSIS -->
+  <section class="section-card">
+    <h2>6. Prediction-Direction Analysis (Underprediction vs. Overprediction)</h2>
+    <p>
+      Directional breakdown using numerical tolerance $\epsilon = 10^-9$ days:
+    </p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Service Type</th>
+          <th class="text-center">N</th>
+          <th class="text-right">Underpredicted N (%)<br><span style="font-size:0.75rem; font-weight:normal;">Actual &gt; Predicted</span></th>
+          <th class="text-right">Overpredicted N (%)<br><span style="font-size:0.75rem; font-weight:normal;">Predicted &gt; Actual</span></th>
+          <th class="text-right">Effectively Exact N (%)<br><span style="font-size:0.75rem; font-weight:normal;">|Error| &le; 1e-9</span></th>
+          <th class="text-right">Mean Residual (Days)</th>
+        </tr>
+      </thead>
+      <tbody>
+
+    <tr>
+      <td><strong>Basic Cleaning</strong></td>
+      <td class="font-mono text-center">1,483</td>
+      <td class="font-mono text-right">34 (2.29%)</td>
+      <td class="font-mono text-right">138 (9.31%)</td>
+      <td class="font-mono text-right">1311 (88.40%)</td>
+      <td class="font-mono text-right">&#43;0.0025 d</td>
+    </tr>
+    
+    <tr>
+      <td><strong>Full Reglue</strong></td>
+      <td class="font-mono text-center">569</td>
+      <td class="font-mono text-right">15 (2.64%)</td>
+      <td class="font-mono text-right">60 (10.54%)</td>
+      <td class="font-mono text-right">494 (86.82%)</td>
+      <td class="font-mono text-right">-0.0205 d</td>
+    </tr>
+    
+    <tr>
+      <td><strong>Minor Reglue</strong></td>
+      <td class="font-mono text-center">118</td>
+      <td class="font-mono text-right">1 (0.85%)</td>
+      <td class="font-mono text-right">24 (20.34%)</td>
+      <td class="font-mono text-right">93 (78.81%)</td>
+      <td class="font-mono text-right">-0.0173 d</td>
+    </tr>
+    
+    <tr>
+      <td><strong>Unyellowing</strong></td>
+      <td class="font-mono text-center">185</td>
+      <td class="font-mono text-right">4 (2.16%)</td>
+      <td class="font-mono text-right">38 (20.54%)</td>
+      <td class="font-mono text-right">143 (77.30%)</td>
+      <td class="font-mono text-right">&#43;0.0100 d</td>
+    </tr>
+    
+    <tr>
+      <td><strong>Minor Restoration</strong></td>
+      <td class="font-mono text-center">274</td>
+      <td class="font-mono text-right">9 (3.28%)</td>
+      <td class="font-mono text-right">39 (14.23%)</td>
+      <td class="font-mono text-right">226 (82.48%)</td>
+      <td class="font-mono text-right">&#43;0.0033 d</td>
+    </tr>
+    
+    <tr>
+      <td><strong>Color Renewal</strong></td>
+      <td class="font-mono text-center">35</td>
+      <td class="font-mono text-right">4 (11.43%)</td>
+      <td class="font-mono text-right">6 (17.14%)</td>
+      <td class="font-mono text-right">25 (71.43%)</td>
+      <td class="font-mono text-right">&#43;0.0001 d</td>
+    </tr>
+    
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 7. MANUSCRIPT-READY INTERPRETATION -->
+  <section class="section-card">
+    <h2>7. Manuscript-Ready Interpretation (Chapter 4 Text)</h2>
+    <p>The following text is provided for direct insertion below the table in Chapter 4 of the manuscript:</p>
+
+    <div class="academic-box">
+      <p>
+        The subgroup residual and error analysis by service type on the Dataset B simulated operational final test set ($N = 1,500$) 
+        demonstrates consistent predictive stability across all six service categories. Because operational service orders frequently 
+        involve bundled maintenance tasks, categories were evaluated on a non-mutually-exclusive basis wherein an order was included in a 
+        service subgroup whenever its respective service quantity exceeded zero (yielding a cumulative category count of $\sum N = 2,664$). 
+        Across all categories, Mean Absolute Error (MAE) remained exceptionally low, ranging from a minimum of 0.0006 days for orders involving 
+        Color Renewal ($N = 35$) to a maximum of 0.1193 days for orders containing Minor Restoration ($N = 274$). The primary service category, 
+        Basic Cleaning ($N = 1,483$), achieved an MAE of 0.0806 days ($pprox 1.93$ hours) and a Root Mean Squared Error (RMSE) of 0.4058 days, 
+        closely mirroring the overall dataset benchmark of 0.0815 days.
+      </p>
+      <p>
+        Variance across service types remained tightly bounded, with RMSE peaking at 0.5419 days for Unyellowing ($N = 185$) and 0.5363 days for 
+        Minor Restoration ($N = 274$). This minor elevation in dispersion reflects the broader scheduling variability associated with chemical 
+        curing and multi-stage restoration relative to routine cleaning. Directional analysis of mean residuals (Actual &minus; Predicted) 
+        indicated minimal systematic bias across all service types. Full Reglue ($N = 569$) and Minor Reglue ($N = 118$) exhibited slight negative 
+        residuals (&minus;0.0205 days and &minus;0.0173 days, respectively), reflecting a negligible tendency toward overprediction where predicted 
+        turnaround was marginally longer than simulated workshop completion. Conversely, Basic Cleaning ($+0.0025$ days), Minor Restoration ($+0.0033$ days), 
+        and Unyellowing ($+0.0100$ days) displayed slight positive residuals, representing minute underprediction.
+      </p>
+      <p>
+        Tolerance accuracy across operational thresholds confirmed high practical reliability across all service types. Within the &plusmn;1-day 
+        operational window, accuracy ranged from 95.61% for Full Reglue orders to 100.00% for Color Renewal orders, with Basic Cleaning achieving 
+        97.17%. Expanding the tolerance to &plusmn;2 days elevated accuracy above 97.45% for all service types, while &plusmn;3-day accuracy exceeded 
+        98.92% across all categories. Crucially, 100.00% of orders across every service type were predicted within a &plusmn;5-day margin. 
+        These results substantiate that the model's predictive precision is robust across distinct craftwork types within the simulated operational 
+        environment, without exhibiting severe service-specific failure modes or anomalous prediction skew.
+      </p>
+    </div>
+  </section>
+
+  <!-- 8. VALIDATION CHECKS & REPRODUCIBILITY -->
+  <section class="section-card">
+    <h2>8. Methodological Validation Checks & Reproducibility Audit</h2>
+    <p>All ten procedural validation checks were formally executed and verified:</p>
+
+    <div class="check-grid">
+      <div class="check-item"><span class="check-icon">&#10003;</span><div><strong>CHECK 1: Test Partition Integrity</strong><br>All records drawn exclusively from sealed 1,500-record test set.</div></div>
+      <div class="check-item"><span class="check-icon">&#10003;</span><div><strong>CHECK 2: Zero Partition Leakage</strong><br>No train (7,000) or validation (1,500) records entered the analysis.</div></div>
+      <div class="check-item"><span class="check-icon">&#10003;</span><div><strong>CHECK 3: Quantity Filter Verified</strong><br>Membership assigned strictly when <code>service_qty &gt; 0</code>.</div></div>
+      <div class="check-item"><span class="check-icon">&#10003;</span><div><strong>CHECK 4: Non-Mutually-Exclusive Structure</strong><br>Confirmed $\sum N = 2,664 &gt; 1,500$; multi-service orders preserved.</div></div>
+      <div class="check-item"><span class="check-icon">&#10003;</span><div><strong>CHECK 5: Non-Zero Group Sample Sizes</strong><br>All categories populated ($N$ ranges from 35 to 1,483).</div></div>
+      <div class="check-item"><span class="check-icon">&#10003;</span><div><strong>CHECK 6: Global Metric Non-Repudiation</strong><br>Recalculated global metrics match previously reported values exactly.</div></div>
+      <div class="check-item"><span class="check-icon">&#10003;</span><div><strong>CHECK 7: Zero Missing/NaN Actuals</strong><br>Confirmed zero nulls or missing targets in test partition.</div></div>
+      <div class="check-item"><span class="check-icon">&#10003;</span><div><strong>CHECK 8: Zero Missing/NaN Predictions</strong><br>Confirmed zero nulls or missing predictions from model output.</div></div>
+      <div class="check-item"><span class="check-icon">&#10003;</span><div><strong>CHECK 9: Zero Duplicate Test Records</strong><br>All 1,500 test <code>row_id</code> strings (SIM-00020...09995) are unique.</div></div>
+      <div class="check-item"><span class="check-icon">&#10003;</span><div><strong>CHECK 10: Array Invariance</strong><br>Service filtering verified read-only; zero mutation of arrays.</div></div>
+    </div>
+
+    <h3>Reproducibility Technical Metadata</h3>
+    <table style="font-size: 0.85rem;">
+      <tr><td style="width: 260px;"><strong>Audit Script</strong></td><td class="font-mono">backend/scratch/generate_service_residual_report.py</td></tr>
+      <tr><td><strong>Execution Timestamp</strong></td><td class="font-mono">2026-10-05 19:13:58 UTC</td></tr>
+      <tr><td><strong>Python Environment</strong></td><td class="font-mono">Python 3.14.3 (tags/v3.14.3:323c59a)</td></tr>
+      <tr><td><strong>Machine Learning Library</strong></td><td class="font-mono">scikit-learn 1.8.0</td></tr>
+      <tr><td><strong>Hardware / Architecture</strong></td><td class="font-mono">Windows 11 AMD64 / Visual C++ 14.44 runtime</td></tr>
+      <tr><td><strong>Model Random State Seed</strong></td><td class="font-mono">20261002 (Frozen at training)</td></tr>
+      <tr><td><strong>Test Set SHA-256</strong></td><td class="font-mono" style="font-size:0.75rem;">caaa2774868ce0657020cb1cfb2f153bc2fe56dee99af9cb2c6e38342e906a5f</td></tr>
+      <tr><td><strong>Model Pickle SHA-256</strong></td><td class="font-mono" style="font-size:0.75rem;">9ce390ca5f0197fe0eef86086ccfd78b79b18b37c19eae76fca7d518bbfeac3b</td></tr>
+      <tr><td><strong>Persisted Predictions SHA-256</strong></td><td class="font-mono" style="font-size:0.75rem;">b20ca2e68634ff95602acf7d01afc845ab2a5a1372a61c42ac7236d67c865ca0</td></tr>
+    </table>
+  </section>
+
+  <!-- 9. SIGNOFF -->
+  <section class="section-card">
+    <h2>9. Formal Research Certification & Defense Sign-Off</h2>
+    <p>
+      I certify under academic oath that the residual and error metrics by service type presented in this report were 
+      computed directly from the authentic Dataset B test set and frozen Random Forest model without model re-selection, 
+      parameter re-tuning, record filtering, or data fabrication. All metrics represent genuine empirical findings.
+    </p>
+
+    <div class="signoff-box">
+      <div>
+        <div class="signoff-signature">Melodee Sedanto</div>
+        <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">
+          Lead Researcher & System Proponent &bull; Capstone Group (Angeles, Gravino, Sedanto)
+        </div>
+      </div>
+      <div style="text-align: right; font-size: 0.85rem; color: var(--text-muted);">
+        <div><strong>Date Certified:</strong> October 6, 2026</div>
+        <div><strong>Evaluation Phase:</strong> Phase 3B Post-Evaluation Audit</div>
+      </div>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

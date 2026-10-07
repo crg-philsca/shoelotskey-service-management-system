@@ -14,6 +14,7 @@ import {
   Banknote,
   FlaskConical,
   Brain,
+  Database,
 } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/app/components/ui/tooltip';
@@ -53,6 +54,7 @@ export default function Layout({ children, user, onLogout, headerAction, headerC
     ...ownerMenuItems,
     { path: '/ml-training', icon: Brain, label: 'ML Training', shortLabel: 'ML' },
     { path: '/research-evidence', icon: FlaskConical, label: 'Research Evidence', shortLabel: 'Evidence' },
+    { path: '/backup', icon: Database, label: 'Backup & Recovery', shortLabel: 'Backup' },
   ];
 
   const frontStaffMenuItems = [
@@ -103,10 +105,11 @@ export default function Layout({ children, user, onLogout, headerAction, headerC
       : (isFrontStaffUser
         ? frontStaffMenuItems
         : staffMenuItems));
-  const canAccessBackup = user.role === 'owner' || user.role === 'admin';
+  const isAdminAccount = user.role === 'admin' || (user?.username || '').toLowerCase().trim() === 'admin';
+  const canAccessBackup = isAdminAccount;
 
   const SidebarContent = ({ collapsed }: { collapsed: boolean }) => (
-    <>
+    <div className="flex flex-col h-full min-h-0 w-full select-none">
       <div className="px-3 h-16 shrink-0 border-b border-red-500 flex items-center">
         <div className={collapsed ? 'flex justify-center w-full' : 'flex items-center w-full pl-2'}>
           {canAccessBackup ? (
@@ -119,8 +122,10 @@ export default function Layout({ children, user, onLogout, headerAction, headerC
                     className="h-12 w-12 rounded-full bg-white flex items-center justify-center flex-shrink-0 shadow-xs ring-2 ring-white/20 hover:ring-white/60 hover:scale-105 active:scale-95 transition-all cursor-pointer"
                   >
                     <img
-                      src="/logo.png"
+                      src="/logo.webp"
                       alt="Shoelotskey logo"
+                      width="36"
+                      height="36"
                       className="h-9 w-9 object-contain pointer-events-none"
                       loading="eager"
                       decoding="async"
@@ -138,8 +143,10 @@ export default function Layout({ children, user, onLogout, headerAction, headerC
               title="Shoelotskey"
             >
               <img
-                src="/logo.png"
+                src="/logo.webp"
                 alt="Shoelotskey logo"
+                width="36"
+                height="36"
                 className="h-9 w-9 object-contain pointer-events-none"
                 loading="eager"
                 decoding="async"
@@ -147,15 +154,15 @@ export default function Layout({ children, user, onLogout, headerAction, headerC
             </div>
           )}
           {!collapsed && (
-            <div className="flex-1 text-center space-y-0.5 min-w-0 ml-4 pr-2">
-              <h1 className="text-base font-bold leading-tight tracking-wide text-white truncate">Shoelotskey</h1>
-              <p className="text-xs text-red-200 font-medium truncate">{user.role === 'admin' ? 'Developer' : (user.role === 'owner' ? 'Owner' : (isFrontStaffUser ? 'Front Staff' : 'Staff'))}</p>
+            <div className="flex-1 text-center space-y-0.5 min-w-0 ml-4 pr-6">
+              <span className="text-base font-bold leading-tight tracking-wide text-white truncate block">Shoelotskey</span>
+              <p className="text-xs text-red-200 font-medium truncate">{user.role === 'admin' ? 'Developer' : (user.role === 'owner' ? 'Owner' : 'Staff')}</p>
             </div>
           )}
         </div>
       </div>
 
-      <div className={`flex-1 ${collapsed ? 'flex flex-col items-center mt-6' : 'px-3 py-4'}`}>
+      <div className={`flex-1 min-h-0 overflow-y-auto subtle-vertical-scroll ${collapsed ? 'flex flex-col items-center mt-6' : 'px-3 py-4'}`}>
         <nav className={`${collapsed ? 'flex flex-col items-center gap-1' : 'space-y-1'}`}>
           <TooltipProvider>
             {menuItems.map((item) => {
@@ -192,7 +199,7 @@ export default function Layout({ children, user, onLogout, headerAction, headerC
         </nav>
       </div>
 
-      <div className={`border-t border-red-500 ${collapsed ? 'flex flex-col items-center gap-2 py-4' : 'p-4 space-y-2'}`}>
+      <div className={`mt-auto shrink-0 border-t border-red-500 ${collapsed ? 'flex flex-col items-center gap-2 py-4' : 'p-4 space-y-2'}`}>
         <TooltipProvider>
           <Tooltip delayDuration={300}>
             <TooltipTrigger asChild>
@@ -217,7 +224,7 @@ export default function Layout({ children, user, onLogout, headerAction, headerC
           </Tooltip>
         </TooltipProvider>
       </div>
-    </>
+    </div>
   );
 
   return (
@@ -231,6 +238,7 @@ export default function Layout({ children, user, onLogout, headerAction, headerC
           onClick={() => setIsCollapsed(!isCollapsed)}
           className={`absolute right-0 ${isCollapsed ? 'top-[47%]' : 'top-[51%]'} -translate-y-1/2 translate-x-1/2 bg-red-800 hover:bg-red-600 text-white rounded-full transition-all duration-300 z-10 shadow-lg border-2 border-white ${isCollapsed ? 'p-1' : 'p-2'}`}
           title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={20} />}
         </button>
@@ -243,14 +251,16 @@ export default function Layout({ children, user, onLogout, headerAction, headerC
           <div className="md:hidden mr-3">
             <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="text-red-700 hover:bg-red-50">
+                <Button variant="ghost" size="icon" aria-label="Open navigation menu" className="text-red-700 hover:bg-red-50">
                   <Menu className="h-6 w-6" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" closeClassName="bg-red-800 hover:bg-red-900 text-white border-red-500/50 shadow-sm" className="p-0 bg-red-700 border-red-800 w-64 z-[1000] overflow-y-auto max-h-[100dvh]">
-                <div className="h-full flex flex-col text-white">
-                  <SidebarContent collapsed={false} />
-                </div>
+              <SheetContent 
+                side="left" 
+                closeClassName="bg-red-800 hover:bg-red-900 text-white border-red-500/50 shadow-sm" 
+                className="p-0 bg-red-700 border-none w-72 max-w-[85vw] h-full min-h-[100dvh] max-h-[100dvh] z-[1000] overflow-hidden rounded-none"
+              >
+                <SidebarContent collapsed={false} />
               </SheetContent>
             </Sheet>
           </div>
@@ -261,9 +271,9 @@ export default function Layout({ children, user, onLogout, headerAction, headerC
                 {headerActionLeft}
               </div>
             )}
-            <h2 className="text-sm sm:text-base md:text-2xl font-bold text-red-600 uppercase truncate">
+            <h1 className="text-sm sm:text-base md:text-2xl font-bold text-red-700 uppercase truncate">
               {pageTitles[location.pathname] || 'PAGE NOT FOUND'}
-            </h2>
+            </h1>
           </div>
 
           {headerCenter ? (
@@ -283,7 +293,17 @@ export default function Layout({ children, user, onLogout, headerAction, headerC
           </div>
         </header>
 
-        <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pt-3 px-3 md:px-6 pb-8 no-scrollbar">
+        <main className={`flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-3 md:px-6 no-scrollbar ${
+          location.pathname === '/service-management'
+            ? 'pt-3 pb-1.5 sm:pt-4 sm:pb-2'
+            : location.pathname === '/job-order-form'
+              ? 'pt-2 sm:pt-2.5 pb-4 md:pb-5'
+              : location.pathname === '/release-calendar'
+                ? 'py-2 sm:py-3 md:py-4 flex flex-col'
+                : location.pathname === '/dashboard' || location.pathname === '/sales-report'
+                  ? 'pt-3.5 sm:pt-4 pb-2.5 sm:pb-3'
+                  : 'pt-3 pb-8'
+        }`}>
           {children}
         </main>
       </div>

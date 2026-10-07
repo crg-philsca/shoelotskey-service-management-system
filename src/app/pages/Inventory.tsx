@@ -2,7 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/ca
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { Input } from '@/app/components/ui/input';
-import { Package, PlusCircle, PackageMinus, Search, Filter, AlertTriangle, ArrowUpRight, ChevronLeft, ChevronRight, Edit, Trash2, XCircle, X, ShieldCheck, Loader2, MoreVertical, Lock, Plus } from 'lucide-react';
+import { Package, PlusCircle, PackageMinus, Search, Filter, AlertTriangle, ArrowUpRight, ChevronLeft, ChevronRight, Edit, Trash2, XCircle, X, ShieldCheck, Loader2, MoreVertical, Lock, Plus, History } from 'lucide-react';
+import { API_BASE } from '@/app/lib/apiBase';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import RestockModal from '@/app/components/RestockModal';
 import UpdateStockModal from '@/app/components/UpdateStockModal';
@@ -26,9 +27,12 @@ import { getInventoryPresentation } from '@/app/lib/inventoryPresentation';
 import { formatPeso } from '@/app/lib/currency';
 import { CreatableCombobox } from '@/app/components/ui/creatable-combobox';
 import { CUSTOM_OPTION_KEYS } from '@/app/lib/customOptions';
+import { hasPermission } from '@/app/lib/permissions';
+import { toServiceCode } from '@/app/lib/businessRules';
+
 interface InventoryProps {
     onSetHeaderActionRight?: (action: React.ReactNode) => void;
-    user: { token: string; role?: string; username?: string; id?: number };
+    user: { token: string; role?: string; username?: string; id?: number; permissions?: string[] };
 }
 
 function formatPackageUnitPlural(unit?: string): string {
@@ -86,9 +90,20 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
     const { services } = useServices();
 
     const normalizedRole = (user.role || '').toLowerCase().trim();
+    const isOwnerOrAdmin = normalizedRole === 'owner' || normalizedRole === 'admin' || ((user as any)?.username || '').toLowerCase().trim() === 'admin';
     const isStaffOrAbove = ['owner', 'admin', 'staff', 'front staff'].includes(normalizedRole) || 
                            normalizedRole.includes('staff') || 
                            ((user as any)?.username || '').toLowerCase().trim() === 'front_staff';
+
+    const canViewInventory = hasPermission(user, 'inventory.view');
+    const canCreateItem = hasPermission(user, 'inventory.create_item');
+    const canAddInventory = canCreateItem;
+    const canAddStock = hasPermission(user, 'inventory.add_stock');
+    const canUseStock = hasPermission(user, 'inventory.use_stock');
+    const canAdjustBalance = hasPermission(user, 'inventory.adjust_balance');
+    const canEditInventory = canUseStock || canAdjustBalance;
+    const canDeactivateInventory = hasPermission(user, 'inventory.deactivate');
+    const canUpdateStock = canAddStock || canUseStock || canAdjustBalance;
 
     // Filter out rush fee from service list for materials/stock deduction
     const eligibleServices = useMemo(() => {
@@ -129,6 +144,51 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
     const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const isSavingRef = useRef(false);
+
+    // Movement History State (Owner and Admin only)
+    const [historyItem, setHistoryItem] = useState<InventoryItem | null>(null);
+    const [itemLogs, setItemLogs] = useState<any[]>([]);
+    const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+    const [historyPage, setHistoryPage] = useState(1);
+    const historyLogsPerPage = 8;
+
+    const totalHistoryPages = Math.ceil(itemLogs.length / historyLogsPerPage) || 1;
+    const paginatedHistoryLogs = useMemo(() => {
+        const start = (historyPage - 1) * historyLogsPerPage;
+        return itemLogs.slice(start, start + historyLogsPerPage);
+    }, [itemLogs, historyPage, historyLogsPerPage]);
+
+    const handleViewItemHistory = async (item: InventoryItem) => {
+        if (!isOwnerOrAdmin) return;
+        setHistoryItem(item);
+        setHistoryPage(1);
+        setIsLoadingLogs(true);
+        setItemLogs([]);
+        try {
+            const token = user?.token || (typeof window !== 'undefined' ? (() => {
+                try {
+                    const u = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user') || '{}');
+                    return u?.token;
+                } catch { return ''; }
+            })() : '');
+            const resp = await fetch(`${API_BASE}/inventory/${item.id}/logs`, {
+                headers: token ? {
+                    'Authorization': `Bearer ${token}`
+                } : {}
+            });
+            if (resp.ok) {
+                const data = await resp.json();
+                setItemLogs(Array.isArray(data) ? data : (data.logs || []));
+            } else {
+                toast.error('Failed to load item movement history.');
+            }
+        } catch (err) {
+            console.error('Error fetching inventory logs:', err);
+            toast.error('Network error loading movement history.');
+        } finally {
+            setIsLoadingLogs(false);
+        }
+    };
 
     // Dynamic service consumption config
     interface ServiceConsumptionRow {
@@ -197,7 +257,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
             onSetHeaderActionRight(
                 <div className="flex items-center gap-2">
                     {/* Left: Update Stock (styled like View History) */}
-                    {isStaffOrAbove && (
+                    {canUpdateStock && (
                         <Button 
                             className="w-10 h-10 sm:w-44 flex items-center justify-center rounded-md border border-red-200 bg-white px-2 sm:px-3 py-2 text-sm font-bold uppercase text-red-600 shadow-sm transition hover:bg-red-50 hover:text-red-600 hover:border-red-300 focus:outline-none focus:ring-2 focus:ring-red-500"
                             onClick={() => {
@@ -210,8 +270,8 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                             <span className="hidden sm:inline font-bold text-red-600">Update Stock</span>
                         </Button>
                     )}
-                    {/* Right: Add Item */}
-                    {isStaffOrAbove && (
+                    {/* Right: Add Item (Owner and Admin only) */}
+                    {canAddInventory && isOwnerOrAdmin && (
                         <Button 
                             className="w-10 h-10 sm:w-36 flex items-center justify-center rounded-md border border-red-600 bg-red-600 px-2 sm:px-3 py-2 text-sm font-bold uppercase text-white shadow-md transition hover:border-red-500 hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500"
                             onClick={() => {
@@ -264,7 +324,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
         return () => {
             if (onSetHeaderActionRight) onSetHeaderActionRight(null);
         };
-    }, [onSetHeaderActionRight, user.role, isStaffOrAbove, inventoryData, eligibleServices]);
+    }, [onSetHeaderActionRight, user.role, isStaffOrAbove, canUpdateStock, canAddInventory, inventoryData, eligibleServices]);
  
     const handleSaveItem = async () => {
         if (isSavingRef.current || isSubmitting) return;
@@ -502,38 +562,66 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
 
     const statuses = ['In Stock', 'Low Stock', 'No Stock'];
 
+    if (!canViewInventory && normalizedRole.includes('staff')) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[400px] p-6 text-center space-y-4">
+                <div className="h-16 w-16 rounded-full bg-red-100 flex items-center justify-center text-red-600">
+                    <Lock size={32} />
+                </div>
+                <h2 className="text-xl font-black uppercase text-gray-900 tracking-wider">Access Denied</h2>
+                <p className="text-sm text-gray-600 max-w-md">
+                    You do not have permission to view inventory records. Contact the Owner if you believe access is required.
+                </p>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6 animate-in fade-in duration-700">
-            {/* Summary Row - Interactive Filter Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 no-print">
+            {/* Summary Row - Interactive Filter Cards (4 Grids instead of 4 rows) */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3.5 no-print">
                 {/* Total Items (Reset filter) */}
                 <Card 
+                    role="button"
+                    tabIndex={0}
                     onClick={() => { setStatusFilter('all'); setActiveFilter('active'); setCurrentPage(1); }}
-                    className={`border transition-all duration-200 cursor-pointer shadow-sm hover:shadow-md ${statusFilter === 'all' && activeFilter === 'active' ? 'ring-2 ring-red-500 bg-red-50/20 border-red-200' : 'bg-white border-gray-100 hover:border-gray-200'}`}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setStatusFilter('all'); setActiveFilter('active'); setCurrentPage(1); } }}
+                    className={`border transition-all duration-200 cursor-pointer shadow-sm hover:shadow-md relative overflow-hidden select-none ${statusFilter === 'all' && activeFilter === 'active' ? 'ring-2 ring-red-500 bg-red-50/25 border-red-200' : 'bg-white border-gray-100 hover:border-gray-200'}`}
                 >
-                    <CardContent className="p-4 flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-xl bg-red-50 flex items-center justify-center text-red-600 transition-all">
-                            <Package size={20} />
+                    <div className="absolute top-0 right-0 p-2 sm:p-2.5 opacity-10 pointer-events-none">
+                        <Package size={44} className="text-red-600" />
+                    </div>
+                    <CardContent className="p-3 sm:p-4 flex items-center gap-2.5 sm:gap-3">
+                        <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-xl bg-red-50 flex items-center justify-center text-red-600 transition-all shrink-0">
+                            <Package size={17} className="sm:w-5 sm:h-5" />
                         </div>
-                        <div>
-                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Total Items</p>
-                            <h3 className="text-xl font-black text-gray-900 leading-tight">{inventoryData.filter(i => i.isActive).length}</h3>
+                        <div className="min-w-0">
+                            <p className="text-[10px] sm:text-xs font-black text-gray-600 uppercase tracking-wider truncate">Total Items</p>
+                            <h3 className="text-lg sm:text-xl font-black text-gray-900 leading-tight">
+                                {inventoryData.filter(i => i.isActive).length}
+                            </h3>
                         </div>
                     </CardContent>
                 </Card>
 
                 {/* In Stock Alert Card */}
                 <Card 
+                    role="button"
+                    tabIndex={0}
                     onClick={() => { setStatusFilter(statusFilter === 'In Stock' ? 'all' : 'In Stock'); setActiveFilter('all'); setCurrentPage(1); }}
-                    className={`border transition-all duration-200 cursor-pointer shadow-sm hover:shadow-md ${statusFilter === 'In Stock' ? 'ring-2 ring-emerald-500 bg-emerald-50/20 border-emerald-200' : 'bg-white border-gray-100 hover:border-gray-200'}`}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setStatusFilter(statusFilter === 'In Stock' ? 'all' : 'In Stock'); setActiveFilter('all'); setCurrentPage(1); } }}
+                    className={`border transition-all duration-200 cursor-pointer shadow-sm hover:shadow-md relative overflow-hidden select-none ${statusFilter === 'In Stock' ? 'ring-2 ring-emerald-500 bg-emerald-50/25 border-emerald-200' : 'bg-white border-gray-100 hover:border-gray-200'}`}
                 >
-                    <CardContent className="p-4 flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 transition-all">
-                            <ArrowUpRight size={20} />
+                    <div className="absolute top-0 right-0 p-2 sm:p-2.5 opacity-10 pointer-events-none">
+                        <ArrowUpRight size={44} className="text-emerald-600" />
+                    </div>
+                    <CardContent className="p-3 sm:p-4 flex items-center gap-2.5 sm:gap-3">
+                        <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 transition-all shrink-0">
+                            <ArrowUpRight size={17} className="sm:w-5 sm:h-5" />
                         </div>
-                        <div>
-                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">In Stock Alert</p>
-                            <h3 className="text-xl font-black text-emerald-600 leading-tight">
+                        <div className="min-w-0">
+                            <p className="text-[10px] sm:text-xs font-black text-gray-600 uppercase tracking-wider truncate">In Stock Alert</p>
+                            <h3 className="text-lg sm:text-xl font-black text-emerald-600 leading-tight">
                                 {inventoryData.filter(i => getInventoryPresentation(i).stockStatus === 'In Stock').length}
                             </h3>
                         </div>
@@ -542,16 +630,22 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
 
                 {/* No Stock Alert Card */}
                 <Card 
+                    role="button"
+                    tabIndex={0}
                     onClick={() => { setStatusFilter(statusFilter === 'No Stock' ? 'all' : 'No Stock'); setActiveFilter('all'); setCurrentPage(1); }}
-                    className={`border transition-all duration-200 cursor-pointer shadow-sm hover:shadow-md ${statusFilter === 'No Stock' ? 'ring-2 ring-rose-500 bg-rose-50/20 border-rose-200' : 'bg-white border-gray-100 hover:border-gray-200'}`}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setStatusFilter(statusFilter === 'No Stock' ? 'all' : 'No Stock'); setActiveFilter('all'); setCurrentPage(1); } }}
+                    className={`border transition-all duration-200 cursor-pointer shadow-sm hover:shadow-md relative overflow-hidden select-none ${statusFilter === 'No Stock' ? 'ring-2 ring-rose-500 bg-rose-50/25 border-rose-200' : 'bg-white border-gray-100 hover:border-gray-200'}`}
                 >
-                    <CardContent className="p-4 flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-xl bg-rose-50 flex items-center justify-center text-rose-600 transition-all">
-                            <XCircle size={20} />
+                    <div className="absolute top-0 right-0 p-2 sm:p-2.5 opacity-10 pointer-events-none">
+                        <XCircle size={44} className="text-rose-600" />
+                    </div>
+                    <CardContent className="p-3 sm:p-4 flex items-center gap-2.5 sm:gap-3">
+                        <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-xl bg-rose-50 flex items-center justify-center text-rose-600 transition-all shrink-0">
+                            <XCircle size={17} className="sm:w-5 sm:h-5" />
                         </div>
-                        <div>
-                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">No Stock Alert</p>
-                            <h3 className="text-xl font-black text-rose-600 leading-tight">
+                        <div className="min-w-0">
+                            <p className="text-[10px] sm:text-xs font-black text-gray-600 uppercase tracking-wider truncate">No Stock Alert</p>
+                            <h3 className="text-lg sm:text-xl font-black text-rose-600 leading-tight">
                                 {inventoryData.filter(i => getInventoryPresentation(i).stockStatus === 'No Stock').length}
                             </h3>
                         </div>
@@ -560,16 +654,22 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
 
                 {/* Low Stock Alert Card */}
                 <Card 
+                    role="button"
+                    tabIndex={0}
                     onClick={() => { setStatusFilter(statusFilter === 'Low Stock' ? 'all' : 'Low Stock'); setActiveFilter('all'); setCurrentPage(1); }}
-                    className={`border transition-all duration-200 cursor-pointer shadow-sm hover:shadow-md ${statusFilter === 'Low Stock' ? 'ring-2 ring-amber-500 bg-amber-50/20 border-amber-200' : 'bg-white border-gray-100 hover:border-gray-200'}`}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setStatusFilter(statusFilter === 'Low Stock' ? 'all' : 'Low Stock'); setActiveFilter('all'); setCurrentPage(1); } }}
+                    className={`border transition-all duration-200 cursor-pointer shadow-sm hover:shadow-md relative overflow-hidden select-none ${statusFilter === 'Low Stock' ? 'ring-2 ring-amber-500 bg-amber-50/25 border-amber-200' : 'bg-white border-gray-100 hover:border-gray-200'}`}
                 >
-                    <CardContent className="p-4 flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 transition-all">
-                            <AlertTriangle size={20} />
+                    <div className="absolute top-0 right-0 p-2 sm:p-2.5 opacity-10 pointer-events-none">
+                        <AlertTriangle size={44} className="text-amber-600" />
+                    </div>
+                    <CardContent className="p-3 sm:p-4 flex items-center gap-2.5 sm:gap-3">
+                        <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 transition-all shrink-0">
+                            <AlertTriangle size={17} className="sm:w-5 sm:h-5" />
                         </div>
-                        <div>
-                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Low Stock Alert</p>
-                            <h3 className="text-xl font-black text-amber-600 leading-tight">
+                        <div className="min-w-0">
+                            <p className="text-[10px] sm:text-xs font-black text-gray-600 uppercase tracking-wider truncate">Low Stock Alert</p>
+                            <h3 className="text-lg sm:text-xl font-black text-amber-600 leading-tight">
                                 {inventoryData.filter(i => getInventoryPresentation(i).stockStatus === 'Low Stock').length}
                             </h3>
                         </div>
@@ -609,48 +709,48 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                     <DialogDescription className="sr-only">Filter options for inventory items by category and status</DialogDescription>
                                 </DialogHeader>
                                 <div className="grid grid-cols-1 gap-2.5 py-2">
-                                    <div className="space-y-1">
-                                        <label className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Category</label>
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-bold uppercase tracking-wider text-gray-700">Category</label>
                                         <Select value={categoryFilter} onValueChange={(val) => { setCategoryFilter(val); setCurrentPage(1); }}>
-                                            <SelectTrigger className="h-8 text-xs rounded-lg border-gray-200 bg-gray-50/80 focus:ring-1 focus:ring-red-500">
+                                            <SelectTrigger className="h-9 text-xs rounded-lg border-gray-200 bg-gray-50/80 focus:ring-1 focus:ring-red-500">
                                                 <SelectValue placeholder="Select Category" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="all">All Categories</SelectItem>
+                                                <SelectItem value="all" className="text-xs">All Categories</SelectItem>
                                                 {categories.map(cat => (
-                                                    <SelectItem key={cat} value={cat}>
+                                                    <SelectItem key={cat} value={cat} className="text-xs">
                                                         {cat.split(' ').map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' ')}
                                                     </SelectItem>
                                                 ))}
                                             </SelectContent>
                                         </Select>
                                     </div>
-                                    <div className="space-y-1">
-                                        <label className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Stock Status</label>
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-bold uppercase tracking-wider text-gray-700">Stock Status</label>
                                         <Select value={statusFilter} onValueChange={(val) => { setStatusFilter(val); setCurrentPage(1); }}>
-                                            <SelectTrigger className="h-8 text-xs rounded-lg border-gray-200 bg-gray-50/80 focus:ring-1 focus:ring-red-500">
+                                            <SelectTrigger className="h-9 text-xs rounded-lg border-gray-200 bg-gray-50/80 focus:ring-1 focus:ring-red-500">
                                                 <SelectValue placeholder="Select Stock Status" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="all">All Stock Statuses</SelectItem>
+                                                <SelectItem value="all" className="text-xs">All Stock Statuses</SelectItem>
                                                 {statuses.map(status => (
-                                                    <SelectItem key={status} value={status}>
+                                                    <SelectItem key={status} value={status} className="text-xs">
                                                         {status.split(' ').map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' ')}
                                                     </SelectItem>
                                                 ))}
                                             </SelectContent>
                                         </Select>
                                     </div>
-                                    <div className="space-y-1">
-                                        <label className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Item Status</label>
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-bold uppercase tracking-wider text-gray-700">Item Status</label>
                                         <Select value={activeFilter} onValueChange={(val) => { setActiveFilter(val); setCurrentPage(1); }}>
-                                            <SelectTrigger className="h-8 text-xs rounded-lg border-gray-200 bg-gray-50/80 focus:ring-1 focus:ring-red-500">
+                                            <SelectTrigger className="h-9 text-xs rounded-lg border-gray-200 bg-gray-50/80 focus:ring-1 focus:ring-red-500">
                                                 <SelectValue placeholder="Select Status" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="all">All Statuses</SelectItem>
-                                                <SelectItem value="active">Active Only</SelectItem>
-                                                <SelectItem value="inactive">Inactive Only</SelectItem>
+                                                <SelectItem value="all" className="text-xs">All Statuses</SelectItem>
+                                                <SelectItem value="active" className="text-xs">Active Only</SelectItem>
+                                                <SelectItem value="inactive" className="text-xs">Inactive Only</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>
@@ -680,39 +780,41 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                         </Dialog>
                     </div>
 
-                    <div className="overflow-x-auto w-full min-h-[380px] custom-scrollbar pb-1">
+                    <div className="overflow-x-auto overflow-y-auto w-full max-h-[435px] xl:max-h-[460px] subtle-vertical-scroll border border-gray-100 rounded-lg pb-1">
                         <table className="w-full table-fixed min-w-[950px] border-t border-gray-100">
                             <colgroup>
-                                <col className="w-[19%]" />
-                                <col className="w-[11%]" />
-                                <col className="w-[11%]" />
-                                <col className="w-[9%]" />
-                                <col className="w-[11%]" />
-                                <col className="w-[14%]" />
-                                <col className="w-[10%]" />
-                                <col className="w-[9%]" />
-                                <col className="w-[6%]" />
+                                <col className={isOwnerOrAdmin ? "w-[19%]" : "w-[24%]"} />
+                                <col className={isOwnerOrAdmin ? "w-[11%]" : "w-[13%]"} />
+                                <col className={isOwnerOrAdmin ? "w-[11%]" : "w-[13%]"} />
+                                {isOwnerOrAdmin && <col className="w-[9%]" />}
+                                <col className={isOwnerOrAdmin ? "w-[11%]" : "w-[12%]"} />
+                                <col className={isOwnerOrAdmin ? "w-[14%]" : "w-[14%]"} />
+                                <col className={isOwnerOrAdmin ? "w-[10%]" : "w-[10%]"} />
+                                <col className={isOwnerOrAdmin ? "w-[9%]" : "w-[9%]"} />
+                                <col className={isOwnerOrAdmin ? "w-[6%]" : "w-[5%]"} />
                             </colgroup>
-                            <thead className="bg-red-50/60 border-y border-red-100">
+                            <thead className="bg-red-50/95 backdrop-blur-xs border-y border-red-100 sticky top-0 z-10 shadow-xs">
                                 <tr>
-                                    <th className="px-2 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Item Name</th>
-                                    <th className="px-1.5 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Category</th>
-                                    <th className="px-1.5 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Package</th>
-                                    <th className="px-1.5 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Unit Price</th>
-                                    <th className="px-1.5 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Retail Price</th>
-                                    <th className="px-1.5 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Stock Level</th>
-                                    <th className="px-1 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Stock Status</th>
-                                    <th className="px-1 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Status</th>
-                                    <th className="px-1 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap no-print">Action</th>
+                                    <th className="px-2 py-2 text-center text-[11px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Item Name</th>
+                                    <th className="px-1.5 py-2 text-center text-[11px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Category</th>
+                                    <th className="px-1.5 py-2 text-center text-[11px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Package</th>
+                                    {isOwnerOrAdmin && (
+                                        <th className="px-1.5 py-2 text-center text-[11px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Unit Price</th>
+                                    )}
+                                    <th className="px-1.5 py-2 text-center text-[11px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Retail Price</th>
+                                    <th className="px-1.5 py-2 text-center text-[11px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Stock Level</th>
+                                    <th className="px-1 py-2 text-center text-[11px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Stock Status</th>
+                                    <th className="px-1 py-2 text-center text-[11px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap">Status</th>
+                                    <th className="px-1 py-2 text-center text-[11px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap no-print">Action</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                                 {paginatedInventory.length === 0 ? (
                                     <tr>
-                                        <td colSpan={9} className="px-6 py-24 text-center">
+                                        <td colSpan={isOwnerOrAdmin ? 9 : 8} className="px-6 py-24 text-center">
                                             <div className="flex flex-col items-center justify-center space-y-3 opacity-40">
-                                                <Package size={48} className="text-gray-300" />
-                                                <p className="text-sm font-black text-gray-400 uppercase tracking-[0.2em]">
+                                                <Package size={48} className="text-gray-600" />
+                                                <p className="text-sm font-black text-gray-600 uppercase tracking-[0.2em]">
                                                     {searchQuery || categoryFilter !== 'all' || statusFilter !== 'all' || activeFilter !== 'all'
                                                         ? 'No matching inventory items found'
                                                         : 'No inventory items available'}
@@ -731,7 +833,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                             <div className="flex justify-center w-full">
                                               <div className="w-[180px] max-w-full text-left min-w-0">
                                                 <p className="text-xs font-bold text-gray-900 leading-snug truncate" title={item.name}>{item.name}</p>
-                                                <p className="text-[9.5px] text-gray-400 mt-0.5 uppercase font-semibold truncate">{item.inventory_number || `INV-${item.id.toString().padStart(4, '0')}`}</p>
+                                                <p className="text-[11px] text-gray-600 mt-0.5 uppercase font-semibold truncate">{item.inventory_number || `INV-${item.id.toString().padStart(4, '0')}`}</p>
                                               </div>
                                             </div>
                                         </td>
@@ -778,9 +880,11 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                                 );
                                             })()}
                                         </td>
-                                        <td className="px-1.5 py-2 text-center font-black text-xs text-gray-900 whitespace-nowrap max-w-0">
-                                            <span className="block truncate max-w-full">{formatPeso(item.price || 0)}</span>
-                                        </td>
+                                        {isOwnerOrAdmin && (
+                                            <td className="px-1.5 py-2 text-center font-black text-xs text-gray-900 whitespace-nowrap max-w-0">
+                                                <span className="block truncate max-w-full">{formatPeso(item.price || 0)}</span>
+                                            </td>
+                                        )}
                                         <td className="px-1.5 py-2 text-center font-black text-xs whitespace-nowrap max-w-0">
                                             {Boolean(item.is_retail) && Number(item.retail_price || 0) > 0 ? (
                                                 <span className="text-emerald-700 font-black block truncate max-w-full">{formatPeso(item.retail_price)}</span>
@@ -862,7 +966,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                                 <DropdownMenuTrigger asChild>
                                                     <Button 
                                                         variant="outline" 
-                                                        className="h-7 w-7 p-0 border-red-200 text-red-700 bg-red-50 hover:bg-red-100 font-bold rounded-md inline-flex items-center justify-center" 
+                                                        className="h-7 w-7 p-0 border-red-200 text-red-700 bg-red-50 hover:bg-red-100 font-bold rounded-md inline-flex items-center justify-center cursor-pointer transition-colors" 
                                                         title="More actions"
                                                         aria-label="More actions"
                                                     >
@@ -870,7 +974,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                                     </Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end" className="w-44 p-1.5 space-y-1">
-                                                    {isStaffOrAbove && (
+                                                    {canEditInventory && (
                                                         <DropdownMenuItem
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
@@ -882,7 +986,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                                             Edit Item
                                                         </DropdownMenuItem>
                                                     )}
-                                                    {isStaffOrAbove && (
+                                                    {canUpdateStock && (
                                                         <DropdownMenuItem
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
@@ -895,7 +999,7 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                                             Update Stock
                                                         </DropdownMenuItem>
                                                     )}
-                                                    {isStaffOrAbove && (
+                                                    {canDeactivateInventory && (
                                                         <DropdownMenuItem
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
@@ -1459,8 +1563,13 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                 onOpenChange={(open) => {
                     if (!open) setSelectedItem(null);
                 }}
-                /* Offer the Edit action to all authorized staff roles */
-                onEdit={isStaffOrAbove ? (item) => {
+                user={user}
+                onOpenHistory={isOwnerOrAdmin ? (item) => {
+                    setSelectedItem(null);
+                    handleViewItemHistory(item);
+                } : undefined}
+                /* Offer the Edit action to authorized staff roles with edit permission */
+                onEdit={canEditInventory ? (item) => {
                     setSelectedItem(null);
                     handleEditItem(item);
                 } : undefined}
@@ -1488,6 +1597,186 @@ export default function Inventory({ onSetHeaderActionRight, user }: InventoryPro
                                 Confirm Delete
                             </Button>
                         </div>
+                    </DialogContent>
+                </Dialog>
+            )}
+
+            {/* ITEM MOVEMENT HISTORY DIALOG (Owner and Admin only) */}
+            {isOwnerOrAdmin && (
+                <Dialog open={!!historyItem} onOpenChange={(open) => { if (!open) setHistoryItem(null); }}>
+                    <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-6 rounded-2xl">
+                        <DialogHeader className="pb-3 border-b border-gray-100">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <DialogTitle className="text-base font-black text-gray-900 uppercase tracking-wide flex items-center gap-2">
+                                        <History className="h-5 w-5 text-red-600" />
+                                        Movement History: {historyItem?.name}
+                                    </DialogTitle>
+                                    <DialogDescription className="text-xs text-gray-500 mt-0.5">
+                                        {historyItem?.inventory_number || `INV-${historyItem?.id}`} • Current Stock: {historyItem?.stock} {historyItem?.unit}
+                                    </DialogDescription>
+                                </div>
+                            </div>
+                        </DialogHeader>
+
+                        <div className="flex-1 overflow-y-auto min-h-0 py-3 visible-vertical-scroll">
+                            {isLoadingLogs ? (
+                                <div className="flex flex-col items-center justify-center py-12 text-gray-400 gap-2">
+                                    <Loader2 className="h-6 w-6 animate-spin text-red-600" />
+                                    <span className="text-xs font-bold">Loading movement history...</span>
+                                </div>
+                            ) : itemLogs.length === 0 ? (
+                                <div className="text-center py-12 text-gray-400">
+                                    <History className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                                    <p className="text-xs font-bold uppercase tracking-wider">No movement records found for this item.</p>
+                                </div>
+                            ) : (
+                                <div className="border border-gray-200 rounded-xl overflow-x-auto shadow-2xs">
+                                    <table className="w-full text-left text-xs min-w-[580px]">
+                                        <thead className="bg-gray-50 border-b border-gray-200 text-[10px] font-black uppercase text-gray-600 tracking-wider">
+                                            <tr>
+                                                <th className="px-3 py-2.5 whitespace-nowrap">Date & Time</th>
+                                                <th className="px-3 py-2.5 text-center whitespace-nowrap">Action</th>
+                                                <th className="px-3 py-2.5 text-right whitespace-nowrap">Change</th>
+                                                <th className="px-3 py-2.5 whitespace-nowrap min-w-[150px]">Reference</th>
+                                                <th className="px-3 py-2.5 whitespace-nowrap">Logged By</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                            {paginatedHistoryLogs.map((log) => {
+                                                const isPositive = Number(log.change_amount) > 0;
+                                                const isSetBalance = log.action_type === 'set_balance';
+                                                const actionLabel = isSetBalance ? 'Manual Stock Adjustment' : log.action_type.replace('_', ' ');
+                                                const actionColor = 
+                                                    log.action_type === 'restock' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                                    log.action_type === 'auto_deduct' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                                    isSetBalance ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                                                    'bg-rose-50 text-rose-700 border-rose-200';
+                                                
+                                                return (
+                                                    <tr key={log.log_id} className="hover:bg-gray-50/60 transition-colors">
+                                                        <td className="px-3 py-2 text-gray-600 whitespace-nowrap text-[11px] font-medium">{log.created_at || '—'}</td>
+                                                        <td className="px-3 py-2 text-center whitespace-nowrap">
+                                                            <span className={`px-2 py-0.5 rounded text-[9.5px] font-black uppercase border ${actionColor}`}>
+                                                                {actionLabel}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-3 py-2 text-right whitespace-nowrap font-black">
+                                                            <span className={isPositive ? 'text-emerald-600' : 'text-rose-600'}>
+                                                                {isPositive ? `+${log.change_amount}` : log.change_amount} {historyItem?.unit}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-3 py-2 text-gray-700 text-[11px] whitespace-nowrap min-w-[150px]">
+                                                            {(() => {
+                                                                let orderNum = '';
+                                                                if (log.order_number) {
+                                                                    orderNum = String(log.order_number).trim();
+                                                                } else if (log.order_id) {
+                                                                    orderNum = `ORD-${log.order_id}`;
+                                                                } else if (log.execution_ref && /^ORD-/i.test(log.execution_ref)) {
+                                                                    const m = log.execution_ref.match(/^(ORD-[A-Za-z0-9-]+?)(?:_ITEM|_SVC|$)/i);
+                                                                    if (m) orderNum = m[1];
+                                                                }
+
+                                                                if (orderNum) {
+                                                                    const cleanNum = orderNum
+                                                                        .replace(/^Order\s*#?/i, '')
+                                                                        .replace(/^#\s*Order\s*/i, '')
+                                                                        .replace(/^#+/, '')
+                                                                        .trim();
+
+                                                                    return (
+                                                                        <span className="font-mono font-bold text-gray-900 text-xs whitespace-nowrap inline-block">
+                                                                            {cleanNum}
+                                                                        </span>
+                                                                    );
+                                                                }
+
+                                                                if (log.execution_ref) {
+                                                                    return (
+                                                                        <span className="font-mono text-[10px] text-gray-500 whitespace-nowrap block truncate max-w-[200px]" title={log.execution_ref}>
+                                                                            {log.execution_ref}
+                                                                        </span>
+                                                                    );
+                                                                }
+
+                                                                return <span className="text-gray-400 whitespace-nowrap">Manual / Adjustment</span>;
+                                                            })()}
+                                                        </td>
+                                                        <td className="px-3 py-2 text-gray-600 text-[11px] font-medium whitespace-nowrap">
+                                                            <div className="flex flex-col gap-0.5">
+                                                                <span className="font-semibold text-gray-800">{log.performed_by || 'System'}</span>
+                                                                {log.authorized_by && (
+                                                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-purple-50 text-purple-700 border border-purple-200 w-fit">
+                                                                        Auth: {log.authorized_by}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Dedicated Bottom Footer: Pagination Controls (Always visible even if there is no next page) */}
+                        {!isLoadingLogs && itemLogs.length > 0 && (
+                            <div className="pt-3 border-t border-gray-100 flex items-center justify-between shrink-0 no-print">
+                                <div className="text-[11px] text-gray-500 font-bold uppercase tracking-wider">
+                                    PAGE {historyPage} OF {totalHistoryPages || 1} <span className="text-gray-400 font-normal">({itemLogs.length} {itemLogs.length === 1 ? 'record' : 'records'})</span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
+                                        disabled={historyPage <= 1}
+                                        className={`h-7 w-7 p-0 rounded-lg transition-all ${
+                                            historyPage <= 1
+                                                ? 'bg-slate-100 text-slate-400 cursor-not-allowed border-gray-200'
+                                                : 'bg-white text-gray-700 hover:bg-red-50 hover:text-red-600 border-gray-300 shadow-2xs cursor-pointer'
+                                        }`}
+                                        title="Previous page"
+                                    >
+                                        <ChevronLeft className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <div className="flex items-center gap-1">
+                                        {Array.from({ length: totalHistoryPages || 1 }, (_, i) => i + 1).map((pageNum) => (
+                                            <Button
+                                                key={pageNum}
+                                                variant={historyPage === pageNum ? 'default' : 'outline'}
+                                                size="sm"
+                                                onClick={() => setHistoryPage(pageNum)}
+                                                className={`h-7 w-7 p-0 rounded-lg text-xs font-bold transition-all ${
+                                                    historyPage === pageNum
+                                                        ? 'bg-red-600 text-white border-red-600 shadow-2xs'
+                                                        : 'bg-white text-gray-700 hover:bg-red-50 hover:text-red-600 border-gray-300 shadow-2xs cursor-pointer'
+                                                }`}
+                                            >
+                                                {pageNum}
+                                            </Button>
+                                        ))}
+                                    </div>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setHistoryPage((p) => Math.min(totalHistoryPages || 1, p + 1))}
+                                        disabled={historyPage >= (totalHistoryPages || 1)}
+                                        className={`h-7 w-7 p-0 rounded-lg transition-all ${
+                                            historyPage >= (totalHistoryPages || 1)
+                                                ? 'bg-slate-100 text-slate-400 cursor-not-allowed border-gray-200'
+                                                : 'bg-white text-gray-700 hover:bg-red-50 hover:text-red-600 border-gray-300 shadow-2xs cursor-pointer'
+                                        }`}
+                                        title="Next page"
+                                    >
+                                        <ChevronRight className="h-3.5 w-3.5" />
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
                     </DialogContent>
                 </Dialog>
             )}

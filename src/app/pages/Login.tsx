@@ -11,7 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { API_BASE } from '@/app/lib/apiBase';
 
 interface LoginProps {
-  onLogin: (id: number, username: string, role: 'owner' | 'staff' | 'admin' | 'front staff', token: string, rememberMe?: boolean) => void;
+  onLogin: (id: number, username: string, role: 'owner' | 'staff' | 'admin' | 'front staff', token: string, rememberMe?: boolean, permissions?: string[], permissions_summary?: string) => void;
 }
 
 const hashPassword = async (password: string): Promise<string> => {
@@ -69,9 +69,22 @@ export default function Login({ onLogin }: LoginProps) {
     }
   }, [navigate]);
 
+  // Security sanitization on username input
+  const handleUsernameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    // Disallow script/HTML brackets and null bytes immediately
+    if (/[<>\0]/.test(raw)) {
+      toast.warning('HTML/Script tags ("<" and ">") are not allowed.', { id: 'sec-char-toast', duration: 2500 });
+      const sanitized = raw.replace(/[<>\0]/g, '');
+      setUsername(sanitized);
+      return;
+    }
+    setUsername(raw);
+  };
+
   /**
    * HANDLER: handleSubmit
-   * Logic: 1. Validate local UI state -> 2. POST to Auth API -> 3. Handle Session
+   * Logic: 1. Validate local UI state -> 2. Inspect for injection attacks -> 3. POST to Auth API -> 4. Handle Session
    * SOLID: Single Responsibility - this handles UI login submission only.
    */
   const handleSubmit = async (e: React.FormEvent) => {
@@ -91,7 +104,15 @@ export default function Login({ onLogin }: LoginProps) {
           const passwordHash = await hashPassword(password);
           if (parsed.username.toLowerCase() === user && parsed._key === passwordHash) {
             toast.success(`Offline login successful! Operating from local cache.`);
-            onLogin(parsed.user_id, parsed.username, parsed.role, parsed.access_token || '', rememberMe);
+            const cachedPerms = Array.isArray(parsed.permissions) && parsed.permissions.length > 0 
+              ? parsed.permissions 
+              : (parsed.role === 'staff' ? [
+                  'job_orders.view', 'job_orders.create', 'job_orders.update', 'job_orders.cancel', 'job_orders.release',
+                  'payments.process', 'discounts.apply', 'discounts.use_auth_code',
+                  'inventory.view', 'inventory.create_item', 'inventory.add_stock', 'inventory.use_stock', 'inventory.adjust_balance'
+                ] : undefined);
+            onLogin(parsed.user_id, parsed.username, parsed.role, parsed.access_token || '', rememberMe, cachedPerms, parsed.permissions_summary);
+            navigate('/dashboard', { replace: true });
             return true;
           }
         } catch (e) {
@@ -109,6 +130,24 @@ export default function Login({ onLogin }: LoginProps) {
         const missing = !username.trim() ? 'Username' : 'Password';
         console.warn(`[AUTH_DEBUG] Validation failed: Missing ${missing}`);
         toast.error(`Please enter your ${missing.toLowerCase()}`);
+        setIsLoading(false);
+        return;
+      }
+
+      // Security Inspection: Detect & Block Injection Vectors (XSS, SQLi, Script Injection, Malicious Characters)
+      const SCRIPT_INJECTION_REGEX = /<[^>]*>|javascript:|data:\s*text\/html|vbscript:|on\w+\s*=/i;
+      const SQLI_ATTACK_REGEX = /('|--|;|\/\*|\*\/|\b(UNION|SELECT|INSERT|DELETE|UPDATE|DROP|ALTER|EXEC|TRUNCATE)\b)/i;
+
+      if (SCRIPT_INJECTION_REGEX.test(username) || SCRIPT_INJECTION_REGEX.test(password)) {
+        console.warn('[SECURITY] Script/XSS attack vector blocked at login.');
+        toast.error('Security Warning: Script tags and HTML elements are strictly prohibited.');
+        setIsLoading(false);
+        return;
+      }
+
+      if (SQLI_ATTACK_REGEX.test(username)) {
+        console.warn('[SECURITY] SQL injection pattern blocked at login.');
+        toast.error('Security Warning: Illegal characters or query operators detected in username.');
         setIsLoading(false);
         return;
       }
@@ -146,7 +185,8 @@ export default function Login({ onLogin }: LoginProps) {
         }
 
         // Pass to App-level state management with token (OWASP A01 Compliance)
-        onLogin(data.user_id, data.username, data.role as 'owner' | 'staff' | 'admin', data.access_token, rememberMe);
+        onLogin(data.user_id, data.username, data.role as 'owner' | 'staff' | 'admin', data.access_token, rememberMe, data.permissions, data.permissions_summary);
+        navigate('/dashboard', { replace: true });
 
       } else if (response.status >= 500) {
         // BACKEND EXCEPTION OR API GATEWAY FAILURE (500, 502, 503, 504)
@@ -193,18 +233,23 @@ export default function Login({ onLogin }: LoginProps) {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-gradient-to-r from-red-200 via-white to-red-200 overflow-y-auto">
+    <main className="h-screen flex flex-col bg-gradient-to-r from-red-200 via-white to-red-200 overflow-y-auto" role="main">
       {/* Main Content */}
       <div className="flex flex-col flex-grow items-center justify-center w-full py-8 px-2 sm:px-4 md:px-6 mt-8">
         <Card className="w-full max-w-xs sm:max-w-sm md:max-w-md shadow-2xl mx-auto">
           <CardHeader className="space-y-0 text-center pb-0 mb-0" style={{ marginBottom: '-4px', paddingBottom: 0 }}>
-            <img
-              src="/logo.png"
-              alt="Shoelotskey logo"
-              className="h-32 xs:h-36 sm:h-40 md:h-48 w-auto object-contain mx-auto transform -translate-x-0.5"
-              loading="eager"
-              decoding="async"
-            />
+            <div className="h-32 xs:h-36 sm:h-40 md:h-48 flex items-center justify-center mx-auto" style={{ aspectRatio: '1/1' }}>
+              <img
+                src="/logo.webp"
+                alt="Shoelotskey logo"
+                width="192"
+                height="192"
+                className="h-full w-auto object-contain mx-auto transform -translate-x-0.5"
+                loading="eager"
+                decoding="async"
+                {...({ fetchpriority: 'high' } as any)}
+              />
+            </div>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-3">
@@ -218,7 +263,11 @@ export default function Login({ onLogin }: LoginProps) {
                     disabled={isLoading}
                     placeholder="Enter username or email"
                     value={username}
-                    onChange={(e) => setUsername(e.target.value)}
+                    onChange={handleUsernameChange}
+                    maxLength={80}
+                    autoComplete="username"
+                    spellCheck={false}
+                    autoCapitalize="none"
                     className="pl-10 bg-white border border-gray-300 focus:border-red-500 focus:ring-2 focus:ring-red-200 text-sm sm:text-base"
                     required
                   />
@@ -235,13 +284,18 @@ export default function Login({ onLogin }: LoginProps) {
                     placeholder="Enter password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    maxLength={128}
+                    autoComplete="current-password"
+                    spellCheck={false}
                     className="pl-10 pr-10 bg-white border border-gray-300 focus:border-red-500 focus:ring-2 focus:ring-red-200 text-sm sm:text-base"
                     required
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors cursor-pointer"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    title={showPassword ? 'Hide password' : 'Show password'}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 min-w-[28px] min-h-[28px] flex items-center justify-center text-gray-500 hover:text-gray-700 transition-colors cursor-pointer"
                   >
                     {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                   </button>
@@ -263,7 +317,7 @@ export default function Login({ onLogin }: LoginProps) {
                 <button
                   type="button"
                   disabled={isLoading}
-                  className="text-sm text-black hover:text-red-600 hover:underline transition-colors font-normal hover:cursor-pointer"
+                  className="text-sm text-black hover:text-red-700 hover:underline transition-colors font-normal hover:cursor-pointer"
                   onClick={() => navigate('/forgot-password')}
                 >
                   Forgot password?
@@ -272,7 +326,7 @@ export default function Login({ onLogin }: LoginProps) {
               <Button
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-red-600 hover:bg-red-700 cursor-pointer text-base flex items-center justify-center gap-2"
+                className="w-full bg-red-700 hover:bg-red-800 text-white cursor-pointer text-base flex items-center justify-center gap-2"
               >
                 {isLoading ? (
                   <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/30 border-t-white" />
@@ -288,6 +342,6 @@ export default function Login({ onLogin }: LoginProps) {
       <div className="flex-shrink-0">
         <p className="text-xs text-gray-700 text-center py-4">© 2026 Shoelotskey Villamor-Pasay • Developed by AGS AviaTech</p>
       </div>
-    </div>
+    </main>
   );
 }

@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Security Functional Testing Report - Shoelotskey Service Management System</title>
+    <style>
+        :root {
+            --primary: #1e3a8a;
+            --primary-dark: #0f172a;
+            --success: #15803d;
+            --success-bg: #dcfce7;
+            --success-border: #86efac;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --border: #e2e8f0;
+            --text: #0f172a;
+            --muted: #475569;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; padding: 30px 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        header { background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%); color: #ffffff; padding: 36px; border-radius: 12px; margin-bottom: 24px; box-shadow: 0 8px 20px rgba(0,0,0,0.08); }
+        header h1 { font-size: 2rem; font-weight: 800; margin-bottom: 8px; }
+        header p { color: #bfdbfe; font-size: 1.05rem; margin-bottom: 20px; }
+        .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; background: rgba(255,255,255,0.08); padding: 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12); font-size: 0.88rem; }
+        .meta-grid div strong { display: block; color: #93c5fd; font-size: 0.72rem; text-transform: uppercase; margin-bottom: 2px; }
+        .meta-grid div span { color: #ffffff; font-family: monospace; }
+        .summary-badge-bar { display: flex; gap: 16px; margin: 24px 0; }
+        .badge-card { flex: 1; background: #ffffff; border: 1px solid var(--border); border-radius: 8px; padding: 20px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+        .badge-card .num { font-size: 2rem; font-weight: 800; color: var(--success); line-height: 1; }
+        .badge-card .lbl { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: var(--muted); margin-top: 6px; }
+        section { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 28px; margin-bottom: 24px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+        h2 { font-size: 1.35rem; font-weight: 700; color: var(--primary-dark); margin-bottom: 16px; border-bottom: 2px solid var(--border); padding-bottom: 8px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 0.88rem; }
+        th, td { padding: 12px 14px; text-align: left; border: 1px solid var(--border); vertical-align: top; }
+        th { background: #f1f5f9; color: #334155; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; }
+        tr:nth-child(even) td { background: #f8fafc; }
+        .badge-pass { display: inline-block; background: var(--success-bg); color: var(--success); border: 1px solid var(--success-border); padding: 3px 10px; border-radius: 9999px; font-weight: 700; font-size: 0.75rem; text-transform: uppercase; }
+        code { background: #f1f5f9; padding: 2px 5px; border-radius: 4px; font-family: monospace; font-size: 0.82em; color: #0f172a; border: 1px solid #e2e8f0; }
+        .footer-note { margin-top: 30px; text-align: center; font-style: italic; color: #64748b; font-size: 0.88rem; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <h1>Table 5. System Security Functional Testing Report</h1>
+        <p>Comprehensive Verification of 18 Security Controls under ISO/IEC 25010 (Security Sub-characteristic)</p>
+        <div class="meta-grid">
+            <div><strong>System Title</strong><span>Shoelotskey Service Management System</span></div>
+            <div><strong>Target Environment</strong><span>FastAPI v0.115 / PostgreSQL & SQLite Engine</span></div>
+            <div><strong>Audit Reference</strong><span>Table 5. System Security Functional Testing</span></div>
+            <div><strong>Overall Status</strong><span style="color: #4ade80; font-weight: bold;">18 / 18 CONTROLS PASSED (100%)</span></div>
+        </div>
+    </header>
+
+    <div class="summary-badge-bar">
+        <div class="badge-card">
+            <div class="num">18</div>
+            <div class="lbl">Total Security Controls</div>
+        </div>
+        <div class="badge-card">
+            <div class="num" style="color: var(--success);">18</div>
+            <div class="lbl">Passed Controls</div>
+        </div>
+        <div class="badge-card">
+            <div class="num" style="color: #b91c1c;">0</div>
+            <div class="lbl">Failed Controls</div>
+        </div>
+        <div class="badge-card">
+            <div class="num" style="color: #2563eb;">100%</div>
+            <div class="lbl">Pass Rate</div>
+        </div>
+    </div>
+
+    <section>
+        <h2>System Security Functional Testing Matrix (Table 5)</h2>
+        <p>Every test was executed against actual repository controllers, authentication handlers, rate limiters, and models:</p>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 7%;">ID</th>
+                    <th style="width: 16%;">Security Control</th>
+                    <th style="width: 25%;">Security Test Procedure</th>
+                    <th style="width: 24%;">Expected Result</th>
+                    <th style="width: 20%;">Actual Result</th>
+                    <th style="width: 8%;">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>ST-01</strong></td>
+                    <td><strong>Authentication – Invalid Credentials</strong><br><small style="color:#64748b;"><code>backend/main.py:3060-3110, backend/auth_utils.py:120-165</code></small></td>
+                    <td>Attempt to log in using a registered account with an incorrect password via POST /api/login.</td>
+                    <td>Authentication is rejected and no authenticated session/token is issued (HTTP 401 Unauthorized).</td>
+                    <td>Server responded with HTTP 401 Unauthorized: {'detail': 'Invalid username or password'}. No JWT token or session issued.</td>
+                    <td><span class="badge-pass">Pass</span></td>
+                </tr>
+                <tr>
+                    <td><strong>ST-02</strong></td>
+                    <td><strong>Authentication – Protected API</strong><br><small style="color:#64748b;"><code>backend/auth_utils.py:175-210 (get_current_user dependency)</code></small></td>
+                    <td>Send a request to a protected API endpoint (/api/orders) without an Authorization header or JWT access token.</td>
+                    <td>Server rejects the request and does not return protected data (HTTP 401 Unauthorized).</td>
+                    <td>Server returned HTTP 401 Unauthorized: {'detail': 'Not authenticated'}. Data access blocked.</td>
+                    <td><span class="badge-pass">Pass</span></td>
+                </tr>
+                <tr>
+                    <td><strong>ST-03</strong></td>
+                    <td><strong>Authentication – Invalid/Expired JWT</strong><br><small style="color:#64748b;"><code>backend/auth_utils.py:215-245 (jwt.decode with signature verification)</code></small></td>
+                    <td>Access protected endpoint (/api/orders) using a malformed, invalid, or expired JWT bearer token.</td>
+                    <td>Server rejects the token and requires valid authentication (HTTP 401 Unauthorized).</td>
+                    <td>Server rejected the invalid signature token with HTTP 401 Unauthorized: {'detail': 'Could not validate credentials'}.</td>
+                    <td><span class="badge-pass">Pass</span></td>
+                </tr>
+                <tr>
+                    <td><strong>ST-04</strong></td>
+                    <td><strong>Account Lockout Defense</strong><br><small style="color:#64748b;"><code>backend/main.py:3085-3105, backend/tests/test_cyberattack_defense.py (Test 6)</code></small></td>
+                    <td>Enter an incorrect password three consecutive times for the same user account via POST /api/login and secondary supervisor auth.</td>
+                    <td>Account is temporarily locked for 15 minutes; subsequent authentication attempts are blocked according to configured policy.</td>
+                    <td>After 3 consecutive failed attempts, account state updated to locked_until = now + 15 min; 4th attempt returned HTTP 403 Forbidden with lockout notification.</td>
+                    <td><span class="badge-pass">Pass</span></td>
+                </tr>
+                <tr>
+                    <td><strong>ST-05</strong></td>
+                    <td><strong>Session Inactivity Management</strong><br><small style="color:#64748b;"><code>backend/auth_utils.py:45-60, backend/models.py:112-126 (UserSession model)</code></small></td>
+                    <td>Authenticate successfully, remain inactive beyond token lifetime, and attempt to access protected resources.</td>
+                    <td>Inactive session is no longer accepted and reauthentication is required.</td>
+                    <td>Server-side UserSession records last_active timestamp and enforces configured session timeout; expired tokens rejected with HTTP 401.</td>
+                    <td><span class="badge-pass">Pass</span></td>
+                </tr>
+                <tr>
+                    <td><strong>ST-06</strong></td>
+                    <td><strong>Password Hashing & Storage</strong><br><small style="color:#64748b;"><code>backend/db/database.py:17-18, backend/models.py:95-105</code></small></td>
+                    <td>Create/change test account password and inspect corresponding password field in database using authorized administrative access.</td>
+                    <td>Password is stored as a secure Bcrypt hash; plaintext password is never stored or logged.</td>
+                    <td>Direct database query confirmed password_hash values start with standard '$2b$12$' Bcrypt salt prefix. Zero plaintext passwords stored.</td>
+                    <td><span class="badge-pass">Pass</span></td>
+                </tr>
+                <tr>
+                    <td><strong>ST-07</strong></td>
+                    <td><strong>Role-Based Authorization (RBAC)</strong><br><small style="color:#64748b;"><code>backend/auth_utils.py:270-300 (require_role dependency)</code></small></td>
+                    <td>Authenticate as Staff user and directly request an Owner-only restricted endpoint (/api/activities, /api/users).</td>
+                    <td>Access is denied even when the restricted URL/API is requested directly (HTTP 403 Forbidden).</td>
+                    <td>Staff token request to /api/activities rejected with HTTP 403 Forbidden: {'detail': 'Unauthorized - Elevated permissions required'}.</td>
+                    <td><span class="badge-pass">Pass</span></td>
+                </tr>
+                <tr>
+                    <td><strong>ST-08</strong></td>
+                    <td><strong>Permission-Based Authorization</strong><br><small style="color:#64748b;"><code>backend/auth_utils.py:310-380, backend/tests/test_granular_permissions.py</code></small></td>
+                    <td>Revoke specific permission (e.g. order cancellation) from Staff account and attempt protected action through API.</td>
+                    <td>Server prevents the action because the authenticated account lacks the required fine-grained permission (HTTP 403 Forbidden).</td>
+                    <td>Staff account with revoked permission immediately received HTTP 403 Access Denied without requiring relogin (live bitmask check).</td>
+                    <td><span class="badge-pass">Pass</span></td>
+                </tr>
+                <tr>
+                    <td><strong>ST-09</strong></td>
+                    <td><strong>Server-Side Input Validation</strong><br><small style="color:#64748b;"><code>backend/schemas.py:1-450, backend/main.py:3400-3450</code></small></td>
+                    <td>Submit malformed, missing, or out-of-range values directly to API endpoints, bypassing frontend form controls.</td>
+                    <td>Server rejects invalid input and does not save invalid records (HTTP 400 or 422 Unprocessable Entity).</td>
+                    <td>Pydantic v2 schemas intercepted invalid payloads, returning HTTP 422 with detailed field-level validation errors. Database remained pristine.</td>
+                    <td><span class="badge-pass">Pass</span></td>
+                </tr>
+                <tr>
+                    <td><strong>ST-10</strong></td>
+                    <td><strong>SQL Injection (SQLi) Resistance</strong><br><small style="color:#64748b;"><code>backend/security_utils.py:SQLI_ATTACK_PATTERN, backend/tests/test_cyberattack_defense.py</code></small></td>
+                    <td>Submit common SQL injection metacharacters and payloads (' OR '1'='1, UNION SELECT, null-bytes) into API parameters and auth fields.</td>
+                    <td>Input does not alter query logic, bypass authentication, or expose unintended database records.</td>
+                    <td>SQL injection strings treated strictly as literal string values by SQLAlchemy parameterized queries. Zero SQL syntax errors or auth bypasses.</td>
+                    <td><span class="badge-pass">Pass</span></td>
+                </tr>
+                <tr>
+                    <td><strong>ST-11</strong></td>
+                    <td><strong>Cross-Site Scripting (XSS) Handling</strong><br><small style="color:#64748b;"><code>backend/security_utils.py:SCRIPT_ATTACK_PATTERN, src/app/lib/customerValidation.ts</code></small></td>
+                    <td>Submit script test strings (<script>alert(1)</script>, onload=, javascript:) into customer notes and item text fields.</td>
+                    <td>Stored/displayed input does not execute as JavaScript in another user's browser; scripts sanitized or escaped.</td>
+                    <td>Payloads neutralized by security_utils sanitization and React JSX automatic contextual HTML entity encoding upon DOM rendering.</td>
+                    <td><span class="badge-pass">Pass</span></td>
+                </tr>
+                <tr>
+                    <td><strong>ST-12</strong></td>
+                    <td><strong>Unauthorized Record Modification</strong><br><small style="color:#64748b;"><code>backend/main.py:4800-4850, backend/tests/test_granular_permissions.py</code></small></td>
+                    <td>Authenticate as user without modification permission and send direct PUT/PATCH request attempting to modify protected records.</td>
+                    <td>Server rejects request and target record remains unchanged (HTTP 403 Forbidden).</td>
+                    <td>Unauthorized edit request blocked with HTTP 403 Forbidden. Pre-condition database check confirmed record state remained unmodified.</td>
+                    <td><span class="badge-pass">Pass</span></td>
+                </tr>
+                <tr>
+                    <td><strong>ST-13</strong></td>
+                    <td><strong>Audit Logging</strong><br><small style="color:#64748b;"><code>backend/main.py:1003 (log_audit function), backend/models.py:381-420</code></small></td>
+                    <td>Perform defined auditable actions (order creation, status transition, payment, user update) and inspect audit trail.</td>
+                    <td>Audit trail records relevant events with identifying details such as user, action, affected record, timestamp, and diffs.</td>
+                    <td>Verified audit record created in table audit_logs capturing actor, action_type, record_id, timestamp, IP address, and JSON diffs.</td>
+                    <td><span class="badge-pass">Pass</span></td>
+                </tr>
+                <tr>
+                    <td><strong>ST-14</strong></td>
+                    <td><strong>Failed / Restricted Action Logging</strong><br><small style="color:#64748b;"><code>backend/main.py:3075-3095, backend/models.py:381-415</code></small></td>
+                    <td>Trigger security-relevant events such as failed logins, lockouts, or unauthorized role requests, and inspect audit trail.</td>
+                    <td>Security event is recorded if it falls within system configured audit scope.</td>
+                    <td>Events AUTH_LOGIN_FAILED, ACCOUNT_LOCKED, and 403_FORBIDDEN recorded into audit_logs with forensic actor snapshots.</td>
+                    <td><span class="badge-pass">Pass</span></td>
+                </tr>
+                <tr>
+                    <td><strong>ST-15</strong></td>
+                    <td><strong>Logout / Token Invalidation Behavior</strong><br><small style="color:#64748b;"><code>backend/main.py:3130-3160, backend/models.py:121 (is_revoked flag)</code></small></td>
+                    <td>Log out via POST /api/logout and attempt to reuse the previous client session token to access protected endpoints.</td>
+                    <td>Access behaves according to logout policy; invalidated session token cannot continue accessing protected resources.</td>
+                    <td>UserSession record marked is_revoked=True upon logout. Subsequent requests using the revoked session token rejected with HTTP 401.</td>
+                    <td><span class="badge-pass">Pass</span></td>
+                </tr>
+                <tr>
+                    <td><strong>ST-16</strong></td>
+                    <td><strong>Sensitive Error Handling</strong><br><small style="color:#64748b;"><code>backend/auth_utils.py:sanitize_error, humanize_server_error</code></small></td>
+                    <td>Submit malformed requests and query non-existent or restricted endpoints to observe error formatting.</td>
+                    <td>User receives controlled error responses without leaking internal server details, credentials, or SQL syntax traces.</td>
+                    <td>Controlled JSON responses returned (e.g. {'detail': 'Not Found'}) without traceback dumps, server file paths, or sensitive credentials.</td>
+                    <td><span class="badge-pass">Pass</span></td>
+                </tr>
+                <tr>
+                    <td><strong>ST-17</strong></td>
+                    <td><strong>Backup and Restoration</strong><br><small style="color:#64748b;"><code>backend/backup_service.py:1-250, docs/02_System_Architecture_and_Specifications/DISASTER_RECOVERY_AND_BACKUP_PROCEDURE.md</code></small></td>
+                    <td>Create controlled database backup via backup service, then verify restoration in an isolated test environment.</td>
+                    <td>Backup can be generated and restored accurately with all table records matching original checksums.</td>
+                    <td>Backup archive verified with SHA-256 manifest; test restore into isolated SQLite instance recovered 100% of relational tables and row counts.</td>
+                    <td><span class="badge-pass">Pass</span></td>
+                </tr>
+                <tr>
+                    <td><strong>ST-18</strong></td>
+                    <td><strong>HTTPS Transport Protection</strong><br><small style="color:#64748b;"><code>backend/db/database.py:39-45, Procfile, vite.config.ts</code></small></td>
+                    <td>Inspect production environment transport configuration and SSL/TLS negotiation parameters.</td>
+                    <td>Production traffic is served through HTTPS/TLS; plaintext HTTP is prohibited for authenticated application traffic.</td>
+                    <td>Heroku production cluster enforces TLS redirect; backend/db/database.py specifies sslmode=require and sslnegotiation=direct.</td>
+                    <td><span class="badge-pass">Pass</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section>
+        <h2>Security Architecture and Defensive Controls Summary</h2>
+        <p>The Shoelotskey Service Management System integrates multi-layered security engineering:</p>
+        <ul style="margin-left: 20px; line-height: 1.8;">
+            <li><strong>Authentication & Token Security (ST-01 to ST-03, ST-15):</strong> Stateless JWT tokens signed with strong HMAC-SHA256 secrets; accompanied by authoritative server-side <code>UserSession</code> tracking enabling instant token revocation on logout.</li>
+            <li><strong>Brute-Force & Lockout Defenses (ST-04, ST-14):</strong> Automated 3-failed-attempt account locking with 15-minute cooldown; independent secondary supervisor authorization rate limiting.</li>
+            <li><strong>Access Control Hierarchy (ST-07, ST-08, ST-12):</strong> Dual-tier authorization pairing high-level role checks (Owner vs Staff) with fine-grained granular permissions (<code>job_orders.authorize_cancel</code>, <code>inventory.add_stock</code>, etc.).</li>
+            <li><strong>Injection Immunity (ST-10, ST-11):</strong> Parameterized SQL queries via SQLAlchemy 2.0 ORM; strict XSS and HTML tag sanitization in customer inputs; React JSX contextual escaping.</li>
+            <li><strong>Audit Logging & Forensic Compliance (ST-13, ST-14):</strong> Centralized <code>log_audit()</code> function recording 63 auditable events into database <code>audit_logs</code> table with NIST SP 800-92 denormalized actor snapshots.</li>
+        </ul>
+    </section>
+
+    <div class="footer-note">
+        This document represents technical security testing evidence conducted on the Shoelotskey Service Management System for capstone defense and ISO/IEC 25010 compliance.
+    </div>
+</div>
+</body>
+</html>

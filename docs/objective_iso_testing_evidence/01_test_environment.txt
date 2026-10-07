@@ -1,0 +1,54 @@
+================================================================================
+OBJECTIVE ISO/IEC 25010 TECHNICAL TESTING — TEST ENVIRONMENT SPECIFICATION
+Project: Shoelotskey Service Management System with Machine Learning Analytics
+Institution: Philippine State College of Aeronautics (PhilSCA)
+Document ID: QA-ENV-2026-01
+Audit Timestamp: 2026-10-06T04:42:02.322329
+================================================================================
+
+1. WORKSTATION HARDWARE & OPERATING SYSTEM
+   - Operating System       : Windows-11-10.0.26200-SP0
+   - OS Architecture        : AMD64
+   - Processor              : AMD64 Family 23 Model 160 Stepping 0, AuthenticAMD
+   - Host Environment       : Windows Local Workstation (Localhost Evaluation Mode)
+
+2. RUNTIME AND PROGRAMMING LANGUAGE
+   - Python Version         : 3.14.3
+   - Python Executable      : C:\Users\charm\AppData\Local\Programs\Python\Python314\python.exe
+   - SQLite Version         : 3.50.4
+
+3. KEY DEPENDENCIES & LIBRARIES
+   - FastAPI                : 0.135.1
+   - Uvicorn                : 0.42.0
+   - SQLAlchemy             : 2.0.48
+   - Pydantic               : 2.12.5
+   - Bcrypt                 : 5.0.0
+   - Scikit-Learn           : error: No module named 'scikit-learn'
+   - NumPy                  : 2.4.3
+   - Pandas                 : 3.0.1
+   - Playwright             : installed
+
+4. PHYSICAL BROWSERS VERIFIED ON HOST
+   - Google Chrome          : Version 154.0.8037.93 (Verified Binary: C:\Program Files\Google\Chrome\Application\chrome.exe)
+   - Microsoft Edge         : Version 153.0.4234.32 (Verified Binary: C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe)
+   - Mozilla Firefox        : NOT INSTALLED on workstation (Marked NOT TESTED)
+   - Apple Safari           : UNAVAILABLE on Windows 11 platform (Marked NOT TESTED)
+
+5. VERSION CONTROL & SOURCE REPOSITORY
+   - Git Commit             : 20032ac217ac65e2bb2b342a9c27cc121144b64f
+   - Active Branch          : main
+   - Working Directory      : C:\Users\charm\Desktop\Shoelotskey Service Management System
+
+6. DATABASE CONFIGURATION & BASELINE METRICS
+   - Storage Engine         : SQLite 3 Relational Database Mirror (backend/db/shoelotskey.db)
+   - Total Relational Tables: 39 tables
+   - Existing Job Orders    : 103 records
+   - Existing Customers     : 1014 records
+   - Registered Users       : 9 accounts
+
+7. NETWORK & SECURITY EXECUTION PARAMETERS
+   - Network Isolation      : Local loopback (127.0.0.1 / localhost)
+   - Authentication Protocol: OAuth2 Bearer JWT (HMAC-SHA256)
+   - Cryptographic Hashing  : Bcrypt salted password hashes
+   - Data Safety Mode       : Non-destructive testing; temporary test records purged
+================================================================================

@@ -92,3 +92,11 @@ brain/
 scratch/
 tmp/
 .gemini/
+
+# Root Directory Isolation: Reports and databases belong in docs/ and backend/db/
+/*.html
+!index.html
+/*.db
+/*.db-journal
+/*.db-wal
+/*.db-shm

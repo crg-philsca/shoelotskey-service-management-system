@@ -1,0 +1,115 @@
+{
+  "audit_metadata": {
+    "title": "Dataset B 10,000 Simulated Operational Records Forensic Evidence Audit",
+    "system": "Shoelotskey Service Management System",
+    "timestamp_iso": "2026-10-06T19:41:37.560033",
+    "status": "FULLY VERIFIED"
+  },
+  "record_counts": {
+    "total_records": 10000,
+    "training_records": 7000,
+    "validation_records": 1500,
+    "test_records": 1500,
+    "sum_verified": true
+  },
+  "data_quality": {
+    "exact_duplicates": 0,
+    "duplicate_ids": 0,
+    "missing_values": 0,
+    "negative_quantities": 0,
+    "zero_pair_orders": 0,
+    "invalid_rush": 0,
+    "invalid_target_turnaround": 0
+  },
+  "partition_overlap": {
+    "train_validation_overlap": 0,
+    "train_test_overlap": 0,
+    "validation_test_overlap": 0,
+    "unique_partition_union": 10000,
+    "zero_leakage_verified": true
+  },
+  "feature_set_c_predictors": [
+    "total_pairs",
+    "basic_cleaning_qty",
+    "full_reglue_qty",
+    "minor_reglue_qty",
+    "unyellowing_qty",
+    "minor_restoration_qty",
+    "color_renewal_qty",
+    "rush_indicator",
+    "distinct_service_types",
+    "total_service_applications",
+    "intake_day_of_week",
+    "intake_month"
+  ],
+  "service_prevalence": [
+    {
+      "service": "Basic Cleaning",
+      "column": "basic_cleaning_qty",
+      "order_count": 9917,
+      "percentage": 99.17,
+      "total_applications": 15246,
+      "mean_qty_when_present": 1.54,
+      "min": 0,
+      "max": 5
+    },
+    {
+      "service": "Full Reglue",
+      "column": "full_reglue_qty",
+      "order_count": 3674,
+      "percentage": 36.74,
+      "total_applications": 4278,
+      "mean_qty_when_present": 1.16,
+      "min": 0,
+      "max": 3
+    },
+    {
+      "service": "Minor Reglue",
+      "column": "minor_reglue_qty",
+      "order_count": 820,
+      "percentage": 8.2,
+      "total_applications": 820,
+      "mean_qty_when_present": 1.0,
+      "min": 0,
+      "max": 1
+    },
+    {
+      "service": "Unyellowing",
+      "column": "unyellowing_qty",
+      "order_count": 1275,
+      "percentage": 12.75,
+      "total_applications": 1481,
+      "mean_qty_when_present": 1.16,
+      "min": 0,
+      "max": 3
+    },
+    {
+      "service": "Minor Restoration",
+      "column": "minor_restoration_qty",
+      "order_count": 1762,
+      "percentage": 17.62,
+      "total_applications": 2064,
+      "mean_qty_when_present": 1.17,
+      "min": 0,
+      "max": 3
+    },
+    {
+      "service": "Color Renewal",
+      "column": "color_renewal_qty",
+      "order_count": 255,
+      "percentage": 2.55,
+      "total_applications": 255,
+      "mean_qty_when_present": 1.0,
+      "min": 0,
+      "max": 1
+    }
+  ],
+  "operational_categories": {
+    "regular_orders": 8798,
+    "rush_orders": 1202,
+    "single_pair": 6174,
+    "multi_pair": 3826,
+    "single_service": 4372,
+    "multi_service": 5628
+  }
+}

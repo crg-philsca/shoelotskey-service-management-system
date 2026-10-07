@@ -390,7 +390,7 @@ export default function CashRegister({ user, onSetHeaderActionRight }: CashRegis
                 <div className="text-[11px] text-gray-500 flex items-center gap-3 pt-1 flex-wrap font-medium">
                   <span className="flex items-center gap-1">
                     <UserCheck className="h-3.5 w-3.5 text-gray-400" />
-                    Opened by: <strong className="text-gray-800">{session.opened_by_name || 'Front Staff'}</strong>
+                    Opened by: <strong className="text-gray-800">{session.opened_by_name || 'Staff'}</strong>
                   </span>
                   <span className="flex items-center gap-1">
                     <Clock className="h-3.5 w-3.5 text-gray-400" />

@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shoelotskey SMS — Checkpoint 4: Complete Numerical & Empirical Revalidation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #0284c7;
+      --primary-dark: #0369a1;
+      --primary-light: #e0f2fe;
+      --accent: #f59e0b;
+      --accent-light: #fef3c7;
+      --success: #10b981;
+      --success-light: #dcfce7;
+      --danger: #ef4444;
+      --danger-light: #fee2e2;
+      --purple: #8b5cf6;
+      --purple-light: #ede9fe;
+      --teal: #0d9488;
+      --teal-light: #ccfbf1;
+      --slate-900: #0f172a;
+      --slate-800: #1e293b;
+      --slate-700: #334155;
+      --slate-600: #475569;
+      --slate-500: #64748b;
+      --slate-100: #f1f5f9;
+      --slate-50: #f8fafc;
+      --border: #e2e8f0;
+      --card-bg: #ffffff;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.08);
+      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: #f8fafc;
+      color: var(--slate-900);
+      line-height: 1.6;
+      padding: 24px 16px;
+    }
+
+    .container {
+      max-width: 1480px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg);
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    .header-banner {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 45%, #0369a1 100%);
+      color: #ffffff;
+      padding: 38px 36px;
+      border-bottom: 4px solid var(--accent);
+    }
+
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .badge-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 14px;
+      border-radius: 9999px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .badge-cp4 { background: rgba(16, 185, 129, 0.25); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.45); }
+    .badge-cvi { background: rgba(56, 189, 248, 0.2); color: #7dd3fc; border: 1px solid rgba(56, 189, 248, 0.4); }
+    .badge-iso { background: rgba(139, 92, 246, 0.2); color: #c4b5fd; border: 1px solid rgba(139, 92, 246, 0.4); }
+
+    .header-title {
+      font-size: 2.15rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 10px;
+    }
+
+    .header-subtitle {
+      font-size: 1.02rem;
+      color: #cbd5e1;
+      max-width: 1200px;
+      margin-bottom: 22px;
+      line-height: 1.6;
+    }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+      background: rgba(255, 255, 255, 0.08);
+      padding: 18px 22px;
+      border-radius: var(--radius-md);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      font-size: 0.85rem;
+    }
+
+    .meta-item strong {
+      display: block;
+      color: #94a3b8;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 2px;
+    }
+
+    .meta-item span { color: #f8fafc; font-weight: 600; }
+
+    /* Content Body */
+    .content-body { padding: 36px 34px; }
+
+    h2 {
+      font-size: 1.38rem;
+      font-weight: 800;
+      color: var(--slate-900);
+      margin: 34px 0 16px 0;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    h2:first-of-type { margin-top: 0; }
+
+    h3 {
+      font-size: 1.12rem;
+      font-weight: 700;
+      color: var(--primary-dark);
+      margin: 22px 0 12px 0;
+    }
+
+    p { margin-bottom: 14px; color: var(--slate-700); font-size: 0.93rem; }
+
+    /* Callouts */
+    .callout {
+      padding: 16px 20px;
+      border-radius: var(--radius-md);
+      margin: 18px 0;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      border: 1px solid transparent;
+      font-size: 0.91rem;
+    }
+
+    .callout-success { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
+    .callout-warning { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+    .callout-danger { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+    .callout-info { background: #f0f9ff; border-color: #bae6fd; color: #075985; }
+
+    .callout-icon { font-size: 1.3rem; line-height: 1; flex-shrink: 0; margin-top: 2px; }
+    .callout-content strong { display: block; margin-bottom: 4px; font-size: 0.95rem; }
+
+    /* KPI Cards */
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 16px;
+      margin: 20px 0 28px 0;
+    }
+
+    .kpi-card {
+      background: var(--slate-50);
+      border-radius: var(--radius-md);
+      padding: 18px 20px;
+      border: 1px solid var(--border);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .kpi-card::before { content: ''; position: absolute; top: 0; left: 0; width: 5px; height: 100%; }
+    .kpi-card.blue::before { background: var(--primary); }
+    .kpi-card.green::before { background: var(--success); }
+    .kpi-card.amber::before { background: var(--accent); }
+    .kpi-card.purple::before { background: var(--purple); }
+
+    .kpi-title { font-size: 0.74rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--slate-500); margin-bottom: 5px; }
+    .kpi-value { font-size: 1.7rem; font-weight: 800; color: var(--slate-900); line-height: 1.1; margin-bottom: 4px; }
+    .kpi-sub { font-size: 0.78rem; color: var(--slate-600); }
+
+    /* Tables */
+    .table-responsive {
+      overflow-x: auto;
+      margin: 18px 0 24px 0;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
+    }
+
+    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.88rem; }
+    thead { background: #f1f5f9; color: var(--slate-800); }
+    th { padding: 12px 14px; font-weight: 700; font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 2px solid var(--border); }
+    td { padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: top; color: var(--slate-700); }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f8fafc; }
+
+    /* Badges */
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .tag-aligned { background: var(--success-light); color: #065f46; border: 1px solid #a7f3d0; }
+    .tag-danger { background: var(--danger-light); color: #991b1b; border: 1px solid #fecaca; }
+    .tag-warning { background: var(--accent-light); color: #92400e; border: 1px solid #fde68a; }
+    .tag-info { background: var(--primary-light); color: #075985; border: 1px solid #bae6fd; }
+
+    pre, code { font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; }
+    code:not(pre code) { background: #f1f5f9; color: #0369a1; padding: 2px 6px; border-radius: 4px; border: 1px solid #e2e8f0; }
+
+    .footer {
+      background: #f8fafc;
+      padding: 20px 34px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 14px;
+      font-size: 0.82rem;
+      color: var(--slate-500);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    
+    <header class="header-banner">
+      <div class="badge-row">
+        <span class="badge-pill badge-cp4">CHECKPOINT 4 — NUMERICAL REVALIDATION</span>
+        <span class="badge-pill badge-cvi">S-CVI = 1.00 Validated</span>
+        <span class="badge-pill badge-iso">ISO 3.71 · TAM 3.88 · ML MAE 8.56d</span>
+      </div>
+
+      <h1 class="header-title">Checkpoint 4: Complete Numerical & Empirical Revalidation</h1>
+      <p class="header-subtitle">
+        Mathematical, statistical, and code-level recalculation of every quantitative metric in the Shoelotskey study: Content Validity Index (S-CVI = 1.00), ISO/IEC 25010:2023 (N=5, GWM = 3.71), TAM (N=6, GWM = 3.88), Random Forest holdout metrics on all N=26 locked test records, and operational timing efficiency gains.
+      </p>
+
+      <div class="meta-grid">
+        <div class="meta-item">
+          <strong>Content Validity (S-CVI)</strong>
+          <span>1.00 (5/5 Validators Universal Agreement)</span>
+        </div>
+        <div class="meta-item">
+          <strong>ISO/IEC 25010:2023 GWM</strong>
+          <span>3.71 / 4.00 (Highly Acceptable, N=5 IT Experts)</span>
+        </div>
+        <div class="meta-item">
+          <strong>TAM User Acceptance GWM</strong>
+          <span>3.88 / 4.00 (Highly Acceptable, N=6 Census)</span>
+        </div>
+        <div class="meta-item">
+          <strong>ML Holdout Test Error</strong>
+          <span>MAE = 8.5554 d · RMSE = 10.2272 d (N=26)</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="content-body">
+
+      <!-- Executive Overview -->
+      <div class="kpi-row">
+        <div class="kpi-card green">
+          <div class="kpi-title">Content Validity</div>
+          <div class="kpi-value">1.00</div>
+          <div class="kpi-sub">S-CVI / Ave across 14 criteria</div>
+        </div>
+        <div class="kpi-card blue">
+          <div class="kpi-title">Software Quality</div>
+          <div class="kpi-value">3.71 / 4.00</div>
+          <div class="kpi-sub">ISO/IEC 25010:2023 (9 traits)</div>
+        </div>
+        <div class="kpi-card purple">
+          <div class="kpi-title">TAM Acceptance</div>
+          <div class="kpi-value">3.88 / 4.00</div>
+          <div class="kpi-sub">PU 4.00 · PEOU 3.89 · BI 3.61 · ASU 4.00</div>
+        </div>
+        <div class="kpi-card amber">
+          <div class="kpi-title">ML Locked Holdout</div>
+          <div class="kpi-value">8.56 Days</div>
+          <div class="kpi-sub">MAE = 8.5554 d · RMSE = 10.2272 d</div>
+        </div>
+      </div>
+
+      <!-- Section 1: ML Metric Provenance & Authoritative Table -->
+      <h2>1. Machine Learning Provenance & Competing Values Resolution</h2>
+      <p>
+        The table below resolves all candidate and competing ML metrics discovered across project artifacts, definitively establishing the authoritative values for Chapter 4 Table 6 and Chapter 5:
+      </p>
+
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Metric Set</th>
+              <th>MAE</th>
+              <th>RMSE</th>
+              <th>R²</th>
+              <th>Sample Size</th>
+              <th>Source File</th>
+              <th>Authoritative?</th>
+              <th>Provenance & Justification</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="background: #f0fdf4;">
+              <td><strong>Locked Final Test (Continuous Raw)</strong></td>
+              <td><strong>8.5554 d</strong></td>
+              <td><strong>10.2272 d</strong></td>
+              <td><strong>-0.0208</strong></td>
+              <td><strong>26 orders</strong></td>
+              <td><code>03_locked_final_test_predictions.csv</code></td>
+              <td><span class="tag tag-aligned">AUTHORITATIVE</span></td>
+              <td>Exact ground truth calculated from raw continuous predictions. Free from display rounding bias.</td>
+            </tr>
+            <tr>
+              <td><strong>Locked Final Test (Display Rounded)</strong></td>
+              <td>8.5769 d</td>
+              <td>10.2638 d</td>
+              <td>-0.0281</td>
+              <td>26 orders</td>
+              <td><code>03_locked_final_test_predictions.csv</code></td>
+              <td><span class="tag tag-info">Subordinate</span></td>
+              <td>Reflects integer day values shown in the intake UI modal.</td>
+            </tr>
+            <tr>
+              <td><strong>Development Set 5-Fold CV</strong></td>
+              <td>8.1541 d</td>
+              <td>10.3225 d</td>
+              <td>0.2679</td>
+              <td>93 orders</td>
+              <td><code>02_development_cv_summary.csv</code></td>
+              <td><span class="tag tag-warning">Dev Only</span></td>
+              <td>Expanding-window cross-validation during model development (Aug–Dec 2025).</td>
+            </tr>
+            <tr>
+              <td><strong>Dev Mean Baseline Benchmark</strong></td>
+              <td>9.3371 d</td>
+              <td>10.1255 d</td>
+              <td>-0.0006</td>
+              <td>26 orders</td>
+              <td><code>04_baseline_comparison.csv</code></td>
+              <td><span class="tag tag-info">Benchmark</span></td>
+              <td>Constant prediction of historical mean (18.44 d). RF achieves 0.78 d error reduction.</td>
+            </tr>
+            <tr>
+              <td><strong>Dev Median Baseline Benchmark</strong></td>
+              <td>8.9615 d</td>
+              <td>10.3571 d</td>
+              <td>-0.0469</td>
+              <td>26 orders</td>
+              <td><code>04_baseline_comparison.csv</code></td>
+              <td><span class="tag tag-info">Benchmark</span></td>
+              <td>Constant prediction of historical median (16.00 d). RF achieves 0.41 d error reduction.</td>
+            </tr>
+            <tr>
+              <td><strong>Manuscript Table 6 Published Rounded</strong></td>
+              <td>8.50 d</td>
+              <td>10.11 d</td>
+              <td>0.1290</td>
+              <td>26 orders</td>
+              <td>Chapter 4 Table 6 draft</td>
+              <td><span class="tag tag-warning">Draft Rounded</span></td>
+              <td>Early draft rounded reporting. Reconciled to exact continuous raw metrics (8.56 / 10.23 / -0.02).</td>
+            </tr>
+            <tr>
+              <td><strong>Illustrative Preview Rows (Table 5)</strong></td>
+              <td>9.90 d</td>
+              <td>11.83 d</td>
+              <td>-0.4590</td>
+              <td>10 orders</td>
+              <td>Chapter 4 Table 5</td>
+              <td><span class="tag tag-danger">Illustrative Only</span></td>
+              <td>First 10 rows shown for qualitative inspection. Must NEVER be described as the final test set.</td>
+            </tr>
+            <tr>
+              <td><strong>Legacy Draft Error (12.90 / 14.05)</strong></td>
+              <td>12.90 d</td>
+              <td>14.05 d</td>
+              <td>-5.1180</td>
+              <td>10 orders</td>
+              <td>Early draft notes</td>
+              <td><span class="tag tag-danger">Obsolete</span></td>
+              <td>Preliminary unvalidated prototype before OCR data cleaning. Completely superseded.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout callout-info">
+        <div class="callout-icon">ℹ</div>
+        <div class="callout-content">
+          <strong>Authoritative ML Defense Formulation:</strong>
+          The final holdout test set consists of <strong>N = 26 locked records</strong> (January 2026). Continuous raw metrics: <strong>MAE = 8.56 days (8.5554), RMSE = 10.23 days (10.2272), R² = -0.0208, Median AE = 7.78 days</strong>. ±1-day accuracy = 11.54% (3/26), ±2-day accuracy = 19.23% (5/26), ±3-day accuracy = 23.08% (6/26). The negative R² indicates high real-world turnaround variance, justifying why the model is deployed strictly as an <strong>advisory estimate (Option B)</strong> while official dates remain business-rule governed.
+        </div>
+      </div>
+
+      <!-- Section 2: Complete 26-Record Locked Test Set Table -->
+      <h2>2. Complete 26-Record Locked Holdout Test Set (January 2026)</h2>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Order ID</th>
+              <th>Date Received</th>
+              <th>Actual Turnaround</th>
+              <th>Raw ML Prediction</th>
+              <th>UI Display Turnaround</th>
+              <th>Absolute Error</th>
+              <th>Within ±1 Day</th>
+              <th>Within ±3 Days</th>
+            </tr>
+          </thead>
+          <tbody>
+            
+        <tr>
+          <td><code>ORD-2026-01-02-002</code></td>
+          <td>2026-01-02</td>
+          <td><strong>12 d</strong></td>
+          <td>22.09 d</td>
+          <td><strong>22 d</strong></td>
+          <td><span class='tag tag-danger'>±10.09d</span></td>
+          <td>NO</td>
+          <td>NO</td>
+        </tr>
+        
+        <tr>
+          <td><code>ORD-2026-01-02-003</code></td>
+          <td>2026-01-02</td>
+          <td><strong>11 d</strong></td>
+          <td>6.51 d</td>
+          <td><strong>7 d</strong></td>
+          <td><span class='tag tag-danger'>±4.49d</span></td>
+          <td>NO</td>
+          <td>NO</td>
+        </tr>
+        
+        <tr>
+          <td><code>ORD-2026-01-02-004</code></td>
+          <td>2026-01-02</td>
+          <td><strong>2 d</strong></td>
+          <td>3.63 d</td>
+          <td><strong>4 d</strong></td>
+          <td><span class='tag tag-aligned'>±1.63d</span></td>
+          <td>NO</td>
+          <td>YES</td>
+        </tr>
+        
+        <tr>
+          <td><code>ORD-2026-01-02-006</code></td>
+          <td>2026-01-02</td>
+          <td><strong>13 d</strong></td>
+          <td>20.49 d</td>
+          <td><strong>20 d</strong></td>
+          <td><span class='tag tag-danger'>±7.49d</span></td>
+          <td>NO</td>
+          <td>NO</td>
+        </tr>
+        
+        <tr>
+          <td><code>ORD-2026-01-03-005</code></td>
+          <td>2026-01-03</td>
+          <td><strong>31 d</strong></td>
+          <td>11.85 d</td>
+          <td><strong>12 d</strong></td>
+          <td><span class='tag tag-danger'>±19.15d</span></td>
+          <td>NO</td>
+          <td>NO</td>
+        </tr>
+        
+        <tr>
+          <td><code>ORD-2026-01-03-006</code></td>
+          <td>2026-01-03</td>
+          <td><strong>12 d</strong></td>
+          <td>6.56 d</td>
+          <td><strong>7 d</strong></td>
+          <td><span class='tag tag-danger'>±5.44d</span></td>
+          <td>NO</td>
+          <td>NO</td>
+        </tr>
+        
+        <tr>
+          <td><code>ORD-2026-01-04-003</code></td>
+          <td>2026-01-04</td>
+          <td><strong>32 d</strong></td>
+          <td>19.42 d</td>
+          <td><strong>19 d</strong></td>
+          <td><span class='tag tag-danger'>±12.58d</span></td>
+          <td>NO</td>
+          <td>NO</td>
+        </tr>
+        
+        <tr>
+          <td><code>ORD-2026-01-07-002</code></td>
+          <td>2026-01-07</td>
+          <td><strong>10 d</strong></td>
+          <td>25.32 d</td>
+          <td><strong>25 d</strong></td>
+          <td><span class='tag tag-danger'>±15.32d</span></td>
+          <td>NO</td>
+          <td>NO</td>
+        </tr>
+        
+        <tr>
+          <td><code>ORD-2026-01-07-005</code></td>
+          <td>2026-01-07</td>
+          <td><strong>28 d</strong></td>
+          <td>7.18 d</td>
+          <td><strong>7 d</strong></td>
+          <td><span class='tag tag-danger'>±20.82d</span></td>
+          <td>NO</td>
+          <td>NO</td>
+        </tr>
+        
+        <tr>
+          <td><code>ORD-2026-01-04-011</code></td>
+          <td>2026-01-08</td>
+          <td><strong>10 d</strong></td>
+          <td>7.07 d</td>
+          <td><strong>7 d</strong></td>
+          <td><span class='tag tag-aligned'>±2.93d</span></td>
+          <td>NO</td>
+          <td>YES</td>
+        </tr>
+        
+        <tr>
+          <td><code>ORD-2026-01-08-001</code></td>
+          <td>2026-01-08</td>
+          <td><strong>28 d</strong></td>
+          <td>21.92 d</td>
+          <td><strong>22 d</strong></td>
+          <td><span class='tag tag-danger'>±6.08d</span></td>
+          <td>NO</td>
+          <td>NO</td>
+        </tr>
+        
+        <tr>
+          <td><code>ORD-2026-01-08-002</code></td>
+          <td>2026-01-08</td>
+          <td><strong>31 d</strong></td>
+          <td>23.40 d</td>
+          <td><strong>23 d</strong></td>
+          <td><span class='tag tag-danger'>±7.60d</span></td>
+          <td>NO</td>
+          <td>NO</td>
+        </tr>
+        
+        <tr>
+          <td><code>ORD-2026-01-08-004</code></td>
+          <td>2026-01-08</td>
+          <td><strong>34 d</strong></td>
+          <td>17.37 d</td>
+          <td><strong>17 d</strong></td>
+          <td><span class='tag tag-danger'>±16.63d</span></td>
+          <td>NO</td>
+          <td>NO</td>
+        </tr>
+        
+        <tr>
+          <td><code>ORD-2026-01-09-002</code></td>
+          <td>2026-01-09</td>
+          <td><strong>32 d</strong></td>
+          <td>19.87 d</td>
+          <td><strong>20 d</strong></td>
+          <td><span class='tag tag-danger'>±12.13d</span></td>
+          <td>NO</td>
+          <td>NO</td>
+        </tr>
+        
+        <tr>
+          <td><code>ORD-2026-01-11-001</code></td>
+          <td>2026-01-11</td>
+          <td><strong>32 d</strong></td>
+          <td>18.22 d</td>
+          <td><strong>18 d</strong></td>
+          <td><span class='tag tag-danger'>±13.78d</span></td>
+          <td>NO</td>
+          <td>NO</td>
+        </tr>
+        
+        <tr>
+          <td><code>ORD-2026-01-11-003</code></td>
+          <td>2026-01-11</td>
+          <td><strong>11 d</strong></td>
+          <td>16.12 d</td>
+          <td><strong>16 d</strong></td>
+          <td><span class='tag tag-danger'>±5.12d</span></td>
+          <td>NO</td>
+          <td>NO</td>
+        </tr>
+        
+        <tr>
+          <td><code>ORD-2026-01-11-006</code></td>
+          <td>2026-01-13</td>
+          <td><strong>9 d</strong></td>
+          <td>7.03 d</td>
+          <td><strong>7 d</strong></td>
+          <td><span class='tag tag-aligned'>±1.97d</span></td>
+          <td>NO</td>
+          <td>YES</td>
+        </tr>
+        
+        <tr>
+          <td><code>ORD-2026-01-11-013</code></td>
+          <td>2026-01-13</td>
+          <td><strong>11 d</strong></td>
+          <td>10.31 d</td>
+          <td><strong>10 d</strong></td>
+          <td><span class='tag tag-aligned'>±0.69d</span></td>
+          <td>YES</td>
+          <td>YES</td>
+        </tr>
+        
+        <tr>
+          <td><code>ORD-2026-01-14-008</code></td>
+          <td>2026-01-14</td>
+          <td><strong>19 d</strong></td>
+          <td>7.18 d</td>
+          <td><strong>7 d</strong></td>
+          <td><span class='tag tag-danger'>±11.82d</span></td>
+          <td>NO</td>
+          <td>NO</td>
+        </tr>
+        
+        <tr>
+          <td><code>ORD-2026-01-15-001</code></td>
+          <td>2026-01-18</td>
+          <td><strong>25 d</strong></td>
+          <td>18.22 d</td>
+          <td><strong>18 d</strong></td>
+          <td><span class='tag tag-danger'>±6.78d</span></td>
+          <td>NO</td>
+          <td>NO</td>
+        </tr>
+        
+        <tr>
+          <td><code>ORD-2026-01-20-003</code></td>
+          <td>2026-01-20</td>
+          <td><strong>8 d</strong></td>
+          <td>7.03 d</td>
+          <td><strong>7 d</strong></td>
+          <td><span class='tag tag-aligned'>±0.97d</span></td>
+          <td>YES</td>
+          <td>YES</td>
+        </tr>
+        
+        <tr>
+          <td><code>ORD-2026-01-21-002</code></td>
+          <td>2026-01-21</td>
+          <td><strong>7 d</strong></td>
+          <td>7.18 d</td>
+          <td><strong>7 d</strong></td>
+          <td><span class='tag tag-aligned'>±0.18d</span></td>
+          <td>YES</td>
+          <td>YES</td>
+        </tr>
+        
+        <tr>
+          <td><code>ORD-2026-01-22-002</code></td>
+          <td>2026-01-22</td>
+          <td><strong>29 d</strong></td>
+          <td>18.37 d</td>
+          <td><strong>18 d</strong></td>
+          <td><span class='tag tag-danger'>±10.63d</span></td>
+          <td>NO</td>
+          <td>NO</td>
+        </tr>
+        
+        <tr>
+          <td><code>ORD-2026-01-11-009</code></td>
+          <td>2026-01-24</td>
+          <td><strong>5 d</strong></td>
+          <td>16.21 d</td>
+          <td><strong>16 d</strong></td>
+          <td><span class='tag tag-danger'>±11.21d</span></td>
+          <td>NO</td>
+          <td>NO</td>
+        </tr>
+        
+        <tr>
+          <td><code>ORD-2026-01-27-004</code></td>
+          <td>2026-01-27</td>
+          <td><strong>15 d</strong></td>
+          <td>7.03 d</td>
+          <td><strong>7 d</strong></td>
+          <td><span class='tag tag-danger'>±7.97d</span></td>
+          <td>NO</td>
+          <td>NO</td>
+        </tr>
+        
+        <tr>
+          <td><code>ORD-2026-01-27-005</code></td>
+          <td>2026-01-27</td>
+          <td><strong>16 d</strong></td>
+          <td>7.03 d</td>
+          <td><strong>7 d</strong></td>
+          <td><span class='tag tag-danger'>±8.97d</span></td>
+          <td>NO</td>
+          <td>NO</td>
+        </tr>
+        
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Section 3: Survey Instrument Content Validity (S-CVI) -->
+      <h2>3. Survey Instrument Content Validity Index (S-CVI)</h2>
+      <p>
+        Evaluated from raw expert rating sheets in <code>VALIDITY TEST RESULTS.xlsx</code> by five (5) credentialed faculty and industry validators across 14 criteria:
+      </p>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Item #</th>
+              <th>Validation Criterion Statement</th>
+              <th>Val 1</th>
+              <th>Val 2</th>
+              <th>Val 3</th>
+              <th>Val 4</th>
+              <th>Val 5</th>
+              <th>I-CVI</th>
+              <th>Interpretation</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1.0</td>
+              <td>Items relevant to study objectives and operations.</td>
+              <td>4</td><td>4</td><td>4</td><td>4</td><td>3</td><td><strong>1.00</strong></td>
+              <td><span class="tag tag-aligned">Valid</span></td>
+            </tr>
+            <tr>
+              <td>2.0</td>
+              <td>Items aligned with core functions (orders, tracking, inventory, ML).</td>
+              <td>4</td><td>4</td><td>4</td><td>4</td><td>3</td><td><strong>1.00</strong></td>
+              <td><span class="tag tag-aligned">Valid</span></td>
+            </tr>
+            <tr>
+              <td>3.0</td>
+              <td>Appropriate number of items for evaluating major features.</td>
+              <td>4</td><td>4</td><td>4</td><td>4</td><td>3</td><td><strong>1.00</strong></td>
+              <td><span class="tag tag-aligned">Valid</span></td>
+            </tr>
+            <tr>
+              <td>4.0</td>
+              <td>Items comprehensive without being too narrow or broad.</td>
+              <td>4</td><td>4</td><td>3</td><td>4</td><td>3</td><td><strong>1.00</strong></td>
+              <td><span class="tag tag-aligned">Valid</span></td>
+            </tr>
+            <tr>
+              <td>5.0</td>
+              <td>Survey covers relevant ISO/IEC 25010:2023 characteristics.</td>
+              <td>4</td><td>4</td><td>3</td><td>4</td><td>4</td><td><strong>1.00</strong></td>
+              <td><span class="tag tag-aligned">Valid</span></td>
+            </tr>
+            <tr>
+              <td>6.0</td>
+              <td>Includes appropriate TAM items (PU, PEOU, BI, ASU).</td>
+              <td>4</td><td>4</td><td>3</td><td>4</td><td>3</td><td><strong>1.00</strong></td>
+              <td><span class="tag tag-aligned">Valid</span></td>
+            </tr>
+            <tr>
+              <td>7.0–14.0</td>
+              <td>Reliability, terminology, visual layout, clarity, scale fit, overall suitability.</td>
+              <td>4</td><td>4</td><td>3–4</td><td>4</td><td>3</td><td><strong>1.00</strong></td>
+              <td><span class="tag tag-aligned">Valid</span></td>
+            </tr>
+            <tr style="background: #f0fdf4; font-weight: bold;">
+              <td colspan="7">Scale-Level Content Validity Index (S-CVI / Average)</td>
+              <td style="color: #065f46; font-size: 1.1rem;">1.00</td>
+              <td><span class="tag tag-aligned">Universal Validity</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Section 4: ISO/IEC 25010:2023 Revalidation -->
+      <h2>4. ISO/IEC 25010:2023 Quality Evaluation (N=5 IT Experts)</h2>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Quality Characteristic</th>
+              <th>Weighted Mean</th>
+              <th>Standard Deviation (SD)</th>
+              <th>Verbal Interpretation</th>
+              <th>Reconciliation Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1</td>
+              <td><strong>Flexibility</strong></td>
+              <td><strong>3.84</strong></td>
+              <td>0.37</td>
+              <td>Highly Acceptable</td>
+              <td><span class="tag tag-aligned">Verified</span></td>
+            </tr>
+            <tr>
+              <td>2</td>
+              <td><strong>Compatibility</strong></td>
+              <td><strong>3.76</strong></td>
+              <td>0.31</td>
+              <td>Highly Acceptable</td>
+              <td><span class="tag tag-aligned">Verified</span></td>
+            </tr>
+            <tr style="background: #fef2f2;">
+              <td>3</td>
+              <td><strong>Reliability</strong></td>
+              <td><strong>3.72</strong></td>
+              <td>0.49</td>
+              <td>Highly Acceptable</td>
+              <td><span class="tag tag-danger">Fixed</span> (Narrative p. 127/141 claimed 3.76; corrected to 3.72)</td>
+            </tr>
+            <tr>
+              <td>4</td>
+              <td><strong>Interaction Capability</strong></td>
+              <td><strong>3.72</strong></td>
+              <td>0.45</td>
+              <td>Highly Acceptable</td>
+              <td><span class="tag tag-aligned">Verified</span></td>
+            </tr>
+            <tr>
+              <td>5</td>
+              <td><strong>Maintainability</strong></td>
+              <td><strong>3.72</strong></td>
+              <td>0.45</td>
+              <td>Highly Acceptable</td>
+              <td><span class="tag tag-aligned">Verified</span></td>
+            </tr>
+            <tr>
+              <td>6</td>
+              <td><strong>Performance Efficiency</strong></td>
+              <td><strong>3.68</strong></td>
+              <td>0.47</td>
+              <td>Highly Acceptable</td>
+              <td><span class="tag tag-aligned">Verified</span></td>
+            </tr>
+            <tr>
+              <td>7</td>
+              <td><strong>Security</strong></td>
+              <td><strong>3.68</strong></td>
+              <td>0.47</td>
+              <td>Highly Acceptable</td>
+              <td><span class="tag tag-aligned">Verified</span></td>
+            </tr>
+            <tr>
+              <td>8</td>
+              <td><strong>Functional Suitability</strong></td>
+              <td><strong>3.64</strong></td>
+              <td>0.48</td>
+              <td>Highly Acceptable</td>
+              <td><span class="tag tag-aligned">Verified</span></td>
+            </tr>
+            <tr>
+              <td>9</td>
+              <td><strong>Safety</strong></td>
+              <td><strong>3.64</strong></td>
+              <td>0.48</td>
+              <td>Highly Acceptable</td>
+              <td><span class="tag tag-aligned">Verified</span></td>
+            </tr>
+            <tr style="background: #e0f2fe; font-weight: bold;">
+              <td colspan="2">Overall Composite GWM (ISO 25010)</td>
+              <td style="color: #0369a1; font-size: 1.1rem;">3.71 / 4.00</td>
+              <td>0.44</td>
+              <td colspan="2"><span class="tag tag-aligned">Highly Acceptable (Excellent Quality)</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Section 5: TAM User Acceptance Revalidation -->
+      <h2>5. Technology Acceptance Model (TAM) Revalidation (N=6 Census)</h2>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Construct</th>
+              <th>Items</th>
+              <th>Weighted Mean</th>
+              <th>Standard Deviation (SD)</th>
+              <th>Verbal Interpretation</th>
+              <th>Operational Finding</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Perceived Usefulness (PU)</strong></td>
+              <td>Items 1–4</td>
+              <td><strong>4.00</strong></td>
+              <td>0.00</td>
+              <td>Strongly Agree / Highly Acceptable</td>
+              <td>Unanimous agreement that digital records eliminate receipt loss.</td>
+            </tr>
+            <tr>
+              <td><strong>Actual System Use (ASU)</strong></td>
+              <td>Items 10–12</td>
+              <td><strong>4.00</strong></td>
+              <td>0.00</td>
+              <td>Strongly Agree / Highly Acceptable</td>
+              <td>Complete operational replacement of manual paper logbooks.</td>
+            </tr>
+            <tr>
+              <td><strong>Perceived Ease of Use (PEOU)</strong></td>
+              <td>Items 5–7</td>
+              <td><strong>3.89</strong></td>
+              <td>0.31</td>
+              <td>Strongly Agree / Highly Acceptable</td>
+              <td>Fast order creation with auto-complete and intuitive buttons.</td>
+            </tr>
+            <tr>
+              <td><strong>Behavioral Intention (BI)</strong></td>
+              <td>Items 8–9</td>
+              <td><strong>3.61</strong></td>
+              <td>0.52</td>
+              <td>Strongly Agree / Highly Acceptable</td>
+              <td>Unanimous commitment to adopt the platform permanently.</td>
+            </tr>
+            <tr style="background: #f1f5f9; font-weight: bold;">
+              <td colspan="2">Standard TAM (Items 1–12) Grand Mean</td>
+              <td><strong>3.91 / 4.00</strong></td>
+              <td>0.28</td>
+              <td colspan="2"><span class="tag tag-aligned">Highly Acceptable</span></td>
+            </tr>
+            <tr>
+              <td><strong>Dashboard Impact (System-Specific)</strong></td>
+              <td>Items 13–15</td>
+              <td><strong>3.83</strong></td>
+              <td>0.41</td>
+              <td>Strongly Agree / Highly Acceptable</td>
+              <td>Instant revenue visibility and 1-click expense reporting.</td>
+            </tr>
+            <tr style="background: #ede9fe; font-weight: bold;">
+              <td colspan="2">Overall Instrument Composite (All 15 Items)</td>
+              <td style="color: #5b21b6; font-size: 1.1rem;">3.88 / 4.00</td>
+              <td>0.25</td>
+              <td colspan="2"><span class="tag tag-aligned">Highly Acceptable</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Section 6: Operational Timing & Mathematical Verifications -->
+      <h2>6. Operational Timing & Efficiency Gain Mathematical Proofs</h2>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Operational Metric</th>
+              <th>Manual Paper Baseline</th>
+              <th>Live Digital System</th>
+              <th>Mathematical Proof / Formula</th>
+              <th>Resulting Efficiency Gain</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Customer Record Retrieval Time</strong></td>
+              <td>5.20 minutes (312 seconds)</td>
+              <td>0.41 minutes (24.6 seconds)</td>
+              <td><code>(5.20 - 0.41) / 5.20 = 4.79 / 5.20 = 92.115%</code></td>
+              <td><span class="tag tag-aligned">92.12% Reduction</span></td>
+            </tr>
+            <tr>
+              <td><strong>Financial & Sales Report Generation</strong></td>
+              <td>43.71 minutes (2,622.6 seconds)</td>
+              <td>0.43 seconds (0.007167 minutes)</td>
+              <td><code>(43.71 - 0.007167) / 43.71 = 43.7028 / 43.71 = 99.9836%</code></td>
+              <td><span class="tag tag-aligned">99.98% Reduction</span></td>
+            </tr>
+            <tr>
+              <td><strong>Daily Duplicate Encoding Errors</strong></td>
+              <td>2 to 3 entries / day</td>
+              <td>0 entries / day</td>
+              <td>Database unique constraints on order numbers</td>
+              <td><span class="tag tag-aligned">100% Elimination</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Gate Decision -->
+      <h2>7. Checkpoint 4 Gate Decision & Summary</h2>
+      <p>
+        All research metrics have been recomputed from ground-truth source files. The ML provenance is resolved with the authoritative 26-record test metrics established. The ISO Reliability contradiction (3.76 narrative vs. 3.72 table) is resolved, and TAM construct distinctions are clarified.
+      </p>
+
+      <div class="callout callout-success">
+        <div class="callout-icon">✓</div>
+        <div class="callout-content">
+          <strong>Checkpoint 4 Status: VERIFIED & COMPLETE</strong>
+          <br>
+          We are ready to proceed to <strong>Checkpoint 5: Chapters 4 to 5 Manuscript Audit</strong> (<code>05_CHAPTERS_4_TO_5_AUDIT.html</code>), where we will audit the presentation of results, discussion of findings, conclusions, and evidence-based recommendations against these revalidated numerical truths.
+        </div>
+      </div>
+
+    </main>
+
+    <footer class="footer">
+      <div><strong>Shoelotskey Service Management System</strong> · Institute of Computer Studies</div>
+      <div>National Aviation Academy of the Philippines (PhilSCA) · Academic Year 2025–2026</div>
+      <div>Checkpoint 4 Numerical Revalidation Report · Generated September 24, 2026</div>
+    </footer>
+
+  </div>
+
+</body>
+</html>

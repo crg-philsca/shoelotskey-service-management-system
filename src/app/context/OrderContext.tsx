@@ -53,7 +53,7 @@ interface OrderContextType {
     // backend rejection (validation/auth/server error) — see addOrder() below. Callers must
     // await this before treating the submission as successful.
     addOrder: (order: JobOrder) => Promise<boolean>;
-    updateOrder: (id: string, updates: Partial<JobOrder>, statusUser?: string) => Promise<void>;
+    updateOrder: (id: string, updates: Partial<JobOrder>, statusUser?: string) => Promise<boolean>;
     deleteOrder: (id: string) => Promise<void>;
     refreshOrders: () => Promise<void>;
 }
@@ -71,44 +71,48 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
     const inFlightOrderUpdates = useRef<Set<string>>(new Set());
     const { addActivity } = useActivities();
     const CACHE_KEY = 'jobOrders_v23_cache';
+    const cacheTimerRef = useRef<any>(null);
 
-    // Safe cache saver with quota overflow eviction and stripping heavy base64 strings
+    // Safe cache saver with quota overflow eviction, stripping heavy base64 strings, and debounced to prevent main-thread lag
     const safeSaveCachedOrders = (ordersToCache: JobOrder[]) => {
         if (typeof window === 'undefined' || !ordersToCache) return;
-        try {
-            // Strip heavy base64 strings (signatures, photos) from order cache to stay well under 5MB quota
-            const lightOrders = ordersToCache.map(o => {
-                const { beforeImage, afterImage, customerSignature, staffSignature, ...rest } = o as any;
-                return rest;
-            });
-            const serialized = JSON.stringify(lightOrders);
+        if (cacheTimerRef.current) clearTimeout(cacheTimerRef.current);
+        cacheTimerRef.current = setTimeout(() => {
             try {
-                localStorage.setItem(CACHE_KEY, serialized);
-            } catch (e: any) {
-                if (e?.name === 'QuotaExceededError' || e?.code === 22 || String(e).includes('quota')) {
-                    console.warn('[OrderContext] LocalStorage quota exceeded. Purging stale keys...');
-                    try {
-                        localStorage.removeItem('jobOrders_v19_cache');
-                        localStorage.removeItem('jobOrders_v20_cache');
-                        localStorage.removeItem('jobOrders_v21_cache');
-                        localStorage.removeItem('jobOrders_v22_cache');
-                        localStorage.removeItem('shoelotskey_job_orders');
-                        localStorage.removeItem('jobOrders_cache');
-                    } catch (_) {}
-                    try {
-                        localStorage.setItem(CACHE_KEY, serialized);
-                    } catch (_) {
+                // Strip heavy base64 strings (signatures, photos) from order cache to stay well under 5MB quota
+                const lightOrders = ordersToCache.map(o => {
+                    const { beforeImage, afterImage, customerSignature, staffSignature, ...rest } = o as any;
+                    return rest;
+                });
+                const serialized = JSON.stringify(lightOrders);
+                try {
+                    localStorage.setItem(CACHE_KEY, serialized);
+                } catch (e: any) {
+                    if (e?.name === 'QuotaExceededError' || e?.code === 22 || String(e).includes('quota')) {
+                        console.warn('[OrderContext] LocalStorage quota exceeded. Purging stale keys...');
                         try {
-                            localStorage.setItem(CACHE_KEY, JSON.stringify(lightOrders.slice(0, 50)));
-                        } catch (finalErr) {
-                            console.warn('[OrderContext] LocalStorage quota exhausted. Skipping cache write.', finalErr);
+                            localStorage.removeItem('jobOrders_v19_cache');
+                            localStorage.removeItem('jobOrders_v20_cache');
+                            localStorage.removeItem('jobOrders_v21_cache');
+                            localStorage.removeItem('jobOrders_v22_cache');
+                            localStorage.removeItem('shoelotskey_job_orders');
+                            localStorage.removeItem('jobOrders_cache');
+                        } catch (_) {}
+                        try {
+                            localStorage.setItem(CACHE_KEY, serialized);
+                        } catch (_) {
+                            try {
+                                localStorage.setItem(CACHE_KEY, JSON.stringify(lightOrders.slice(0, 50)));
+                            } catch (finalErr) {
+                                console.warn('[OrderContext] LocalStorage quota exhausted. Skipping cache write.', finalErr);
+                            }
                         }
                     }
                 }
+            } catch (err) {
+                console.warn('[OrderContext] Failed to serialize orders for cache:', err);
             }
-        } catch (err) {
-            console.warn('[OrderContext] Failed to serialize orders for cache:', err);
-        }
+        }, 400);
     };
 
     const [orders, setOrders] = useState<JobOrder[]>(() => {
@@ -228,14 +232,17 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
     const [refreshing, setRefreshing] = useState(false);
     const [dbStatus, setDbStatus] = useState<'remote' | 'local' | 'unknown'>('unknown');
 
-    // Diagnostic Check: Verify if we are on Remote or Local DB
+    // Diagnostic Check: Verify if we are on Remote or Local DB (deferred to idle to protect FCP/LCP)
     useEffect(() => {
+        let isMounted = true;
         const checkHealth = async () => {
             try {
                 const res = await fetch(`${API_BASE}/health-check`);
                 const data = await res.json();
                 const dbLabel = String(data.database || '');
-                setDbStatus(dbLabel.includes('PostgreSQL') ? 'remote' : dbLabel.includes('SQLite') ? 'local' : 'unknown');
+                if (isMounted) {
+                    setDbStatus(dbLabel.includes('PostgreSQL') ? 'remote' : dbLabel.includes('SQLite') ? 'local' : 'unknown');
+                }
                 
                 // Auto-trigger cloud sync if we have pending local data and we're back on Remote
                 if (data.has_pending_offline_data && dbLabel.includes('PostgreSQL') && user.token) {
@@ -244,7 +251,7 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                         method: 'POST',
                         headers: { 'Authorization': `Bearer ${user.token}` }
                     }).then(r => r.json()).then(syncData => {
-                        if (syncData.status === 'success') {
+                        if (syncData.status === 'success' && isMounted) {
                             toast.success("Database Restored", {
                                 description: `Successfully synced ${syncData.synced_records} orders from local backup to Cloud Database.`,
                                 duration: 10000
@@ -254,10 +261,38 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                     }).catch(console.error);
                 }
             } catch (e) {
-                setDbStatus('unknown');
+                if (isMounted) setDbStatus('unknown');
             }
         };
-        checkHealth();
+
+        const isJobOrderForm = typeof window !== 'undefined' && window.location.pathname.startsWith('/job-order-form');
+        if (isJobOrderForm) {
+            const timer = setTimeout(() => {
+                if (isMounted) checkHealth();
+            }, 15000);
+            return () => {
+                isMounted = false;
+                clearTimeout(timer);
+            };
+        }
+
+        if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+            const idleId = (window as any).requestIdleCallback(() => {
+                if (isMounted) checkHealth();
+            }, { timeout: 1500 });
+            return () => {
+                isMounted = false;
+                (window as any).cancelIdleCallback(idleId);
+            };
+        } else {
+            const timer = setTimeout(() => {
+                if (isMounted) checkHealth();
+            }, 600);
+            return () => {
+                isMounted = false;
+                clearTimeout(timer);
+            };
+        }
     }, [user.token]);
 
     // Robust Mapping: Converts Backend 3NF Model to Frontend JobOrder Type
@@ -299,16 +334,28 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
             customerName: bo.customer?.customer_name || 'Guest',
             contactNumber: bo.customer?.contact_number || '-',
             grandTotal: parseFloat(bo.grand_total) || 0,
-            baseServiceFee: bo.items?.reduce((total: number, currItem: any) =>
-                total + (currItem.services?.filter((s: any) =>
-                    (s.category?.category_name || s.category) === 'base'
-                ).reduce((sum: number, s: any) => sum + (parseFloat(s.base_price) || 0) * (currItem.quantity || 1), 0) || 0)
-                , 0) || 0,
-            addOnsTotal: bo.items?.reduce((total: number, currItem: any) =>
-                total + (currItem.services?.filter((s: any) =>
-                    (s.category?.category_name || s.category) === 'addon'
-                ).reduce((sum: number, s: any) => sum + (parseFloat(s.base_price) || 0) * (currItem.quantity || 1), 0) || 0)
-                , 0) || 0,
+            baseServiceFee: bo.base_service_fee != null && Number(bo.base_service_fee) > 0
+                ? parseFloat(bo.base_service_fee)
+                : (bo.items?.reduce((total: number, currItem: any) =>
+                    total + (currItem.services?.filter((s: any) =>
+                        (s.category?.category_name || s.category) === 'base'
+                    ).reduce((sum: number, s: any) => sum + (parseFloat(s.base_price) || 0) * (currItem.quantity || 1), 0) || 0)
+                    , 0) || 0),
+            addOnsTotal: bo.add_ons_total != null && Number(bo.add_ons_total) > 0
+                ? parseFloat(bo.add_ons_total)
+                : (bo.items?.reduce((total: number, currItem: any) =>
+                    total + (currItem.services?.filter((s: any) =>
+                        (s.category?.category_name || s.category) === 'addon'
+                    ).reduce((sum: number, s: any) => sum + (parseFloat(s.base_price) || 0) * (currItem.quantity || 1), 0) || 0)
+                    , 0) || 0),
+            discountAmount: bo.discount_amount != null ? parseFloat(bo.discount_amount) : (bo.discountAmount != null ? parseFloat(bo.discountAmount) : (bo.discount != null ? parseFloat(bo.discount) : 0)),
+            discount: bo.discount_amount != null ? parseFloat(bo.discount_amount) : (bo.discountAmount != null ? parseFloat(bo.discountAmount) : (bo.discount != null ? parseFloat(bo.discount) : 0)),
+            discountType: bo.discount_type || bo.discountType || '',
+            discountName: bo.discount_name || bo.discountName || '',
+            discountPreset: bo.discount_preset || bo.discountPreset || '',
+            discountCode: bo.discount_code || bo.discountCode || '',
+            discountIdNumber: bo.discount_id_number || bo.discountIdNumber || '',
+            authorized_by_username: bo.authorized_by_username || '',
             priorityLevel: (bo.priority?.priority_name || bo.priority || 'regular').toLowerCase() as any,
             ...(() => {
                 // Always sort payments ascending by payment_id so payment 0 is the initial intake payment
@@ -591,6 +638,7 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
 
     // Initial Load - Hydrate from API with LocalStorage fallback
     useEffect(() => {
+        let isMounted = true;
         const loadInitialData = async () => {
             // If we have no orders, show blocking loading
             if (orders.length === 0) setLoading(true);
@@ -600,39 +648,66 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                 const response = await fetch(`${API_BASE}/orders`, {
                     headers: { 'Authorization': `Bearer ${user.token}` }
                 });
-                if (response.ok) {
+                if (response.ok && isMounted) {
                     const data = await response.json();
                     const mappedOrders = data.map(mapBackendToFrontend);
                     const finalOrders = mergePendingOrders(mappedOrders);
 
                     setOrders(finalOrders);
                     safeSaveCachedOrders(finalOrders);
-                } else {
+                } else if (!response.ok) {
                     throw new Error('API unreachable');
                 }
             } catch (err) {
                 console.warn("Retaining cached data due to fetch failure", err);
-                // P1-17 FIX: this previously fell back to `mockJobOrders` (fabricated demo
-                // customers/orders from src/app/lib/mockData.ts) whenever the initial fetch
-                // failed with no cached orders yet available (e.g. first load on a fresh
-                // browser/device with a flaky connection). That let entirely fake job orders
-                // silently render as if they were real production records — exactly the
-                // pattern flagged by the audit. If there is no real cached data, show a
-                // genuine empty state instead and surface a clear connectivity error so
-                // staff/owner know data failed to load rather than mistaking it for "no
-                // orders exist yet".
-                if (orders.length === 0) {
+                if (orders.length === 0 && isMounted) {
                     import('sonner').then(({ toast }) => toast.error(
                         "Unable to load Job Orders from the server. Check your connection and try again."
                     ));
                 }
             } finally {
-                setLoading(false);
-                setRefreshing(false);
+                if (isMounted) {
+                    setLoading(false);
+                    setRefreshing(false);
+                }
             }
         };
 
-        loadInitialData();
+        // Defer API sync until after initial paint / browser idle
+        // so that LCP and FCP complete with zero main-thread blocking on both cold and warm navigations.
+        const isJobOrderForm = typeof window !== 'undefined' && window.location.pathname.startsWith('/job-order-form');
+        if (isJobOrderForm) {
+            // User is focused on creating an order; defer downloading 365KB orders payload
+            const timer = setTimeout(() => {
+                if (isMounted) loadInitialData();
+            }, 15000);
+            return () => {
+                isMounted = false;
+                clearTimeout(timer);
+            };
+        }
+
+        if (orders.length === 0) {
+            // Cold start or empty cache: start network request immediately without idle lag
+            loadInitialData();
+        } else if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+            // Warm navigation with existing orders: defer background revalidation
+            const idleId = (window as any).requestIdleCallback(() => {
+                if (isMounted) loadInitialData();
+            }, { timeout: 1500 });
+            return () => {
+                isMounted = false;
+                (window as any).cancelIdleCallback(idleId);
+            };
+        } else {
+            const timer = setTimeout(() => {
+                if (isMounted) loadInitialData();
+            }, 300);
+            return () => {
+                isMounted = false;
+                clearTimeout(timer);
+            };
+        }
     }, []);
 
     // Real-time synchronization: Mirror active orders state to localStorage cache whenever changed
@@ -652,10 +727,14 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
             'claimed': 'claimed',
             'cancelled': 'cancelled',
             'canceled': 'cancelled',
-            // Legacy mappings in case old DB data exists
+            // Legacy / canonical mappings in both capitalized and lowercase
             'Pending': 'new-order',
+            'pending': 'new-order',
             'In Progress': 'on-going',
+            'in progress': 'on-going',
+            'in-progress': 'on-going',
             'Completed': 'for-release',
+            'completed': 'for-release',
             'Claimed': 'claimed',
             'Cancelled': 'cancelled',
             'Canceled': 'cancelled',
@@ -663,7 +742,8 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
         // [FIX] Only fall back to 'new-order' if the statusName itself is empty/null.
         if (!statusName) return 'new-order';
         
-        const normalized = map[statusName] ?? map[statusName.toLowerCase()];
+        const trimmed = String(statusName).trim();
+        const normalized = map[trimmed] ?? map[trimmed.toLowerCase()];
         if (!normalized) {
             console.error(`[OrderContext] Critical data integrity issue: Unknown backend status '${statusName}'. Falling back to 'new-order' for UI stability. Please check backend schema.`);
             return 'new-order';
@@ -1020,11 +1100,11 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
         }
     };
 
-    const updateOrder = async (id: string, updates: Partial<JobOrder>, statusUser?: string) => {
+    const updateOrder = async (id: string, updates: Partial<JobOrder>, statusUser?: string): Promise<boolean> => {
         const orderKey = String(id);
         if (inFlightOrderUpdates.current.has(orderKey)) {
             console.warn(`[DUPLICATE PREVENTED] Order update already in progress for #${orderKey}`);
-            return;
+            return false;
         }
         inFlightOrderUpdates.current.add(orderKey);
 
@@ -1197,7 +1277,7 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                     duration: 5000
                 });
                 refreshOrders(); // Remove the "ghost" order from UI
-                return;
+                return false;
             }
 
             if (response.status === 400 || response.status === 401 || response.status === 403) {
@@ -1229,15 +1309,17 @@ export function OrderProvider({ children, user }: { children: ReactNode, user: {
                 });
                 broadcastUpdate(finalUpdates.status);
             }
+            return true;
             // Note: Backend /api/orders/{id} automatically performs atomic log_audit inside the DB transaction.
         } catch (err: any) {
             console.error('[DEBUG] OrderProvider: Update failed or sync pending.', err);
             if (err?.message && err.message.startsWith('HTTP_')) {
                 import('sonner').then(({ toast }) => toast.error("Update denied by server (400/401/403)."));
                 refreshOrders();
-                return;
+                return false;
             }
             queueSyncTask({ type: 'UPDATE', id, payload });
+            return true;
         } finally {
             inFlightOrderUpdates.current.delete(orderKey);
         }

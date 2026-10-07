@@ -16,12 +16,24 @@
   // genuinely sustained/widespread outage, not a single flaky call. A short debounce window
   // requiring multiple qualifying failures in quick succession preserves the legitimate
   // "backend is actually down" detection while no longer blanking the app on one-off errors.
+  // Prevent Vite dynamic chunk load failures from getting stuck on reload/refresh spam
+  window.addEventListener('vite:preloadError', (event) => {
+    console.warn('[Vite Preload Error] Module chunk fetch aborted or failed during reload. Refreshing:', event);
+    window.location.reload();
+  });
+
+  let isPageUnloading = false;
+  window.addEventListener('beforeunload', () => {
+    isPageUnloading = true;
+  });
+
   const originalFetch = window.fetch;
   const SYS_ERROR_FAILURE_THRESHOLD = 3;
   const SYS_ERROR_WINDOW_MS = 8000;
   let recentFailureTimestamps: number[] = [];
 
   const reportPossibleSystemFailure = (detail: '500' | 'network') => {
+    if (isPageUnloading) return;
     const now = Date.now();
     recentFailureTimestamps = recentFailureTimestamps.filter((t) => now - t < SYS_ERROR_WINDOW_MS);
     recentFailureTimestamps.push(now);
@@ -47,9 +59,21 @@
       const response = await originalFetch(...args);
       // Intercept 401 unauthenticated responses from protected APIs
       if (response.status === 401) {
-        const isAuthEndpoint = url.includes('/login') || url.includes('/forgot-password') || url.includes('/reset-password') || isPublicTracking;
+        const isAuthEndpoint = 
+          url.includes('/login') || 
+          url.includes('/logout') || 
+          url.includes('/forgot-password') || 
+          url.includes('/reset-password') || 
+          url.includes('/verify-token') || 
+          url.includes('/predict') ||
+          url.includes('/authorize') ||
+          isPublicTracking;
+
         if (!isAuthEndpoint) {
-          window.dispatchEvent(new CustomEvent('SHOELOTSKEY_AUTH_EXPIRED', { detail: 'Your session has expired. Please log in again.' }));
+          const hasActiveSession = !!(localStorage.getItem('user') || sessionStorage.getItem('user'));
+          if (hasActiveSession) {
+            window.dispatchEvent(new CustomEvent('SHOELOTSKEY_AUTH_EXPIRED', { detail: 'Your session has expired. Please log in again.' }));
+          }
         }
       } else if (response.status >= 500 && !isExcludedFromSystemError) {
         reportPossibleSystemFailure('500');
@@ -59,10 +83,10 @@
         recentFailureTimestamps = [];
       }
       return response;
-    } catch (error) {
-      // TypeError on fetch usually means network offline / server completely unreachable
-      // Do not escalate background session heartbeats, tracking queries, or health pings to full-screen system errors
-      if (error instanceof TypeError && !isExcludedFromSystemError) {
+    } catch (error: any) {
+      // Aborted or cancelled requests (common when spamming reload or navigating) must NOT trigger system errors
+      const isAbort = error?.name === 'AbortError' || error?.message?.includes('aborted');
+      if (error instanceof TypeError && !isExcludedFromSystemError && !isPageUnloading && !isAbort) {
         reportPossibleSystemFailure('network');
       }
       throw error;

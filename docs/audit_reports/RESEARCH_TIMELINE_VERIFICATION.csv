@@ -1,0 +1,12 @@
+Activity,Claimed Date in Manuscript/Slides,Evidence Source,Prerequisite Activity,Chronologically Possible?,Conflict Identified?,Recommended Correction / Note
+Initial Shop Observation & FGD,"March 12–15, 2025","Focus Group Notes, Table 2/3 narrative",Shop partnership agreement,YES,NO,Authentic baseline observation of manual workflow.
+Historical Receipts Ingestion Period,August 2025 – January 2026,6 Monthly CSVs (Aug-Jan),Shop daily operational orders,YES,NO,"Covers 6 months, 714 raw receipts, 119 validated orders."
+System Requirements & Architecture Design,April – July 2025,Draft Ch. 1-4 PDF (April/July 2026 stamps),Initial observation data,YES,NO,Waterfall phase: Requirements analysis & DB normalization.
+System Development & Core Implementation,July 2025 – August 2026,"Git commit history, main.py, frontend",Approved architecture & DB schema,YES,NO,Full-stack build of React SPA + FastAPI backend.
+Model Development & Cross-Validation,August – December 2025,02_development_cv_summary.csv,93 development historical orders,YES,NO,5-fold expanding window CV on Aug–Dec 2025 data.
+Locked Holdout Test Set Evaluation,January 2026,03_locked_final_test_predictions.csv,Frozen Model + 26 Jan 2026 orders,YES,NO,"Final locked holdout evaluation (MAE 8.50, RMSE 10.11, R² 0.129)."
+Production Retraining on 119 Records,Post-Evaluation (Sept 2026),completion_model.pkl timestamp,Evaluation freeze complete,YES,NO,Post-evaluation model retrained on full 119 records for deployment.
+Faculty Content Validity Testing (CVI),August 2026,VALIDITY TEST RESULTS.xlsx (N=5),Survey instruments drafted,YES,NO,S-CVI = 1.00 confirmed prior to field deployment.
+System User Pilot Testing (TAM),"September 2–16, 2026",TAM-Respondents-Result.pdf (N=6),Production system deployed & stable,YES,NO,2-week hands-on shop pilot with owner and staff.
+IT Expert Evaluation (ISO/IEC 25010),"September 9–19, 2026",IT Expert Evaluation Forms 1–5,Working production system,YES,NO,Evaluated by 5 external IT experts.
+Preliminary Presentation Testing Claim,"June 1–10, 2025",Early slide draft snippet,Full system completed,NO,YES (Anachronism),"Erronous draft date in old slide text; replace with Sept 2–16, 2026."

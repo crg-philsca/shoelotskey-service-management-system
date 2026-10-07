@@ -1,0 +1,34 @@
+{
+  "generator_script": {
+    "path": "C:\\Users\\charm\\Desktop\\Shoelotskey Service Management System\\backend\\research_outputs\\ml_final\\generate_dataset_b.py",
+    "sha256": "6d6f4db8ea08db713cecc3e866e45c6c56d542a78ea2ba3a7612a8d8d52066c6"
+  },
+  "generator_config": {
+    "path": "C:\\Users\\charm\\Desktop\\Shoelotskey Service Management System\\backend\\research_outputs\\ml_final\\dataset_b_generator_config.json",
+    "sha256": "e5d7f34c805f123886c68daeb91f10e8ef32dd5daa2f7f586875446ddf30eb51"
+  },
+  "master_dataset": {
+    "path": "C:\\Users\\charm\\Desktop\\Shoelotskey Service Management System\\backend\\research_outputs\\ml_final\\dataset_b_10000.csv",
+    "sha256": "bffe2f45043c97262471fbca02fd2f5a52163735c452f4a25a8045e6977e91bb"
+  },
+  "training_set": {
+    "path": "C:\\Users\\charm\\Desktop\\Shoelotskey Service Management System\\backend\\research_outputs\\ml_final\\dataset_b_train_7000.csv",
+    "sha256": "4dab063f029936a2788454a013539294eff13f29036bff6ba30e9701c45c2aed"
+  },
+  "validation_set": {
+    "path": "C:\\Users\\charm\\Desktop\\Shoelotskey Service Management System\\backend\\research_outputs\\ml_final\\dataset_b_validation_1500.csv",
+    "sha256": "d2dc915946435d85448a3bde6f4981177e8c4ebf710908c3bf8e8fa7c30ed0c3"
+  },
+  "test_set": {
+    "path": "C:\\Users\\charm\\Desktop\\Shoelotskey Service Management System\\backend\\research_outputs\\ml_final\\dataset_b_test_1500.csv",
+    "sha256": "caaa2774868ce0657020cb1cfb2f153bc2fe56dee99af9cb2c6e38342e906a5f"
+  },
+  "selected_model": {
+    "path": "C:\\Users\\charm\\Desktop\\Shoelotskey Service Management System\\backend\\research_outputs\\ml_final\\dataset_b_selected_model.pkl",
+    "sha256": "9ce390ca5f0197fe0eef86086ccfd78b79b18b37c19eae76fca7d518bbfeac3b"
+  },
+  "final_predictions": {
+    "path": "C:\\Users\\charm\\Desktop\\Shoelotskey Service Management System\\backend\\research_outputs\\ml_final\\dataset_b_final_test_predictions.csv",
+    "sha256": "b20ca2e68634ff95602acf7d01afc845ab2a5a1372a61c42ac7236d67c865ca0"
+  }
+}

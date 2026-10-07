@@ -435,15 +435,15 @@ export default function ClaimRecord({ user }: { user: { token: string } }) {
                 </CardHeader>
 
                 <CardContent className="p-0">
-                    <div className="overflow-x-auto w-full">
-                        <table className="w-full table-fixed border-collapse min-w-[700px]">
+                    <div className="overflow-x-auto w-full subtle-vertical-scroll pb-1">
+                        <table className="w-full table-fixed border-collapse min-w-[850px]">
                             <colgroup>
-                                <col className="w-[14%]" />
-                                <col className="w-[21%]" />
-                                <col className="w-[23%]" />
-                                <col className="w-[7%]" />
-                                <col className="w-[17%]" />
-                                <col className="w-[18%]" />
+                                <col style={{ width: '155px' }} />
+                                <col style={{ width: '165px' }} />
+                                <col style={{ width: '190px' }} />
+                                <col style={{ width: '65px' }} />
+                                <col style={{ width: '140px' }} />
+                                <col style={{ width: '135px' }} />
                             </colgroup>
                             <thead className="bg-red-50/50">
                                 <tr>
@@ -758,6 +758,7 @@ export default function ClaimRecord({ user }: { user: { token: string } }) {
                 order={selectedOrder}
                 open={!!selectedOrder}
                 onOpenChange={(open) => !open && setSelectedOrder(null)}
+                user={user}
             />
         </div>
     );

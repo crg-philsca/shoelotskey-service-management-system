@@ -9,18 +9,19 @@ type ToasterProps = React.ComponentProps<typeof Sonner>;
 const Toaster = ({ ...props }: ToasterProps) => {
   return (
     <Sonner
-      className={cn("toaster group z-[9999]", props.className)}
+      className={cn("toaster group z-[99999]", props.className)}
       position={props.position || "top-center"}
+      style={{ '--width': 'max-content', ...props.style } as React.CSSProperties}
       toastOptions={{
         style: {
           background: 'white',
           color: 'black',
           border: '1px solid #e5e7eb',
           fontSize: '13px',
-          padding: '12px 16px',
-          maxWidth: 'calc(100vw - 24px)',
+          padding: '12px 22px',
+          ...props.toastOptions?.style,
         },
-        className: 'custom-toast max-w-[calc(100vw-24px)] mx-auto rounded-xl shadow-xl',
+        className: cn('custom-toast rounded-xl shadow-xl', props.toastOptions?.className),
         duration: 4000,
         ...props.toastOptions,
       }}

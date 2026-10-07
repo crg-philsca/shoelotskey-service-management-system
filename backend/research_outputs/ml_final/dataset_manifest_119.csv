@@ -1,0 +1,120 @@
+index,partition,order_id,raw_order_id,date_received,claimed_date,actual_turnaround_days,target_variable,priority,services,total_pairs,distinct_service_types,total_service_applications,rush_indicator,day_of_week_received,month_received,basic_cleaning_qty,full_reglue_qty,minor_reglue_qty,full_restoration_qty,minor_restoration_qty,color_renewal_qty,unyellowing_qty
+0,development,ORD-2025-08-15-669,ORD-2025-08-15-001,2025-08-15,2025-08-19,4.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Basic Cleaning",2,1,2,0,4,8,2,0,0,0,0,0,0
+1,development,ORD-2025-08-15-670,ORD-2025-08-15-002,2025-08-15,2025-08-19,4.0,historical_order_to_claim_turnaround_days,Rush,"Basic Cleaning, Basic Cleaning",2,1,2,1,4,8,2,0,0,0,0,0,0
+2,development,ORD-2025-08-15-671,ORD-2025-08-15-003,2025-08-15,2025-08-21,6.0,historical_order_to_claim_turnaround_days,Regular,Basic Cleaning,1,1,1,0,4,8,1,0,0,0,0,0,0
+3,development,ORD-2025-08-16-005,ORD-2025-08-16-002,2025-08-16,2025-08-21,5.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Basic Cleaning, BC, Basic Cleaning, Basic Cleaning, Basic Cleaning",6,1,5,0,5,8,5,0,0,0,0,0,0
+4,development,ORD-2025-08-17-007,ORD-2025-08-17-002,2025-08-17,2025-08-20,3.0,historical_order_to_claim_turnaround_days,Regular,Basic Cleaning,1,1,1,0,6,8,1,0,0,0,0,0,0
+5,development,ORD-2025-08-17-010,ORD-2025-08-17-005,2025-08-17,2025-08-21,4.0,historical_order_to_claim_turnaround_days,Regular,Basic Cleaning,1,1,1,0,6,8,1,0,0,0,0,0,0
+6,development,ORD-2025-08-18-006,ORD-2025-08-18-002,2025-08-18,2025-08-23,5.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, BC",1,1,1,0,0,8,1,0,0,0,0,0,0
+7,development,ORD-2025-08-19-006,ORD-2025-08-19-002,2025-08-19,2025-08-24,5.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Minor Reglue",1,2,2,0,1,8,1,0,1,0,0,0,0
+8,development,ORD-2025-08-27-006,ORD-2025-08-27-003,2025-08-27,2025-09-26,30.0,historical_order_to_claim_turnaround_days,Regular,"Full Reglue, BC, MRES",1,1,1,0,2,8,0,1,0,0,0,0,0
+9,development,ORD-2025-08-27-007,ORD-2025-08-27-004,2025-08-27,2025-09-26,30.0,historical_order_to_claim_turnaround_days,Regular,"BC, Minor Restoration, Unyellowing, Basic Cleaning",2,3,3,0,2,8,1,0,0,0,1,0,1
+10,development,ORD-2025-08-28-008,ORD-2025-08-28-006,2025-08-28,2025-09-09,12.0,historical_order_to_claim_turnaround_days,Regular,"Full Reglue, Basic Cleaning",1,2,2,0,3,8,1,1,0,0,0,0,0
+11,development,ORD-2025-09-16-004,ORD-2025-09-16-005,2025-09-16,2025-10-04,18.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Basic Cleaning",2,1,2,0,1,9,2,0,0,0,0,0,0
+12,development,ORD-2025-09-17-001,ORD-2025-09-17-001,2025-09-17,2025-10-01,14.0,historical_order_to_claim_turnaround_days,Regular,"Minor Reglue, Basic Cleaning, Full Reglue, Basic Cleaning, Minor Restoration",2,4,5,0,2,9,2,1,1,0,1,0,0
+13,development,ORD-2025-09-19-002,ORD-2025-09-19-002,2025-09-19,2025-09-27,8.0,historical_order_to_claim_turnaround_days,Regular,"Minor Reglue, Basic Cleaning, Basic Cleaning",2,2,3,0,4,9,2,0,1,0,0,0,0
+14,development,ORD-2025-10-07-002,ORD-2025-10-07-002,2025-10-07,2025-11-04,28.0,historical_order_to_claim_turnaround_days,Regular,"Full Reglue, Basic Cleaning",1,2,2,0,1,10,1,1,0,0,0,0,0
+15,development,ORD-2025-10-10-005,ORD-2025-10-10-004,2025-10-10,2025-10-25,15.0,historical_order_to_claim_turnaround_days,Regular,Basic Cleaning,1,1,1,0,4,10,1,0,0,0,0,0,0
+16,development,ORD-2025-10-13-008,ORD-2025-10-13-008,2025-10-13,2025-10-24,11.0,historical_order_to_claim_turnaround_days,Regular,"Full Reglue, Basic Cleaning",1,2,2,0,0,10,1,1,0,0,0,0,0
+17,development,ORD-2025-10-14-001,ORD-2025-10-14-001,2025-10-14,2025-10-25,11.0,historical_order_to_claim_turnaround_days,Regular,"Minor Reglue, Basic Cleaning, Unyellowing",1,3,3,0,1,10,1,0,1,0,0,0,1
+18,development,ORD-2025-10-16-003,ORD-2025-10-16-003,2025-10-16,2025-11-19,34.0,historical_order_to_claim_turnaround_days,Regular,"Minor Reglue, Basic Cleaning",1,2,2,0,3,10,1,0,1,0,0,0,0
+19,development,ORD-2025-10-21-001,ORD-2025-10-21-001,2025-10-21,2025-10-28,7.0,historical_order_to_claim_turnaround_days,Regular,Basic Cleaning,1,1,1,0,1,10,1,0,0,0,0,0,0
+20,development,ORD-2025-10-21-003,ORD-2025-10-21-003,2025-10-21,2025-10-30,9.0,historical_order_to_claim_turnaround_days,Regular,Basic Cleaning,1,1,1,0,1,10,1,0,0,0,0,0,0
+21,development,ORD-2025-10-21-004,ORD-2025-10-21-004,2025-10-21,2025-10-30,9.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Basic Cleaning",2,1,2,0,1,10,2,0,0,0,0,0,0
+22,development,ORD-2025-10-22-001,ORD-2025-10-22-001,2025-10-22,2025-11-08,17.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Basic Cleaning",2,1,2,0,2,10,2,0,0,0,0,0,0
+23,development,ORD-2025-10-23-001,ORD-2025-10-23-001,2025-10-23,2025-10-30,7.0,historical_order_to_claim_turnaround_days,Regular,Basic Cleaning,1,1,1,0,3,10,1,0,0,0,0,0,0
+24,development,ORD-2025-10-24-001,ORD-2025-10-24-001,2025-10-24,2025-11-24,31.0,historical_order_to_claim_turnaround_days,Regular,"Full Reglue, Basic Cleaning",1,2,2,0,4,10,1,1,0,0,0,0,0
+25,development,ORD-2025-10-24-002,ORD-2025-10-24-002,2025-10-24,2025-11-28,35.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Full Reglue, Unyellowing",1,3,3,0,4,10,1,1,0,0,0,0,1
+26,development,ORD-2025-10-28-001,ORD-2025-10-28-001,2025-10-28,2025-10-30,2.0,historical_order_to_claim_turnaround_days,Rush,Basic Cleaning,1,1,1,1,1,10,1,0,0,0,0,0,0
+27,development,ORD-2025-10-28-003,ORD-2025-10-28-003,2025-10-28,2025-11-18,21.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Basic Cleaning",2,1,2,0,1,10,2,0,0,0,0,0,0
+28,development,ORD-2025-10-29-004,ORD-2025-10-29-005,2025-10-29,2025-11-22,24.0,historical_order_to_claim_turnaround_days,Regular,"Full Reglue, Basic Cleaning",1,2,2,0,2,10,1,1,0,0,0,0,0
+29,development,ORD-2025-10-31-001,ORD-2025-10-31-001,2025-10-31,2025-11-25,25.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Full Reglue, Basic Cleaning",2,2,3,0,4,10,2,1,0,0,0,0,0
+30,development,ORD-2025-11-06-005,ORD-2025-11-08-002,2025-11-06,2025-11-29,23.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Basic Cleaning",2,1,2,0,3,11,2,0,0,0,0,0,0
+31,development,ORD-2025-11-08-003,ORD-2025-11-08-006,2025-11-08,2025-11-20,12.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Basic Cleaning",2,1,2,0,5,11,2,0,0,0,0,0,0
+32,development,ORD-2025-11-13-001,ORD-2025-11-13-001,2025-11-13,2025-12-02,19.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Full Reglue Undersole, Full Reglue Midsole",1,2,3,0,3,11,1,2,0,0,0,0,0
+33,development,ORD-2025-11-14-001,ORD-2025-11-14-001,2025-11-14,2025-12-12,28.0,historical_order_to_claim_turnaround_days,Regular,"Full Reglue, Basic Cleaning",1,2,2,0,4,11,1,1,0,0,0,0,0
+34,development,ORD-2025-11-14-005,ORD-2025-11-14-005,2025-11-14,2025-12-09,25.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Basic Cleaning, Basic Cleaning, Basic Cleaning",4,1,4,0,4,11,4,0,0,0,0,0,0
+35,development,ORD-2025-11-15-002,ORD-2025-11-15-003,2025-11-15,2025-11-19,4.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Basic Cleaning",2,1,2,0,5,11,2,0,0,0,0,0,0
+36,development,ORD-2025-11-16-001,ORD-2025-11-16-003,2025-11-16,2025-11-21,5.0,historical_order_to_claim_turnaround_days,Regular,Basic Cleaning,1,1,1,0,6,11,1,0,0,0,0,0,0
+37,development,ORD-2025-11-17-001,ORD-2025-11-17-004,2025-11-17,2025-11-29,12.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Basic Cleaning, Basic Cleaning, Minor Restoration",3,2,4,0,0,11,3,0,0,0,1,0,0
+38,development,ORD-2025-11-18-001,ORD-2025-11-18-004,2025-11-18,2025-12-02,14.0,historical_order_to_claim_turnaround_days,Regular,Basic Cleaning,1,1,1,0,1,11,1,0,0,0,0,0,0
+39,development,ORD-2025-11-18-004,ORD-2025-11-18-007,2025-11-18,2025-11-28,10.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Basic Cleaning",2,1,2,0,1,11,2,0,0,0,0,0,0
+40,development,ORD-2025-11-19-002,ORD-2025-11-19-002,2025-11-19,2025-11-20,1.0,historical_order_to_claim_turnaround_days,Rush,Basic Cleaning,1,1,1,1,2,11,1,0,0,0,0,0,0
+41,development,ORD-2025-11-19-004,ORD-2025-11-19-004,2025-11-19,2025-12-02,13.0,historical_order_to_claim_turnaround_days,Rush,"Basic Cleaning, Basic Cleaning",2,1,2,1,2,11,2,0,0,0,0,0,0
+42,development,ORD-2025-11-20-002,ORD-2025-11-20-002,2025-11-20,2025-11-22,2.0,historical_order_to_claim_turnaround_days,Rush,Basic Cleaning,1,1,1,1,3,11,1,0,0,0,0,0,0
+43,development,ORD-2025-11-20-004,ORD-2025-11-20-004,2025-11-20,2025-12-19,29.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Full Reglue Midsole, Full Reglue Undersole",1,2,3,0,3,11,1,2,0,0,0,0,0
+44,development,ORD-2025-11-20-010,ORD-2025-11-20-010,2025-11-20,2025-12-20,30.0,historical_order_to_claim_turnaround_days,Regular,"Full Reglue, Basic Cleaning, Full Reglue, Basic Cleaning",2,2,4,0,3,11,2,2,0,0,0,0,0
+45,development,ORD-2025-11-20-011,ORD-2025-11-20-011,2025-11-20,2025-12-08,18.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Minor Restoration",1,2,2,0,3,11,1,0,0,0,1,0,0
+46,development,ORD-2025-11-20-015,ORD-2025-11-20-015,2025-11-20,2025-12-10,20.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Minor Restoration",1,2,2,0,3,11,1,0,0,0,1,0,0
+47,development,ORD-2025-11-20-018,ORD-2025-11-28-015,2025-11-20,2025-12-20,30.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Minor Restoration",1,2,2,0,3,11,1,0,0,0,1,0,0
+48,development,ORD-2025-11-21-002,ORD-2025-11-21-002,2025-11-21,2025-12-02,11.0,historical_order_to_claim_turnaround_days,Regular,Basic Cleaning,1,1,1,0,4,11,1,0,0,0,0,0,0
+49,development,ORD-2025-11-21-005,ORD-2025-11-21-006,2025-11-21,2025-12-17,26.0,historical_order_to_claim_turnaround_days,Regular,"Full Reglue, Basic Cleaning",1,2,2,0,4,11,1,1,0,0,0,0,0
+50,development,ORD-2025-11-21-008,ORD-2025-11-21-011,2025-11-21,2026-01-04,44.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Full Reglue Midsole, Full Reglue Undersole",1,2,3,0,4,11,1,2,0,0,0,0,0
+51,development,ORD-2025-11-22-006,ORD-2025-11-22-006,2025-11-22,2025-12-27,35.0,historical_order_to_claim_turnaround_days,Regular,"Full Reglue, Basic Cleaning, Full Reglue, Basic Cleaning, Full Reglue, Basic Cleaning, Unyellowing, Basic Cleaning, Minor Retouch",4,3,8,0,5,11,4,3,0,0,0,0,1
+52,development,ORD-2025-11-22-008,ORD-2025-11-22-008,2025-11-22,2025-12-01,9.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Basic Cleaning, Full Reglue",3,2,3,0,5,11,2,1,0,0,0,0,0
+53,development,ORD-2025-11-22-009,ORD-2025-11-22-009,2025-11-22,2025-12-16,24.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Full Reglue Undersole",1,2,2,0,5,11,1,1,0,0,0,0,0
+54,development,ORD-2025-11-24-008,ORD-2025-11-28-008,2025-11-24,2025-12-10,16.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Minor Restoration",1,2,2,0,0,11,1,0,0,0,1,0,0
+55,development,ORD-2025-11-24-009,ORD-2025-11-28-010,2025-11-24,2025-12-30,36.0,historical_order_to_claim_turnaround_days,Regular,Basic Cleaning,1,1,1,0,0,11,1,0,0,0,0,0,0
+56,development,ORD-2025-11-25-002,ORD-2025-11-25-002,2025-11-25,2025-12-23,28.0,historical_order_to_claim_turnaround_days,Regular,"Full Reglue, Basic Cleaning",1,2,2,0,1,11,1,1,0,0,0,0,0
+57,development,ORD-2025-11-27-005,ORD-2025-11-27-021,2025-11-27,2025-12-10,13.0,historical_order_to_claim_turnaround_days,Regular,"Full Reglue, Basic Cleaning",1,2,2,0,3,11,1,1,0,0,0,0,0
+58,development,ORD-2025-11-27-006,ORD-2025-11-27-022,2025-11-27,2026-01-22,56.0,historical_order_to_claim_turnaround_days,Regular,"Full Reglue, Basic Cleaning",1,2,2,0,3,11,1,1,0,0,0,0,0
+59,development,ORD-2025-11-28-004,ORD-2025-11-28-014,2025-11-28,2025-12-18,20.0,historical_order_to_claim_turnaround_days,Rush,"Full Reglue, Basic Cleaning, Minor Restoration, Basic Cleaning",2,3,4,1,4,11,2,1,0,0,1,0,0
+60,development,ORD-2025-11-30-003,ORD-2025-11-30-001,2025-11-30,2025-12-08,8.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Basic Cleaning, Basic Cleaning",3,1,3,0,6,11,3,0,0,0,0,0,0
+61,development,ORD-2025-11-30-008,ORD-2025-11-30-006,2025-11-30,2025-12-09,9.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Basic Cleaning, Basic Cleaning, Basic Cleaning",4,1,4,0,6,11,4,0,0,0,0,0,0
+62,development,ORD-2025-12-02-002,ORD-2025-12-02-002,2025-12-02,2025-12-27,25.0,historical_order_to_claim_turnaround_days,Regular,"Full Reglue, Basic Cleaning",1,2,2,0,1,12,1,1,0,0,0,0,0
+63,development,ORD-2025-12-02-003,ORD-2025-12-02-003,2025-12-02,2025-12-10,8.0,historical_order_to_claim_turnaround_days,Regular,Basic Cleaning,1,1,1,0,1,12,1,0,0,0,0,0,0
+64,development,ORD-2025-12-04-001,ORD-2025-12-04-001,2025-12-04,2025-12-30,26.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Full Reglue Undersole, Full Reglue Midsole",1,2,3,0,3,12,1,2,0,0,0,0,0
+65,development,ORD-2025-12-05-006,ORD-2025-12-05-007,2025-12-05,2025-12-13,8.0,historical_order_to_claim_turnaround_days,Regular,"Color Renewal, Basic Cleaning",1,2,2,0,4,12,1,0,0,0,0,1,0
+66,development,ORD-2025-12-07-003,ORD-2025-12-07-003,2025-12-07,2026-01-13,37.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Minor Restoration",1,2,2,0,6,12,1,0,0,0,1,0,0
+67,development,ORD-2025-12-08-005,ORD-2025-12-08-004,2025-12-08,2026-01-17,40.0,historical_order_to_claim_turnaround_days,Regular,"Full Reglue, Basic Cleaning, Basic Cleaning, Basic Cleaning, Minor Reglue, Basic Cleaning",4,3,6,0,0,12,4,1,1,0,0,0,0
+68,development,ORD-2025-12-08-006,ORD-2025-12-08-005,2025-12-08,2025-12-21,13.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Unyellowing, Basic Cleaning, Basic Cleaning",3,2,4,0,0,12,3,0,0,0,0,0,1
+69,development,ORD-2025-12-09-003,ORD-2025-12-09-003,2025-12-09,2026-01-17,39.0,historical_order_to_claim_turnaround_days,Regular,"Full Reglue, Basic Cleaning, Minor Restoration",1,3,3,0,1,12,1,1,0,0,1,0,0
+70,development,ORD-2025-12-09-005,ORD-2025-12-09-005,2025-12-09,2026-01-20,42.0,historical_order_to_claim_turnaround_days,Regular,"Full Reglue, Basic Cleaning, Minor Restoration",1,3,3,0,1,12,1,1,0,0,1,0,0
+71,development,ORD-2025-12-10-002,ORD-2025-12-10-002,2025-12-10,2026-01-13,34.0,historical_order_to_claim_turnaround_days,Regular,"Full Reglue, Basic Cleaning, Minor Reglue, Basic Cleaning",2,3,4,0,2,12,2,1,1,0,0,0,0
+72,development,ORD-2025-12-10-007,ORD-2025-12-10-008,2025-12-10,2026-01-06,27.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Unyellowing",1,2,2,0,2,12,1,0,0,0,0,0,1
+73,development,ORD-2025-12-10-008,ORD-2025-12-10-009,2025-12-10,2025-12-15,5.0,historical_order_to_claim_turnaround_days,Regular,Basic Cleaning,1,1,1,0,2,12,1,0,0,0,0,0,0
+74,development,ORD-2025-12-10-009,ORD-2025-12-10-010,2025-12-10,2026-01-29,50.0,historical_order_to_claim_turnaround_days,Rush,"Basic Cleaning, Minor Restoration, Unyellowing, Full Reglue, Basic Cleaning, Basic Cleaning",3,4,6,1,2,12,3,1,0,0,1,0,1
+75,development,ORD-2025-12-11-002,ORD-2025-12-11-002,2025-12-11,2025-12-26,15.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Basic Cleaning, Unyellowing, Basic Cleaning, Full Reglue, Basic Cleaning, Full Reglue",4,3,7,0,3,12,4,2,0,0,0,0,1
+76,development,ORD-2025-12-12-001,ORD-2025-12-12-002,2025-12-12,2026-01-18,37.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Full Reglue Undersole, Full Reglue Midsole",1,2,3,0,4,12,1,2,0,0,0,0,0
+77,development,ORD-2025-12-12-003,ORD-2025-12-12-004,2025-12-12,2026-01-13,32.0,historical_order_to_claim_turnaround_days,Regular,"Full Reglue, Basic Cleaning",1,2,2,0,4,12,1,1,0,0,0,0,0
+78,development,ORD-2025-12-13-002,ORD-2025-12-13-002,2025-12-13,2025-12-29,16.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Basic Cleaning",2,1,2,0,5,12,2,0,0,0,0,0,0
+79,development,ORD-2025-12-14-002,ORD-2025-12-14-002,2025-12-14,2026-01-13,30.0,historical_order_to_claim_turnaround_days,Regular,"Full Reglue, Basic Cleaning, Full Reglue, Basic Cleaning, Full Reglue, Basic Cleaning, Basic Cleaning",4,2,7,0,6,12,4,3,0,0,0,0,0
+80,development,ORD-2025-12-15-001,ORD-2025-12-15-001,2025-12-15,2026-01-22,38.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Full Reglue Midsole, Full Reglue Undersole, Minor Restoration",1,3,4,0,0,12,1,2,0,0,1,0,0
+81,development,ORD-2025-12-17-002,ORD-2025-12-17-011,2025-12-17,2025-12-22,5.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Basic Cleaning, Basic Cleaning",3,1,3,0,2,12,3,0,0,0,0,0,0
+82,development,ORD-2025-12-17-006,ORD-2025-12-17-016,2025-12-17,2025-12-18,1.0,historical_order_to_claim_turnaround_days,Rush,"Basic Cleaning, Basic Cleaning",2,1,2,1,2,12,2,0,0,0,0,0,0
+83,development,ORD-2025-12-17-007,ORD-2025-12-17-017,2025-12-17,2025-12-20,3.0,historical_order_to_claim_turnaround_days,Rush,Basic Cleaning,1,1,1,1,2,12,1,0,0,0,0,0,0
+84,development,ORD-2025-12-17-009,ORD-2025-12-17-020,2025-12-17,2026-02-01,46.0,historical_order_to_claim_turnaround_days,Regular,"Full Reglue, Basic Cleaning, Minor Restoration",1,3,3,0,2,12,1,1,0,0,1,0,0
+85,development,ORD-2025-12-18-001,ORD-2025-12-18-001,2025-12-18,2025-12-20,2.0,historical_order_to_claim_turnaround_days,Rush,"Minor Reglue, Basic Cleaning, Unyellowing",1,3,3,1,3,12,1,0,1,0,0,0,1
+86,development,ORD-2025-12-18-003,ORD-2025-12-18-004,2025-12-18,2025-12-22,4.0,historical_order_to_claim_turnaround_days,Rush,"Basic Cleaning, Basic Cleaning, Unyellowing",2,2,3,1,3,12,2,0,0,0,0,0,1
+87,development,ORD-2025-12-20-003,ORD-2025-12-20-003,2025-12-20,2025-12-24,4.0,historical_order_to_claim_turnaround_days,Regular,Basic Cleaning,1,1,1,0,5,12,1,0,0,0,0,0,0
+88,development,ORD-2025-12-23-001,ORD-2025-12-23-001,2025-12-23,2026-01-16,24.0,historical_order_to_claim_turnaround_days,Regular,"Minor Restoration, Unyellowing, Minor Restoration, Unyellowing, Basic Cleaning, Minor Restoration, Unyellowing",3,3,7,0,1,12,1,0,0,0,3,0,3
+89,development,ORD-2025-12-26-002,ORD-2025-12-22-012,2025-12-26,2026-01-13,18.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Minor Retouch",1,1,1,0,4,12,1,0,0,0,0,0,0
+90,development,ORD-2025-12-26-005,ORD-2025-12-26-003,2025-12-26,2025-12-28,2.0,historical_order_to_claim_turnaround_days,Rush,"Basic Cleaning, Basic Cleaning",2,1,2,1,4,12,2,0,0,0,0,0,0
+91,development,ORD-2025-12-27-003,ORD-2025-12-27-002,2025-12-27,2025-12-28,1.0,historical_order_to_claim_turnaround_days,Rush,"Basic Cleaning, Basic Cleaning",2,1,2,1,5,12,2,0,0,0,0,0,0
+92,development,ORD-2025-12-29-001,ORD-2025-12-22-013,2025-12-29,2026-01-17,19.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Unyellowing",1,2,2,0,0,12,1,0,0,0,0,0,1
+93,held_out_test,ORD-2026-01-02-002,ORD-2026-01-02-002,2026-01-02,2026-01-14,12.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Minor Reglue, Full Reglue, Basic Cleaning",2,3,4,0,4,1,2,1,1,0,0,0,0
+94,held_out_test,ORD-2026-01-02-003,ORD-2026-01-02-003,2026-01-02,2026-01-13,11.0,historical_order_to_claim_turnaround_days,Regular,Basic Cleaning,1,1,1,0,4,1,1,0,0,0,0,0,0
+95,held_out_test,ORD-2026-01-02-004,ORD-2026-01-02-004,2026-01-02,2026-01-04,2.0,historical_order_to_claim_turnaround_days,Rush,Basic Cleaning,1,1,1,1,4,1,1,0,0,0,0,0,0
+96,held_out_test,ORD-2026-01-02-006,ORD-2026-01-02-006,2026-01-02,2026-01-15,13.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Minor Reglue, Minor Retouch",1,2,2,0,4,1,1,0,1,0,0,0,0
+97,held_out_test,ORD-2026-01-03-004,ORD-2026-01-03-005,2026-01-03,2026-02-03,31.0,historical_order_to_claim_turnaround_days,Regular,"Color Renewal, Basic Cleaning",1,2,2,0,5,1,1,0,0,0,0,1,0
+98,held_out_test,ORD-2026-01-03-005,ORD-2026-01-03-006,2026-01-03,2026-01-15,12.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Basic Cleaning",2,1,2,0,5,1,2,0,0,0,0,0,0
+99,held_out_test,ORD-2026-01-04-003,ORD-2026-01-04-003,2026-01-04,2026-02-05,32.0,historical_order_to_claim_turnaround_days,Regular,"Full Reglue, Basic Cleaning, Basic Cleaning, Full Reglue Undersole, Full Reglue Midsole",2,2,5,0,6,1,2,3,0,0,0,0,0
+100,held_out_test,ORD-2026-01-07-002,ORD-2026-01-07-002,2026-01-07,2026-01-17,10.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Full Reglue Midsole, Minor Restoration, Unyellowing, Basic Cleaning",2,4,5,0,2,1,2,1,0,0,1,0,1
+101,held_out_test,ORD-2026-01-07-005,ORD-2026-01-07-005,2026-01-07,2026-02-04,28.0,historical_order_to_claim_turnaround_days,Regular,Basic Cleaning,1,1,1,0,2,1,1,0,0,0,0,0,0
+102,held_out_test,ORD-2026-01-08-001,ORD-2026-01-04-011,2026-01-08,2026-01-18,10.0,historical_order_to_claim_turnaround_days,Regular,Basic Cleaning,1,1,1,0,3,1,1,0,0,0,0,0,0
+103,held_out_test,ORD-2026-01-08-002,ORD-2026-01-08-001,2026-01-08,2026-02-05,28.0,historical_order_to_claim_turnaround_days,Regular,"Full Reglue, Color Renewal, Basic Cleaning",1,3,3,0,3,1,1,1,0,0,0,1,0
+104,held_out_test,ORD-2026-01-08-003,ORD-2026-01-08-002,2026-01-08,2026-02-08,31.0,historical_order_to_claim_turnaround_days,Regular,"Full Reglue, Basic Cleaning, Basic Cleaning, Minor Restoration",2,3,4,0,3,1,2,1,0,0,1,0,0
+105,held_out_test,ORD-2026-01-08-004,ORD-2026-01-08-004,2026-01-08,2026-02-11,34.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Unyellowing",1,2,2,0,3,1,1,0,0,0,0,0,1
+106,held_out_test,ORD-2026-01-09-002,ORD-2026-01-09-002,2026-01-09,2026-02-10,32.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Full Reglue",1,2,2,0,4,1,1,1,0,0,0,0,0
+107,held_out_test,ORD-2026-01-11-002,ORD-2026-01-11-001,2026-01-11,2026-02-12,32.0,historical_order_to_claim_turnaround_days,Regular,"Full Reglue, Basic Cleaning",1,2,2,0,6,1,1,1,0,0,0,0,0
+108,held_out_test,ORD-2026-01-11-003,ORD-2026-01-11-003,2026-01-11,2026-01-22,11.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Full Reglue, Basic Cleaning",2,2,3,0,6,1,2,1,0,0,0,0,0
+109,held_out_test,ORD-2026-01-13-001,ORD-2026-01-11-006,2026-01-13,2026-01-22,9.0,historical_order_to_claim_turnaround_days,Regular,Basic Cleaning,1,1,1,0,1,1,1,0,0,0,0,0,0
+110,held_out_test,ORD-2026-01-13-005,ORD-2026-01-11-013,2026-01-13,2026-01-24,11.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Basic Cleaning",2,1,2,0,1,1,2,0,0,0,0,0,0
+111,held_out_test,ORD-2026-01-14-006,ORD-2026-01-14-008,2026-01-14,2026-02-02,19.0,historical_order_to_claim_turnaround_days,Regular,Basic Cleaning,1,1,1,0,2,1,1,0,0,0,0,0,0
+112,held_out_test,ORD-2026-01-18-001,ORD-2026-01-15-001,2026-01-18,2026-02-12,25.0,historical_order_to_claim_turnaround_days,Regular,"Full Reglue, Basic Cleaning",1,2,2,0,6,1,1,1,0,0,0,0,0
+113,held_out_test,ORD-2026-01-20-004,ORD-2026-01-20-003,2026-01-20,2026-01-28,8.0,historical_order_to_claim_turnaround_days,Regular,Basic Cleaning,1,1,1,0,1,1,1,0,0,0,0,0,0
+114,held_out_test,ORD-2026-01-21-002,ORD-2026-01-21-002,2026-01-21,2026-01-28,7.0,historical_order_to_claim_turnaround_days,Regular,Basic Cleaning,1,1,1,0,2,1,1,0,0,0,0,0,0
+115,held_out_test,ORD-2026-01-22-002,ORD-2026-01-22-002,2026-01-22,2026-02-20,29.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Minor Restoration, Basic Cleaning, Minor Restoration",2,2,4,0,3,1,2,0,0,0,2,0,0
+116,held_out_test,ORD-2026-01-24-001,ORD-2026-01-11-009,2026-01-24,2026-01-29,5.0,historical_order_to_claim_turnaround_days,Regular,"Basic Cleaning, Unyellowing",1,2,2,0,5,1,1,0,0,0,0,0,1
+117,held_out_test,ORD-2026-01-27-004,ORD-2026-01-27-004,2026-01-27,2026-02-11,15.0,historical_order_to_claim_turnaround_days,Regular,Basic Cleaning,1,1,1,0,1,1,1,0,0,0,0,0,0
+118,held_out_test,ORD-2026-01-27-005,ORD-2026-01-27-005,2026-01-27,2026-02-12,16.0,historical_order_to_claim_turnaround_days,Regular,Basic Cleaning,1,1,1,0,1,1,1,0,0,0,0,0,0

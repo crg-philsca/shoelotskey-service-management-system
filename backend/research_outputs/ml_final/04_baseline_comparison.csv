@@ -1,0 +1,9 @@
+Metric,Random_Forest,Dev_Mean_Baseline,Dev_Median_Baseline
+MAE,8.5554,9.3371,8.9615
+RMSE,10.2272,10.1255,10.3571
+R2,-0.0208,-0.0006,-0.0469
+Median Absolute Error,7.7836,9.5,8.5
+Mean Signed Error,-4.6297,0.2486,-2.1923
+Within +-1 Day (%),11.54% (3/26),3.85% (1/26),7.69% (2/26)
+Within +-2 Days (%),19.23% (5/26),3.85% (1/26),7.69% (2/26)
+Within +-3 Days (%),23.08% (6/26),7.69% (2/26),15.38% (4/26)

@@ -130,7 +130,7 @@ export function toServiceCode(nameOrCode: string): string {
     const trimmed = String(nameOrCode).trim();
     if (!trimmed) return '';
     const upper = trimmed.toUpperCase();
-    if (['BC', 'FR', 'MR', 'COR', 'WPT', 'UNY', 'MRES', 'MRET', 'FRMID', 'FRUND', 'COR2', 'COR3'].includes(upper)) {
+    if (['BC', 'FR', 'MR', 'BR', 'COR', 'WPT', 'UNY', 'MRES', 'MRET', 'FRMID', 'FRUND', 'COR2', 'COR3'].includes(upper)) {
         return upper;
     }
     if (upper === 'CR') return 'COR';
@@ -152,6 +152,7 @@ export function toServiceCode(nameOrCode: string): string {
     if (lower.includes('minor restoration') || lower === 'mres') return 'MRES';
     if (lower.includes('minor retouch') || lower === 'mret') return 'MRET';
     if (lower.includes('minor reglue') || lower === 'mr') return 'MR';
+    if (lower.includes('basic reglue') || lower === 'br') return 'BR';
     if (lower.includes('full reglue') || lower.includes('full restoration') || lower === 'fr') return 'FR';
     if (lower.includes('basic cleaning') || lower.includes('cleaning') || lower === 'bc') return 'BC';
 
@@ -162,20 +163,78 @@ export function toServiceCode(nameOrCode: string): string {
 }
 
 /**
- * Chunks service names/codes into lines with up to 2 service codes per row.
- * E.g. ['BC'] -> ['BC']
- * E.g. ['BC', 'FR'] -> ['BC, FR']
- * E.g. ['BC', 'COR', 'COR2'] -> ['BC, COR,', 'COR2']
- * E.g. ['BC', 'FR', 'UNY', 'WPT'] -> ['BC, FR,', 'UNY, WPT']
+ * Normalizes an array of services (names, codes, or objects) into canonical display codes.
+ * - Suppresses generic 'FR' if 'FRMID' or 'FRUND' specification is present.
+ * - Suppresses generic 'COR' if 'COR2' or 'COR3' specification is present.
+ * - Preserves generic 'FR' or 'COR' if no specific sub-specification is recorded (historical compatibility).
+ * - Deduplicates while preserving order.
  */
-export function chunkServiceCodesTwoPerRow(services: string[]): string[] {
-    let codes = services.map((s) => toServiceCode(s)).filter(Boolean);
-    if (codes.length === 0) return [];
+export function normalizeServiceCodes(services: (string | any)[]): string[] {
+    if (!services || !Array.isArray(services)) return [];
 
-    // Remove redundant base 'COR' if multi-color 'COR2' or 'COR3' is already present
-    if (codes.includes('COR') && (codes.includes('COR2') || codes.includes('COR3'))) {
+    const rawList: string[] = [];
+    services.forEach((s) => {
+        if (!s) return;
+        if (typeof s === 'string') {
+            if (s.includes(',')) {
+                s.split(',').forEach((sub) => {
+                    const trimmed = sub.trim();
+                    if (trimmed) rawList.push(trimmed);
+                });
+            } else {
+                const trimmed = s.trim();
+                if (trimmed) rawList.push(trimmed);
+            }
+        } else if (typeof s === 'object') {
+            const name = s.service_code || s.code || s.name || s.service_name || s.service || '';
+            if (name) {
+                if (typeof name === 'string' && name.includes(',')) {
+                    name.split(',').forEach((sub) => {
+                        const trimmed = sub.trim();
+                        if (trimmed) rawList.push(trimmed);
+                    });
+                } else {
+                    rawList.push(String(name).trim());
+                }
+            }
+        }
+    });
+
+    let codes: string[] = [];
+    for (const item of rawList) {
+        const clean = item.replace(/\s*\(with basic cleaning\)/gi, '').trim();
+        const code = toServiceCode(clean) || clean.toUpperCase();
+        if (code && !codes.includes(code)) {
+            codes.push(code);
+        }
+    }
+
+    // Specification replacements:
+    // If FRMID or FRUND is present, remove generic FR
+    const hasFullReglueSpec = codes.some((c) => c === 'FRMID' || c === 'FRUND');
+    if (hasFullReglueSpec) {
+        codes = codes.filter((c) => c !== 'FR');
+    }
+
+    // If COR2 or COR3 is present, remove generic COR
+    const hasColorRenewalSpec = codes.some((c) => c === 'COR2' || c === 'COR3');
+    if (hasColorRenewalSpec) {
         codes = codes.filter((c) => c !== 'COR');
     }
+
+    return codes;
+}
+
+/**
+ * Chunks service names/codes into lines with up to 2 service codes per row.
+ * E.g. ['BC'] -> ['BC']
+ * E.g. ['BC', 'FR', 'FRMID'] -> ['BC, FRMID']
+ * E.g. ['BC', 'COR', 'COR2'] -> ['BC, COR2']
+ * E.g. ['BC', 'FR', 'FRMID', 'FRUND'] -> ['BC, FRMID,', 'FRUND']
+ */
+export function chunkServiceCodesTwoPerRow(services: string[]): string[] {
+    const codes = normalizeServiceCodes(services);
+    if (codes.length === 0) return [];
 
     const rows: string[] = [];
     for (let i = 0; i < codes.length; i += 2) {
@@ -380,11 +439,13 @@ export function calculateOfficialReleaseBreakdown(
 
             const isPairRush = (shoe as any).priorityLevel === 'rush' || (safeShoes.length === 1 && priorityLevel.toLowerCase() === 'rush');
             let pairEffectiveDays = pairBaseDays;
-            // Rush order only available for plain Basic Cleaning with no add-ons
-            if (isPairRush && canonicalSet.has(CANONICAL_BC) && canonicalSet.size === 1 && addons.length === 0) {
+            if (isPairRush) {
                 anyRush = true;
-                const rush = Number(rushReductionDays);
-                const reduction = Number.isFinite(rush) ? rush : DEFAULT_RUSH_REDUCTION_DAYS;
+                const shoeReduction = Number((shoe as any).rushReductionDays);
+                const globalReduction = Number(rushReductionDays);
+                const reduction = (Number.isFinite(shoeReduction) && shoeReduction > 0)
+                    ? shoeReduction
+                    : (Number.isFinite(globalReduction) && globalReduction > 0 ? globalReduction : DEFAULT_RUSH_REDUCTION_DAYS);
                 pairEffectiveDays = Math.max(MIN_DURATION_DAYS, pairBaseDays - reduction);
             }
             longestPairWithRush = Math.max(longestPairWithRush, pairEffectiveDays);

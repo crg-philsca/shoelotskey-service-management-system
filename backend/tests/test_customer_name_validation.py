@@ -69,3 +69,28 @@ def test_invalid_characters():
     # Punctuation only
     ok, err, name = validate_customer_name(".-.")
     assert ok is False
+
+def test_cyber_attack_and_script_injection():
+    from schemas import sanitize_security_string
+
+    # Script tags should be blocked
+    with pytest.raises(ValueError, match="Script tags and executable JavaScript"):
+        sanitize_security_string("<script>alert('xss')</script>")
+
+    with pytest.raises(ValueError, match="Script tags and executable JavaScript"):
+        sanitize_security_string("<script src='malicious.js'>")
+
+    with pytest.raises(ValueError, match="Script tags and executable JavaScript"):
+        sanitize_security_string("javascript:alert(1)")
+
+    # SQL injection should be blocked
+    with pytest.raises(ValueError, match="Database manipulation and SQL injection"):
+        sanitize_security_string("Nike' UNION SELECT * FROM users--")
+
+    with pytest.raises(ValueError, match="Database manipulation and SQL injection"):
+        sanitize_security_string("'; DROP TABLE orders; --")
+
+    # Safe strings should be cleanly preserved and HTML brackets neutralized
+    assert sanitize_security_string("Air Jordan 1") == "Air Jordan 1"
+    assert sanitize_security_string("Running / Training") == "Running / Training"
+    assert sanitize_security_string("Size 10.5 (US)") == "Size 10.5 (US)"

@@ -56,7 +56,7 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
     // Always reload from server when opening Activity History so deletes/CRUD appear immediately.
     useEffect(() => {
         if (user.token) {
-            void refreshActivities();
+            void refreshActivities(1000);
         }
     }, [user.token, refreshActivities]);
 
@@ -115,17 +115,20 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
     // Predefined Module Filter Options
     const MODULE_OPTIONS = [
         { label: 'ALL TYPES & MODULES', value: 'all' },
-        { label: 'System', value: 'System' },
-        { label: 'Authentication', value: 'Authentication' },
-        { label: 'Job Orders', value: 'Job Orders' },
-        { label: 'Services', value: 'Services' },
-        { label: 'Inventory', value: 'Inventory' },
-        { label: 'Sales', value: 'Sales' },
-        { label: 'Expenses', value: 'Expenses' },
-        { label: 'Reports', value: 'Reports' },
+        { label: 'Dashboard', value: 'Dashboard' },
+        { label: 'Job Order Form', value: 'Job Order Form' },
+        { label: 'Release Calendar', value: 'Release Calendar' },
+        { label: 'Sales Report', value: 'Sales Report' },
+        { label: 'Inventory Management', value: 'Inventory Management' },
+        { label: 'Service Management', value: 'Service Management' },
         { label: 'User Management', value: 'User Management' },
+        { label: 'Authentication', value: 'Authentication' },
+        { label: 'Cash Register', value: 'Cash Register' },
+        { label: 'Expenses', value: 'Expenses' },
         { label: 'Historical Records', value: 'Historical Records' },
-        { label: 'Machine Learning', value: 'Machine Learning' }
+        { label: 'System Telemetry (Benchmarks)', value: 'System Telemetry' },
+        { label: 'Machine Learning', value: 'Machine Learning' },
+        { label: 'System', value: 'System' }
     ];
 
     const getFormattedRole = (role?: string, username?: string): string => {
@@ -139,21 +142,49 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
     };
 
     const getModuleBadge = (activity: ActivityLog) => {
+        const action = (activity.action || '').toUpperCase();
+        const actionRaw = (activity.actionRaw || '').toUpperCase();
+        const combined = `${actionRaw} ${action}`;
+
+        // 1. Objective 1 performance benchmark / read telemetry
+        if (actionRaw === 'JOB_ORDER_RETRIEVED' || action === 'JOB_ORDER_RETRIEVED' || combined.includes('RETRIEVED')) {
+            return 'System Telemetry';
+        }
+        // 2. Dashboard actions & telemetry
+        if (actionRaw.includes('DASHBOARD') || action.includes('DASHBOARD') || activity.module === 'Dashboard' || (activity.type || '').toLowerCase() === 'dashboard') {
+            return 'Dashboard';
+        }
+        // 3. Release Calendar actions & date reschedules
+        if (actionRaw.includes('CALENDAR') || action.includes('CALENDAR') || activity.module === 'Release Calendar' || (activity.details || '').toLowerCase().includes('rescheduled')) {
+            return 'Release Calendar';
+        }
+        // 4. Staff permissions & users belong in User Management
+        if (actionRaw.includes('PERMISSION') || action.includes('PERMISSION') || activity.table === 'user_permissions' || activity.table === 'users' || activity.type === 'system' || activity.module === 'User Management') {
+            return 'User Management';
+        }
+        // 5. Cash register sessions
+        if (activity.table === 'cash_sessions' || actionRaw === 'OPEN' || actionRaw === 'CLOSE' || actionRaw.includes('CASH')) {
+            return 'Cash Register';
+        }
+
         const desc = (activity.newValues?.description || '').toLowerCase();
         const det = (activity.details || '').toLowerCase();
         if (desc.includes('inventory restock') || det.includes('stock addition')) {
-            return 'Inventory';
+            return 'Inventory Management';
         }
         if (activity.module && activity.module !== 'System' && activity.module !== 'Orders') {
-            if (activity.module === 'Orders') return 'Job Orders';
+            if (activity.module === 'Orders' || activity.module === 'Job Orders') return 'Job Order Form';
+            if (activity.module === 'Inventory') return 'Inventory Management';
+            if (activity.module === 'Services') return 'Service Management';
+            if (activity.module === 'Reports') return 'Sales Report';
             return activity.module;
         }
         const type = (activity.type || '').toLowerCase();
-        const action = (activity.action || '').toUpperCase();
-        if (type === 'service' || activity.table === 'Services') return 'Services';
-        if (type === 'inventory' || activity.table === 'Inventory') return 'Inventory';
-        if (type === 'expense' || activity.table === 'Expenses') return 'Expenses';
-        if (type === 'order' || activity.table === 'Orders' || activity.table === 'Job Orders') return 'Job Orders';
+        const table = (activity.table || '').toLowerCase();
+        if (type === 'service' || table === 'services' || activity.module === 'Services' || activity.module === 'Service Management') return 'Service Management';
+        if (type === 'inventory' || table === 'inventory' || activity.module === 'Inventory' || activity.module === 'Inventory Management') return 'Inventory Management';
+        if (type === 'expense' || table === 'expenses' || activity.module === 'Expenses') return 'Expenses';
+        if (type === 'order' || table === 'orders' || activity.module === 'Job Orders' || activity.module === 'Job Order Form') return 'Job Order Form';
         if (
             action.includes('LOGIN') ||
             action.includes('LOGOUT') ||
@@ -162,7 +193,19 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             action.includes('TIMEOUT') ||
             action.includes('SESSION')
         ) return 'Authentication';
-        if (type === 'reports' || action === 'PRINT') return 'Reports';
+        if (
+            activity.type === 'reports' || 
+            table === 'reports' || 
+            actionRaw.includes('REPORT') || 
+            action.includes('REPORT') ||
+            action === 'PRINT' || 
+            actionRaw === 'PRINT' || 
+            actionRaw.startsWith('EXPORT') ||
+            Boolean(activity.newValues?.report_type)
+        ) {
+            return 'Sales Report';
+        }
+        if (type === 'reports' || action === 'PRINT') return 'Sales Report';
         if (type === 'historical' || activity.module === 'Historical Records' || activity.table === 'Historical Records') return 'Historical Records';
         if (type === 'system' || activity.table === 'Users') return 'User Management';
         if (type === 'ml' || action.includes('PREDICT') || action.includes('TRAIN')) return 'Machine Learning';
@@ -170,33 +213,105 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
     };
 
     const getBusinessActionTitle = (activity: ActivityLog) => {
-        const action = activity.action.toUpperCase();
+        const action = (activity.action || '').toUpperCase();
         const actionRaw = (activity.actionRaw || '').toUpperCase();
         const type = (activity.type || '').toLowerCase();
-        const combined = `${actionRaw} ${action}`;
+        const combined = `${actionRaw} ${action}`.replace(/[_-]+/g, ' ');
         const moduleName = String(activity.module || getModuleBadge(activity) || '').toUpperCase();
+        const tableLower = String(activity.table || '').toLowerCase();
+        const detLower = (activity.details || '').toLowerCase();
+
+        // 1. Staff Permissions
+        if (actionRaw === 'STAFF_PERMISSION_UPDATED' || action.includes('STAFF_PERMISSION_UPDATED') || combined.includes('PERMISSION UPDATED')) {
+            return 'Staff Permissions Updated';
+        }
+        if (actionRaw === 'STAFF_PERMISSION_RESET_DEFAULTS' || combined.includes('PERMISSION RESET')) {
+            return 'Staff Permissions Reset to Defaults';
+        }
+
+        // 2. Telemetry & Query Benchmarks (Prevent mislabeling as Job Order Updated)
+        if (actionRaw === 'JOB_ORDER_RETRIEVED' || action === 'JOB_ORDER_RETRIEVED' || combined.includes('RETRIEVED')) {
+            return 'Record Retrieved';
+        }
+
+        // 3. Reports & Analytics (Check BEFORE generic entity fallbacks!)
+        const isReport =
+            type === 'reports' ||
+            moduleName.includes('REPORT') ||
+            tableLower.includes('report') ||
+            Boolean(activity.newValues?.report_type);
+
+        if (actionRaw.includes('EXPORT_CSV') || combined.includes('EXPORT CSV')) return 'Report Exported (CSV)';
+        if (actionRaw.includes('EXPORT_XLSX') || combined.includes('EXPORT XLSX') || combined.includes('EXCEL')) return 'Report Exported (Excel)';
+        if (actionRaw.includes('EXPORT_PDF') || combined.includes('EXPORT PDF')) return 'Report Exported (PDF)';
+        if (actionRaw.includes('PRINT') || combined.includes('PRINT')) return 'Report Printed';
+        if (actionRaw.includes('REPORT') || combined.includes('REPORT') || isReport) {
+            if (actionRaw.includes('VIEW') || combined.includes('VIEW') || combined.includes('DISPLAY') || detLower.includes('displayed sales report') || detLower.includes('displayed')) {
+                return 'Report Viewed';
+            }
+            return 'Report Generated';
+        }
+
+        // 4. Cash Register Sessions
+        if (actionRaw === 'OPEN' || actionRaw === 'OPEN_SESSION' || (activity.table === 'cash_sessions' && action.includes('OPEN'))) {
+            return 'Cash Register Opened';
+        }
+        if (actionRaw === 'CLOSE' || actionRaw === 'CLOSE_SESSION' || (activity.table === 'cash_sessions' && action.includes('CLOSE'))) {
+            return 'Cash Register Closed';
+        }
+
+        // 5. Financial & Discounts
+        if (actionRaw === 'DISCOUNT_AUTHORIZED' || combined.includes('DISCOUNT')) {
+            return 'Discount Authorized';
+        }
+
+        // 6. Account Access Control & Security
+        if (actionRaw === 'LOCK' || action.includes('LOCK_USER') || combined.includes('ACCOUNT LOCKED')) {
+            return 'User Account Locked';
+        }
+        if (actionRaw === 'UNLOCK' || action.includes('UNLOCK_USER') || combined.includes('ACCOUNT UNLOCKED')) {
+            return 'User Account Unlocked';
+        }
+        if (actionRaw === 'PASSWORD_RESET' || action.includes('PASSWORD_RESET') || combined.includes('PASSWORD RESET') || activity.newValues?.password_changed === true) {
+            return 'Password Reset';
+        }
+
+        // 7. Inventory Adjustments & Restock
+        if (actionRaw === 'SET_BALANCE' || combined.includes('SET BALANCE')) {
+            return 'Inventory Balance Adjusted';
+        }
+
+        // 8. System Backups
+        if (actionRaw === 'BACKUP_DOWNLOAD') return 'Backup Downloaded';
+        if (actionRaw === 'BACKUP') return 'System Backup Created';
+        if (actionRaw === 'BACKUP_FAILED') return 'System Backup Failed';
+
+        // 9. Order Lifecycle - Cancel Order
+        if (actionRaw === 'CANCEL' || action === 'CANCEL' || combined.includes('CANCEL')) {
+            return 'Job Order Cancelled';
+        }
+
         const isOrder =
             type === 'order' ||
             activity.table === 'Orders' ||
             activity.table === 'Job Orders' ||
+            tableLower === 'orders' ||
             moduleName === 'JOB ORDERS';
         const isService =
-            type === 'service' || activity.table === 'Services' || activity.table === 'services' || moduleName === 'SERVICES';
+            type === 'service' || activity.table === 'Services' || tableLower === 'services' || moduleName === 'SERVICES';
         const isInventory =
-            type === 'inventory' || activity.table === 'Inventory' || activity.table === 'inventory' || moduleName === 'INVENTORY';
+            type === 'inventory' || activity.table === 'Inventory' || tableLower === 'inventory' || moduleName === 'INVENTORY';
         const isExpense =
-            type === 'expense' || activity.table === 'Expenses' || activity.table === 'expenses' || moduleName === 'EXPENSES';
+            type === 'expense' || activity.table === 'Expenses' || tableLower === 'expenses' || moduleName === 'EXPENSES';
         const isUser =
-            type === 'system' || activity.table === 'Users' || activity.table === 'users' || moduleName === 'USER MANAGEMENT';
+            activity.table === 'Users' ||
+            tableLower === 'users' ||
+            moduleName === 'USER MANAGEMENT' ||
+            (type === 'system' && (activity.oldValues?.username || activity.newValues?.username) && !isReport);
         const isHistorical =
             moduleName === 'HISTORICAL RECORDS' ||
             activity.table === 'Historical Records' ||
-            activity.table === 'historical_orders';
-
-        // Cancel Order must never display as "Updated" or "Deleted"
-        if (actionRaw === 'CANCEL' || action === 'CANCEL' || combined.includes('CANCEL')) {
-            return 'Job Order Cancelled';
-        }
+            tableLower === 'historical_orders';
 
         // Soft-delete / deactivate
         if (actionRaw === 'DEACTIVATE' || action.includes('DEACTIVATE')) {
@@ -220,16 +335,14 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
         }
 
         if (combined.includes('404')) return 'Page Not Found';
-        if (combined.includes('SERVER_ERROR') || combined.includes('SERVER ERROR')) return 'Server Error';
+        if (combined.includes('SERVER ERROR')) return 'Server Error';
         if (combined.includes('FAILED')) return 'Failed Login';
         if (combined.includes('TIMEOUT')) return 'Session Timeout';
         // LOGOUT before LOGIN — "LOGGED OUT" must not be classified as login.
         if (combined.includes('LOGOUT') || combined.includes('LOGGED OUT')) return 'User Logged Out';
-        if (combined.includes('PASSWORD')) return 'Password Reset';
         if (combined.includes('LOGIN') || combined.includes('LOGGED IN')) return 'User Logged In';
-        
+
         const descLower = (activity.newValues?.description || '').toLowerCase();
-        const detLower = (activity.details || '').toLowerCase();
         if (
             action.includes('RESTOCK') || 
             actionRaw.includes('RESTOCK') || 
@@ -237,10 +350,8 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             detLower.includes('stock addition') ||
             descLower.includes('inventory restock')
         ) return 'Inventory Restocked';
-        if (action.includes('DEDUCT') || actionRaw.includes('DEDUCT') || (activity.details || '').toLowerCase().includes('deduct')) return 'Inventory Deducted';
-        if (action.includes('REACTIVATE') || actionRaw.includes('REACTIVATE') || (activity.details || '').toLowerCase().includes('reactivated')) return 'Inventory Reactivated';
-        
-        if (action.includes('PRINT') || type === 'reports') return 'Report Generated';
+        if (action.includes('DEDUCT') || actionRaw.includes('DEDUCT') || detLower.includes('deduct')) return 'Inventory Deducted';
+        if (action.includes('REACTIVATE') || actionRaw.includes('REACTIVATE') || detLower.includes('reactivated')) return 'Inventory Reactivated';
 
         if (isInventory) {
             if (action.includes('CREATE') || actionRaw.includes('CREATE')) return 'Inventory Added';
@@ -248,24 +359,30 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
         }
         if (isOrder) {
             if (action.includes('CREATE') || action.includes('NEW') || actionRaw.includes('NEW') || actionRaw.includes('CREATE')) return 'Job Order Created';
-            if (activity.newValues?.status === 'claimed') return 'Order Claimed';
-            if (activity.newValues?.status === 'for-release') return 'Order Ready For Release';
+            const orderStatus = String(activity.newValues?.status || activity.newValues?.new_status || '').toLowerCase();
+            if (orderStatus === 'claimed') return 'Order Claimed';
+            if (orderStatus === 'for-release' || orderStatus === 'for_release') return 'Order Ready For Release';
+            if (orderStatus === 'on-going' || orderStatus === 'ongoing' || orderStatus === 'in-progress') return 'Order In Progress';
+            if (activity.newValues?.payment_status === 'paid' && activity.oldValues?.payment_status !== 'paid') return 'Order Payment Received';
             return 'Job Order Updated';
         }
         if (isService) {
-            if (action.includes('CREATE')) return 'Service Created';
+            if (action.includes('CREATE') || actionRaw.includes('CREATE')) return 'Service Created';
             return 'Service Updated';
         }
         if (isExpense) {
-            if (action.includes('CREATE')) return 'Expense Created';
+            if (action.includes('CREATE') || actionRaw.includes('CREATE')) return 'Expense Created';
             return 'Expense Updated';
         }
         if (isUser) {
-            if (action.includes('CREATE')) return 'User Created';
+            if (action.includes('CREATE') || actionRaw.includes('CREATE')) return 'User Created';
+            if (activity.newValues?.is_active === false && activity.oldValues?.is_active === true) return 'User Deactivated';
+            if (activity.newValues?.is_active === true && activity.oldValues?.is_active === false) return 'User Reactivated';
+            if (activity.newValues?.role && activity.oldValues?.role && activity.newValues.role !== activity.oldValues.role) return 'User Role Updated';
             return 'User Updated';
         }
         if (isHistorical) {
-            if (action.includes('CREATE')) return 'Historical Record Created';
+            if (action.includes('CREATE') || actionRaw.includes('CREATE')) return 'Historical Record Created';
             return 'Historical Record Updated';
         }
 
@@ -292,6 +409,39 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
     };
 
     const getAffectedRecordLabel = (activity: ActivityLog) => {
+        // Priority 1: Direct target user from payload (Permission changes, User edits)
+        const targetU = 
+            activity.newValues?.target_user ||
+            activity.oldValues?.target_user ||
+            activity.newValues?.target_username ||
+            activity.oldValues?.target_username;
+        if (targetU) return String(targetU);
+
+        const actionRaw = (activity.actionRaw || '').toUpperCase();
+        const action = (activity.action || '').toUpperCase();
+        const title = getBusinessActionTitle(activity).toUpperCase();
+
+        // Priority 2: Query benchmarks / telemetry
+        if (actionRaw === 'JOB_ORDER_RETRIEVED' || action === 'JOB_ORDER_RETRIEVED' || title.includes('BENCHMARK')) {
+            return activity.newValues?.order_reference || 'All Orders';
+        }
+
+        // Priority 3: Cash Register Sessions
+        if (activity.table === 'cash_sessions' || title.includes('CASH REGISTER')) {
+            return activity.newValues?.session_id ? `Session #${activity.newValues.session_id}` : 'Cash Register';
+        }
+
+        // Priority 4: Discount Authorizations
+        if (actionRaw === 'DISCOUNT_AUTHORIZED' || title.includes('DISCOUNT')) {
+            return activity.newValues?.job_order || activity.newValues?.order_number || 'Job Order';
+        }
+
+        // Priority 5: Inventory balance adjustments
+        if (actionRaw === 'SET_BALANCE' || title.includes('BALANCE ADJUSTED')) {
+            return activity.newValues?.item_name || activity.oldValues?.item_name || 'Inventory Item';
+        }
+
+        // Priority 6: Authentication events
         const moduleName = String(getModuleBadge(activity) || '').toUpperCase();
         const isAuth =
             moduleName === 'AUTHENTICATION' ||
@@ -331,8 +481,8 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             activity.newValues?.customerName ||
             activity.oldValues?.description ||
             activity.newValues?.description ||
-            (String(activity.newValues?.details || activity.details || '').match(/(?:on|item:?)\s*['"]?([^'"]+?)['"]?(?:\s*\(|\s*:|\s*updated|\s*$)/i)?.[1]) ||
-            (String(activity.newValues?.details || activity.details || '').match(/(?:for|account for)\s+([A-Za-z0-9_.-]+)/i)?.[1]) ||
+            (String(activity.newValues?.details || activity.details || '').match(/(?:for order:?|item:?)\s*['"]?([^'"]+?)['"]?(?:\s*\(|\s*:|\s*updated|\s*$)/i)?.[1]) ||
+            (String(activity.newValues?.details || activity.details || '').match(/(?:account for)\s+([A-Za-z0-9_.-]+)/i)?.[1]) ||
             activity.recordId ||
             'N/A'
         );
@@ -341,8 +491,12 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
     const getActionIcon = (title: string) => {
         const t = title.toUpperCase();
         if (t.includes('JOB ORDER') || t.includes('CLAIMED') || t.includes('RELEASE') || t.includes('CANCEL')) return <ShoppingCart className="w-3.5 h-3.5" />;
-        if (t.includes('INVENTORY') || t.includes('RESTOCK') || t.includes('DEDUCT')) return <Package className="w-3.5 h-3.5" />;
+        if (t.includes('INVENTORY') || t.includes('RESTOCK') || t.includes('DEDUCT') || t.includes('BALANCE')) return <Package className="w-3.5 h-3.5" />;
         if (t.includes('LOGIN') || t.includes('LOGOUT') || t.includes('LOGGED') || t.includes('PASSWORD') || t.includes('SESSION')) return <Key className="w-3.5 h-3.5" />;
+        if (t.includes('PERMISSION')) return <Users className="w-3.5 h-3.5" />;
+        if (t.includes('BENCHMARK') || t.includes('TELEMETRY')) return <Activity className="w-3.5 h-3.5" />;
+        if (t.includes('CASH REGISTER')) return <ShoppingCart className="w-3.5 h-3.5" />;
+        if (t.includes('DISCOUNT')) return <Tag className="w-3.5 h-3.5" />;
         if (t.includes('SERVER ERROR')) return <Activity className="w-3.5 h-3.5" />;
         if (t.includes('SERVICE')) return <Tag className="w-3.5 h-3.5" />;
         if (t.includes('EXPENSE')) return <Tag className="w-3.5 h-3.5" />;
@@ -355,13 +509,23 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
         const actStr = getBusinessActionTitle(activity);
         const actUpper = actStr.toUpperCase();
         let colorClass = "bg-gray-100 text-gray-700 border-gray-200";
-        if (actUpper.includes('NEW') || actUpper.includes('CREATED') || actUpper.includes('ADDED') || actUpper.includes('REACTIVATED') || actUpper.includes('LOGGED IN') || actUpper.includes('RESTOCK')) {
+        if (actUpper.includes('PERMISSION')) {
+            colorClass = "bg-indigo-50 text-indigo-700 border-indigo-200";
+        } else if (actUpper.includes('BENCHMARK') || actUpper.includes('TELEMETRY')) {
+            colorClass = "bg-sky-50 text-sky-700 border-sky-200";
+        } else if (actUpper.includes('CASH REGISTER')) {
+            colorClass = actUpper.includes('OPEN') ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-700 border-slate-300";
+        } else if (actUpper.includes('DISCOUNT')) {
+            colorClass = "bg-teal-50 text-teal-700 border-teal-200";
+        } else if (actUpper.includes('BALANCE ADJUSTED')) {
+            colorClass = "bg-amber-50 text-amber-700 border-amber-200";
+        } else if (actUpper.includes('NEW') || actUpper.includes('CREATED') || actUpper.includes('ADDED') || actUpper.includes('REACTIVATED') || actUpper.includes('LOGGED IN') || actUpper.includes('RESTOCK')) {
             colorClass = "bg-emerald-50 text-emerald-700 border-emerald-200";
         } else if (actUpper.includes('UPDATE') || actUpper.includes('GENERATED') || actUpper.includes('EDIT')) {
             colorClass = "bg-amber-50 text-amber-700 border-amber-200";
-        } else if (actUpper.includes('DELETE') || actUpper.includes('OUT') || actUpper.includes('FAILED') || actUpper.includes('CANCEL') || actUpper.includes('DEDUCT')) {
+        } else if (actUpper.includes('DELETE') || actUpper.includes('OUT') || actUpper.includes('FAILED') || actUpper.includes('CANCEL') || actUpper.includes('DEDUCT') || actUpper.includes('LOCKED')) {
             colorClass = "bg-rose-50 text-rose-700 border-rose-200";
-        } else if (actUpper.includes('PASSWORD') || actUpper.includes('CLAIMED') || actUpper.includes('RELEASE')) {
+        } else if (actUpper.includes('PASSWORD') || actUpper.includes('CLAIMED') || actUpper.includes('RELEASE') || actUpper.includes('UNLOCKED')) {
             colorClass = "bg-purple-50 text-purple-700 border-purple-200";
         }
         return (
@@ -466,11 +630,26 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
         let matchesType = selectedType === 'all' || 
             activityMod === selType || 
             activity.type?.toLowerCase() === selType;
-        if (!matchesType && selType === 'sales') {
-            matchesType = activityMod === 'job orders' || activityMod === 'reports' || activity.table?.toLowerCase() === 'orders' || activity.type?.toLowerCase() === 'order';
+        if (!matchesType && (selType === 'sales' || selType === 'sales report' || selType === 'reports')) {
+            matchesType = activityMod.includes('report') || activityMod.includes('sales') || activity.table?.toLowerCase() === 'reports' || activity.type?.toLowerCase() === 'reports';
         }
-        if (!matchesType && selType === 'inventory') {
-            matchesType = activityMod === 'inventory' || (activity.newValues?.description || '').toLowerCase().includes('inventory restock') || (activity.details || '').toLowerCase().includes('stock addition');
+        if (!matchesType && (selType === 'inventory' || selType === 'inventory management')) {
+            matchesType = activityMod.includes('inventory') || activity.table?.toLowerCase() === 'inventory' || (activity.newValues?.description || '').toLowerCase().includes('inventory restock') || (activity.details || '').toLowerCase().includes('stock addition');
+        }
+        if (!matchesType && (selType === 'services' || selType === 'service management')) {
+            matchesType = activityMod.includes('service') || activity.table?.toLowerCase() === 'services' || activity.type?.toLowerCase() === 'service';
+        }
+        if (!matchesType && (selType === 'job orders' || selType === 'job order form')) {
+            matchesType = activityMod.includes('job order') || activityMod.includes('order') || activity.table?.toLowerCase() === 'orders' || activity.type?.toLowerCase() === 'order';
+        }
+        if (!matchesType && selType === 'release calendar') {
+            matchesType = activityMod.includes('calendar') || (activity.details || '').toLowerCase().includes('rescheduled') || (activity.module || '').toLowerCase().includes('calendar');
+        }
+        if (!matchesType && selType === 'dashboard') {
+            matchesType = activityMod.includes('dashboard') || (activity.module || '').toLowerCase().includes('dashboard') || (activity.type || '').toLowerCase() === 'dashboard';
+        }
+        if (!matchesType && selType === 'user management') {
+            matchesType = activityMod.includes('user') || activity.table?.toLowerCase() === 'users' || activity.table?.toLowerCase() === 'user_permissions';
         }
         if (!matchesType && selType === 'expenses') {
             matchesType = activityMod === 'expenses' || activity.table?.toLowerCase() === 'expenses';
@@ -505,6 +684,28 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
+    const normalizeDate = (ts: string) => {
+        if (!ts) return "";
+        if (ts.length > 18 || isNaN(parseInt(ts.substring(0, 2))) || ts.includes('T')) {
+            try {
+                const d = new Date(ts);
+                if (!isNaN(d.getTime())) {
+                    const mm = String(d.getMonth() + 1).padStart(2, '0');
+                    const dd = String(d.getDate()).padStart(2, '0');
+                    const yyyy = d.getFullYear();
+                    let hours = d.getHours();
+                    const mins = String(d.getMinutes()).padStart(2, '0');
+                    const ampm = hours >= 12 ? 'PM' : 'AM';
+                    hours = hours % 12;
+                    hours = hours ? hours : 12;
+                    const hh = String(hours).padStart(2, '0');
+                    return `${mm}/${dd}/${yyyy}, ${hh}:${mins} ${ampm}`;
+                }
+            } catch { return ts; }
+        }
+        return ts;
+    };
+
     const handleRowClick = (activity: ActivityLog) => {
         setSelectedLog(activity);
         setIsLogModalOpen(true);
@@ -524,7 +725,7 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
         const actionStr = getBusinessActionTitle(log).toUpperCase();
         const module = getModuleBadge(log).toUpperCase();
         
-        const ignoredKeys = new Set(['id', 'order_id', 'item_id', 'user_id', 'customer_id', 'created_at', 'updated_at', 'history', 'items', 'inventory_used', 'inventoryused', '_id', 'token', 'password', 'ordernumber', 'order_number', 'updater_id', 'updaterid', 'inventoryapplied', 'inventory_applied', 'last_modified', 'is_retail', 'isretail', 'sync_version', 'modifier', 'record_id', 'details', 'cancelled']);
+        const ignoredKeys = new Set(['id', 'order_id', 'item_id', 'user_id', 'customer_id', 'created_at', 'updated_at', 'history', 'items', 'inventory_used', 'inventoryused', '_id', 'token', 'password', 'ordernumber', 'order_number', 'updater_id', 'updaterid', 'inventoryapplied', 'inventory_applied', 'last_modified', 'is_retail', 'isretail', 'sync_version', 'modifier', 'record_id', 'details', 'cancelled', 'permissions', 'added', 'removed', 'target_user', 'targetuser', 'target_username', 'restored_defaults', 'restoreddefaults', 'test_id', 'testid', 'duration_ms', 'durationms', 'result_count', 'resultcount']);
 
         const mapBusinessLabel = (key: string) => {
             const lowerKey = key.toLowerCase();
@@ -557,8 +758,11 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             if (lowerKey === 'order_time' || lowerKey === 'ordertime') return 'Order Time';
             if (lowerKey === 'encoding_time' || lowerKey === 'encodingtime') return 'Intake Duration';
             if (lowerKey === 'encoding_seconds' || lowerKey === 'encodingseconds') return 'Intake Seconds';
-            if (lowerKey === 'efficiency_vs_paper' || lowerKey === 'efficiencyvspaper') return 'Efficiency vs Manual Paper';
+            if (lowerKey === 'efficiency_vs_paper' || lowerKey === 'efficiencyvspaper') return 'Intake Duration';
             if (lowerKey === 'total_pairs' || lowerKey === 'totalpairs') return 'Total Pairs';
+            if (lowerKey === 'duration_ms' || lowerKey === 'durationms') return 'Duration (ms)';
+            if (lowerKey === 'duration_formatted' || lowerKey === 'durationformatted') return 'Duration';
+            if (lowerKey === 'time_taken' || lowerKey === 'timetaken') return 'Time Taken';
             return key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ');
         };
 
@@ -568,9 +772,43 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             return val;
         };
 
+        const formatIsoTimestamp = (raw: string): string | null => {
+            if (!raw || typeof raw !== 'string') return null;
+            const trimmed = raw.trim();
+            // Match ISO timestamps or date strings like 2026-09-30T05:51:48.892908, 2026-09-30 05:51:48, 2026-09-30
+            if (/^\d{4}-\d{2}-\d{2}(?:[T\s]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/i.test(trimmed)) {
+                try {
+                    const d = new Date(trimmed);
+                    if (!isNaN(d.getTime())) {
+                        const mm = String(d.getMonth() + 1).padStart(2, '0');
+                        const dd = String(d.getDate()).padStart(2, '0');
+                        const yyyy = d.getFullYear();
+                        if (trimmed.includes('T') || trimmed.includes(':') || (trimmed.includes(' ') && trimmed.length > 10)) {
+                            let hours = d.getHours();
+                            const minutes = String(d.getMinutes()).padStart(2, '0');
+                            const ampm = hours >= 12 ? 'PM' : 'AM';
+                            hours = hours % 12;
+                            hours = hours ? hours : 12;
+                            const hh = String(hours).padStart(2, '0');
+                            return `${mm}/${dd}/${yyyy}, ${hh}:${minutes} ${ampm}`;
+                        }
+                        return `${mm}/${dd}/${yyyy}`;
+                    }
+                } catch {
+                    return null;
+                }
+            }
+            return null;
+        };
+
         const humanizeReadableValue = (raw: string): string => {
             const trimmed = raw.trim();
             if (!trimmed) return 'None';
+
+            // Check if string is an ISO timestamp before stripping characters
+            const isoFormatted = formatIsoTimestamp(trimmed);
+            if (isoFormatted) return isoFormatted;
+
             const lower = trimmed.toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
             const known: Record<string, string> = {
                 'new order': 'New Order',
@@ -597,6 +835,11 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                 'not set': 'None',
                 'n/a': 'None',
                 'na': 'None',
+                'in stock': 'In Stock',
+                'low stock': 'Low Stock',
+                'out of stock': 'Out of Stock',
+                'active': 'Active',
+                'inactive': 'Inactive',
             };
             if (known[lower]) return known[lower];
             // Title-case slug-like values so they don't look like code
@@ -615,17 +858,23 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             if (val === true || val === 'true') return 'Yes';
             if (val === false || val === 'false') return 'No';
             if (val === null || val === undefined || val === '') {
-                // Status cleared reads more naturally than a technical placeholder
                 if (lowerKey === 'status' || lowerKey === 'status_after' || lowerKey === 'statusafter') {
-                    return 'Cleared';
+                    return 'Not Set';
                 }
                 return 'None';
             }
             if (typeof val === 'string' && ['empty', 'null', 'none', 'not set', 'n/a', 'na'].includes(val.trim().toLowerCase())) {
                 if (lowerKey === 'status' || lowerKey === 'status_after' || lowerKey === 'statusafter') {
-                    return 'Cleared';
+                    return 'Not Set';
                 }
                 return 'None';
+            }
+
+            if (lowerKey.includes('date') || lowerKey.includes('time') || lowerKey.includes('timestamp') || lowerKey.includes('created') || lowerKey.includes('updated') || lowerKey.includes('predicted') || lowerKey.includes('transaction')) {
+                if (typeof val === 'string') {
+                    const parsedDate = formatIsoTimestamp(val);
+                    if (parsedDate) return parsedDate;
+                }
             }
 
             if (lowerKey === 'role' || lowerKey === 'role_name' || lowerKey === 'rolename') {
@@ -664,6 +913,14 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                 }
             }
             
+            if (lowerKey === 'duration_ms' || lowerKey === 'durationms') {
+                const num = Number(val);
+                if (Number.isFinite(num)) {
+                    return `${num.toLocaleString('en-US')} ms`;
+                }
+                return String(val);
+            }
+
             // Check if key represents a count / quantity rather than monetary amount:
             const isCountOrQuantity = 
                 lowerKey.includes('pair') || 
@@ -730,6 +987,10 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             Object.keys(newVals).forEach(k => {
                 const norm = k.toLowerCase().replace(/[_-\s]/g, '');
                 if (!ignoredKeys.has(norm) && !ignoredKeys.has(k)) {
+                    // Filter out synthetic or no-op password_changed: false
+                    if (norm === 'passwordchanged' && (newVals[k] === false || newVals[k] === 'false' || newVals[k] === 'No' || !newVals[k])) {
+                        return;
+                    }
                     if (!normMap[norm]) {
                         normMap[norm] = { label: k, missingInOld: true };
                     }
@@ -739,6 +1000,12 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             });
 
             const changedItems = Object.values(normMap).filter(item => {
+                const norm = item.label.toLowerCase().replace(/[_-\s]/g, '');
+                if (norm === 'passwordchanged') {
+                    if (item.newVal !== true && item.newVal !== 'true' && item.newVal !== 'Yes') {
+                        return false;
+                    }
+                }
                 const normalizeValue = (v: any) => {
                     if (v === undefined || v === null || v === '' || v === ' ') return null;
                     if (typeof v === 'boolean') return String(v);
@@ -792,15 +1059,21 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                                         </div>
                                     )}
                                     {(oldVals.stock_quantity != null || newVals.stock_quantity != null) && (
-                                        <div className="flex flex-col gap-0.5">
-                                            <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Stock Quantity</span>
-                                            <div className="flex items-center gap-2 text-[13px] font-black">
-                                                <span className="text-rose-700/80 line-through">{mapBusinessValue('stock_quantity', oldVals.stock_quantity)}</span>
-                                                <span className="text-gray-300">→</span>
-                                                <span className="text-emerald-700">{mapBusinessValue('stock_quantity', newVals.stock_quantity)}</span>
-                                                {(newVals.unit || oldVals.unit) && (
-                                                    <span className="text-gray-500 font-bold text-[11px]">{newVals.unit || oldVals.unit}</span>
-                                                )}
+                                        <div className="flex flex-col gap-1">
+                                            <span className="font-extrabold text-slate-500 uppercase text-[9px] tracking-widest">Stock Quantity</span>
+                                            <div className="grid grid-cols-2 gap-2 mt-0.5">
+                                                <div className="bg-white border border-slate-200 rounded-lg p-2 flex flex-col gap-0.5">
+                                                    <span className="text-[8.5px] font-black uppercase tracking-wider text-slate-400">Previous</span>
+                                                    <span className="text-[12px] font-bold text-slate-700">
+                                                        {mapBusinessValue('stock_quantity', oldVals.stock_quantity)}{oldVals.unit ? ` ${oldVals.unit}` : ''}
+                                                    </span>
+                                                </div>
+                                                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-2 flex flex-col gap-0.5">
+                                                    <span className="text-[8.5px] font-black uppercase tracking-wider text-emerald-700">Updated</span>
+                                                    <span className="text-[12px] font-black text-emerald-900">
+                                                        {mapBusinessValue('stock_quantity', newVals.stock_quantity)}{newVals.unit ? ` ${newVals.unit}` : ''}
+                                                    </span>
+                                                </div>
                                             </div>
                                         </div>
                                     )}
@@ -810,8 +1083,8 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                     );
                 }
                 return (
-                    <div className="bg-gray-50 p-3 rounded-xl border border-dashed border-gray-200 text-center mt-3">
-                        <span className="text-[11px] font-bold text-gray-500 italic">No user-visible business changes were made.</span>
+                    <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-center mt-3">
+                        <span className="text-[11px] font-bold text-slate-600">Record saved with no field modifications.</span>
                     </div>
                 );
             }
@@ -863,25 +1136,26 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             });
 
             return (
-                <div className="space-y-4 mt-3">
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Business Changes</span>
+                <div className="space-y-3 mt-3">
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">Activity Changes & Audit Record</span>
                     
                     {Object.entries(groupedChanges).map(([sectionTitle, items]) => {
                         if (items.length === 0) return null;
                         return (
-                            <div key={sectionTitle} className="space-y-2 mb-4">
-                                <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 pb-1 block w-full">{sectionTitle}</span>
-                                <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm space-y-3 min-w-0 overflow-hidden">
+                            <div key={sectionTitle} className="space-y-2 mb-3">
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-1 block w-full">{sectionTitle}</span>
+                                <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm space-y-3 min-w-0">
                                     {items.map(({ label, oldVal, newVal }) => (
-                                        <div key={label} className="flex flex-col gap-1 pb-2.5 border-b border-gray-100 last:border-0 last:pb-0 min-w-0">
-                                            <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">{mapBusinessLabel(label)}</span>
-                                            <div className="flex flex-col gap-0.5 mt-0.5 min-w-0">
-                                                <span className="text-[13px] font-black text-rose-700/80 line-through decoration-rose-300 decoration-2 break-all break-words">
-                                                    {mapBusinessValue(label, oldVal)}
-                                                </span>
-                                                <div className="flex items-center gap-2 text-[13px] font-black text-gray-900 min-w-0">
-                                                    <span className="text-gray-300 shrink-0">↳</span>
-                                                    <span className="text-emerald-700 break-all break-words">{mapBusinessValue(label, newVal)}</span>
+                                        <div key={label} className="flex flex-col gap-1.5 pb-2.5 border-b border-slate-100 last:border-0 last:pb-0 min-w-0">
+                                            <span className="font-extrabold text-slate-600 uppercase text-[9.5px] tracking-wider">{mapBusinessLabel(label)}</span>
+                                            <div className="grid grid-cols-2 gap-2 mt-0.5 min-w-0">
+                                                <div className="bg-slate-50 border border-slate-200/80 rounded-lg p-2 flex flex-col gap-0.5 min-w-0">
+                                                    <span className="text-[8.5px] font-black uppercase tracking-wider text-slate-400">Previous</span>
+                                                    <span className="text-[12px] font-bold text-slate-700 break-words leading-tight">{mapBusinessValue(label, oldVal)}</span>
+                                                </div>
+                                                <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-lg p-2 flex flex-col gap-0.5 min-w-0">
+                                                    <span className="text-[8.5px] font-black uppercase tracking-wider text-emerald-700">Updated</span>
+                                                    <span className="text-[12px] font-black text-emerald-900 break-words leading-tight">{mapBusinessValue(label, newVal)}</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -913,18 +1187,23 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
 
         // Event Specific Summaries
         let eventSummary = null;
-        if (module === 'JOB ORDERS' && Object.keys(oldVals).length > 0 && Object.keys(newVals).length > 0 && newVals.status && oldVals.status !== newVals.status) {
+        if ((module.includes('JOB ORDER') || module === 'ORDERS') && Object.keys(oldVals).length > 0 && Object.keys(newVals).length > 0 && newVals.status && oldVals.status !== newVals.status) {
             eventSummary = (
                 <div className="mb-4 space-y-1.5">
                     <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Status Changed</span>
-                    <div className="flex items-center gap-2 text-[14px] font-black text-blue-700 bg-blue-50 p-2.5 rounded-xl border border-blue-100 shadow-sm">
-                        <span className="text-gray-500 line-through decoration-gray-400 decoration-1 text-[13px]">{mapBusinessValue('status', oldVals.status)}</span>
-                        <span className="text-gray-400">→</span>
-                        <span>{mapBusinessValue('status', newVals.status)}</span>
+                    <div className="grid grid-cols-2 gap-2 bg-blue-50/60 p-2.5 rounded-xl border border-blue-100 shadow-sm">
+                        <div className="flex flex-col gap-0.5">
+                            <span className="text-[8.5px] font-black uppercase tracking-wider text-slate-400">Previous Status</span>
+                            <span className="text-[12px] font-bold text-slate-600">{mapBusinessValue('status', oldVals.status)}</span>
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                            <span className="text-[8.5px] font-black uppercase tracking-wider text-blue-700">Updated Status</span>
+                            <span className="text-[12px] font-black text-blue-900">{mapBusinessValue('status', newVals.status)}</span>
+                        </div>
                     </div>
                 </div>
             );
-        } else if (module === 'INVENTORY' && actionStr.includes('RESTOCK')) {
+        } else if (module.includes('INVENTORY') && actionStr.includes('RESTOCK')) {
             const addedRaw = newVals.stock_added || newVals.quantity || newVals.amount || log.details.match(/(?:added|restocked)\s*(\d+(?:\.\d+)?)/i)?.[1] || 0;
             const addedNum = Number(addedRaw);
             const addedFormatted = Number.isFinite(addedNum) ? (Number.isInteger(addedNum) ? String(addedNum) : addedNum.toFixed(2)) : String(addedRaw);
@@ -936,14 +1215,14 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                     <div className="flex items-center gap-3 bg-emerald-50 p-2.5 rounded-xl border border-emerald-100 shadow-sm">
                         <span className="text-[14px] font-black text-emerald-700">+{addedFormatted}{unit ? ` ${unit}` : ''}</span>
                         <div className="flex items-center gap-2 text-[12px] font-bold text-gray-600 border-l border-emerald-200 pl-3">
-                            <span className="line-through text-gray-400">{mapBusinessValue('stock', oldVals.stock || oldVals.stock_quantity || 0)}</span>
-                            <span className="text-gray-400">→</span>
-                            <span className="text-gray-800">{mapBusinessValue('stock', newVals.stock || newVals.stock_quantity || 0)}</span>
+                            <span className="text-slate-500">From: {mapBusinessValue('stock', oldVals.stock || oldVals.stock_quantity || 0)}</span>
+                            <span className="text-slate-300">•</span>
+                            <span className="text-emerald-800 font-black">To: {mapBusinessValue('stock', newVals.stock || newVals.stock_quantity || 0)}</span>
                         </div>
                     </div>
                 </div>
             );
-        } else if (module === 'INVENTORY' && (actionStr.includes('CONSUME') || actionStr.includes('DEDUCT') || log.details.toLowerCase().includes('deduct'))) {
+        } else if (module.includes('INVENTORY') && (actionStr.includes('CONSUME') || actionStr.includes('DEDUCT') || log.details.toLowerCase().includes('deduct'))) {
             const usedRaw = newVals.quantity_used || newVals.amount || log.details.match(/(?:used|deducted)\s*(\d+(?:\.\d+)?)/i)?.[1] || 0;
             const usedNum = Number(usedRaw);
             const usedFormatted = Number.isFinite(usedNum) ? (Number.isInteger(usedNum) ? String(usedNum) : usedNum.toFixed(2)) : String(usedRaw);
@@ -955,27 +1234,32 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                     <div className="flex items-center gap-3 bg-rose-50 p-2.5 rounded-xl border border-rose-100 shadow-sm">
                         <span className="text-[14px] font-black text-rose-700">−{usedFormatted}{unit ? ` ${unit}` : ''}</span>
                         <div className="flex items-center gap-2 text-[12px] font-bold text-gray-600 border-l border-rose-200 pl-3">
-                            <span className="line-through text-gray-400">{mapBusinessValue('stock', oldVals.stock || oldVals.stock_quantity || 0)}</span>
-                            <span className="text-gray-400">→</span>
-                            <span className="text-gray-800">{mapBusinessValue('stock', newVals.stock || newVals.stock_quantity || 0)}</span>
+                            <span className="text-slate-500">From: {mapBusinessValue('stock', oldVals.stock || oldVals.stock_quantity || 0)}</span>
+                            <span className="text-slate-300">•</span>
+                            <span className="text-rose-800 font-black">To: {mapBusinessValue('stock', newVals.stock || newVals.stock_quantity || 0)}</span>
                         </div>
                     </div>
                 </div>
             );
-        } else if (module === 'SERVICES' && Object.keys(oldVals).length > 0 && Object.keys(newVals).length > 0 && ((newVals.base_price && oldVals.base_price !== newVals.base_price) || (newVals.price && oldVals.price !== newVals.price))) {
+        } else if (module.includes('SERVICE') && Object.keys(oldVals).length > 0 && Object.keys(newVals).length > 0 && ((newVals.base_price && oldVals.base_price !== newVals.base_price) || (newVals.price && oldVals.price !== newVals.price))) {
             const oldP = oldVals.base_price || oldVals.price;
             const newP = newVals.base_price || newVals.price;
             eventSummary = (
                 <div className="mb-4 space-y-1.5">
                     <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Price Updated</span>
-                    <div className="flex items-center gap-3 text-[14px] font-black text-emerald-700 bg-emerald-50 p-2.5 rounded-xl border border-emerald-100 shadow-sm">
-                        <span className="text-gray-500 line-through decoration-gray-400 decoration-1 text-[13px]">{formatCurrency(oldP)}</span>
-                        <span className="text-gray-400">→</span>
-                        <span>{formatCurrency(newP)}</span>
+                    <div className="grid grid-cols-2 gap-2 bg-emerald-50/60 p-2.5 rounded-xl border border-emerald-100 shadow-sm">
+                        <div className="flex flex-col gap-0.5">
+                            <span className="text-[8.5px] font-black uppercase tracking-wider text-slate-400">Previous Price</span>
+                            <span className="text-[12px] font-bold text-slate-600">{formatCurrency(oldP)}</span>
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                            <span className="text-[8.5px] font-black uppercase tracking-wider text-emerald-700">Updated Price</span>
+                            <span className="text-[12px] font-black text-emerald-900">{formatCurrency(newP)}</span>
+                        </div>
                     </div>
                 </div>
             );
-        } else if ((module === 'USERS' || module === 'USER MANAGEMENT') && actionStr.includes('CREATE')) {
+        } else if ((module === 'USERS' || module.includes('USER')) && actionStr.includes('CREATE')) {
             eventSummary = (
                 <div className="mb-4 space-y-1.5">
                     <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Created Account</span>
@@ -985,7 +1269,34 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                     </div>
                 </div>
             );
-        } else if (module === 'REPORTS' || actionStr.includes('REPORT') || actionStr.includes('GENERATED')) {
+        } else if (module.includes('CALENDAR') || actionStr.includes('RESCHEDULE') || actionStr.includes('CALENDAR')) {
+            const oldDate = oldVals.predicted_completion_date || oldVals.release_date || '';
+            const newDate = newVals.predicted_completion_date || newVals.release_date || '';
+            eventSummary = (
+                <div className="mb-4 space-y-1.5">
+                    <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Release Schedule Changed</span>
+                    <div className="grid grid-cols-2 gap-2 bg-indigo-50/60 p-2.5 rounded-xl border border-indigo-100 shadow-sm">
+                        <div className="flex flex-col gap-0.5">
+                            <span className="text-[8.5px] font-black uppercase tracking-wider text-slate-400">Previous Date</span>
+                            <span className="text-[12px] font-bold text-slate-600">{oldDate ? formatIsoTimestamp(oldDate) || oldDate : '—'}</span>
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                            <span className="text-[8.5px] font-black uppercase tracking-wider text-indigo-700">New Date</span>
+                            <span className="text-[12px] font-black text-indigo-900">{newDate ? formatIsoTimestamp(newDate) || newDate : log.details || 'Release Date Updated'}</span>
+                        </div>
+                    </div>
+                </div>
+            );
+        } else if (module.includes('DASHBOARD')) {
+            eventSummary = (
+                <div className="mb-4 space-y-1.5">
+                    <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Dashboard Activity</span>
+                    <div className="flex items-center gap-2 text-[13px] font-bold text-sky-800 bg-sky-50 p-2.5 rounded-xl border border-sky-100 shadow-sm">
+                        <span>{log.details || 'Operational metrics and real-time KPI analytics inspected'}</span>
+                    </div>
+                </div>
+            );
+        } else if (module.includes('REPORT') || actionStr.includes('REPORT') || actionStr.includes('GENERATED')) {
             const reportName = log.details.replace(/Printed\s*/i, '').replace(/Generated\s*/i, '') || 'System Report';
             eventSummary = (
                 <div className="mb-4 space-y-1.5">
@@ -998,6 +1309,346 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
         }
 
         // Layout Router
+
+        // 1. SPECIALIZED LAYOUT: Staff Permissions Update & Defaults Reset
+        if (actionStr.includes('PERMISSION') || log.table === 'user_permissions') {
+            const targetUser = newVals.target_user || oldVals.target_user || log.recordId || 'Staff';
+            const addedList: string[] = Array.isArray(newVals.added) ? newVals.added : [];
+            const removedList: string[] = Array.isArray(newVals.removed) ? newVals.removed : [];
+            const isReset = actionStr.includes('RESET') || Boolean(newVals.restored_defaults);
+
+            const PERMISSION_META: Record<string, { label: string; category: string; description: string }> = {
+                'job_orders.view': { label: 'View Job Orders', category: 'Job Orders', description: 'Can view customer job orders and statuses' },
+                'job_orders.create': { label: 'Create Job Orders', category: 'Job Orders', description: 'Can intake shoes and create new orders' },
+                'job_orders.update': { label: 'Update Job Orders', category: 'Job Orders', description: 'Can update order status, items, and details' },
+                'job_orders.cancel': { label: 'Cancel Job Orders', category: 'Job Orders', description: 'Can cancel job orders before completion' },
+                'job_orders.release': { label: 'Release / Claim Orders', category: 'Job Orders', description: 'Can mark orders as claimed/released to customer' },
+                'payments.process': { label: 'Process Payments', category: 'Financial', description: 'Can accept cash, GCash, and Maya payments' },
+                'discounts.apply': { label: 'Apply Discounts', category: 'Financial', description: 'Can view and select discounts on job orders' },
+                'discounts.authorize': { label: 'Authorize Discounts', category: 'Financial', description: 'Can grant custom or senior/PWD discounts' },
+                'inventory.view': { label: 'View Inventory', category: 'Inventory', description: 'Can view raw materials, supplies, and stock levels' },
+                'inventory.add': { label: 'Add New Inventory', category: 'Inventory', description: 'Can create new stock catalog items' },
+                'inventory.edit': { label: 'Edit Inventory Items', category: 'Inventory', description: 'Can edit unit costs, stock counts, and specs' },
+                'inventory.deactivate': { label: 'Deactivate / Delete Inventory', category: 'Inventory', description: 'Can soft-delete inventory catalog items' },
+            };
+
+            const formatPermBadge = (code: string) => {
+                const meta = PERMISSION_META[code.trim()] || {
+                    label: code.replace(/[._]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+                    category: 'System'
+                };
+                return meta.label;
+            };
+
+            const permsDict = newVals.permissions || newVals.restored_defaults || {};
+
+            return (
+                <div className="space-y-3 mt-2">
+                    {/* Target Staff Card */}
+                    <div className="bg-indigo-50/70 p-3 rounded-xl border border-indigo-100 flex items-center justify-between">
+                        <div className="flex flex-col gap-0.5">
+                            <span className="font-extrabold text-indigo-600 uppercase text-[9px] tracking-widest">Target Staff Account</span>
+                            <span className="font-black text-indigo-950 text-[14px]">{targetUser}</span>
+                        </div>
+                        <Badge className="bg-indigo-600 text-white font-black text-[10px] uppercase tracking-wider px-2 py-0.5">
+                            Role: Staff
+                        </Badge>
+                    </div>
+
+                    {/* Reset to Defaults Notice */}
+                    {isReset && (
+                        <div className="bg-blue-50 p-3 rounded-xl border border-blue-200 flex items-center gap-2.5">
+                            <div className="w-2 h-2 rounded-full bg-blue-600 shrink-0" />
+                            <span className="text-[12px] font-bold text-blue-900 leading-snug">
+                                All staff permissions were restored to standard system defaults.
+                            </span>
+                        </div>
+                    )}
+
+                    {/* Revoked Permissions */}
+                    {removedList.length > 0 && (
+                        <div className="space-y-1.5">
+                            <span className="text-[9px] font-black text-rose-600 uppercase tracking-widest flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-rose-600" />
+                                Access Revoked ({removedList.length})
+                            </span>
+                            <div className="bg-rose-50/60 p-3 rounded-xl border border-rose-200/80 space-y-2">
+                                <div className="flex flex-wrap gap-1.5">
+                                    {removedList.map((code) => (
+                                        <span
+                                            key={code}
+                                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-black bg-rose-100/90 text-rose-800 border border-rose-300 shadow-2xs"
+                                        >
+                                            <span className="text-rose-600 text-[11px]">✕</span>
+                                            {formatPermBadge(code)}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Granted Permissions */}
+                    {addedList.length > 0 && (
+                        <div className="space-y-1.5">
+                            <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+                                Access Granted ({addedList.length})
+                            </span>
+                            <div className="bg-emerald-50/60 p-3 rounded-xl border border-emerald-200/80 space-y-2">
+                                <div className="flex flex-wrap gap-1.5">
+                                    {addedList.map((code) => (
+                                        <span
+                                            key={code}
+                                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-black bg-emerald-100/90 text-emerald-800 border border-emerald-300 shadow-2xs"
+                                        >
+                                            <span className="text-emerald-600 text-[11px]">✓</span>
+                                            {formatPermBadge(code)}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Collapsible Full Active Matrix */}
+                    {typeof permsDict === 'object' && Object.keys(permsDict).length > 0 && (
+                        <details className="group [&_summary::-webkit-details-marker]:hidden bg-slate-50 rounded-xl border border-slate-200 mt-2">
+                            <summary className="flex items-center justify-between px-3.5 py-2.5 cursor-pointer text-[10px] font-black text-slate-600 uppercase tracking-widest hover:text-slate-900 transition-colors">
+                                <span>Active Permission Matrix ({Object.values(permsDict).filter(Boolean).length} / {Object.keys(permsDict).length} Enabled)</span>
+                                <span className="text-slate-400 group-open:rotate-180 transition-transform text-xs">▼</span>
+                            </summary>
+                            <div className="p-3 border-t border-slate-200 space-y-2 bg-white rounded-b-xl">
+                                {['Job Orders', 'Inventory', 'Financial'].map((cat) => {
+                                    const catItems = Object.entries(PERMISSION_META).filter(([_, m]) => m.category === cat);
+                                    if (catItems.length === 0) return null;
+                                    return (
+                                        <div key={cat} className="space-y-1">
+                                            <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block">{cat}</span>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                                                {catItems.map(([code, meta]) => {
+                                                    const isEnabled = Boolean(permsDict[code]);
+                                                    return (
+                                                        <div
+                                                            key={code}
+                                                            className={`flex items-center justify-between p-1.5 px-2.5 rounded-lg text-xs font-bold border ${isEnabled ? 'bg-emerald-50/50 border-emerald-200 text-slate-800' : 'bg-slate-50 border-slate-200 text-slate-400 line-through'}`}
+                                                        >
+                                                            <span className="text-[11px] truncate">{meta.label}</span>
+                                                            <span className={`text-[10px] font-black shrink-0 ${isEnabled ? 'text-emerald-600' : 'text-slate-400'}`}>
+                                                                {isEnabled ? 'Enabled' : 'Disabled'}
+                                                            </span>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </details>
+                    )}
+                </div>
+            );
+        }
+
+        // 2. SPECIALIZED LAYOUT: Objective 1 Read Telemetry & Query Benchmarks
+        if (actionStr.includes('BENCHMARK') || (log.actionRaw || '').toUpperCase() === 'JOB_ORDER_RETRIEVED') {
+            const testId = newVals.test_id || log.recordId || 'O1-RET-BENCHMARK';
+            const scope = newVals.order_reference || 'All Orders';
+            const durMs = Number(newVals.duration_ms || 0);
+            const count = Number(newVals.result_count || 0);
+
+            return (
+                <div className="space-y-3 mt-2">
+                    <div className="bg-sky-50/80 p-3.5 rounded-xl border border-sky-200 space-y-3 shadow-sm">
+                        <div className="flex items-center justify-between border-b border-sky-200 pb-2">
+                            <span className="font-extrabold text-sky-700 uppercase text-[9px] tracking-widest">Objective 1: Digital Retrieval Speed</span>
+                            <Badge className="bg-sky-600 text-white font-black text-[9px] uppercase px-2 py-0.5">
+                                {durMs < 500 ? '⚡ Ultra-Fast (<0.5s)' : 'Normal (<2s)'}
+                            </Badge>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="flex flex-col gap-0.5">
+                                <span className="font-extrabold text-sky-800 uppercase text-[9px] tracking-widest">Test Run ID</span>
+                                <span className="font-black text-slate-900 text-[13px]">{testId}</span>
+                            </div>
+                            <div className="flex flex-col gap-0.5">
+                                <span className="font-extrabold text-sky-800 uppercase text-[9px] tracking-widest">Query Target</span>
+                                <span className="font-black text-slate-900 text-[13px]">{scope}</span>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 pt-2 border-t border-sky-100">
+                            <div className="flex flex-col gap-0.5">
+                                <span className="font-extrabold text-sky-800 uppercase text-[9px] tracking-widest">Response Latency</span>
+                                <span className="font-black text-emerald-700 text-[15px]">{durMs.toFixed(2)} ms</span>
+                            </div>
+                            <div className="flex flex-col gap-0.5">
+                                <span className="font-extrabold text-sky-800 uppercase text-[9px] tracking-widest">Records Fetched</span>
+                                <span className="font-black text-slate-900 text-[15px]">{count} record{count !== 1 ? 's' : ''}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 leading-relaxed">
+                        Automated telemetry logging for academic validation comparing computerized instant query retrieval against traditional manual filing systems (Objective 1).
+                    </div>
+                </div>
+            );
+        }
+
+        // 3. SPECIALIZED LAYOUT: Discount Authorization
+        if (actionStr.includes('DISCOUNT AUTHORIZED') || (log.actionRaw || '').toUpperCase() === 'DISCOUNT_AUTHORIZED') {
+            const ordRef = newVals.job_order || newVals.order_number || log.recordId || 'Job Order';
+            const authBy = newVals.authorized_by || log.user || 'Owner';
+            const authRole = newVals.authorizer_role || 'Owner';
+            const discAmt = Number(newVals.discount_amount || 0);
+            const staff = newVals.processing_staff || log.user || 'Staff';
+            const reason = newVals.reason || 'Authorized by supervisor';
+
+            return (
+                <div className="space-y-3 mt-2">
+                    <div className="bg-teal-50/80 p-3.5 rounded-xl border border-teal-200 space-y-3 shadow-sm">
+                        <div className="flex items-center justify-between border-b border-teal-200 pb-2">
+                            <span className="font-extrabold text-teal-800 uppercase text-[9px] tracking-widest">Discount Authorization Card</span>
+                            <Badge className="bg-teal-600 text-white font-black text-[9px] uppercase px-2 py-0.5">
+                                Authorized
+                            </Badge>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="flex flex-col gap-0.5">
+                                <span className="font-extrabold text-teal-700 uppercase text-[9px] tracking-widest">Job Order</span>
+                                <span className="font-black text-slate-900 text-[13px]">{ordRef}</span>
+                            </div>
+                            <div className="flex flex-col gap-0.5">
+                                <span className="font-extrabold text-teal-700 uppercase text-[9px] tracking-widest">Discount Amount</span>
+                                <span className="font-black text-emerald-700 text-[15px]">{formatCurrency(discAmt)}</span>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 pt-2 border-t border-teal-100">
+                            <div className="flex flex-col gap-0.5">
+                                <span className="font-extrabold text-teal-700 uppercase text-[9px] tracking-widest">Authorized By</span>
+                                <span className="font-black text-slate-900 text-[13px]">{authBy} <span className="text-teal-600 font-bold">({getFormattedRole(authRole, authBy)})</span></span>
+                            </div>
+                            <div className="flex flex-col gap-0.5">
+                                <span className="font-extrabold text-teal-700 uppercase text-[9px] tracking-widest">Staff In Attendance</span>
+                                <span className="font-black text-slate-900 text-[13px]">{staff}</span>
+                            </div>
+                        </div>
+                        {reason && (
+                            <div className="pt-2 border-t border-teal-100">
+                                <span className="font-extrabold text-teal-700 uppercase text-[9px] tracking-widest block mb-0.5">Reason / Justification</span>
+                                <span className="text-xs font-semibold text-slate-800">{reason}</span>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        // 4. SPECIALIZED LAYOUT: Cash Register (Open / Close)
+        if (actionStr.includes('CASH REGISTER') || log.table === 'cash_sessions') {
+            const isOpen = actionStr.includes('OPEN') || (newVals.status || '').toUpperCase() === 'OPEN';
+            const sessionId = newVals.session_id || log.recordId || 'N/A';
+            const openAmt = Number(newVals.opening_cash || 0);
+            const expectedAmt = Number(newVals.expected_cash || 0);
+            const actualAmt = Number(newVals.actual_cash || 0);
+            const overShort = Number(newVals.over_short || 0);
+            const varReason = newVals.variance_reason || '';
+
+            return (
+                <div className="space-y-3 mt-2">
+                    <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-3 shadow-sm">
+                        <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                            <span className="font-extrabold text-slate-500 uppercase text-[9px] tracking-widest">Register Session #{sessionId}</span>
+                            <Badge className={`${isOpen ? 'bg-emerald-600' : 'bg-slate-700'} text-white font-black text-[9px] uppercase px-2 py-0.5`}>
+                                {isOpen ? 'Register Opened' : 'Register Closed'}
+                            </Badge>
+                        </div>
+                        {isOpen ? (
+                            <div className="flex flex-col gap-0.5">
+                                <span className="font-extrabold text-slate-400 uppercase text-[9px] tracking-widest">Starting Float Cash</span>
+                                <span className="font-black text-emerald-700 text-lg">{formatCurrency(openAmt)}</span>
+                            </div>
+                        ) : (
+                            <div className="space-y-2.5">
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="flex flex-col gap-0.5">
+                                        <span className="font-extrabold text-slate-400 uppercase text-[9px] tracking-widest">Expected System Cash</span>
+                                        <span className="font-black text-slate-900 text-[14px]">{formatCurrency(expectedAmt)}</span>
+                                    </div>
+                                    <div className="flex flex-col gap-0.5">
+                                        <span className="font-extrabold text-slate-400 uppercase text-[9px] tracking-widest">Actual Counted Cash</span>
+                                        <span className="font-black text-emerald-700 text-[14px]">{formatCurrency(actualAmt)}</span>
+                                    </div>
+                                </div>
+                                <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
+                                    <span className="font-extrabold text-slate-400 uppercase text-[9px] tracking-widest">Cash Discrepancy</span>
+                                    <Badge className={`${overShort === 0 ? 'bg-emerald-100 text-emerald-800' : overShort > 0 ? 'bg-blue-100 text-blue-800' : 'bg-rose-100 text-rose-800'} font-black text-[11px]`}>
+                                        {overShort === 0 ? 'Exact Match (₱0.00)' : `${overShort > 0 ? '+₱' : '-₱'}${Math.abs(overShort).toFixed(2)} (${overShort > 0 ? 'Over' : 'Short'})`}
+                                    </Badge>
+                                </div>
+                                {varReason && (
+                                    <div className="pt-2 border-t border-slate-200">
+                                        <span className="font-extrabold text-slate-400 uppercase text-[9px] tracking-widest block mb-0.5">Variance Explanation</span>
+                                        <span className="text-xs font-semibold text-slate-800">{varReason}</span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        // 5. SPECIALIZED LAYOUT: Inventory Set Balance (Physical Reconciliation)
+        if (actionStr.includes('BALANCE ADJUSTED') || (log.actionRaw || '').toUpperCase() === 'SET_BALANCE') {
+            const itemName = newVals.item_name || oldVals.item_name || 'Inventory Item';
+            const prevStock = Number(oldVals.stock_quantity ?? newVals.previous_stock ?? 0);
+            const newStock = Number(newVals.stock_quantity ?? newVals.new_stock ?? 0);
+            const diff = Number(newVals.difference ?? (newStock - prevStock));
+            const unit = newVals.unit || oldVals.unit || '';
+            const reason = newVals.reason || '';
+
+            return (
+                <div className="space-y-3 mt-2">
+                    <div className="bg-amber-50/70 p-3.5 rounded-xl border border-amber-200 space-y-3 shadow-sm">
+                        <div className="flex items-center justify-between border-b border-amber-200 pb-2">
+                            <span className="font-extrabold text-amber-800 uppercase text-[9px] tracking-widest">Physical Reconciliation</span>
+                            <Badge className="bg-amber-600 text-white font-black text-[9px] uppercase px-2 py-0.5">
+                                Count Adjusted
+                            </Badge>
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                            <span className="font-extrabold text-amber-700 uppercase text-[9px] tracking-widest">Inventory Item</span>
+                            <span className="font-black text-slate-900 text-[14px]">{itemName}</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 pt-2 border-t border-amber-100">
+                            <div className="flex flex-col gap-0.5">
+                                <span className="font-extrabold text-amber-700 uppercase text-[9px] tracking-widest">Previous Stock</span>
+                                <span className="font-bold text-slate-700 text-[13px]">{prevStock} {unit}</span>
+                            </div>
+                            <div className="flex flex-col gap-0.5">
+                                <span className="font-extrabold text-amber-700 uppercase text-[9px] tracking-widest">Reconciled Count</span>
+                                <span className="font-black text-emerald-700 text-[14px]">{newStock} {unit}</span>
+                            </div>
+                        </div>
+                        <div className="pt-2 border-t border-amber-100 flex items-center justify-between">
+                            <span className="font-extrabold text-amber-700 uppercase text-[9px] tracking-widest">Adjustment Difference</span>
+                            <Badge className={`${diff >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'} font-black text-[11px]`}>
+                                {diff >= 0 ? `+${diff}` : diff} {unit}
+                            </Badge>
+                        </div>
+                        {reason && (
+                            <div className="pt-2 border-t border-amber-100">
+                                <span className="font-extrabold text-amber-700 uppercase text-[9px] tracking-widest block mb-0.5">Reason</span>
+                                <span className="text-xs font-semibold text-slate-800">{reason}</span>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        // 6. SPECIALIZED LAYOUT: Authentication
         if (module === 'AUTHENTICATION') {
             const tokens = getActionTokens(log);
             const logout = isLogoutAction(log);
@@ -1009,29 +1660,25 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             if (failed) {
                 return (
                     <div className="space-y-2.5 mt-2">
-                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Failed Login Attempt</span>
-                        <div className="bg-red-50 p-3 rounded-xl border border-red-200 shadow-sm space-y-2">
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Authentication Failure</span>
+                        <div className="bg-red-50 p-3.5 rounded-xl border border-red-200 shadow-sm space-y-2.5">
                             <div className="flex flex-col gap-0.5">
-                                <span className="font-extrabold text-red-500 uppercase text-[9px] tracking-widest">Username</span>
-                                <span className="font-black text-red-900 text-[13px]">{newVals.username_attempted || log.user}</span>
+                                <span className="font-extrabold text-red-600 uppercase text-[9px] tracking-widest">Attempted Account</span>
+                                <span className="font-black text-red-950 text-[13px]">{newVals.username_attempted || log.user}</span>
                             </div>
-                            <div className="flex flex-col gap-0.5 mt-2">
-                                <span className="font-extrabold text-red-500 uppercase text-[9px] tracking-widest">Status</span>
-                                <span className="font-black text-[13px] text-red-700">Login failed</span>
-                            </div>
-                            <div className="flex flex-col gap-0.5 mt-2">
-                                <span className="font-extrabold text-red-500 uppercase text-[9px] tracking-widest">Reason</span>
+                            <div className="flex flex-col gap-0.5 pt-2 border-t border-red-200">
+                                <span className="font-extrabold text-red-600 uppercase text-[9px] tracking-widest">Failure Reason</span>
                                 <span className="font-black text-red-700 text-[13px]">{newVals.reason === 'wrong_password' ? 'Incorrect Password' : newVals.reason === 'account_locked' ? 'Account Locked' : newVals.reason === 'account_deactivated' ? 'Account Deactivated' : newVals.reason === 'account_not_found' ? 'Account Not Found' : 'Incorrect Credentials'}</span>
                             </div>
                             {newVals.failed_attempts !== undefined && (
-                                <div className="flex flex-col gap-0.5 mt-2">
-                                    <span className="font-extrabold text-red-500 uppercase text-[9px] tracking-widest">Failed Attempts</span>
+                                <div className="flex flex-col gap-0.5 pt-2 border-t border-red-200">
+                                    <span className="font-extrabold text-red-600 uppercase text-[9px] tracking-widest">Consecutive Failed Attempts</span>
                                     <span className="font-black text-red-900 text-[13px]">{newVals.failed_attempts} of 3</span>
                                 </div>
                             )}
-                            <div className="flex flex-col gap-0.5 mt-2 pt-2 border-t border-red-200">
-                                <span className="font-extrabold text-red-500 uppercase text-[9px] tracking-widest">Result</span>
-                                <span className="font-black text-[13px] text-red-900">{newVals.reason === 'account_locked' ? 'Account Locked' : newVals.reason === 'account_deactivated' ? 'Access Blocked' : 'Account still active'}</span>
+                            <div className="flex flex-col gap-0.5 pt-2 border-t border-red-200">
+                                <span className="font-extrabold text-red-600 uppercase text-[9px] tracking-widest">Security Action</span>
+                                <span className="font-black text-[13px] text-red-900">{newVals.reason === 'account_locked' ? 'Account Automatically Locked' : newVals.reason === 'account_deactivated' ? 'Access Blocked' : 'Warning Recorded'}</span>
                             </div>
                         </div>
                     </div>
@@ -1041,23 +1688,15 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             if (timedOut) {
                 return (
                     <div className="space-y-2.5 mt-2">
-                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Session Expired</span>
-                        <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 shadow-sm space-y-2">
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Session Expiration</span>
+                        <div className="bg-amber-50 p-3.5 rounded-xl border border-amber-200 shadow-sm space-y-2.5">
                             <div className="flex flex-col gap-0.5">
-                                <span className="font-extrabold text-amber-600 uppercase text-[9px] tracking-widest">User</span>
-                                <span className="font-black text-amber-900 text-[13px]">{log.user}</span>
+                                <span className="font-extrabold text-amber-700 uppercase text-[9px] tracking-widest">User Account</span>
+                                <span className="font-black text-amber-950 text-[13px]">{log.user}</span>
                             </div>
-                            <div className="flex flex-col gap-0.5 mt-2">
-                                <span className="font-extrabold text-amber-600 uppercase text-[9px] tracking-widest">Status</span>
-                                <span className="font-black text-[13px] text-amber-700">Session timed out</span>
-                            </div>
-                            <div className="flex flex-col gap-0.5 mt-2">
-                                <span className="font-extrabold text-amber-600 uppercase text-[9px] tracking-widest">Reason</span>
-                                <span className="font-black text-[13px] text-amber-700">Signed out automatically due to inactivity.</span>
-                            </div>
-                            <div className="flex flex-col gap-0.5 mt-2 pt-2 border-t border-amber-200">
-                                <span className="font-extrabold text-amber-600 uppercase text-[9px] tracking-widest">Next step</span>
-                                <span className="font-black text-[13px] text-amber-900">Please log in again to continue.</span>
+                            <div className="flex flex-col gap-0.5 pt-2 border-t border-amber-200">
+                                <span className="font-extrabold text-amber-700 uppercase text-[9px] tracking-widest">Expiration Reason</span>
+                                <span className="font-bold text-[12px] text-amber-800">Automatic logout after period of system inactivity.</span>
                             </div>
                         </div>
                     </div>
@@ -1067,19 +1706,15 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             if (passwordReset) {
                 return (
                     <div className="space-y-2.5 mt-2">
-                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Password Reset</span>
-                        <div className="bg-purple-50 p-3 rounded-xl border border-purple-200 shadow-sm space-y-2">
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Credential Update</span>
+                        <div className="bg-purple-50 p-3.5 rounded-xl border border-purple-200 shadow-sm space-y-2.5">
                             <div className="flex flex-col gap-0.5">
-                                <span className="font-extrabold text-purple-600 uppercase text-[9px] tracking-widest">Username</span>
-                                <span className="font-black text-purple-900 text-[13px]">{log.user}</span>
+                                <span className="font-extrabold text-purple-700 uppercase text-[9px] tracking-widest">User Account</span>
+                                <span className="font-black text-purple-950 text-[13px]">{log.user}</span>
                             </div>
-                            <div className="flex flex-col gap-0.5 mt-2">
-                                <span className="font-extrabold text-purple-600 uppercase text-[9px] tracking-widest">Status</span>
-                                <span className="font-black text-[13px] text-purple-700">Password updated successfully</span>
-                            </div>
-                            <div className="flex flex-col gap-0.5 mt-2 pt-2 border-t border-purple-200">
-                                <span className="font-extrabold text-purple-600 uppercase text-[9px] tracking-widest">What happened</span>
-                                <span className="font-bold text-[12px] text-purple-900">This account’s password was reset through the secure reset flow.</span>
+                            <div className="flex flex-col gap-0.5 pt-2 border-t border-purple-200">
+                                <span className="font-extrabold text-purple-700 uppercase text-[9px] tracking-widest">Security Status</span>
+                                <span className="font-black text-[13px] text-purple-800">Password reset and encrypted successfully.</span>
                             </div>
                         </div>
                     </div>
@@ -1090,22 +1725,22 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                 return (
                     <div className="space-y-2.5 mt-2">
                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Session Details</span>
-                        <div className="bg-white p-3 rounded-xl border border-rose-100 shadow-sm space-y-2">
-                            <div className="flex flex-col gap-0.5">
-                                <span className="font-extrabold text-rose-600 uppercase text-[9px] tracking-widest">Username</span>
-                                <span className="font-black text-gray-900 text-[13px]">{log.user}</span>
+                        <div className="bg-white p-3.5 rounded-xl border border-rose-100 shadow-sm space-y-2.5">
+                            <div className="grid grid-cols-2 gap-2">
+                                <div className="flex flex-col gap-0.5">
+                                    <span className="font-extrabold text-rose-600 uppercase text-[9px] tracking-widest">User Account</span>
+                                    <span className="font-black text-gray-900 text-[13px]">{log.user}</span>
+                                </div>
+                                <div className="flex flex-col gap-0.5">
+                                    <span className="font-extrabold text-rose-600 uppercase text-[9px] tracking-widest">Role</span>
+                                    <span className="font-bold text-gray-700 text-[12px]">{getFormattedRole(log.role, log.user)}</span>
+                                </div>
                             </div>
-                            <div className="flex flex-col gap-0.5 mt-2">
-                                <span className="font-extrabold text-rose-600 uppercase text-[9px] tracking-widest">Status</span>
-                                <span className="font-black text-[13px] text-rose-700">Successful logout</span>
-                            </div>
-                            <div className="flex flex-col gap-0.5 mt-2 pt-2 border-t border-rose-100">
-                                <span className="font-extrabold text-rose-600 uppercase text-[9px] tracking-widest">What happened</span>
-                                <span className="font-bold text-[12px] text-gray-800">
-                                    {log.details && !String(log.details).toLowerCase().includes('sql')
-                                        ? log.details
-                                        : `${log.user} signed out of the system.`}
-                                </span>
+                            <div className="flex items-center justify-between pt-2 border-t border-rose-100">
+                                <span className="font-extrabold text-rose-600 uppercase text-[9px] tracking-widest">Session Status</span>
+                                <Badge className="bg-rose-100 text-rose-800 border-rose-200 font-black text-[10px]">
+                                    Session Terminated
+                                </Badge>
                             </div>
                         </div>
                     </div>
@@ -1116,24 +1751,22 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             return (
                 <div className="space-y-2.5 mt-2">
                     <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Session Details</span>
-                    <div className="bg-white p-3 rounded-xl border border-emerald-100 shadow-sm space-y-2">
-                        <div className="flex flex-col gap-0.5">
-                            <span className="font-extrabold text-emerald-600 uppercase text-[9px] tracking-widest">Username</span>
-                            <span className="font-black text-gray-900 text-[13px]">{log.user}</span>
+                    <div className="bg-white p-3.5 rounded-xl border border-emerald-100 shadow-sm space-y-2.5">
+                        <div className="grid grid-cols-2 gap-2">
+                            <div className="flex flex-col gap-0.5">
+                                <span className="font-extrabold text-emerald-600 uppercase text-[9px] tracking-widest">User Account</span>
+                                <span className="font-black text-gray-900 text-[13px]">{log.user}</span>
+                            </div>
+                            <div className="flex flex-col gap-0.5">
+                                <span className="font-extrabold text-emerald-600 uppercase text-[9px] tracking-widest">Role</span>
+                                <span className="font-bold text-gray-700 text-[12px]">{getFormattedRole(log.role, log.user)}</span>
+                            </div>
                         </div>
-                        <div className="flex flex-col gap-0.5 mt-2">
-                            <span className="font-extrabold text-emerald-600 uppercase text-[9px] tracking-widest">Status</span>
-                            <span className="font-black text-[13px] text-emerald-600">
-                                {loginOk ? 'Successful login' : 'Authentication event'}
-                            </span>
-                        </div>
-                        <div className="flex flex-col gap-0.5 mt-2 pt-2 border-t border-emerald-100">
-                            <span className="font-extrabold text-emerald-600 uppercase text-[9px] tracking-widest">What happened</span>
-                            <span className="font-bold text-[12px] text-gray-800">
-                                {log.details && !String(log.details).toLowerCase().includes('sql')
-                                    ? log.details
-                                    : `${log.user} signed in successfully.`}
-                            </span>
+                        <div className="flex items-center justify-between pt-2 border-t border-emerald-100">
+                            <span className="font-extrabold text-emerald-600 uppercase text-[9px] tracking-widest">Session Status</span>
+                            <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 font-black text-[10px]">
+                                {loginOk ? 'Active Session' : 'Authentication Event'}
+                            </Badge>
                         </div>
                     </div>
                 </div>
@@ -1220,7 +1853,7 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                         {oldStock !== undefined && newStock !== undefined && (
                             <div className="flex items-center justify-between py-1.5 px-3 bg-gray-50 rounded-lg border border-gray-100 text-xs">
                                 <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Stock Progression</span>
-                                <span className="font-bold text-gray-700">{oldStock} {unit} → <span className="font-black text-emerald-700">{newStock} {unit}</span></span>
+                                <span className="font-bold text-gray-700">From {oldStock} {unit} to <span className="font-black text-emerald-700">{newStock} {unit}</span></span>
                             </div>
                         )}
                         {expenseAmt && (
@@ -1290,16 +1923,21 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                                         {key === 'stock_quantity' && unit ? ` ${unit}` : ''}
                                     </span>
                                 ) : (
-                                    <div className="flex items-center gap-2 text-[13px] font-black">
-                                        <span className="text-rose-700/80 line-through decoration-rose-300">
-                                            {mapBusinessValue(key, oldV)}
-                                            {key === 'stock_quantity' && unit ? ` ${unit}` : ''}
-                                        </span>
-                                        <span className="text-gray-300">→</span>
-                                        <span className="text-emerald-700">
-                                            {mapBusinessValue(key, newV)}
-                                            {key === 'stock_quantity' && unit ? ` ${unit}` : ''}
-                                        </span>
+                                    <div className="grid grid-cols-2 gap-2 mt-1 min-w-0">
+                                        <div className="bg-slate-50 border border-slate-200/80 rounded-lg p-2 flex flex-col gap-0.5 min-w-0">
+                                            <span className="text-[8.5px] font-black uppercase tracking-wider text-slate-400">Previous</span>
+                                            <span className="text-[12px] font-bold text-slate-700 break-words leading-snug">
+                                                {mapBusinessValue(key, oldV)}
+                                                {key === 'stock_quantity' && unit ? ` ${unit}` : ''}
+                                            </span>
+                                        </div>
+                                        <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-lg p-2 flex flex-col gap-0.5 min-w-0">
+                                            <span className="text-[8.5px] font-black uppercase tracking-wider text-emerald-700">Updated</span>
+                                            <span className="text-[12px] font-black text-emerald-900 break-words leading-snug">
+                                                {mapBusinessValue(key, newV)}
+                                                {key === 'stock_quantity' && unit ? ` ${unit}` : ''}
+                                            </span>
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -1336,14 +1974,55 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             );
         }
 
-        if (module === 'REPORTS' || actionStr.includes('REPORT')) {
+        if (module === 'REPORTS' || actionStr.includes('REPORT') || newVals.report_type) {
+            const reportType = newVals.report_type === 'dashboard' ? 'Dashboard Metrics' : (newVals.report_type || 'Sales Report');
+            const period = newVals.period_type ? (newVals.period_type.charAt(0).toUpperCase() + newVals.period_type.slice(1)) : 'Daily';
+            const durMs = Number(newVals.duration_ms || 0);
+            const status = newVals.status || 'SUCCESS';
+            const method = newVals.payment_method;
+
             return (
                 <div className="space-y-2.5 mt-2">
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Report Details</span>
-                    <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm space-y-2">
-                        <div className="flex flex-col gap-0.5">
-                            <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Generated Report</span>
-                            <span className="font-black text-gray-900 text-[13px]">{log.details.replace(/Printed\s*/i, '').replace(/Generated\s*/i, '') || 'System Report'}</span>
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Report Generation & Timing Details</span>
+                    <div className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-sm space-y-3">
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="flex flex-col gap-0.5">
+                                <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Report Type</span>
+                                <span className="font-black text-gray-900 text-[13px] capitalize">{reportType}</span>
+                            </div>
+                            <div className="flex flex-col gap-0.5">
+                                <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Timeframe</span>
+                                <Badge className="w-fit bg-red-50 text-red-700 border-red-200 font-black text-[10px] uppercase">
+                                    {period}
+                                </Badge>
+                            </div>
+                        </div>
+
+                        {durMs > 0 && (
+                            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-gray-100">
+                                <div className="flex flex-col gap-0.5">
+                                    <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Generation Speed</span>
+                                    <span className="font-black text-emerald-700 text-[14px]">{durMs} ms</span>
+                                </div>
+                                <div className="flex flex-col gap-0.5">
+                                    <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Computation Status</span>
+                                    <Badge className="w-fit bg-emerald-100 text-emerald-800 font-bold text-[10px]">
+                                        {status}
+                                    </Badge>
+                                </div>
+                            </div>
+                        )}
+
+                        {method && method !== 'all' && (
+                            <div className="pt-2 border-t border-gray-100 flex flex-col gap-0.5">
+                                <span className="font-extrabold text-gray-500 uppercase text-[9px] tracking-widest">Payment Method Filter</span>
+                                <span className="font-bold text-gray-800 text-[12px] uppercase">{method}</span>
+                            </div>
+                        )}
+
+                        <div className="pt-2 border-t border-gray-100">
+                            <span className="font-extrabold text-gray-400 uppercase text-[9px] tracking-widest block mb-0.5">Audit Note</span>
+                            <p className="text-xs font-semibold text-gray-700 leading-snug">{log.details || 'On-screen report metrics generated successfully.'}</p>
                         </div>
                     </div>
                 </div>
@@ -1414,7 +2093,7 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-gray-100 bg-slate-50/80 p-2.5 rounded-xl border border-slate-200/60">
                                     {(newVals.order_date || newVals.order_time) && (
                                         <div className="flex flex-col gap-0.5">
-                                            <span className="font-extrabold text-slate-500 uppercase text-[9px] tracking-widest">Intake Date & Time</span>
+                                            <span className="font-extrabold text-slate-500 uppercase text-[9px] tracking-widest">Date & Time Received</span>
                                             <span className="font-black text-slate-900 text-[12px]">
                                                 {newVals.order_date || '—'} {newVals.order_time ? `@ ${newVals.order_time}` : ''}
                                             </span>
@@ -1422,16 +2101,13 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                                     )}
                                     {(newVals.encoding_time || newVals.efficiency_vs_paper) && (
                                         <div className="flex flex-col gap-0.5">
-                                            <span className="font-extrabold text-slate-500 uppercase text-[9px] tracking-widest">Intake Efficiency</span>
+                                            <span className="font-extrabold text-slate-500 uppercase text-[9px] tracking-widest">Intake Duration</span>
                                             <div className="flex items-center gap-1.5 flex-wrap">
-                                                {newVals.encoding_time && (
+                                                {(newVals.encoding_time || newVals.efficiency_vs_paper) && (
                                                     <span className="font-black text-emerald-700 text-[12px] bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-                                                        {newVals.encoding_time}
+                                                        {newVals.encoding_time || newVals.efficiency_vs_paper}
                                                     </span>
                                                 )}
-                                                <span className="text-[10.5px] font-bold text-gray-600">
-                                                    vs ~5–10m paper manual
-                                                </span>
                                             </div>
                                         </div>
                                     )}
@@ -1587,7 +2263,7 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                             </Button>
                             <Input 
                                 id="activitySearch"
-                                placeholder="Search username, role, action, module, table, date..."
+                                placeholder="Search username, role, action, module, date..."
                                 className="pl-9 h-9 text-xs border-gray-100 bg-gray-50/50 font-medium focus-visible:ring-1 focus-visible:ring-red-600 focus-visible:border-red-600 rounded-xl w-full transition-all"
                                 value={searchTerm}
                                 onChange={(e) => {
@@ -1624,7 +2300,7 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                                 <tr>
                                     <th className="px-4 py-3 text-center text-[11px] font-extrabold text-slate-800 uppercase tracking-wider">User / Role</th>
                                     <th className="px-4 py-3 text-center text-[11px] font-extrabold text-slate-800 uppercase tracking-wider">Action</th>
-                                    <th className="px-4 py-3 text-center text-[11px] font-extrabold text-slate-800 uppercase tracking-wider">Module / Table</th>
+                                    <th className="px-4 py-3 text-center text-[11px] font-extrabold text-slate-800 uppercase tracking-wider">Module</th>
                                     <th className="px-4 py-3 text-center text-[11px] font-extrabold text-slate-800 uppercase tracking-wider">Date & Time</th>
                                     <th className="px-4 py-3 text-center text-[11px] font-extrabold text-slate-800 uppercase tracking-wider">Inspect</th>
                                 </tr>
@@ -1645,24 +2321,6 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                                     </tr>
                                 ) : (
                                     paginatedActivities.map((activity: ActivityLog) => {
-                                        const normalizeDate = (ts: string) => {
-                                            if (!ts) return "";
-                                            if (ts.length > 20 || isNaN(parseInt(ts.substring(0, 2)))) {
-                                                try {
-                                                    const d = new Date(ts);
-                                                    if (!isNaN(d.getTime())) {
-                                                        const mm = String(d.getMonth() + 1).padStart(2, '0');
-                                                        const dd = String(d.getDate()).padStart(2, '0');
-                                                        const yyyy = d.getFullYear();
-                                                        const hh = String(d.getHours()).padStart(2, '0');
-                                                        const mins = String(d.getMinutes()).padStart(2, '0');
-                                                        return `${mm}/${dd}/${yyyy}, ${hh}:${mins}`;
-                                                    }
-                                                } catch (e) { return ts; }
-                                            }
-                                            return ts;
-                                        };
-
                                         const moduleName = getModuleBadge(activity);
                                         const roleName = getFormattedRole(activity.role, activity.user);
 
@@ -1688,19 +2346,24 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                                                     </div>
                                                 </td>
                                                 <td className="px-4 py-3.5 text-center">
-                                                    <Badge variant="outline" className={
-                                                        `font-black uppercase text-[10px] tracking-wider px-2.5 py-0.5 rounded-md border 
-                                                        ${moduleName === 'Services' ? 'border-blue-200 text-blue-700 bg-blue-50' :
-                                                          moduleName === 'Inventory' ? 'border-purple-200 text-purple-700 bg-purple-50' :
-                                                          moduleName === 'Expenses' ? 'border-orange-200 text-orange-700 bg-orange-50' :
-                                                          moduleName === 'User Management' || moduleName === 'Users' ? 'border-emerald-200 text-emerald-700 bg-emerald-50' :
-                                                          moduleName === 'Authentication' ? 'border-cyan-200 text-cyan-700 bg-cyan-50' :
-                                                          moduleName === 'Reports' ? 'border-indigo-200 text-indigo-700 bg-indigo-50' :
-                                                          moduleName === 'Machine Learning' ? 'border-pink-200 text-pink-700 bg-pink-50' :
-                                                          'border-red-200 text-red-700 bg-red-50'}`
-                                                    }>
-                                                        {moduleName}
-                                                    </Badge>
+                                                    <div className="flex flex-col items-center justify-center">
+                                                        <Badge variant="outline" className={
+                                                            `font-black uppercase text-[10px] tracking-wider px-2.5 py-0.5 rounded-md border 
+                                                            ${moduleName === 'Service Management' || moduleName === 'Services' ? 'border-blue-200 text-blue-700 bg-blue-50' :
+                                                              moduleName === 'Inventory Management' || moduleName === 'Inventory' ? 'border-purple-200 text-purple-700 bg-purple-50' :
+                                                              moduleName === 'Expenses' ? 'border-orange-200 text-orange-700 bg-orange-50' :
+                                                              moduleName === 'User Management' || moduleName === 'Users' ? 'border-emerald-200 text-emerald-700 bg-emerald-50' :
+                                                              moduleName === 'Authentication' ? 'border-cyan-200 text-cyan-700 bg-cyan-50' :
+                                                              moduleName === 'Sales Report' || moduleName === 'Reports' ? 'border-indigo-200 text-indigo-700 bg-indigo-50' :
+                                                              moduleName === 'Machine Learning' ? 'border-pink-200 text-pink-700 bg-pink-50' :
+                                                              moduleName === 'Dashboard' ? 'border-amber-200 text-amber-700 bg-amber-50' :
+                                                              moduleName === 'Release Calendar' ? 'border-teal-200 text-teal-700 bg-teal-50' :
+                                                              moduleName === 'Job Order Form' || moduleName === 'Job Orders' ? 'border-red-200 text-red-700 bg-red-50' :
+                                                              'border-slate-200 text-slate-700 bg-slate-50'}`
+                                                        }>
+                                                            {moduleName}
+                                                        </Badge>
+                                                    </div>
                                                 </td>
                                                 <td className="px-4 py-3.5 text-center text-xs text-gray-700 font-bold whitespace-nowrap">
                                                     {normalizeDate(activity.timestamp)}
@@ -1913,27 +2576,35 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                             <div className="p-5 space-y-4 overflow-y-auto custom-scrollbar flex-1 min-h-0">
                                 {/* Summary Banner */}
                                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-3 min-w-0">
-                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block border-b border-slate-200 pb-2">Activity Summary</span>
+                                    <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">Activity Summary</span>
+                                    </div>
                                     <div className="grid grid-cols-2 gap-4 mt-1">
                                         <div className="flex flex-col gap-1 min-w-0">
-                                            <span className="font-extrabold text-slate-400 uppercase text-[9px] tracking-widest">Performed By</span>
+                                            <span className="font-extrabold text-slate-400 uppercase text-[9px] tracking-widest">User / Role</span>
                                             <span className="text-[13px] font-bold text-slate-800 leading-tight truncate">
                                                 <span className="text-red-600 font-black">{selectedLog.user}</span> <span className="text-slate-500 font-medium">({getFormattedRole(selectedLog.role, selectedLog.user)})</span>
                                             </span>
                                         </div>
                                         <div className="flex flex-col gap-1 min-w-0">
-                                            <span className="font-extrabold text-slate-400 uppercase text-[9px] tracking-widest">Event Timestamp</span>
+                                            <span className="font-extrabold text-slate-400 uppercase text-[9px] tracking-widest">Date & Time</span>
                                             <span className="text-[13px] font-bold text-slate-800 leading-tight">
-                                                {selectedLog.timestamp}
+                                                {normalizeDate(selectedLog.timestamp)}
                                             </span>
                                         </div>
-                                        <div className="flex flex-col gap-1 mt-2 border-t border-slate-100 pt-3 min-w-0">
+                                        <div className="flex flex-col gap-0.5 mt-2 border-t border-slate-100 pt-3 min-w-0">
                                             <span className="font-extrabold text-slate-400 uppercase text-[9px] tracking-widest">Action</span>
                                             <span className="text-[13px] font-black text-slate-800 leading-tight">
                                                 {getBusinessActionTitle(selectedLog)}
                                             </span>
                                         </div>
-                                        <div className="flex flex-col gap-1 mt-2 border-t border-slate-100 pt-3 min-w-0">
+                                        <div className="flex flex-col gap-0.5 mt-2 border-t border-slate-100 pt-3 min-w-0">
+                                            <span className="font-extrabold text-slate-400 uppercase text-[9px] tracking-widest">Module</span>
+                                            <span className="text-[13px] font-black text-slate-800 leading-tight">
+                                                {getModuleBadge(selectedLog)}
+                                            </span>
+                                        </div>
+                                        <div className="col-span-2 flex flex-col gap-0.5 mt-1 border-t border-slate-100 pt-2 min-w-0">
                                             <span className="font-extrabold text-slate-400 uppercase text-[9px] tracking-widest">Affected Record</span>
                                             <span className="text-[13px] font-black text-slate-800 leading-tight break-all break-words">
                                                 {getAffectedRecordLabel(selectedLog)}
@@ -1970,13 +2641,15 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                                             (selectedLog.newValues && typeof selectedLog.newValues === 'object' && selectedLog.newValues.details) || 
                                             (selectedLog.oldValues && typeof selectedLog.oldValues === 'object' && selectedLog.oldValues.details) || '';
                                         if (!rawDetails) return null;
+                                        let cleanDetails = String(rawDetails);
+                                        cleanDetails = cleanDetails.replace(/\(saved;\s*no field value changes detected\)/gi, '(Profile verified, no changes detected)');
                                         return (
                                             <div className="mt-1 pt-3 border-t border-slate-200 flex flex-col gap-1.5 min-w-0">
                                                 <span className="font-extrabold text-slate-500 uppercase text-[9px] tracking-widest flex items-center gap-1.5">
                                                     <FileText size={12} className="text-red-500" /> Activity Details & Notes
                                                 </span>
-                                                <div className="p-3 bg-white rounded-lg border border-slate-200 text-xs font-semibold text-slate-800 leading-relaxed shadow-2xs break-all break-words">
-                                                    {String(rawDetails)}
+                                                <div className="p-3 bg-white rounded-lg border border-slate-200 text-xs font-semibold text-slate-800 leading-relaxed shadow-2xs break-words">
+                                                    {cleanDetails}
                                                 </div>
                                             </div>
                                         );
@@ -2020,15 +2693,6 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                                         </div>
                                     </details>
                                 </div>
-                            </div>
-
-                            <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex justify-end shrink-0">
-                                <Button
-                                    onClick={() => setIsLogModalOpen(false)}
-                                    className="h-8 px-4 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs uppercase tracking-wider rounded-lg transition-all"
-                                >
-                                    Close
-                                </Button>
                             </div>
                         </>
                     )}

@@ -1,0 +1,217 @@
+{
+  "files_count": 6,
+  "total_raw_rows": 721,
+  "successfully_parsed": 718,
+  "normalized_format_recovered": 29,
+  "needs_human_review": 3,
+  "truly_invalid": 0,
+  "unique_candidates": 711,
+  "exact_duplicate_rows_count": 7,
+  "exact_duplicate_rows_details": [
+    {
+      "source_filename": "shoelotskey_december_dataset.csv",
+      "source_row": 92,
+      "Order_ID": "ORD-2025-12-17-012",
+      "Control_No": "MISSING",
+      "date_received": "2025-12-17",
+      "customer": "Amil, Amiel Erwin A.",
+      "services": "MRES | FR US + FR Mid",
+      "grand_total": 1275.0,
+      "duplicate_of": "shoelotskey_december_dataset.csv row 90"
+    },
+    {
+      "source_filename": "shoelotskey_january_dataset.csv",
+      "source_row": 83,
+      "Order_ID": "ORD-2026-01-13-005",
+      "Control_No": "MISSING",
+      "date_received": "2026-01-13",
+      "customer": "Aquino, Sir Angelo C.",
+      "services": "MRES + UNY",
+      "grand_total": 675.0,
+      "duplicate_of": "shoelotskey_january_dataset.csv row 70"
+    },
+    {
+      "source_filename": "shoelotskey_january_dataset.csv",
+      "source_row": 94,
+      "Order_ID": "ORD-2026-01-14-011",
+      "Control_No": "MISSING",
+      "date_received": "2026-01-14",
+      "customer": "Maribeth Maniego",
+      "services": "BC (Rush)",
+      "grand_total": 475.0,
+      "duplicate_of": "shoelotskey_january_dataset.csv row 85"
+    },
+    {
+      "source_filename": "shoelotskey_january_dataset.csv",
+      "source_row": 105,
+      "Order_ID": "ORD-2026-01-17-007",
+      "Control_No": "MISSING",
+      "date_received": "2026-01-17",
+      "customer": "Marlan Molera",
+      "services": "BC (Rush)",
+      "grand_total": 475.0,
+      "duplicate_of": "shoelotskey_january_dataset.csv row 100"
+    },
+    {
+      "source_filename": "shoelotskey_january_dataset.csv",
+      "source_row": 106,
+      "Order_ID": "ORD-2026-01-17-008",
+      "Control_No": "MISSING",
+      "date_received": "2026-01-17",
+      "customer": "Jenard S Mallorca",
+      "services": "BC + UNY | FR | FR",
+      "grand_total": 1600.0,
+      "duplicate_of": "shoelotskey_january_dataset.csv row 101"
+    },
+    {
+      "source_filename": "shoelotskey_january_dataset.csv",
+      "source_row": 124,
+      "Order_ID": "ORD-2026-01-20-004",
+      "Control_No": "MISSING",
+      "date_received": "2026-01-20",
+      "customer": "Ethel Bert Tumamac",
+      "services": "MRES",
+      "grand_total": 550.0,
+      "duplicate_of": "shoelotskey_january_dataset.csv row 122"
+    },
+    {
+      "source_filename": "shoelotskey_january_dataset.csv",
+      "source_row": 134,
+      "Order_ID": "ORD-2026-01-23-002",
+      "Control_No": "MISSING",
+      "date_received": "2026-01-13",
+      "customer": "Khim Pamperoda",
+      "services": "BC | BC",
+      "grand_total": 650.0,
+      "duplicate_of": "shoelotskey_january_dataset.csv row 69"
+    }
+  ],
+  "missing_order_id": 0,
+  "duplicate_order_id_count": 3,
+  "duplicate_order_ids": {
+    "ORD-2026-01-17-004": 2,
+    "ORD-2026-01-18-005": 2,
+    "ORD-2025-11-21-008": 2
+  },
+  "missing_control_no": 633,
+  "duplicate_control_no_count": 8,
+  "duplicate_control_nos": {
+    "8/15/2025": 2,
+    "8/15/25": 2,
+    "8/17/2025": 5,
+    "8/18/2025": 2,
+    "082105": 2
+  },
+  "date_rec_valid": 689,
+  "date_rec_recovered": 29,
+  "date_rec_needs_review": 3,
+  "date_rec_invalid": 0,
+  "claim_genuine_valid": 137,
+  "claim_recovered": 2,
+  "claim_text_non_date": 45,
+  "claim_missing": 536,
+  "claim_invalid_ambiguous": 1,
+  "n_potential_ml": 120,
+  "min_turnaround": 1,
+  "max_turnaround": 56,
+  "mean_turnaround": 18.35,
+  "median_turnaround": 15.0,
+  "stdev_turnaround": 12.55,
+  "q1_turnaround": 8,
+  "q3_turnaround": 29,
+  "potential_ml_by_month": {
+    "2025-08": 11,
+    "2025-09": 3,
+    "2025-10": 16,
+    "2025-11": 33,
+    "2025-12": 31,
+    "2026-01": 26
+  },
+  "buckets": {
+    "1-5": 23,
+    "6-10": 17,
+    "11-15": 21,
+    "16-20": 12,
+    "21-25": 9,
+    "26-30": 15,
+    "31-40": 18,
+    "41-50": 4,
+    "51-60": 1
+  },
+  "missing_fields": {
+    "Quantity": 0,
+    "Brand": 238,
+    "Model": 9,
+    "Size": 335,
+    "Color": 721,
+    "Material": 721,
+    "Condition": 695,
+    "Priority": 621,
+    "Grand Total": 18,
+    "Payment Method": 721,
+    "Payment Status": 53
+  },
+  "legacy_reference_matches_count": 61,
+  "legacy_reference_matches_sample": [
+    {
+      "csv_source_record": "shoelotskey_august_dataset.csv row 2 (ORD-2025-08-15-001)",
+      "legacy_ocr_record_id": 66,
+      "match_type": "ORDER_ID_EXACT",
+      "classification": "LEGACY_REFERENCE_MATCH"
+    },
+    {
+      "csv_source_record": "shoelotskey_august_dataset.csv row 3 (ORD-2025-08-15-002)",
+      "legacy_ocr_record_id": 76,
+      "match_type": "ORDER_ID_EXACT",
+      "classification": "LEGACY_REFERENCE_MATCH"
+    },
+    {
+      "csv_source_record": "shoelotskey_august_dataset.csv row 4 (ORD-2025-08-15-003)",
+      "legacy_ocr_record_id": 84,
+      "match_type": "ORDER_ID_EXACT",
+      "classification": "LEGACY_REFERENCE_MATCH"
+    },
+    {
+      "csv_source_record": "shoelotskey_august_dataset.csv row 5 (ORD-2025-08-15-004)",
+      "legacy_ocr_record_id": 88,
+      "match_type": "ORDER_ID_EXACT",
+      "classification": "LEGACY_REFERENCE_MATCH"
+    },
+    {
+      "csv_source_record": "shoelotskey_august_dataset.csv row 6 (ORD-2025-08-15-005)",
+      "legacy_ocr_record_id": 99,
+      "match_type": "ORDER_ID_EXACT",
+      "classification": "LEGACY_REFERENCE_MATCH"
+    },
+    {
+      "csv_source_record": "shoelotskey_august_dataset.csv row 7 (ORD-2025-08-16-001)",
+      "legacy_ocr_record_id": 68,
+      "match_type": "ORDER_ID_EXACT",
+      "classification": "LEGACY_REFERENCE_MATCH"
+    },
+    {
+      "csv_source_record": "shoelotskey_august_dataset.csv row 8 (ORD-2025-08-16-002)",
+      "legacy_ocr_record_id": 142,
+      "match_type": "ORDER_ID_EXACT",
+      "classification": "LEGACY_REFERENCE_MATCH"
+    },
+    {
+      "csv_source_record": "shoelotskey_august_dataset.csv row 9 (ORD-2025-08-17-001)",
+      "legacy_ocr_record_id": 69,
+      "match_type": "ORDER_ID_EXACT",
+      "classification": "LEGACY_REFERENCE_MATCH"
+    },
+    {
+      "csv_source_record": "shoelotskey_august_dataset.csv row 10 (ORD-2025-08-17-002)",
+      "legacy_ocr_record_id": 70,
+      "match_type": "ORDER_ID_EXACT",
+      "classification": "LEGACY_REFERENCE_MATCH"
+    },
+    {
+      "csv_source_record": "shoelotskey_august_dataset.csv row 11 (ORD-2025-08-17-003)",
+      "legacy_ocr_record_id": 71,
+      "match_type": "ORDER_ID_EXACT",
+      "classification": "LEGACY_REFERENCE_MATCH"
+    }
+  ]
+}

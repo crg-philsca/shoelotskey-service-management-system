@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Historical Job Order Data-Quality & Reconciliation Report</title>
+  
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #0b0f19; color: #f1f5f9; margin: 0; padding: 28px; line-height: 1.5; }
+  .container { max-width: 1440px; margin: 0 auto; }
+  .header { background: #111827; padding: 24px 32px; border-radius: 12px; border: 1px solid #1f2937; margin-bottom: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+  .header h1 { margin: 0 0 10px 0; color: #38bdf8; font-size: 26px; font-weight: 800; letter-spacing: -0.02em; }
+  .header p { margin: 0; color: #94a3b8; font-size: 14px; }
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-top: 18px; }
+  .card { background: #111827; padding: 24px; border-radius: 10px; border: 1px solid #1f2937; margin-bottom: 24px; }
+  .card h2 { margin-top: 0; color: #f8fafc; border-bottom: 1px solid #1f2937; padding-bottom: 12px; font-size: 19px; font-weight: 700; }
+  .card h3 { color: #38bdf8; font-size: 15px; margin-top: 20px; margin-bottom: 8px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 13px; }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #1f2937; }
+  th { background: #0f172a; color: #94a3b8; font-weight: 700; text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em; }
+  tr:hover { background: #1e293b50; }
+  .badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.02em; }
+  .badge-success { background: #065f46; color: #34d399; }
+  .badge-danger { background: #991b1b; color: #fca5a5; }
+  .badge-info { background: #075985; color: #38bdf8; }
+  .badge-warning { background: #854d0e; color: #fde047; }
+  code { background: #0f172a; padding: 2px 6px; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; color: #38bdf8; font-size: 12px; }
+  .callout { background: #1e293b; border-left: 4px solid #38bdf8; padding: 14px 18px; border-radius: 0 8px 8px 0; margin: 16px 0; font-size: 13.5px; }
+  .callout-warning { border-left-color: #f59e0b; background: #2d2415; }
+  .callout-success { border-left-color: #10b981; background: #064e3b30; }
+</style>
+
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>Historical Job Order Data-Quality & Reconciliation Report</h1>
+    <p>Comprehensive forensic audit of the 54 imported historical orders, customer transcription annotations, contact mapping, brand/services availability, and release date semantics.</p>
+    <div class="meta-grid">
+      <div><strong>Historical Cohort Size:</strong> 54 Orders</div>
+      <div><strong>Physical Job Order Supported:</strong> 14 Orders (22 Pairs)</div>
+      <div><strong>DSMR-Only Supported:</strong> 40 Orders</div>
+      <div><strong>Status:</strong> READ-ONLY AUDIT FIRST (Zero Mutations Executed)</div>
+    </div>
+  </div>
+
+  <div class="callout callout-info">
+    <strong>CRITICAL ARCHITECTURAL FINDING:</strong> Brand and services are already correctly stored in the relational database (<code>items</code>, <code>services</code>, <code>item_service_mapping</code>) for orders with physical Job Order forms (e.g. Nyx Pantoja, Kenneth Gutierrez, Wendel Fabro). The Order Detail modal renders them completely. In contrast, the Dashboard displays <code>-</code> because (1) September 7 visible rows were DSMR-only transactions where services were never documented in the source, and (2) the Dashboard lacks a compact Brand column. <strong>No database re-import is required or authorized.</strong>
+  </div>
+
+  <div class="card">
+    <h2>1. Customer Name Transcription Annotation Audit & Proposed Cleanup</h2>
+    <p>Research metadata annotations (<code>[best read]</code>, <code>[unclear]</code>) must be removed from operational customer names while preserving transcription confidence in the evidence layer:</p>
+    <table>
+      <thead>
+        <tr><th>Order Number</th><th>Current Customer Name (With Annotation)</th><th>Proposed Clean Name</th><th>Contact Number</th><th>Confidence Level</th><th>Proposed Action</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+  <td><code>ORD-2026-09-07-001</code></td>
+  <td><code style="color:#f87171;">Ben Chavez [best read]</code></td>
+  <td><strong style="color:#34d399;">Ben Chavez</strong></td>
+  <td>—</td>
+  <td><span class="badge badge-info">HIGH_CONFIDENCE_TRANSCRIPTION</span></td>
+  <td><span class="badge badge-warning">REMOVE_ANNOTATION</span></td>
+</tr><tr>
+  <td><code>ORD-2026-09-07-002</code></td>
+  <td><code style="color:#f87171;">Aristotle Gomez [best read]</code></td>
+  <td><strong style="color:#34d399;">Aristotle Gomez</strong></td>
+  <td>—</td>
+  <td><span class="badge badge-info">HIGH_CONFIDENCE_TRANSCRIPTION</span></td>
+  <td><span class="badge badge-warning">REMOVE_ANNOTATION</span></td>
+</tr><tr>
+  <td><code>ORD-2026-09-07-003</code></td>
+  <td><code style="color:#f87171;">Kirk Guvia [best read]</code></td>
+  <td><strong style="color:#34d399;">Kirk Guvia</strong></td>
+  <td>—</td>
+  <td><span class="badge badge-info">HIGH_CONFIDENCE_TRANSCRIPTION</span></td>
+  <td><span class="badge badge-warning">REMOVE_ANNOTATION</span></td>
+</tr><tr>
+  <td><code>ORD-2026-09-07-004</code></td>
+  <td><code style="color:#f87171;">Cont [unclear]</code></td>
+  <td><strong style="color:#34d399;">Cont</strong></td>
+  <td>—</td>
+  <td><span class="badge badge-info">AMBIGUOUS_REQUIRES_HOLD</span></td>
+  <td><span class="badge badge-warning">RETAIN_UNCERTAINTY_IN_EVIDENCE</span></td>
+</tr><tr>
+  <td><code>ORD-2026-09-07-005</code></td>
+  <td><code style="color:#f87171;">Jeulia Hatty [best read]</code></td>
+  <td><strong style="color:#34d399;">Jeulia Hatty</strong></td>
+  <td>—</td>
+  <td><span class="badge badge-info">HIGH_CONFIDENCE_TRANSCRIPTION</span></td>
+  <td><span class="badge badge-warning">REMOVE_ANNOTATION</span></td>
+</tr><tr>
+  <td><code>ORD-2026-09-07-006</code></td>
+  <td><code style="color:#f87171;">Zaira Elida [best read]</code></td>
+  <td><strong style="color:#34d399;">Zaira Elida</strong></td>
+  <td>—</td>
+  <td><span class="badge badge-info">HIGH_CONFIDENCE_TRANSCRIPTION</span></td>
+  <td><span class="badge badge-warning">REMOVE_ANNOTATION</span></td>
+</tr><tr>
+  <td><code>ORD-2026-09-07-007</code></td>
+  <td><code style="color:#f87171;">J. Eduvere [best read]</code></td>
+  <td><strong style="color:#34d399;">J. Eduvere</strong></td>
+  <td>—</td>
+  <td><span class="badge badge-info">HIGH_CONFIDENCE_TRANSCRIPTION</span></td>
+  <td><span class="badge badge-warning">REMOVE_ANNOTATION</span></td>
+</tr><tr>
+  <td><code>ORD-2026-09-08-001</code></td>
+  <td><code style="color:#f87171;">Derick Pucero [best read]</code></td>
+  <td><strong style="color:#34d399;">Derick Pucero</strong></td>
+  <td>—</td>
+  <td><span class="badge badge-info">HIGH_CONFIDENCE_TRANSCRIPTION</span></td>
+  <td><span class="badge badge-warning">REMOVE_ANNOTATION</span></td>
+</tr><tr>
+  <td><code>ORD-2026-09-08-002</code></td>
+  <td><code style="color:#f87171;">Irene de Leon [best read]</code></td>
+  <td><strong style="color:#34d399;">Irene de Leon</strong></td>
+  <td>—</td>
+  <td><span class="badge badge-info">HIGH_CONFIDENCE_TRANSCRIPTION</span></td>
+  <td><span class="badge badge-warning">REMOVE_ANNOTATION</span></td>
+</tr><tr>
+  <td><code>ORD-2026-09-08-004</code></td>
+  <td><code style="color:#f87171;">Danzel Cabaron [best read]</code></td>
+  <td><strong style="color:#34d399;">Danzel Cabaron</strong></td>
+  <td>—</td>
+  <td><span class="badge badge-info">HIGH_CONFIDENCE_TRANSCRIPTION</span></td>
+  <td><span class="badge badge-warning">REMOVE_ANNOTATION</span></td>
+</tr><tr>
+  <td><code>ORD-2026-09-08-006</code></td>
+  <td><code style="color:#f87171;">Oliver [surname unclear]</code></td>
+  <td><strong style="color:#34d399;">Oliver [surname unclear]</strong></td>
+  <td>—</td>
+  <td><span class="badge badge-info">HIGH</span></td>
+  <td><span class="badge badge-warning">CLEAN</span></td>
+</tr><tr>
+  <td><code>ORD-2026-09-08-007</code></td>
+  <td><code style="color:#f87171;">Christian T. [best read]</code></td>
+  <td><strong style="color:#34d399;">Christian T.</strong></td>
+  <td>—</td>
+  <td><span class="badge badge-info">HIGH_CONFIDENCE_TRANSCRIPTION</span></td>
+  <td><span class="badge badge-warning">REMOVE_ANNOTATION</span></td>
+</tr><tr>
+  <td><code>ORD-2026-09-08-008</code></td>
+  <td><code style="color:#f87171;">MJ Sumaridos [best read]</code></td>
+  <td><strong style="color:#34d399;">MJ Sumaridos</strong></td>
+  <td>—</td>
+  <td><span class="badge badge-info">HIGH_CONFIDENCE_TRANSCRIPTION</span></td>
+  <td><span class="badge badge-warning">REMOVE_ANNOTATION</span></td>
+</tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>2. Representative Records Trace (Database vs. API vs. Dashboard UI)</h2>
+    <table>
+      <thead>
+        <tr><th>Order #</th><th>Customer Name</th><th>Contact</th><th>Pairs</th><th>Brands</th><th>Services</th><th>Order Date</th><th>Expected Date</th><th>Total</th><th>Evidence Source</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+      <td><strong>ORD-2026-09-07-001</strong></td>
+      <td>Ben Chavez [best read]</td>
+      <td>—</td>
+      <td>0 PR</td>
+      <td>— (DSMR-only)</td>
+      <td>— (DSMR-only)</td>
+      <td>2026-09-07</td>
+      <td><code>2026-09-07</code></td>
+      <td>₱2,100.00</td>
+      <td>DSMR-only</td>
+    </tr><tr>
+      <td><strong>ORD-2026-09-07-002</strong></td>
+      <td>Aristotle Gomez [best read]</td>
+      <td>—</td>
+      <td>0 PR</td>
+      <td>— (DSMR-only)</td>
+      <td>— (DSMR-only)</td>
+      <td>2026-09-07</td>
+      <td><code>2026-09-07</code></td>
+      <td>₱1,650.00</td>
+      <td>DSMR-only</td>
+    </tr><tr>
+      <td><strong>ORD-2026-09-07-003</strong></td>
+      <td>Kirk Guvia [best read]</td>
+      <td>—</td>
+      <td>0 PR</td>
+      <td>— (DSMR-only)</td>
+      <td>— (DSMR-only)</td>
+      <td>2026-09-07</td>
+      <td><code>2026-09-07</code></td>
+      <td>₱550.00</td>
+      <td>DSMR-only</td>
+    </tr><tr>
+      <td><strong>ORD-2026-09-07-004</strong></td>
+      <td>Cont [unclear]</td>
+      <td>—</td>
+      <td>0 PR</td>
+      <td>— (DSMR-only)</td>
+      <td>— (DSMR-only)</td>
+      <td>2026-09-07</td>
+      <td><code>2026-09-07</code></td>
+      <td>₱325.00</td>
+      <td>DSMR-only</td>
+    </tr><tr>
+      <td><strong>ORD-2026-09-14-009</strong></td>
+      <td>Nyx Pantoja</td>
+      <td>—</td>
+      <td>3 PR</td>
+      <td>Palladium, Palladium, Palladium</td>
+      <td>Basic Cleaning, Basic Cleaning, Full Reglue</td>
+      <td>2026-09-14</td>
+      <td><code>2026-09-14</code></td>
+      <td>₱1,225.00</td>
+      <td>DSMR + Paper JO</td>
+    </tr><tr>
+      <td><strong>ORD-2026-09-14-010</strong></td>
+      <td>Kenneth Gutierrez</td>
+      <td>0950</td>
+      <td>6 PR</td>
+      <td>Adidas, Oncloud, Nike, General Shoe, Adidas, Nike</td>
+      <td>Basic Cleaning, Basic Cleaning, Midsole Full Reglue, Midsole Full Reglue, Undersole Full Reglue, Full Reglue Midsole</td>
+      <td>2026-09-14</td>
+      <td><code>2026-09-14</code></td>
+      <td>₱2,900.00</td>
+      <td>DSMR + Paper JO</td>
+    </tr><tr>
+      <td><strong>ORD-2026-09-12-001</strong></td>
+      <td>Wendel Fabro</td>
+      <td>—</td>
+      <td>3 PR</td>
+      <td>General Shoe, Adidas, Nike</td>
+      <td>Minor Reglue, Full Reglue, Undersole Full Reglue</td>
+      <td>2026-09-12</td>
+      <td><code>2026-09-12</code></td>
+      <td>₱1,725.00</td>
+      <td>DSMR + Paper JO</td>
+    </tr><tr>
+      <td><strong>ORD-2026-09-14-007</strong></td>
+      <td>Karl Agnas</td>
+      <td>—</td>
+      <td>1 PR</td>
+      <td>Salomon</td>
+      <td>Basic Cleaning</td>
+      <td>2026-09-14</td>
+      <td><code>2026-09-14</code></td>
+      <td>₱325.00</td>
+      <td>DSMR + Paper JO</td>
+    </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>3. Release Date Semantics Code Trace & Correction</h2>
+    <ul>
+      <li><strong>Frontend Label:</strong> Dashboard column header currently reads <code>Release Date</code>.</li>
+      <li><strong>Frontend Property:</strong> Bound to <code>order.predictedCompletionDate</code>.</li>
+      <li><strong>API Serializer:</strong> Maps from SQLAlchemy <code>Order.expected_at</code>.</li>
+      <li><strong>Root Cause of Same-Day Date:</strong> The historical import script stored a derived storage anchor (<code>order_date + 18:00:00</code>) to satisfy the <code>NOT NULL</code> constraint on <code>Order.expected_at</code>. When formatted as <code>MM/dd/yy</code>, it produced identical Order Date and Release Date (e.g. <code>09/07/26</code>).</li>
+      <li><strong>Proposed UI Correction:</strong>
+        <ol>
+          <li>Rename table header to <strong>EXPECTED RELEASE</strong> when viewing New Orders.</li>
+          <li>For historical orders where expected date is solely a derived storage anchor, display <code>—</code> (or <code>Not documented</code>).</li>
+          <li>Never fallback to Order Date as a surrogate release date.</li>
+        </ol>
+      </li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>4. Status & Lifecycle Integrity (22 Quarantined DSMR Claims)</h2>
+    <p>All 54 historical orders currently maintain <code>status_id = 1 (New Order)</code> with <code>released_at = NULL</code> and <code>claimed_at = NULL</code>. This conservative policy was established to prevent manufactured timestamps. The 22 DSMR Claim transactions remain quarantined in the evidence layer. To prevent fabricating midnight pickup timestamps (<code>00:00:00</code>), claim linkages will remain in evidence records until explicit date-only historical outcome presentation is authorized.</p>
+  </div>
+</div>
+</body>
+</html>

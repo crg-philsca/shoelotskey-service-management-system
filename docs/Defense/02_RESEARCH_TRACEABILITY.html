@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shoelotskey SMS - Checkpoint 2: Research Alignment & Traceability Matrix</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #0284c7;
+      --primary-dark: #0369a1;
+      --primary-light: #e0f2fe;
+      --accent: #f59e0b;
+      --accent-light: #fef3c7;
+      --success: #10b981;
+      --success-light: #dcfce7;
+      --danger: #ef4444;
+      --danger-light: #fee2e2;
+      --purple: #8b5cf6;
+      --purple-light: #ede9fe;
+      --teal: #0d9488;
+      --teal-light: #ccfbf1;
+      --slate-900: #0f172a;
+      --slate-800: #1e293b;
+      --slate-700: #334155;
+      --slate-600: #475569;
+      --slate-500: #64748b;
+      --slate-100: #f1f5f9;
+      --slate-50: #f8fafc;
+      --border: #e2e8f0;
+      --card-bg: #ffffff;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.08);
+      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: #f8fafc;
+      color: var(--slate-900);
+      line-height: 1.6;
+      padding: 24px 16px;
+    }
+
+    .container {
+      max-width: 1440px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg);
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    .header-banner {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 45%, #0369a1 100%);
+      color: #ffffff;
+      padding: 36px 32px;
+      border-bottom: 4px solid var(--accent);
+    }
+
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .badge-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 9999px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .badge-cp2 { background: rgba(2, 132, 199, 0.25); color: #7dd3fc; border: 1px solid rgba(2, 132, 199, 0.45); }
+    .badge-trace { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); }
+    .badge-audit { background: rgba(245, 158, 11, 0.2); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.4); }
+
+    .header-title {
+      font-size: 2.0rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+    }
+
+    .header-subtitle {
+      font-size: 1.0rem;
+      color: #cbd5e1;
+      max-width: 1100px;
+      margin-bottom: 20px;
+      line-height: 1.55;
+    }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      background: rgba(255, 255, 255, 0.08);
+      padding: 16px 20px;
+      border-radius: var(--radius-md);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      font-size: 0.84rem;
+    }
+
+    .meta-item strong {
+      display: block;
+      color: #94a3b8;
+      font-size: 0.70rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 2px;
+    }
+
+    .meta-item span { color: #f8fafc; font-weight: 600; }
+
+    .content-body { padding: 32px 30px; }
+
+    h2 {
+      font-size: 1.35rem;
+      font-weight: 800;
+      color: var(--slate-900);
+      margin: 28px 0 14px 0;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    h2:first-of-type { margin-top: 0; }
+
+    h3 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--primary-dark);
+      margin: 20px 0 10px 0;
+    }
+
+    p { margin-bottom: 12px; color: var(--slate-700); font-size: 0.92rem; }
+
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 14px;
+      margin: 18px 0 24px 0;
+    }
+
+    .kpi-card {
+      background: var(--slate-50);
+      border-radius: var(--radius-md);
+      padding: 16px 18px;
+      border: 1px solid var(--border);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .kpi-card::before { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; }
+    .kpi-card.blue::before { background: var(--primary); }
+    .kpi-card.green::before { background: var(--success); }
+    .kpi-card.purple::before { background: var(--purple); }
+    .kpi-card.amber::before { background: var(--accent); }
+
+    .kpi-title { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--slate-500); margin-bottom: 4px; }
+    .kpi-value { font-size: 1.6rem; font-weight: 800; color: var(--slate-900); line-height: 1.1; margin-bottom: 3px; }
+    .kpi-sub { font-size: 0.76rem; color: var(--slate-600); }
+
+    .callout {
+      padding: 16px 18px;
+      border-radius: var(--radius-md);
+      margin: 16px 0;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      border: 1px solid transparent;
+      font-size: 0.90rem;
+    }
+
+    .callout-success { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
+    .callout-warning { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+    .callout-danger { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+    .callout-info { background: #f0f9ff; border-color: #bae6fd; color: #075985; }
+
+    .callout-icon { font-size: 1.25rem; line-height: 1; flex-shrink: 0; margin-top: 2px; }
+    .callout-content strong { display: block; margin-bottom: 3px; font-size: 0.94rem; }
+
+    .table-responsive {
+      overflow-x: auto;
+      margin: 16px 0 22px 0;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
+    }
+
+    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.85rem; }
+    thead { background: #f1f5f9; color: var(--slate-800); }
+    th { padding: 11px 12px; font-weight: 700; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 2px solid var(--border); }
+    td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; color: var(--slate-700); }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f8fafc; }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 0.70rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .tag-aligned { background: var(--success-light); color: #065f46; border: 1px solid #a7f3d0; }
+    .tag-partial { background: var(--accent-light); color: #92400e; border: 1px solid #fde68a; }
+    .tag-contradict { background: var(--danger-light); color: #991b1b; border: 1px solid #fecaca; }
+
+    .dimension-card {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 20px 22px;
+      margin-bottom: 18px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .dimension-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .dimension-title {
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: var(--slate-900);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .flow-chain {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      background: var(--slate-50);
+      padding: 14px 16px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      margin: 10px 0;
+      font-size: 0.86rem;
+    }
+
+    .flow-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .flow-badge {
+      font-size: 0.70rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      padding: 2px 6px;
+      border-radius: 4px;
+      width: 100px;
+      flex-shrink: 0;
+      text-align: center;
+    }
+
+    .flow-badge.q { background: var(--primary-light); color: var(--primary-dark); }
+    .flow-badge.o { background: var(--teal-light); color: var(--teal); }
+    .flow-badge.m { background: var(--purple-light); color: var(--purple); }
+    .flow-badge.r { background: var(--success-light); color: #065f46; }
+    .flow-badge.c { background: #fef3c7; color: #92400e; }
+    .flow-badge.p { background: #ffe4e6; color: #9f1239; }
+
+    .flow-text { color: var(--slate-800); }
+
+    .footer {
+      background: #f8fafc;
+      padding: 18px 30px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 0.80rem;
+      color: var(--slate-500);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    
+    <header class="header-banner">
+      <div class="badge-row">
+        <span class="badge-pill badge-cp2">CHECKPOINT 2 — RESEARCH ALIGNMENT AUDIT</span>
+        <span class="badge-pill badge-trace">6/6 Dimensions Traced End-to-End</span>
+        <span class="badge-pill badge-audit">Problem &rarr; RQ &rarr; Obj &rarr; Results &rarr; Conclusions &rarr; PPT</span>
+      </div>
+
+      <h1 class="header-title">Checkpoint 2: Complete Research Alignment & Traceability Matrix</h1>
+      <p class="header-subtitle">
+        An exhaustive academic audit establishing end-to-end alignment across the entire research chain: Problem Statement, Research Questions (RQ 1–6), Specific Objectives (Obj 1–6), System Modules, Methodology, Evaluation Instruments (TAM & ISO/IEC 25010:2023), Chapter 4 Findings, Chapter 5 Conclusions & Recommendations, and Defense Slide Deck.
+      </p>
+
+      <div class="meta-grid">
+        <div class="meta-item">
+          <strong>Research Domain</strong>
+          <span>Aviation Information Technology (MSME Service Ops)</span>
+        </div>
+        <div class="meta-item">
+          <strong>Alignment Integrity</strong>
+          <span>6 of 6 Core Dimensions Structurally Connected</span>
+        </div>
+        <div class="meta-item">
+          <strong>Audited Manuscript</strong>
+          <span>Authoritative 155-Page Complete Document</span>
+        </div>
+        <div class="meta-item">
+          <strong>Audited Slide Deck</strong>
+          <span>17-Slide Final Presentation (Sept 22, 2026)</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="content-body">
+
+      <!-- Executive KPIs -->
+      <div class="kpi-row">
+        <div class="kpi-card green">
+          <div class="kpi-title">Structural Alignment</div>
+          <div class="kpi-value">100%</div>
+          <div class="kpi-sub">All 6 RQs map to Objectives 1–6</div>
+        </div>
+        <div class="kpi-card blue">
+          <div class="kpi-title">Instrument Parity</div>
+          <div class="kpi-value">100%</div>
+          <div class="kpi-sub">TAM (20 items) & ISO (45 items)</div>
+        </div>
+        <div class="kpi-card amber">
+          <div class="kpi-title">Identified Discrepancies</div>
+          <div class="kpi-value">4 Gaps</div>
+          <div class="kpi-sub">Table jumps, narrative vs table GWM</div>
+        </div>
+        <div class="kpi-card purple">
+          <div class="kpi-title">Defense Slide Parity</div>
+          <div class="kpi-value">Verified</div>
+          <div class="kpi-sub">Slides 3, 7, 8, 9, 10, 11, 12, 13, 14</div>
+        </div>
+      </div>
+
+      <!-- Master Traceability Table -->
+      <h2>1. The Comprehensive Research Traceability Matrix</h2>
+      <p>
+        The table below tracks every research dimension across all levels of the academic and system architecture, identifying exact status, evidence sources, and required remediations:
+      </p>
+
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Dim</th>
+              <th>Research Question & Objective</th>
+              <th>System Module</th>
+              <th>Methodology & Measurement</th>
+              <th>Chapter 4 Result Evidence</th>
+              <th>Chapter 5 Finding & Conclusion</th>
+              <th>Presentation Slide</th>
+              <th>Audit Status & Discrepancy</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>1</strong></td>
+              <td><strong>RQ1 & Obj 1:</strong> Comparative analysis of manual paper logbook vs. digital system (record accessibility, retrieval time, data accuracy).</td>
+              <td>Job Order Summary Management (`/orders`, `JobOrderForm.tsx`, `JobOrders.tsx`).</td>
+              <td>10 randomly selected retrieval trials; 2-week daily observation of errors; percentage reduction formula.</td>
+              <td><strong>Table 2:</strong> Retrieval down 92.12% (5.20m &rarr; 0.41m).<br><strong>Table 3:</strong> Duplicate entries 2–3/day &rarr; 0; corrections &lt;1/day.<br><strong>Table 4:</strong> Summary table.</td>
+              <td><strong>Finding 1 & Conclusion 1:</strong> Digital storage substantially accelerated retrieval and eliminated paper duplication.</td>
+              <td><strong>Slides 3, 7, 9</strong></td>
+              <td><span class="tag tag-aligned">ALIGNED</span><br><small style="color: #64748b;">Fix RQ1 ending punctuation.</small></td>
+            </tr>
+            <tr>
+              <td><strong>2</strong></td>
+              <td><strong>RQ2 & Obj 2:</strong> Machine learning model performance in predicting service turnaround duration and release dates using historical service data.</td>
+              <td>ML Completion Date Engine (`historical_ml_engine.py`, Option B UI on Order Form).</td>
+              <td>119 validated orders (714 raw receipts); chronological split: 93 dev (Aug–Dec 2025), 26 locked test (Jan 2026); 13 features; MAE, RMSE, $R^2$.</td>
+              <td><strong>Table 5:</strong> 10 representative test rows.<br><strong>Table 6:</strong> Complete test set: MAE = 8.50 d, RMSE = 10.11 d, $R^2 = 0.129$. Benchmark &ge; 0.85 not achieved; designated ADVISORY.</td>
+              <td><strong>Finding 2 & Conclusion 2:</strong> Deployed as advisory estimate; official release dates remain governed by deterministic Business Rules.</td>
+              <td><strong>Slides 3, 6, 8, 11, 15</strong></td>
+              <td><span class="tag tag-partial">PARTIAL</span><br><small style="color: #92400e;">Slide 11 calls N=26 a '10-record sample'. Clarify in PPT.</small></td>
+            </tr>
+            <tr>
+              <td><strong>3</strong></td>
+              <td><strong>RQ3 & Obj 3:</strong> Impact of real-time analytics dashboard on reporting efficiency, information access, and decision-making.</td>
+              <td>Dashboard & Sales Reporting (`/dashboard`, `/reports`, `SalesReport.tsx`).</td>
+              <td>Comparative report generation timing test (7 reports: Daily, Weekly, Monthly, Quarterly, Annual, Expenses, ROI) + 3-item survey (N=6).</td>
+              <td><strong>Table 7:</strong> Report generation time down 99.98% (43.71m &rarr; 0.43s).<br><strong>Table 8:</strong> Dashboard Impact rated <strong>3.83 / 4.00 (Highly Acceptable)</strong> by shop management.</td>
+              <td><strong>Finding 3 & Conclusion 3:</strong> Transformed administrative productivity and provided immediate operational visibility.</td>
+              <td><strong>Slides 3, 9, 10</strong></td>
+              <td><span class="tag tag-aligned">ALIGNED</span><br><small style="color: #64748b;">Confirm 0.43 seconds vs minutes units.</small></td>
+            </tr>
+            <tr>
+              <td><strong>4</strong></td>
+              <td><strong>RQ4 & Obj 4:</strong> Software product quality compliance based on ISO/IEC 25010 standards across 9 quality characteristics.</td>
+              <td>Full-stack system architecture (React SPA, FastAPI backend, PostgreSQL on Heroku, Bcrypt, JWT, RBAC, audit logs).</td>
+              <td>45-item survey across 9 characteristics (Functional Suitability, Performance, Compatibility, Interaction, Reliability, Security, Maintainability, Flexibility, Safety) evaluated by 5 IT experts (4-point scale).</td>
+              <td><strong>Tables 9–19 & 24:</strong> All 9 characteristics rated Highly Acceptable. Composite GWM = <strong>3.71 / 4.00</strong>. Highest: Flexibility (3.84); Lowest: Functional & Safety (3.64).</td>
+              <td><strong>Finding 4 & Conclusion 4:</strong> Confirmed software engineering robustness and institutional quality compliance.</td>
+              <td><strong>Slides 3, 7, 13</strong></td>
+              <td><span class="tag tag-contradict">CONTRADICTION</span><br><small style="color: #991b1b;">Narrative says Reliability 3.76; Table 13/24 say 3.72. Table jump 13&rarr;16.</small></td>
+            </tr>
+            <tr>
+              <td><strong>5</strong></td>
+              <td><strong>RQ5 & Obj 5:</strong> Level of user acceptance based on the Technology Acceptance Model (TAM) measuring PU, PEOU, BI, and ASU.</td>
+              <td>End-user interfaces for Owner and Staff (intake form, inventory, calendar, reporting).</td>
+              <td>Total population census of Shoelotskey personnel ($N=6$: 2 owners, 4 staff); 2-week hands-on pilot testing (Sept 2–16, 2026); 20-item survey on 4-point scale.</td>
+              <td><strong>Tables 20–24:</strong> PU = 4.00, PEOU = 3.89, BI = 3.61, ASU = 4.00. Overall TAM GWM = <strong>3.88 / 4.00 (Highly Acceptable)</strong>.</td>
+              <td><strong>Finding 5 & Conclusion 5:</strong> Demonstrates high perceived usefulness and full operational adoption by shop staff.</td>
+              <td><strong>Slides 3, 7, 12</strong></td>
+              <td><span class="tag tag-aligned">ALIGNED</span><br><small style="color: #64748b;">Slide 12: Note that N=6 is 100% census.</small></td>
+            </tr>
+            <tr>
+              <td><strong>6</strong></td>
+              <td><strong>RQ6 & Obj 6:</strong> Recommended system enhancements and additional features for future researchers.</td>
+              <td>Targeted enhancement roadmap (dropdown masterfiles, inventory audit logs, SMS webhooks, WCAG styling).</td>
+              <td>Qualitative comments from Part III of IT expert evaluation forms; frequency & percentage distribution ($P = f / N * 100$).</td>
+              <td><strong>Table 25:</strong> Ranked suggestions: Dropdown flexibility (60%, Rank 1), Inventory audit logs (40%, Rank 2), SMS notifications (40%, Rank 2), ML retraining (20%, Rank 4).</td>
+              <td><strong>Finding 6, Conclusion 6 & Recs 1–6:</strong> Actionable roadmap derived directly from expert feedback.</td>
+              <td><strong>Slides 3, 14, 15</strong></td>
+              <td><span class="tag tag-partial">CROSS-REF TYPO</span><br><small style="color: #92400e;">Page 144 refers to 'Table 24' instead of 'Table 25'.</small></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Dimension-by-Dimension Deep Dives -->
+      <h2>2. Deep-Dive Chain Audits by Research Dimension</h2>
+
+      <!-- Dimension 1 Card -->
+      <div class="dimension-card">
+        <div class="dimension-header">
+          <div class="dimension-title">
+            <span style="color: var(--primary);">#1</span> Manual vs. Digital Comparative Analysis
+          </div>
+          <span class="tag tag-aligned">ALIGNED</span>
+        </div>
+        <div class="flow-chain">
+          <div class="flow-step">
+            <span class="flow-badge q">Problem</span>
+            <span class="flow-text">Manual logbooks cause record fragmentation, slow claiming retrieval (3–10 min), and frequent encoding errors (2–3 daily corrections).</span>
+          </div>
+          <div class="flow-step">
+            <span class="flow-badge o">Objective 1</span>
+            <span class="flow-text">Conduct a comparative analysis between existing manual paper-based system and developed digital system in terms of accessibility, retrieval time, and accuracy.</span>
+          </div>
+          <div class="flow-step">
+            <span class="flow-badge m">Methodology</span>
+            <span class="flow-text">10 retrieval trials using identical order records in manual logbook vs. digital search; daily observation of duplicate/incomplete records over 2 weeks.</span>
+          </div>
+          <div class="flow-step">
+            <span class="flow-badge r">Chapter 4</span>
+            <span class="flow-text"><strong>Table 2:</strong> Mean retrieval time reduced from 5.20 min to 0.41 min (<strong>92.12% reduction</strong>). <strong>Table 3:</strong> Duplicate entries reduced from 2–3/day to 0.</span>
+          </div>
+          <div class="flow-step">
+            <span class="flow-badge c">Chapter 5</span>
+            <span class="flow-text"><strong>Conclusion 1:</strong> Digital centralization eliminated retrieval bottlenecks and manual duplication errors.</span>
+          </div>
+          <div class="flow-step">
+            <span class="flow-badge p">Slide Deck</span>
+            <span class="flow-text"><strong>Slide 9:</strong> Highlights 92.12% retrieval reduction and automated field validation with zero duplicates.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dimension 2 Card -->
+      <div class="dimension-card">
+        <div class="dimension-header">
+          <div class="dimension-title">
+            <span style="color: var(--primary);">#2</span> Machine Learning Service Turnaround Prediction
+          </div>
+          <span class="tag tag-partial">PARTIAL / REQUIRES CLARIFICATION</span>
+        </div>
+        <div class="flow-chain">
+          <div class="flow-step">
+            <span class="flow-badge q">Problem</span>
+            <span class="flow-text">Service completion estimation relies entirely on subjective staff memory, causing inconsistent customer pickup dates and workload imbalances.</span>
+          </div>
+          <div class="flow-step">
+            <span class="flow-badge o">Objective 2</span>
+            <span class="flow-text">Evaluate the machine learning model for predicting service turnaround duration and release dates using historical service data based on regression metrics.</span>
+          </div>
+          <div class="flow-step">
+            <span class="flow-badge m">Methodology</span>
+            <span class="flow-text">119 validated orders from 714 paper receipts; chronological split: 93 dev (Aug–Dec 2025) for 5-fold expanding-window CV, 26 locked test (Jan 2026); 13 features; target: claimed_date - date_received.</span>
+          </div>
+          <div class="flow-step">
+            <span class="flow-badge r">Chapter 4</span>
+            <span class="flow-text"><strong>Table 5:</strong> 10 representative test rows. <strong>Table 6:</strong> Complete test set: MAE = 8.50 days, RMSE = 10.11 days, R&sup2; = 0.129. Benchmark &ge; 0.85 not achieved; designated strictly advisory.</span>
+          </div>
+          <div class="flow-step">
+            <span class="flow-badge c">Chapter 5</span>
+            <span class="flow-text"><strong>Conclusion 2:</strong> Deployed as advisory estimate under Option B; official release dates remain determined by deterministic Business Rules.</span>
+          </div>
+          <div class="flow-step">
+            <span class="flow-badge p">Slide Deck</span>
+            <span class="flow-text"><strong>Slide 8:</strong> Dataset split. <strong>Slide 11:</strong> MAE 8.50, RMSE 10.11, R&sup2; 0.129. <span style="color: var(--danger); font-weight: bold;">(Slide 11 incorrectly says '10-record test sample' &rarr; fix to '26-record test set')</span>.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dimension 3 Card -->
+      <div class="dimension-card">
+        <div class="dimension-header">
+          <div class="dimension-title">
+            <span style="color: var(--primary);">#3</span> Real-Time Analytics Dashboard & Reporting Efficiency
+          </div>
+          <span class="tag tag-aligned">ALIGNED</span>
+        </div>
+        <div class="flow-chain">
+          <div class="flow-step">
+            <span class="flow-badge q">Problem</span>
+            <span class="flow-text">Compiling manual sales, expense, and performance summaries takes 1 to 2 hours per report, reducing managerial productivity.</span>
+          </div>
+          <div class="flow-step">
+            <span class="flow-badge o">Objective 3</span>
+            <span class="flow-text">Determine the impact of real-time analytics in the Sales Report Module on reporting efficiency by assessing generation time for sales, expense, and ROI reports.</span>
+          </div>
+          <div class="flow-step">
+            <span class="flow-badge m">Methodology</span>
+            <span class="flow-text">Timing comparison across 7 report types; survey of 6 shop personnel on access to information, monitoring, and decision support (4-point scale).</span>
+          </div>
+          <div class="flow-step">
+            <span class="flow-badge r">Chapter 4</span>
+            <span class="flow-text"><strong>Table 7:</strong> Report generation time dropped from 43.71 min to 0.43 sec (<strong>99.98% reduction</strong>). <strong>Table 8:</strong> Dashboard Impact GWM = <strong>3.83 / 4.00</strong> (Highly Acceptable).</span>
+          </div>
+          <div class="flow-step">
+            <span class="flow-badge c">Chapter 5</span>
+            <span class="flow-text"><strong>Conclusion 3:</strong> Substantially accelerated report preparation and enabled evidence-based decision-making.</span>
+          </div>
+          <div class="flow-step">
+            <span class="flow-badge p">Slide Deck</span>
+            <span class="flow-text"><strong>Slide 10:</strong> Bar chart comparing manual vs. dashboard generation times; highlights 43.71 min &rarr; ~0.43 sec and 3.83 rating.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dimension 4 Card -->
+      <div class="dimension-card">
+        <div class="dimension-header">
+          <div class="dimension-title">
+            <span style="color: var(--primary);">#4</span> Software Quality Evaluation (ISO/IEC 25010:2023)
+          </div>
+          <span class="tag tag-contradict">CONTRADICTION & NUMBERING GAP</span>
+        </div>
+        <div class="flow-chain">
+          <div class="flow-step">
+            <span class="flow-badge q">Problem</span>
+            <span class="flow-text">Lack of standardized evaluation of system quality, security, and maintainability for small-scale shoe repair operations.</span>
+          </div>
+          <div class="flow-step">
+            <span class="flow-badge o">Objective 4</span>
+            <span class="flow-text">Evaluate the effectiveness of the developed system based on ISO/IEC 25010 across Functional Suitability, Performance, Compatibility, Interaction Capability, Reliability, Security, Maintainability, Flexibility, Safety.</span>
+          </div>
+          <div class="flow-step">
+            <span class="flow-badge m">Methodology</span>
+            <span class="flow-text">45-item survey (5 items/characteristic) evaluated by 5 external IT experts on a 4-point forced-choice Likert scale.</span>
+          </div>
+          <div class="flow-step">
+            <span class="flow-badge r">Chapter 4</span>
+            <span class="flow-text"><strong>Tables 9–19 & 24:</strong> Composite GWM = <strong>3.71 / 4.00</strong> (Highly Acceptable). <span style="color: var(--danger); font-weight: bold;">(Discrepancy: Narrative on p. 127 says Reliability is 3.76, while Table 13 and Table 24 say 3.72. Table numbering skips Tables 14 & 15)</span>.</span>
+          </div>
+          <div class="flow-step">
+            <span class="flow-badge c">Chapter 5</span>
+            <span class="flow-text"><strong>Conclusion 4:</strong> Deployed system conforms to all 9 ISO 25010:2023 quality dimensions. <span style="color: var(--danger); font-weight: bold;">(Repeats 3.76 typo on p. 149 &rarr; fix to 3.72)</span>.</span>
+          </div>
+          <div class="flow-step">
+            <span class="flow-badge p">Slide Deck</span>
+            <span class="flow-text"><strong>Slide 13:</strong> Correctly shows all 9 characteristics (Reliability = 3.72). <span style="color: var(--danger); font-weight: bold;">(Slide 7 has typo 'ISO/EIC 25010' &rarr; fix to 'ISO/IEC 25010')</span>.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dimension 5 Card -->
+      <div class="dimension-card">
+        <div class="dimension-header">
+          <div class="dimension-title">
+            <span style="color: var(--primary);">#5</span> Technology Acceptance Model (TAM)
+          </div>
+          <span class="tag tag-aligned">ALIGNED</span>
+        </div>
+        <div class="flow-chain">
+          <div class="flow-step">
+            <span class="flow-badge q">Problem</span>
+            <span class="flow-text">Resistance to adopting complex digital software by non-technical shop personnel accustomed to physical paper notebooks.</span>
+          </div>
+          <div class="flow-step">
+            <span class="flow-badge o">Objective 5</span>
+            <span class="flow-text">Measure user acceptance of the developed system among Shoelotskey staff and management using TAM (PU, PEOU, BI, ASU).</span>
+          </div>
+          <div class="flow-step">
+            <span class="flow-badge m">Methodology</span>
+            <span class="flow-text">Total population census of shop personnel (N=6: 2 owners, 4 staff); 2-week hands-on pilot testing (Sept 2–16, 2026); 4-point scale.</span>
+          </div>
+          <div class="flow-step">
+            <span class="flow-badge r">Chapter 4</span>
+            <span class="flow-text"><strong>Tables 20–24:</strong> PU = 4.00, PEOU = 3.89, BI = 3.61, ASU = 4.00. Overall TAM GWM = <strong>3.88 / 4.00</strong> (Highly Acceptable).</span>
+          </div>
+          <div class="flow-step">
+            <span class="flow-badge c">Chapter 5</span>
+            <span class="flow-text"><strong>Conclusion 5:</strong> High operational acceptance and daily utilization by all participating personnel.</span>
+          </div>
+          <div class="flow-step">
+            <span class="flow-badge p">Slide Deck</span>
+            <span class="flow-text"><strong>Slide 12:</strong> Bar chart showing all constructs; PU & ASU highest at 4.00; BI at 3.61.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dimension 6 Card -->
+      <div class="dimension-card">
+        <div class="dimension-header">
+          <div class="dimension-title">
+            <span style="color: var(--primary);">#6</span> System Enhancements & Recommendations
+          </div>
+          <span class="tag tag-partial">PARTIAL / CROSS-REF TYPO</span>
+        </div>
+        <div class="flow-chain">
+          <div class="flow-step">
+            <span class="flow-badge q">Problem</span>
+            <span class="flow-text">Initial system scope may require ongoing enhancements as the micro-enterprise expands its service offerings and transaction volume.</span>
+          </div>
+          <div class="flow-step">
+            <span class="flow-badge o">Objective 6</span>
+            <span class="flow-text">Recommend possible system enhancements by identifying improvements and additional features for future researchers.</span>
+          </div>
+          <div class="flow-step">
+            <span class="flow-badge m">Methodology</span>
+            <span class="flow-text">Frequency and percentage distribution ranking of qualitative suggestions from Part III of IT expert evaluation forms.</span>
+          </div>
+          <div class="flow-step">
+            <span class="flow-badge r">Chapter 4</span>
+            <span class="flow-text"><strong>Table 25:</strong> Ranked suggestions: Dropdown flexibility (60%), Inventory audit logs (40%), SMS notifications (40%), ML retraining (20%), API validation (20%). <span style="color: var(--danger); font-weight: bold;">(Page 144 erroneously refers to Table 24 instead of Table 25)</span>.</span>
+          </div>
+          <div class="flow-step">
+            <span class="flow-badge c">Chapter 5</span>
+            <span class="flow-text"><strong>Conclusion 6 & Recommendations:</strong> Formulates 6 evidence-based recommendations directly addressing evaluator suggestions.</span>
+          </div>
+          <div class="flow-step">
+            <span class="flow-badge p">Slide Deck</span>
+            <span class="flow-text"><strong>Slide 14:</strong> Displays ranked suggestions (60% Dropdowns, 40% Audit logs, 40% SMS alerts, 20% Others).</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Checkpoint 2 Gate Decision -->
+      <h2>3. Checkpoint 2 Gate Decision & Synthesis</h2>
+      <p>
+        The research chain from Problem Statement &rarr; Questions &rarr; Objectives &rarr; Modules &rarr; Results &rarr; Conclusions &rarr; Slides is <strong>conceptually sound and fully traceable</strong>. The audit caught four specific defects that must be reconciled:
+      </p>
+      <ul style="margin: 12px 0 16px 20px; color: var(--slate-800); font-size: 0.92rem;">
+        <li><strong>Defect 1 (Chapter 4 p. 127 & Ch 5 p. 149):</strong> Reliability mean reported as 3.76 in narrative, contradicting Table 13 (3.72) and Table 24 (3.72). Fix narrative to <strong>3.72</strong>.</li>
+        <li><strong>Defect 2 (Chapter 4 Table Sequence):</strong> Table numbering jumps from Table 13 (p. 126) to Table 16 (p. 128). Renumber sequentially.</li>
+        <li><strong>Defect 3 (Chapter 4 p. 144):</strong> Section 6 text references "Table 24" for suggestions, but suggestions are in <strong>Table 25</strong>. Change reference to Table 25.</li>
+        <li><strong>Defect 4 (Presentation Slide 7 & 11):</strong> Fix typo `ISO/EIC 25010` to `ISO/IEC 25010` on Slide 7; rephrase Slide 11 from "10-record test sample" to "26-record test set (10 representative rows shown)".</li>
+      </ul>
+
+      <div class="callout callout-success">
+        <div class="callout-icon">✓</div>
+        <div class="callout-content">
+          <strong>Checkpoint 2 Status: PASSED & FROZEN</strong>
+          <br>
+          We are ready to proceed to <strong>Checkpoint 3: Chapters 1 to 3 Manuscript Audit</strong> (`03_CHAPTERS_1_TO_3_AUDIT.html`), where we will audit the conceptual framework, research timeline feasibility, Waterfall SDLC descriptions, and exact replacement cards for Chapters 1–3.
+        </div>
+      </div>
+
+    </main>
+
+    <footer class="footer">
+      <div><strong>Shoelotskey Service Management System</strong> · Institute of Computer Studies</div>
+      <div>National Aviation Academy of the Philippines (PhilSCA) · Academic Year 2025–2026</div>
+      <div>Checkpoint 2 Research Traceability Report · Generated September 23, 2026</div>
+    </footer>
+
+  </div>
+
+</body>
+</html>

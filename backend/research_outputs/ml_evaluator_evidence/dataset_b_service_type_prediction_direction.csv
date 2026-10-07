@@ -1,0 +1,7 @@
+Service Type,N,Underpredicted N,Underpredicted (%),Overpredicted N,Overpredicted (%),Effectively Exact N,Effectively Exact (%),Mean Residual (Days)
+Basic Cleaning,1483,34,2.29,138,9.31,1311,88.4,0.0025
+Full Reglue,569,15,2.64,60,10.54,494,86.82,-0.0205
+Minor Reglue,118,1,0.85,24,20.34,93,78.81,-0.0173
+Unyellowing,185,4,2.16,38,20.54,143,77.3,0.01
+Minor Restoration,274,9,3.28,39,14.23,226,82.48,0.0033
+Color Renewal,35,4,11.43,6,17.14,25,71.43,0.0001

@@ -17,6 +17,7 @@ import {
   Trash2,
   Clock3,
   Smartphone,
+  RotateCcw,
 } from 'lucide-react';
 import { format as dateFnsFormat } from 'date-fns';
 import { Button } from '@/app/components/ui/button';
@@ -39,6 +40,7 @@ import {
   resolvePaymentMethod,
   type ReportRange,
 } from '@/app/lib/salesAnalytics';
+import MMDDYYYYDatePicker from '@/app/components/ui/MMDDYYYYDatePicker';
 
 type PaymentsReceivedProps = {
   onSetHeaderActionRight?: (action: ReactNode | null) => void;
@@ -182,6 +184,28 @@ export default function PaymentsReceived({ onSetHeaderActionRight, user }: Payme
     }
   }, [location.state]);
 
+  const handleCustomStartDateChange = (newStart: string) => {
+    setCustomStartDate(newStart);
+    if (!newStart) return;
+    if (customEndDate && newStart > customEndDate) {
+      setCustomEndDate(newStart);
+      toast.error(`Invalid range: Start date cannot be after end date. End date adjusted to ${newStart}.`);
+    } else {
+      toast.success(`Payments (Custom): Filtered (${customEndDate ? `${newStart} to ${customEndDate}` : `from ${newStart}`})`);
+    }
+  };
+
+  const handleCustomEndDateChange = (newEnd: string) => {
+    setCustomEndDate(newEnd);
+    if (!newEnd) return;
+    if (customStartDate && newEnd < customStartDate) {
+      setCustomStartDate(newEnd);
+      toast.error(`Invalid range: End date cannot be earlier than start date. Start date adjusted to ${newEnd}.`);
+    } else {
+      toast.success(`Payments (Custom): Filtered (${customStartDate ? `${customStartDate} to ${newEnd}` : `until ${newEnd}`})`);
+    }
+  };
+
   const [searchQuery, setSearchQuery] = useState('');
   const [cardFilter, setCardFilter] = useState<'all' | 'fully-paid' | 'downpayment' | 'cash' | 'digital'>(() => {
     return (location.state as any)?.filterCard || 'all';
@@ -241,32 +265,33 @@ export default function PaymentsReceived({ onSetHeaderActionRight, user }: Payme
     onSetHeaderActionRight(
       <div className="flex items-center gap-2">
         {timeframe === 'Custom' && (
-          <div className="hidden lg:flex items-center gap-1">
-            <input
-              type="date"
+          <div className="hidden lg:flex items-center h-10 rounded-md border border-red-600 bg-white shadow-xs px-1.5 gap-1 focus-within:ring-2 focus-within:ring-red-500/20">
+            <MMDDYYYYDatePicker
               aria-label="Custom start date"
               value={customStartDate}
-              onChange={(e) => setCustomStartDate(e.target.value)}
-              className="h-10 rounded-md border border-gray-300 px-2 text-xs"
+              onChange={(val) => handleCustomStartDateChange(val)}
+              variant="embedded"
             />
-            <span className="text-xs text-gray-500">–</span>
-            <input
-              type="date"
+            <span className="text-xs text-red-500 font-bold px-0.5 select-none">–</span>
+            <MMDDYYYYDatePicker
               aria-label="Custom end date"
               value={customEndDate}
-              onChange={(e) => setCustomEndDate(e.target.value)}
-              className="h-10 rounded-md border border-gray-300 px-2 text-xs"
+              onChange={(val) => handleCustomEndDateChange(val)}
+              variant="embedded"
             />
+            <div className="h-5 w-px bg-red-200 mx-0.5" />
             <button
               type="button"
-              className="h-10 px-2 text-sm font-bold uppercase text-red-700 border border-red-200 rounded-md bg-white hover:bg-red-50 hover:text-red-700"
+              className="h-7 w-7 flex items-center justify-center rounded-md text-red-600 hover:bg-red-50 hover:text-red-700 active:bg-red-100 transition cursor-pointer"
               onClick={() => {
                 setCustomStartDate('');
                 setCustomEndDate('');
-                setTimeframe('Daily');
+                toast.success('Cleared custom dates');
               }}
+              title="Clear dates"
+              aria-label="Clear dates"
             >
-              Clear
+              <RotateCcw className="h-3.5 w-3.5 stroke-[2.5]" />
             </button>
           </div>
         )}
@@ -470,31 +495,29 @@ export default function PaymentsReceived({ onSetHeaderActionRight, user }: Payme
         <div className="flex flex-wrap items-end justify-center gap-2 rounded-xl border border-red-100 bg-red-50/60 p-3 lg:hidden">
           <label className="flex flex-col gap-1">
             <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Start date</span>
-            <input
-              type="date"
+            <MMDDYYYYDatePicker
               aria-label="Custom start date"
               value={customStartDate}
-              onChange={(e) => setCustomStartDate(e.target.value)}
-              className="h-10 rounded-md border border-gray-300 bg-white px-2 text-xs"
+              onChange={(val) => handleCustomStartDateChange(val)}
+              className="w-full"
             />
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">End date</span>
-            <input
-              type="date"
+            <MMDDYYYYDatePicker
               aria-label="Custom end date"
               value={customEndDate}
-              onChange={(e) => setCustomEndDate(e.target.value)}
-              className="h-10 rounded-md border border-gray-300 bg-white px-2 text-xs"
+              onChange={(val) => handleCustomEndDateChange(val)}
+              className="w-full"
             />
           </label>
           <button
             type="button"
-            className="h-10 px-3 text-sm font-bold uppercase text-red-700 border border-red-200 rounded-md bg-white hover:bg-red-50 hover:text-red-700"
+            className="h-10 px-3 text-sm font-bold uppercase text-red-700 border border-red-200 rounded-md bg-white hover:bg-red-50 hover:text-red-700 cursor-pointer"
             onClick={() => {
               setCustomStartDate('');
               setCustomEndDate('');
-              setTimeframe('Daily');
+              toast.success('Cleared custom dates');
             }}
           >
             Clear
@@ -680,7 +703,7 @@ export default function PaymentsReceived({ onSetHeaderActionRight, user }: Payme
         </CardHeader>
 
         <CardContent className="pt-0 px-2 sm:px-4 md:px-6">
-          <div className="overflow-x-auto w-full custom-scrollbar pb-1">
+          <div className="overflow-x-auto overflow-y-auto max-h-[435px] xl:max-h-[460px] w-full subtle-vertical-scroll pb-1 rounded-lg border border-gray-100">
             <Table className="w-full table-fixed min-w-[850px] text-xs">
               <colgroup>
                 <col className="w-[16%]" />
@@ -691,7 +714,7 @@ export default function PaymentsReceived({ onSetHeaderActionRight, user }: Payme
                 <col className="w-[12%]" />
                 <col className="w-[7%]" />
               </colgroup>
-              <TableHeader className="bg-red-50/50 border-b border-red-100">
+              <TableHeader className="bg-red-50/95 backdrop-blur-xs border-b border-red-100 sticky top-0 z-10 shadow-xs">
                 <TableRow className="border-b border-red-100 hover:bg-transparent">
                   <TableHead className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-wider text-[10px] whitespace-nowrap">
                     Order #

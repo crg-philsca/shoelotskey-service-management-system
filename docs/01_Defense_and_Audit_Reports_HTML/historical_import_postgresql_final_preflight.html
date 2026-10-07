@@ -1,0 +1,2270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shoelotskey — PostgreSQL Production Final Pre-Import Gate Report</title>
+<style>
+  :root {
+    --bg-primary: #0a0f1d;
+    --bg-secondary: #131c2e;
+    --bg-card: #1a253a;
+    --border-color: #2b3a55;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --accent-blue: #38bdf8;
+    --accent-emerald: #34d399;
+    --accent-amber: #fbbf24;
+    --accent-rose: #f43f5e;
+    --accent-purple: #c084fc;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    padding: 24px;
+  }
+  .container {
+    max-width: 1520px;
+    margin: 0 auto;
+  }
+  header {
+    background: linear-gradient(135deg, #1e293b 0%, #0a0f1d 100%);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 32px;
+    margin-bottom: 28px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+  }
+  .header-badge {
+    display: inline-block;
+    padding: 6px 14px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    border-radius: 9999px;
+    background-color: rgba(52, 211, 153, 0.15);
+    color: var(--accent-emerald);
+    border: 1px solid rgba(52, 211, 153, 0.3);
+    margin-bottom: 12px;
+  }
+  h1 {
+    font-size: 2.1rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: #ffffff;
+    margin-bottom: 8px;
+  }
+  .header-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    margin-top: 16px;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+  }
+  .header-meta div span {
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .gate-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(52, 211, 153, 0.12);
+    border: 2px solid var(--accent-emerald);
+    border-radius: 10px;
+    padding: 22px 28px;
+    margin-bottom: 30px;
+  }
+  .gate-title {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: var(--accent-emerald);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .gate-badge {
+    padding: 10px 24px;
+    font-size: 1.1rem;
+    font-weight: 800;
+    border-radius: 8px;
+    background-color: var(--accent-emerald);
+    color: #0a0f1d;
+    letter-spacing: 0.05em;
+  }
+  .gate-desc {
+    color: var(--text-secondary);
+    font-size: 0.925rem;
+    margin-top: 6px;
+  }
+  .grid-4 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+    margin-bottom: 30px;
+  }
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
+    gap: 20px;
+    margin-bottom: 24px;
+  }
+  .card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 22px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+  }
+  .metric-value {
+    font-size: 2.1rem;
+    font-weight: 800;
+    color: #ffffff;
+    line-height: 1.2;
+  }
+  .metric-label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-secondary);
+    margin-top: 4px;
+  }
+  .metric-sub {
+    font-size: 0.775rem;
+    color: var(--text-muted);
+    margin-top: 3px;
+  }
+  section {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 28px;
+    margin-bottom: 32px;
+  }
+  h2 {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 10px;
+  }
+  h2 .section-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    background-color: rgba(56, 189, 248, 0.15);
+    color: var(--accent-blue);
+    border-radius: 6px;
+    font-size: 0.9rem;
+  }
+  h3 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--accent-blue);
+    margin: 18px 0 10px 0;
+  }
+  p {
+    font-size: 0.925rem;
+    color: var(--text-secondary);
+    margin-bottom: 14px;
+  }
+  ul, ol {
+    margin-left: 22px;
+    margin-bottom: 14px;
+    color: var(--text-secondary);
+    font-size: 0.925rem;
+  }
+  li { margin-bottom: 6px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0 24px 0;
+    font-size: 0.85rem;
+  }
+  th {
+    background-color: #0b1324;
+    color: var(--text-primary);
+    text-align: left;
+    padding: 10px 12px;
+    font-weight: 600;
+    border-bottom: 2px solid var(--border-color);
+    white-space: nowrap;
+  }
+  td {
+    padding: 9px 12px;
+    border-bottom: 1px solid rgba(43, 58, 85, 0.6);
+    color: var(--text-secondary);
+  }
+  tr:hover td {
+    background-color: rgba(43, 58, 85, 0.35);
+    color: var(--text-primary);
+  }
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.725rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .tag-exact { background: rgba(52, 211, 153, 0.2); color: var(--accent-emerald); border: 1px solid rgba(52, 211, 153, 0.3); }
+  .tag-probable { background: rgba(56, 189, 248, 0.2); color: var(--accent-blue); border: 1px solid rgba(56, 189, 248, 0.3); }
+  .tag-review { background: rgba(251, 191, 36, 0.2); color: var(--accent-amber); border: 1px solid rgba(251, 191, 36, 0.3); }
+  .tag-hold { background: rgba(244, 63, 94, 0.2); color: var(--accent-rose); border: 1px solid rgba(244, 63, 94, 0.3); }
+  .code-badge {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.775rem;
+    background-color: #070c18;
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: #38bdf8;
+    border: 1px solid #1a253a;
+    white-space: nowrap;
+  }
+  .alert-box {
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin: 16px 0;
+    font-size: 0.9rem;
+  }
+  .alert-warning {
+    background-color: rgba(251, 191, 36, 0.1);
+    border-left: 4px solid var(--accent-amber);
+    color: #fde68a;
+  }
+  .alert-danger {
+    background-color: rgba(244, 63, 94, 0.1);
+    border-left: 4px solid var(--accent-rose);
+    color: #fecdd3;
+  }
+  .alert-info {
+    background-color: rgba(56, 189, 248, 0.1);
+    border-left: 4px solid var(--accent-blue);
+    color: #bae6fd;
+  }
+  .alert-success {
+    background-color: rgba(52, 211, 153, 0.1);
+    border-left: 4px solid var(--accent-emerald);
+    color: #a7f3d0;
+  }
+  footer {
+    text-align: center;
+    padding: 30px;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    border-top: 1px solid var(--border-color);
+    margin-top: 40px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- HEADER -->
+  <header>
+    <div class="header-badge">PostgreSQL Production Final Pre-Import Gate &bull; Read-Only Audit</div>
+    <h1>Shoelotskey Service Management System</h1>
+    <p style="font-size: 1.1rem; color: #cbd5e1; margin-bottom: 0;">
+      September 2026 Historical Pilot Master Dataset — Deployed PostgreSQL Production Destination &amp; Zero-Duplicate Final Preflight Report
+    </p>
+    <div class="header-meta">
+      <div><span>Source Evidence:</span> Shoelotskey_September_2026_Historical_Pilot_Master_Dataset.xlsx</div>
+      <div><span>Authoritative Target:</span> Deployed PostgreSQL 17.9 (AWS RDS / Heroku Cluster)</div>
+      <div><span>Database Name:</span> d6281rp0p4pg8c (Public Schema)</div>
+      <div><span>Audit Mode:</span> STRICT READ-ONLY PREFLIGHT (0 Writes, 0 Deletes, 0 Updates)</div>
+    </div>
+  </header>
+
+  <!-- GATE BANNER -->
+  <div class="gate-banner">
+    <div>
+      <div class="gate-title">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+        FINAL PRE-IMPORT DECISION: READY FOR AUTHORIZED POSTGRESQL IMPORT
+      </div>
+      <div class="gate-desc">
+        All 14 pre-import gates are fully proven. Zero-duplicate mathematical balance is verified against deployed PostgreSQL. Native order numbering, Job Order Form schema, native expense format, payment derivation, idempotency, and rollback isolation are established. Production database writes remain gated pending explicit authorization.
+      </div>
+    </div>
+    <div class="gate-badge">READY FOR AUTHORIZED POSTGRESQL IMPORT</div>
+  </div>
+
+  <!-- KPI SUMMARY CARDS -->
+  <div class="grid-4">
+    <div class="card">
+      <div class="metric-value">54</div>
+      <div class="metric-label">Approved Order Inserts</div>
+      <div class="metric-sub">54 Safe New &bull; 2 Linked &bull; 4 Held</div>
+    </div>
+    <div class="card">
+      <div class="metric-value">22</div>
+      <div class="metric-label">Approved Item / Pair Inserts</div>
+      <div class="metric-sub">Deduplicated from 26 Source Pairs</div>
+    </div>
+    <div class="card">
+      <div class="metric-value">48</div>
+      <div class="metric-label">Approved Initial Payments</div>
+      <div class="metric-sub">25 Fully Paid &bull; 23 Down Payments</div>
+    </div>
+    <div class="card">
+      <div class="metric-value">&#8361;53,124.17</div>
+      <div class="metric-label">7 Verified Fixed Expenses</div>
+      <div class="metric-sub">Parcels, Eileen &amp; Maynilad Held</div>
+    </div>
+  </div>
+
+  <!-- SECTION 1: PROVE NATIVE ORDER NUMBER GENERATION -->
+  <section id="sec-1">
+    <h2><span class="section-num">1</span> Native Order Number Generation Proof</h2>
+    <p>
+      In strict accordance with client instructions, <strong>historical Evidence IDs (such as <span class="code-badge">JO-2026-09-14-NYX</span> or <span class="code-badge">DSMR-2026-09-14-R16</span>) are treated as source references only</strong>. They will NEVER be used as production <span class="code-badge">orders.order_number</span> values.
+    </p>
+    <div class="card">
+      <h3 style="margin-top:0;">Source Code Implementation &amp; Sequencing Rules</h3>
+      <p><strong>Generator Implementation:</strong> <span class="code-badge">backend/order_numbering.py:189-207</span> (<span class="code-badge">next_canonical_order_id</span>) &amp; <span class="code-badge">backend/main.py:4714-4718</span> (<span class="code-badge">_live_canonical_order_number</span>).</p>
+      <p><strong>Canonical Format:</strong> <span class="code-badge">ORD-YYYY-MM-DD-NNN</span> (Regex: <span class="code-badge">^ORD-\d{4}-\d{2}-\d{2}-\d{3}$</span>).</p>
+      <p><strong>Sequencing &amp; Collision Rule:</strong> Sequence <span class="code-badge">NNN</span> resets daily for each calendar intake date. It scans all existing order numbers with prefix <span class="code-badge">ORD-YYYY-MM-DD-</span> across both <span class="code-badge">orders</span> and <span class="code-badge">historical_orders</span> in PostgreSQL, finds the maximum existing sequence, and allocates <span class="code-badge">max_seq + 1</span> zero-padded to 3 digits.</p>
+      <p><strong>PostgreSQL Uniqueness Enforcement:</strong> <span class="code-badge">orders.order_number</span> carries a database-level <span class="code-badge">UNIQUE</span> constraint. The generator includes a collision loop ensuring candidate uniqueness before insertion.</p>
+      <div class="alert-box alert-info" style="margin-top:12px; padding:10px 14px;">
+        <strong>Live Production Demonstration:</strong> On September 14, 2026, PostgreSQL already contains <span class="code-badge">ORD-2026-09-14-001</span> (Juana Reyes) and <span class="code-badge">ORD-2026-09-14-002</span> (Anna Karina). When the historical import script processes September 14 orders, the native generator will automatically assign sequence <span class="code-badge">003</span> onward (e.g. <span class="code-badge">ORD-2026-09-14-003</span>, <span class="code-badge">ORD-2026-09-14-004</span>, etc.), preventing collision with native records.
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 2: COMPLETE JOB ORDER FORM FIELD MAPPING -->
+  <section id="sec-2">
+    <h2><span class="section-num">2</span> Complete Job Order Form Field Mapping Matrix</h2>
+    <p>
+      Every field from the native Shoelotskey Job Order creation flow (<span class="code-badge">JobOrderForm.tsx</span> &rarr; <span class="code-badge">OrderCreatePayloadSchema</span> &rarr; <span class="code-badge">OrderSchema</span> &rarr; PostgreSQL <span class="code-badge">orders</span>) is audited below:
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Job Order UI Label</th>
+          <th>Frontend Field</th>
+          <th>API / Schema Field</th>
+          <th>SQLAlchemy Model Field</th>
+          <th>PostgreSQL Column</th>
+          <th>Historical Source Evidence</th>
+          <th>Proposed Import Value</th>
+          <th>Null / Default Rule</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Order Number</strong></td>
+          <td><span class="code-badge">orderNumber</span></td>
+          <td><span class="code-badge">order_number</span></td>
+          <td><span class="code-badge">Order.order_number</span></td>
+          <td><span class="code-badge">orders.order_number</span></td>
+          <td>Native Generator</td>
+          <td><span class="code-badge">ORD-YYYY-MM-DD-NNN</span></td>
+          <td>NOT NULL (Unique)</td>
+        </tr>
+        <tr>
+          <td><strong>Customer Name</strong></td>
+          <td><span class="code-badge">customerName</span></td>
+          <td><span class="code-badge">customer_name</span></td>
+          <td><span class="code-badge">Customer.customer_name</span></td>
+          <td><span class="code-badge">customers.customer_name</span></td>
+          <td>Paper Form / DSMR</td>
+          <td>Normalized Name (e.g. "Nyx Pantoja")</td>
+          <td>NOT NULL (Min 2 chars)</td>
+        </tr>
+        <tr>
+          <td><strong>Contact Number</strong></td>
+          <td><span class="code-badge">contactNumber</span></td>
+          <td><span class="code-badge">contact_number</span></td>
+          <td><span class="code-badge">Customer.contact_number</span></td>
+          <td><span class="code-badge">customers.contact_number</span></td>
+          <td>Paper Job Order Form</td>
+          <td>Sanitized digits (e.g. "0917-253-3957")</td>
+          <td>Empty string if absent on DSMR</td>
+        </tr>
+        <tr>
+          <td><strong>Date Received</strong></td>
+          <td><span class="code-badge">orderDate</span></td>
+          <td><span class="code-badge">created_at</span></td>
+          <td><span class="code-badge">Order.created_at</span></td>
+          <td><span class="code-badge">orders.created_at</span></td>
+          <td>Paper / DSMR Date</td>
+          <td>Historical Date ISO (e.g. 2026-09-14 00:00:00)</td>
+          <td>NOT NULL (Historical Date)</td>
+        </tr>
+        <tr>
+          <td><strong>Branch</strong></td>
+          <td><span class="code-badge">branch</span></td>
+          <td><span class="code-badge">branch</span></td>
+          <td><span class="code-badge">HistoricalOrder.branch</span></td>
+          <td><span class="code-badge">pre_cancellation_state</span></td>
+          <td>Paper Form</td>
+          <td>"Villamor"</td>
+          <td>Metadata JSON storage</td>
+        </tr>
+        <tr>
+          <td><strong>Staff / Received By</strong></td>
+          <td><span class="code-badge">receivedBy</span></td>
+          <td><span class="code-badge">user_id</span></td>
+          <td><span class="code-badge">Order.user_id</span></td>
+          <td><span class="code-badge">orders.user_id</span></td>
+          <td>Paper Staff (e.g. Yang)</td>
+          <td>User FK = 1 (System Admin / Owner default)</td>
+          <td>FK to users.user_id</td>
+        </tr>
+        <tr>
+          <td><strong>Number of Pairs</strong></td>
+          <td><span class="code-badge">numberOfPairs</span></td>
+          <td><span class="code-badge">total_pairs</span></td>
+          <td><span class="code-badge">HistoricalOrder.total_pairs</span></td>
+          <td><span class="code-badge">orders.rush_reduction_days</span></td>
+          <td>Paper / DSMR Count</td>
+          <td>Documented Integer (e.g. 3)</td>
+          <td>NOT NULL</td>
+        </tr>
+        <tr>
+          <td><strong>Priority / Rush</strong></td>
+          <td><span class="code-badge">priority</span></td>
+          <td><span class="code-badge">priority_id</span></td>
+          <td><span class="code-badge">Order.priority_id</span></td>
+          <td><span class="code-badge">orders.priority_id</span></td>
+          <td>Paper Form Rush flag</td>
+          <td>1 = regular, 2 = rush</td>
+          <td>Default 1 (regular)</td>
+        </tr>
+        <tr>
+          <td><strong>Shoe Brand</strong></td>
+          <td><span class="code-badge">brand</span></td>
+          <td><span class="code-badge">items[].brand</span></td>
+          <td><span class="code-badge">Item.brand</span></td>
+          <td><span class="code-badge">items.brand</span></td>
+          <td>Paper Job Order Form</td>
+          <td>Documented Brand (e.g. "Palladium")</td>
+          <td>NULL for DSMR-only orders</td>
+        </tr>
+        <tr>
+          <td><strong>Shoe Description</strong></td>
+          <td><span class="code-badge">shoeModel</span></td>
+          <td><span class="code-badge">items[].shoe_model</span></td>
+          <td><span class="code-badge">Item.shoe_model</span></td>
+          <td><span class="code-badge">items.shoe_model</span></td>
+          <td>Paper Job Order Form</td>
+          <td>Documented Model/Color (e.g. "white")</td>
+          <td>NULL for DSMR-only orders</td>
+        </tr>
+        <tr>
+          <td><strong>Service(s)</strong></td>
+          <td><span class="code-badge">services</span></td>
+          <td><span class="code-badge">items[].service_mappings</span></td>
+          <td><span class="code-badge">ItemServiceMapping</span></td>
+          <td><span class="code-badge">item_service_mapping</span></td>
+          <td>Paper Form Codes (BC, FR, etc.)</td>
+          <td>Verified service_id (1, 3, 40, etc.)</td>
+          <td>Multi-service supported</td>
+        </tr>
+        <tr>
+          <td><strong>Service Price</strong></td>
+          <td><span class="code-badge">actualPrice</span></td>
+          <td><span class="code-badge">service_mappings[].actual_price</span></td>
+          <td><span class="code-badge">ItemServiceMapping.actual_price</span></td>
+          <td><span class="code-badge">item_service_mapping.actual_price</span></td>
+          <td>Paper Form Price</td>
+          <td>Historical Transaction Price (e.g. ₱325.00)</td>
+          <td>NOT NULL (Transaction Snapshot)</td>
+        </tr>
+        <tr>
+          <td><strong>Estimated Release</strong></td>
+          <td><span class="code-badge">estimatedReleaseDate</span></td>
+          <td><span class="code-badge">expected_at</span></td>
+          <td><span class="code-badge">Order.expected_at</span></td>
+          <td><span class="code-badge">orders.expected_at</span></td>
+          <td>Paper Form Target Date</td>
+          <td>Target Date ISO (e.g. 2026-09-25 00:00:00)</td>
+          <td>Default created_at + 10 days if blank</td>
+        </tr>
+        <tr>
+          <td><strong>Actual Ready Date</strong></td>
+          <td><span class="code-badge">releasedAt</span></td>
+          <td><span class="code-badge">released_at</span></td>
+          <td><span class="code-badge">Order.released_at</span></td>
+          <td><span class="code-badge">orders.released_at</span></td>
+          <td>NO SOURCE EVIDENCE</td>
+          <td><span class="tag tag-hold">NULL</span></td>
+          <td>NULL (Never copy estimated date)</td>
+        </tr>
+        <tr>
+          <td><strong>Actual Claimed Date</strong></td>
+          <td><span class="code-badge">claimedAt</span></td>
+          <td><span class="code-badge">claimed_at</span></td>
+          <td><span class="code-badge">Order.claimed_at</span></td>
+          <td><span class="code-badge">orders.claimed_at</span></td>
+          <td>NO SOURCE EVIDENCE (1st Import)</td>
+          <td><span class="tag tag-hold">NULL</span></td>
+          <td>NULL (Claims held for 1st import)</td>
+        </tr>
+        <tr>
+          <td><strong>ML Predicted Days</strong></td>
+          <td><span class="code-badge">predictedDays</span></td>
+          <td><span class="code-badge">predicted_days</span></td>
+          <td><span class="code-badge">Order.predicted_days</span></td>
+          <td><span class="code-badge">orders.predicted_days</span></td>
+          <td>NO SOURCE EVIDENCE</td>
+          <td><span class="tag tag-hold">NULL</span></td>
+          <td>NULL (No synthetic prediction)</td>
+        </tr>
+        <tr>
+          <td><strong>ML Predicted At</strong></td>
+          <td><span class="code-badge">predictedAt</span></td>
+          <td><span class="code-badge">predicted_at</span></td>
+          <td><span class="code-badge">Order.predicted_at</span></td>
+          <td><span class="code-badge">orders.predicted_at</span></td>
+          <td>NO SOURCE EVIDENCE</td>
+          <td><span class="tag tag-hold">NULL</span></td>
+          <td>NULL (No synthetic prediction)</td>
+        </tr>
+        <tr>
+          <td><strong>Grand Total</strong></td>
+          <td><span class="code-badge">grandTotal</span></td>
+          <td><span class="code-badge">grand_total</span></td>
+          <td><span class="code-badge">Order.grand_total</span></td>
+          <td><span class="code-badge">orders.grand_total</span></td>
+          <td>Paper / DSMR Amount</td>
+          <td>Documented Total (e.g. ₱1,225.00)</td>
+          <td>NOT NULL</td>
+        </tr>
+        <tr>
+          <td><strong>Payment Status</strong></td>
+          <td><span class="code-badge">paymentStatus</span></td>
+          <td><span class="code-badge">payments[].status_id</span></td>
+          <td><span class="code-badge">Payment.status_id</span></td>
+          <td><span class="code-badge">payments.status_id</span></td>
+          <td>Paper / DSMR Status</td>
+          <td>1=fully-paid, 2=downpayment, 3=pending</td>
+          <td>Derived from amount vs total</td>
+        </tr>
+        <tr>
+          <td><strong>Payment Method</strong></td>
+          <td><span class="code-badge">paymentMethod</span></td>
+          <td><span class="code-badge">payments[].method_id</span></td>
+          <td><span class="code-badge">Payment.method_id</span></td>
+          <td><span class="code-badge">payments.method_id</span></td>
+          <td>Paper / DSMR Method</td>
+          <td>1=cash, 2=gcash</td>
+          <td>1 (cash default)</td>
+        </tr>
+        <tr>
+          <td><strong>Amount Received</strong></td>
+          <td><span class="code-badge">amountReceived</span></td>
+          <td><span class="code-badge">payments[].amount_received</span></td>
+          <td><span class="code-badge">Payment.amount_received</span></td>
+          <td><span class="code-badge">payments.amount_received</span></td>
+          <td>Paper / DSMR Paid</td>
+          <td>Documented Amount Paid</td>
+          <td>₱0.00 if Not Yet Paid</td>
+        </tr>
+        <tr>
+          <td><strong>Remaining Balance</strong></td>
+          <td><span class="code-badge">balance</span></td>
+          <td><span class="code-badge">payments[].balance</span></td>
+          <td><span class="code-badge">Payment.balance</span></td>
+          <td><span class="code-badge">payments.balance</span></td>
+          <td>Paper / DSMR Balance</td>
+          <td>Documented Remaining Balance</td>
+          <td>₱0.00 if Fully Paid</td>
+        </tr>
+        <tr>
+          <td><strong>Order Status</strong></td>
+          <td><span class="code-badge">status</span></td>
+          <td><span class="code-badge">status_id</span></td>
+          <td><span class="code-badge">Order.status_id</span></td>
+          <td><span class="code-badge">orders.status_id</span></td>
+          <td>Paper Business Facts</td>
+          <td>1 ('new-order')</td>
+          <td>Exact native status value</td>
+        </tr>
+        <tr>
+          <td><strong>Batch Identifier</strong></td>
+          <td>Provenance Meta</td>
+          <td><span class="code-badge">batch_id</span></td>
+          <td><span class="code-badge">Order.cancellation_stage</span></td>
+          <td><span class="code-badge">orders.cancellation_stage</span></td>
+          <td>Batch Rule</td>
+          <td>"BATCH-HIST-SEP2026-001"</td>
+          <td>Exact deterministic batch key</td>
+        </tr>
+        <tr>
+          <td><strong>Historical Manifest</strong></td>
+          <td>Provenance Meta</td>
+          <td><span class="code-badge">pre_cancellation_state</span></td>
+          <td><span class="code-badge">Order.pre_cancellation_state</span></td>
+          <td><span class="code-badge">orders.pre_cancellation_state</span></td>
+          <td>Evidence Mapping</td>
+          <td>JSON: {"batch_id": "...", "source_ids": [...]}</td>
+          <td>JSON format metadata</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- SECTION 3: NYX PANTOJA COMPLETE WALKTHROUGH -->
+  <section id="sec-3">
+    <h2><span class="section-num">3</span> Complete Record Walkthrough: Nyx Pantoja (Multi-Pair Native Mapping)</h2>
+    <p>
+      The historical Job Order for <strong>Nyx Pantoja</strong> demonstrates how complex multi-pair paper forms map into native PostgreSQL rows without losing pair details or fabricating unsupported fields:
+    </p>
+
+    <div class="card" style="margin-bottom:16px;">
+      <h3 style="margin-top:0; color:var(--accent-emerald);">A. Order Header (<span class="code-badge">orders</span> &amp; <span class="code-badge">customers</span>)</h3>
+      <table>
+        <tr><th>Attribute</th><th>Source Evidence Fact</th><th>PostgreSQL Destination Column</th><th>Proposed Final Value</th></tr>
+        <tr><td>Customer Name</td><td>Nyx Pantoja</td><td><span class="code-badge">customers.customer_name</span></td><td><strong>Nyx Pantoja</strong></td></tr>
+        <tr><td>Contact Number</td><td>0917-253-3957</td><td><span class="code-badge">customers.contact_number</span></td><td><strong>09172533957</strong></td></tr>
+        <tr><td>Order Number</td><td>Native Generated</td><td><span class="code-badge">orders.order_number</span></td><td><span class="code-badge">ORD-2026-09-14-003</span></td></tr>
+        <tr><td>Intake Date</td><td>09/14/2026</td><td><span class="code-badge">orders.created_at</span></td><td><strong>2026-09-14 00:00:00</strong></td></tr>
+        <tr><td>Expected Target Date</td><td>09/25/2026 (Pairs 1 &amp; 2)</td><td><span class="code-badge">orders.expected_at</span></td><td><strong>2026-09-25 00:00:00</strong></td></tr>
+        <tr><td>Grand Total</td><td>₱1,225.00</td><td><span class="code-badge">orders.grand_total</span></td><td><strong>1225.00</strong></td></tr>
+        <tr><td>Status</td><td>Received at intake</td><td><span class="code-badge">orders.status_id</span></td><td><strong>1 ('new-order')</strong></td></tr>
+        <tr><td>Batch Tag</td><td>Import Rule</td><td><span class="code-badge">orders.cancellation_stage</span></td><td><span class="code-badge">BATCH-HIST-SEP2026-001</span></td></tr>
+        <tr><td>Actual Released Date</td><td>NO EVIDENCE</td><td><span class="code-badge">orders.released_at</span></td><td><span class="tag tag-hold">NULL</span></td></tr>
+        <tr><td>Actual Claimed Date</td><td>NO EVIDENCE</td><td><span class="code-badge">orders.claimed_at</span></td><td><span class="tag tag-hold">NULL</span></td></tr>
+        <tr><td>ML Predicted Days</td><td>NO EVIDENCE</td><td><span class="code-badge">orders.predicted_days</span></td><td><span class="tag tag-hold">NULL</span></td></tr>
+        <tr><td>ML Predicted Timestamp</td><td>NO EVIDENCE</td><td><span class="code-badge">orders.predicted_at</span></td><td><span class="tag tag-hold">NULL</span></td></tr>
+      </table>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;">
+      <h3 style="margin-top:0; color:var(--accent-blue);">B. Pair-by-Pair Breakdown (<span class="code-badge">items</span> &amp; <span class="code-badge">item_service_mapping</span>)</h3>
+      <table>
+        <tr><th>Pair #</th><th>Brand &amp; Color</th><th>Service Code</th><th>Mapped Service ID</th><th>Transaction Price</th><th>Target Release</th></tr>
+        <tr><td>Pair 1</td><td>Palladium white</td><td><span class="code-badge">BC</span></td><td>1 (Basic Cleaning)</td><td><strong>₱325.00</strong></td><td>2026-09-25</td></tr>
+        <tr><td>Pair 2</td><td>Palladium black</td><td><span class="code-badge">BC</span></td><td>1 (Basic Cleaning)</td><td><strong>₱325.00</strong></td><td>2026-09-25</td></tr>
+        <tr><td>Pair 3</td><td>Palladium beige</td><td><span class="code-badge">FR</span></td><td>3 (Full Reglue)</td><td><strong>₱575.00</strong></td><td>2026-10-13</td></tr>
+        <tr style="font-weight:700; color:#fff; background-color:#0b1324;">
+          <td colspan="4">TOTAL SUM OF SERVICES</td>
+          <td>₱1,225.00</td>
+          <td>Exact match with Grand Total</td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0; color:var(--accent-amber);">C. Payment Ledger (<span class="code-badge">payments</span>)</h3>
+      <p>
+        The paper form records <strong>Not Yet Paid</strong> (₱0 paid at intake, full ₱1,225 balance due).
+        <br>Under our mathematical rule, <strong>zero payment rows are created</strong> in <span class="code-badge">payments</span> at intake, preserving a 100% accurate financial ledger with ₱0 false cash flow.
+      </p>
+    </div>
+  </section>
+
+  <!-- SECTION 4: ZERO-DUPLICATE PRE-IMPORT MATRIX -->
+  <section id="sec-4">
+    <h2><span class="section-num">4</span> ZERO-DUPLICATE PRE-IMPORT MATRIX (ALL 60 NEW TRANSACTIONS)</h2>
+    <p>
+      Every single one of the <strong>60 NEW transactions</strong> has been audited against the deployed PostgreSQL database.
+    </p>
+    <div class="alert-box alert-success">
+      <strong>Required Mathematical Balance Equation:</strong><br>
+      <code>60 NEW = 54 SAFE NEW ORDERS + 2 LINK EXISTING ORDERS + 2 HOLD PROBABLE DUPLICATE + 1 HOLD IDENTITY CONFLICT + 1 HOLD INSUFFICIENT EVIDENCE</code>
+      <br><strong>Sum = EXACTLY 60. Zero duplicate orders. Zero omitted transactions.</strong>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Evidence ID</th>
+          <th>Customer</th>
+          <th>Date</th>
+          <th>Pairs</th>
+          <th>Total</th>
+          <th>Paid</th>
+          <th>Job Order Match</th>
+          <th>PostgreSQL Candidate</th>
+          <th>Classification</th>
+          <th>Final Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        
+    <tr>
+      <td><strong>1</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-09-R02</span></td>
+      <td><strong>Levan Bunhaje</strong></td>
+      <td>2026-09-09</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱510.00</td>
+      <td style='text-align:right;'>₱510.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>2</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-09-R03</span></td>
+      <td><strong>Rudary Mirhaza</strong></td>
+      <td>2026-09-09</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱510.00</td>
+      <td style='text-align:right;'>₱510.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>3</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-09-R04</span></td>
+      <td><strong>Al Aguilar</strong></td>
+      <td>2026-09-09</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱575.00</td>
+      <td style='text-align:right;'>₱300.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>4</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-09-R05</span></td>
+      <td><strong>Charl Panilio</strong></td>
+      <td>2026-09-09</td>
+      <td style='text-align:center;'>8</td>
+      <td style='text-align:right;'>₱3,275.00</td>
+      <td style='text-align:right;'>₱2,000.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>5</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-09-R06</span></td>
+      <td><strong>Roderick Del Rosario</strong></td>
+      <td>2026-09-09</td>
+      <td style='text-align:center;'>2</td>
+      <td style='text-align:right;'>₱1,250.00</td>
+      <td style='text-align:right;'>-</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>6</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-09-R07</span></td>
+      <td><strong>Dea Chavez</strong></td>
+      <td>2026-09-09</td>
+      <td style='text-align:center;'>5</td>
+      <td style='text-align:right;'>₱2,075.00</td>
+      <td style='text-align:right;'>₱1,000.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>7</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-09-R08</span></td>
+      <td><strong>Karen Tupos</strong></td>
+      <td>2026-09-09</td>
+      <td style='text-align:center;'>3</td>
+      <td style='text-align:right;'>₱1,250.00</td>
+      <td style='text-align:right;'>₱1,250.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>8</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-09-R09</span></td>
+      <td><strong>Christian Job</strong></td>
+      <td>2026-09-09</td>
+      <td style='text-align:center;'>2</td>
+      <td style='text-align:right;'>₱1,100.00</td>
+      <td style='text-align:right;'>₱1,100.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>9</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-09-R10</span></td>
+      <td><strong>Lyndo Lao</strong></td>
+      <td>2026-09-09</td>
+      <td style='text-align:center;'>2</td>
+      <td style='text-align:right;'>₱1,400.00</td>
+      <td style='text-align:right;'>₱500.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>ORD-2026-09-09-003</td>
+      <td><span class='tag tag-hold'>PROBABLE DUPLICATE</span></td>
+      <td><strong>HOLD - PROBABLE DUPLICATE</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>10</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-09-R11</span></td>
+      <td><strong>Pete Tahil</strong></td>
+      <td>2026-09-09</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱700.00</td>
+      <td style='text-align:right;'>₱700.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>11</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-09-R12</span></td>
+      <td><strong>Gibson</strong></td>
+      <td>2026-09-09</td>
+      <td style='text-align:center;'>4</td>
+      <td style='text-align:right;'>₱3,125.00</td>
+      <td style='text-align:right;'>-</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>12</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-09-R13</span></td>
+      <td><strong>Saludo</strong></td>
+      <td>2026-09-09</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱575.00</td>
+      <td style='text-align:right;'>-</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>13</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-09-R14</span></td>
+      <td><strong>Mark Ontic</strong></td>
+      <td>2026-09-09</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱700.00</td>
+      <td style='text-align:right;'>₱300.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>14</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-10-R02</span></td>
+      <td><strong>Vines Reuben</strong></td>
+      <td>2026-09-10</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱475.00</td>
+      <td style='text-align:right;'>₱475.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>15</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-10-R03</span></td>
+      <td><strong>Jeremiah Valerio</strong></td>
+      <td>2026-09-10</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱475.00</td>
+      <td style='text-align:right;'>₱475.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>16</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-10-R04</span></td>
+      <td><strong>Mark Aguilar</strong></td>
+      <td>2026-09-10</td>
+      <td style='text-align:center;'>2</td>
+      <td style='text-align:right;'>₱1,275.00</td>
+      <td style='text-align:right;'>₱1,275.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>17</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-10-R05</span></td>
+      <td><strong>Mabr D.</strong></td>
+      <td>2026-09-10</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱450.00</td>
+      <td style='text-align:right;'>₱200.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>18</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-11-R04</span></td>
+      <td><strong>Robert Yera Sr.</strong></td>
+      <td>2026-09-11</td>
+      <td style='text-align:center;'>2</td>
+      <td style='text-align:right;'>₱1,170.00</td>
+      <td style='text-align:right;'>₱520.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>19</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-11-R05</span></td>
+      <td><strong>Janelle Kahano</strong></td>
+      <td>2026-09-11</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱205.00</td>
+      <td style='text-align:right;'>₱105.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>20</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-11-R06</span></td>
+      <td><strong>Nicka Alkuino</strong></td>
+      <td>2026-09-11</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱550.00</td>
+      <td style='text-align:right;'>₱275.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>21</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-11-R07</span></td>
+      <td><strong>Dicky Flora</strong></td>
+      <td>2026-09-11</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td style='text-align:right;'>₱150.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>22</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-11-R08</span></td>
+      <td><strong>Albert Pacuno</strong></td>
+      <td>2026-09-11</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>23</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-11-R09</span></td>
+      <td><strong>Jley Penesa</strong></td>
+      <td>2026-09-11</td>
+      <td style='text-align:center;'>3</td>
+      <td style='text-align:right;'>₱2,025.00</td>
+      <td style='text-align:right;'>₱1,025.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>24</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-11-R10</span></td>
+      <td><strong>Jeivce Velasco</strong></td>
+      <td>2026-09-11</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>-</td>
+      <td style='text-align:right;'>-</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-hold'>INSUFFICIENT EVIDENCE</span></td>
+      <td><strong>HOLD - INSUFFICIENT EVIDENCE</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>25</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-11-R11</span></td>
+      <td><strong>Gyser Inoro</strong></td>
+      <td>2026-09-11</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱475.00</td>
+      <td style='text-align:right;'>₱475.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>26</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-11-R12</span></td>
+      <td><strong>Rheiner Martinez</strong></td>
+      <td>2026-09-11</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱425.00</td>
+      <td style='text-align:right;'>₱50.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>27</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-11-R13</span></td>
+      <td><strong>Frank Emilia</strong></td>
+      <td>2026-09-11</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱550.00</td>
+      <td style='text-align:right;'>₱550.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>28</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-12-R02</span></td>
+      <td><strong>Wendel Fabro</strong></td>
+      <td>2026-09-12</td>
+      <td style='text-align:center;'>3</td>
+      <td style='text-align:right;'>₱1,725.00</td>
+      <td style='text-align:right;'>₱725.00</td>
+      <td><span class='code-badge'>JO-2026-09-12-WENDEL</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>29</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-12-R03</span></td>
+      <td><strong>Leslie Auderia</strong></td>
+      <td>2026-09-12</td>
+      <td style='text-align:center;'>5</td>
+      <td style='text-align:right;'>₱2,610.00</td>
+      <td style='text-align:right;'>₱2,610.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>30</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-12-R04</span></td>
+      <td><strong>Kennise Delgaco</strong></td>
+      <td>2026-09-12</td>
+      <td style='text-align:center;'>2</td>
+      <td style='text-align:right;'>₱650.00</td>
+      <td style='text-align:right;'>₱650.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>31</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-12-R05</span></td>
+      <td><strong>Jerome Ramirez</strong></td>
+      <td>2026-09-12</td>
+      <td style='text-align:center;'>2</td>
+      <td style='text-align:right;'>₱1,025.00</td>
+      <td style='text-align:right;'>₱512.00</td>
+      <td><span class='code-badge'>JO-2026-09-12-JEROME</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>32</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-12-R06</span></td>
+      <td><strong>Sebastian Casa</strong></td>
+      <td>2026-09-12</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱450.00</td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td><span class='code-badge'>JO-2026-09-12-SEBASTIAN</span></td>
+      <td>ORD-2026-09-12-001</td>
+      <td><span class='tag tag-probable'>EXISTING EXACT MATCH</span></td>
+      <td><strong>LINK EXISTING</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>33</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-14-R10</span></td>
+      <td><strong>Ernest Agapay / Acapulco</strong></td>
+      <td>2026-09-14</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱925.00</td>
+      <td style='text-align:right;'>₱925.00</td>
+      <td><span class='code-badge'>JO-2026-09-14-ERNEST</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>34</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-14-R11</span></td>
+      <td><strong>Raphael Puncino</strong></td>
+      <td>2026-09-14</td>
+      <td style='text-align:center;'>3</td>
+      <td style='text-align:right;'>₱975.00</td>
+      <td style='text-align:right;'>₱500.00</td>
+      <td><span class='code-badge'>JO-2026-09-14-RAPHAEL</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>35</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-14-R12</span></td>
+      <td><strong>Christian Fontanilla</strong></td>
+      <td>2026-09-14</td>
+      <td style='text-align:center;'>2</td>
+      <td style='text-align:right;'>₱650.00</td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td><span class='code-badge'>JO-2026-09-14-CHRISTIAN</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>36</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-14-R13</span></td>
+      <td><strong>Cubelo</strong></td>
+      <td>2026-09-14</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱475.00</td>
+      <td style='text-align:right;'>₱475.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>37</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-14-R14</span></td>
+      <td><strong>Karl Agnas</strong></td>
+      <td>2026-09-14</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td><span class='code-badge'>JO-2026-09-14-KARL</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>38</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-14-R15</span></td>
+      <td><strong>Chaukie</strong></td>
+      <td>2026-09-14</td>
+      <td style='text-align:center;'>2</td>
+      <td style='text-align:right;'>₱1,150.00</td>
+      <td style='text-align:right;'>₱1,000.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>39</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-14-R16</span></td>
+      <td><strong>Nyx Pantoja</strong></td>
+      <td>2026-09-14</td>
+      <td style='text-align:center;'>3</td>
+      <td style='text-align:right;'>₱1,225.00</td>
+      <td style='text-align:right;'>-</td>
+      <td><span class='code-badge'>JO-2026-09-14-NYX</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>40</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-14-R17</span></td>
+      <td><strong>Kenneth Gutierrez</strong></td>
+      <td>2026-09-14</td>
+      <td style='text-align:center;'>6</td>
+      <td style='text-align:right;'>₱2,900.00</td>
+      <td style='text-align:right;'>-</td>
+      <td><span class='code-badge'>JO-2026-09-14-KENNETH</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>41</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-15-R05</span></td>
+      <td><strong>Juan</strong></td>
+      <td>2026-09-15</td>
+      <td style='text-align:center;'>2</td>
+      <td style='text-align:right;'>₱1,400.00</td>
+      <td style='text-align:right;'>₱1,400.00</td>
+      <td><span class='code-badge'>JO-2026-09-15-JUAN</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>42</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-15-R06</span></td>
+      <td><strong>Antonio Lagunada</strong></td>
+      <td>2026-09-15</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱475.00</td>
+      <td style='text-align:right;'>₱475.00</td>
+      <td><span class='code-badge'>JO-2026-09-15-ANTONIO</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>43</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-15-R07</span></td>
+      <td><strong>Cico B. Conde</strong></td>
+      <td>2026-09-15</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td style='text-align:right;'>₱100.00</td>
+      <td><span class='code-badge'>JO-2026-09-15-CICO</span></td>
+      <td>None</td>
+      <td><span class='tag tag-hold'>IDENTITY CONFLICT</span></td>
+      <td><strong>HOLD - IDENTITY CONFLICT</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>44</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-08-R02</span></td>
+      <td><strong>Derick Pucero [best read]</strong></td>
+      <td>2026-09-08</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱700.00</td>
+      <td style='text-align:right;'>₱200.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>45</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-08-R03</span></td>
+      <td><strong>Irene de Leon [best read]</strong></td>
+      <td>2026-09-08</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱575.00</td>
+      <td style='text-align:right;'>₱575.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>46</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-08-R04</span></td>
+      <td><strong>Edzel de Mesa</strong></td>
+      <td>2026-09-08</td>
+      <td style='text-align:center;'>2</td>
+      <td style='text-align:right;'>₱1,525.00</td>
+      <td style='text-align:right;'>₱1,000.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>47</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-08-R05</span></td>
+      <td><strong>Danzel Cabaron [best read]</strong></td>
+      <td>2026-09-08</td>
+      <td style='text-align:center;'>2</td>
+      <td style='text-align:right;'>₱1,250.00</td>
+      <td style='text-align:right;'>₱1,250.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>48</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-08-R06</span></td>
+      <td><strong>Johmar Tacacray</strong></td>
+      <td>2026-09-08</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱725.00</td>
+      <td style='text-align:right;'>₱725.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>49</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-08-R07</span></td>
+      <td><strong>Marvin</strong></td>
+      <td>2026-09-08</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱725.00</td>
+      <td style='text-align:right;'>₱725.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>ORD-2026-09-08-002</td>
+      <td><span class='tag tag-hold'>PROBABLE DUPLICATE</span></td>
+      <td><strong>HOLD - PROBABLE DUPLICATE</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>50</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-08-R08</span></td>
+      <td><strong>Oliver [surname unclear]</strong></td>
+      <td>2026-09-08</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱575.00</td>
+      <td style='text-align:right;'>₱575.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>51</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-08-R09</span></td>
+      <td><strong>Christian T. [best read]</strong></td>
+      <td>2026-09-08</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱475.00</td>
+      <td style='text-align:right;'>₱475.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>52</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-08-R10</span></td>
+      <td><strong>MJ Sumaridos [best read]</strong></td>
+      <td>2026-09-08</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td style='text-align:right;'>-</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>53</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-07-R03</span></td>
+      <td><strong>Ben Chavez [best read]</strong></td>
+      <td>2026-09-07</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱2,100.00</td>
+      <td style='text-align:right;'>₱2,000.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>54</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-07-R04</span></td>
+      <td><strong>Aristotle Gomez [best read]</strong></td>
+      <td>2026-09-07</td>
+      <td style='text-align:center;'>3</td>
+      <td style='text-align:right;'>₱1,650.00</td>
+      <td style='text-align:right;'>₱825.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>55</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-07-R05</span></td>
+      <td><strong>Kirk Guvia [best read]</strong></td>
+      <td>2026-09-07</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱550.00</td>
+      <td style='text-align:right;'>₱550.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>56</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-07-R06</span></td>
+      <td><strong>Cont [unclear]</strong></td>
+      <td>2026-09-07</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>57</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-07-R07</span></td>
+      <td><strong>Jeulia Hatty [best read]</strong></td>
+      <td>2026-09-07</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱550.00</td>
+      <td style='text-align:right;'>₱275.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>58</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-07-R08</span></td>
+      <td><strong>Zaira Elida [best read]</strong></td>
+      <td>2026-09-07</td>
+      <td style='text-align:center;'>3</td>
+      <td style='text-align:right;'>₱1,200.00</td>
+      <td style='text-align:right;'>₱550.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>59</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-07-R09</span></td>
+      <td><strong>J. Eduvere [best read]</strong></td>
+      <td>2026-09-07</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱475.00</td>
+      <td style='text-align:right;'>₱200.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>None</td>
+      <td><span class='tag tag-exact'>SAFE NEW ORDER</span></td>
+      <td><strong>SAFE NEW ORDER</strong></td>
+    </tr>
+    
+    <tr>
+      <td><strong>60</strong></td>
+      <td><span class='code-badge'>DSMR-2026-09-07-R10</span></td>
+      <td><strong>Mark Ferrer</strong></td>
+      <td>2026-09-07</td>
+      <td style='text-align:center;'>1</td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td><span class='code-badge'>No</span></td>
+      <td>ORD-2026-09-07-001</td>
+      <td><span class='tag tag-probable'>EXISTING EXACT MATCH</span></td>
+      <td><strong>LINK EXISTING</strong></td>
+    </tr>
+    
+      </tbody>
+    </table>
+  </section>
+
+  <!-- SECTION 5: IDEMPOTENCY -->
+  <section id="sec-5">
+    <h2><span class="section-num">5</span> Import Idempotency Guarantee</h2>
+    <p>
+      The import process is fully idempotent. If <span class="code-badge">BATCH-HIST-SEP2026-001</span> is executed a second time, it will produce:
+      <br><strong>0 duplicate orders, 0 duplicate items, 0 duplicate payments, and 0 duplicate expenses.</strong>
+    </p>
+    <div class="card">
+      <p><strong>Idempotency Enforcement Protocol:</strong></p>
+      <ol>
+        <li><strong>Batch Pre-Check:</strong> The script checks <span class="code-badge">csv_import_batches</span> for <span class="code-badge">batch_id = 'BATCH-HIST-SEP2026-001'</span>. If already marked <span class="code-badge">COMPLETED</span>, the entire batch run halts with a safe status report.</li>
+        <li><strong>Order Number Pre-Check:</strong> Every order insert checks <span class="code-badge">orders.order_number</span> uniqueness. If the candidate order number already exists, it is skipped.</li>
+        <li><strong>Business Signature Check:</strong> The script checks <span class="code-badge">(customer_name, intake_date, grand_total)</span>. Any record matching an existing batch entry is flagged as <span class="code-badge">ALREADY_IMPORTED</span> and skipped.</li>
+        <li><strong>Expense Signature Check:</strong> Expenses check <span class="code-badge">description LIKE '%[BATCH-HIST-SEP2026-001]%'</span>. Existing expenses are skipped.</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- SECTION 6: BATCH ID STORAGE PROOF -->
+  <section id="sec-6">
+    <h2><span class="section-num">6</span> Batch ID Storage Proof (Zero Schema Alteration)</h2>
+    <p>
+      The batch identifier <span class="code-badge">BATCH-HIST-SEP2026-001</span> will be stored in existing native columns without altering the production database schema:
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Target Table</th>
+          <th>Existing Column Used</th>
+          <th>Data Type</th>
+          <th>Stored Value Example</th>
+          <th>Rollback Query Mechanism</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>orders</strong></td>
+          <td><span class="code-badge">cancellation_stage</span> &amp; <span class="code-badge">pre_cancellation_state</span></td>
+          <td>VARCHAR(255) &amp; JSON</td>
+          <td><span class="code-badge">"BATCH-HIST-SEP2026-001"</span></td>
+          <td><span class="code-badge">WHERE cancellation_stage = 'BATCH-HIST-SEP2026-001'</span></td>
+        </tr>
+        <tr>
+          <td><strong>items</strong></td>
+          <td><span class="code-badge">order_id</span> (FK)</td>
+          <td>INTEGER (FK)</td>
+          <td>FK link to parent order</td>
+          <td><span class="code-badge">WHERE order_id IN (SELECT order_id FROM orders WHERE ...)</span></td>
+        </tr>
+        <tr>
+          <td><strong>item_service_mapping</strong></td>
+          <td><span class="code-badge">item_id</span> (FK)</td>
+          <td>INTEGER (FK)</td>
+          <td>FK link to item</td>
+          <td><span class="code-badge">WHERE item_id IN (SELECT item_id FROM items WHERE ...)</span></td>
+        </tr>
+        <tr>
+          <td><strong>payments</strong></td>
+          <td><span class="code-badge">reference_no</span> &amp; <span class="code-badge">order_id</span></td>
+          <td>VARCHAR(100) &amp; INT</td>
+          <td><span class="code-badge">"BATCH-HIST-SEP2026-001:PAY"</span></td>
+          <td><span class="code-badge">WHERE reference_no LIKE 'BATCH-HIST-SEP2026-001%'</span></td>
+        </tr>
+        <tr>
+          <td><strong>expenses</strong></td>
+          <td><span class="code-badge">description</span></td>
+          <td>TEXT</td>
+          <td><span class="code-badge">"[BATCH-HIST-SEP2026-001] Fixed Overhead || ..."</span></td>
+          <td><span class="code-badge">WHERE description LIKE '%[BATCH-HIST-SEP2026-001]%'</span></td>
+        </tr>
+        <tr>
+          <td><strong>csv_import_batches</strong></td>
+          <td><span class="code-badge">batch_id</span></td>
+          <td>VARCHAR(100)</td>
+          <td><span class="code-badge">"BATCH-HIST-SEP2026-001"</span></td>
+          <td><span class="code-badge">WHERE batch_id = 'BATCH-HIST-SEP2026-001'</span></td>
+        </tr>
+        <tr>
+          <td><strong>audit_logs</strong></td>
+          <td><span class="code-badge">new_values->>'batch_id'</span></td>
+          <td>JSON</td>
+          <td><span class="code-badge">{"batch_id": "BATCH-HIST-SEP2026-001"}</span></td>
+          <td>Audit trail record</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- SECTION 7: EXPENSE NATIVE FORMAT & 7 APPROVED FIXED EXPENSES -->
+  <section id="sec-7">
+    <h2><span class="section-num">7</span> Native Expense Format &amp; 7 Approved Fixed Expenses</h2>
+    <p>
+      In accordance with client instructions, <strong>the first production import includes ONLY the 7 verified fixed September expenses totaling &#8361;53,124.17</strong>. Parcels, Eileen cash-out, and Maynilad water are strictly HELD.
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Evidence Ref</th>
+          <th>Expense Date</th>
+          <th>Amount</th>
+          <th>Native Description Stored in PostgreSQL</th>
+          <th>Target user_id</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="code-badge">EXP-RENT-SEP2026</span></td>
+          <td>2026-09-01 00:00:00</td>
+          <td><strong>₱20,000.00</strong></td>
+          <td>[BATCH-HIST-SEP2026-001] Fixed Overhead || Monthly Shop Rent || Recurring</td>
+          <td>1 (Owner)</td>
+          <td><span class="tag tag-exact">APPROVED INSERT</span></td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">EXP-MERALCO-2026-09-29</span></td>
+          <td>2026-09-29 00:00:00</td>
+          <td><strong>₱3,745.17</strong></td>
+          <td>[BATCH-HIST-SEP2026-001] Utilities || MERALCO 248 kWh (Aug 30 - Sep 29) || Verified Bill</td>
+          <td>1 (Owner)</td>
+          <td><span class="tag tag-exact">APPROVED INSERT</span></td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">EXP-CONVERGE-SEP2026</span></td>
+          <td>2026-09-01 00:00:00</td>
+          <td><strong>₱1,299.00</strong></td>
+          <td>[BATCH-HIST-SEP2026-001] Utilities || Converge Fiber Internet || Recurring</td>
+          <td>1 (Owner)</td>
+          <td><span class="tag tag-exact">APPROVED INSERT</span></td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">EXP-PAYROLL-2026-09-15-JOY</span></td>
+          <td>2026-09-15 00:00:00</td>
+          <td><strong>₱5,720.00</strong></td>
+          <td>[BATCH-HIST-SEP2026-001] Payroll || Staff Joy 1st Cutoff (Sep 15) || Fixed</td>
+          <td>1 (Owner)</td>
+          <td><span class="tag tag-exact">APPROVED INSERT</span></td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">EXP-PAYROLL-2026-09-15-YANG</span></td>
+          <td>2026-09-15 00:00:00</td>
+          <td><strong>₱8,320.00</strong></td>
+          <td>[BATCH-HIST-SEP2026-001] Payroll || Staff Yang 1st Cutoff (Sep 15) || Fixed</td>
+          <td>1 (Owner)</td>
+          <td><span class="tag tag-exact">APPROVED INSERT</span></td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">EXP-PAYROLL-2026-09-30-JOY</span></td>
+          <td>2026-09-30 00:00:00</td>
+          <td><strong>₱5,720.00</strong></td>
+          <td>[BATCH-HIST-SEP2026-001] Payroll || Staff Joy 2nd Cutoff (Sep 30) || Fixed</td>
+          <td>1 (Owner)</td>
+          <td><span class="tag tag-exact">APPROVED INSERT</span></td>
+        </tr>
+        <tr>
+          <td><span class="code-badge">EXP-PAYROLL-2026-09-30-YANG</span></td>
+          <td>2026-09-30 00:00:00</td>
+          <td><strong>₱8,320.00</strong></td>
+          <td>[BATCH-HIST-SEP2026-001] Payroll || Staff Yang 2nd Cutoff (Sep 30) || Fixed</td>
+          <td>1 (Owner)</td>
+          <td><span class="tag tag-exact">APPROVED INSERT</span></td>
+        </tr>
+        <tr style="font-weight:700; color:#fff; background-color:#0b1324;">
+          <td colspan="2">TOTAL APPROVED FIXED OVERHEAD</td>
+          <td>₱53,124.17</td>
+          <td colspan="3">Zero double-counting; individual paychecks; zero duplicates in PostgreSQL</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="alert-box alert-danger">
+      <strong>Items Strictly Gated ON HOLD (Excluded from 1st Production Batch):</strong><br>
+      &bull; <strong>Sept 12 Parcel Logistics (₱442.00):</strong> HELD pending separate verification.<br>
+      &bull; <strong>Sept 15 Parcel Logistics (₱129.00):</strong> HELD pending separate verification.<br>
+      &bull; <strong>Sept 14 Eileen Cash-Out (₱3,000.00):</strong> HELD (unclassified business purpose).<br>
+      &bull; <strong>Maynilad Water Bill (₱4,311.03):</strong> HELD (possible prior arrears).<br>
+      <strong>Total Held: ₱7,882.03</strong>
+    </div>
+  </section>
+
+  <!-- SECTION 8: PAYMENT NATIVE FORMAT -->
+  <section id="sec-8">
+    <h2><span class="section-num">8</span> Payment Native Format &amp; Derivation</h2>
+    <p>
+      In the Shoelotskey database, payment records in <span class="code-badge">payments</span> derive strictly from transaction receipts:
+    </p>
+    <ul>
+      <li><strong>Fully Paid at Intake (25 orders):</strong> Generates 25 payment rows with <span class="code-badge">amount_received = grand_total</span>, <span class="code-badge">balance = 0.00</span>, <span class="code-badge">status_id = 1 ('fully-paid')</span>.</li>
+      <li><strong>Down Payment at Intake (23 orders):</strong> Generates 23 payment rows with <span class="code-badge">amount_received = deposit</span>, <span class="code-badge">balance = remaining_balance</span>, <span class="code-badge">status_id = 2 ('downpayment')</span>.</li>
+      <li><strong>Not Yet Paid at Intake (6 orders):</strong> ₱0 collected &rarr; <strong>0 payment rows</strong> created. Order balance remains full grand total.</li>
+      <li><strong>Back Job Warranty Rework (1 order):</strong> ₱0 collected &rarr; <strong>0 payment rows</strong> created.</li>
+      <li><strong>CLAIM Payments (All 22 claims):</strong> <strong>HELD for 1st import</strong> &rarr; <strong>0 claim payment rows</strong> created.</li>
+    </ul>
+    <div class="alert-box alert-success">
+      <strong>Total Approved Payment Inserts for 1st Import = EXACTLY 48.</strong>
+    </div>
+  </section>
+
+  <!-- SECTION 9: ITEMS AND SERVICES DEDUPLICATION -->
+  <section id="sec-9">
+    <h2><span class="section-num">9</span> Shoe Pairs / Items Deduplication (26 Source Rows &rarr; 22 Approved Inserts)</h2>
+    <p>
+      As identified by the client, the 26 Services-Pairs rows are SOURCE EVIDENCE, not automatic database inserts. Checking parent orders reveals:
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Parent Job Order ID</th>
+          <th>Pair #</th>
+          <th>Shoe Model</th>
+          <th>Service Code</th>
+          <th>Price</th>
+          <th>Rush</th>
+          <th>Classification</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        
+    <tr>
+      <td>1</td>
+      <td><span class='code-badge'>JO-2026-09-12-WENDEL</span></td>
+      <td style='text-align:center;'>Pair #1</td>
+      <td><strong>Flow</strong></td>
+      <td><span class='code-badge'>PR</span></td>
+      <td style='text-align:right;'>₱575.00</td>
+      <td style='text-align:center;'>No</td>
+      <td><span class='tag tag-exact'>INSERT PAIR</span></td>
+      <td style='font-size:0.8rem;'>Parent order approved as SAFE NEW ORDER; attach pair to native order.</td>
+    </tr>
+    
+    <tr>
+      <td>2</td>
+      <td><span class='code-badge'>JO-2026-09-12-WENDEL</span></td>
+      <td style='text-align:center;'>Pair #2</td>
+      <td><strong>Adidas</strong></td>
+      <td><span class='code-badge'>FR</span></td>
+      <td style='text-align:right;'>₱575.00</td>
+      <td style='text-align:center;'>No</td>
+      <td><span class='tag tag-exact'>INSERT PAIR</span></td>
+      <td style='font-size:0.8rem;'>Parent order approved as SAFE NEW ORDER; attach pair to native order.</td>
+    </tr>
+    
+    <tr>
+      <td>3</td>
+      <td><span class='code-badge'>JO-2026-09-12-WENDEL</span></td>
+      <td style='text-align:center;'>Pair #3</td>
+      <td><strong>Nike black</strong></td>
+      <td><span class='code-badge'>FR US</span></td>
+      <td style='text-align:right;'>₱575.00</td>
+      <td style='text-align:center;'>No</td>
+      <td><span class='tag tag-exact'>INSERT PAIR</span></td>
+      <td style='font-size:0.8rem;'>Parent order approved as SAFE NEW ORDER; attach pair to native order.</td>
+    </tr>
+    
+    <tr>
+      <td>4</td>
+      <td><span class='code-badge'>JO-2026-09-12-JEROME</span></td>
+      <td style='text-align:center;'>Pair #1</td>
+      <td><strong>Converse</strong></td>
+      <td><span class='code-badge'>FR</span></td>
+      <td style='text-align:right;'>₱575.00</td>
+      <td style='text-align:center;'>No</td>
+      <td><span class='tag tag-exact'>INSERT PAIR</span></td>
+      <td style='font-size:0.8rem;'>Parent order approved as SAFE NEW ORDER; attach pair to native order.</td>
+    </tr>
+    
+    <tr>
+      <td>5</td>
+      <td><span class='code-badge'>JO-2026-09-12-JEROME</span></td>
+      <td style='text-align:center;'>Pair #2</td>
+      <td><strong>Nike</strong></td>
+      <td><span class='code-badge'>MR</span></td>
+      <td style='text-align:right;'>₱450.00</td>
+      <td style='text-align:center;'>No</td>
+      <td><span class='tag tag-exact'>INSERT PAIR</span></td>
+      <td style='font-size:0.8rem;'>Parent order approved as SAFE NEW ORDER; attach pair to native order.</td>
+    </tr>
+    
+    <tr>
+      <td>6</td>
+      <td><span class='code-badge'>JO-2026-09-12-SEBASTIAN</span></td>
+      <td style='text-align:center;'>Pair #1</td>
+      <td><strong>Skechers</strong></td>
+      <td><span class='code-badge'>MR/MK [handwriting]</span></td>
+      <td style='text-align:right;'>₱450.00</td>
+      <td style='text-align:center;'>No</td>
+      <td><span class='tag tag-probable'>EXISTING — KEEP / LINK</span></td>
+      <td style='font-size:0.8rem;'>Parent order Sebastian Casa is linked as existing; pair preserved without duplicate insert.</td>
+    </tr>
+    
+    <tr>
+      <td>7</td>
+      <td><span class='code-badge'>JO-2026-09-14-RAPHAEL</span></td>
+      <td style='text-align:center;'>Pair #1</td>
+      <td><strong>Nike gray</strong></td>
+      <td><span class='code-badge'>BC</span></td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td style='text-align:center;'>No</td>
+      <td><span class='tag tag-exact'>INSERT PAIR</span></td>
+      <td style='font-size:0.8rem;'>Parent order approved as SAFE NEW ORDER; attach pair to native order.</td>
+    </tr>
+    
+    <tr>
+      <td>8</td>
+      <td><span class='code-badge'>JO-2026-09-14-RAPHAEL</span></td>
+      <td style='text-align:center;'>Pair #2</td>
+      <td><strong>Nike white/blue</strong></td>
+      <td><span class='code-badge'>BC</span></td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td style='text-align:center;'>No</td>
+      <td><span class='tag tag-exact'>INSERT PAIR</span></td>
+      <td style='font-size:0.8rem;'>Parent order approved as SAFE NEW ORDER; attach pair to native order.</td>
+    </tr>
+    
+    <tr>
+      <td>9</td>
+      <td><span class='code-badge'>JO-2026-09-14-RAPHAEL</span></td>
+      <td style='text-align:center;'>Pair #3</td>
+      <td><strong>Nike black/white</strong></td>
+      <td><span class='code-badge'>BC</span></td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td style='text-align:center;'>No</td>
+      <td><span class='tag tag-exact'>INSERT PAIR</span></td>
+      <td style='font-size:0.8rem;'>Parent order approved as SAFE NEW ORDER; attach pair to native order.</td>
+    </tr>
+    
+    <tr>
+      <td>10</td>
+      <td><span class='code-badge'>JO-2026-09-14-CHRISTIAN</span></td>
+      <td style='text-align:center;'>Pair #1</td>
+      <td><strong>ASICS</strong></td>
+      <td><span class='code-badge'>BC</span></td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td style='text-align:center;'>No</td>
+      <td><span class='tag tag-exact'>INSERT PAIR</span></td>
+      <td style='font-size:0.8rem;'>Parent order approved as SAFE NEW ORDER; attach pair to native order.</td>
+    </tr>
+    
+    <tr>
+      <td>11</td>
+      <td><span class='code-badge'>JO-2026-09-14-CHRISTIAN</span></td>
+      <td style='text-align:center;'>Pair #2</td>
+      <td><strong>ASICS</strong></td>
+      <td><span class='code-badge'>BC</span></td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td style='text-align:center;'>No</td>
+      <td><span class='tag tag-exact'>INSERT PAIR</span></td>
+      <td style='font-size:0.8rem;'>Parent order approved as SAFE NEW ORDER; attach pair to native order.</td>
+    </tr>
+    
+    <tr>
+      <td>12</td>
+      <td><span class='code-badge'>JO-2026-09-14-KARL</span></td>
+      <td style='text-align:center;'>Pair #1</td>
+      <td><strong>Salomon</strong></td>
+      <td><span class='code-badge'>BC</span></td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td style='text-align:center;'>No</td>
+      <td><span class='tag tag-exact'>INSERT PAIR</span></td>
+      <td style='font-size:0.8rem;'>Parent order approved as SAFE NEW ORDER; attach pair to native order.</td>
+    </tr>
+    
+    <tr>
+      <td>13</td>
+      <td><span class='code-badge'>JO-2026-09-14-NYX</span></td>
+      <td style='text-align:center;'>Pair #1</td>
+      <td><strong>Palladium white</strong></td>
+      <td><span class='code-badge'>BC</span></td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td style='text-align:center;'>No</td>
+      <td><span class='tag tag-exact'>INSERT PAIR</span></td>
+      <td style='font-size:0.8rem;'>Parent order approved as SAFE NEW ORDER; attach pair to native order.</td>
+    </tr>
+    
+    <tr>
+      <td>14</td>
+      <td><span class='code-badge'>JO-2026-09-14-NYX</span></td>
+      <td style='text-align:center;'>Pair #2</td>
+      <td><strong>Palladium black</strong></td>
+      <td><span class='code-badge'>BC</span></td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td style='text-align:center;'>No</td>
+      <td><span class='tag tag-exact'>INSERT PAIR</span></td>
+      <td style='font-size:0.8rem;'>Parent order approved as SAFE NEW ORDER; attach pair to native order.</td>
+    </tr>
+    
+    <tr>
+      <td>15</td>
+      <td><span class='code-badge'>JO-2026-09-14-NYX</span></td>
+      <td style='text-align:center;'>Pair #3</td>
+      <td><strong>Palladium beige</strong></td>
+      <td><span class='code-badge'>FR</span></td>
+      <td style='text-align:right;'>₱575.00</td>
+      <td style='text-align:center;'>No</td>
+      <td><span class='tag tag-exact'>INSERT PAIR</span></td>
+      <td style='font-size:0.8rem;'>Parent order approved as SAFE NEW ORDER; attach pair to native order.</td>
+    </tr>
+    
+    <tr>
+      <td>16</td>
+      <td><span class='code-badge'>JO-2026-09-14-ERNEST</span></td>
+      <td style='text-align:center;'>Pair #1</td>
+      <td><strong>Birkenstock</strong></td>
+      <td><span class='code-badge'>MRES + color renewal</span></td>
+      <td style='text-align:right;'>₱925.00</td>
+      <td style='text-align:center;'>No</td>
+      <td><span class='tag tag-exact'>INSERT PAIR</span></td>
+      <td style='font-size:0.8rem;'>Parent order approved as SAFE NEW ORDER; attach pair to native order.</td>
+    </tr>
+    
+    <tr>
+      <td>17</td>
+      <td><span class='code-badge'>JO-2026-09-14-KENNETH</span></td>
+      <td style='text-align:center;'>Pair #1</td>
+      <td><strong>Adidas</strong></td>
+      <td><span class='code-badge'>BC</span></td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td style='text-align:center;'>No</td>
+      <td><span class='tag tag-exact'>INSERT PAIR</span></td>
+      <td style='font-size:0.8rem;'>Parent order approved as SAFE NEW ORDER; attach pair to native order.</td>
+    </tr>
+    
+    <tr>
+      <td>18</td>
+      <td><span class='code-badge'>JO-2026-09-14-KENNETH</span></td>
+      <td style='text-align:center;'>Pair #2</td>
+      <td><strong>Oncloud</strong></td>
+      <td><span class='code-badge'>BC</span></td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td style='text-align:center;'>No</td>
+      <td><span class='tag tag-exact'>INSERT PAIR</span></td>
+      <td style='font-size:0.8rem;'>Parent order approved as SAFE NEW ORDER; attach pair to native order.</td>
+    </tr>
+    
+    <tr>
+      <td>19</td>
+      <td><span class='code-badge'>JO-2026-09-14-KENNETH</span></td>
+      <td style='text-align:center;'>Pair #3</td>
+      <td><strong>Nike</strong></td>
+      <td><span class='code-badge'>MRES</span></td>
+      <td style='text-align:right;'>₱550.00</td>
+      <td style='text-align:center;'>No</td>
+      <td><span class='tag tag-exact'>INSERT PAIR</span></td>
+      <td style='font-size:0.8rem;'>Parent order approved as SAFE NEW ORDER; attach pair to native order.</td>
+    </tr>
+    
+    <tr>
+      <td>20</td>
+      <td><span class='code-badge'>JO-2026-09-14-KENNETH</span></td>
+      <td style='text-align:center;'>Pair #4</td>
+      <td><strong>Boost</strong></td>
+      <td><span class='code-badge'>MRES</span></td>
+      <td style='text-align:right;'>₱550.00</td>
+      <td style='text-align:center;'>No</td>
+      <td><span class='tag tag-exact'>INSERT PAIR</span></td>
+      <td style='font-size:0.8rem;'>Parent order approved as SAFE NEW ORDER; attach pair to native order.</td>
+    </tr>
+    
+    <tr>
+      <td>21</td>
+      <td><span class='code-badge'>JO-2026-09-14-KENNETH</span></td>
+      <td style='text-align:center;'>Pair #5</td>
+      <td><strong>Adidas white</strong></td>
+      <td><span class='code-badge'>FR US</span></td>
+      <td style='text-align:right;'>₱575.00</td>
+      <td style='text-align:center;'>No</td>
+      <td><span class='tag tag-exact'>INSERT PAIR</span></td>
+      <td style='font-size:0.8rem;'>Parent order approved as SAFE NEW ORDER; attach pair to native order.</td>
+    </tr>
+    
+    <tr>
+      <td>22</td>
+      <td><span class='code-badge'>JO-2026-09-14-KENNETH</span></td>
+      <td style='text-align:center;'>Pair #6</td>
+      <td><strong>Nike black</strong></td>
+      <td><span class='code-badge'>FR MID</span></td>
+      <td style='text-align:right;'>₱575.00</td>
+      <td style='text-align:center;'>No</td>
+      <td><span class='tag tag-exact'>INSERT PAIR</span></td>
+      <td style='font-size:0.8rem;'>Parent order approved as SAFE NEW ORDER; attach pair to native order.</td>
+    </tr>
+    
+    <tr>
+      <td>23</td>
+      <td><span class='code-badge'>JO-2026-09-15-ANTONIO</span></td>
+      <td style='text-align:center;'>Pair #1</td>
+      <td><strong>Oncloud</strong></td>
+      <td><span class='code-badge'>BC</span></td>
+      <td style='text-align:right;'>₱475.00</td>
+      <td style='text-align:center;'>Yes</td>
+      <td><span class='tag tag-exact'>INSERT PAIR</span></td>
+      <td style='font-size:0.8rem;'>Parent order approved as SAFE NEW ORDER; attach pair to native order.</td>
+    </tr>
+    
+    <tr>
+      <td>24</td>
+      <td><span class='code-badge'>JO-2026-09-15-CICO</span></td>
+      <td style='text-align:center;'>Pair #1</td>
+      <td><strong>Vans</strong></td>
+      <td><span class='code-badge'>BC</span></td>
+      <td style='text-align:right;'>₱325.00</td>
+      <td style='text-align:center;'>No</td>
+      <td><span class='tag tag-hold'>HOLD IDENTITY CONFLICT</span></td>
+      <td style='font-size:0.8rem;'>Parent order held due to Cico vs Rico name conflict; pair held.</td>
+    </tr>
+    
+    <tr>
+      <td>25</td>
+      <td><span class='code-badge'>JO-2026-09-16-LAWRENCE</span></td>
+      <td style='text-align:center;'>Pair #1</td>
+      <td><strong>Nike AF1</strong></td>
+      <td><span class='code-badge'>BC</span></td>
+      <td style='text-align:right;'>₱475.00</td>
+      <td style='text-align:center;'>Yes</td>
+      <td><span class='tag tag-hold'>HOLD NO DSMR MATCH</span></td>
+      <td style='font-size:0.8rem;'>Job Order form exists on paper but has no corresponding DSMR NEW intake row; held.</td>
+    </tr>
+    
+    <tr>
+      <td>26</td>
+      <td><span class='code-badge'>JO-2026-09-16-LAWRENCE</span></td>
+      <td style='text-align:center;'>Pair #2</td>
+      <td><strong>Tiger</strong></td>
+      <td><span class='code-badge'>MRES</span></td>
+      <td style='text-align:right;'>₱700.00</td>
+      <td style='text-align:center;'>Yes</td>
+      <td><span class='tag tag-hold'>HOLD NO DSMR MATCH</span></td>
+      <td style='font-size:0.8rem;'>Job Order form exists on paper but has no corresponding DSMR NEW intake row; held.</td>
+    </tr>
+    
+      </tbody>
+    </table>
+    <div class="alert-box alert-info">
+      <strong>Real Proposed Insert Counts for 1st Batch:</strong><br>
+      &bull; <strong>items:</strong> <strong>+22 Shoe Pairs</strong> (22 pairs belong to approved SAFE NEW orders; 1 pair kept for Sebastian, 1 pair held for Cico, 2 pairs held for Lawrence).<br>
+      &bull; <strong>item_service_mapping:</strong> <strong>+22 Service Mapping Rows</strong>.
+    </div>
+  </section>
+
+  <!-- SECTION 10: SERVICE MAPPING TABLE -->
+  <section id="sec-10">
+    <h2><span class="section-num">10</span> Production Service Code Mapping</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Paper Abbreviation</th>
+          <th>Production Service Name</th>
+          <th>Service ID in PostgreSQL</th>
+          <th>Production Base Price</th>
+          <th>Confidence</th>
+          <th>Historical Pricing Rule</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>BC</strong></td><td>Basic Cleaning</td><td><span class="code-badge">1</span></td><td>₱325.00</td><td><span class="tag tag-exact">EXACT</span></td><td>Snapshot in <span class="code-badge">actual_price</span></td></tr>
+        <tr><td><strong>FR</strong></td><td>Full Reglue</td><td><span class="code-badge">3</span></td><td>₱250.00</td><td><span class="tag tag-exact">EXACT</span></td><td>Snapshot in <span class="code-badge">actual_price</span></td></tr>
+        <tr><td><strong>MRES</strong></td><td>Midsole Full Reglue</td><td><span class="code-badge">40</span></td><td>₱150.00</td><td><span class="tag tag-exact">EXACT</span></td><td>Snapshot in <span class="code-badge">actual_price</span></td></tr>
+        <tr><td><strong>MR</strong></td><td>Minor Reglue</td><td><span class="code-badge">4</span></td><td>₱125.00</td><td><span class="tag tag-exact">EXACT</span></td><td>Snapshot in <span class="code-badge">actual_price</span></td></tr>
+        <tr><td><strong>FR US</strong></td><td>Full Reglue + Unyellowing Sole</td><td><span class="code-badge">3 &amp; 6</span></td><td>₱250.00 + ₱125.00</td><td><span class="tag tag-exact">VERIFIED MAPPING</span></td><td>Snapshot in <span class="code-badge">actual_price</span></td></tr>
+        <tr><td><strong>FR MID</strong></td><td>Full Reglue Midsole</td><td><span class="code-badge">166</span></td><td>₱150.00</td><td><span class="tag tag-exact">VERIFIED MAPPING</span></td><td>Snapshot in <span class="code-badge">actual_price</span></td></tr>
+        <tr><td><strong>PR</strong></td><td>Premium Restoration / Minor Rest.</td><td><span class="code-badge">41</span></td><td>₱225.00</td><td><span class="tag tag-exact">VERIFIED MAPPING</span></td><td>Snapshot in <span class="code-badge">actual_price</span></td></tr>
+        <tr><td><strong>Color Renewal</strong></td><td>Color Renewal</td><td><span class="code-badge">67</span></td><td>₱0.00</td><td><span class="tag tag-exact">EXACT</span></td><td>Snapshot in <span class="code-badge">actual_price</span></td></tr>
+      </tbody>
+    </table>
+    <div class="alert-box alert-success">
+      <strong>Zero Distortion of Master Prices:</strong> Master service prices in <span class="code-badge">services</span> remain completely untouched. The documented historical price is stored in <span class="code-badge">item_service_mapping.actual_price</span>.
+    </div>
+  </section>
+
+  <!-- SECTION 11: HISTORICAL CLAIMS GATING -->
+  <section id="sec-11">
+    <h2><span class="section-num">11</span> Historical Claims Gating (All 22 CLAIM Rows Held)</h2>
+    <p>
+      In accordance with client instructions, <strong>no artificial 00:00:00 timestamps will be written into <span class="code-badge">orders.claimed_at</span></strong>.
+    </p>
+    <div class="alert-box alert-warning">
+      <strong>Conservative Gating Decision:</strong><br>
+      All 22 CLAIM rows remain preserved in historical staging evidence tables.<br>
+      &bull; <strong>orders.claimed_at:</strong> Remains <span class="tag tag-hold">NULL</span> for all imported orders.<br>
+      &bull; <strong>Claim Settlement Payments:</strong> 0 claim payment rows will be inserted into <span class="code-badge">payments</span> during this first batch.<br>
+      This prevents fabricating observed claim hours and avoids mutating native order histories.
+    </div>
+  </section>
+
+  <!-- SECTION 12: CONSERVATIVE FIRST-IMPORT SCOPE -->
+  <section id="sec-12">
+    <h2><span class="section-num">12</span> Conservative First-Import Scope (PostgreSQL Projected Impact)</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Target PostgreSQL Table</th>
+          <th>Pre-Import Baseline</th>
+          <th>Approved 1st Batch Inserts</th>
+          <th>Linked Records (0 Overwrite)</th>
+          <th>Held from 1st Batch</th>
+          <th>Post-Import Projected Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>orders</strong></td>
+          <td>79</td>
+          <td><strong>+54</strong></td>
+          <td>2 (Link Provenance Only)</td>
+          <td>4 Held</td>
+          <td><strong>133 Orders</strong></td>
+        </tr>
+        <tr>
+          <td><strong>items (Shoe Pairs)</strong></td>
+          <td>82</td>
+          <td><strong>+22</strong></td>
+          <td>1 Kept</td>
+          <td>3 Held</td>
+          <td><strong>104 Shoe Pairs</strong></td>
+        </tr>
+        <tr>
+          <td><strong>item_service_mapping</strong></td>
+          <td>139</td>
+          <td><strong>+22</strong></td>
+          <td>1 Kept</td>
+          <td>3 Held</td>
+          <td><strong>161 Mappings</strong></td>
+        </tr>
+        <tr>
+          <td><strong>payments</strong></td>
+          <td>79</td>
+          <td><strong>+48</strong></td>
+          <td>2 Existing</td>
+          <td>22 Claims + 4 Held Orders</td>
+          <td><strong>127 Payments</strong></td>
+        </tr>
+        <tr>
+          <td><strong>customers</strong></td>
+          <td>953</td>
+          <td><strong>+48</strong></td>
+          <td>8 Linked Existing</td>
+          <td>2 Held</td>
+          <td><strong>1,001 Customers</strong></td>
+        </tr>
+        <tr>
+          <td><strong>expenses</strong></td>
+          <td>8</td>
+          <td><strong>+7</strong></td>
+          <td>0</td>
+          <td>4 Held (Parcels, Eileen, Maynilad)</td>
+          <td><strong>15 Expenses (₱53,124.17)</strong></td>
+        </tr>
+        <tr>
+          <td><strong>inventory</strong></td>
+          <td>26</td>
+          <td><strong>0</strong></td>
+          <td>0</td>
+          <td>0</td>
+          <td><strong>26 (UNCHANGED)</strong></td>
+        </tr>
+        <tr>
+          <td><strong>inventory_logs</strong></td>
+          <td>54</td>
+          <td><strong>0</strong></td>
+          <td>0</td>
+          <td>0</td>
+          <td><strong>54 (UNCHANGED)</strong></td>
+        </tr>
+        <tr>
+          <td><strong>audit_logs</strong></td>
+          <td>1,804</td>
+          <td><strong>+1 (Batch Log)</strong></td>
+          <td>0</td>
+          <td>0</td>
+          <td><strong>1,805 Logs</strong></td>
+        </tr>
+        <tr>
+          <td><strong>csv_import_batches</strong></td>
+          <td>1</td>
+          <td><strong>+1 (Manifest)</strong></td>
+          <td>0</td>
+          <td>0</td>
+          <td><strong>2 Batches</strong></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- SECTION 13: POST-IMPORT ONLINE VERIFICATION PLAN -->
+  <section id="sec-13">
+    <h2><span class="section-num">13</span> Post-Import Online Verification Plan</h2>
+    <p>
+      Following future authorized execution, verification will immediately execute against the live deployed PostgreSQL database and online application UI:
+    </p>
+    <div class="card">
+      <ol>
+        <li><strong>API Read-Back Verification:</strong> Query <span class="code-badge">GET /api/orders/</span> over HTTPS to confirm all 54 imported orders return HTTP 200 with valid customer names, canonical order numbers (<span class="code-badge">ORD-2026-09-XX-NNN</span>), and correct grand totals.</li>
+        <li><strong>Job Order Detail Verification:</strong> Query <span class="code-badge">GET /api/orders/{order_id}</span> for Nyx Pantoja to confirm that all 3 pairs appear with Palladium models, BC/FR service mappings, and ₱1,225 balance.</li>
+        <li><strong>Expenses Verification:</strong> Query <span class="code-badge">GET /api/expenses/</span> to confirm that exactly 7 new expense entries appear under September 2026 totaling ₱53,124.17 with zero double-counted payroll.</li>
+        <li><strong>Zero Duplication Audit:</strong> Execute SQL <span class="code-badge">SELECT order_number, count(*) FROM orders GROUP BY order_number HAVING count(*) > 1;</span> to prove 100% uniqueness.</li>
+        <li><strong>Search &amp; Retrieval:</strong> Query the search endpoint for "Nyx Pantoja", "Wendel Fabro", and "Jerome Ramirez" to confirm instant retrieval.</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- SECTION 14: FINAL PRE-IMPORT DECISION -->
+  <section id="sec-14">
+    <h2><span class="section-num">14</span> Final Pre-Import Decision</h2>
+    <div class="gate-banner" style="margin-top:20px;">
+      <div>
+        <div class="gate-title" style="font-size:1.4rem;">
+          DECISION: READY FOR AUTHORIZED POSTGRESQL IMPORT
+        </div>
+        <div class="gate-desc" style="font-size:0.95rem; color:#f1f5f9; margin-top:8px;">
+          All 14 pre-import technical gates are rigorously satisfied. PostgreSQL baseline counts and schemas are verified read-only. Antigravity has executed ZERO database writes and is fully prepared for your final authorized import prompt.
+        </div>
+      </div>
+      <div class="gate-badge">READY FOR AUTHORIZED POSTGRESQL IMPORT</div>
+    </div>
+  </section>
+
+  <footer>
+    <p>Shoelotskey Service Management System &bull; Final Pre-Import Gate Report &bull; Villamor–Pasay Operational Pilot</p>
+    <p style="margin-top: 4px;">PostgreSQL Production Destination &bull; Read-Only Audit &bull; Stop Condition Enforced</p>
+  </footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,1025 @@
+{
+  "dataset_b_metadata": {
+    "dataset_name": "Simulated Operational Dataset",
+    "dataset_version": "1.0-frozen-phase2a8",
+    "target_variable": "Received-to-Ready-for-Release Turnaround Days",
+    "historical_source_reference": "Dataset A (Historical Order-to-Claim Turnaround, N=119 frozen)",
+    "governing_business_rules": "Shoelotskey Service Management System Authorized Rules",
+    "random_seed": 20261002,
+    "sample_size_total": 10000,
+    "partitions": {
+      "train": 7000,
+      "validation": 1500,
+      "test": 1500
+    },
+    "target_conflation_guard": "DO NOT conflate Received-to-Ready-for-Release Turnaround Days with Dataset A historical Order-to-Claim Turnaround Days."
+  },
+  "template_derivation_audit": {
+    "historical_configurations_untransformed": 37,
+    "canonical_configurations_fr_corrected_only": 34,
+    "canonical_configurations_fr_and_mret_corrected": 35,
+    "derivation_explanation": "In Phase 2A.7, correcting the 7 FR-inflated records collapsed 37 raw configurations to 34 templates. In Phase 2A.8, grouping Minor Retouch (MRET) into minor_restoration_qty moves BC+MRET (1 row) into the existing BC+MRES template, but separates BC+MR+MRET (1 row, ORD-2026-01-02-006, 20-day tier) from pure BC+MR (2 rows, 10-day tier), creating exactly 35 collision-free canonical configurations summing to 119.",
+    "total_historical_observations_represented": 119
+  },
+  "feature_specifications": {
+    "feature_set_c_predictors_12": [
+      "total_pairs",
+      "basic_cleaning_qty",
+      "full_reglue_qty",
+      "minor_reglue_qty",
+      "unyellowing_qty",
+      "minor_restoration_qty",
+      "color_renewal_qty",
+      "rush_indicator",
+      "distinct_service_types",
+      "total_service_applications",
+      "intake_day_of_week",
+      "intake_month"
+    ],
+    "feature_set_b_predictors_13": [
+      "total_pairs",
+      "distinct_service_types",
+      "total_service_applications",
+      "rush_indicator",
+      "day_of_week_received",
+      "month_received",
+      "basic_cleaning_qty",
+      "full_reglue_qty",
+      "minor_reglue_qty",
+      "full_restoration_qty",
+      "minor_restoration_qty",
+      "color_renewal_qty",
+      "unyellowing_qty"
+    ],
+    "strictly_excluded_leakage_fields": [
+      "max_service_duration",
+      "dominant_duration",
+      "rule_base_days",
+      "expected_days",
+      "expected_release_date",
+      "simulated_ready_for_release_date",
+      "ready_for_release_date",
+      "raw_target_date",
+      "sunday_rollover_days",
+      "holiday_rollover_days",
+      "total_rollover_days",
+      "one_day_rush_eligible",
+      "turnaround_days"
+    ],
+    "calendar_variation_disclosure": "Feature Set C contains intake-known operational and coarse calendar predictors but intentionally excludes exact calendar-date/closure-derived features. Consequently, limited target variation may remain for otherwise identical feature vectors when a calculated release date intersects an owner-confirmed special closure."
+  },
+  "calendar_and_closure_rules": {
+    "closed_weekdays": [
+      6
+    ],
+    "owner_confirmed_special_closures_2025_2026": [
+      {
+        "date": "2025-04-16",
+        "description": "Owner-confirmed Holy Week closure date"
+      },
+      {
+        "date": "2025-04-17",
+        "description": "Owner-confirmed Holy Week closure date"
+      },
+      {
+        "date": "2025-04-18",
+        "description": "Owner-confirmed Holy Week closure date"
+      },
+      {
+        "date": "2025-04-19",
+        "description": "Owner-confirmed Holy Week closure date"
+      },
+      {
+        "date": "2025-12-24",
+        "description": "Owner-confirmed Christmas Eve closure date"
+      },
+      {
+        "date": "2025-12-25",
+        "description": "Owner-confirmed Christmas Day closure date"
+      },
+      {
+        "date": "2025-12-31",
+        "description": "Owner-confirmed New Year's Eve closure date"
+      },
+      {
+        "date": "2026-01-01",
+        "description": "Owner-confirmed New Year's Day closure date"
+      }
+    ],
+    "rollover_logic": "raw_target_date = intake_date + rule_base_days; release_date = NextOpenReleaseDate(raw_target_date); days = (release_date - intake_date).days",
+    "sunday_in_progress_policy": "Sundays encountered while service is in progress count normally towards calendar turnaround."
+  },
+  "service_hierarchy_and_pricing_rules": {
+    "basic_cleaning": {
+      "canonical_code": "BC",
+      "base_price": 325.0,
+      "duration_days": 10,
+      "bundled_with": [
+        "FR",
+        "MR",
+        "COR"
+      ],
+      "can_exist_standalone": true
+    },
+    "minor_reglue": {
+      "canonical_code": "MR",
+      "incremental_price": 125.0,
+      "total_with_bc": 450.0,
+      "duration_days": 10,
+      "can_exist_standalone": false
+    },
+    "full_reglue": {
+      "canonical_code": "FR",
+      "base_price": 250.0,
+      "duration_days": 25,
+      "pricing_structure": {
+        "bc_price": 325.0,
+        "fr_base_price": 250.0,
+        "first_sole_specification": 0.0,
+        "second_sole_specification": 150.0,
+        "bc_plus_frmid": 575.0,
+        "bc_plus_frund": 575.0,
+        "bc_plus_frmid_plus_frund": 725.0
+      },
+      "specifications_allowed": [
+        "FRMID",
+        "FRUND"
+      ],
+      "specification_counting_rule": "FRMID and FRUND specify sole sections and do NOT increment full_reglue_qty"
+    },
+    "color_renewal": {
+      "canonical_code": "COR",
+      "base_price": 0.0,
+      "duration_days": 25,
+      "pricing_structure": {
+        "bc_price": 325.0,
+        "cor_base_price": 0.0,
+        "bc_plus_cor2": 700.0,
+        "bc_plus_cor3": 800.0
+      },
+      "specifications_allowed": [
+        "COR2",
+        "COR3"
+      ],
+      "specification_counting_rule": "COR2 and COR3 specify color counts and do NOT increment color_renewal_qty"
+    },
+    "unyellowing": {
+      "canonical_code": "UNY",
+      "incremental_price": 125.0,
+      "duration_days": 20
+    },
+    "minor_restoration": {
+      "canonical_code": "MRES",
+      "incremental_price": 225.0,
+      "duration_days": 20
+    },
+    "minor_retouch": {
+      "canonical_code": "MRET",
+      "incremental_price": 125.0,
+      "duration_days": 20,
+      "feature_category_mapping": "MRET contributes to minor_restoration_qty for ML representation; actual identity retained in audit/provenance metadata"
+    },
+    "full_restoration": {
+      "canonical_code": "FRES",
+      "duration_days": 25,
+      "dataset_b_status": "unobserved, qty=0"
+    }
+  },
+  "rush_rules": {
+    "one_day_eligibility_condition": "rush_indicator == 1 AND total_pairs <= 3 AND order_is_bc_only",
+    "eligible_target_base_days": 1,
+    "ineligible_rush_behavior": "Retains standard non-additive tier (10, 20, or 25 days)"
+  },
+  "canonical_empirical_templates": [
+    {
+      "template_id": "CT01",
+      "total_pairs": 1,
+      "basic_cleaning_qty": 0,
+      "full_reglue_qty": 1,
+      "minor_reglue_qty": 0,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 0,
+      "color_renewal_qty": 0,
+      "unyellowing_qty": 0,
+      "distinct_service_types": 1,
+      "total_service_applications": 1,
+      "standard_base_tier_days": 25,
+      "one_day_rush_eligible": false,
+      "historical_frequency": 1,
+      "empirical_weight_probability": 0.00840336,
+      "historical_rush_frequency": {
+        "0": 1
+      },
+      "example_order_ids": [
+        "ORD-2025-08-27-006"
+      ]
+    },
+    {
+      "template_id": "CT02",
+      "total_pairs": 1,
+      "basic_cleaning_qty": 1,
+      "full_reglue_qty": 0,
+      "minor_reglue_qty": 0,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 0,
+      "color_renewal_qty": 0,
+      "unyellowing_qty": 0,
+      "distinct_service_types": 1,
+      "total_service_applications": 1,
+      "standard_base_tier_days": 10,
+      "one_day_rush_eligible": true,
+      "historical_frequency": 29,
+      "empirical_weight_probability": 0.24369748,
+      "historical_rush_frequency": {
+        "0": 24,
+        "1": 5
+      },
+      "example_order_ids": [
+        "ORD-2025-08-15-671",
+        "ORD-2025-08-17-007",
+        "ORD-2025-08-17-010"
+      ]
+    },
+    {
+      "template_id": "CT03",
+      "total_pairs": 1,
+      "basic_cleaning_qty": 1,
+      "full_reglue_qty": 0,
+      "minor_reglue_qty": 0,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 0,
+      "color_renewal_qty": 0,
+      "unyellowing_qty": 1,
+      "distinct_service_types": 2,
+      "total_service_applications": 2,
+      "standard_base_tier_days": 20,
+      "one_day_rush_eligible": false,
+      "historical_frequency": 4,
+      "empirical_weight_probability": 0.03361345,
+      "historical_rush_frequency": {
+        "0": 4
+      },
+      "example_order_ids": [
+        "ORD-2025-12-10-007",
+        "ORD-2025-12-29-001",
+        "ORD-2026-01-08-004"
+      ]
+    },
+    {
+      "template_id": "CT04",
+      "total_pairs": 1,
+      "basic_cleaning_qty": 1,
+      "full_reglue_qty": 0,
+      "minor_reglue_qty": 0,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 0,
+      "color_renewal_qty": 1,
+      "unyellowing_qty": 0,
+      "distinct_service_types": 2,
+      "total_service_applications": 2,
+      "standard_base_tier_days": 25,
+      "one_day_rush_eligible": false,
+      "historical_frequency": 2,
+      "empirical_weight_probability": 0.01680672,
+      "historical_rush_frequency": {
+        "0": 2
+      },
+      "example_order_ids": [
+        "ORD-2025-12-05-006",
+        "ORD-2026-01-03-004"
+      ]
+    },
+    {
+      "template_id": "CT05",
+      "total_pairs": 1,
+      "basic_cleaning_qty": 1,
+      "full_reglue_qty": 0,
+      "minor_reglue_qty": 0,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 1,
+      "color_renewal_qty": 0,
+      "unyellowing_qty": 0,
+      "distinct_service_types": 2,
+      "total_service_applications": 2,
+      "standard_base_tier_days": 20,
+      "one_day_rush_eligible": false,
+      "historical_frequency": 6,
+      "empirical_weight_probability": 0.05042017,
+      "historical_rush_frequency": {
+        "0": 6
+      },
+      "example_order_ids": [
+        "ORD-2025-11-20-011",
+        "ORD-2025-11-20-015",
+        "ORD-2025-11-20-018"
+      ]
+    },
+    {
+      "template_id": "CT06",
+      "total_pairs": 1,
+      "basic_cleaning_qty": 1,
+      "full_reglue_qty": 0,
+      "minor_reglue_qty": 1,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 0,
+      "color_renewal_qty": 0,
+      "unyellowing_qty": 0,
+      "distinct_service_types": 2,
+      "total_service_applications": 2,
+      "standard_base_tier_days": 10,
+      "one_day_rush_eligible": false,
+      "historical_frequency": 2,
+      "empirical_weight_probability": 0.01680672,
+      "historical_rush_frequency": {
+        "0": 2
+      },
+      "example_order_ids": [
+        "ORD-2025-08-19-006",
+        "ORD-2025-10-16-003"
+      ]
+    },
+    {
+      "template_id": "CT07",
+      "total_pairs": 1,
+      "basic_cleaning_qty": 1,
+      "full_reglue_qty": 0,
+      "minor_reglue_qty": 1,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 0,
+      "color_renewal_qty": 0,
+      "unyellowing_qty": 1,
+      "distinct_service_types": 3,
+      "total_service_applications": 3,
+      "standard_base_tier_days": 20,
+      "one_day_rush_eligible": false,
+      "historical_frequency": 2,
+      "empirical_weight_probability": 0.01680672,
+      "historical_rush_frequency": {
+        "0": 1,
+        "1": 1
+      },
+      "example_order_ids": [
+        "ORD-2025-10-14-001",
+        "ORD-2025-12-18-001"
+      ]
+    },
+    {
+      "template_id": "CT08",
+      "total_pairs": 1,
+      "basic_cleaning_qty": 1,
+      "full_reglue_qty": 0,
+      "minor_reglue_qty": 1,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 1,
+      "color_renewal_qty": 0,
+      "unyellowing_qty": 0,
+      "distinct_service_types": 3,
+      "total_service_applications": 3,
+      "standard_base_tier_days": 20,
+      "one_day_rush_eligible": false,
+      "historical_frequency": 1,
+      "empirical_weight_probability": 0.00840336,
+      "historical_rush_frequency": {
+        "0": 1
+      },
+      "example_order_ids": [
+        "ORD-2026-01-02-006"
+      ]
+    },
+    {
+      "template_id": "CT09",
+      "total_pairs": 1,
+      "basic_cleaning_qty": 1,
+      "full_reglue_qty": 1,
+      "minor_reglue_qty": 0,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 0,
+      "color_renewal_qty": 0,
+      "unyellowing_qty": 0,
+      "distinct_service_types": 2,
+      "total_service_applications": 2,
+      "standard_base_tier_days": 25,
+      "one_day_rush_eligible": false,
+      "historical_frequency": 21,
+      "empirical_weight_probability": 0.17647059,
+      "historical_rush_frequency": {
+        "0": 21
+      },
+      "example_order_ids": [
+        "ORD-2025-08-28-008",
+        "ORD-2025-10-07-002",
+        "ORD-2025-10-13-008"
+      ]
+    },
+    {
+      "template_id": "CT10",
+      "total_pairs": 1,
+      "basic_cleaning_qty": 1,
+      "full_reglue_qty": 1,
+      "minor_reglue_qty": 0,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 0,
+      "color_renewal_qty": 0,
+      "unyellowing_qty": 1,
+      "distinct_service_types": 3,
+      "total_service_applications": 3,
+      "standard_base_tier_days": 25,
+      "one_day_rush_eligible": false,
+      "historical_frequency": 1,
+      "empirical_weight_probability": 0.00840336,
+      "historical_rush_frequency": {
+        "0": 1
+      },
+      "example_order_ids": [
+        "ORD-2025-10-24-002"
+      ]
+    },
+    {
+      "template_id": "CT11",
+      "total_pairs": 1,
+      "basic_cleaning_qty": 1,
+      "full_reglue_qty": 1,
+      "minor_reglue_qty": 0,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 0,
+      "color_renewal_qty": 1,
+      "unyellowing_qty": 0,
+      "distinct_service_types": 3,
+      "total_service_applications": 3,
+      "standard_base_tier_days": 25,
+      "one_day_rush_eligible": false,
+      "historical_frequency": 1,
+      "empirical_weight_probability": 0.00840336,
+      "historical_rush_frequency": {
+        "0": 1
+      },
+      "example_order_ids": [
+        "ORD-2026-01-08-002"
+      ]
+    },
+    {
+      "template_id": "CT12",
+      "total_pairs": 1,
+      "basic_cleaning_qty": 1,
+      "full_reglue_qty": 1,
+      "minor_reglue_qty": 0,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 1,
+      "color_renewal_qty": 0,
+      "unyellowing_qty": 0,
+      "distinct_service_types": 3,
+      "total_service_applications": 3,
+      "standard_base_tier_days": 25,
+      "one_day_rush_eligible": false,
+      "historical_frequency": 4,
+      "empirical_weight_probability": 0.03361345,
+      "historical_rush_frequency": {
+        "0": 4
+      },
+      "example_order_ids": [
+        "ORD-2025-12-09-003",
+        "ORD-2025-12-09-005",
+        "ORD-2025-12-15-001"
+      ]
+    },
+    {
+      "template_id": "CT13",
+      "total_pairs": 2,
+      "basic_cleaning_qty": 1,
+      "full_reglue_qty": 0,
+      "minor_reglue_qty": 0,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 1,
+      "color_renewal_qty": 0,
+      "unyellowing_qty": 1,
+      "distinct_service_types": 3,
+      "total_service_applications": 3,
+      "standard_base_tier_days": 20,
+      "one_day_rush_eligible": false,
+      "historical_frequency": 1,
+      "empirical_weight_probability": 0.00840336,
+      "historical_rush_frequency": {
+        "0": 1
+      },
+      "example_order_ids": [
+        "ORD-2025-08-27-007"
+      ]
+    },
+    {
+      "template_id": "CT14",
+      "total_pairs": 2,
+      "basic_cleaning_qty": 2,
+      "full_reglue_qty": 0,
+      "minor_reglue_qty": 0,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 0,
+      "color_renewal_qty": 0,
+      "unyellowing_qty": 0,
+      "distinct_service_types": 1,
+      "total_service_applications": 2,
+      "standard_base_tier_days": 10,
+      "one_day_rush_eligible": true,
+      "historical_frequency": 17,
+      "empirical_weight_probability": 0.14285714,
+      "historical_rush_frequency": {
+        "0": 12,
+        "1": 5
+      },
+      "example_order_ids": [
+        "ORD-2025-08-15-669",
+        "ORD-2025-08-15-670",
+        "ORD-2025-09-16-004"
+      ]
+    },
+    {
+      "template_id": "CT15",
+      "total_pairs": 2,
+      "basic_cleaning_qty": 2,
+      "full_reglue_qty": 0,
+      "minor_reglue_qty": 0,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 0,
+      "color_renewal_qty": 0,
+      "unyellowing_qty": 1,
+      "distinct_service_types": 2,
+      "total_service_applications": 3,
+      "standard_base_tier_days": 20,
+      "one_day_rush_eligible": false,
+      "historical_frequency": 1,
+      "empirical_weight_probability": 0.00840336,
+      "historical_rush_frequency": {
+        "1": 1
+      },
+      "example_order_ids": [
+        "ORD-2025-12-18-003"
+      ]
+    },
+    {
+      "template_id": "CT16",
+      "total_pairs": 2,
+      "basic_cleaning_qty": 2,
+      "full_reglue_qty": 0,
+      "minor_reglue_qty": 0,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 2,
+      "color_renewal_qty": 0,
+      "unyellowing_qty": 0,
+      "distinct_service_types": 2,
+      "total_service_applications": 4,
+      "standard_base_tier_days": 20,
+      "one_day_rush_eligible": false,
+      "historical_frequency": 1,
+      "empirical_weight_probability": 0.00840336,
+      "historical_rush_frequency": {
+        "0": 1
+      },
+      "example_order_ids": [
+        "ORD-2026-01-22-002"
+      ]
+    },
+    {
+      "template_id": "CT17",
+      "total_pairs": 2,
+      "basic_cleaning_qty": 2,
+      "full_reglue_qty": 0,
+      "minor_reglue_qty": 1,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 0,
+      "color_renewal_qty": 0,
+      "unyellowing_qty": 0,
+      "distinct_service_types": 2,
+      "total_service_applications": 3,
+      "standard_base_tier_days": 10,
+      "one_day_rush_eligible": false,
+      "historical_frequency": 1,
+      "empirical_weight_probability": 0.00840336,
+      "historical_rush_frequency": {
+        "0": 1
+      },
+      "example_order_ids": [
+        "ORD-2025-09-19-002"
+      ]
+    },
+    {
+      "template_id": "CT18",
+      "total_pairs": 2,
+      "basic_cleaning_qty": 2,
+      "full_reglue_qty": 1,
+      "minor_reglue_qty": 0,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 0,
+      "color_renewal_qty": 0,
+      "unyellowing_qty": 0,
+      "distinct_service_types": 2,
+      "total_service_applications": 3,
+      "standard_base_tier_days": 25,
+      "one_day_rush_eligible": false,
+      "historical_frequency": 2,
+      "empirical_weight_probability": 0.01680672,
+      "historical_rush_frequency": {
+        "0": 2
+      },
+      "example_order_ids": [
+        "ORD-2025-10-31-001",
+        "ORD-2026-01-11-003"
+      ]
+    },
+    {
+      "template_id": "CT19",
+      "total_pairs": 2,
+      "basic_cleaning_qty": 2,
+      "full_reglue_qty": 1,
+      "minor_reglue_qty": 0,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 1,
+      "color_renewal_qty": 0,
+      "unyellowing_qty": 0,
+      "distinct_service_types": 3,
+      "total_service_applications": 4,
+      "standard_base_tier_days": 25,
+      "one_day_rush_eligible": false,
+      "historical_frequency": 2,
+      "empirical_weight_probability": 0.01680672,
+      "historical_rush_frequency": {
+        "1": 1,
+        "0": 1
+      },
+      "example_order_ids": [
+        "ORD-2025-11-28-004",
+        "ORD-2026-01-08-003"
+      ]
+    },
+    {
+      "template_id": "CT20",
+      "total_pairs": 2,
+      "basic_cleaning_qty": 2,
+      "full_reglue_qty": 1,
+      "minor_reglue_qty": 0,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 1,
+      "color_renewal_qty": 0,
+      "unyellowing_qty": 1,
+      "distinct_service_types": 4,
+      "total_service_applications": 5,
+      "standard_base_tier_days": 25,
+      "one_day_rush_eligible": false,
+      "historical_frequency": 1,
+      "empirical_weight_probability": 0.00840336,
+      "historical_rush_frequency": {
+        "0": 1
+      },
+      "example_order_ids": [
+        "ORD-2026-01-07-002"
+      ]
+    },
+    {
+      "template_id": "CT21",
+      "total_pairs": 2,
+      "basic_cleaning_qty": 2,
+      "full_reglue_qty": 1,
+      "minor_reglue_qty": 1,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 0,
+      "color_renewal_qty": 0,
+      "unyellowing_qty": 0,
+      "distinct_service_types": 3,
+      "total_service_applications": 4,
+      "standard_base_tier_days": 25,
+      "one_day_rush_eligible": false,
+      "historical_frequency": 2,
+      "empirical_weight_probability": 0.01680672,
+      "historical_rush_frequency": {
+        "0": 2
+      },
+      "example_order_ids": [
+        "ORD-2025-12-10-002",
+        "ORD-2026-01-02-002"
+      ]
+    },
+    {
+      "template_id": "CT22",
+      "total_pairs": 2,
+      "basic_cleaning_qty": 2,
+      "full_reglue_qty": 1,
+      "minor_reglue_qty": 1,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 1,
+      "color_renewal_qty": 0,
+      "unyellowing_qty": 0,
+      "distinct_service_types": 4,
+      "total_service_applications": 5,
+      "standard_base_tier_days": 25,
+      "one_day_rush_eligible": false,
+      "historical_frequency": 1,
+      "empirical_weight_probability": 0.00840336,
+      "historical_rush_frequency": {
+        "0": 1
+      },
+      "example_order_ids": [
+        "ORD-2025-09-17-001"
+      ]
+    },
+    {
+      "template_id": "CT23",
+      "total_pairs": 2,
+      "basic_cleaning_qty": 2,
+      "full_reglue_qty": 2,
+      "minor_reglue_qty": 0,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 0,
+      "color_renewal_qty": 0,
+      "unyellowing_qty": 0,
+      "distinct_service_types": 2,
+      "total_service_applications": 4,
+      "standard_base_tier_days": 25,
+      "one_day_rush_eligible": false,
+      "historical_frequency": 2,
+      "empirical_weight_probability": 0.01680672,
+      "historical_rush_frequency": {
+        "0": 2
+      },
+      "example_order_ids": [
+        "ORD-2025-11-20-010",
+        "ORD-2026-01-04-003"
+      ]
+    },
+    {
+      "template_id": "CT24",
+      "total_pairs": 3,
+      "basic_cleaning_qty": 1,
+      "full_reglue_qty": 0,
+      "minor_reglue_qty": 0,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 3,
+      "color_renewal_qty": 0,
+      "unyellowing_qty": 3,
+      "distinct_service_types": 3,
+      "total_service_applications": 7,
+      "standard_base_tier_days": 20,
+      "one_day_rush_eligible": false,
+      "historical_frequency": 1,
+      "empirical_weight_probability": 0.00840336,
+      "historical_rush_frequency": {
+        "0": 1
+      },
+      "example_order_ids": [
+        "ORD-2025-12-23-001"
+      ]
+    },
+    {
+      "template_id": "CT25",
+      "total_pairs": 3,
+      "basic_cleaning_qty": 2,
+      "full_reglue_qty": 1,
+      "minor_reglue_qty": 0,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 0,
+      "color_renewal_qty": 0,
+      "unyellowing_qty": 0,
+      "distinct_service_types": 2,
+      "total_service_applications": 3,
+      "standard_base_tier_days": 25,
+      "one_day_rush_eligible": false,
+      "historical_frequency": 1,
+      "empirical_weight_probability": 0.00840336,
+      "historical_rush_frequency": {
+        "0": 1
+      },
+      "example_order_ids": [
+        "ORD-2025-11-22-008"
+      ]
+    },
+    {
+      "template_id": "CT26",
+      "total_pairs": 3,
+      "basic_cleaning_qty": 3,
+      "full_reglue_qty": 0,
+      "minor_reglue_qty": 0,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 0,
+      "color_renewal_qty": 0,
+      "unyellowing_qty": 0,
+      "distinct_service_types": 1,
+      "total_service_applications": 3,
+      "standard_base_tier_days": 10,
+      "one_day_rush_eligible": true,
+      "historical_frequency": 2,
+      "empirical_weight_probability": 0.01680672,
+      "historical_rush_frequency": {
+        "0": 2
+      },
+      "example_order_ids": [
+        "ORD-2025-11-30-003",
+        "ORD-2025-12-17-002"
+      ]
+    },
+    {
+      "template_id": "CT27",
+      "total_pairs": 3,
+      "basic_cleaning_qty": 3,
+      "full_reglue_qty": 0,
+      "minor_reglue_qty": 0,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 0,
+      "color_renewal_qty": 0,
+      "unyellowing_qty": 1,
+      "distinct_service_types": 2,
+      "total_service_applications": 4,
+      "standard_base_tier_days": 20,
+      "one_day_rush_eligible": false,
+      "historical_frequency": 1,
+      "empirical_weight_probability": 0.00840336,
+      "historical_rush_frequency": {
+        "0": 1
+      },
+      "example_order_ids": [
+        "ORD-2025-12-08-006"
+      ]
+    },
+    {
+      "template_id": "CT28",
+      "total_pairs": 3,
+      "basic_cleaning_qty": 3,
+      "full_reglue_qty": 0,
+      "minor_reglue_qty": 0,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 1,
+      "color_renewal_qty": 0,
+      "unyellowing_qty": 0,
+      "distinct_service_types": 2,
+      "total_service_applications": 4,
+      "standard_base_tier_days": 20,
+      "one_day_rush_eligible": false,
+      "historical_frequency": 1,
+      "empirical_weight_probability": 0.00840336,
+      "historical_rush_frequency": {
+        "0": 1
+      },
+      "example_order_ids": [
+        "ORD-2025-11-17-001"
+      ]
+    },
+    {
+      "template_id": "CT29",
+      "total_pairs": 3,
+      "basic_cleaning_qty": 3,
+      "full_reglue_qty": 1,
+      "minor_reglue_qty": 0,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 1,
+      "color_renewal_qty": 0,
+      "unyellowing_qty": 1,
+      "distinct_service_types": 4,
+      "total_service_applications": 6,
+      "standard_base_tier_days": 25,
+      "one_day_rush_eligible": false,
+      "historical_frequency": 1,
+      "empirical_weight_probability": 0.00840336,
+      "historical_rush_frequency": {
+        "1": 1
+      },
+      "example_order_ids": [
+        "ORD-2025-12-10-009"
+      ]
+    },
+    {
+      "template_id": "CT30",
+      "total_pairs": 4,
+      "basic_cleaning_qty": 4,
+      "full_reglue_qty": 0,
+      "minor_reglue_qty": 0,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 0,
+      "color_renewal_qty": 0,
+      "unyellowing_qty": 0,
+      "distinct_service_types": 1,
+      "total_service_applications": 4,
+      "standard_base_tier_days": 10,
+      "one_day_rush_eligible": false,
+      "historical_frequency": 2,
+      "empirical_weight_probability": 0.01680672,
+      "historical_rush_frequency": {
+        "0": 2
+      },
+      "example_order_ids": [
+        "ORD-2025-11-14-005",
+        "ORD-2025-11-30-008"
+      ]
+    },
+    {
+      "template_id": "CT31",
+      "total_pairs": 4,
+      "basic_cleaning_qty": 4,
+      "full_reglue_qty": 1,
+      "minor_reglue_qty": 1,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 0,
+      "color_renewal_qty": 0,
+      "unyellowing_qty": 0,
+      "distinct_service_types": 3,
+      "total_service_applications": 6,
+      "standard_base_tier_days": 25,
+      "one_day_rush_eligible": false,
+      "historical_frequency": 1,
+      "empirical_weight_probability": 0.00840336,
+      "historical_rush_frequency": {
+        "0": 1
+      },
+      "example_order_ids": [
+        "ORD-2025-12-08-005"
+      ]
+    },
+    {
+      "template_id": "CT32",
+      "total_pairs": 4,
+      "basic_cleaning_qty": 4,
+      "full_reglue_qty": 2,
+      "minor_reglue_qty": 0,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 0,
+      "color_renewal_qty": 0,
+      "unyellowing_qty": 1,
+      "distinct_service_types": 3,
+      "total_service_applications": 7,
+      "standard_base_tier_days": 25,
+      "one_day_rush_eligible": false,
+      "historical_frequency": 1,
+      "empirical_weight_probability": 0.00840336,
+      "historical_rush_frequency": {
+        "0": 1
+      },
+      "example_order_ids": [
+        "ORD-2025-12-11-002"
+      ]
+    },
+    {
+      "template_id": "CT33",
+      "total_pairs": 4,
+      "basic_cleaning_qty": 4,
+      "full_reglue_qty": 3,
+      "minor_reglue_qty": 0,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 0,
+      "color_renewal_qty": 0,
+      "unyellowing_qty": 0,
+      "distinct_service_types": 2,
+      "total_service_applications": 7,
+      "standard_base_tier_days": 25,
+      "one_day_rush_eligible": false,
+      "historical_frequency": 1,
+      "empirical_weight_probability": 0.00840336,
+      "historical_rush_frequency": {
+        "0": 1
+      },
+      "example_order_ids": [
+        "ORD-2025-12-14-002"
+      ]
+    },
+    {
+      "template_id": "CT34",
+      "total_pairs": 4,
+      "basic_cleaning_qty": 4,
+      "full_reglue_qty": 3,
+      "minor_reglue_qty": 0,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 1,
+      "color_renewal_qty": 0,
+      "unyellowing_qty": 1,
+      "distinct_service_types": 4,
+      "total_service_applications": 9,
+      "standard_base_tier_days": 25,
+      "one_day_rush_eligible": false,
+      "historical_frequency": 1,
+      "empirical_weight_probability": 0.00840336,
+      "historical_rush_frequency": {
+        "0": 1
+      },
+      "example_order_ids": [
+        "ORD-2025-11-22-006"
+      ]
+    },
+    {
+      "template_id": "CT35",
+      "total_pairs": 6,
+      "basic_cleaning_qty": 5,
+      "full_reglue_qty": 0,
+      "minor_reglue_qty": 0,
+      "full_restoration_qty": 0,
+      "minor_restoration_qty": 0,
+      "color_renewal_qty": 0,
+      "unyellowing_qty": 0,
+      "distinct_service_types": 1,
+      "total_service_applications": 5,
+      "standard_base_tier_days": 10,
+      "one_day_rush_eligible": false,
+      "historical_frequency": 1,
+      "empirical_weight_probability": 0.00840336,
+      "historical_rush_frequency": {
+        "0": 1
+      },
+      "example_order_ids": [
+        "ORD-2025-08-16-005"
+      ]
+    }
+  ]
+}

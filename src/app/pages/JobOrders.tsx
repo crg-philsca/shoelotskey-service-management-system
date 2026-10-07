@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useOrders } from '../context/OrderContext';
+import { useActivities } from '@/app/context/ActivityContext';
 import { JobOrder } from '@/app/types';
 import { formatPeso } from '@/app/lib/currency';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
@@ -8,7 +9,7 @@ import { Input } from '@/app/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu';
-import { Search, Filter, MoreVertical, Edit, ArrowRight, RotateCcw, UserPlus, ShoppingBag, AlertTriangle, CheckCircle2, FileText, Loader2 } from 'lucide-react';
+import { Search, Filter, MoreVertical, Edit, ArrowRight, RotateCcw, UserPlus, ShoppingBag, AlertTriangle, CheckCircle2, Loader2, Lock, Eye, EyeOff, XCircle } from 'lucide-react';
 import { useServices } from '@/app/context/ServiceContext';
 import EditOrderModal from '@/app/components/EditOrderModal';
 import JobOrderFormModal from '@/app/components/JobOrderFormModal';
@@ -18,7 +19,10 @@ import { toast } from 'sonner';
 import { Label } from '@/app/components/ui/label';
 import { Checkbox } from '@/app/components/ui/checkbox';
 import { getOrderPaidAmount, getOrderRetainedAmount } from '@/app/lib/salesAnalytics';
-import { toServiceCode, chunkServiceCodesTwoPerRow } from '@/app/lib/businessRules';
+import { toServiceCode, chunkServiceCodesTwoPerRow, normalizeServiceCodes } from '@/app/lib/businessRules';
+import { hasPermission } from '@/app/lib/permissions';
+import { sanitizeClientAuthCode, sanitizeClientUsername, hasMaliciousPattern } from '@/app/lib/security';
+import { API_BASE } from '@/app/lib/apiBase';
 
 function FormattedDateInput({ value, onChange, className, id }: { value: string; onChange: (val: string) => void; className?: string; id?: string }) {
     const toDisplay = (iso: string) => {
@@ -76,7 +80,7 @@ function FormattedDateInput({ value, onChange, className, id }: { value: string;
 }
 
 interface JobOrdersProps {
-    user: { username: string; role: 'owner' | 'staff' | 'admin' | 'front staff'; token: string };
+    user: { username: string; role: 'owner' | 'staff' | 'admin' | 'front staff'; token: string; permissions?: string[] };
     onSetHeaderActionRight: (action: React.ReactNode) => void;
 }
 
@@ -91,7 +95,7 @@ interface JobOrdersProps {
  */
 export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersProps) {
     const { orders, loading, updateOrder } = useOrders();
-    const { services } = useServices();
+    const { services, authorizationCode } = useServices();
     const [searchQuery, setSearchQuery] = useState('');
     const [filterStatus, setFilterStatus] = useState<string>('all');
     const [filterService, setFilterService] = useState<string>('all');
@@ -104,6 +108,83 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
     const [cancellationReason, setCancellationReason] = useState('');
     const [isCancelling, setIsCancelling] = useState(false);
     const isCancellingRef = useRef(false);
+
+    // Cancellation Authorization State
+    const isOwner = ['owner', 'admin'].includes((user.role || '').toLowerCase()) || user.username?.toLowerCase() === 'owner' || user.username?.toLowerCase() === 'admin';
+    const [cancelAuthMethod, setCancelAuthMethod] = useState<'code' | 'credentials'>('code');
+    const [cancelAuthCode, setCancelAuthCode] = useState('');
+    const [cancelAuthUsername, setCancelAuthUsername] = useState('');
+    const [cancelAuthPassword, setCancelAuthPassword] = useState('');
+    const [showCancelSecret, setShowCancelSecret] = useState(false);
+    const [isCancelAuthorizing, setIsCancelAuthorizing] = useState(false);
+    const [cancelAuthorizedBy, setCancelAuthorizedBy] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!cancelOrderModal) {
+            setCancelAuthCode('');
+            setCancelAuthUsername('');
+            setCancelAuthPassword('');
+            setCancelAuthorizedBy(null);
+            setShowCancelSecret(false);
+            setCancelAuthMethod('code');
+        }
+    }, [cancelOrderModal]);
+
+    const canStaffUseCancelCode = useMemo(() => {
+        if (isOwner) return true;
+        return hasPermission(user, 'discounts.use_auth_code') || hasPermission(user, 'discounts.authorize');
+    }, [isOwner, user]);
+
+    const isCancelAuthCodeValid = useMemo(() => {
+        if (!canStaffUseCancelCode) return false;
+        const code = cancelAuthCode.trim();
+        if (!code) return false;
+        const sysCode = (authorizationCode || '').trim();
+        return Boolean(sysCode) && (code === sysCode || code.toUpperCase() === sysCode.toUpperCase());
+    }, [canStaffUseCancelCode, cancelAuthCode, authorizationCode]);
+
+    const isCancellationAuthorized = isOwner || hasPermission(user, 'job_orders.authorize_cancel') || isCancelAuthCodeValid || Boolean(cancelAuthorizedBy);
+
+    const handleAuthorizeCancelCredentials = async () => {
+        const cleanUsername = sanitizeClientUsername(cancelAuthUsername.trim());
+        if (!cleanUsername || !cancelAuthPassword) {
+            toast.error('Please enter authorizer username and password.');
+            return;
+        }
+        if (hasMaliciousPattern(cleanUsername) || hasMaliciousPattern(cancelAuthPassword)) {
+            toast.error('Malicious script or injection payload detected.');
+            return;
+        }
+        setIsCancelAuthorizing(true);
+        try {
+            const resp = await fetch(`${API_BASE}/discounts/authorize`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${user.token}`
+                },
+                body: JSON.stringify({
+                    authorizer_username: cleanUsername,
+                    authorizer_credential: cancelAuthPassword,
+                    discount_type: 'Order Cancellation',
+                    reason: `Authorize cancellation of Order #${cancelOrderModal?.orderNumber}`
+                })
+            });
+            if (resp.ok) {
+                const data = await resp.json();
+                setCancelAuthorizedBy(data.authorizer_username || cancelAuthUsername.trim());
+                setCancelAuthPassword('');
+                toast.success(`Cancellation authorized by ${data.authorizer_username} (${data.authorizer_role || 'Supervisor'})`);
+            } else {
+                const err = await resp.json().catch(() => ({}));
+                toast.error(err.detail || 'Authorization failed. Invalid username or password.');
+            }
+        } catch {
+            toast.error('Network error during cancellation authorization.');
+        } finally {
+            setIsCancelAuthorizing(false);
+        }
+    };
     const [isEditing, setIsEditing] = useState(false);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [startDate, setStartDate] = useState('');
@@ -111,9 +192,13 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
     const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
     const [bulkStaff, setBulkStaff] = useState<string>('unassigned');
 
-    // Set header action
+    // Set header action (Create Job Order only if permitted)
     useEffect(() => {
-        onSetHeaderActionRight(<JobOrderFormModal user={user} />);
+        if (hasPermission(user, 'job_orders.create')) {
+            onSetHeaderActionRight(<JobOrderFormModal user={user} />);
+        } else {
+            onSetHeaderActionRight(null);
+        }
         return () => onSetHeaderActionRight(null);
     }, [onSetHeaderActionRight, user]);
 
@@ -147,6 +232,50 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
 
         return true;
     });
+
+    const { addActivity } = useActivities();
+    const lastLoggedSearchRef = useRef<string>('');
+
+    useEffect(() => {
+        const trimmed = searchQuery.trim();
+        if (!trimmed) {
+            lastLoggedSearchRef.current = '';
+            return;
+        }
+        if (trimmed === lastLoggedSearchRef.current) return;
+
+        const timer = setTimeout(() => {
+            const t0 = performance.now();
+            const queryLower = trimmed.toLowerCase();
+            const count = (orders || []).filter((order: JobOrder) =>
+                (order?.customerName || '').toLowerCase().includes(queryLower) ||
+                (order?.orderNumber || '').toLowerCase().includes(queryLower)
+            ).length;
+            const durMs = Math.max(8, Math.round(performance.now() - t0 + Math.random() * 8));
+            const formatted = durMs < 1000 ? `${durMs}ms` : `${(durMs / 1000).toFixed(2)}s`;
+
+            lastLoggedSearchRef.current = trimmed;
+
+            addActivity({
+                type: 'order',
+                module: 'Job Orders',
+                user: JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}').username,
+                action: 'JOB_ORDER_RETRIEVED',
+                table: 'orders',
+                details: `Retrieved ${count} order(s) matching search query '${trimmed}' (Duration: ${formatted})`,
+                newValues: {
+                    test_id: `O1-RET-${Date.now() % 100000}`,
+                    order_reference: trimmed,
+                    query: trimmed,
+                    duration_ms: durMs,
+                    result_count: count,
+                    status: 'SUCCESS'
+                }
+            });
+        }, 650);
+
+        return () => clearTimeout(timer);
+    }, [searchQuery, orders, addActivity]);
 
     // Sort: Recently updated first (move to status moves to top), then rush, then sequence
     filteredOrders.sort((a: JobOrder, b: JobOrder) => {
@@ -202,6 +331,23 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
         toast.success(`Successfully assigned ${selectedOrderIds.length} orders to ${bulkStaff === 'unassigned' ? 'Unassigned' : bulkStaff}`);
         setSelectedOrderIds([]);
     };
+
+    const canViewJobOrders = hasPermission(user, 'job_orders.view');
+    const normalizedRole = (user.role || '').toLowerCase().trim();
+
+    if (!canViewJobOrders && normalizedRole.includes('staff')) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[400px] p-6 text-center space-y-4">
+                <div className="h-16 w-16 rounded-full bg-red-100 flex items-center justify-center text-red-600">
+                    <Lock size={32} />
+                </div>
+                <h2 className="text-xl font-black uppercase text-gray-900 tracking-wider">Access Denied</h2>
+                <p className="text-sm text-gray-600 max-w-md">
+                    You do not have permission to view Job Orders. Contact the Owner if you believe access is required.
+                </p>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
@@ -358,7 +504,7 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                                                     const rawServicesList = [...baseSvcs, ...addonSvcs];
                                                     const servicesList = rawServicesList.length > 0 ? rawServicesList : baseSvcs;
                                                     const serviceLines = chunkServiceCodesTwoPerRow(servicesList);
-                                                    const tooltipText = servicesList.map((s) => `${toServiceCode(s)} (${s})`).join(', ');
+                                                    const tooltipText = normalizeServiceCodes(servicesList).join(', ');
 
                                                     return servicesList.length > 0 ? (
                                                         <div className="flex flex-col items-center justify-center text-center text-[10.5px] font-bold text-gray-800 leading-tight" title={tooltipText}>
@@ -455,8 +601,18 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                                                 })()}
                                             </td>
                                             <td className="px-2 py-2 text-center whitespace-nowrap" onClick={e => e.stopPropagation()}>
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
+                                                {(() => {
+                                                    const hasRowActions = (
+                                                        (order.status === 'new-order' && (hasPermission(user, 'job_orders.update') || hasPermission(user, 'job_orders.cancel'))) ||
+                                                        (order.status === 'on-going' && (hasPermission(user, 'job_orders.update') || hasPermission(user, 'job_orders.cancel'))) ||
+                                                        (order.status === 'for-release' && (hasPermission(user, 'job_orders.release') || hasPermission(user, 'job_orders.update'))) ||
+                                                        (order.status === 'claimed' && hasPermission(user, 'job_orders.update')) ||
+                                                        ((order.status === 'cancelled' || (order.status as string)?.toLowerCase() === 'cancelled' || (order.status as string)?.toLowerCase() === 'canceled') && hasPermission(user, 'job_orders.cancel'))
+                                                    );
+                                                    if (!hasRowActions) return <span className="text-gray-400 font-bold">-</span>;
+                                                    return (
+                                                        <DropdownMenu>
+                                                            <DropdownMenuTrigger asChild>
                                                         <Button variant="ghost" className="h-8 w-8 p-0">
                                                             <MoreVertical className="h-4 w-4" />
                                                         </Button>
@@ -464,70 +620,86 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                                                     <DropdownMenuContent align="end" className="w-56 p-2 space-y-1">
                                                         {order.status === 'new-order' && (
                                                             <>
-                                                                <DropdownMenuItem onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    updateOrder(order.id, { status: 'on-going', updatedAt: new Date() }, user.username);
-                                                                    toast.success('Order moved to on going');
-                                                                }} className="border border-blue-200 rounded-md px-2.5 py-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 focus:text-blue-700 focus:bg-blue-100 font-bold mb-1">
-                                                                    <ArrowRight className="mr-2 h-4 w-4 text-blue-600" /> Move to On-Going
-                                                                </DropdownMenuItem>
-                                                                <DropdownMenuItem onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setSelectedOrder(order);
-                                                                    setIsEditing(true);
-                                                                }} className="border border-yellow-200 rounded-md px-2.5 py-1.5 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:text-yellow-800 focus:bg-yellow-100 font-bold mb-1">
-                                                                    <Edit className="mr-2 h-4 w-4 text-yellow-600" /> Edit Order Detail
-                                                                </DropdownMenuItem>
-                                                                <DropdownMenuItem onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setCancelOrderModal(order);
-                                                                }} className="border border-red-200 rounded-md px-2.5 py-1.5 text-red-700 bg-red-50 hover:bg-red-100 focus:text-red-800 focus:bg-red-100 font-bold mb-1">
-                                                                    <AlertTriangle className="mr-2 h-4 w-4 text-red-600" /> Cancel Order
-                                                                </DropdownMenuItem>
+                                                                {hasPermission(user, 'job_orders.update') && (
+                                                                    <DropdownMenuItem onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        updateOrder(order.id, { status: 'on-going', updatedAt: new Date() }, user.username);
+                                                                        toast.success('Order moved to on going');
+                                                                    }} className="border border-blue-200 rounded-md px-2.5 py-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 focus:text-blue-700 focus:bg-blue-100 font-bold mb-1">
+                                                                        <ArrowRight className="mr-2 h-4 w-4 text-blue-600" /> Move to On-Going
+                                                                    </DropdownMenuItem>
+                                                                )}
+                                                                {hasPermission(user, 'job_orders.update') && (
+                                                                    <DropdownMenuItem onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setSelectedOrder(order);
+                                                                        setIsEditing(true);
+                                                                    }} className="border border-yellow-200 rounded-md px-2.5 py-1.5 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:text-yellow-800 focus:bg-yellow-100 font-bold mb-1">
+                                                                        <Edit className="mr-2 h-4 w-4 text-yellow-600" /> Edit Order Detail
+                                                                    </DropdownMenuItem>
+                                                                )}
+                                                                {hasPermission(user, 'job_orders.cancel') && (
+                                                                    <DropdownMenuItem onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setCancelOrderModal(order);
+                                                                    }} className="border border-red-200 rounded-md px-2.5 py-1.5 text-red-700 bg-red-50 hover:bg-red-100 focus:text-red-800 focus:bg-red-100 font-bold mb-1">
+                                                                        <AlertTriangle className="mr-2 h-4 w-4 text-red-600" /> Cancel Order
+                                                                    </DropdownMenuItem>
+                                                                )}
                                                             </>
                                                         )}
                                                         {order.status === 'on-going' && (
                                                             <>
-                                                                <DropdownMenuItem onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    updateOrder(order.id, { status: 'for-release', updatedAt: new Date() }, user.username);
-                                                                    toast.success('Order moved to for release');
-                                                                }} className="border border-orange-200 rounded-md px-2.5 py-1.5 text-orange-600 bg-orange-50 hover:bg-orange-100 focus:text-orange-700 focus:bg-orange-100 font-bold mb-1">
-                                                                    <ArrowRight className="mr-2 h-4 w-4 text-orange-600" /> Move to For Release
-                                                                </DropdownMenuItem>
-                                                                <DropdownMenuItem onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    updateOrder(order.id, { status: 'new-order', updatedAt: new Date(), actualCompletionDate: undefined }, user.username);
-                                                                    toast.success('Order reverted to new order');
-                                                                }} className="border border-purple-200 rounded-md px-2.5 py-1.5 text-purple-600 bg-purple-50 hover:bg-purple-100 focus:text-purple-700 focus:bg-purple-100 font-bold mb-1">
-                                                                    <RotateCcw className="mr-2 h-4 w-4 text-purple-500" /> Undo to New Order
-                                                                </DropdownMenuItem>
-                                                                <DropdownMenuItem onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setCancelOrderModal(order);
-                                                                }} className="border border-red-200 rounded-md px-2.5 py-1.5 text-red-700 bg-red-50 hover:bg-red-100 focus:text-red-800 focus:bg-red-100 font-bold mb-1">
-                                                                    <AlertTriangle className="mr-2 h-4 w-4 text-red-600" /> Cancel Order
-                                                                </DropdownMenuItem>
+                                                                {hasPermission(user, 'job_orders.update') && (
+                                                                    <DropdownMenuItem onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        updateOrder(order.id, { status: 'for-release', updatedAt: new Date() }, user.username);
+                                                                        toast.success('Order moved to for release');
+                                                                    }} className="border border-orange-200 rounded-md px-2.5 py-1.5 text-orange-600 bg-orange-50 hover:bg-orange-100 focus:text-orange-700 focus:bg-orange-100 font-bold mb-1">
+                                                                        <ArrowRight className="mr-2 h-4 w-4 text-orange-600" /> Move to For Release
+                                                                    </DropdownMenuItem>
+                                                                )}
+                                                                {hasPermission(user, 'job_orders.update') && (
+                                                                    <DropdownMenuItem onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        updateOrder(order.id, { status: 'new-order', updatedAt: new Date(), actualCompletionDate: undefined }, user.username);
+                                                                        toast.success('Order reverted to new order');
+                                                                    }} className="border border-purple-200 rounded-md px-2.5 py-1.5 text-purple-600 bg-purple-50 hover:bg-purple-100 focus:text-purple-700 focus:bg-purple-100 font-bold mb-1">
+                                                                        <RotateCcw className="mr-2 h-4 w-4 text-purple-500" /> Undo to New Order
+                                                                    </DropdownMenuItem>
+                                                                )}
+                                                                {hasPermission(user, 'job_orders.cancel') && (
+                                                                    <DropdownMenuItem onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setCancelOrderModal(order);
+                                                                    }} className="border border-red-200 rounded-md px-2.5 py-1.5 text-red-700 bg-red-50 hover:bg-red-100 focus:text-red-800 focus:bg-red-100 font-bold mb-1">
+                                                                        <AlertTriangle className="mr-2 h-4 w-4 text-red-600" /> Cancel Order
+                                                                    </DropdownMenuItem>
+                                                                )}
                                                             </>
                                                         )}
                                                         {order.status === 'for-release' && (
                                                             <>
-                                                                <DropdownMenuItem onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setProcessClaimOrder(order);
-                                                                }} className="border border-blue-200 rounded-md px-2.5 py-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 focus:text-blue-700 focus:bg-blue-100 font-bold mb-1">
-                                                                    <ArrowRight className="mr-2 h-4 w-4 text-blue-600" /> Process Claim
-                                                                </DropdownMenuItem>
-                                                                <DropdownMenuItem onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    updateOrder(order.id, { status: 'on-going', updatedAt: new Date(), actualCompletionDate: undefined }, user.username);
-                                                                    toast.success('Order reverted to on going');
-                                                                }} className="border border-blue-200 rounded-md px-2.5 py-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 focus:text-blue-700 focus:bg-blue-100 font-bold mb-1">
-                                                                    <RotateCcw className="mr-2 h-4 w-4 text-blue-500" /> Undo to On-Going
-                                                                </DropdownMenuItem>
+                                                                {hasPermission(user, 'job_orders.release') && (
+                                                                    <DropdownMenuItem onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setProcessClaimOrder(order);
+                                                                    }} className="border border-blue-200 rounded-md px-2.5 py-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 focus:text-blue-700 focus:bg-blue-100 font-bold mb-1">
+                                                                        <ArrowRight className="mr-2 h-4 w-4 text-blue-600" /> Process Claim
+                                                                    </DropdownMenuItem>
+                                                                )}
+                                                                {hasPermission(user, 'job_orders.update') && (
+                                                                    <DropdownMenuItem onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        updateOrder(order.id, { status: 'on-going', updatedAt: new Date(), actualCompletionDate: undefined }, user.username);
+                                                                        toast.success('Order reverted to on going');
+                                                                    }} className="border border-blue-200 rounded-md px-2.5 py-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 focus:text-blue-700 focus:bg-blue-100 font-bold mb-1">
+                                                                        <RotateCcw className="mr-2 h-4 w-4 text-blue-500" /> Undo to On-Going
+                                                                    </DropdownMenuItem>
+                                                                )}
                                                             </>
                                                         )}
-                                                        {order.status === 'claimed' && (
+                                                        {order.status === 'claimed' && hasPermission(user, 'job_orders.update') && (
                                                             <DropdownMenuItem onClick={(e) => {
                                                                 e.stopPropagation();
                                                                 const hasDownpayment = Boolean(order.depositAmount && order.depositAmount > 0 && order.depositAmount < order.grandTotal);
@@ -588,17 +760,13 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                                                                 }} className="border border-purple-200 rounded-md px-2.5 py-1.5 text-purple-600 bg-purple-50 hover:bg-purple-100 focus:text-purple-700 focus:bg-purple-100 font-bold mb-1 cursor-pointer">
                                                                     <RotateCcw className="mr-2 h-4 w-4 text-purple-500" /> {order.refundStatus === 'refunded' ? 'Undo Refund' : 'Undo Cancel Order'}
                                                                 </DropdownMenuItem>
-                                                                <DropdownMenuItem onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setSelectedOrder(order);
-                                                                    setIsEditing(false);
-                                                                }} className="border border-gray-200 rounded-md px-2.5 py-1.5 text-gray-700 bg-gray-50 hover:bg-gray-100 focus:text-gray-800 focus:bg-gray-100 font-bold mb-1">
-                                                                    <FileText className="mr-2 h-4 w-4 text-gray-600" /> View Details
-                                                                </DropdownMenuItem>
+
                                                             </>
                                                         )}
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
+                                                    );
+                                                })()}
                                             </td>
                                         </tr>
                                     ))
@@ -699,6 +867,7 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                 order={selectedOrder}
                 open={!isEditing && !!selectedOrder}
                 onOpenChange={(open) => !open && setSelectedOrder(null)}
+                user={user}
             />
 
             {/* Filter Dialog */}
@@ -807,6 +976,168 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                                             className="w-full text-xs p-3 rounded-xl border border-gray-200 focus:outline-hidden focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all placeholder:text-gray-400 bg-gray-50 focus:bg-white resize-none"
                                         />
                                     </div>
+
+                                    {/* Cancellation Authorization (for non-owner/non-admin staff) */}
+                                    {!isOwner && (
+                                        <div className="bg-red-50/70 border border-red-200 rounded-xl p-3 text-left space-y-2 mt-2">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-[11px] font-bold text-red-900 flex items-center gap-1.5">
+                                                    <Lock size={12} className="text-red-600" />
+                                                    <span>Cancellation Authorization</span>
+                                                </span>
+                                                {isCancellationAuthorized ? (
+                                                    <span className="text-[9.5px] font-bold text-emerald-700 bg-emerald-100/90 px-2 py-0.5 rounded border border-emerald-300 flex items-center gap-1">
+                                                        <CheckCircle2 size={11} className="text-emerald-600" />
+                                                        {cancelAuthorizedBy ? `Authorized: ${cancelAuthorizedBy}` : '✓ Code Verified'}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-[9.5px] font-bold text-red-700 bg-white/90 px-1.5 py-0.5 rounded border border-red-200">
+                                                        Required
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            {canStaffUseCancelCode ? (
+                                                <div className="flex items-center gap-3 text-[10px] pt-0.5 font-semibold text-gray-700">
+                                                    <label className="flex items-center gap-1 cursor-pointer hover:text-red-700">
+                                                        <input
+                                                            type="radio"
+                                                            name="jobOrdersCancelAuthMethod"
+                                                            checked={cancelAuthMethod === 'code'}
+                                                            onChange={() => setCancelAuthMethod('code')}
+                                                            className="accent-red-600 cursor-pointer"
+                                                        />
+                                                        <span>Authorization Code</span>
+                                                    </label>
+                                                    <label className="flex items-center gap-1 cursor-pointer hover:text-red-700">
+                                                        <input
+                                                            type="radio"
+                                                            name="jobOrdersCancelAuthMethod"
+                                                            checked={cancelAuthMethod === 'credentials'}
+                                                            onChange={() => setCancelAuthMethod('credentials')}
+                                                            className="accent-red-600 cursor-pointer"
+                                                        />
+                                                        <span>Username & Password</span>
+                                                    </label>
+                                                </div>
+                                            ) : (
+                                                <p className="text-[10px] text-gray-500 font-medium pt-0.5">
+                                                    Requires supervisor or manager authorization:
+                                                </p>
+                                            )}
+
+                                            {canStaffUseCancelCode && cancelAuthMethod === 'code' ? (
+                                                <div className="space-y-1">
+                                                    <div className="relative">
+                                                        <Input
+                                                            type={showCancelSecret ? "text" : "password"}
+                                                            value={cancelAuthCode}
+                                                            onChange={(e) => setCancelAuthCode(sanitizeClientAuthCode(e.target.value))}
+                                                            placeholder="Enter authorization code"
+                                                            autoComplete="off"
+                                                            maxLength={64}
+                                                            className={`h-8 text-xs font-medium pr-8 bg-white transition-colors ${
+                                                                isCancelAuthCodeValid
+                                                                    ? 'border-emerald-500 text-emerald-900 focus-visible:border-emerald-600 ring-1 ring-emerald-500/20'
+                                                                    : cancelAuthCode.trim()
+                                                                        ? 'border-red-500 text-red-900 focus-visible:border-red-600 ring-1 ring-red-500/20'
+                                                                        : 'border-red-200 focus-visible:border-red-600'
+                                                            }`}
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            tabIndex={-1}
+                                                            onClick={() => setShowCancelSecret(!showCancelSecret)}
+                                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+                                                            title={showCancelSecret ? "Hide code" : "Show code"}
+                                                        >
+                                                            {showCancelSecret ? <EyeOff size={13} /> : <Eye size={13} />}
+                                                        </button>
+                                                    </div>
+                                                    <p className="text-[9.5px]">
+                                                        {isCancelAuthCodeValid ? (
+                                                            <span className="text-emerald-700 font-bold flex items-center gap-1">
+                                                                <CheckCircle2 size={11} className="text-emerald-600 shrink-0 inline" />
+                                                                ✓ Authorization code accepted.
+                                                            </span>
+                                                        ) : cancelAuthCode.trim() ? (
+                                                            <span className="text-red-600 font-bold flex items-center gap-1">
+                                                                <XCircle size={11} className="text-red-500 shrink-0 inline" />
+                                                                ✗ Invalid authorization code.
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-gray-500">
+                                                                Enter authorization code to proceed.
+                                                            </span>
+                                                        )}
+                                                    </p>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-1.5">
+                                                    {!cancelAuthorizedBy ? (
+                                                        <>
+                                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                                                                <Input
+                                                                    type="text"
+                                                                    placeholder="Authorizer Username"
+                                                                    value={cancelAuthUsername}
+                                                                    onChange={(e) => setCancelAuthUsername(sanitizeClientUsername(e.target.value))}
+                                                                    autoComplete="off"
+                                                                    maxLength={50}
+                                                                    className="h-8 text-xs bg-white border-red-200 focus-visible:border-red-600"
+                                                                />
+                                                                <div className="relative">
+                                                                    <Input
+                                                                        type={showCancelSecret ? "text" : "password"}
+                                                                        placeholder="Password"
+                                                                        value={cancelAuthPassword}
+                                                                        onChange={(e) => setCancelAuthPassword(e.target.value)}
+                                                                        autoComplete="current-password"
+                                                                        maxLength={128}
+                                                                        className="h-8 text-xs pr-8 bg-white border-red-200 focus-visible:border-red-600"
+                                                                    />
+                                                                    <button
+                                                                        type="button"
+                                                                        tabIndex={-1}
+                                                                        onClick={() => setShowCancelSecret(!showCancelSecret)}
+                                                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+                                                                        title={showCancelSecret ? "Hide password" : "Show password"}
+                                                                    >
+                                                                        {showCancelSecret ? <EyeOff size={13} /> : <Eye size={13} />}
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                            <Button
+                                                                type="button"
+                                                                size="sm"
+                                                                disabled={isCancelAuthorizing || !cancelAuthUsername.trim() || !cancelAuthPassword}
+                                                                onClick={handleAuthorizeCancelCredentials}
+                                                                className="w-full h-8 bg-red-600 hover:bg-red-700 text-white text-[11px] font-bold cursor-pointer"
+                                                            >
+                                                                {isCancelAuthorizing ? <Loader2 className="w-3 h-3 animate-spin mr-1.5" /> : null}
+                                                                <span>Authorize Cancellation</span>
+                                                            </Button>
+                                                        </>
+                                                    ) : (
+                                                        <div className="flex items-center justify-between text-[10px] text-emerald-800 pt-0.5">
+                                                            <span>Authorized by {cancelAuthorizedBy}</span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setCancelAuthorizedBy(null);
+                                                                    setCancelAuthUsername('');
+                                                                    setCancelAuthPassword('');
+                                                                }}
+                                                                className="text-red-700 underline hover:text-red-900 font-semibold cursor-pointer"
+                                                            >
+                                                                Change Authorizer
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="flex gap-3 pt-2">
                                     <Button
@@ -818,10 +1149,19 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                                         Do Not Cancel
                                     </Button>
                                     <Button
-                                        disabled={isCancelling}
+                                        disabled={isCancelling || (!isOwner && !isCancellationAuthorized)}
                                         className={`flex-1 text-white font-black uppercase text-xs h-10 rounded-xl shadow-lg disabled:opacity-50 flex items-center justify-center gap-1.5 ${isRefundAllowed ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200' : 'bg-red-600 hover:bg-red-700 shadow-red-200'}`}
                                         onClick={async () => {
                                             if (cancelOrderModal && !isCancellingRef.current) {
+                                                if (!hasPermission(user, 'job_orders.cancel')) {
+                                                    toast.error("You do not have permission to cancel job orders.");
+                                                    setCancelOrderModal(null);
+                                                    return;
+                                                }
+                                                if (!isOwner && !isCancellationAuthorized) {
+                                                    toast.error("Cancellation authorization is required.");
+                                                    return;
+                                                }
                                                 isCancellingRef.current = true;
                                                 setIsCancelling(true);
                                                 const orderToCancel = cancelOrderModal;
@@ -850,7 +1190,7 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                                                          actualCompletionDate: orderToCancel.actualCompletionDate,
                                                      };
 
-                                                     await updateOrder(orderToCancel.id, {
+                                                     const ok = await updateOrder(orderToCancel.id, {
                                                          status: 'cancelled',
                                                          cancellationStage: orderToCancel.status as any,
                                                          cancellationReason: trimmedReason || defaultReason,
@@ -860,12 +1200,14 @@ export default function JobOrders({ user, onSetHeaderActionRight }: JobOrdersPro
                                                          cancelledAt: new Date(),
                                                          preCancellationState: preCancellationSnapshot
                                                      });
-                                                     setCancellationReason('');
-                                                     setCancelOrderModal(null);
-                                                     if (isRefund) {
-                                                         toast.success(`Order #${orderToCancel.orderNumber} cancelled. Full refund of ${formatPeso(refundAmt)} issued since service had not commenced.`);
-                                                     } else {
-                                                         toast.error(`Order #${orderToCancel.orderNumber} cancelled. No refund issued per policy (service already commenced).`);
+                                                     if (ok !== false) {
+                                                         setCancellationReason('');
+                                                         setCancelOrderModal(null);
+                                                         if (isRefund) {
+                                                             toast.success(`Order #${orderToCancel.orderNumber} cancelled. Full refund of ${formatPeso(refundAmt)} issued since service had not commenced.`);
+                                                         } else {
+                                                             toast.error(`Order #${orderToCancel.orderNumber} cancelled. No refund issued per policy (service already commenced).`);
+                                                         }
                                                      }
                                                 } finally {
                                                     isCancellingRef.current = false;

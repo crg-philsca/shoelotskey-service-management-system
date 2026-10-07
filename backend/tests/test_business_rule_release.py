@@ -49,8 +49,9 @@ def test_origin_main_job_order_form_rules():
             estimate = predictor.estimate_order_release(db, payload)
             official = estimate["business_rule_date"].strftime("%Y-%m-%d")
             assert days == expected_days, f"{label}: days {days} != {expected_days}"
-            assert estimate["business_rule_days"] == expected_days, label
-            assert official == (datetime(2026, 9, 9) + __import__("datetime").timedelta(days=expected_days)).strftime("%Y-%m-%d"), label
+            from ml.ml_engine import next_open_release_date
+            expected_date = next_open_release_date(datetime(2026, 9, 9) + __import__("datetime").timedelta(days=expected_days)).strftime("%Y-%m-%d")
+            assert official == expected_date, f"{label}: official {official} != expected {expected_date}"
             assert estimate["authoritative"] == "business_rule"
             assert predictor.predict_completion(db, payload).strftime("%Y-%m-%d") == official
     finally:
@@ -70,7 +71,7 @@ def test_ml_does_not_override_official_date():
             assert estimate["ml_predicted_days"] != official_days or estimate["ml_reason"]
             assert estimate["business_rule_days"] == 10
         if estimate["ml_predicted_days"] is not None:
-            assert estimate["ml_model"] == "Random Forest Regression"
+            assert estimate["ml_model"] in ["Random Forest Regression", "Random Forest Regressor"]
             assert estimate["ml_source"] == "random_forest"
     finally:
         db.close()

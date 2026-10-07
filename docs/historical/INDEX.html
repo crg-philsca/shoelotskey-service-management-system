@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shoelotskey SMS — Master Documentation Hub</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: #111827;
+      --card-border: #1f2937;
+      --text: #f9fafb;
+      --text-muted: #9ca3af;
+      --accent-red: #ef4444;
+      --accent-blue: #38bdf8;
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-purple: #a855f7;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Outfit', sans-serif;
+      padding: 36px 20px;
+      line-height: 1.6;
+    }
+    .container { max-width: 1380px; margin: 0 auto; }
+    header {
+      background: linear-gradient(135deg, #180d12 0%, #172033 100%);
+      border: 1px solid #374151;
+      border-radius: 16px;
+      padding: 32px 36px;
+      margin-bottom: 28px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      position: relative;
+    }
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      padding: 4px 12px;
+      border-radius: 9999px;
+      margin-bottom: 12px;
+    }
+    h1 { font-size: 26px; font-weight: 900; color: #fff; margin-bottom: 8px; letter-spacing: -0.02em; }
+    p.subtitle { color: var(--text-muted); font-size: 14.5px; max-width: 860px; }
+    .stats-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-top: 20px;
+    }
+    .stat-pill {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid #374151;
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: #cbd5e1;
+    }
+    .stat-pill strong { color: #38bdf8; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+      gap: 22px;
+    }
+    .cat-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+      transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+    .cat-card:hover {
+      border-color: #374151;
+      transform: translateY(-2px);
+    }
+    .cat-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 14px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--card-border);
+      gap: 12px;
+    }
+    .cat-title {
+      font-size: 15.5px;
+      font-weight: 800;
+      color: #fff;
+      display: block;
+    }
+    .cat-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .count-badge {
+      font-size: 11px;
+      font-weight: 700;
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      padding: 2px 10px;
+      border-radius: 9999px;
+      white-space: nowrap;
+    }
+    .file-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      max-height: 310px;
+      overflow-y: auto;
+      padding-right: 6px;
+    }
+    .file-list::-webkit-scrollbar { width: 5px; }
+    .file-list::-webkit-scrollbar-thumb { background: #374151; border-radius: 9999px; }
+    .file-link {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      text-decoration: none;
+      color: #cbd5e1;
+      font-size: 12.5px;
+      padding: 8px 11px;
+      border-radius: 8px;
+      background: rgba(17, 24, 39, 0.7);
+      border: 1px solid rgba(55, 65, 81, 0.5);
+      transition: all 0.15s ease;
+      font-family: 'JetBrains Mono', monospace;
+      word-break: break-all;
+    }
+    .file-link:hover {
+      background: rgba(239, 68, 68, 0.12);
+      border-color: rgba(239, 68, 68, 0.4);
+      color: #fca5a5;
+    }
+    .file-name { margin-right: 10px; }
+    .ext {
+      font-size: 9.5px;
+      font-weight: 800;
+      text-transform: uppercase;
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-left: auto;
+      flex-shrink: 0;
+    }
+    .ext-html { background: rgba(56, 189, 248, 0.2); color: #7dd3fc; }
+    .ext-md { background: rgba(168, 85, 247, 0.2); color: #d8b4fe; }
+    .ext-pdf { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
+    .ext-csv { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
+    .ext-py { background: rgba(245, 158, 11, 0.2); color: #fcd34d; }
+    .ext-sql { background: rgba(236, 72, 153, 0.2); color: #f472b6; }
+    footer {
+      text-align: center;
+      margin-top: 40px;
+      color: var(--text-muted);
+      font-size: 12.5px;
+      border-top: 1px solid var(--card-border);
+      padding-top: 24px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <span class="badge">Master Documentation Hub</span>
+      <h1>SHOELOTSKEY SERVICE MANAGEMENT SYSTEM</h1>
+      <p class="subtitle">Categorized index of capstone defense audits, technical specifications, testing manuals, manuscript PDFs, and automated verification scripts.</p>
+      <div class="stats-bar">
+        <span class="stat-pill"><strong>118</strong> Total Organized Documents</span>
+        <span class="stat-pill"><strong>7</strong> Categorized Subfolders</span>
+        <span class="stat-pill"><strong>100%</strong> Root Folder Clutter-Free</span>
+      </div>
+    </header>
+
+    <div class="grid">
+      <div class="cat-card">
+        <div class="cat-header">
+          <div>
+            <span class="cat-title">01 Defense and Audit Reports HTML</span>
+            <p class="cat-desc">HTML Defense Audits, Master Reports & System Checklists</p>
+          </div>
+          <span class="count-badge">22 files</span>
+        </div>
+        <ul class="file-list">
+          <li>
+            <a class="file-link" href="./01_Defense_and_Audit_Reports_HTML/00_FILE_INVENTORY.html" target="_blank">
+              <span class="file-name">00_FILE_INVENTORY.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./01_Defense_and_Audit_Reports_HTML/01_SYSTEM_GROUND_TRUTH.html" target="_blank">
+              <span class="file-name">01_SYSTEM_GROUND_TRUTH.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./01_Defense_and_Audit_Reports_HTML/02_RESEARCH_TRACEABILITY.html" target="_blank">
+              <span class="file-name">02_RESEARCH_TRACEABILITY.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./01_Defense_and_Audit_Reports_HTML/03_CHAPTERS_1_TO_3_AUDIT.html" target="_blank">
+              <span class="file-name">03_CHAPTERS_1_TO_3_AUDIT.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./01_Defense_and_Audit_Reports_HTML/04_NUMERICAL_REVALIDATION.html" target="_blank">
+              <span class="file-name">04_NUMERICAL_REVALIDATION.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./01_Defense_and_Audit_Reports_HTML/05_CHAPTERS_4_TO_5_AUDIT.html" target="_blank">
+              <span class="file-name">05_CHAPTERS_4_TO_5_AUDIT.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./01_Defense_and_Audit_Reports_HTML/06_PANEL_AND_EXPERT_COMPLIANCE.html" target="_blank">
+              <span class="file-name">06_PANEL_AND_EXPERT_COMPLIANCE.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./01_Defense_and_Audit_Reports_HTML/06_REVISIONS_AND_COMMENTS_AUDIT.html" target="_blank">
+              <span class="file-name">06_REVISIONS_AND_COMMENTS_AUDIT.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./01_Defense_and_Audit_Reports_HTML/07_ACADEMIC_COMPLIANCE_AND_APPENDICES.html" target="_blank">
+              <span class="file-name">07_ACADEMIC_COMPLIANCE_AND_APPENDICES.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./01_Defense_and_Audit_Reports_HTML/07_ACADEMIC_COMPLIANCE_AUDIT.html" target="_blank">
+              <span class="file-name">07_ACADEMIC_COMPLIANCE_AUDIT.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./01_Defense_and_Audit_Reports_HTML/08_DEFENSE_PRESENTATION_AUDIT.html" target="_blank">
+              <span class="file-name">08_DEFENSE_PRESENTATION_AUDIT.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./01_Defense_and_Audit_Reports_HTML/09_DEFENSE_QA_PLAYBOOK.html" target="_blank">
+              <span class="file-name">09_DEFENSE_QA_PLAYBOOK.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./01_Defense_and_Audit_Reports_HTML/10_MASTER_CAPSTONE_DEFENSE_READINESS_REPORT.html" target="_blank">
+              <span class="file-name">10_MASTER_CAPSTONE_DEFENSE_READINESS_REPORT.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./01_Defense_and_Audit_Reports_HTML/4_Master_Manuscript_System_and_Defense_Revision_Report.html" target="_blank">
+              <span class="file-name">4_Master_Manuscript_System_and_Defense_Revision_Report.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./01_Defense_and_Audit_Reports_HTML/Capstone_Manuscript_and_System_Alignment_Audit_Report.html" target="_blank">
+              <span class="file-name">Capstone_Manuscript_and_System_Alignment_Audit_Report.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./01_Defense_and_Audit_Reports_HTML/LIGHTHOUSE_AUDIT_REPORT.html" target="_blank">
+              <span class="file-name">LIGHTHOUSE_AUDIT_REPORT.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./01_Defense_and_Audit_Reports_HTML/MANUSCRIPT_ALIGNMENT_AND_REVISION_GUIDE.html" target="_blank">
+              <span class="file-name">MANUSCRIPT_ALIGNMENT_AND_REVISION_GUIDE.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./01_Defense_and_Audit_Reports_HTML/RBAC_SYSTEM_ACCESS_REPORT.html" target="_blank">
+              <span class="file-name">RBAC_SYSTEM_ACCESS_REPORT.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./01_Defense_and_Audit_Reports_HTML/RECOMMENDED_SYSTEM_ENHANCEMENTS_ROADMAP.html" target="_blank">
+              <span class="file-name">RECOMMENDED_SYSTEM_ENHANCEMENTS_ROADMAP.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./01_Defense_and_Audit_Reports_HTML/SYSTEM_TECH_STACK_REPORT.html" target="_blank">
+              <span class="file-name">SYSTEM_TECH_STACK_REPORT.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./01_Defense_and_Audit_Reports_HTML/capstone_final_alignment_audit.html" target="_blank">
+              <span class="file-name">capstone_final_alignment_audit.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./01_Defense_and_Audit_Reports_HTML/capstone_panel_compliance_matrix.html" target="_blank">
+              <span class="file-name">capstone_panel_compliance_matrix.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="cat-card">
+        <div class="cat-header">
+          <div>
+            <span class="cat-title">02 System Architecture and Specifications</span>
+            <p class="cat-desc">SRS, System Architecture Diagrams, Disaster Recovery & Security Threat Registers</p>
+          </div>
+          <span class="count-badge">10 files</span>
+        </div>
+        <ul class="file-list">
+          <li>
+            <a class="file-link" href="./02_System_Architecture_and_Specifications/DISASTER_RECOVERY_AND_BACKUP_PROCEDURE.md" target="_blank">
+              <span class="file-name">DISASTER_RECOVERY_AND_BACKUP_PROCEDURE.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./02_System_Architecture_and_Specifications/SECURITY_AUDIT_FIXES_2024.md" target="_blank">
+              <span class="file-name">SECURITY_AUDIT_FIXES_2024.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./02_System_Architecture_and_Specifications/SYSTEM_FEATURES_CATALOG.html" target="_blank">
+              <span class="file-name">SYSTEM_FEATURES_CATALOG.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./02_System_Architecture_and_Specifications/conceptual_network_diagram.html" target="_blank">
+              <span class="file-name">conceptual_network_diagram.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./02_System_Architecture_and_Specifications/security-threat-and-risk-register.md" target="_blank">
+              <span class="file-name">security-threat-and-risk-register.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./02_System_Architecture_and_Specifications/setup.sql" target="_blank">
+              <span class="file-name">setup.sql</span>
+              <span class="ext ext-sql">sql</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./02_System_Architecture_and_Specifications/system-architecture-and-data-flow.md" target="_blank">
+              <span class="file-name">system-architecture-and-data-flow.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./02_System_Architecture_and_Specifications/system-readiness-audit.md" target="_blank">
+              <span class="file-name">system-readiness-audit.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./02_System_Architecture_and_Specifications/system_architecture.html" target="_blank">
+              <span class="file-name">system_architecture.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./02_System_Architecture_and_Specifications/system_requirements_specification.html" target="_blank">
+              <span class="file-name">system_requirements_specification.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="cat-card">
+        <div class="cat-header">
+          <div>
+            <span class="cat-title">03 Use Case Testing and Manuals</span>
+            <p class="cat-desc">Use-Case Test Suites, Button & Navigation Manuals with Screenshots</p>
+          </div>
+          <span class="count-badge">7 files</span>
+        </div>
+        <ul class="file-list">
+          <li>
+            <a class="file-link" href="./03_Use_Case_Testing_and_Manuals/CAPSTONE_USE_CASE_TEST_SUITE.html" target="_blank">
+              <span class="file-name">CAPSTONE_USE_CASE_TEST_SUITE.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./03_Use_Case_Testing_and_Manuals/Capstone_Use_Case_Testing_Manual_With_Screenshots.html" target="_blank">
+              <span class="file-name">Capstone_Use_Case_Testing_Manual_With_Screenshots.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./03_Use_Case_Testing_and_Manuals/Complete_System_Features_Buttons_And_Navigation_Test_Manual_With_Screenshots.html" target="_blank">
+              <span class="file-name">Complete_System_Features_Buttons_And_Navigation_Test_Manual_With_Screenshots.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./03_Use_Case_Testing_and_Manuals/Comprehensive_IT_Expert_Remediation_and_ISO25010_Report.html" target="_blank">
+              <span class="file-name">Comprehensive_IT_Expert_Remediation_and_ISO25010_Report.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./03_Use_Case_Testing_and_Manuals/Dashboard_Module_SQA_Use_Case_Test_Manual.html" target="_blank">
+              <span class="file-name">Dashboard_Module_SQA_Use_Case_Test_Manual.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./03_Use_Case_Testing_and_Manuals/final-end-to-end-functionality-qa-report.md" target="_blank">
+              <span class="file-name">final-end-to-end-functionality-qa-report.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./03_Use_Case_Testing_and_Manuals/qa-functional-readiness-report-2026-09-09.md" target="_blank">
+              <span class="file-name">qa-functional-readiness-report-2026-09-09.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="cat-card">
+        <div class="cat-header">
+          <div>
+            <span class="cat-title">04 Manuscript and Academic Papers</span>
+            <p class="cat-desc">Capstone Academic Chapters 1-4 PDF, Revision Matrices, & Academic Excerpts</p>
+          </div>
+          <span class="count-badge">7 files</span>
+        </div>
+        <ul class="file-list">
+          <li>
+            <a class="file-link" href="./04_Manuscript_and_Academic_Papers/Capstone_AngelesGravinoSedanto-CHAPTER-1-4.pdf" target="_blank">
+              <span class="file-name">Capstone_AngelesGravinoSedanto-CHAPTER-1-4.pdf</span>
+              <span class="ext ext-pdf">pdf</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./04_Manuscript_and_Academic_Papers/MATRIX-OF-CAPSTONE-PROJECT-REVISIONS.pdf" target="_blank">
+              <span class="file-name">MATRIX-OF-CAPSTONE-PROJECT-REVISIONS.pdf</span>
+              <span class="ext ext-pdf">pdf</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./04_Manuscript_and_Academic_Papers/capstone_manuscript_chapter_1_to_4.html" target="_blank">
+              <span class="file-name">capstone_manuscript_chapter_1_to_4.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./04_Manuscript_and_Academic_Papers/capstone_paper_ml_section.html" target="_blank">
+              <span class="file-name">capstone_paper_ml_section.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./04_Manuscript_and_Academic_Papers/capstone_paper_system_testing.html" target="_blank">
+              <span class="file-name">capstone_paper_system_testing.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./04_Manuscript_and_Academic_Papers/capstone_paper_technical_background.html" target="_blank">
+              <span class="file-name">capstone_paper_technical_background.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./04_Manuscript_and_Academic_Papers/capstone_paper_unit_testing.html" target="_blank">
+              <span class="file-name">capstone_paper_unit_testing.html</span>
+              <span class="ext ext-html">html</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="cat-card">
+        <div class="cat-header">
+          <div>
+            <span class="cat-title">05 Research Audits and Checklists MD</span>
+            <p class="cat-desc">Technical Audit Markdown Reports, OCR Gap Analyses & Remediation Statuses</p>
+          </div>
+          <span class="count-badge">36 files</span>
+        </div>
+        <ul class="file-list">
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/ANTIGRAVITY_QUEUE.md" target="_blank">
+              <span class="file-name">ANTIGRAVITY_QUEUE.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/ATTRIBUTIONS.md" target="_blank">
+              <span class="file-name">ATTRIBUTIONS.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/CAPSTONE_MANUSCRIPT_AND_SYSTEM_ALIGNMENT_AUDIT_REPORT.md" target="_blank">
+              <span class="file-name">CAPSTONE_MANUSCRIPT_AND_SYSTEM_ALIGNMENT_AUDIT_REPORT.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/CAPSTONE_SYSTEM_AUDIT_AND_VALIDATION_MATRIX.md" target="_blank">
+              <span class="file-name">CAPSTONE_SYSTEM_AUDIT_AND_VALIDATION_MATRIX.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/COMPREHENSIVE_AUDIT_REPORT.md" target="_blank">
+              <span class="file-name">COMPREHENSIVE_AUDIT_REPORT.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/COMPREHENSIVE_IT_EXPERT_REMEDIATION_AND_ISO25010_REPORT.md" target="_blank">
+              <span class="file-name">COMPREHENSIVE_IT_EXPERT_REMEDIATION_AND_ISO25010_REPORT.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/DEFENSE_GUIDE.md" target="_blank">
+              <span class="file-name">DEFENSE_GUIDE.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/IMPLEMENTATION_PLAN.md" target="_blank">
+              <span class="file-name">IMPLEMENTATION_PLAN.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/WORK_STATE.md" target="_blank">
+              <span class="file-name">WORK_STATE.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/code-review-claim-verification-2026-09-09.md" target="_blank">
+              <span class="file-name">code-review-claim-verification-2026-09-09.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/demo-live-job-orders-snapshot-2026-09-09.md" target="_blank">
+              <span class="file-name">demo-live-job-orders-snapshot-2026-09-09.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/deployment-readiness-recheck-2026-09-09.md" target="_blank">
+              <span class="file-name">deployment-readiness-recheck-2026-09-09.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/deployment-readiness-report-2026-09-09.md" target="_blank">
+              <span class="file-name">deployment-readiness-report-2026-09-09.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/final-pre-deployment-assess-fix-reaudit-2026-09-09.md" target="_blank">
+              <span class="file-name">final-pre-deployment-assess-fix-reaudit-2026-09-09.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/final-pre-deployment-phase1-diagnostic-2026-09-09.md" target="_blank">
+              <span class="file-name">final-pre-deployment-phase1-diagnostic-2026-09-09.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/final-release-gate-audit-2026-09-09.md" target="_blank">
+              <span class="file-name">final-release-gate-audit-2026-09-09.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/final-system-evaluation-readiness-report.md" target="_blank">
+              <span class="file-name">final-system-evaluation-readiness-report.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/final-system-quality-and-defense-readiness-report.md" target="_blank">
+              <span class="file-name">final-system-quality-and-defense-readiness-report.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/final-system-quality-audit-pre-evaluation-2026-09-09.md" target="_blank">
+              <span class="file-name">final-system-quality-audit-pre-evaluation-2026-09-09.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/heroku-slug-size-remediation-report.md" target="_blank">
+              <span class="file-name">heroku-slug-size-remediation-report.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/historical-ocr-ingestion-gap-report.md" target="_blank">
+              <span class="file-name">historical-ocr-ingestion-gap-report.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/historical-ocr-ingestion-implementation-report.md" target="_blank">
+              <span class="file-name">historical-ocr-ingestion-implementation-report.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/iso-25010-statement-traceability-matrix.md" target="_blank">
+              <span class="file-name">iso-25010-statement-traceability-matrix.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/ml-methodology-LOCKED-defense-2026-09-09.md" target="_blank">
+              <span class="file-name">ml-methodology-LOCKED-defense-2026-09-09.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/ml-random-forest-methodology-and-historical-module-2026-09-09.md" target="_blank">
+              <span class="file-name">ml-random-forest-methodology-and-historical-module-2026-09-09.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/ml-random-forest-methodology.md" target="_blank">
+              <span class="file-name">ml-random-forest-methodology.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/owasp-oop-tam-iso-evaluation-2026-09-09.md" target="_blank">
+              <span class="file-name">owasp-oop-tam-iso-evaluation-2026-09-09.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/panel-defense-question-bank.md" target="_blank">
+              <span class="file-name">panel-defense-question-bank.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/pre-evaluation-readiness-audit-2026-09-09.md" target="_blank">
+              <span class="file-name">pre-evaluation-readiness-audit-2026-09-09.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/release-blocker-remediation-report.md" target="_blank">
+              <span class="file-name">release-blocker-remediation-report.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/release-closure-status-2026-09-09.md" target="_blank">
+              <span class="file-name">release-closure-status-2026-09-09.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/remediation_readiness_report_237fb953.plan.md" target="_blank">
+              <span class="file-name">remediation_readiness_report_237fb953.plan.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/repository-dependency-audit.md" target="_blank">
+              <span class="file-name">repository-dependency-audit.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/shoelotskey-remediation-readiness-report.md" target="_blank">
+              <span class="file-name">shoelotskey-remediation-readiness-report.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/tam-readiness-traceability-matrix.md" target="_blank">
+              <span class="file-name">tam-readiness-traceability-matrix.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./05_Research_Audits_and_Checklists_MD/targeted-blocker-remediation-report-2026-09-09.md" target="_blank">
+              <span class="file-name">targeted-blocker-remediation-report-2026-09-09.md</span>
+              <span class="ext ext-md">md</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="cat-card">
+        <div class="cat-header">
+          <div>
+            <span class="cat-title">06 Audit Data and CSV Matrices</span>
+            <p class="cat-desc">CSV Numerical Audits, ML Metric Provenance & Research Timelines</p>
+          </div>
+          <span class="count-badge">3 files</span>
+        </div>
+        <ul class="file-list">
+          <li>
+            <a class="file-link" href="./06_Audit_Data_and_CSV_Matrices/CHAPTER4_NUMERICAL_AUDIT.csv" target="_blank">
+              <span class="file-name">CHAPTER4_NUMERICAL_AUDIT.csv</span>
+              <span class="ext ext-csv">csv</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./06_Audit_Data_and_CSV_Matrices/ML_METRIC_PROVENANCE_TABLE.csv" target="_blank">
+              <span class="file-name">ML_METRIC_PROVENANCE_TABLE.csv</span>
+              <span class="ext ext-csv">csv</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./06_Audit_Data_and_CSV_Matrices/RESEARCH_TIMELINE_VERIFICATION.csv" target="_blank">
+              <span class="file-name">RESEARCH_TIMELINE_VERIFICATION.csv</span>
+              <span class="ext ext-csv">csv</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="cat-card">
+        <div class="cat-header">
+          <div>
+            <span class="cat-title">07 Audit and Generator Scripts Python</span>
+            <p class="cat-desc">Python Automation Scripts for System Auditing, OCR Scanning & Report Generation</p>
+          </div>
+          <span class="count-badge">33 files</span>
+        </div>
+        <ul class="file-list">
+          <li>
+            <a class="file-link" href="./07_Audit_and_Generator_Scripts_Python/audit_system_ground_truth.py" target="_blank">
+              <span class="file-name">audit_system_ground_truth.py</span>
+              <span class="ext ext-py">py</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./07_Audit_and_Generator_Scripts_Python/build_docs.py" target="_blank">
+              <span class="file-name">build_docs.py</span>
+              <span class="ext ext-py">py</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./07_Audit_and_Generator_Scripts_Python/check_pdf_pages.py" target="_blank">
+              <span class="file-name">check_pdf_pages.py</span>
+              <span class="ext ext-py">py</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./07_Audit_and_Generator_Scripts_Python/check_scanned.py" target="_blank">
+              <span class="file-name">check_scanned.py</span>
+              <span class="ext ext-py">py</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./07_Audit_and_Generator_Scripts_Python/check_tam_pdf.py" target="_blank">
+              <span class="file-name">check_tam_pdf.py</span>
+              <span class="ext ext-py">py</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./07_Audit_and_Generator_Scripts_Python/deep_generate.py" target="_blank">
+              <span class="file-name">deep_generate.py</span>
+              <span class="ext ext-py">py</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./07_Audit_and_Generator_Scripts_Python/dump_xlsx.py" target="_blank">
+              <span class="file-name">dump_xlsx.py</span>
+              <span class="ext ext-py">py</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./07_Audit_and_Generator_Scripts_Python/extract_all_docs.py" target="_blank">
+              <span class="file-name">extract_all_docs.py</span>
+              <span class="ext ext-py">py</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./07_Audit_and_Generator_Scripts_Python/extract_revisions.py" target="_blank">
+              <span class="file-name">extract_revisions.py</span>
+              <span class="ext ext-py">py</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./07_Audit_and_Generator_Scripts_Python/generate_00_inventory.py" target="_blank">
+              <span class="file-name">generate_00_inventory.py</span>
+              <span class="ext ext-py">py</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./07_Audit_and_Generator_Scripts_Python/generate_01_ground_truth.py" target="_blank">
+              <span class="file-name">generate_01_ground_truth.py</span>
+              <span class="ext ext-py">py</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./07_Audit_and_Generator_Scripts_Python/generate_02_traceability.py" target="_blank">
+              <span class="file-name">generate_02_traceability.py</span>
+              <span class="ext ext-py">py</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./07_Audit_and_Generator_Scripts_Python/generate_03_chapters_1_to_3_audit.py" target="_blank">
+              <span class="file-name">generate_03_chapters_1_to_3_audit.py</span>
+              <span class="ext ext-py">py</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./07_Audit_and_Generator_Scripts_Python/generate_04_numerical_revalidation.py" target="_blank">
+              <span class="file-name">generate_04_numerical_revalidation.py</span>
+              <span class="ext ext-py">py</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./07_Audit_and_Generator_Scripts_Python/generate_05_chapters_4_to_5_audit.py" target="_blank">
+              <span class="file-name">generate_05_chapters_4_to_5_audit.py</span>
+              <span class="ext ext-py">py</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./07_Audit_and_Generator_Scripts_Python/generate_06_panel_and_expert_compliance.py" target="_blank">
+              <span class="file-name">generate_06_panel_and_expert_compliance.py</span>
+              <span class="ext ext-py">py</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./07_Audit_and_Generator_Scripts_Python/generate_07_academic_compliance.py" target="_blank">
+              <span class="file-name">generate_07_academic_compliance.py</span>
+              <span class="ext ext-py">py</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./07_Audit_and_Generator_Scripts_Python/generate_08_defense_presentation_audit.py" target="_blank">
+              <span class="file-name">generate_08_defense_presentation_audit.py</span>
+              <span class="ext ext-py">py</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./07_Audit_and_Generator_Scripts_Python/generate_09_defense_qa_playbook.py" target="_blank">
+              <span class="file-name">generate_09_defense_qa_playbook.py</span>
+              <span class="ext ext-py">py</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./07_Audit_and_Generator_Scripts_Python/generate_final_docs.py" target="_blank">
+              <span class="file-name">generate_final_docs.py</span>
+              <span class="ext ext-py">py</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./07_Audit_and_Generator_Scripts_Python/generate_final_docs_v2.py" target="_blank">
+              <span class="file-name">generate_final_docs_v2.py</span>
+              <span class="ext ext-py">py</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./07_Audit_and_Generator_Scripts_Python/generate_lighthouse_report.py" target="_blank">
+              <span class="file-name">generate_lighthouse_report.py</span>
+              <span class="ext ext-py">py</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./07_Audit_and_Generator_Scripts_Python/generate_master_report.py" target="_blank">
+              <span class="file-name">generate_master_report.py</span>
+              <span class="ext ext-py">py</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./07_Audit_and_Generator_Scripts_Python/generate_rbac_report.py" target="_blank">
+              <span class="file-name">generate_rbac_report.py</span>
+              <span class="ext ext-py">py</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./07_Audit_and_Generator_Scripts_Python/generate_system_tech_stack_report.py" target="_blank">
+              <span class="file-name">generate_system_tech_stack_report.py</span>
+              <span class="ext ext-py">py</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./07_Audit_and_Generator_Scripts_Python/inspect_auth.py" target="_blank">
+              <span class="file-name">inspect_auth.py</span>
+              <span class="ext ext-py">py</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./07_Audit_and_Generator_Scripts_Python/inspect_schema.py" target="_blank">
+              <span class="file-name">inspect_schema.py</span>
+              <span class="ext ext-py">py</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./07_Audit_and_Generator_Scripts_Python/ocr_capstone2.py" target="_blank">
+              <span class="file-name">ocr_capstone2.py</span>
+              <span class="ext ext-py">py</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./07_Audit_and_Generator_Scripts_Python/ocr_revisions.py" target="_blank">
+              <span class="file-name">ocr_revisions.py</span>
+              <span class="ext ext-py">py</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./07_Audit_and_Generator_Scripts_Python/read_validity.py" target="_blank">
+              <span class="file-name">read_validity.py</span>
+              <span class="ext ext-py">py</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./07_Audit_and_Generator_Scripts_Python/run_ocr.py" target="_blank">
+              <span class="file-name">run_ocr.py</span>
+              <span class="ext ext-py">py</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./07_Audit_and_Generator_Scripts_Python/scan_inventory.py" target="_blank">
+              <span class="file-name">scan_inventory.py</span>
+              <span class="ext ext-py">py</span>
+            </a>
+          </li>
+          <li>
+            <a class="file-link" href="./07_Audit_and_Generator_Scripts_Python/test_easyocr.py" target="_blank">
+              <span class="file-name">test_easyocr.py</span>
+              <span class="ext ext-py">py</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <footer>
+      Shoelotskey Service Management System &bull; Capstone Documentation Hub
+    </footer>
+  </div>
+</body>
+</html>

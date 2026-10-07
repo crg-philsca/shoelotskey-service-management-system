@@ -1,0 +1,1720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Master System Use Case & Functional Testing Report - Shoelotskey Service Management System</title>
+    <style>
+        :root {
+            --primary: #1e3a8a;
+            --primary-dark: #0f172a;
+            --primary-light: #2563eb;
+            --success: #15803d;
+            --success-bg: #dcfce7;
+            --success-border: #86efac;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --border: #e2e8f0;
+            --text: #0f172a;
+            --muted: #475569;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; padding: 30px 20px; }
+        .container { max-width: 1300px; margin: 0 auto; }
+        header { background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%); color: #ffffff; padding: 40px; border-radius: 12px; margin-bottom: 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        .inst-header { font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.08em; color: #93c5fd; margin-bottom: 8px; }
+        header h1 { font-size: 2.1rem; font-weight: 800; margin-bottom: 10px; line-height: 1.25; }
+        header p { color: #bfdbfe; font-size: 1.05rem; margin-bottom: 24px; }
+        .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; background: rgba(255,255,255,0.08); padding: 18px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12); font-size: 0.88rem; }
+        .meta-grid div strong { display: block; color: #bfdbfe; font-size: 0.72rem; text-transform: uppercase; margin-bottom: 4px; }
+        .meta-grid div span { color: #ffffff; font-family: monospace; }
+        
+        .summary-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin: 24px 0; }
+        .stat-card { background: #ffffff; border: 1px solid var(--border); border-radius: 8px; padding: 20px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+        .stat-card .val { font-size: 2.4rem; font-weight: 800; color: var(--primary); line-height: 1; }
+        .stat-card .lbl { font-size: 0.78rem; font-weight: 600; text-transform: uppercase; color: var(--muted); margin-top: 6px; letter-spacing: 0.05em; }
+        
+        .toc-box { background: #ffffff; border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 28px; }
+        .toc-box h3 { font-size: 1.15rem; color: var(--primary-dark); margin-bottom: 14px; }
+        .toc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 10px; }
+        .toc-link { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: #f8fafc; border: 1px solid var(--border); border-radius: 6px; text-decoration: none; color: var(--text); font-size: 0.88rem; font-weight: 500; transition: all 0.15s; }
+        .toc-link:hover { background: #eff6ff; border-color: var(--primary-light); color: var(--primary); }
+        .toc-link span.count { background: #e2e8f0; color: #334155; font-size: 0.75rem; padding: 2px 8px; border-radius: 9999px; font-weight: 700; }
+
+        section.module-section { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 28px; margin-bottom: 28px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+        .module-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border); padding-bottom: 12px; margin-bottom: 18px; }
+        .module-header h2 { font-size: 1.3rem; color: var(--primary-dark); font-weight: 700; }
+        .module-header .count-badge { background: #eff6ff; color: var(--primary); border: 1px solid #bfdbfe; padding: 4px 12px; border-radius: 9999px; font-weight: 700; font-size: 0.8rem; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.88rem; }
+        th, td { padding: 12px 14px; text-align: left; border: 1px solid var(--border); vertical-align: top; }
+        th { background: #f1f5f9; color: #334155; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; }
+        tr:nth-child(even) td { background: #f8fafc; }
+        
+        .badge-pass { display: inline-block; background: var(--success-bg); color: var(--success); border: 1px solid var(--success-border); padding: 3px 10px; border-radius: 9999px; font-weight: 700; font-size: 0.75rem; text-transform: uppercase; }
+        code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 0.85em; color: #0f172a; border: 1px solid #e2e8f0; }
+        .footer-note { text-align: center; margin-top: 40px; padding: 20px; font-size: 0.88rem; color: var(--muted); border-top: 1px solid var(--border); font-style: italic; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <div class="inst-header">Republic of the Philippines • National Aviation Academy of the Philippines • Institute of Computer Studies</div>
+        <h1>Master System Use Case & Functional Testing Report</h1>
+        <p>Comprehensive Verification of All Updated Features Across 22 Functional Modules</p>
+        <div class="meta-grid">
+            <div><strong>Capstone Project</strong><span>Shoelotskey Service Management System</span></div>
+            <div><strong>Authors / Researchers</strong><span>Angeles, C. R., Gravino, K. C., Sedanto, M. D.</span></div>
+            <div><strong>Advisers</strong><span>Richard Niel B. Peralta, MSIT & Assoc. Prof. Mary Ann F. Aballiar-Vista</span></div>
+            <div><strong>Overall Status</strong><span style="color: #4ade80; font-weight: bold;">120 / 120 TEST CASES PASSED (100%)</span></div>
+        </div>
+    </header>
+
+    <div class="summary-bar">
+        <div class="stat-card">
+            <div class="val">120</div>
+            <div class="lbl">Total Test Cases</div>
+        </div>
+        <div class="stat-card">
+            <div class="val" style="color: var(--success);">120</div>
+            <div class="lbl">Passed Test Cases</div>
+        </div>
+        <div class="stat-card">
+            <div class="val" style="color: #dc2626;">0</div>
+            <div class="lbl">Failed Test Cases</div>
+        </div>
+        <div class="stat-card">
+            <div class="val" style="color: #2563eb;">22</div>
+            <div class="lbl">Tested Modules</div>
+        </div>
+        <div class="stat-card">
+            <div class="val" style="color: var(--success);">100%</div>
+            <div class="lbl">Success Rate</div>
+        </div>
+    </div>
+
+    <div class="toc-box">
+        <h3>Table of Contents — All Tested System Modules</h3>
+        <div class="toc-grid">
+            <a class="toc-link" href="#mod-1">
+                <span>Module 1: Authentication, Password Recovery & Multi-Session Control</span>
+                <span class="count">6 Cases</span>
+            </a>
+            <a class="toc-link" href="#mod-2">
+                <span>Module 2: Executive Dashboard Overview & KPI Metrics Drill-Downs</span>
+                <span class="count">9 Cases</span>
+            </a>
+            <a class="toc-link" href="#mod-3">
+                <span>Module 3: Job Order Admission & Customer Management</span>
+                <span class="count">13 Cases</span>
+            </a>
+            <a class="toc-link" href="#mod-4">
+                <span>Module 4: Shoe Item Configuration & Add-On Service Compatibility</span>
+                <span class="count">9 Cases</span>
+            </a>
+            <a class="toc-link" href="#mod-5">
+                <span>Module 5: Machine Learning Service Duration Prediction Engine</span>
+                <span class="count">7 Cases</span>
+            </a>
+            <a class="toc-link" href="#mod-6">
+                <span>Module 6: Payment Settlement & Discount Authorization</span>
+                <span class="count">9 Cases</span>
+            </a>
+            <a class="toc-link" href="#mod-7">
+                <span>Module 7: Active Job Orders Management & Multi-Criteria Search</span>
+                <span class="count">8 Cases</span>
+            </a>
+            <a class="toc-link" href="#mod-8">
+                <span>Module 8: Order Status Progression Pipeline (New -> Progress -> Ready -> Claimed)</span>
+                <span class="count">6 Cases</span>
+            </a>
+            <a class="toc-link" href="#mod-9">
+                <span>Module 9: Customer Claim Verification & Order Release</span>
+                <span class="count">6 Cases</span>
+            </a>
+            <a class="toc-link" href="#mod-10">
+                <span>Module 10: Release Calendar Navigation & Production Scheduling</span>
+                <span class="count">5 Cases</span>
+            </a>
+            <a class="toc-link" href="#mod-11">
+                <span>Module 11: Inventory Catalog & Real-Time Stock Control</span>
+                <span class="count">6 Cases</span>
+            </a>
+            <a class="toc-link" href="#mod-12">
+                <span>Module 12: Automated Material Consumption & Restocking Operations</span>
+                <span class="count">5 Cases</span>
+            </a>
+            <a class="toc-link" href="#mod-13">
+                <span>Module 13: Service Catalog Configuration & Dynamic Pricing</span>
+                <span class="count">4 Cases</span>
+            </a>
+            <a class="toc-link" href="#mod-14">
+                <span>Module 14: User Access Administration & Granular Role Permissions</span>
+                <span class="count">6 Cases</span>
+            </a>
+            <a class="toc-link" href="#mod-15">
+                <span>Module 15: Claim Records Archive & Receipt Generation</span>
+                <span class="count">3 Cases</span>
+            </a>
+            <a class="toc-link" href="#mod-16">
+                <span>Module 16: System Activity History & Forensic Audit Trail</span>
+                <span class="count">6 Cases</span>
+            </a>
+            <a class="toc-link" href="#mod-17">
+                <span>Module 17: Cash Register & Daily Drawer Session Management</span>
+                <span class="count">3 Cases</span>
+            </a>
+            <a class="toc-link" href="#mod-18">
+                <span>Module 18: Customer Tracking & Public Status Inquiry</span>
+                <span class="count">2 Cases</span>
+            </a>
+            <a class="toc-link" href="#mod-19">
+                <span>Module 19: Financial Analytics Drilldowns & Payments Received Ledger</span>
+                <span class="count">1 Cases</span>
+            </a>
+            <a class="toc-link" href="#mod-20">
+                <span>Module 20: Database Backup, Snapshot & Disaster Recovery</span>
+                <span class="count">2 Cases</span>
+            </a>
+            <a class="toc-link" href="#mod-21">
+                <span>Module 21: Historical Data Digitization & OCR Validation Queue</span>
+                <span class="count">2 Cases</span>
+            </a>
+            <a class="toc-link" href="#mod-22">
+                <span>Module 22: Research Traceability & Empirical Objectives 1–6 Engine</span>
+                <span class="count">2 Cases</span>
+            </a>
+        </div>
+    </div>
+
+    <section class="module-section" id="mod-1">
+        <div class="module-header">
+            <h2>Module 1: Authentication, Password Recovery & Multi-Session Control</h2>
+            <span class="count-badge">6 Functional Test Cases</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 10%;">Test Case ID</th>
+                    <th style="width: 22%;">Test Case Title</th>
+                    <th style="width: 22%;">Actions / Procedure</th>
+                    <th style="width: 22%;">Expected Output</th>
+                    <th style="width: 16%;">Actual Output</th>
+                    <th style="width: 8%;">Remarks</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong><code>TC_1</code></strong></td>
+                    <td>Owner Login with Valid Credentials</td>
+                    <td>Enter valid Owner username and password on the login screen and click Login.</td>
+                    <td>The system authenticates the Owner, unlocks full administrative privileges, and redirects to the Owner Dashboard displaying Status Summary and financial Overview Summary cards.
+                            📸 Defense Evidence GuidelineScreenshot of the login screen filled with valid owner credentials, followed by the resulting Owner Dashboard showing active financial KPI cards.</td>
+                    <td>The system authenticates the Owner, unlocks full administrative privileges, and redirects to the Owner Dashboard displaying Status Summary and financial Overview Summary cards.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_2</code></strong></td>
+                    <td>Staff Login with Valid Credentials</td>
+                    <td>Enter valid Staff credentials on the login screen and click Login.</td>
+                    <td>The system authenticates the Staff member and redirects to the Staff Dashboard where financial summaries (Total Sales, Pending Payments, Total Expenses) are strictly hidden.
+                            📸 Defense Evidence GuidelineScreenshot of the Staff Dashboard confirming that only Active Orders appear in Overview Summary while Sales Reports and User Management are hidden from the sidebar.</td>
+                    <td>The system authenticates the Staff member and redirects to the Staff Dashboard where financial summaries (Total Sales, Pending Payments, Total Expenses) are strictly hidden.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_3</code></strong></td>
+                    <td>Login with Invalid Credentials</td>
+                    <td>Enter an incorrect username or wrong password and click Login.</td>
+                    <td>The system denies access and displays a clear red toast alert stating &quot;Invalid username or password.&quot;
+                            📸 Defense Evidence GuidelineScreenshot of the login page showing the red error notification toast when wrong credentials are submitted.</td>
+                    <td>The system denies access and displays a clear red toast alert stating &quot;Invalid username or password.&quot;</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_4</code></strong></td>
+                    <td>Login with Empty Required Fields</td>
+                    <td>Leave the username or password fields completely blank and click Login.</td>
+                    <td>The browser prevents submission and displays a validation popup stating &quot;Please fill out this field.&quot;
+                            📸 Defense Evidence GuidelineScreenshot of the form validation tooltip pointing to an empty password or username box.</td>
+                    <td>The browser prevents submission and displays a validation popup stating &quot;Please fill out this field.&quot;</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_5</code></strong></td>
+                    <td>Password Reset Request (Forgot Password)</td>
+                    <td>Click &quot;Forgot Password?&quot; on the login page, enter a registered account email, and submit the reset request.</td>
+                    <td>The system validates the registered email and transmits a secure password reset link to the user&#x27;s email address.
+                            📸 Defense Evidence GuidelineScreenshot of the &quot;Reset link sent&quot; confirmation dialog on the Forgot Password screen.</td>
+                    <td>The system validates the registered email and transmits a secure password reset link to the user&#x27;s email address.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_6</code></strong></td>
+                    <td>System Logout from Red Sidebar</td>
+                    <td>Click the dedicated Logout button located at the bottom of the left red navigation sidebar.</td>
+                    <td>The system instantly destroys the user session token and securely redirects back to the main Login page.
+                            📸 Defense Evidence GuidelineScreenshot highlighting the Logout icon at the bottom of the red sidebar, followed by the redirected Login screen.</td>
+                    <td>The system instantly destroys the user session token and securely redirects back to the main Login page.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="module-section" id="mod-2">
+        <div class="module-header">
+            <h2>Module 2: Executive Dashboard Overview & KPI Metrics Drill-Downs</h2>
+            <span class="count-badge">9 Functional Test Cases</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 10%;">Test Case ID</th>
+                    <th style="width: 22%;">Test Case Title</th>
+                    <th style="width: 22%;">Actions / Procedure</th>
+                    <th style="width: 22%;">Expected Output</th>
+                    <th style="width: 16%;">Actual Output</th>
+                    <th style="width: 8%;">Remarks</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong><code>TC_7</code></strong></td>
+                    <td>Status Summary Cards Display &amp; Clickability</td>
+                    <td>Observe the 4 interactive status cards under &quot;Status Summary&quot; (New Order, On-Going, For Release, Claimed) and click on any card.</td>
+                    <td>Each card displays real-time order quantities. Clicking a card hides the general charts and instantly opens an itemized Status Table specific to that selected status.
+                            📸 Defense Evidence GuidelineScreenshot showing the 4 color-coded status summary cards (Purple, Blue, Orange, Gray) on the Dashboard.</td>
+                    <td>Each card displays real-time order quantities. Clicking a card hides the general charts and instantly opens an itemized Status Table specific to that selected status.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_8</code></strong></td>
+                    <td>Status Table Search &amp; Date Filter Operations</td>
+                    <td>While inside an expanded Status Table, enter a customer name in the search bar or pick a custom Start Date and End Date.</td>
+                    <td>The table dynamically filters displayed orders in real-time, matching the entered text or falling strictly within the chosen date boundary.
+                            📸 Defense Evidence GuidelineScreenshot of the expanded Status Table displaying filtered results when a date range is applied.</td>
+                    <td>The table dynamically filters displayed orders in real-time, matching the entered text or falling strictly within the chosen date boundary.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_9</code></strong></td>
+                    <td>Status Table Back Button Return</td>
+                    <td>Click the red &quot;← Back&quot; button at the top-left of an expanded Status Table.</td>
+                    <td>The system exits the drill-down table view and seamlessly restores the full Dashboard featuring charts, trends, and stock alerts.
+                            📸 Defense Evidence GuidelineScreenshot highlighting the red &quot;Back&quot; button above the status table.</td>
+                    <td>The system exits the drill-down table view and seamlessly restores the full Dashboard featuring charts, trends, and stock alerts.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_10</code></strong></td>
+                    <td>Overview Summary Display for Owner</td>
+                    <td>Log in as Owner and observe the &quot;Overview Summary&quot; section directly below Status Summary.</td>
+                    <td>The system displays 4 distinct KPI cards: Active Orders (Yellow), Pending Payments (Red border with dollar amount), Total Sales (Green border), and Total Expenses (Orange border).
+                            📸 Defense Evidence GuidelineScreenshot of the Owner&#x27;s Overview Summary row displaying exact financial totals for sales, pending payments, and expenses.</td>
+                    <td>The system displays 4 distinct KPI cards: Active Orders (Yellow), Pending Payments (Red border with dollar amount), Total Sales (Green border), and Total Expenses (Orange border).</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_11</code></strong></td>
+                    <td>Overview Summary Restriction for Staff</td>
+                    <td>Log in as Staff and check the &quot;Overview Summary&quot; section on the Dashboard.</td>
+                    <td>Only the &quot;Active Orders&quot; count card is rendered; all sensitive financial cards (Pending Payments, Total Sales, and Total Expenses) are entirely suppressed.
+                            📸 Defense Evidence GuidelineScreenshot showing the Staff view where Overview Summary solely displays the Active Orders KPI card.</td>
+                    <td>Only the &quot;Active Orders&quot; count card is rendered; all sensitive financial cards (Pending Payments, Total Sales, and Total Expenses) are entirely suppressed.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_12</code></strong></td>
+                    <td>Service Volume by Type Chart Rendering</td>
+                    <td>Inspect the &quot;Service Volume by Type&quot; bar chart section on the Dashboard.</td>
+                    <td>The system renders color-coded horizontal bar charts breaking down completed job quantities across Basic Cleaning, Full Reglue, Minor Reglue, and Color Renewal services.
+                            📸 Defense Evidence GuidelineScreenshot of the visual bar chart showing service distribution by type.</td>
+                    <td>The system renders color-coded horizontal bar charts breaking down completed job quantities across Basic Cleaning, Full Reglue, Minor Reglue, and Color Renewal services.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_13</code></strong></td>
+                    <td>Service Volume Chart Tooltip Hover</td>
+                    <td>Hover the mouse pointer over any vertical bar inside the Service Volume by Type chart.</td>
+                    <td>A dark interactive tooltip box appears showing the exact numerical order count and (for owners) the revenue contribution of that specific service category.
+                            📸 Defense Evidence GuidelineScreenshot capturing the hover tooltip popped up over a service bar.</td>
+                    <td>A dark interactive tooltip box appears showing the exact numerical order count and (for owners) the revenue contribution of that specific service category.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_14</code></strong></td>
+                    <td>Order Activity Trends Line Chart Display</td>
+                    <td>Scroll down to inspect the &quot;Order Activity Trends&quot; line chart comparing order lifecycle movements over time.</td>
+                    <td>The system renders a dynamic dual-line chart tracing &quot;Orders Created&quot; (Purple line) against &quot;Orders Released&quot; (Green line) across historical timeline intervals.
+                            📸 Defense Evidence GuidelineScreenshot of the dual-line graph tracking created vs released shoe restorations.</td>
+                    <td>The system renders a dynamic dual-line chart tracing &quot;Orders Created&quot; (Purple line) against &quot;Orders Released&quot; (Green line) across historical timeline intervals.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_15</code></strong></td>
+                    <td>Order Activity Trend Tooltip Inspection</td>
+                    <td>Hover over a plotted data node on the Order Activity Trends graph.</td>
+                    <td>An interactive summary pop-over appears listing exact counts for new intake vs finished claim releases for that specific date/month.
+                            📸 Defense Evidence GuidelineScreenshot showing the trend tooltip over a timeline milestone.</td>
+                    <td>An interactive summary pop-over appears listing exact counts for new intake vs finished claim releases for that specific date/month.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="module-section" id="mod-3">
+        <div class="module-header">
+            <h2>Module 3: Job Order Admission & Customer Management</h2>
+            <span class="count-badge">13 Functional Test Cases</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 10%;">Test Case ID</th>
+                    <th style="width: 22%;">Test Case Title</th>
+                    <th style="width: 22%;">Actions / Procedure</th>
+                    <th style="width: 22%;">Expected Output</th>
+                    <th style="width: 16%;">Actual Output</th>
+                    <th style="width: 8%;">Remarks</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong><code>TC_16</code></strong></td>
+                    <td>Stock Status Alerts (Low &amp; Critical Warnings)</td>
+                    <td>Inspect the &quot;Stock Status Alerts&quot; card located at the bottom of the Dashboard when an item falls below safety thresholds.</td>
+                    <td>The card explicitly displays affected items with an amber &quot;Low Stock&quot; badge or red &quot;Critical&quot; badge, listing the item category and remaining quantity.
+                            📸 Defense Evidence GuidelineScreenshot of the Stock Status Alerts widget showing warnings for items like Leather Glue or Soler-Clean.</td>
+                    <td>The card explicitly displays affected items with an amber &quot;Low Stock&quot; badge or red &quot;Critical&quot; badge, listing the item category and remaining quantity.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_17</code></strong></td>
+                    <td>Stock Status Alerts Normal State Display</td>
+                    <td>View the Stock Status Alerts section when all inventory supplies maintain sufficient volume above threshold levels.</td>
+                    <td>The card displays a clean green check icon accompanied by the text &quot;All stock levels normal&quot; and a 0 Warnings badge.
+                            📸 Defense Evidence GuidelineScreenshot of the healthy inventory confirmation state on the Dashboard.</td>
+                    <td>The card displays a clean green check icon accompanied by the text &quot;All stock levels normal&quot; and a 0 Warnings badge.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_18</code></strong></td>
+                    <td>Red Sidebar Expand and Collapse Control</td>
+                    <td>Click the circular white chevron button located on the edge of the left red navigation sidebar.</td>
+                    <td>The red sidebar cleanly collapses into a narrow icon-only column to maximize working dashboard width, and re-expands upon secondary click.
+                            📸 Defense Evidence GuidelineBefore and after screenshot demonstration showing the red sidebar in expanded vs collapsed mode.</td>
+                    <td>The red sidebar cleanly collapses into a narrow icon-only column to maximize working dashboard width, and re-expands upon secondary click.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_19</code></strong></td>
+                    <td>Navigate to Job Order Form from Sidebar</td>
+                    <td>Click on &quot;Job Order Form&quot; in the red navigation sidebar.</td>
+                    <td>The system opens the centralized intake creation form featuring clearly delineated Customer Details, Shoe Details, and Job Order Summary sections.
+                            📸 Defense Evidence GuidelineScreenshot of the clean, freshly loaded Job Order Form interface.</td>
+                    <td>The system opens the centralized intake creation form featuring clearly delineated Customer Details, Shoe Details, and Job Order Summary sections.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_20</code></strong></td>
+                    <td>Customer Details Input &amp; Validation</td>
+                    <td>Enter customer contact information (Name, Phone Number, Email Address) into the Customer Details card.</td>
+                    <td>The text fields accept input smoothly and instantly mirror the customer profile inside the live Job Order Summary panel on the right.
+                            📸 Defense Evidence GuidelineScreenshot showing filled customer profile details appearing synchronously in the summary box.</td>
+                    <td>The text fields accept input smoothly and instantly mirror the customer profile inside the live Job Order Summary panel on the right.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_21</code></strong></td>
+                    <td>Shoe Item Specification Entry</td>
+                    <td>Under &quot;Shoe Details&quot;, input the Shoe Brand, Model/Name, Colorway, and description of current physical shoe condition/issues.</td>
+                    <td>The shoe profile card formats neatly, labeling the header dynamically with the typed shoe name (e.g. &quot;Jordan 1 Retro High&quot;).
+                            📸 Defense Evidence GuidelineScreenshot showing the Shoe Details card populated with specific footwear identifiers and repair notes.</td>
+                    <td>The shoe profile card formats neatly, labeling the header dynamically with the typed shoe name (e.g. &quot;Jordan 1 Retro High&quot;).</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_22</code></strong></td>
+                    <td>Multi-Pair Shoe Addition via &quot;+ Add Shoe&quot; Button</td>
+                    <td>Click the &quot;+ Add Shoe&quot; button at the bottom of the Shoe Details section for a customer bringing in multiple pairs.</td>
+                    <td>A new independent shoe specification tab/card expands instantly below the first pair, allowing customized service selection per footwear item.
+                            📸 Defense Evidence GuidelineScreenshot of two distinct shoe entry boxes displayed simultaneously inside a single Job Order creation screen.</td>
+                    <td>A new independent shoe specification tab/card expands instantly below the first pair, allowing customized service selection per footwear item.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_23</code></strong></td>
+                    <td>Remove Extra Shoe Item via Trash Icon</td>
+                    <td>Click the delete trash icon located on the top corner of a secondary added shoe card.</td>
+                    <td>The selected secondary shoe item is cleanly removed from the form, and total order pricing automatically subtracts its associated service fees.
+                            📸 Defense Evidence GuidelineScreenshot showing the deletion confirmation or immediate removal of an extra shoe card from the order summary.</td>
+                    <td>The selected secondary shoe item is cleanly removed from the form, and total order pricing automatically subtracts its associated service fees.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_24</code></strong></td>
+                    <td>Base Service Selection and Price Integration</td>
+                    <td>Select a core service (e.g., &quot;Full Reglue - ₱650&quot;) from the Base Services selection buttons or dropdown.</td>
+                    <td>The chosen base service highlights actively, adding its exact price to the Total Amount and displaying under Service Details in the Job Order Summary.
+                            📸 Defense Evidence GuidelineScreenshot showing the active blue/green highlight on the selected Base Service and its immediate reflection in the price summary.</td>
+                    <td>The chosen base service highlights actively, adding its exact price to the Total Amount and displaying under Service Details in the Job Order Summary.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_25</code></strong></td>
+                    <td>Priority Fees Selection (Rush vs Standard)</td>
+                    <td>Select an optional Priority Fee option (such as Express Rush 24hrs or VIP Turnaround) for a shoe item.</td>
+                    <td>The priority fee correctly appends to the service cost, adjusts estimated turnaround days, and marks the item with a priority indicator in the summary.
+                            📸 Defense Evidence GuidelineScreenshot capturing the addition of a Priority Fee option and the corresponding adjustments to price and timeline.</td>
+                    <td>The priority fee correctly appends to the service cost, adjusts estimated turnaround days, and marks the item with a priority indicator in the summary.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_26</code></strong></td>
+                    <td>Add-On Services Checkbox Selection</td>
+                    <td>Tick one or more supplementary Add-On Services (such as Sole Protect, Deoxidizing, or Water Repellent Spray).</td>
+                    <td>All checked add-ons attach cleanly to the specific shoe item, compounding their fees into the grand Total Amount calculation.
+                            📸 Defense Evidence GuidelineScreenshot displaying multiple selected Add-On checkboxes itemized in the right-hand Job Order Summary panel.</td>
+                    <td>All checked add-ons attach cleanly to the specific shoe item, compounding their fees into the grand Total Amount calculation.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_27</code></strong></td>
+                    <td>Downpayment Input and Remaining Balance Math</td>
+                    <td>Enter an upfront downpayment amount (e.g., ₱300) into the Downpayment input field inside Payment Summary.</td>
+                    <td>The system calculates Remaining Balance automatically (Total Amount minus Downpayment) in real-time without requiring manual calculation.
+                            📸 Defense Evidence GuidelineScreenshot of the Payment Summary box proving mathematically precise Remaining Balance calculation upon downpayment entry.</td>
+                    <td>The system calculates Remaining Balance automatically (Total Amount minus Downpayment) in real-time without requiring manual calculation.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_28</code></strong></td>
+                    <td>Payment Method Selection (Cash, GCash, Bank)</td>
+                    <td>Select a payment medium from the Payment Method dropdown selector (Cash, GCash, or Bank Transfer).</td>
+                    <td>The chosen payment mode locks into the order record, ensuring proper categorization for downstream financial analytics and receipt printing.
+                            📸 Defense Evidence GuidelineScreenshot showing the opened Payment Method selection menu with &quot;GCash&quot; selected.</td>
+                    <td>The chosen payment mode locks into the order record, ensuring proper categorization for downstream financial analytics and receipt printing.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="module-section" id="mod-4">
+        <div class="module-header">
+            <h2>Module 4: Shoe Item Configuration & Add-On Service Compatibility</h2>
+            <span class="count-badge">9 Functional Test Cases</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 10%;">Test Case ID</th>
+                    <th style="width: 22%;">Test Case Title</th>
+                    <th style="width: 22%;">Actions / Procedure</th>
+                    <th style="width: 22%;">Expected Output</th>
+                    <th style="width: 16%;">Actual Output</th>
+                    <th style="width: 8%;">Remarks</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong><code>TC_29</code></strong></td>
+                    <td>Submit Job Order with Incomplete Mandatory Fields</td>
+                    <td>Attempt to click the primary &quot;Submit Order&quot; button without entering a Customer Name or selecting a Base Service.</td>
+                    <td>The form rejects submission, halts execution, and displays conspicuous warning toasts highlighting the missing mandatory inputs.
+                            📸 Defense Evidence GuidelineScreenshot showing red validation border highlights around blank mandatory customer name and service fields.</td>
+                    <td>The form rejects submission, halts execution, and displays conspicuous warning toasts highlighting the missing mandatory inputs.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_30</code></strong></td>
+                    <td>Successful Job Order Creation &amp; Receipt Generation</td>
+                    <td>With all details validated, click &quot;Create Job Order&quot; at the bottom of the form.</td>
+                    <td>The system stores the order in the database, emits a green &quot;Job order created successfully&quot; toast, generates a unique Order #, and opens the printable intake summary receipt.
+                            📸 Defense Evidence GuidelineScreenshot capturing the success toast notification alongside the freshly generated printable Job Order Intake Summary.</td>
+                    <td>The system stores the order in the database, emits a green &quot;Job order created successfully&quot; toast, generates a unique Order #, and opens the printable intake summary receipt.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_31</code></strong></td>
+                    <td>View Job Orders Directory Table</td>
+                    <td>Navigate to the Job Orders list (via `/job-orders` or drill-down tables) and observe the column layout.</td>
+                    <td>The table displays Order Number, Customer Name, Shoes/Services summary, Current Status Badge, Total Amount, Remaining Balance, and Action buttons.
+                            📸 Defense Evidence GuidelineScreenshot of the Job Orders Directory table showcasing clean, columnar arrangement of client footwear records.</td>
+                    <td>The table displays Order Number, Customer Name, Shoes/Services summary, Current Status Badge, Total Amount, Remaining Balance, and Action buttons.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_32</code></strong></td>
+                    <td>Search Orders by Customer Name or Tracking #</td>
+                    <td>Type a customer&#x27;s name or specific order number into the search bar above the directory table.</td>
+                    <td>The directory filters live as typing progresses, hiding unrelated rows and isolating exclusively matching records.
+                            📸 Defense Evidence GuidelineScreenshot showing filtered search results isolating a specific customer&#x27;s repair ticket.</td>
+                    <td>The directory filters live as typing progresses, hiding unrelated rows and isolating exclusively matching records.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_33</code></strong></td>
+                    <td>Open Order Detail Modal via Eye Icon / View Button</td>
+                    <td>Click the &quot;View&quot; button or inspect icon on any specific order row.</td>
+                    <td>The Order Detail Modal opens, displaying comprehensive sections: Customer Details, Service Details, Additional Products used, Schedule Details, and Payment Summary.
+                            📸 Defense Evidence GuidelineScreenshot of the opened Order Detail Modal displaying all five structured summary sub-headers clearly.</td>
+                    <td>The Order Detail Modal opens, displaying comprehensive sections: Customer Details, Service Details, Additional Products used, Schedule Details, and Payment Summary.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_34</code></strong></td>
+                    <td>Open Edit Order Modal from Row Actions</td>
+                    <td>Click the &quot;Edit&quot; button (pencil icon) on a target order record.</td>
+                    <td>The Edit Order Modal launches, populating all customer info, shoe items, service selections, and pricing into editable form inputs.
+                            📸 Defense Evidence GuidelineScreenshot of the Edit Order Modal with editable customer phone number and service selection toggles.</td>
+                    <td>The Edit Order Modal launches, populating all customer info, shoe items, service selections, and pricing into editable form inputs.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_35</code></strong></td>
+                    <td>Save Order Modifications &amp; Database Sync</td>
+                    <td>Modify a detail (e.g. change shoe color note or adjust release schedule) inside Edit Order Modal and click &quot;Save Changes&quot;.</td>
+                    <td>The system updates the record, displays an &quot;Order updated successfully&quot; toast, and immediately refreshes the parent directory table.
+                            📸 Defense Evidence GuidelineScreenshot of the green update success toast appearing alongside the modified order table row.</td>
+                    <td>The system updates the record, displays an &quot;Order updated successfully&quot; toast, and immediately refreshes the parent directory table.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_36</code></strong></td>
+                    <td>Open Stock Update Modal from Order Actions</td>
+                    <td>Click the &quot;Update Stock&quot; / inventory bottle button on an active job order row to record chemical/supply consumption.</td>
+                    <td>The Stock Update Modal launches inside a compact, scrollable container with fixed headers and footers, eliminating vertical layout overflow.
+                            📸 Defense Evidence GuidelineScreenshot showing the neatly framed, scrollable Stock Update Modal displayed directly over the order directory.</td>
+                    <td>The Stock Update Modal launches inside a compact, scrollable container with fixed headers and footers, eliminating vertical layout overflow.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_37</code></strong></td>
+                    <td>Accurate Unit Display (ml, g, pairs vs generic can)</td>
+                    <td>Select inventory items inside Stock Update Modal (e.g., Soler-Clean or Leather Glue) and check the measurement label next to quantity input.</td>
+                    <td>The system dynamically pulls and displays the true physical measurement unit from database settings (e.g., ml, g, or pairs) instead of hardcoding generic &quot;cans&quot;.
+                            📸 Defense Evidence GuidelineClose-up screenshot of the inventory usage input showing correct units (&quot;ml&quot; for cleaning formulas, &quot;g&quot; for glue) next to quantity boxes.</td>
+                    <td>The system dynamically pulls and displays the true physical measurement unit from database settings (e.g., ml, g, or pairs) instead of hardcoding generic &quot;cans&quot;.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="module-section" id="mod-5">
+        <div class="module-header">
+            <h2>Module 5: Machine Learning Service Duration Prediction Engine</h2>
+            <span class="count-badge">7 Functional Test Cases</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 10%;">Test Case ID</th>
+                    <th style="width: 22%;">Test Case Title</th>
+                    <th style="width: 22%;">Actions / Procedure</th>
+                    <th style="width: 22%;">Expected Output</th>
+                    <th style="width: 16%;">Actual Output</th>
+                    <th style="width: 8%;">Remarks</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong><code>TC_38</code></strong></td>
+                    <td>Editable Consumption List (Edit / Remove Usage)</td>
+                    <td>After adding a consumption item into the usage queue, click the edit pen or remove trash icon next to the staged item before saving.</td>
+                    <td>The staged usage entry opens for immediate quantity adjustment or complete removal, protecting users against typographical input mistakes.
+                            📸 Defense Evidence GuidelineScreenshot highlighting an interactive staged usage row being edited from an erroneous 1000ml down to a realistic 20ml before final submission.</td>
+                    <td>The staged usage entry opens for immediate quantity adjustment or complete removal, protecting users against typographical input mistakes.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_39</code></strong></td>
+                    <td>Commit Inventory Consumption to Order</td>
+                    <td>With correct consumption values staged (e.g., 25ml Soler-Clean), click &quot;Save Stock Usage&quot; inside Stock Update Modal.</td>
+                    <td>The consumption log saves directly under the order&#x27;s &quot;Additional Products&quot; list and deducts exact volumes from general store inventory.
+                            📸 Defense Evidence GuidelineScreenshot showing the recorded chemical consumption appearing cleanly inside the order&#x27;s Additional Products detail section.</td>
+                    <td>The consumption log saves directly under the order&#x27;s &quot;Additional Products&quot; list and deducts exact volumes from general store inventory.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_40</code></strong></td>
+                    <td>Order Status Progression (New → On-Going → For Release)</td>
+                    <td>Change an order&#x27;s lifecycle status using the status selector from New Order to On-Going, and eventually to For Release.</td>
+                    <td>The table row updates its color-coded badge immediately, and the Dashboard Status Summary counters increment/decrement accurately in real-time.
+                            📸 Defense Evidence GuidelineScreenshot showing an order transitioning from a blue On-Going badge to an orange For Release badge.</td>
+                    <td>The table row updates its color-coded badge immediately, and the Dashboard Status Summary counters increment/decrement accurately in real-time.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_41</code></strong></td>
+                    <td>Open Process Claim Modal for Completed Shoe</td>
+                    <td>Click the &quot;Process Claim&quot; button on an order currently marked as &quot;For Release&quot;.</td>
+                    <td>The Process Claim Modal launches, summarizing remaining balance due and displaying input fields for claimant details and final payment capture.
+                            📸 Defense Evidence GuidelineScreenshot of the opened Process Claim Modal showing the unpaid balance amount and claimant name inputs.</td>
+                    <td>The Process Claim Modal launches, summarizing remaining balance due and displaying input fields for claimant details and final payment capture.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_42</code></strong></td>
+                    <td>Settle Remaining Balance &amp; Complete Claim</td>
+                    <td>Inside Process Claim Modal, enter the remaining balance payment amount, select Payment Method, and click &quot;Confirm Claim &amp; Release&quot;.</td>
+                    <td>The system registers full settlement, transitions status to &quot;Claimed&quot;, archives the transaction into Claim Records, and opens a final Release Receipt.
+                            📸 Defense Evidence GuidelineScreenshot capturing the final claim receipt accompanied by the row status updating to a gray Claimed badge.</td>
+                    <td>The system registers full settlement, transitions status to &quot;Claimed&quot;, archives the transaction into Claim Records, and opens a final Release Receipt.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_109</code></strong></td>
+                    <td>Automated Lead-Time Duration Prediction on Service Selection</td>
+                    <td>Select shoe brand, material, and cleaning services in Job Order Form and observe the predicted service completion duration.</td>
+                    <td>Random Forest model calculates estimated completion days in real time based on service workload and historical completion data.</td>
+                    <td>System displays predicted duration (e.g. &#x27;Estimated Lead Time: 3 Days (Random Forest Model)&#x27;).</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_110</code></strong></td>
+                    <td>Open Machine Learning Estimation Breakdown Modal</td>
+                    <td>Click the &#x27;AI / ML Info&#x27; badge or sparkle button next to the estimated duration in Job Order Form.</td>
+                    <td>Modal displays model feature weights, base service duration days, add-on days, and rush modifier breakdown.</td>
+                    <td>MLBreakdown component renders transparent explanation of predicted completion timeline.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="module-section" id="mod-6">
+        <div class="module-header">
+            <h2>Module 6: Payment Settlement & Discount Authorization</h2>
+            <span class="count-badge">9 Functional Test Cases</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 10%;">Test Case ID</th>
+                    <th style="width: 22%;">Test Case Title</th>
+                    <th style="width: 22%;">Actions / Procedure</th>
+                    <th style="width: 22%;">Expected Output</th>
+                    <th style="width: 16%;">Actual Output</th>
+                    <th style="width: 8%;">Remarks</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong><code>TC_43</code></strong></td>
+                    <td>Order Deletion Confirmation &amp; Guardrail</td>
+                    <td>Click the delete trash button on an erroneous order row and confirm destruction inside the warning popup.</td>
+                    <td>The system securely erases the record from the active list, returns any deducted stock back to inventory, and emits an order deleted notification.
+                            📸 Defense Evidence GuidelineScreenshot of the red warning deletion dialog asking user confirmation before permanent record removal.</td>
+                    <td>The system securely erases the record from the active list, returns any deducted stock back to inventory, and emits an order deleted notification.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_44</code></strong></td>
+                    <td>Navigate to Release Calendar View</td>
+                    <td>Click &quot;Release Calendar&quot; in the red navigation sidebar.</td>
+                    <td>The screen opens displaying a clean monthly calendar grid alongside an active schedule sidebar labeled &quot;Select Release Date&quot;.
+                            📸 Defense Evidence GuidelineScreenshot of the loaded Release Calendar showing the full month grid and side timeline view.</td>
+                    <td>The screen opens displaying a clean monthly calendar grid alongside an active schedule sidebar labeled &quot;Select Release Date&quot;.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_45</code></strong></td>
+                    <td>Month Navigation (Previous &amp; Next Controls)</td>
+                    <td>Click the left arrow (Previous Month) and right arrow (Next Month) buttons located above the calendar grid.</td>
+                    <td>The calendar grid updates dynamically, accurately rendering correct days of the week and date numbers for past and future months.
+                            📸 Defense Evidence GuidelineScreenshot showing the month header transitioning smoothly between consecutive calendar months.</td>
+                    <td>The calendar grid updates dynamically, accurately rendering correct days of the week and date numbers for past and future months.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_46</code></strong></td>
+                    <td>Quick &quot;Today&quot; Button Return</td>
+                    <td>After browsing into a future month, click the &quot;Today&quot; shortcut button in the controls header.</td>
+                    <td>The calendar snaps instantly back to the current month and highlights today&#x27;s date box with a distinctive primary border.
+                            📸 Defense Evidence GuidelineScreenshot highlighting the active red frame around today&#x27;s current calendar cell after clicking &quot;Today&quot;.</td>
+                    <td>The calendar snaps instantly back to the current month and highlights today&#x27;s date box with a distinctive primary border.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_47</code></strong></td>
+                    <td>Visual Indicators for Scheduled Releases</td>
+                    <td>Inspect calendar day boxes that match scheduled target release dates of active job orders.</td>
+                    <td>Days with pending finishes display prominent numerical badges or colored pills indicating how many shoes are scheduled for pick-up on that specific day.
+                            📸 Defense Evidence GuidelineScreenshot of calendar grid cells containing badge indicators like &quot;3 Releases&quot; or &quot;1 Due&quot;.</td>
+                    <td>Days with pending finishes display prominent numerical badges or colored pills indicating how many shoes are scheduled for pick-up on that specific day.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_48</code></strong></td>
+                    <td>Interactive Date Selection &amp; Order Drill-Down</td>
+                    <td>Click on any calendar day containing scheduled job releases under the &quot;Select Release Date&quot; layout.</td>
+                    <td>The side schedule panel updates immediately, listing itemized details of every order due for completion on that exact calendar date.
+                            📸 Defense Evidence GuidelineScreenshot of a clicked calendar date box and the corresponding list of scheduled customer repairs listed on the side panel.</td>
+                    <td>The side schedule panel updates immediately, listing itemized details of every order due for completion on that exact calendar date.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_49</code></strong></td>
+                    <td>Direct Order Inspection from Calendar Side Panel</td>
+                    <td>Click on a specific job order card displayed inside the day&#x27;s release checklist panel.</td>
+                    <td>The system opens the full Order Detail Modal without forcing the user to exit the Release Calendar interface.
+                            📸 Defense Evidence GuidelineScreenshot showing the Order Detail modal overlaid directly above the active Release Calendar interface.</td>
+                    <td>The system opens the full Order Detail Modal without forcing the user to exit the Release Calendar interface.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_111</code></strong></td>
+                    <td>Request Discount Requiring Supervisor Credentials</td>
+                    <td>Staff user selects a custom or special discount percentage exceeding staff limit.</td>
+                    <td>System prompts with Supervisor Authorization Modal requiring Owner/Supervisor username and password.</td>
+                    <td>Discount authorization modal opens, blocking form submission until authorized.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_112</code></strong></td>
+                    <td>Supervisor Authorization Lockout Defense on Failed Attempts</td>
+                    <td>Enter incorrect supervisor password 3 consecutive times in the Discount Authorization Modal.</td>
+                    <td>System locks out secondary authorization attempts for 15 minutes and records security alert.</td>
+                    <td>Supervisor auth rate-limiter returns HTTP 403 Forbidden with lockout cooldown; security log recorded.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="module-section" id="mod-7">
+        <div class="module-header">
+            <h2>Module 7: Active Job Orders Management & Multi-Criteria Search</h2>
+            <span class="count-badge">8 Functional Test Cases</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 10%;">Test Case ID</th>
+                    <th style="width: 22%;">Test Case Title</th>
+                    <th style="width: 22%;">Actions / Procedure</th>
+                    <th style="width: 22%;">Expected Output</th>
+                    <th style="width: 16%;">Actual Output</th>
+                    <th style="width: 8%;">Remarks</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong><code>TC_50</code></strong></td>
+                    <td>Overdue Release Visual Highlight</td>
+                    <td>Observe calendar entries for active orders whose scheduled release date has passed without being transitioned to &quot;Claimed&quot;.</td>
+                    <td>Overdue appointments display conspicuous alert styling (such as red border highlighting or alert icons) urging immediate staff attention.
+                            📸 Defense Evidence GuidelineScreenshot capturing the red alert styling applied to an unrecovered past-due restoration ticket.</td>
+                    <td>Overdue appointments display conspicuous alert styling (such as red border highlighting or alert icons) urging immediate staff attention.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_51</code></strong></td>
+                    <td>Empty Schedule Handling on Selected Days</td>
+                    <td>Click on a completely clear calendar day with zero scheduled restorations.</td>
+                    <td>The side panel displays a neat empty confirmation illustration with the text &quot;No releases scheduled for this date&quot;.
+                            📸 Defense Evidence GuidelineScreenshot of the empty state placeholder on a date without booked repairs.</td>
+                    <td>The side panel displays a neat empty confirmation illustration with the text &quot;No releases scheduled for this date&quot;.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_52</code></strong></td>
+                    <td>Navigate to Stock Inventory Management</td>
+                    <td>Click &quot;Inventory Management&quot; in the red navigation sidebar.</td>
+                    <td>The system renders the &quot;Stock Inventory&quot; dashboard, featuring top summary counters (Total Items, Low Stock, Critical) and the full supplies catalogue.
+                            📸 Defense Evidence GuidelineScreenshot of the main Stock Inventory management dashboard with summary counts at the top.</td>
+                    <td>The system renders the &quot;Stock Inventory&quot; dashboard, featuring top summary counters (Total Items, Low Stock, Critical) and the full supplies catalogue.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_53</code></strong></td>
+                    <td>Add New Inventory Item with True Unit Pricing</td>
+                    <td>Click &quot;+ Add New Item&quot;, enter name (e.g., Premium Leather Cleaner), category (Cleaning), unit volume (500ml per bottle), price, and minimum stock alarm threshold, then save.</td>
+                    <td>The new supply saves into the database, displays an &quot;Item added&quot; toast, and renders in the catalog with precise container volumetric rules.
+                            📸 Defense Evidence GuidelineScreenshot of the item creation modal filled with exact ml/g volumetric specifications and cost data.</td>
+                    <td>The new supply saves into the database, displays an &quot;Item added&quot; toast, and renders in the catalog with precise container volumetric rules.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_54</code></strong></td>
+                    <td>Category Filtering (Cleaning, Chemicals, Paint, Tools)</td>
+                    <td>Click category filter tabs or dropdowns above the Stock Inventory table to switch between Cleaning Formulas, Chemicals/Solvents, Leather Paint, and Tools.</td>
+                    <td>The table filters instantaneously, displaying only items classified under the actively selected product category tab.
+                            📸 Defense Evidence GuidelineScreenshot showing the inventory table filtered strictly to &quot;Chemicals/Solvents&quot;.</td>
+                    <td>The table filters instantaneously, displaying only items classified under the actively selected product category tab.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_55</code></strong></td>
+                    <td>Search Inventory Items by Name or SKU</td>
+                    <td>Type a material name (e.g. &quot;Soler&quot;) or product SKU into the stock search box.</td>
+                    <td>The inventory list filters dynamically as characters are typed, isolating exact supply items immediately.
+                            📸 Defense Evidence GuidelineScreenshot showing the search bar populated with &quot;Soler&quot; and the matched formula records below.</td>
+                    <td>The inventory list filters dynamically as characters are typed, isolating exact supply items immediately.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_56</code></strong></td>
+                    <td>Open Restock Modal with Container Logic</td>
+                    <td>Click the green &quot;Restock&quot; (+ box icon) button on a packaged item row (e.g., 500ml cleaner bottles).</td>
+                    <td>The Restock Modal opens, displaying smart container calculation fields where inputting the number of containers automatically calculates total volume gain (e.g. 2 Bottles × 500ml = +1,000ml).
+                            📸 Defense Evidence GuidelineScreenshot of the Restock Modal demonstrating automated container multiplication (Bottles × unit ml size).</td>
+                    <td>The Restock Modal opens, displaying smart container calculation fields where inputting the number of containers automatically calculates total volume gain (e.g. 2 Bottles × 500ml = +1,000ml).</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_57</code></strong></td>
+                    <td>Execute Restock &amp; Verify Inventory Bump</td>
+                    <td>Confirm restock quantities inside the Restock Modal and click &quot;Confirm Restock&quot;.</td>
+                    <td>The system updates the stock balance instantly, displays a green success toast, removes any active Low Stock warnings on the Dashboard, and logs the replenishment in Activity History.
+                            📸 Defense Evidence GuidelineScreenshot showing the updated inventory total and the removed low-stock warning badge after replenishment.</td>
+                    <td>The system updates the stock balance instantly, displays a green success toast, removes any active Low Stock warnings on the Dashboard, and logs the replenishment in Activity History.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="module-section" id="mod-8">
+        <div class="module-header">
+            <h2>Module 8: Order Status Progression Pipeline (New -> Progress -> Ready -> Claimed)</h2>
+            <span class="count-badge">6 Functional Test Cases</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 10%;">Test Case ID</th>
+                    <th style="width: 22%;">Test Case Title</th>
+                    <th style="width: 22%;">Actions / Procedure</th>
+                    <th style="width: 22%;">Expected Output</th>
+                    <th style="width: 16%;">Actual Output</th>
+                    <th style="width: 8%;">Remarks</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong><code>TC_58</code></strong></td>
+                    <td>Manual Stock Deduction / Usage Adjustment</td>
+                    <td>Click the &quot;Update / Deduct&quot; button on an inventory row to record non-order chemical usage or accidental spoilage, enter quantity in true units (ml/g), and submit.</td>
+                    <td>The system subtracts the exact volume from store levels and logs the manual adjustment under general audit records.
+                            📸 Defense Evidence GuidelineScreenshot of a manual stock adjustment dialog saving a verified deduction in exact ml/g increments.</td>
+                    <td>The system subtracts the exact volume from store levels and logs the manual adjustment under general audit records.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_59</code></strong></td>
+                    <td>Open Inventory Detail Modal (History &amp; Specs)</td>
+                    <td>Click the &quot;View Details&quot; / info icon on an inventory supply row.</td>
+                    <td>The Inventory Detail Modal launches, breaking down supply attributes, cost per unit volume, minimum warning threshold level, and historical usage logs.
+                            📸 Defense Evidence GuidelineScreenshot of the opened Inventory Detail Modal displaying complete item specifications and usage history.</td>
+                    <td>The Inventory Detail Modal launches, breaking down supply attributes, cost per unit volume, minimum warning threshold level, and historical usage logs.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_60</code></strong></td>
+                    <td>Low Stock Threshold Automatic Warning Trigger</td>
+                    <td>Deduct stock volume until remaining balance reaches or drops below the configured minimum safety alarm threshold.</td>
+                    <td>An amber &quot;Low Stock&quot; warning pill appears instantly on the item row and mirrors directly onto the Dashboard Stock Status Alerts widget.
+                            📸 Defense Evidence GuidelineScreenshot showing an amber Low Stock badge appearing immediately when volume falls below minimum safety thresholds.</td>
+                    <td>An amber &quot;Low Stock&quot; warning pill appears instantly on the item row and mirrors directly onto the Dashboard Stock Status Alerts widget.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_61</code></strong></td>
+                    <td>Critical Zero-Stock Red Alert Trigger</td>
+                    <td>Deduct stock or complete orders until an item reaches exactly 0 remaining quantity.</td>
+                    <td>A high-priority red &quot;Critical&quot; badge replaces the normal/low status, alerting managers to complete stock depletion.
+                            📸 Defense Evidence GuidelineScreenshot capturing a prominent red Critical depletion badge on an item that has reached zero quantity.</td>
+                    <td>A high-priority red &quot;Critical&quot; badge replaces the normal/low status, alerting managers to complete stock depletion.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_62</code></strong></td>
+                    <td>Edit Inventory Item Properties</td>
+                    <td>Click the &quot;Edit&quot; pen icon on an inventory item, modify its name, unit price, or threshold level, and save.</td>
+                    <td>The updated specifications persist to the database immediately without breaking historical usage relationships.
+                            📸 Defense Evidence GuidelineScreenshot of an inventory item successfully updated with a revised threshold or pricing parameter.</td>
+                    <td>The updated specifications persist to the database immediately without breaking historical usage relationships.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_63</code></strong></td>
+                    <td>Delete Unused Inventory Catalog Record</td>
+                    <td>Click the delete trash icon on an obsolete supply item and confirm deletion in the popup dialog.</td>
+                    <td>The supply record vanishes from the active table, displaying an &quot;Item deleted&quot; notification toast.
+                            📸 Defense Evidence GuidelineScreenshot showing the deletion confirmation warning prior to removing an item from the stock catalog.</td>
+                    <td>The supply record vanishes from the active table, displaying an &quot;Item deleted&quot; notification toast.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="module-section" id="mod-9">
+        <div class="module-header">
+            <h2>Module 9: Customer Claim Verification & Order Release</h2>
+            <span class="count-badge">6 Functional Test Cases</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 10%;">Test Case ID</th>
+                    <th style="width: 22%;">Test Case Title</th>
+                    <th style="width: 22%;">Actions / Procedure</th>
+                    <th style="width: 22%;">Expected Output</th>
+                    <th style="width: 16%;">Actual Output</th>
+                    <th style="width: 8%;">Remarks</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong><code>TC_64</code></strong></td>
+                    <td>Navigate to Sales Report as Owner</td>
+                    <td>Log in as Owner and click &quot;Sales Report&quot; (`/sales-report`) in the red navigation sidebar.</td>
+                    <td>The comprehensive analytical dashboard loads, organizing data into clearly articulated sections: Business Activity, Financial Summary, Total Sales By Service Type, and Payment Method Analytics.
+                            📸 Defense Evidence GuidelineScreenshot of the main Sales Report overview showing all analytical section headers.</td>
+                    <td>The comprehensive analytical dashboard loads, organizing data into clearly articulated sections: Business Activity, Financial Summary, Total Sales By Service Type, and Payment Method Analytics.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_65</code></strong></td>
+                    <td>Business Activity &amp; Financial Summary KPI Accuracy</td>
+                    <td>Inspect the summary cards under &quot;Business Activity&quot; and &quot;Financial Summary&quot;.</td>
+                    <td>The system displays precise totals for completed transactions, Gross Revenue generated, Operational Expenses incurred, and resulting Net Profit Margins based on real database records.
+                            📸 Defense Evidence GuidelineScreenshot showing the Financial Summary KPI boxes with verified revenue, expense, and net profit amounts.</td>
+                    <td>The system displays precise totals for completed transactions, Gross Revenue generated, Operational Expenses incurred, and resulting Net Profit Margins based on real database records.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_66</code></strong></td>
+                    <td>Total Sales By Service Type Chart &amp; Breakdown</td>
+                    <td>Examine the &quot;Total Sales By Service Type&quot; visual analytics card and accompanying table.</td>
+                    <td>The system breaks down gross income precisely across cleaning, reglue, and renewal operations, highlighting highest revenue generating restoration offerings.
+                            📸 Defense Evidence GuidelineScreenshot of the sales breakdown chart displaying revenue percentages across different restoration categories.</td>
+                    <td>The system breaks down gross income precisely across cleaning, reglue, and renewal operations, highlighting highest revenue generating restoration offerings.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_67</code></strong></td>
+                    <td>Payment Method Analytics Distribution (Cash vs GCash vs Bank)</td>
+                    <td>Inspect the &quot;Payment Method Analytics&quot; card located on the Sales Report screen.</td>
+                    <td>The chart accurately segregates incoming revenue streams by medium, detailing exact peso amounts and percentages collected via Cash, GCash, and Bank Transfers.
+                            📸 Defense Evidence GuidelineScreenshot of the Payment Method Analytics distribution graph demonstrating multi-channel revenue splits.</td>
+                    <td>The chart accurately segregates incoming revenue streams by medium, detailing exact peso amounts and percentages collected via Cash, GCash, and Bank Transfers.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_68</code></strong></td>
+                    <td>Sales Records Table &amp; Date Range Filtering</td>
+                    <td>Scroll down to the &quot;Sales Records&quot; table and apply a Start Date and End Date filter (or select Daily/Weekly/Monthly presets).</td>
+                    <td>The transaction table immediately filters to show only completed restorations settled within the specified target timeline, updating Total Sales sums dynamically.
+                            📸 Defense Evidence GuidelineScreenshot showing the filtered Sales Records table after applying a strict date window.</td>
+                    <td>The transaction table immediately filters to show only completed restorations settled within the specified target timeline, updating Total Sales sums dynamically.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_120</code></strong></td>
+                    <td>Capture Customer Digital Signature on Claim</td>
+                    <td>Open Process Claim Modal, trigger Digital Signature Pad, sign using mouse or touch screen, and submit.</td>
+                    <td>Signature is converted to base64 image and stored with the release record for claim verification.</td>
+                    <td>Customer signature saved and printed on the release claim voucher.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="module-section" id="mod-10">
+        <div class="module-header">
+            <h2>Module 10: Release Calendar Navigation & Production Scheduling</h2>
+            <span class="count-badge">5 Functional Test Cases</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 10%;">Test Case ID</th>
+                    <th style="width: 22%;">Test Case Title</th>
+                    <th style="width: 22%;">Actions / Procedure</th>
+                    <th style="width: 22%;">Expected Output</th>
+                    <th style="width: 16%;">Actual Output</th>
+                    <th style="width: 8%;">Remarks</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong><code>TC_69</code></strong></td>
+                    <td>Navigate to Expenses Records &amp; Management Screen</td>
+                    <td>Click &quot;Expenses&quot; (`/expenses`) or scroll to the &quot;Expenses Records&quot; section of the Sales Report.</td>
+                    <td>The system renders an organized catalog of business operating overhead expenditures, displaying Date, Category, Amount, Receipt Ref, and descriptive notes.
+                            📸 Defense Evidence GuidelineScreenshot of the clean Expenses Records directory displaying itemized operating expenditures.</td>
+                    <td>The system renders an organized catalog of business operating overhead expenditures, displaying Date, Category, Amount, Receipt Ref, and descriptive notes.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_70</code></strong></td>
+                    <td>Open Add Expense Modal &amp; Log Expenditure</td>
+                    <td>Click &quot;+ Add Expense&quot;, input expenditure details (e.g., Supplies Restock or Shop Utilities, ₱1,500, Receipt #, Notes), and submit.</td>
+                    <td>The expense record saves directly into the database, updates general ledger deductions, and immediately increments the Total Expenses KPI card on the Owner Dashboard.
+                            📸 Defense Evidence GuidelineScreenshot of the Add Expense Modal being filled with operating overhead data before submission.</td>
+                    <td>The expense record saves directly into the database, updates general ledger deductions, and immediately increments the Total Expenses KPI card on the Owner Dashboard.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_71</code></strong></td>
+                    <td>Edit or Delete Existing Expense Record</td>
+                    <td>Click the edit or delete icon on an existing operating expense entry inside Expenses Records.</td>
+                    <td>The expense entry is successfully updated or permanently removed, and Net Profit sums recompute automatically across all reporting views.
+                            📸 Defense Evidence GuidelineScreenshot showing the successful update or deletion of an overhead expense row from the records table.</td>
+                    <td>The expense entry is successfully updated or permanently removed, and Net Profit sums recompute automatically across all reporting views.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_72</code></strong></td>
+                    <td>ROI &amp; Profitability Summary Calculation Verification</td>
+                    <td>Inspect the &quot;ROI &amp; Profitability Summary&quot; card at the bottom of the Sales Report interface.</td>
+                    <td>The system accurately derives Net Return on Investment (ROI %) and operational efficiency margins by computing `((Total Sales - Total Expenses) / Total Expenses) * 100`.
+                            📸 Defense Evidence GuidelineScreenshot of the ROI &amp; Profitability Summary box demonstrating real-time margin percentage computations.</td>
+                    <td>The system accurately derives Net Return on Investment (ROI %) and operational efficiency margins by computing `((Total Sales - Total Expenses) / Total Expenses) * 100`.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_73</code></strong></td>
+                    <td>Navigate to Total Sales Detailed Page</td>
+                    <td>Click on the &quot;Total Sales&quot; KPI link or navigate directly to `/total-sales`.</td>
+                    <td>The dedicated Total Sales view opens, listing comprehensive itemized historical payment logs with sorting controls and export capabilities.
+                            📸 Defense Evidence GuidelineScreenshot of the dedicated Total Sales (`/total-sales`) deep-dive transaction log page.</td>
+                    <td>The dedicated Total Sales view opens, listing comprehensive itemized historical payment logs with sorting controls and export capabilities.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="module-section" id="mod-11">
+        <div class="module-header">
+            <h2>Module 11: Inventory Catalog & Real-Time Stock Control</h2>
+            <span class="count-badge">6 Functional Test Cases</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 10%;">Test Case ID</th>
+                    <th style="width: 22%;">Test Case Title</th>
+                    <th style="width: 22%;">Actions / Procedure</th>
+                    <th style="width: 22%;">Expected Output</th>
+                    <th style="width: 16%;">Actual Output</th>
+                    <th style="width: 8%;">Remarks</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong><code>TC_74</code></strong></td>
+                    <td>Navigate to Total Orders Detailed Page</td>
+                    <td>Click on the &quot;Active Orders&quot; / &quot;Total Orders&quot; link on the Dashboard or navigate to `/total-orders`.</td>
+                    <td>The dedicated Total Orders list renders, displaying full volume records across all status classifications with comprehensive filter tools.
+                            📸 Defense Evidence GuidelineScreenshot of the dedicated Total Orders (`/total-orders`) overview directory.</td>
+                    <td>The dedicated Total Orders list renders, displaying full volume records across all status classifications with comprehensive filter tools.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_75</code></strong></td>
+                    <td>Staff Unauthorized Access Block to Sales &amp; Expenses</td>
+                    <td>Log in as Staff and attempt to type `/sales-report`, `/total-sales`, or `/expenses` directly into the browser URL bar.</td>
+                    <td>The security guardrail intercepts the unauthorized request immediately, blocks page rendering, and redirects the staff member safely back to their Dashboard.
+                            📸 Defense Evidence GuidelineScreenshot demonstrating automatic redirection back to the Staff Dashboard upon unauthorized direct URL entry.</td>
+                    <td>The security guardrail intercepts the unauthorized request immediately, blocks page rendering, and redirects the staff member safely back to their Dashboard.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_76</code></strong></td>
+                    <td>Export / Print Sales &amp; Financial Analytics Summary</td>
+                    <td>Click the print or export action button located on the top header of the Sales Report screen.</td>
+                    <td>The browser triggers a well-styled print dialog that formatting financial figures, charts, and expense records into professional accounting summaries.
+                            📸 Defense Evidence GuidelineScreenshot of the print preview dialog rendering a clean, executive-ready accounting report.</td>
+                    <td>The browser triggers a well-styled print dialog that formatting financial figures, charts, and expense records into professional accounting summaries.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_77</code></strong></td>
+                    <td>Navigate to Service Management as Owner</td>
+                    <td>Log in as Owner and click &quot;Service Management&quot; (`/service-management`) in the red navigation sidebar.</td>
+                    <td>The Service Management interface opens, displaying three clearly categorized pricing tables: Base Services, Priority Fees, and Add-On Services.
+                            📸 Defense Evidence GuidelineScreenshot of the loaded Service Management dashboard clearly showing all three pricing tables.</td>
+                    <td>The Service Management interface opens, displaying three clearly categorized pricing tables: Base Services, Priority Fees, and Add-On Services.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_78</code></strong></td>
+                    <td>Add New Base Service &amp; Estimated Turnaround Days</td>
+                    <td>Click &quot;+ Add Service&quot; under Base Services, enter service name (e.g., Deep Suede Cleansing), base price, and estimated turnaround days (e.g., 3 days), then submit.</td>
+                    <td>The service persists into the active catalog, displaying an &quot;Added successfully&quot; toast, and becomes instantly available inside the Job Order Form.
+                            📸 Defense Evidence GuidelineScreenshot showing the new restoration offering appearing inside the Base Services table with price and turnaround timeline.</td>
+                    <td>The service persists into the active catalog, displaying an &quot;Added successfully&quot; toast, and becomes instantly available inside the Job Order Form.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_79</code></strong></td>
+                    <td>Add / Modify Priority Fees &amp; Express Options</td>
+                    <td>Under the &quot;Priority Fees&quot; card section, add or edit a rush turnaround option (e.g. Same-Day VIP Priority - ₱500 surcharge) and save.</td>
+                    <td>The priority option saves cleanly and updates all order schedule accelerators inside intake workflows.
+                            📸 Defense Evidence GuidelineScreenshot of the Priority Fees table showcasing configured rush restoration surcharges and time multipliers.</td>
+                    <td>The priority option saves cleanly and updates all order schedule accelerators inside intake workflows.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="module-section" id="mod-12">
+        <div class="module-header">
+            <h2>Module 12: Automated Material Consumption & Restocking Operations</h2>
+            <span class="count-badge">5 Functional Test Cases</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 10%;">Test Case ID</th>
+                    <th style="width: 22%;">Test Case Title</th>
+                    <th style="width: 22%;">Actions / Procedure</th>
+                    <th style="width: 22%;">Expected Output</th>
+                    <th style="width: 16%;">Actual Output</th>
+                    <th style="width: 8%;">Remarks</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong><code>TC_80</code></strong></td>
+                    <td>Add / Modify Add-On Services Catalog</td>
+                    <td>Under &quot;Add-On Services&quot;, input a supplementary product treatment (such as Anti-Microbial Deodorizing Spray - ₱150) and submit.</td>
+                    <td>The new treatment saves under Add-On Services and dynamically appears as a selectable checkbox option inside the Job Order creation interface.
+                            📸 Defense Evidence GuidelineScreenshot showing the updated Add-On Services table containing newly added shoe care treatments.</td>
+                    <td>The new treatment saves under Add-On Services and dynamically appears as a selectable checkbox option inside the Job Order creation interface.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_81</code></strong></td>
+                    <td>Edit Service Price &amp; Turnaround Specifications</td>
+                    <td>Click the &quot;Edit&quot; pen icon on an existing Base Service row, adjust its fee (e.g. from ₱600 to ₱650), and click &quot;Save Changes&quot;.</td>
+                    <td>The catalog price updates instantaneously for all future order intake forms without altering previously completed transaction invoices.
+                            📸 Defense Evidence GuidelineScreenshot of the edit service dialog modifying pricing parameters safely.</td>
+                    <td>The catalog price updates instantaneously for all future order intake forms without altering previously completed transaction invoices.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_82</code></strong></td>
+                    <td>Toggle Service Active / Inactive Status</td>
+                    <td>Click the status switch toggle on an existing service to temporarily retire or pause an offering (e.g., Seasonal Dye Treatment).</td>
+                    <td>The service marks as &quot;Inactive&quot;, dimming its table row and cleanly hiding it from active selection inside the Job Order intake screen.
+                            📸 Defense Evidence GuidelineScreenshot capturing a service toggled into &quot;Inactive&quot; state alongside its disappearance from active intake dropdowns.</td>
+                    <td>The service marks as &quot;Inactive&quot;, dimming its table row and cleanly hiding it from active selection inside the Job Order intake screen.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_83</code></strong></td>
+                    <td>Delete Obsolete Service Offering</td>
+                    <td>Click the delete trash icon on an unwanted service and confirm deletion in the dialog.</td>
+                    <td>The system permanently erases the service from the available configuration directory and displays a &quot;Service deleted&quot; toast confirmation.
+                            📸 Defense Evidence GuidelineScreenshot showing the warning deletion popup prior to removing a service from the active price sheet.</td>
+                    <td>The system permanently erases the service from the available configuration directory and displays a &quot;Service deleted&quot; toast confirmation.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_84</code></strong></td>
+                    <td>Staff Unauthorized Access Block to Service Management</td>
+                    <td>Log in as Staff and attempt to access `/service-management` via direct URL insertion.</td>
+                    <td>The role security perimeter intercepts the request, aborts rendering, and safely bounces the staff user back to their basic Dashboard view.
+                            📸 Defense Evidence GuidelineScreenshot demonstrating route redirection back to Dashboard upon unauthorized URL entry.</td>
+                    <td>The role security perimeter intercepts the request, aborts rendering, and safely bounces the staff user back to their basic Dashboard view.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="module-section" id="mod-13">
+        <div class="module-header">
+            <h2>Module 13: Service Catalog Configuration & Dynamic Pricing</h2>
+            <span class="count-badge">4 Functional Test Cases</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 10%;">Test Case ID</th>
+                    <th style="width: 22%;">Test Case Title</th>
+                    <th style="width: 22%;">Actions / Procedure</th>
+                    <th style="width: 22%;">Expected Output</th>
+                    <th style="width: 16%;">Actual Output</th>
+                    <th style="width: 8%;">Remarks</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong><code>TC_85</code></strong></td>
+                    <td>Search &amp; Filter Service Catalog</td>
+                    <td>Type a keyword into the service search bar above the pricing directory tables.</td>
+                    <td>The catalog filters instantaneously, isolating matching service names or descriptions in real-time.
+                            📸 Defense Evidence GuidelineScreenshot showing live text filtering isolating specific restoration service entries.</td>
+                    <td>The catalog filters instantaneously, isolating matching service names or descriptions in real-time.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_86</code></strong></td>
+                    <td>Navigate to User Management as Owner</td>
+                    <td>Log in as Owner and click &quot;User Management&quot; (`/user-management`) in the red navigation sidebar.</td>
+                    <td>The User Directory opens, listing all registered staff and owner accounts with Username, Email, Assigned Role badge, and Status indicators.
+                            📸 Defense Evidence GuidelineScreenshot of the complete User Management directory highlighting active team member roles.</td>
+                    <td>The User Directory opens, listing all registered staff and owner accounts with Username, Email, Assigned Role badge, and Status indicators.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_87</code></strong></td>
+                    <td>Register New Staff Account via UserModal</td>
+                    <td>Click &quot;+ Add New User&quot;, input username (e.g. staff_marc), valid email, initial password, assign the &quot;Staff&quot; role, and submit.</td>
+                    <td>The account creates cleanly in the database, displays a green success toast, and grants the new staff member immediate login capabilities.
+                            📸 Defense Evidence GuidelineScreenshot of the UserModal registration dialog creating a new staff account profile.</td>
+                    <td>The account creates cleanly in the database, displays a green success toast, and grants the new staff member immediate login capabilities.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_88</code></strong></td>
+                    <td>Register Additional Owner / Admin Account</td>
+                    <td>Inside Add User dialog, register an account explicitly assigning the elevated &quot;Owner&quot; role parameter and submit.</td>
+                    <td>The account initiates with full Owner privileges, displaying a distinct red/gold Owner role badge inside the directory table.
+                            📸 Defense Evidence GuidelineScreenshot of the user table demonstrating distinct visual role badges between Owner and Staff accounts.</td>
+                    <td>The account initiates with full Owner privileges, displaying a distinct red/gold Owner role badge inside the directory table.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="module-section" id="mod-14">
+        <div class="module-header">
+            <h2>Module 14: User Access Administration & Granular Role Permissions</h2>
+            <span class="count-badge">6 Functional Test Cases</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 10%;">Test Case ID</th>
+                    <th style="width: 22%;">Test Case Title</th>
+                    <th style="width: 22%;">Actions / Procedure</th>
+                    <th style="width: 22%;">Expected Output</th>
+                    <th style="width: 16%;">Actual Output</th>
+                    <th style="width: 8%;">Remarks</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong><code>TC_89</code></strong></td>
+                    <td>Edit User Profile Information &amp; Role Elevation</td>
+                    <td>Click the &quot;Edit&quot; pencil button on an existing account, change their assigned role (e.g. promoting Staff to Owner), and save.</td>
+                    <td>The profile updates immediately, granting or restricting sidebar menu items dynamically upon their next login session.
+                            📸 Defense Evidence GuidelineScreenshot showing an account being promoted from Staff to Owner inside the edit modal.</td>
+                    <td>The profile updates immediately, granting or restricting sidebar menu items dynamically upon their next login session.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_90</code></strong></td>
+                    <td>Administrative Password Reset for Team Member</td>
+                    <td>Click the key/reset password icon on a staff member&#x27;s account row to generate a replacement authentication credential.</td>
+                    <td>The system securely generates and assigns a temporary replacement password without exposing hashed database encryption keys.
+                            📸 Defense Evidence GuidelineScreenshot of the admin password reset dialog confirms secure password alteration.</td>
+                    <td>The system securely generates and assigns a temporary replacement password without exposing hashed database encryption keys.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_91</code></strong></td>
+                    <td>Deactivate / Revoke Account Login Access</td>
+                    <td>Click the status switch or &quot;Deactivate&quot; button on an active staff account row.</td>
+                    <td>The account status transitions immediately to &quot;Inactive/Deactivated&quot;, directly blocking any future authentication attempts on the login screen.
+                            📸 Defense Evidence GuidelineScreenshot showing an account marked as &quot;Inactive&quot; and a rejected login attempt from that revoked credential.</td>
+                    <td>The account status transitions immediately to &quot;Inactive/Deactivated&quot;, directly blocking any future authentication attempts on the login screen.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_92</code></strong></td>
+                    <td>Reactivate Previously Revoked Account</td>
+                    <td>Click the status toggle on a currently deactivated account row to restore &quot;Active&quot; operational capabilities.</td>
+                    <td>The account transitions back to &quot;Active&quot;, instantly restoring system login capabilities and regular dashboard functionalities.
+                            📸 Defense Evidence GuidelineScreenshot showing the successful restoration of an inactive staff account back to Active status.</td>
+                    <td>The account transitions back to &quot;Active&quot;, instantly restoring system login capabilities and regular dashboard functionalities.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_93</code></strong></td>
+                    <td>Staff Unauthorized Access Block to User Management</td>
+                    <td>Log in as Staff and attempt to access `/user-management` directly via URL input.</td>
+                    <td>The security filter blocks the route immediately and redirects the staff member back to their basic Dashboard without exposing employee data.
+                            📸 Defense Evidence GuidelineScreenshot proving immediate URL redirection away from `/user-management` when logged in as staff.</td>
+                    <td>The security filter blocks the route immediately and redirects the staff member back to their basic Dashboard without exposing employee data.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_94</code></strong></td>
+                    <td>Search Employee Accounts by Username or Email</td>
+                    <td>Type a staff username or email fragment into the user directory search box.</td>
+                    <td>The directory filters live, isolating matching account profiles instantaneously.
+                            📸 Defense Evidence GuidelineScreenshot showing filtered search results highlighting a specific staff profile.</td>
+                    <td>The directory filters live, isolating matching account profiles instantaneously.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="module-section" id="mod-15">
+        <div class="module-header">
+            <h2>Module 15: Claim Records Archive & Receipt Generation</h2>
+            <span class="count-badge">3 Functional Test Cases</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 10%;">Test Case ID</th>
+                    <th style="width: 22%;">Test Case Title</th>
+                    <th style="width: 22%;">Actions / Procedure</th>
+                    <th style="width: 22%;">Expected Output</th>
+                    <th style="width: 16%;">Actual Output</th>
+                    <th style="width: 8%;">Remarks</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong><code>TC_95</code></strong></td>
+                    <td>Navigate to Dedicated Claim Record Page</td>
+                    <td>Click on &quot;CLAIM RECORD&quot; / `/claim-record` via menu navigation or order actions.</td>
+                    <td>The dedicated Claim Record archive renders, itemizing all completed footwear releases with Customer Name, Shoe Details, Claimed By identifier, Release Date, and Receipt download link.
+                            📸 Defense Evidence GuidelineScreenshot of the loaded Claim Record table displaying complete client pick-up archives.</td>
+                    <td>The dedicated Claim Record archive renders, itemizing all completed footwear releases with Customer Name, Shoe Details, Claimed By identifier, Release Date, and Receipt download link.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_96</code></strong></td>
+                    <td>Search Claim Records by Customer or Claimant Name</td>
+                    <td>Type a claimant&#x27;s name or original tracking number into the Claim Record search bar.</td>
+                    <td>The historical archive filters instantly in real-time, isolating specific customer claim histories without delay.
+                            📸 Defense Evidence GuidelineScreenshot showing the filtered Claim Record archive displaying a specific client&#x27;s release receipt history.</td>
+                    <td>The historical archive filters instantly in real-time, isolating specific customer claim histories without delay.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_97</code></strong></td>
+                    <td>Reprint Claim Release Receipt from Archive</td>
+                    <td>Click the &quot;Print Receipt&quot; / receipt icon on an historical entry in the Claim Record directory.</td>
+                    <td>The printable release summary regenerates cleanly with original timestamped settlement figures and claimant signatures.
+                            📸 Defense Evidence GuidelineScreenshot of the regenerated claim receipt displaying historical payment and claimant verification details.</td>
+                    <td>The printable release summary regenerates cleanly with original timestamped settlement figures and claimant signatures.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="module-section" id="mod-16">
+        <div class="module-header">
+            <h2>Module 16: System Activity History & Forensic Audit Trail</h2>
+            <span class="count-badge">6 Functional Test Cases</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 10%;">Test Case ID</th>
+                    <th style="width: 22%;">Test Case Title</th>
+                    <th style="width: 22%;">Actions / Procedure</th>
+                    <th style="width: 22%;">Expected Output</th>
+                    <th style="width: 16%;">Actual Output</th>
+                    <th style="width: 8%;">Remarks</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong><code>TC_98</code></strong></td>
+                    <td>Navigate to System Activity History (Audit Trail)</td>
+                    <td>Click on &quot;Activity History&quot; / `/activity-history` in the system navigation.</td>
+                    <td>The comprehensive system audit trail renders, listing immutable records of events (order creation, status changes, inventory restocks/deductions, expense entries) with timestamps and actor usernames.
+                            📸 Defense Evidence GuidelineScreenshot of the complete Activity History audit log showing timestamped operational events.</td>
+                    <td>The comprehensive system audit trail renders, listing immutable records of events (order creation, status changes, inventory restocks/deductions, expense entries) with timestamps and actor usernames.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_99</code></strong></td>
+                    <td>Filter Activity Logs by Event Type</td>
+                    <td>Use the event category filter on the Activity History page to isolate specific event types (e.g., exclusively viewing &quot;Inventory Restock&quot; or &quot;Order Status Update&quot;).</td>
+                    <td>The audit table filters cleanly, showing only events matching the chosen category while suppressing unrelated system noise.
+                            📸 Defense Evidence GuidelineScreenshot of the Activity History table filtered strictly to &quot;Inventory Restock&quot; events.</td>
+                    <td>The audit table filters cleanly, showing only events matching the chosen category while suppressing unrelated system noise.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_100</code></strong></td>
+                    <td>Filter Activity Logs by Date &amp; Actor Username</td>
+                    <td>Enter a specific date window or type a staff member&#x27;s username into the Activity History search box.</td>
+                    <td>The audit trail filters accurately, isolating all actions executed by that individual user during the target timeframe.
+                            📸 Defense Evidence GuidelineScreenshot showing audit logs filtered to display actions performed by a specific staff username on a selected date.</td>
+                    <td>The audit trail filters accurately, isolating all actions executed by that individual user during the target timeframe.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_101</code></strong></td>
+                    <td>Open Activity Log Detail Modal</td>
+                    <td>Click the inspection eye / detail button on an entry inside Activity History (e.g. an order modification log).</td>
+                    <td>The `ActivityLogModal` opens, displaying granular before-and-after change diffs and transaction identifiers for full administrative accountability.
+                            📸 Defense Evidence GuidelineScreenshot of the opened ActivityLogModal revealing granular data field changes made during a transaction update.</td>
+                    <td>The `ActivityLogModal` opens, displaying granular before-and-after change diffs and transaction identifiers for full administrative accountability.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_102</code></strong></td>
+                    <td>Verify Immutable Audit Trail Protection</td>
+                    <td>Inspect the Activity History tables for edit or delete controls on logged events.</td>
+                    <td>No modification or deletion actions exist on audit rows, preserving complete historical ledger integrity for management defense and compliance.
+                            📸 Defense Evidence GuidelineScreenshot verifying the complete absence of edit or delete buttons across immutable Activity History log entries.</td>
+                    <td>No modification or deletion actions exist on audit rows, preserving complete historical ledger integrity for management defense and compliance.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_103</code></strong></td>
+                    <td>Verify Error Boundary Stability on Dashboard Exception</td>
+                    <td>Simulate a rendering exception or network dropout while viewing the Dashboard or complex charts.</td>
+                    <td>Instead of crashing into an unresponsive white screen, the `DashboardErrorBoundary` intercepts the exception and renders an organized &quot;Dashboard Engine Halted&quot; recovery screen with a &quot;Re-Ignite Engine&quot; reload button.
+                            📸 Defense Evidence GuidelineScreenshot of the clean error boundary fallback screen displaying the protective &quot;Re-Ignite Engine&quot; recovery button.</td>
+                    <td>Instead of crashing into an unresponsive white screen, the `DashboardErrorBoundary` intercepts the exception and renders an organized &quot;Dashboard Engine Halted&quot; recovery screen with a &quot;Re-Ignite Engine&quot; reload button.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="module-section" id="mod-17">
+        <div class="module-header">
+            <h2>Module 17: Cash Register & Daily Drawer Session Management</h2>
+            <span class="count-badge">3 Functional Test Cases</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 10%;">Test Case ID</th>
+                    <th style="width: 22%;">Test Case Title</th>
+                    <th style="width: 22%;">Actions / Procedure</th>
+                    <th style="width: 22%;">Expected Output</th>
+                    <th style="width: 16%;">Actual Output</th>
+                    <th style="width: 8%;">Remarks</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong><code>TC_104</code></strong></td>
+                    <td>Open Daily Cash Drawer Session with Float</td>
+                    <td>Navigate to Cash Register (/cash-register), enter opening cash float amount (e.g. 1000.00), and click &#x27;Open Drawer Session&#x27;.</td>
+                    <td>Cash session status updates to &#x27;OPEN&#x27;, initial drawer float recorded in database, and cashier ready to record transactions.</td>
+                    <td>Session created in table cash_sessions with status=&#x27;OPEN&#x27; and opening_cash=1000.00.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_105</code></strong></td>
+                    <td>Real-Time Expected Cash Calculation on Sales</td>
+                    <td>Record multiple cash payments through Job Orders and observe the &#x27;Expected Cash in Drawer&#x27; metric.</td>
+                    <td>System calculates expected cash by summing opening float and total cash received minus recorded cash payouts.</td>
+                    <td>Expected cash dynamically updates accurately on every cash transaction.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_106</code></strong></td>
+                    <td>Close Drawer Session with Physical Cash Count &amp; Variance</td>
+                    <td>Click &#x27;End Shift / Close Session&#x27;, input physical cash count breakdown, and submit session closing.</td>
+                    <td>System compares actual cash against expected cash, calculates variance (over/short), requires explanation if variance exists, and closes session.</td>
+                    <td>Session closed, variance logged, and session summary archived in cash_sessions table.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="module-section" id="mod-18">
+        <div class="module-header">
+            <h2>Module 18: Customer Tracking & Public Status Inquiry</h2>
+            <span class="count-badge">2 Functional Test Cases</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 10%;">Test Case ID</th>
+                    <th style="width: 22%;">Test Case Title</th>
+                    <th style="width: 22%;">Actions / Procedure</th>
+                    <th style="width: 22%;">Expected Output</th>
+                    <th style="width: 16%;">Actual Output</th>
+                    <th style="width: 8%;">Remarks</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong><code>TC_107</code></strong></td>
+                    <td>Track Order Progression by Order Number</td>
+                    <td>Navigate to Customer Tracking page, enter valid order ID (e.g. JO-2026-0001), and click &#x27;Track Status&#x27;.</td>
+                    <td>System displays current order status, repair progress steps, shoe brand/model, and scheduled release date without exposing sensitive financial details.</td>
+                    <td>Order timeline rendered with current status badge and expected completion date.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_108</code></strong></td>
+                    <td>Track Order with Non-Existent or Invalid Number</td>
+                    <td>Enter non-existent order number (e.g. JO-INVALID-999) and click &#x27;Track Status&#x27;.</td>
+                    <td>System displays &#x27;Order not found. Please verify your Job Order number or contact the shop.&#x27;</td>
+                    <td>Friendly error message displayed without system failure or console errors.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="module-section" id="mod-19">
+        <div class="module-header">
+            <h2>Module 19: Financial Analytics Drilldowns & Payments Received Ledger</h2>
+            <span class="count-badge">1 Functional Test Cases</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 10%;">Test Case ID</th>
+                    <th style="width: 22%;">Test Case Title</th>
+                    <th style="width: 22%;">Actions / Procedure</th>
+                    <th style="width: 22%;">Expected Output</th>
+                    <th style="width: 16%;">Actual Output</th>
+                    <th style="width: 8%;">Remarks</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong><code>TC_113</code></strong></td>
+                    <td>View All Payments Received Transactional Ledger</td>
+                    <td>Navigate to Payments Received page (/payments-received) as Owner.</td>
+                    <td>System displays comprehensive transactional ledger of all cash, GCash, and Maya payments with reference numbers and timestamps.</td>
+                    <td>Filterable payment history table rendered with payment method breakdown and total collections.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="module-section" id="mod-20">
+        <div class="module-header">
+            <h2>Module 20: Database Backup, Snapshot & Disaster Recovery</h2>
+            <span class="count-badge">2 Functional Test Cases</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 10%;">Test Case ID</th>
+                    <th style="width: 22%;">Test Case Title</th>
+                    <th style="width: 22%;">Actions / Procedure</th>
+                    <th style="width: 22%;">Expected Output</th>
+                    <th style="width: 16%;">Actual Output</th>
+                    <th style="width: 8%;">Remarks</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong><code>TC_114</code></strong></td>
+                    <td>Generate Dual Database Backup Archive</td>
+                    <td>Navigate to Backup &amp; Recovery page (/backup) as Admin/Owner and click &#x27;Generate Full Backup Archive&#x27;.</td>
+                    <td>System creates compressed backup archive containing JSON table-level dumps and SQLite snapshot with SHA-256 checksums.</td>
+                    <td>Backup archive generated successfully; manifest recorded with table counts and file checksums.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_115</code></strong></td>
+                    <td>Verify Backup Integrity and Isolated Restoration</td>
+                    <td>Select a generated backup archive and trigger &#x27;Verify Backup Archive Integrity&#x27;.</td>
+                    <td>System verifies checksums, performs test restore into an isolated environment, and confirms 100% table restoration without data loss.</td>
+                    <td>Verification succeeds with green status badge confirming archive integrity.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="module-section" id="mod-21">
+        <div class="module-header">
+            <h2>Module 21: Historical Data Digitization & OCR Validation Queue</h2>
+            <span class="count-badge">2 Functional Test Cases</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 10%;">Test Case ID</th>
+                    <th style="width: 22%;">Test Case Title</th>
+                    <th style="width: 22%;">Actions / Procedure</th>
+                    <th style="width: 22%;">Expected Output</th>
+                    <th style="width: 16%;">Actual Output</th>
+                    <th style="width: 8%;">Remarks</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong><code>TC_116</code></strong></td>
+                    <td>View Historical Processing Validation Queue</td>
+                    <td>Navigate to Historical Validation Queue as Admin.</td>
+                    <td>System lists digitized physical job orders flagged for human review due to OCR ambiguities or missing completion dates.</td>
+                    <td>Queue interface renders side-by-side view of digitized receipt image and editable field inputs.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_117</code></strong></td>
+                    <td>Validate and Reconcile OCR Record into Authoritative Dataset</td>
+                    <td>Review OCR extracted fields, make human correction to service or completion date, and click &#x27;Validate Record&#x27;.</td>
+                    <td>Record is updated, validation audit status set to &#x27;VALIDATED&#x27;, and record approved for ML model training inclusion.</td>
+                    <td>Record saved, removed from pending queue, and logged in etl_import_history table.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="module-section" id="mod-22">
+        <div class="module-header">
+            <h2>Module 22: Research Traceability & Empirical Objectives 1–6 Engine</h2>
+            <span class="count-badge">2 Functional Test Cases</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 10%;">Test Case ID</th>
+                    <th style="width: 22%;">Test Case Title</th>
+                    <th style="width: 22%;">Actions / Procedure</th>
+                    <th style="width: 22%;">Expected Output</th>
+                    <th style="width: 16%;">Actual Output</th>
+                    <th style="width: 8%;">Remarks</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong><code>TC_118</code></strong></td>
+                    <td>View Live Research Objectives 1–6 Metrics Dashboard</td>
+                    <td>Navigate to Research Evidence page (/research-evidence) as Admin.</td>
+                    <td>System computes live, non-fabricated metrics for manual vs digital time reduction (Obj 1), ML accuracy (Obj 2), and TAM responses (Obj 5).</td>
+                    <td>Live dashboard renders empirical comparison statistics computed directly from the database.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+                <tr>
+                    <td><strong><code>TC_119</code></strong></td>
+                    <td>Export Verified Capstone Research Evidence CSV</td>
+                    <td>Click &#x27;Export Research Data CSV&#x27; on Research Evidence page.</td>
+                    <td>System downloads verified CSV file containing raw transaction logs and test results for statistical validation.</td>
+                    <td>CSV generated and downloaded with identical data to database records.</td>
+                    <td><span class="badge-pass">PASSED</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <div class="footer-note">
+        This document represents the master functional use case testing evidence conducted on the Shoelotskey Service Management System for capstone defense and ISO/IEC 25010 compliance.
+    </div>
+</div>
+</body>
+</html>

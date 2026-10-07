@@ -89,9 +89,6 @@ export function applyColorCountExclusive(
         return next;
     }
 
-    if (hasColorRenewal(baseServices) && !next.some((addon) => addon.name === other)) {
-        return addOns || [];
-    }
     return next.filter((addon) => addon.name !== selectedName);
 }
 
@@ -107,15 +104,26 @@ export function syncColorRenewalAddons(
     if (hasTwo && hasThree) {
         return (addOns || []).filter((addon) => addon.name !== THREE_COLORS);
     }
-    if (!hasTwo && !hasThree) {
-        return [...(addOns || []), { name: TWO_COLORS, quantity: 1 }];
-    }
     return addOns || [];
 }
 
 export function shoeHasBothColorCounts(addOns: Array<string | { name?: string }> = []): boolean {
     const names = (addOns || []).map((addon) => (typeof addon === 'string' ? addon : addon?.name || ''));
     return names.includes(TWO_COLORS) && names.includes(THREE_COLORS);
+}
+
+export function hasFullReglue(baseServices: string[] = []): boolean {
+    return (baseServices || []).some((s) => norm(s) === 'full reglue');
+}
+
+export function syncFullReglueAddons(
+    addOns: AddonEntry[] = [],
+    baseServices: string[] = [],
+): AddonEntry[] {
+    if (!hasFullReglue(baseServices)) {
+        return (addOns || []).filter((addon) => !isFullReglueSoleAddon(addon.name));
+    }
+    return addOns || [];
 }
 
 export function isAddonCompatibleWithSingleService(addonName: string, serviceName: string): boolean {
@@ -198,4 +206,62 @@ export function isAddonVisibleForBaseServices(
 
     return false;
 }
+
+/**
+ * Checks whether a shoe's selected base services and add-ons are eligible for a given Priority/Rush fee.
+ */
+export function isRushApplicableForShoe(
+    baseServices: string[],
+    addOns: (string | { name: string })[],
+    rushService?: any | null
+): boolean {
+    if (!rushService || rushService.active === false) return false;
+    if (!baseServices || baseServices.length === 0) return false;
+
+    // Check base services eligibility if configured
+    const allowedBase = Array.isArray(rushService.connectedBaseServices) ? rushService.connectedBaseServices : [];
+    if (allowedBase.length > 0) {
+        const matchesBase = baseServices.some(bs => 
+            allowedBase.some((allowed: string) => norm(allowed) === norm(bs) || norm(bs).includes(norm(allowed)))
+        );
+        if (!matchesBase) return false;
+    }
+
+    // Check add-ons eligibility if configured
+    const addonNames = (addOns || []).map((a: any) => typeof a === 'string' ? a : a?.name).filter(Boolean);
+    const allowedAddons = Array.isArray(rushService.connectedAddons) ? rushService.connectedAddons : [];
+    if (allowedAddons.length > 0) {
+        // If specific add-ons are whitelisted for rush, ensure all selected add-ons are allowed
+        const hasDisallowedAddon = addonNames.some((selected: string) => 
+            !allowedAddons.some((allowed: string) => norm(allowed) === norm(selected))
+        );
+        if (hasDisallowedAddon) return false;
+    }
+
+    return true;
+}
+
+/**
+ * Finds the best matching Rush/Priority fee for a shoe's services from the active catalog.
+ */
+export function getApplicableRushFee(
+    baseServices: string[],
+    addOns: (string | { name: string })[],
+    allServices: any[]
+): any | null {
+    const priorityServices = (allServices || []).filter((s: any) => s?.category === 'priority' && s?.active);
+    if (!priorityServices.length) return null;
+
+    // 1. Look for a priority service specifically configured for these base services & add-ons
+    const matched = priorityServices.find((ps: any) => isRushApplicableForShoe(baseServices, addOns, ps));
+    if (matched) return matched;
+
+    // 2. Fallback: if an unconfigured priority fee exists (universal fallback)
+    const generic = priorityServices.find((ps: any) => 
+        (!ps.connectedBaseServices || ps.connectedBaseServices.length === 0) &&
+        (!ps.connectedAddons || ps.connectedAddons.length === 0)
+    );
+    return generic || null;
+}
+
 

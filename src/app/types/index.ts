@@ -144,8 +144,19 @@ export interface BaseJobOrderData {
   claimReferenceNo?: string;
   paymentHistory?: PaymentRecord[];
 
+  // Discounts & Authorization
+  discountAmount?: number;
+  discount?: number;
+  discountPreset?: string;
+  discountType?: string;
+  discountName?: string;
+  discountCode?: string;
+  discountIdNumber?: string;
+  authorized_by_user_id?: number;
+  authorized_by_username?: string;
+
   // Metadata
-  transactionDate: Date;
+  transactionDate: Date | string;
   processedBy: string;
   beforeImage?: string;
   afterImage?: string;
@@ -206,15 +217,15 @@ export interface JobOrder extends BaseJobOrderData {
   orderNumber: string;
   status: JobStatus;
   assignedTo?: string;
-  predictedCompletionDate?: Date;
-  predictedAt?: Date;
+  predictedCompletionDate?: Date | string;
+  predictedAt?: Date | string;
   predictedDays?: number;
   estimatedDays?: number;
   actualReleaseDate?: Date | string | null;
   actualCompletionDate?: Date | string | null;
   claimedAt?: Date | string | null;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: Date | string;
+  updatedAt: Date | string;
   items?: ShoeItem[];
   releaseTime?: string;
   claimedBy?: string;
@@ -261,13 +272,27 @@ export interface Service {
   id: string;
   name: string;
   price: number;
-  category: 'base' | 'addon' | 'priority';
+  category: 'base' | 'addon' | 'priority' | 'discount';
   active: boolean;
   description?: string;
   durationDays?: string | number;
   code?: string;
   sortOrder?: number;
   connectedAddons?: string[];
+  connectedBaseServices?: string[];
+  requiresIdVerification?: boolean;
+  idVerificationType?: 'control_number' | 'id_number' | 'none';
+  idFormat?: 'alphanumeric' | 'numbers' | 'letters';
+  idDigits?: number;
+  hasSpinner?: boolean;
+}
+
+export interface UserPermissionItem {
+  code: string;
+  name: string;
+  description: string;
+  category: string;
+  enabled: boolean;
 }
 
 export interface User {
@@ -279,6 +304,8 @@ export interface User {
   active: boolean;
   failedLoginAttempts?: number;
   lockedUntil?: string | null;
+  permissions?: string[];
+  permissions_summary?: string;
 }
 
 export interface Shelf {

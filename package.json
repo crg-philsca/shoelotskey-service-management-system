@@ -7,6 +7,7 @@
     "build": "vite build",
     "heroku-postbuild": "vite build",
     "dev": "vite",
+    "preview": "vite preview",
     "server": "cmd /c \"cd backend && ..\\venv\\Scripts\\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000\"",
     "server:watch": "cmd /c \"cd backend && ..\\venv\\Scripts\\python.exe -m uvicorn main:app --reload --reload-exclude \\\"*.db\\\" --reload-exclude \\\"*.db-journal\\\" --reload-exclude \\\"*.db-wal\\\" --reload-exclude \\\"*.db-shm\\\" --reload-exclude \\\"historical_data\\\" --host 0.0.0.0 --port 8000\"",
     "monolith": "npx concurrently -n \"Vite-UI,FastAPI-BE\" -c \"red,cyan\" \"npm run dev\" \"npm run server\"",
@@ -93,5 +94,8 @@
     "overrides": {
       "vite": "6.3.5"
     }
+  },
+  "overrides": {
+    "fflate": "^0.8.3"
   }
 }

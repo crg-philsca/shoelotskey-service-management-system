@@ -28,10 +28,11 @@ router = APIRouter()
 # Returns records that need human review: OCR-pending images OR records
 # with NULL ML-critical fields (completion_days, brand, service_name)
 
-def _count_review_queue_total(db: Session) -> int:
+def _count_review_queue_total(db: Session, include_incomplete: bool = False) -> int:
     """
     Exact count of records that belong in the human-review queue.
-    Must stay in sync with get_validation_queue filters (Source A + Source B).
+    Only counts pending OCR images awaiting human review by default.
+    Validated records never reappear unless explicitly requested via include_incomplete=True.
     """
     pending_images = (
         db.query(HistoricalImage.historical_image_id)
@@ -39,6 +40,19 @@ def _count_review_queue_total(db: Session) -> int:
         .filter(HistoricalImage.ocr_status.in_(pending_filter_values()))
         .count()
     )
+    pending_non_image = (
+        db.query(HistoricalOrder.historical_order_id)
+        .outerjoin(HistoricalImage, HistoricalOrder.historical_order_id == HistoricalImage.historical_order_id)
+        .filter(
+            HistoricalImage.historical_image_id == None,
+            HistoricalOrder.ocr_status.in_(pending_filter_values()),
+        )
+        .count()
+    )
+    base_pending = int(pending_images) + int(pending_non_image)
+    if not include_incomplete:
+        return base_pending
+
     from historical.ocr_status import validated_filter_values
     pending_order_ids = {
         row[0]
@@ -61,67 +75,128 @@ def _count_review_queue_total(db: Session) -> int:
     for (oid,) in incomplete_q.all():
         if oid not in pending_order_ids:
             incomplete_extra += 1
-    return int(pending_images) + int(incomplete_extra)
+    return base_pending + int(incomplete_extra)
 
 
 @router.get("/queue")
 def get_validation_queue(
     db: Session = Depends(get_db),
     limit: int = 20,
+    include_incomplete: bool = False,
+    source_filter: Optional[str] = "all",
     current_user: User = Depends(require_role("admin")),
 ):
     """
     Returns records needing human review.
-    Includes:
-      1. Images with ocr_status == 'Pending'
-      2. Orders with NULL ML-critical fields (completion_days, brand, etc.)
+    Includes images with ocr_status in pending_filter_values().
+    Validated records stay accepted and do not reappear unless include_incomplete=True.
 
     Response shape:
       { "items": [...], "total": <exact pending count>, "returned": <len(items)> }
     """
     results = []
-    total_pending = _count_review_queue_total(db)
+    total_pending = _count_review_queue_total(db, include_incomplete=include_incomplete)
+    s_filter = (source_filter or "all").lower()
 
-    # ── Source A: OCR-pending images ──────────────────────────────────────────
-    images = (
-        db.query(HistoricalImage)
-        .join(HistoricalImage.order)
-        .filter(HistoricalImage.ocr_status.in_(pending_filter_values()))
-        .order_by(
-            HistoricalOrder.date_received.asc(),
-            HistoricalImage.historical_image_id.asc(),
+    if s_filter in ("csv", "csv_import", "non_image"):
+        non_image_orders = (
+            db.query(HistoricalOrder)
+            .outerjoin(HistoricalImage, HistoricalImage.historical_order_id == HistoricalOrder.historical_order_id)
+            .filter(
+                HistoricalImage.historical_image_id == None,
+                HistoricalOrder.ocr_status.in_(pending_filter_values()),
+            )
+            .order_by(
+                HistoricalOrder.date_received.asc(),
+                HistoricalOrder.historical_order_id.asc(),
+            )
+            .limit(limit)
+            .all()
         )
-        .limit(limit)
-        .all()
-    )
-    for img in images:
-        order = img.order
-        if order:
-            item = _build_queue_item(img, order, source="ocr_pending")
+        for order in non_image_orders:
+            item = _build_queue_item(None, order, source="csv_pending" if getattr(order, "source_type", None) == "CSV_IMPORT" else "pending_review")
             if item:
                 results.append(item)
-
-    # ── Source B: already-validated records still missing ML fields ───────────
-    from historical.ocr_status import validated_filter_values
-    remaining_slots = max(0, limit - len(results))
-    incomplete_orders = (
-        db.query(HistoricalOrder)
-        .filter(
-            HistoricalOrder.ocr_status.in_(validated_filter_values()),
-            (HistoricalOrder.completion_days == None) |
-            (HistoricalOrder.claimed_date == None),
+    elif s_filter in ("ocr", "scans"):
+        images = (
+            db.query(HistoricalImage)
+            .join(HistoricalImage.order)
+            .filter(HistoricalImage.ocr_status.in_(pending_filter_values()))
+            .order_by(
+                HistoricalOrder.date_received.asc(),
+                HistoricalImage.historical_image_id.asc(),
+            )
+            .limit(limit)
+            .all()
         )
-        .order_by(HistoricalOrder.date_received.asc())
-        .limit(remaining_slots)
-        .all()
-    ) if remaining_slots else []
-    existing_ids = {r["order"]["historical_order_id"] for r in results if r.get("order")}
-    for order in incomplete_orders:
-        if order.historical_order_id in existing_ids:
-            continue
-        item = _build_queue_item(None, order, source="incomplete_fields")
-        if item:
-            results.append(item)
+        for img in images:
+            order = img.order
+            if order:
+                item = _build_queue_item(img, order, source="ocr_pending")
+                if item:
+                    results.append(item)
+    else:
+        images = (
+            db.query(HistoricalImage)
+            .join(HistoricalImage.order)
+            .filter(HistoricalImage.ocr_status.in_(pending_filter_values()))
+            .order_by(
+                HistoricalOrder.date_received.asc(),
+                HistoricalImage.historical_image_id.asc(),
+            )
+            .limit(limit)
+            .all()
+        )
+        for img in images:
+            order = img.order
+            if order:
+                item = _build_queue_item(img, order, source="ocr_pending")
+                if item:
+                    results.append(item)
+
+        remaining_slots = max(0, limit - len(results))
+        if remaining_slots > 0:
+            non_image_orders = (
+                db.query(HistoricalOrder)
+                .outerjoin(HistoricalImage, HistoricalImage.historical_order_id == HistoricalOrder.historical_order_id)
+                .filter(
+                    HistoricalImage.historical_image_id == None,
+                    HistoricalOrder.ocr_status.in_(pending_filter_values()),
+                )
+                .order_by(
+                    HistoricalOrder.date_received.asc(),
+                    HistoricalOrder.historical_order_id.asc(),
+                )
+                .limit(remaining_slots)
+                .all()
+            )
+            for order in non_image_orders:
+                item = _build_queue_item(None, order, source="csv_pending" if getattr(order, "source_type", None) == "CSV_IMPORT" else "pending_review")
+                if item:
+                    results.append(item)
+
+    # ── Source C: already-validated records (ONLY if explicitly requested) ───
+    if include_incomplete:
+        from historical.ocr_status import validated_filter_values
+        remaining_slots = max(0, limit - len(results))
+        incomplete_orders = (
+            db.query(HistoricalOrder)
+            .filter(
+                HistoricalOrder.ocr_status.in_(validated_filter_values()),
+                (HistoricalOrder.completion_days == None) |
+                (HistoricalOrder.claimed_date == None),
+            )
+            .order_by(HistoricalOrder.date_received.asc())
+            .limit(remaining_slots)
+            .all()
+        ) if remaining_slots else []
+        existing_ids = {r["order"]["historical_order_id"] for r in results if r.get("order")}
+        for order in incomplete_orders:
+            if order.historical_order_id in existing_ids:
+                continue
+            item = _build_queue_item(None, order, source="incomplete_fields")
+            if item:
+                results.append(item)
 
     assign_display_order_ids(db, results)
     sort_review_queue(results)
@@ -418,6 +493,48 @@ def serialize_historical_order(order, service_prices: Optional[Dict[str, float]]
     customer = getattr(order, "customer", None)
     img = getattr(order, "image", None)
     image_filename = getattr(img, "image_filename", None) if img is not None else None
+
+    # Strict Academic ML target calculations
+    from historical.ocr_status import is_validated_status
+    is_val = is_validated_status(order.ocr_status)
+    has_dates = bool(getattr(order, "claimed_date", None) and getattr(order, "date_received", None))
+    turnaround = None
+    window_valid = False
+    if has_dates:
+        try:
+            c_date = order.claimed_date.date() if hasattr(order.claimed_date, "date") else order.claimed_date
+            r_date = order.date_received.date() if hasattr(order.date_received, "date") else order.date_received
+            turnaround = (c_date - r_date).days
+            window_valid = (1 <= turnaround <= 60)
+        except Exception:
+            window_valid = False
+
+    potential_ml = bool(has_dates and window_valid)
+    is_conflict = getattr(order, "reconciliation_status", None) == "CONFLICT"
+    prov = getattr(order, "target_provenance", "UNKNOWN") or "UNKNOWN"
+
+    if is_val and not is_conflict and prov == "CLAIM_DATE_CALCULATED" and window_valid:
+        is_ml_eligible = True
+        ml_excl_reason = None
+    else:
+        is_ml_eligible = False
+        if is_conflict:
+            ml_excl_reason = "UNRESOLVED_RECONCILIATION_CONFLICT"
+        elif not is_val:
+            ml_excl_reason = "AWAITING_HUMAN_VALIDATION"
+        elif not getattr(order, "claimed_date", None):
+            ml_excl_reason = "MISSING_GENUINE_CLAIMED_DATE"
+        elif prov == "EXPECTED_DATE":
+            ml_excl_reason = "EXPECTED_RELEASE_DATE_NOT_GENUINE_TARGET"
+        elif prov == "HEURISTIC":
+            ml_excl_reason = "HEURISTIC_GENERATED_DURATION"
+        elif prov == "UNKNOWN":
+            ml_excl_reason = "UNKNOWN_TARGET_PROVENANCE"
+        elif not window_valid:
+            ml_excl_reason = "INVALID_ORDER_TO_CLAIM_WINDOW"
+        else:
+            ml_excl_reason = "NON_GENUINE_TARGET_PROVENANCE"
+
     return {
         "historical_order_id": order.historical_order_id,
         "order_id": order.order_id,
@@ -445,6 +562,27 @@ def serialize_historical_order(order, service_prices: Optional[Dict[str, float]]
         "sync_status": order.sync_status,
         "ocr_status": order.ocr_status,
         "status": order.ocr_status or "Validated",
+        "source_type": getattr(order, "source_type", "OCR") or "OCR",
+        "source_filename": getattr(order, "source_filename", None),
+        "source_row": getattr(order, "source_row", None),
+        "control_no": getattr(order, "control_no", None),
+        "import_batch_id": getattr(order, "import_batch_id", None),
+        "target_provenance": getattr(order, "target_provenance", "UNKNOWN"),
+        "reconciliation_status": getattr(order, "reconciliation_status", "CONFIRMED"),
+        "reconciliation_notes": getattr(order, "reconciliation_notes", None),
+        "potential_ml_candidate": bool(getattr(order, "potential_ml_candidate", False)),
+        "quantity_source": getattr(order, "quantity_source", None),
+        "raw_services": getattr(order, "raw_services", None),
+        "raw_date_received": getattr(order, "raw_date_received", None),
+        "raw_claimed_date": getattr(order, "raw_claimed_date", None),
+        "raw_order_id": getattr(order, "raw_order_id", None),
+        "raw_total": getattr(order, "raw_total", None),
+        "validated_by": getattr(order, "validated_by", None),
+        "validated_at": order.validated_at.isoformat() if getattr(order, "validated_at", None) else None,
+        "ml_eligible": is_ml_eligible,
+        "potential_ml_eligible": potential_ml,
+        "ml_exclusion_reason": ml_excl_reason,
+        "calculated_turnaround_days": turnaround,
         "items": items_out,
         "image": {
             "image_filename": image_filename,
@@ -927,6 +1065,7 @@ def _build_queue_item_unsafe(img, order, source: str, db: Session = None, reserv
 
         items_data.append({
             "historical_item_id": i.historical_item_id,
+            "raw_model": getattr(i, "raw_model", None) or i.model,
             "model": model,
             "brand": canonical_brand_name(i.brand) or i.brand,
             "color": color,
@@ -942,6 +1081,8 @@ def _build_queue_item_unsafe(img, order, source: str, db: Session = None, reserv
             "is_free": is_free_row,
             "price_breakdown": breakdown if not is_free_row else None,
             "services": services_out,
+            "attribute_normalization_status": getattr(i, "attribute_normalization_status", "CLEAN"),
+            "attribute_review_reason": getattr(i, "attribute_review_reason", None),
         })
 
     dp = _money_col(order.downpayment)
@@ -1112,6 +1253,8 @@ def _build_queue_item_unsafe(img, order, source: str, db: Session = None, reserv
             "claimed_date": claimed_str,
             "completion_days": completion_days,
             "priority": order.priority,
+            "raw_priority": "RUSH" if str(order.priority or "").upper() == "RUSH" else "NOT_RECORDED",
+            "priority_provenance": "EXPLICIT_SOURCE_VALUE" if str(order.priority or "").upper() == "RUSH" else "DERIVED_BUSINESS_RULE",
             "rush_fee": rush_fee,
             "branch": order.branch,
             "original_grand_total": original_gt,
@@ -1124,6 +1267,21 @@ def _build_queue_item_unsafe(img, order, source: str, db: Session = None, reserv
             "downpayment": dp,
             "balance": bal,
             "payment_method": order.payment_method or "Cash",
+            "source_type": getattr(order, "source_type", "OCR") or "OCR",
+            "source_filename": getattr(order, "source_filename", None),
+            "source_row": getattr(order, "source_row", None),
+            "original_order_id": getattr(order, "raw_order_id", None) or order.order_id,
+            "raw_order_id": getattr(order, "raw_order_id", None),
+            "control_no": getattr(order, "control_no", None) or control_no,
+            "potential_ml_candidate": bool(getattr(order, "potential_ml_candidate", False)),
+            "quantity_source": getattr(order, "quantity_source", None),
+            "raw_services": getattr(order, "raw_services", None),
+            "raw_date_received": getattr(order, "raw_date_received", None),
+            "raw_claimed_date": getattr(order, "raw_claimed_date", None),
+            "raw_total": getattr(order, "raw_total", None),
+            "reconciliation_status": getattr(order, "reconciliation_status", "CONFIRMED"),
+            "reconciliation_notes": getattr(order, "reconciliation_notes", None),
+            "target_provenance": getattr(order, "target_provenance", "NONE"),
             "items": items_data,
         },
     }
@@ -1134,6 +1292,24 @@ def _build_queue_item_unsafe(img, order, source: str, db: Session = None, reserv
 def apply_order_corrections(order, corrections, db: Session, assign_canonical_id: bool = True):
     if not corrections:
         return
+    from models import HistoricalOrder
+    from sqlalchemy import inspect as sa_inspect
+    try:
+        mapper = sa_inspect(HistoricalOrder)
+        for f_name, f_val in corrections.items():
+            if f_name in mapper.relationships:
+                f_nature = "RELATIONSHIP"
+                f_target = str(mapper.relationships[f_name].target.name)
+            elif f_name in mapper.columns:
+                f_nature = "COLUMN"
+                f_target = str(mapper.columns[f_name].type)
+            else:
+                f_nature = "UNKNOWN"
+                f_target = "N/A"
+            print(f"[DIAGNOSTIC] apply_order_corrections: field='{f_name}' | type={type(f_val).__name__} | mapper={f_nature} | target={f_target}")
+    except Exception as diag_err:
+        print(f"[DIAGNOSTIC] Error inspecting corrections: {diag_err}")
+
     items = list(order.items or [])
     for field, value in corrections.items():
         if field == "items":
@@ -1388,7 +1564,7 @@ def apply_order_corrections(order, corrections, db: Session, assign_canonical_id
         elif field in ("discount", "discount_type", "discount_percent", "discount_value"):
             # Persisted on the OCR audit blob below (no dedicated columns).
             continue
-        elif hasattr(order, field):
+        elif field in HistoricalOrder.__table__.columns.keys():
             if value == "":
                 value = None
             setattr(order, field, value)
@@ -1476,19 +1652,37 @@ def apply_order_corrections(order, corrections, db: Session, assign_canonical_id
         pass
 
 
-def apply_queue_review_action(action: str, img, order, corrections, db: Session) -> str:
+def apply_queue_review_action(action: str, img, order, corrections, db: Session, current_user: Any = None) -> str:
     """
     approve  = finalize and leave the review queue
     reject   = flag and leave the review queue
     save/correct = persist edits and stay PENDING_REVIEW
     """
     action = str(action or "").strip().lower()
+    from models import AuditLog
+    username = getattr(current_user, "username", "admin") if current_user else "admin"
+    user_id = getattr(current_user, "user_id", None) if current_user else None
+    role = getattr(current_user, "role", "admin") if current_user else "admin"
+
     if action == "reject":
         if img is not None:
             img.ocr_status = REJECTED
             img.processed_at = datetime.now()
         if order is not None:
             order.ocr_status = REJECTED
+            order.validated_by = username
+            order.validated_at = datetime.now()
+            db.add(AuditLog(
+                user_id=user_id,
+                username=username,
+                role=role,
+                action_type="HISTORICAL_REJECT",
+                module="Historical Records",
+                table_name="historical_orders",
+                record_id=order.historical_order_id,
+                old_values={"ocr_status": "PENDING_REVIEW"},
+                new_values={"ocr_status": REJECTED, "validated_by": username},
+            ))
         return REJECTED
     if action == "approve":
         if order is not None:
@@ -1498,6 +1692,41 @@ def apply_queue_review_action(action: str, img, order, corrections, db: Session)
                 apply_canonical_id_on_validate(order, db)
             order.ocr_status = VALIDATED
             order.sync_status = "synced"
+            order.validated_by = username
+            order.validated_at = datetime.now()
+            
+            # Recalculate academic target provenance & completion days
+            is_ml_eligible = False
+            if order.claimed_date and order.date_received:
+                c_d = order.claimed_date.date() if hasattr(order.claimed_date, "date") else order.claimed_date
+                r_d = order.date_received.date() if hasattr(order.date_received, "date") else order.date_received
+                diff = (c_d - r_d).days
+                if 1 <= diff <= 60 and getattr(order, "reconciliation_status", None) != "ORDER_ID_COLLISION":
+                    order.completion_days = diff
+                    order.target_provenance = "CLAIM_DATE_CALCULATED"
+                    is_ml_eligible = True
+                else:
+                    order.completion_days = diff if diff >= 0 else None
+                    order.target_provenance = "NONE"
+            order.sync_status = "CONFIRMED_ML_ELIGIBLE" if is_ml_eligible else "synced"
+            
+            db.add(AuditLog(
+                user_id=user_id,
+                username=username,
+                role=role,
+                action_type="HISTORICAL_VALIDATE",
+                module="Historical Records",
+                table_name="historical_orders",
+                record_id=order.historical_order_id,
+                old_values={"ocr_status": "PENDING_REVIEW"},
+                new_values={
+                    "ocr_status": VALIDATED,
+                    "target_provenance": order.target_provenance,
+                    "completion_days": order.completion_days,
+                    "validated_by": username,
+                    "validated_at": order.validated_at.isoformat() if order.validated_at else None,
+                },
+            ))
         if img is not None:
             img.ocr_status = VALIDATED
             img.processed_at = datetime.now()
@@ -1527,6 +1756,7 @@ def approve_historical_item(
         img.order,
         payload.get("corrections") or {},
         db,
+        current_user=current_user,
     )
     db.commit()
     return {"status": "success", "new_status": img.ocr_status, "action": result}
@@ -1634,6 +1864,7 @@ def validate_order_record(
         order,
         payload.get("corrections") or {},
         db,
+        current_user=current_user,
     )
     db.commit()
     return {"status": "success", "historical_order_id": historical_order_id, "action": result}

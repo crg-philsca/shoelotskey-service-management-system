@@ -1,0 +1,1305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PostgreSQL Pre-Schema Reconciliation Safety Snapshot</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 1400px; margin: 0 auto; }
+    .header { background: #1e293b; padding: 24px; border-radius: 12px; border: 1px solid #334155; margin-bottom: 24px; }
+    .header h1 { margin: 0 0 12px 0; color: #38bdf8; font-size: 26px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 16px; }
+    .card { background: #1e293b; padding: 20px; border-radius: 8px; border: 1px solid #334155; margin-bottom: 24px; }
+    .card h2 { margin-top: 0; color: #f1f5f9; border-bottom: 1px solid #334155; padding-bottom: 10px; font-size: 20px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #334155; }
+    th { background: #0f172a; color: #94a3b8; font-weight: 600; }
+    tr:hover { background: #33415540; }
+    .badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+    .badge-success { background: #065f46; color: #34d399; }
+    .badge-info { background: #075985; color: #38bdf8; }
+    .badge-warning { background: #854d0e; color: #fde047; }
+    code { background: #0f172a; padding: 2px 6px; border-radius: 4px; font-family: monospace; color: #38bdf8; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>PostgreSQL Pre-Schema Reconciliation Safety Snapshot</h1>
+    <p>Safety snapshot captured prior to minimal schema migration execution for BATCH-HIST-SEP2026-001 integrity.</p>
+    <div class="meta-grid">
+      <div><strong>Snapshot Timestamp:</strong> 2026-10-07T06:45:47.083565+00:00</div>
+      <div><strong>Git Commit Hash:</strong> <code>20032ac217ac65e2bb2b342a9c27cc121144b64f</code></div>
+      <div><strong>Database Engine:</strong> PostgreSQL 17.9 on aarch64-unknown-linux-gnu, compiled ...</div>
+      <div><strong>Batch Identifier:</strong> <code>BATCH-HIST-SEP2026-001</code></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>1. Authoritative PostgreSQL Baseline Row Counts</h2>
+    <table>
+      <thead>
+        <tr><th>Table Name</th><th>Row Count</th><th>Baseline Status</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+  <td><strong>orders</strong></td>
+  <td>133</td>
+  <td><span class="badge badge-success">VERIFIED</span></td>
+</tr><tr>
+  <td><strong>customers</strong></td>
+  <td>1005</td>
+  <td><span class="badge badge-success">VERIFIED</span></td>
+</tr><tr>
+  <td><strong>items</strong></td>
+  <td>104</td>
+  <td><span class="badge badge-success">VERIFIED</span></td>
+</tr><tr>
+  <td><strong>item_service_mapping</strong></td>
+  <td>161</td>
+  <td><span class="badge badge-success">VERIFIED</span></td>
+</tr><tr>
+  <td><strong>payments</strong></td>
+  <td>127</td>
+  <td><span class="badge badge-success">VERIFIED</span></td>
+</tr><tr>
+  <td><strong>expenses</strong></td>
+  <td>15</td>
+  <td><span class="badge badge-success">VERIFIED</span></td>
+</tr><tr>
+  <td><strong>inventory</strong></td>
+  <td>26</td>
+  <td><span class="badge badge-success">VERIFIED</span></td>
+</tr><tr>
+  <td><strong>inventory_logs</strong></td>
+  <td>54</td>
+  <td><span class="badge badge-success">VERIFIED</span></td>
+</tr><tr>
+  <td><strong>material_consumptions</strong></td>
+  <td>0</td>
+  <td><span class="badge badge-success">VERIFIED</span></td>
+</tr><tr>
+  <td><strong>audit_logs</strong></td>
+  <td>1815</td>
+  <td><span class="badge badge-success">VERIFIED</span></td>
+</tr><tr>
+  <td><strong>csv_import_batches</strong></td>
+  <td>2</td>
+  <td><span class="badge badge-success">VERIFIED</span></td>
+</tr><tr>
+  <td><strong>services</strong></td>
+  <td>22</td>
+  <td><span class="badge badge-success">VERIFIED</span></td>
+</tr><tr>
+  <td><strong>users</strong></td>
+  <td>12</td>
+  <td><span class="badge badge-success">VERIFIED</span></td>
+</tr><tr>
+  <td><strong>roles</strong></td>
+  <td>4</td>
+  <td><span class="badge badge-success">VERIFIED</span></td>
+</tr><tr>
+  <td><strong>historical_orders</strong></td>
+  <td>1445</td>
+  <td><span class="badge badge-success">VERIFIED</span></td>
+</tr><tr>
+  <td><strong>historical_items</strong></td>
+  <td>2003</td>
+  <td><span class="badge badge-success">VERIFIED</span></td>
+</tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>2. BATCH-HIST-SEP2026-001 Manifest Evidence</h2>
+    <pre style="background:#0f172a; padding:16px; border-radius:8px; overflow-x:auto;">[
+  {
+    "id": 34,
+    "batch_id": "BATCH-HIST-SEP2026-001",
+    "source_filename": "Shoelotskey_September_2026_Historical_Pilot_Master_Dataset.xlsx",
+    "file_size_bytes": 105820,
+    "imported_by": "admin",
+    "import_started": "2026-10-07T12:56:53.032531",
+    "import_finished": "2026-10-07T12:58:03.263532",
+    "status": "COMPLETED",
+    "rows_read": 60,
+    "rows_parsed": 60,
+    "exact_duplicates": 0,
+    "possible_duplicates": 2,
+    "conflicts": 1,
+    "new_records": 54,
+    "invalid_records": 0,
+    "accepted_records": 54,
+    "rejected_records": 6,
+    "details_json": {
+      "target": "PostgreSQL 17.9",
+      "orders_inserted": 54,
+      "customers_inserted": 52,
+      "customers_linked": 2,
+      "items_inserted": 22,
+      "mappings_inserted": 22,
+      "payments_inserted": 48,
+      "expenses_inserted": 7,
+      "gross_sales": 53880.0,
+      "cash_collected": 33017.0,
+      "balance_due": 20863.0,
+      "fixed_expenses": 53124.17,
+      "held_claims": 22,
+      "held_parcels": 2
+    }
+  }
+]</pre>
+  </div>
+
+  <div class="card">
+    <h2>3. Captured Historical Orders (54 Verified Records)</h2>
+    <p>Total Contracted Sales: <strong>₱53,880.00</strong> | Cash Collected: <strong>₱33,017.00</strong> | Balance Due: <strong>₱20,863.00</strong></p>
+    <table>
+      <thead>
+        <tr><th>Order ID</th><th>Order Number</th><th>Customer</th><th>Grand Total</th><th>Paid Amount</th><th>Balance</th><th>Intake Date</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+  <td><code>1045</code></td>
+  <td><strong>ORD-2026-09-07-001</strong></td>
+  <td>Ben Chavez [best read] (ID: 1946)</td>
+  <td>₱2,100.00</td>
+  <td>₱2,000.00</td>
+  <td>₱100.00</td>
+  <td>2026-09-07</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1046</code></td>
+  <td><strong>ORD-2026-09-07-002</strong></td>
+  <td>Aristotle Gomez [best read] (ID: 1947)</td>
+  <td>₱1,650.00</td>
+  <td>₱825.00</td>
+  <td>₱825.00</td>
+  <td>2026-09-07</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1047</code></td>
+  <td><strong>ORD-2026-09-07-003</strong></td>
+  <td>Kirk Guvia [best read] (ID: 1948)</td>
+  <td>₱550.00</td>
+  <td>₱550.00</td>
+  <td>₱0.00</td>
+  <td>2026-09-07</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1048</code></td>
+  <td><strong>ORD-2026-09-07-004</strong></td>
+  <td>Cont [unclear] (ID: 1949)</td>
+  <td>₱325.00</td>
+  <td>₱325.00</td>
+  <td>₱0.00</td>
+  <td>2026-09-07</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1049</code></td>
+  <td><strong>ORD-2026-09-07-005</strong></td>
+  <td>Jeulia Hatty [best read] (ID: 1950)</td>
+  <td>₱550.00</td>
+  <td>₱275.00</td>
+  <td>₱275.00</td>
+  <td>2026-09-07</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1050</code></td>
+  <td><strong>ORD-2026-09-07-006</strong></td>
+  <td>Zaira Elida [best read] (ID: 1951)</td>
+  <td>₱1,200.00</td>
+  <td>₱550.00</td>
+  <td>₱650.00</td>
+  <td>2026-09-07</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1051</code></td>
+  <td><strong>ORD-2026-09-07-007</strong></td>
+  <td>J. Eduvere [best read] (ID: 1952)</td>
+  <td>₱475.00</td>
+  <td>₱200.00</td>
+  <td>₱275.00</td>
+  <td>2026-09-07</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1052</code></td>
+  <td><strong>ORD-2026-09-08-001</strong></td>
+  <td>Derick Pucero [best read] (ID: 1938)</td>
+  <td>₱700.00</td>
+  <td>₱200.00</td>
+  <td>₱500.00</td>
+  <td>2026-09-08</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1053</code></td>
+  <td><strong>ORD-2026-09-08-002</strong></td>
+  <td>Irene de Leon [best read] (ID: 1939)</td>
+  <td>₱575.00</td>
+  <td>₱575.00</td>
+  <td>₱0.00</td>
+  <td>2026-09-08</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1054</code></td>
+  <td><strong>ORD-2026-09-08-003</strong></td>
+  <td>Edzel de Mesa (ID: 1940)</td>
+  <td>₱1,525.00</td>
+  <td>₱1,000.00</td>
+  <td>₱525.00</td>
+  <td>2026-09-08</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1055</code></td>
+  <td><strong>ORD-2026-09-08-004</strong></td>
+  <td>Danzel Cabaron [best read] (ID: 1941)</td>
+  <td>₱1,250.00</td>
+  <td>₱1,250.00</td>
+  <td>₱0.00</td>
+  <td>2026-09-08</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1056</code></td>
+  <td><strong>ORD-2026-09-08-005</strong></td>
+  <td>Johmar Tacacray (ID: 1942)</td>
+  <td>₱725.00</td>
+  <td>₱725.00</td>
+  <td>₱0.00</td>
+  <td>2026-09-08</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1057</code></td>
+  <td><strong>ORD-2026-09-08-006</strong></td>
+  <td>Oliver [surname unclear] (ID: 1943)</td>
+  <td>₱575.00</td>
+  <td>₱575.00</td>
+  <td>₱0.00</td>
+  <td>2026-09-08</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1058</code></td>
+  <td><strong>ORD-2026-09-08-007</strong></td>
+  <td>Christian T. [best read] (ID: 1944)</td>
+  <td>₱475.00</td>
+  <td>₱475.00</td>
+  <td>₱0.00</td>
+  <td>2026-09-08</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1059</code></td>
+  <td><strong>ORD-2026-09-08-008</strong></td>
+  <td>MJ Sumaridos [best read] (ID: 1945)</td>
+  <td>₱325.00</td>
+  <td>₱0.00</td>
+  <td>₱325.00</td>
+  <td>2026-09-08</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1060</code></td>
+  <td><strong>ORD-2026-09-09-002</strong></td>
+  <td>Levan Bunhaje (ID: 1901)</td>
+  <td>₱510.00</td>
+  <td>₱510.00</td>
+  <td>₱0.00</td>
+  <td>2026-09-09</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1061</code></td>
+  <td><strong>ORD-2026-09-09-003</strong></td>
+  <td>Rudary Mirhaza (ID: 1902)</td>
+  <td>₱510.00</td>
+  <td>₱510.00</td>
+  <td>₱0.00</td>
+  <td>2026-09-09</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1062</code></td>
+  <td><strong>ORD-2026-09-09-004</strong></td>
+  <td>Al Aguilar (ID: 1903)</td>
+  <td>₱575.00</td>
+  <td>₱300.00</td>
+  <td>₱275.00</td>
+  <td>2026-09-09</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1063</code></td>
+  <td><strong>ORD-2026-09-09-005</strong></td>
+  <td>Charl Panilio (ID: 1904)</td>
+  <td>₱3,275.00</td>
+  <td>₱2,000.00</td>
+  <td>₱1,275.00</td>
+  <td>2026-09-09</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1064</code></td>
+  <td><strong>ORD-2026-09-09-006</strong></td>
+  <td>Roderick Del Rosario (ID: 1340)</td>
+  <td>₱1,250.00</td>
+  <td>₱0.00</td>
+  <td>₱1,250.00</td>
+  <td>2026-09-09</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1065</code></td>
+  <td><strong>ORD-2026-09-09-007</strong></td>
+  <td>Dea Chavez (ID: 1905)</td>
+  <td>₱2,075.00</td>
+  <td>₱1,000.00</td>
+  <td>₱1,075.00</td>
+  <td>2026-09-09</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1066</code></td>
+  <td><strong>ORD-2026-09-09-008</strong></td>
+  <td>Karen Tupos (ID: 1906)</td>
+  <td>₱1,250.00</td>
+  <td>₱1,250.00</td>
+  <td>₱0.00</td>
+  <td>2026-09-09</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1067</code></td>
+  <td><strong>ORD-2026-09-09-009</strong></td>
+  <td>Christian Job (ID: 1907)</td>
+  <td>₱1,100.00</td>
+  <td>₱1,100.00</td>
+  <td>₱0.00</td>
+  <td>2026-09-09</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1068</code></td>
+  <td><strong>ORD-2026-09-09-010</strong></td>
+  <td>Pete Tahil (ID: 1908)</td>
+  <td>₱700.00</td>
+  <td>₱700.00</td>
+  <td>₱0.00</td>
+  <td>2026-09-09</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1069</code></td>
+  <td><strong>ORD-2026-09-09-011</strong></td>
+  <td>Gibson (ID: 1909)</td>
+  <td>₱3,125.00</td>
+  <td>₱0.00</td>
+  <td>₱3,125.00</td>
+  <td>2026-09-09</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1070</code></td>
+  <td><strong>ORD-2026-09-09-012</strong></td>
+  <td>Saludo (ID: 1910)</td>
+  <td>₱575.00</td>
+  <td>₱0.00</td>
+  <td>₱575.00</td>
+  <td>2026-09-09</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1071</code></td>
+  <td><strong>ORD-2026-09-09-013</strong></td>
+  <td>Mark Ontic (ID: 1911)</td>
+  <td>₱700.00</td>
+  <td>₱300.00</td>
+  <td>₱400.00</td>
+  <td>2026-09-09</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1072</code></td>
+  <td><strong>ORD-2026-09-10-006</strong></td>
+  <td>Vines Reuben (ID: 1912)</td>
+  <td>₱475.00</td>
+  <td>₱475.00</td>
+  <td>₱0.00</td>
+  <td>2026-09-10</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1073</code></td>
+  <td><strong>ORD-2026-09-10-007</strong></td>
+  <td>Jeremiah Valerio (ID: 1913)</td>
+  <td>₱475.00</td>
+  <td>₱475.00</td>
+  <td>₱0.00</td>
+  <td>2026-09-10</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1074</code></td>
+  <td><strong>ORD-2026-09-10-008</strong></td>
+  <td>Mark Aguilar (ID: 1914)</td>
+  <td>₱1,275.00</td>
+  <td>₱1,275.00</td>
+  <td>₱0.00</td>
+  <td>2026-09-10</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1075</code></td>
+  <td><strong>ORD-2026-09-10-009</strong></td>
+  <td>Mabr D. (ID: 1915)</td>
+  <td>₱450.00</td>
+  <td>₱200.00</td>
+  <td>₱250.00</td>
+  <td>2026-09-10</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1076</code></td>
+  <td><strong>ORD-2026-09-11-002</strong></td>
+  <td>Robert Yera Sr. (ID: 1916)</td>
+  <td>₱1,170.00</td>
+  <td>₱520.00</td>
+  <td>₱650.00</td>
+  <td>2026-09-11</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1077</code></td>
+  <td><strong>ORD-2026-09-11-003</strong></td>
+  <td>Janelle Kahano (ID: 1917)</td>
+  <td>₱205.00</td>
+  <td>₱105.00</td>
+  <td>₱100.00</td>
+  <td>2026-09-11</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1078</code></td>
+  <td><strong>ORD-2026-09-11-004</strong></td>
+  <td>Nicka Alkuino (ID: 1918)</td>
+  <td>₱550.00</td>
+  <td>₱275.00</td>
+  <td>₱275.00</td>
+  <td>2026-09-11</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1079</code></td>
+  <td><strong>ORD-2026-09-11-005</strong></td>
+  <td>Dicky Flora (ID: 1919)</td>
+  <td>₱325.00</td>
+  <td>₱150.00</td>
+  <td>₱175.00</td>
+  <td>2026-09-11</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1080</code></td>
+  <td><strong>ORD-2026-09-11-006</strong></td>
+  <td>Albert Pacuno (ID: 1920)</td>
+  <td>₱325.00</td>
+  <td>₱325.00</td>
+  <td>₱0.00</td>
+  <td>2026-09-11</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1081</code></td>
+  <td><strong>ORD-2026-09-11-007</strong></td>
+  <td>Jley Penesa (ID: 1921)</td>
+  <td>₱2,025.00</td>
+  <td>₱1,025.00</td>
+  <td>₱1,000.00</td>
+  <td>2026-09-11</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1082</code></td>
+  <td><strong>ORD-2026-09-11-008</strong></td>
+  <td>Gyser Inoro (ID: 1922)</td>
+  <td>₱475.00</td>
+  <td>₱475.00</td>
+  <td>₱0.00</td>
+  <td>2026-09-11</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1083</code></td>
+  <td><strong>ORD-2026-09-11-009</strong></td>
+  <td>Rheiner Martinez (ID: 1923)</td>
+  <td>₱425.00</td>
+  <td>₱50.00</td>
+  <td>₱375.00</td>
+  <td>2026-09-11</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1084</code></td>
+  <td><strong>ORD-2026-09-11-010</strong></td>
+  <td>Frank Emilia (ID: 1924)</td>
+  <td>₱550.00</td>
+  <td>₱550.00</td>
+  <td>₱0.00</td>
+  <td>2026-09-11</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1085</code></td>
+  <td><strong>ORD-2026-09-12-001</strong></td>
+  <td>Wendel Fabro (ID: 1925)</td>
+  <td>₱1,725.00</td>
+  <td>₱2,175.00</td>
+  <td>₱1,000.00</td>
+  <td>2026-09-12</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1086</code></td>
+  <td><strong>ORD-2026-09-12-002</strong></td>
+  <td>Leslie Auderia (ID: 1926)</td>
+  <td>₱2,610.00</td>
+  <td>₱2,610.00</td>
+  <td>₱0.00</td>
+  <td>2026-09-12</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1087</code></td>
+  <td><strong>ORD-2026-09-12-003</strong></td>
+  <td>Kennise Delgaco (ID: 1927)</td>
+  <td>₱650.00</td>
+  <td>₱650.00</td>
+  <td>₱0.00</td>
+  <td>2026-09-12</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1088</code></td>
+  <td><strong>ORD-2026-09-12-004</strong></td>
+  <td>Jerome Ramirez (ID: 1928)</td>
+  <td>₱1,025.00</td>
+  <td>₱1,024.00</td>
+  <td>₱513.00</td>
+  <td>2026-09-12</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1089</code></td>
+  <td><strong>ORD-2026-09-14-003</strong></td>
+  <td>Ernest Agapay / Acapulco (ID: 1929)</td>
+  <td>₱925.00</td>
+  <td>₱925.00</td>
+  <td>₱0.00</td>
+  <td>2026-09-14</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1090</code></td>
+  <td><strong>ORD-2026-09-14-004</strong></td>
+  <td>Raphael Puncino (ID: 1930)</td>
+  <td>₱975.00</td>
+  <td>₱1,500.00</td>
+  <td>₱475.00</td>
+  <td>2026-09-14</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1091</code></td>
+  <td><strong>ORD-2026-09-14-005</strong></td>
+  <td>Christian Fontanilla (ID: 1931)</td>
+  <td>₱650.00</td>
+  <td>₱650.00</td>
+  <td>₱325.00</td>
+  <td>2026-09-14</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1092</code></td>
+  <td><strong>ORD-2026-09-14-006</strong></td>
+  <td>Cubelo (ID: 1932)</td>
+  <td>₱475.00</td>
+  <td>₱475.00</td>
+  <td>₱0.00</td>
+  <td>2026-09-14</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1093</code></td>
+  <td><strong>ORD-2026-09-14-007</strong></td>
+  <td>Karl Agnas (ID: 1933)</td>
+  <td>₱325.00</td>
+  <td>₱325.00</td>
+  <td>₱0.00</td>
+  <td>2026-09-14</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1094</code></td>
+  <td><strong>ORD-2026-09-14-008</strong></td>
+  <td>Chaukie (ID: 1934)</td>
+  <td>₱1,150.00</td>
+  <td>₱1,000.00</td>
+  <td>₱150.00</td>
+  <td>2026-09-14</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1095</code></td>
+  <td><strong>ORD-2026-09-14-009</strong></td>
+  <td>Nyx Pantoja (ID: 1935)</td>
+  <td>₱1,225.00</td>
+  <td>₱0.00</td>
+  <td>₱1,225.00</td>
+  <td>2026-09-14</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1096</code></td>
+  <td><strong>ORD-2026-09-14-010</strong></td>
+  <td>Kenneth Gutierrez (ID: 1289)</td>
+  <td>₱2,900.00</td>
+  <td>₱0.00</td>
+  <td>₱2,900.00</td>
+  <td>2026-09-14</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1097</code></td>
+  <td><strong>ORD-2026-09-15-001</strong></td>
+  <td>Juan (ID: 1936)</td>
+  <td>₱1,400.00</td>
+  <td>₱1,400.00</td>
+  <td>₱0.00</td>
+  <td>2026-09-15</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr><tr>
+  <td><code>1098</code></td>
+  <td><strong>ORD-2026-09-15-002</strong></td>
+  <td>Antonio Lagunada (ID: 1937)</td>
+  <td>₱475.00</td>
+  <td>₱475.00</td>
+  <td>₱0.00</td>
+  <td>2026-09-15</td>
+  <td><span class="badge badge-info">ID: 1</span></td>
+</tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>4. Captured Historical Payments (48 Verified Transactions)</h2>
+    <p>Cash Payments: 27 (₱17,215.00) | GCash Payments: 21 (₱15,802.00) | Total Collected: <strong>₱33,017.00</strong></p>
+    <table>
+      <thead>
+        <tr><th>Payment ID</th><th>Order Number</th><th>Amount Received</th><th>Balance Due</th><th>Method</th><th>Status</th><th>Reference No</th><th>Created At</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+  <td><code>958</code></td>
+  <td><strong>ORD-2026-09-07-001</strong></td>
+  <td>₱2,000.00</td>
+  <td>₱100.00</td>
+  <td>cash</td>
+  <td>downpayment</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-001</code></td>
+  <td>2026-09-07T09:15:00</td>
+</tr><tr>
+  <td><code>959</code></td>
+  <td><strong>ORD-2026-09-07-002</strong></td>
+  <td>₱825.00</td>
+  <td>₱825.00</td>
+  <td>gcash</td>
+  <td>downpayment</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-002</code></td>
+  <td>2026-09-07T09:15:00</td>
+</tr><tr>
+  <td><code>960</code></td>
+  <td><strong>ORD-2026-09-07-003</strong></td>
+  <td>₱550.00</td>
+  <td>₱0.00</td>
+  <td>cash</td>
+  <td>fully-paid</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-003</code></td>
+  <td>2026-09-07T09:15:00</td>
+</tr><tr>
+  <td><code>961</code></td>
+  <td><strong>ORD-2026-09-07-004</strong></td>
+  <td>₱325.00</td>
+  <td>₱0.00</td>
+  <td>gcash</td>
+  <td>fully-paid</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-004</code></td>
+  <td>2026-09-07T09:15:00</td>
+</tr><tr>
+  <td><code>962</code></td>
+  <td><strong>ORD-2026-09-07-005</strong></td>
+  <td>₱275.00</td>
+  <td>₱275.00</td>
+  <td>cash</td>
+  <td>downpayment</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-005</code></td>
+  <td>2026-09-07T09:15:00</td>
+</tr><tr>
+  <td><code>963</code></td>
+  <td><strong>ORD-2026-09-07-006</strong></td>
+  <td>₱550.00</td>
+  <td>₱650.00</td>
+  <td>gcash</td>
+  <td>downpayment</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-006</code></td>
+  <td>2026-09-07T09:15:00</td>
+</tr><tr>
+  <td><code>964</code></td>
+  <td><strong>ORD-2026-09-07-007</strong></td>
+  <td>₱200.00</td>
+  <td>₱275.00</td>
+  <td>gcash</td>
+  <td>downpayment</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-007</code></td>
+  <td>2026-09-07T09:15:00</td>
+</tr><tr>
+  <td><code>965</code></td>
+  <td><strong>ORD-2026-09-08-001</strong></td>
+  <td>₱200.00</td>
+  <td>₱500.00</td>
+  <td>cash</td>
+  <td>downpayment</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-008</code></td>
+  <td>2026-09-08T09:15:00</td>
+</tr><tr>
+  <td><code>966</code></td>
+  <td><strong>ORD-2026-09-08-002</strong></td>
+  <td>₱575.00</td>
+  <td>₱0.00</td>
+  <td>gcash</td>
+  <td>fully-paid</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-009</code></td>
+  <td>2026-09-08T09:15:00</td>
+</tr><tr>
+  <td><code>967</code></td>
+  <td><strong>ORD-2026-09-08-003</strong></td>
+  <td>₱1,000.00</td>
+  <td>₱525.00</td>
+  <td>cash</td>
+  <td>downpayment</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-010</code></td>
+  <td>2026-09-08T09:15:00</td>
+</tr><tr>
+  <td><code>968</code></td>
+  <td><strong>ORD-2026-09-08-004</strong></td>
+  <td>₱1,250.00</td>
+  <td>₱0.00</td>
+  <td>gcash</td>
+  <td>fully-paid</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-011</code></td>
+  <td>2026-09-08T09:15:00</td>
+</tr><tr>
+  <td><code>969</code></td>
+  <td><strong>ORD-2026-09-08-005</strong></td>
+  <td>₱725.00</td>
+  <td>₱0.00</td>
+  <td>cash</td>
+  <td>fully-paid</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-012</code></td>
+  <td>2026-09-08T09:15:00</td>
+</tr><tr>
+  <td><code>970</code></td>
+  <td><strong>ORD-2026-09-08-006</strong></td>
+  <td>₱575.00</td>
+  <td>₱0.00</td>
+  <td>cash</td>
+  <td>fully-paid</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-013</code></td>
+  <td>2026-09-08T09:15:00</td>
+</tr><tr>
+  <td><code>971</code></td>
+  <td><strong>ORD-2026-09-08-007</strong></td>
+  <td>₱475.00</td>
+  <td>₱0.00</td>
+  <td>cash</td>
+  <td>fully-paid</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-014</code></td>
+  <td>2026-09-08T09:15:00</td>
+</tr><tr>
+  <td><code>972</code></td>
+  <td><strong>ORD-2026-09-09-002</strong></td>
+  <td>₱510.00</td>
+  <td>₱0.00</td>
+  <td>cash</td>
+  <td>fully-paid</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-015</code></td>
+  <td>2026-09-09T09:15:00</td>
+</tr><tr>
+  <td><code>973</code></td>
+  <td><strong>ORD-2026-09-09-003</strong></td>
+  <td>₱510.00</td>
+  <td>₱0.00</td>
+  <td>cash</td>
+  <td>fully-paid</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-016</code></td>
+  <td>2026-09-09T09:15:00</td>
+</tr><tr>
+  <td><code>974</code></td>
+  <td><strong>ORD-2026-09-09-004</strong></td>
+  <td>₱300.00</td>
+  <td>₱275.00</td>
+  <td>cash</td>
+  <td>downpayment</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-017</code></td>
+  <td>2026-09-09T09:15:00</td>
+</tr><tr>
+  <td><code>975</code></td>
+  <td><strong>ORD-2026-09-09-005</strong></td>
+  <td>₱2,000.00</td>
+  <td>₱1,275.00</td>
+  <td>cash</td>
+  <td>downpayment</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-018</code></td>
+  <td>2026-09-09T09:15:00</td>
+</tr><tr>
+  <td><code>976</code></td>
+  <td><strong>ORD-2026-09-09-007</strong></td>
+  <td>₱1,000.00</td>
+  <td>₱1,075.00</td>
+  <td>cash</td>
+  <td>downpayment</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-019</code></td>
+  <td>2026-09-09T09:15:00</td>
+</tr><tr>
+  <td><code>977</code></td>
+  <td><strong>ORD-2026-09-09-008</strong></td>
+  <td>₱1,250.00</td>
+  <td>₱0.00</td>
+  <td>gcash</td>
+  <td>fully-paid</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-020</code></td>
+  <td>2026-09-09T09:15:00</td>
+</tr><tr>
+  <td><code>978</code></td>
+  <td><strong>ORD-2026-09-09-009</strong></td>
+  <td>₱1,100.00</td>
+  <td>₱0.00</td>
+  <td>gcash</td>
+  <td>fully-paid</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-021</code></td>
+  <td>2026-09-09T09:15:00</td>
+</tr><tr>
+  <td><code>979</code></td>
+  <td><strong>ORD-2026-09-09-010</strong></td>
+  <td>₱700.00</td>
+  <td>₱0.00</td>
+  <td>cash</td>
+  <td>fully-paid</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-022</code></td>
+  <td>2026-09-09T09:15:00</td>
+</tr><tr>
+  <td><code>980</code></td>
+  <td><strong>ORD-2026-09-09-013</strong></td>
+  <td>₱300.00</td>
+  <td>₱400.00</td>
+  <td>cash</td>
+  <td>downpayment</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-023</code></td>
+  <td>2026-09-09T09:15:00</td>
+</tr><tr>
+  <td><code>981</code></td>
+  <td><strong>ORD-2026-09-10-006</strong></td>
+  <td>₱475.00</td>
+  <td>₱0.00</td>
+  <td>cash</td>
+  <td>fully-paid</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-024</code></td>
+  <td>2026-09-10T09:15:00</td>
+</tr><tr>
+  <td><code>982</code></td>
+  <td><strong>ORD-2026-09-10-007</strong></td>
+  <td>₱475.00</td>
+  <td>₱0.00</td>
+  <td>cash</td>
+  <td>fully-paid</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-025</code></td>
+  <td>2026-09-10T09:15:00</td>
+</tr><tr>
+  <td><code>983</code></td>
+  <td><strong>ORD-2026-09-10-008</strong></td>
+  <td>₱1,275.00</td>
+  <td>₱0.00</td>
+  <td>gcash</td>
+  <td>fully-paid</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-026</code></td>
+  <td>2026-09-10T09:15:00</td>
+</tr><tr>
+  <td><code>984</code></td>
+  <td><strong>ORD-2026-09-10-009</strong></td>
+  <td>₱200.00</td>
+  <td>₱250.00</td>
+  <td>cash</td>
+  <td>downpayment</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-027</code></td>
+  <td>2026-09-10T09:15:00</td>
+</tr><tr>
+  <td><code>985</code></td>
+  <td><strong>ORD-2026-09-11-002</strong></td>
+  <td>₱520.00</td>
+  <td>₱650.00</td>
+  <td>cash</td>
+  <td>downpayment</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-028</code></td>
+  <td>2026-09-11T09:15:00</td>
+</tr><tr>
+  <td><code>986</code></td>
+  <td><strong>ORD-2026-09-11-003</strong></td>
+  <td>₱105.00</td>
+  <td>₱100.00</td>
+  <td>gcash</td>
+  <td>downpayment</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-029</code></td>
+  <td>2026-09-11T09:15:00</td>
+</tr><tr>
+  <td><code>987</code></td>
+  <td><strong>ORD-2026-09-11-004</strong></td>
+  <td>₱275.00</td>
+  <td>₱275.00</td>
+  <td>gcash</td>
+  <td>downpayment</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-030</code></td>
+  <td>2026-09-11T09:15:00</td>
+</tr><tr>
+  <td><code>988</code></td>
+  <td><strong>ORD-2026-09-11-005</strong></td>
+  <td>₱150.00</td>
+  <td>₱175.00</td>
+  <td>cash</td>
+  <td>downpayment</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-031</code></td>
+  <td>2026-09-11T09:15:00</td>
+</tr><tr>
+  <td><code>989</code></td>
+  <td><strong>ORD-2026-09-11-006</strong></td>
+  <td>₱325.00</td>
+  <td>₱0.00</td>
+  <td>gcash</td>
+  <td>fully-paid</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-032</code></td>
+  <td>2026-09-11T09:15:00</td>
+</tr><tr>
+  <td><code>990</code></td>
+  <td><strong>ORD-2026-09-11-007</strong></td>
+  <td>₱1,025.00</td>
+  <td>₱1,000.00</td>
+  <td>gcash</td>
+  <td>downpayment</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-033</code></td>
+  <td>2026-09-11T09:15:00</td>
+</tr><tr>
+  <td><code>991</code></td>
+  <td><strong>ORD-2026-09-11-008</strong></td>
+  <td>₱475.00</td>
+  <td>₱0.00</td>
+  <td>cash</td>
+  <td>fully-paid</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-034</code></td>
+  <td>2026-09-11T09:15:00</td>
+</tr><tr>
+  <td><code>992</code></td>
+  <td><strong>ORD-2026-09-11-009</strong></td>
+  <td>₱50.00</td>
+  <td>₱375.00</td>
+  <td>cash</td>
+  <td>downpayment</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-035</code></td>
+  <td>2026-09-11T09:15:00</td>
+</tr><tr>
+  <td><code>993</code></td>
+  <td><strong>ORD-2026-09-11-010</strong></td>
+  <td>₱550.00</td>
+  <td>₱0.00</td>
+  <td>cash</td>
+  <td>fully-paid</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-036</code></td>
+  <td>2026-09-11T09:15:00</td>
+</tr><tr>
+  <td><code>994</code></td>
+  <td><strong>ORD-2026-09-12-001</strong></td>
+  <td>₱725.00</td>
+  <td>₱1,000.00</td>
+  <td>gcash</td>
+  <td>downpayment</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-037</code></td>
+  <td>2026-09-12T09:15:00</td>
+</tr><tr>
+  <td><code>995</code></td>
+  <td><strong>ORD-2026-09-12-002</strong></td>
+  <td>₱2,610.00</td>
+  <td>₱0.00</td>
+  <td>gcash</td>
+  <td>fully-paid</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-038</code></td>
+  <td>2026-09-12T09:15:00</td>
+</tr><tr>
+  <td><code>996</code></td>
+  <td><strong>ORD-2026-09-12-003</strong></td>
+  <td>₱650.00</td>
+  <td>₱0.00</td>
+  <td>gcash</td>
+  <td>fully-paid</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-039</code></td>
+  <td>2026-09-12T09:15:00</td>
+</tr><tr>
+  <td><code>997</code></td>
+  <td><strong>ORD-2026-09-12-004</strong></td>
+  <td>₱512.00</td>
+  <td>₱513.00</td>
+  <td>gcash</td>
+  <td>downpayment</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-040</code></td>
+  <td>2026-09-12T09:15:00</td>
+</tr><tr>
+  <td><code>998</code></td>
+  <td><strong>ORD-2026-09-14-003</strong></td>
+  <td>₱925.00</td>
+  <td>₱0.00</td>
+  <td>gcash</td>
+  <td>fully-paid</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-041</code></td>
+  <td>2026-09-14T09:15:00</td>
+</tr><tr>
+  <td><code>999</code></td>
+  <td><strong>ORD-2026-09-14-004</strong></td>
+  <td>₱500.00</td>
+  <td>₱475.00</td>
+  <td>gcash</td>
+  <td>downpayment</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-042</code></td>
+  <td>2026-09-14T09:15:00</td>
+</tr><tr>
+  <td><code>1000</code></td>
+  <td><strong>ORD-2026-09-14-005</strong></td>
+  <td>₱325.00</td>
+  <td>₱325.00</td>
+  <td>gcash</td>
+  <td>downpayment</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-043</code></td>
+  <td>2026-09-14T09:15:00</td>
+</tr><tr>
+  <td><code>1001</code></td>
+  <td><strong>ORD-2026-09-14-006</strong></td>
+  <td>₱475.00</td>
+  <td>₱0.00</td>
+  <td>gcash</td>
+  <td>fully-paid</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-044</code></td>
+  <td>2026-09-14T09:15:00</td>
+</tr><tr>
+  <td><code>1002</code></td>
+  <td><strong>ORD-2026-09-14-007</strong></td>
+  <td>₱325.00</td>
+  <td>₱0.00</td>
+  <td>cash</td>
+  <td>fully-paid</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-045</code></td>
+  <td>2026-09-14T09:15:00</td>
+</tr><tr>
+  <td><code>1003</code></td>
+  <td><strong>ORD-2026-09-14-008</strong></td>
+  <td>₱1,000.00</td>
+  <td>₱150.00</td>
+  <td>cash</td>
+  <td>downpayment</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-046</code></td>
+  <td>2026-09-14T09:15:00</td>
+</tr><tr>
+  <td><code>1004</code></td>
+  <td><strong>ORD-2026-09-15-001</strong></td>
+  <td>₱1,400.00</td>
+  <td>₱0.00</td>
+  <td>cash</td>
+  <td>fully-paid</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-047</code></td>
+  <td>2026-09-15T09:15:00</td>
+</tr><tr>
+  <td><code>1005</code></td>
+  <td><strong>ORD-2026-09-15-002</strong></td>
+  <td>₱475.00</td>
+  <td>₱0.00</td>
+  <td>cash</td>
+  <td>fully-paid</td>
+  <td><code>BATCH-HIST-SEP2026-001-PAY-048</code></td>
+  <td>2026-09-15T09:15:00</td>
+</tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>5. Captured Historical Expenses (7 Verified Components)</h2>
+    <p>Verified Fixed September Operating Expenses: <strong>₱53,124.17</strong> (Rent: ₱20,000 | Meralco: ₱3,745.17 | Converge: ₱1,299 | Payroll: ₱28,080)</p>
+    <table>
+      <thead>
+        <tr><th>Expense ID</th><th>Expense Date</th><th>Amount</th><th>Description</th><th>User</th><th>Created At</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+  <td><code>232</code></td>
+  <td>2026-09-01</td>
+  <td><strong>₱20,000.00</strong></td>
+  <td>[BATCH-HIST-SEP2026-001] Rent || Commercial Space Rental - Villamor Main</td>
+  <td>User ID: 1</td>
+  <td>2026-10-07T12:58:01</td>
+</tr><tr>
+  <td><code>233</code></td>
+  <td>2026-09-29</td>
+  <td><strong>₱3,745.17</strong></td>
+  <td>[BATCH-HIST-SEP2026-001] Utilities || Meralco Electric Bill (Sept 2026 Consumption)</td>
+  <td>User ID: 1</td>
+  <td>2026-10-07T12:58:01</td>
+</tr><tr>
+  <td><code>234</code></td>
+  <td>2026-09-05</td>
+  <td><strong>₱1,299.00</strong></td>
+  <td>[BATCH-HIST-SEP2026-001] Utilities || Converge Fiber Internet Subscription</td>
+  <td>User ID: 1</td>
+  <td>2026-10-07T12:58:01</td>
+</tr><tr>
+  <td><code>235</code></td>
+  <td>2026-09-15</td>
+  <td><strong>₱5,720.00</strong></td>
+  <td>[BATCH-HIST-SEP2026-001] Payroll || Joy - Cutoff Payroll (Sept 1–15, 2026)</td>
+  <td>User ID: 1</td>
+  <td>2026-10-07T12:58:02</td>
+</tr><tr>
+  <td><code>236</code></td>
+  <td>2026-09-15</td>
+  <td><strong>₱8,320.00</strong></td>
+  <td>[BATCH-HIST-SEP2026-001] Payroll || Yang - Cutoff Payroll (Sept 1–15, 2026)</td>
+  <td>User ID: 1</td>
+  <td>2026-10-07T12:58:02</td>
+</tr><tr>
+  <td><code>237</code></td>
+  <td>2026-09-30</td>
+  <td><strong>₱5,720.00</strong></td>
+  <td>[BATCH-HIST-SEP2026-001] Payroll || Joy - Cutoff Payroll (Sept 16–30, 2026)</td>
+  <td>User ID: 1</td>
+  <td>2026-10-07T12:58:02</td>
+</tr><tr>
+  <td><code>238</code></td>
+  <td>2026-09-30</td>
+  <td><strong>₱8,320.00</strong></td>
+  <td>[BATCH-HIST-SEP2026-001] Payroll || Yang - Cutoff Payroll (Sept 16–30, 2026)</td>
+  <td>User ID: 1</td>
+  <td>2026-10-07T12:58:02</td>
+</tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>6. Captured Batch Audit Logs</h2>
+    <pre style="background:#0f172a; padding:16px; border-radius:8px; overflow-x:auto;">[
+  {
+    "audit_log_id": 6724,
+    "user_id": 1,
+    "username": "admin",
+    "role": "owner",
+    "action_type": "HISTORICAL_IMPORT",
+    "module": "Historical Batch Importer",
+    "table_name": "orders",
+    "record_id": null,
+    "new_values": {
+      "batch_id": "BATCH-HIST-SEP2026-001",
+      "orders_inserted": 54,
+      "customers_inserted": 52,
+      "customers_linked": 2,
+      "items_inserted": 22,
+      "mappings_inserted": 22,
+      "payments_inserted": 48,
+      "expenses_inserted": 7,
+      "gross_transaction_value": 53880.0,
+      "cash_collected": 33017.0,
+      "receivable_balance": 20863.0,
+      "fixed_expenses": 53124.17,
+      "execution_mode": "AUTHORIZED_POSTGRESQL_COMMIT"
+    },
+    "created_at": "2026-10-07T12:58:03.584508"
+  },
+  {
+    "audit_log_id": 6728,
+    "user_id": 1,
+    "username": "owner",
+    "role": "owner",
+    "action_type": "UPDATE",
+    "module": "Job Orders",
+    "table_name": "orders",
+    "record_id": 1081,
+    "new_values": {
+      "orderNumber": "ORD-2026-09-11-007",
+      "status": "new-order",
+      "priorityLevel": "regular",
+      "grandTotal": 2025.0,
+      "transactionDate": "2026-09-11T01:00:00",
+      "predictedCompletionDate": "2026-09-11T18:00:00",
+      "inventoryApplied": false,
+      "inventoryUsed": {},
+      "cancellationStage": null,
+      "cancellationReason": null,
+      "refundStatus": null,
+      "refundAmount": 0.0,
+      "refundReason": null,
+      "cancelledAt": null,
+      "preCancellationState": null,
+      "customerName": "Jley Penesa",
+      "contactNumber": "",
+      "paymentMethod": "gcash",
+      "paymentStatus": "downpayment",
+      "amountReceived": 1025.0,
+      "balance": 1000.0,
+      "referenceNo": "BATCH-HIST-SEP2026-001-PAY-033",
+      "depositAmount": 1025.0,
+      "details": "Job Orders record 'ORD-2026-09-11-007' updated \u2014 Transactiondate: 2026-09-11T09:00:00 \u2192 2026-09-11T01:00:00"
+    },
+    "created_at": "2026-10-07T06:24:29.159392"
+  },
+  {
+    "audit_log_id": 6730,
+    "user_id": 1,
+    "username": "owner",
+    "role": "owner",
+    "action_type": "UPDATE",
+    "module": "Job Orders",
+    "table_name": "orders",
+    "record_id": 1045,
+    "new_values": {
+      "orderNumber": "ORD-2026-09-07-001",
+      "status": "new-order",
+      "priorityLevel": "regular",
+      "grandTotal": 2100.0,
+      "transactionDate": "2026-09-07T01:00:00",
+      "predictedCompletionDate": "2026-09-07T18:00:00",
+      "inventoryApplied": false,
+      "inventoryUsed": {},
+      "cancellationStage": null,
+      "cancellationReason": null,
+      "refundStatus": null,
+      "refundAmount": 0.0,
+      "refundReason": null,
+      "cancelledAt": null,
+      "preCancellationState": null,
+      "customerName": "Ben Chavez [best read]",
+      "contactNumber": "",
+      "paymentMethod": "cash",
+      "paymentStatus": "downpayment",
+      "amountReceived": 2000.0,
+      "balance": 100.0,
+      "referenceNo": "BATCH-HIST-SEP2026-001-PAY-001",
+      "depositAmount": 2000.0,
+      "details": "Job Orders record 'ORD-2026-09-07-001' updated \u2014 Transactiondate: 2026-09-07T09:00:00 \u2192 2026-09-07T01:00:00"
+    },
+    "created_at": "2026-10-07T06:25:31.587205"
+  },
+  {
+    "audit_log_id": 6734,
+    "user_id": 1,
+    "username": "owner",
+    "role": "owner",
+    "action_type": "UPDATE",
+    "module": "Job Orders",
+    "table_name": "orders",
+    "record_id": 1094,
+    "new_values": {
+      "orderNumber": "ORD-2026-09-14-008",
+      "status": "new-order",
+      "priorityLevel": "regular",
+      "grandTotal": 1150.0,
+      "transactionDate": "2026-09-14T01:00:00",
+      "predictedCompletionDate": "2026-09-14T18:00:00",
+      "inventoryApplied": false,
+      "inventoryUsed": {},
+      "cancellationStage": null,
+      "cancellationReason": null,
+      "refundStatus": null,
+      "refundAmount": 0.0,
+      "refundReason": null,
+      "cancelledAt": null,
+      "preCancellationState": null,
+      "customerName": "Chaukie",
+      "contactNumber": "",
+      "paymentMethod": "cash",
+      "paymentStatus": "downpayment",
+      "amountReceived": 1000.0,
+      "balance": 150.0,
+      "referenceNo": "BATCH-HIST-SEP2026-001-PAY-046",
+      "depositAmount": 1000.0,
+      "details": "Job Orders record 'ORD-2026-09-14-008' updated \u2014 Transactiondate: 2026-09-14T09:00:00 \u2192 2026-09-14T01:00:00"
+    },
+    "created_at": "2026-10-07T06:27:58.983317"
+  }
+]</pre>
+  </div>
+</div>
+</body>
+</html>

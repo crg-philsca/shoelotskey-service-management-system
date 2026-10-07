@@ -3,19 +3,174 @@
   <html lang="en">
     <head>
       <meta charset="UTF-8" />
-      <link rel="icon" type="image/png" sizes="32x32" href="/logo2.png" />
-      <link rel="icon" type="image/png" sizes="48x48" href="/logo2.png" />
-      <link rel="icon" type="image/png" sizes="64x64" href="/logo2.png" />
-      <link rel="icon" type="image/png" sizes="128x128" href="/logo2.png" />
-      <link rel="icon" type="image/png" sizes="256x256" href="/logo2.png" />
-      <link rel="icon" type="image/png" sizes="512x512" href="/logo2.png" />
-      <link rel="apple-touch-icon" sizes="180x180" href="/logo2.png" />
+      <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+      <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png" />
+      <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <meta name="description" content="Shoelotskey Service Management System with Data Analytics Using Machine Learning - pasay city shoe repair and care services portal." />
+      <meta name="theme-color" content="#dc2626" />
+      <meta name="color-scheme" content="light" />
+      <style>
+        :root {
+          color-scheme: light;
+        }
+        html, body {
+          margin: 0;
+          padding: 0;
+          height: 100%;
+          background: #f8fafc;
+          font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        #initial-loader {
+          height: 100vh;
+          width: 100%;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          background: linear-gradient(to right, #fecaca, #ffffff, #fecaca);
+        }
+        html.app-auth #initial-loader {
+          background: #f8fafc;
+        }
+        .initial-card {
+          width: 90%;
+          max-width: 384px;
+          background: #ffffff;
+          border-radius: 12px;
+          box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+          padding: 32px 24px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          box-sizing: border-box;
+        }
+        html.app-auth .initial-card {
+          box-shadow: none;
+          background: transparent;
+          border: none;
+        }
+        .initial-logo {
+          height: 156px;
+          width: 156px;
+          object-fit: contain;
+          margin: 0 auto;
+          display: block;
+        }
+        .initial-status-row {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          margin-top: 14px;
+        }
+        .initial-spinner {
+          width: 14px;
+          height: 14px;
+          border: 2px solid #fee2e2;
+          border-top-color: #dc2626;
+          border-radius: 50%;
+          animation: spin-initial 0.75s linear infinite;
+          flex-shrink: 0;
+        }
+        .initial-text {
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 0.1em;
+          color: #64748b;
+          text-transform: uppercase;
+        }
+        .initial-shoe-box {
+          margin-top: -6px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          position: relative;
+        }
+        .initial-shoe-runner {
+          animation: initialShoeRun 1.4s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+          transform-origin: 48% 88%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .initial-shoe-img {
+          height: 72px;
+          width: auto;
+          object-fit: contain;
+          display: block;
+          filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.08));
+        }
+        .initial-shoe-shadow {
+          width: 80px;
+          height: 5px;
+          background: rgba(148, 163, 184, 0.35);
+          border-radius: 9999px;
+          filter: blur(2px);
+          margin-top: 3px;
+          animation: initialShadowPulse 1.4s ease-in-out infinite;
+        }
+        @keyframes spin-initial {
+          to { transform: rotate(360deg); }
+        }
+        @keyframes initialShoeRun {
+          0%   { transform: translateY(0px)   translateX(0px)  rotate(0deg);   }
+          10%  { transform: translateY(-5px)  translateX(-4px) rotate(10deg);  }
+          28%  { transform: translateY(-18px) translateX(2px)  rotate(3deg);   }
+          45%  { transform: translateY(-24px) translateX(8px)  rotate(-1deg);  }
+          60%  { transform: translateY(-12px) translateX(12px) rotate(-9deg);  }
+          74%  { transform: translateY(-3px)  translateX(8px)  rotate(-6deg);  }
+          86%  { transform: translateY(0px)   translateX(4px)  rotate(0deg);   }
+          100% { transform: translateY(0px)   translateX(0px)  rotate(0deg);   }
+        }
+        @keyframes initialShadowPulse {
+          0%, 100% { transform: scaleX(1); opacity: 0.35; }
+          45% { transform: scaleX(0.65); opacity: 0.15; }
+        }
+      </style>
       <title>Shoelotskey Villamor-Pasay</title>
+      <link rel="preload" as="image" href="/logo.webp" type="image/webp" fetchpriority="high" />
+      <link rel="preload" as="image" href="/static/branded_shoe_404.png?v=pristine_cutout" type="image/png" fetchpriority="high" />
     </head>
 
     <body>
-      <div id="root"></div>
+      <div id="root">
+        <script>
+          try {
+            var isAuth = localStorage.getItem('user') || sessionStorage.getItem('user');
+            var path = window.location.pathname;
+            if (isAuth && path !== '/login' && path !== '/forgot-password' && path !== '/reset-password') {
+              document.documentElement.classList.add('app-auth');
+            }
+          } catch (e) {}
+        </script>
+        <div id="initial-loader">
+          <div id="initial-card" class="initial-card">
+            <img class="initial-logo" src="/logo.webp" alt="Shoelotskey logo" width="160" height="160" fetchpriority="high" />
+            <div class="initial-shoe-box">
+              <div class="initial-shoe-runner">
+                <img class="initial-shoe-img" src="/static/branded_shoe_404.png?v=pristine_cutout" alt="Shoelotskey running shoe" width="110" height="68" />
+              </div>
+              <div class="initial-shoe-shadow"></div>
+            </div>
+            <div class="initial-status-row">
+              <div class="initial-spinner" aria-label="Loading"></div>
+              <div class="initial-text">Loading...</div>
+            </div>
+            <button id="initial-reload-btn" onclick="window.location.reload()" style="display:none; margin-top: 12px; font-size: 12px; color: #dc2626; background: transparent; border: none; text-decoration: underline; cursor: pointer; font-weight: 600;">
+              Taking longer than usual? Click to refresh
+            </button>
+          </div>
+        </div>
+        <script>
+          setTimeout(function() {
+            var btn = document.getElementById('initial-reload-btn');
+            if (btn && document.getElementById('initial-loader')) {
+              btn.style.display = 'block';
+            }
+          }, 4500);
+        </script>
+      </div>
       <script type="module" src="/src/main.tsx"></script>
     </body>
   </html>

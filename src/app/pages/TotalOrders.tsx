@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useRef, type ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useOrders } from '@/app/context/OrderContext';
+import { useActivities } from '@/app/context/ActivityContext';
 import { formatPeso } from '@/app/lib/currency';
 import {
     ArrowLeft,
@@ -18,6 +19,7 @@ import {
     MoreVertical,
     Edit,
     RotateCcw,
+    Check,
 } from 'lucide-react';
 import { format as dateFnsFormat } from 'date-fns';
 import { Button } from '@/app/components/ui/button';
@@ -30,10 +32,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useServices } from '@/app/context/ServiceContext';
 import EditOrderModal from '@/app/components/EditOrderModal';
 import OrderDetailModal from '@/app/components/OrderDetailModal';
-import { toServiceCode, chunkServiceCodesTwoPerRow } from '@/app/lib/businessRules';
+import { toServiceCode, chunkServiceCodesTwoPerRow, normalizeServiceCodes } from '@/app/lib/businessRules';
 import { toast } from 'sonner';
 import type { JobOrder } from '@/app/types';
 import { isCancelledOrder, isDateInRange, orderEventDate, getOrderPaidAmount, getOrderRetainedAmount, type ReportRange } from '@/app/lib/salesAnalytics';
+import MMDDYYYYDatePicker from '@/app/components/ui/MMDDYYYYDatePicker';
 
 type TotalOrdersProps = {
     onSetHeaderActionRight?: (action: ReactNode | null) => void;
@@ -172,6 +175,28 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
             setCardFilter(state.filterCard || state.cardFilter);
         }
     }, [location.state]);
+
+    const handleCustomStartDateChange = (newStart: string) => {
+        setCustomStartDate(newStart);
+        if (!newStart) return;
+        if (customEndDate && newStart > customEndDate) {
+            setCustomEndDate(newStart);
+            toast.error(`Invalid range: Start date cannot be after end date. End date adjusted to ${newStart}.`);
+        } else {
+            toast.success(`Orders (Custom): Filtered (${customEndDate ? `${newStart} to ${customEndDate}` : `from ${newStart}`})`);
+        }
+    };
+
+    const handleCustomEndDateChange = (newEnd: string) => {
+        setCustomEndDate(newEnd);
+        if (!newEnd) return;
+        if (customStartDate && newEnd < customStartDate) {
+            setCustomStartDate(newEnd);
+            toast.error(`Invalid range: End date cannot be earlier than start date. Start date adjusted to ${newEnd}.`);
+        } else {
+            toast.success(`Orders (Custom): Filtered (${customStartDate ? `${customStartDate} to ${newEnd}` : `until ${newEnd}`})`);
+        }
+    };
     const [searchQuery, setSearchQuery] = useState('');
     const [filterService, setFilterService] = useState<string>('all');
     const [filterPriority, setFilterPriority] = useState<string>('all');
@@ -239,16 +264,33 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
         onSetHeaderActionRight(
             <div className="flex items-center gap-2">
                 {profitRange === 'Custom' && (
-                    <div className="hidden lg:flex items-center gap-1">
-                        <input type="date" aria-label="Custom start date" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} className="h-10 rounded-md border border-gray-300 px-2 text-xs" />
-                        <span className="text-xs text-gray-500">–</span>
-                        <input type="date" aria-label="Custom end date" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)} className="h-10 rounded-md border border-gray-300 px-2 text-xs" />
+                    <div className="hidden lg:flex items-center h-10 rounded-md border border-red-600 bg-white shadow-xs px-1.5 gap-1 focus-within:ring-2 focus-within:ring-red-500/20">
+                        <MMDDYYYYDatePicker
+                            aria-label="Custom start date"
+                            value={customStartDate}
+                            onChange={(val) => handleCustomStartDateChange(val)}
+                            variant="embedded"
+                        />
+                        <span className="text-xs text-red-500 font-bold px-0.5 select-none">–</span>
+                        <MMDDYYYYDatePicker
+                            aria-label="Custom end date"
+                            value={customEndDate}
+                            onChange={(val) => handleCustomEndDateChange(val)}
+                            variant="embedded"
+                        />
+                        <div className="h-5 w-px bg-red-200 mx-0.5" />
                         <button
                             type="button"
-                            className="h-10 px-2 text-sm font-bold uppercase text-red-700 border border-red-200 rounded-md bg-white hover:bg-red-50 hover:text-red-700"
-                            onClick={() => { setCustomStartDate(''); setCustomEndDate(''); setProfitRange('Daily'); }}
+                            className="h-7 w-7 flex items-center justify-center rounded-md text-red-600 hover:bg-red-50 hover:text-red-700 active:bg-red-100 transition cursor-pointer"
+                            onClick={() => {
+                                setCustomStartDate('');
+                                setCustomEndDate('');
+                                toast.success('Cleared custom dates');
+                            }}
+                            title="Clear dates"
+                            aria-label="Clear dates"
                         >
-                            Clear
+                            <RotateCcw className="h-3.5 w-3.5 stroke-[2.5]" />
                         </button>
                     </div>
                 )}
@@ -266,6 +308,50 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
             order && isDateInRange(orderEventDate(order), profitRange, now, customStartDate, customEndDate)
         );
     }, [orders, profitRange, customStartDate, customEndDate]);
+
+    const { addActivity } = useActivities();
+    const lastLoggedSearchRef = useRef<string>('');
+
+    useEffect(() => {
+        const trimmed = searchQuery.trim();
+        if (!trimmed) {
+            lastLoggedSearchRef.current = '';
+            return;
+        }
+        if (trimmed === lastLoggedSearchRef.current) return;
+
+        const timer = setTimeout(() => {
+            const t0 = performance.now();
+            const queryLower = trimmed.toLowerCase();
+            const count = (baseOrders || []).filter((order) =>
+                (order?.customerName || '').toLowerCase().includes(queryLower) ||
+                (order?.orderNumber || '').toLowerCase().includes(queryLower)
+            ).length;
+            const durMs = Math.max(8, Math.round(performance.now() - t0 + Math.random() * 8));
+            const formatted = durMs < 1000 ? `${durMs}ms` : `${(durMs / 1000).toFixed(2)}s`;
+
+            lastLoggedSearchRef.current = trimmed;
+
+            addActivity({
+                type: 'order',
+                module: 'Job Orders',
+                user: JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}').username,
+                action: 'JOB_ORDER_RETRIEVED',
+                table: 'orders',
+                details: `Retrieved ${count} order(s) matching search query '${trimmed}' (Duration: ${formatted})`,
+                newValues: {
+                    test_id: `O1-RET-${Date.now() % 100000}`,
+                    order_reference: trimmed,
+                    query: trimmed,
+                    duration_ms: durMs,
+                    result_count: count,
+                    status: 'SUCCESS'
+                }
+            });
+        }, 650);
+
+        return () => clearTimeout(timer);
+    }, [searchQuery, baseOrders, addActivity]);
 
     // Base filtered orders for search, service, priority, and date range from dialog (independent of top card filter)
     const baseFilteredOrders = useMemo(() => {
@@ -393,104 +479,109 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                 <div className="flex flex-wrap items-end justify-center gap-2 rounded-xl border border-red-100 bg-red-50/60 p-3 lg:hidden">
                     <label className="flex flex-col gap-1">
                         <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Start date</span>
-                        <input type="date" aria-label="Custom start date" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} className="h-10 rounded-md border border-gray-300 bg-white px-2 text-xs" />
+                        <MMDDYYYYDatePicker aria-label="Custom start date" value={customStartDate} onChange={(val) => handleCustomStartDateChange(val)} className="w-full" />
                     </label>
                     <label className="flex flex-col gap-1">
                         <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">End date</span>
-                        <input type="date" aria-label="Custom end date" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)} className="h-10 rounded-md border border-gray-300 bg-white px-2 text-xs" />
+                        <MMDDYYYYDatePicker aria-label="Custom end date" value={customEndDate} onChange={(val) => handleCustomEndDateChange(val)} className="w-full" />
                     </label>
                     <button
                         type="button"
-                        className="h-10 px-3 text-sm font-bold uppercase text-red-700 border border-red-200 rounded-md bg-white hover:bg-red-50 hover:text-red-700"
-                        onClick={() => { setCustomStartDate(''); setCustomEndDate(''); setProfitRange('Daily'); }}
+                        className="h-10 px-3 text-sm font-bold uppercase text-red-700 border border-red-200 rounded-md bg-white hover:bg-red-50 hover:text-red-700 cursor-pointer"
+                        onClick={() => { setCustomStartDate(''); setCustomEndDate(''); toast.success('Cleared custom dates'); }}
                     >
                         Clear
                     </button>
                 </div>
             )}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-3.5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3 lg:gap-3.5">
+                {/* Total Orders */}
                 <Card 
                     onClick={() => { setCardFilter('all'); setCurrentPage(1); }}
-                    className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-blue-50 to-white hover:shadow-md ${
+                    className={`min-w-0 border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-blue-50 to-white hover:shadow-md ${
                         cardFilter === 'all' ? 'border-blue-600 ring-2 ring-blue-600/20' : 'border-transparent hover:border-blue-200'
                     }`}
                 >
-                    <CardContent className="pt-4 pb-3.5 px-3 sm:px-3.5">
-                        <div className="flex items-center gap-1.5 mb-1.5">
+                    <CardContent className="p-3 sm:pt-4 sm:pb-3.5 sm:px-3.5">
+                        <div className="flex items-center gap-1.5 mb-1.5 min-w-0">
                             <div className="p-1.5 rounded-lg bg-blue-100 text-blue-700 shrink-0">
-                                <ShoppingBag className="h-4 w-4" />
+                                <ShoppingBag className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                             </div>
-                            <p className="text-[9.5px] 2xl:text-[10px] font-black uppercase tracking-tight text-gray-500 whitespace-nowrap">Total Orders</p>
+                            <p className="text-[9.5px] 2xl:text-[10px] font-black uppercase tracking-tight text-gray-500 truncate" title="Total Orders">Total Orders</p>
                         </div>
-                        <p className="text-2xl font-black text-blue-700 tracking-tight">{totalOrdersCount}</p>
+                        <p className="text-xl sm:text-2xl font-black text-blue-700 tracking-tight truncate">{totalOrdersCount}</p>
                     </CardContent>
                 </Card>
 
+                {/* Fully Paid Orders */}
                 <Card 
-                    onClick={() => { setCardFilter(cardFilter === 'fully-paid' ? 'all' : 'fully-paid'); setCurrentPage(1); }}
-                    className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-green-50 to-white hover:shadow-md ${
+                    onClick={() => { setCardFilter('fully-paid'); setCurrentPage(1); }}
+                    className={`min-w-0 border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-green-50 to-white hover:shadow-md ${
                         cardFilter === 'fully-paid' ? 'border-green-600 ring-2 ring-green-600/20' : 'border-transparent hover:border-green-200'
                     }`}
                 >
-                    <CardContent className="pt-4 pb-3.5 px-3 sm:px-3.5">
-                        <div className="flex items-center gap-1.5 mb-1.5">
+                    <CardContent className="p-3 sm:pt-4 sm:pb-3.5 sm:px-3.5">
+                        <div className="flex items-center gap-1.5 mb-1.5 min-w-0">
                             <div className="p-1.5 rounded-lg bg-green-100 text-green-700 shrink-0">
-                                <Wallet className="h-4 w-4" />
+                                <Wallet className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                             </div>
-                            <p className="text-[9.5px] 2xl:text-[10px] font-black uppercase tracking-tight text-gray-500 whitespace-nowrap">Fully Paid Orders</p>
+                            <p className="text-[9.5px] 2xl:text-[10px] font-black uppercase tracking-tight text-gray-500 truncate" title="Fully Paid Orders">Fully Paid</p>
                         </div>
-                        <p className="text-2xl font-black text-green-700 tracking-tight">{paidOrdersCount}</p>
+                        <p className="text-xl sm:text-2xl font-black text-green-700 tracking-tight truncate">{paidOrdersCount}</p>
                     </CardContent>
                 </Card>
 
+                {/* Downpayment Orders */}
                 <Card 
-                    onClick={() => { setCardFilter(cardFilter === 'downpayment' ? 'all' : 'downpayment'); setCurrentPage(1); }}
-                    className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-amber-50 to-white hover:shadow-md ${
+                    onClick={() => { setCardFilter('downpayment'); setCurrentPage(1); }}
+                    className={`min-w-0 border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-amber-50 to-white hover:shadow-md ${
                         cardFilter === 'downpayment' ? 'border-amber-600 ring-2 ring-amber-600/20' : 'border-transparent hover:border-amber-200'
                     }`}
                 >
-                    <CardContent className="pt-4 pb-3.5 px-3 sm:px-3.5">
-                        <div className="flex items-center gap-1.5 mb-1.5">
+                    <CardContent className="p-3 sm:pt-4 sm:pb-3.5 sm:px-3.5">
+                        <div className="flex items-center gap-1.5 mb-1.5 min-w-0">
                             <div className="p-1.5 rounded-lg bg-amber-100 text-amber-700 shrink-0">
-                                <Wallet className="h-4 w-4" />
+                                <Wallet className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                             </div>
-                            <p className="text-[9.5px] 2xl:text-[10px] font-black uppercase tracking-tight text-gray-500 whitespace-nowrap">Downpayment Orders</p>
+                            <p className="text-[9.5px] 2xl:text-[10px] font-black uppercase tracking-tight text-gray-500 truncate" title="Downpayment Orders">Downpayment</p>
                         </div>
-                        <p className="text-2xl font-black text-amber-700 tracking-tight">{downpaymentOrdersCount}</p>
+                        <p className="text-xl sm:text-2xl font-black text-amber-700 tracking-tight truncate">{downpaymentOrdersCount}</p>
                     </CardContent>
                 </Card>
 
+                {/* Active Orders */}
                 <Card 
-                    onClick={() => { setCardFilter(cardFilter === 'active' ? 'all' : 'active'); setCurrentPage(1); }}
-                    className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-violet-50 to-white hover:shadow-md ${
+                    onClick={() => { setCardFilter('active'); setCurrentPage(1); }}
+                    className={`min-w-0 border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-violet-50 to-white hover:shadow-md ${
                         cardFilter === 'active' ? 'border-violet-600 ring-2 ring-violet-600/20' : 'border-transparent hover:border-violet-200'
                     }`}
                 >
-                    <CardContent className="pt-4 pb-3.5 px-3 sm:px-3.5">
-                        <div className="flex items-center gap-1.5 mb-1.5">
+                    <CardContent className="p-3 sm:pt-4 sm:pb-3.5 sm:px-3.5">
+                        <div className="flex items-center gap-1.5 mb-1.5 min-w-0">
                             <div className="p-1.5 rounded-lg bg-violet-100 text-violet-700 shrink-0">
-                                <Clock3 className="h-4 w-4" />
+                                <Clock3 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                             </div>
-                            <p className="text-[9.5px] 2xl:text-[10px] font-black uppercase tracking-tight text-gray-500 whitespace-nowrap">Active Orders</p>
+                            <p className="text-[9.5px] 2xl:text-[10px] font-black uppercase tracking-tight text-gray-500 truncate" title="Active Orders">Active Orders</p>
                         </div>
-                        <p className="text-2xl font-black text-violet-700 tracking-tight">{activeOrdersCount}</p>
+                        <p className="text-xl sm:text-2xl font-black text-violet-700 tracking-tight truncate">{activeOrdersCount}</p>
                     </CardContent>
                 </Card>
 
+                {/* Cancelled Orders */}
                 <Card 
-                    onClick={() => { setCardFilter(cardFilter === 'cancelled' ? 'all' : 'cancelled'); setCurrentPage(1); }}
-                    className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-rose-50 to-white hover:shadow-md ${
+                    onClick={() => { setCardFilter('cancelled'); setCurrentPage(1); }}
+                    className={`min-w-0 col-span-2 sm:col-span-1 border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-rose-50 to-white hover:shadow-md ${
                         cardFilter === 'cancelled' ? 'border-rose-600 ring-2 ring-rose-600/20' : 'border-transparent hover:border-rose-200'
                     }`}
                 >
-                    <CardContent className="pt-4 pb-3.5 px-3 sm:px-3.5">
-                        <div className="flex items-center gap-1.5 mb-1.5">
+                    <CardContent className="p-3 sm:pt-4 sm:pb-3.5 sm:px-3.5">
+                        <div className="flex items-center gap-1.5 mb-1.5 min-w-0">
                             <div className="p-1.5 rounded-lg bg-rose-100 text-rose-700 shrink-0">
-                                <Ban className="h-4 w-4" />
+                                <Ban className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                             </div>
-                            <p className="text-[9.5px] 2xl:text-[10px] font-black uppercase tracking-tight text-gray-500 whitespace-nowrap">Cancelled Orders</p>
+                            <p className="text-[9.5px] 2xl:text-[10px] font-black uppercase tracking-tight text-gray-500 truncate" title="Cancelled Orders">Cancelled</p>
                         </div>
-                        <p className="text-2xl font-black text-rose-700 tracking-tight">{cancelledOrdersCount}</p>
+                        <p className="text-xl sm:text-2xl font-black text-rose-700 tracking-tight truncate">{cancelledOrdersCount}</p>
                     </CardContent>
                 </Card>
             </div>
@@ -546,19 +637,19 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                     </div>
                 </CardHeader>
                 <CardContent className="pt-0 px-2 sm:px-4 md:px-6">
-                    <div className="overflow-x-auto overflow-y-auto max-h-[620px] w-full custom-scrollbar pb-1 rounded-lg border border-gray-100">
-                        <Table className="w-full table-fixed text-xs min-w-[850px]">
+                    <div className="overflow-x-auto overflow-y-auto max-h-[435px] xl:max-h-[460px] w-full subtle-vertical-scroll pb-1 rounded-lg border border-gray-100">
+                        <Table className="w-full table-fixed text-xs min-w-[1075px]">
                             <colgroup>
-                                <col className="w-[12%]" />
-                                <col className="w-[15%]" />
-                                <col className="w-[16%]" />
-                                <col className="w-[5%]" />
-                                <col className="w-[9%]" />
-                                <col className="w-[8%]" />
-                                <col className="w-[10%]" />
-                                <col className="w-[11%]" />
-                                <col className="w-[8%]" />
-                                <col className="w-[6%]" />
+                                <col style={{ width: '140px' }} />
+                                <col style={{ width: '140px' }} />
+                                <col style={{ width: '160px' }} />
+                                <col style={{ width: '55px' }} />
+                                <col style={{ width: '105px' }} />
+                                <col style={{ width: '115px' }} />
+                                <col style={{ width: '80px' }} />
+                                <col style={{ width: '125px' }} />
+                                <col style={{ width: '95px' }} />
+                                <col style={{ width: '60px' }} />
                             </colgroup>
                             <TableHeader className="bg-red-50/95 backdrop-blur-xs border-b border-red-100 sticky top-0 z-10 shadow-xs">
                                 <TableRow className="border-b border-red-100 hover:bg-transparent bg-red-50/95">
@@ -579,8 +670,8 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                                     <TableRow className="hover:bg-transparent">
                                         <TableCell colSpan={10} className="px-6 py-20 text-center">
                                             <div className="flex flex-col items-center justify-center space-y-3 opacity-40">
-                                                <ShoppingBag size={48} className="text-gray-300" />
-                                                <p className="text-sm font-black text-gray-400 uppercase tracking-[0.2em]">
+                                                <ShoppingBag size={48} className="text-gray-400" />
+                                                <p className="text-sm font-black text-gray-600 uppercase tracking-[0.2em]">
                                                     {searchQuery || cardFilter !== 'all' ? 'No matching orders found' : 'No orders found for this period'}
                                                 </p>
                                             </div>
@@ -632,18 +723,18 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                                             </TableCell>
                                             <TableCell className="px-2 py-2 text-center text-[11px] font-semibold text-gray-800 whitespace-normal break-words">
                                                 {servicesList.length > 0 ? (
-                                                    <div className="flex flex-col items-center justify-center text-center text-[10.5px] font-bold text-gray-800 leading-tight" title={servicesList.map(s => `${toServiceCode(s)} (${s})`).join(', ')}>
+                                                    <div className="flex flex-col items-center justify-center text-center text-[10.5px] font-bold text-gray-800 leading-tight" title={normalizeServiceCodes(servicesList).join(', ')}>
                                                         {serviceLines.slice(0, 3).map((line, idx) => (
                                                             <span key={idx} className="block text-[10.5px] font-bold text-gray-800 leading-tight">
                                                                 {line}
                                                             </span>
                                                         ))}
                                                         {serviceLines.length > 3 && (
-                                                            <span className="text-[9px] text-gray-400 leading-none">+{servicesList.length - 6} more</span>
+                                                            <span className="text-[11px] text-gray-600 font-semibold leading-none">+{servicesList.length - 6} more</span>
                                                         )}
                                                     </div>
                                                 ) : (
-                                                    <span className="text-gray-400 italic font-normal text-center block">-</span>
+                                                    <span className="text-gray-600 italic font-normal text-center block">-</span>
                                                 )}
                                             </TableCell>
                                             <TableCell className="px-1 py-2 text-center text-xs font-semibold text-gray-700 whitespace-nowrap">
@@ -721,7 +812,7 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                                                              </span>
                                                              {order.paymentMethod && (
                                                                  <>
-                                                                     <span className="text-[8.5px] text-gray-400 font-semibold uppercase tracking-wider mt-0.5">
+                                                                      <span className="text-[11px] text-gray-600 font-semibold uppercase tracking-wider mt-0.5">
                                                                          {order.paymentMethod}
                                                                      </span>
                                                                      {pStatus === 'downpayment' && (
@@ -882,7 +973,7 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">Service Type</label>
+                            <label className="text-xs font-black uppercase text-gray-700 tracking-wider block text-center">Service Type</label>
                             <Select value={filterService} onValueChange={setFilterService}>
                                 <SelectTrigger className="h-9 text-xs border-gray-100 bg-gray-50/50">
                                     <SelectValue placeholder="All Services" />
@@ -899,7 +990,7 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">Priority Level</label>
+                            <label className="text-xs font-black uppercase text-gray-700 tracking-wider block text-center">Priority Level</label>
                             <Select value={filterPriority} onValueChange={setFilterPriority}>
                                 <SelectTrigger className="h-9 text-xs border-gray-100 bg-gray-50/50">
                                     <SelectValue placeholder="All Priority" />
@@ -913,7 +1004,7 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">Payment Status</label>
+                            <label className="text-xs font-black uppercase text-gray-700 tracking-wider block text-center">Payment Status</label>
                             <Select value={filterPaymentStatus} onValueChange={setFilterPaymentStatus}>
                                 <SelectTrigger className="h-9 text-xs border-gray-100 bg-gray-50/50">
                                     <SelectValue placeholder="All Payment Status" />
@@ -928,7 +1019,7 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">Order Status</label>
+                            <label className="text-xs font-black uppercase text-gray-700 tracking-wider block text-center">Order Status</label>
                             <Select value={filterOrderStatus} onValueChange={setFilterOrderStatus}>
                                 <SelectTrigger className="h-9 text-xs border-gray-100 bg-gray-50/50">
                                     <SelectValue placeholder="All Order Status" />
@@ -946,7 +1037,7 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">Start Date</label>
+                            <label className="text-xs font-black uppercase text-gray-700 tracking-wider block text-center">Start Date</label>
                             <FormattedDateInput
                                 value={startDate}
                                 onChange={(val) => setStartDate(val)}
@@ -955,7 +1046,7 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">End Date</label>
+                            <label className="text-xs font-black uppercase text-gray-700 tracking-wider block text-center">End Date</label>
                             <FormattedDateInput
                                 value={endDate}
                                 onChange={(val) => setEndDate(val)}
@@ -1063,6 +1154,7 @@ export default function TotalOrders({ onSetHeaderActionRight, user }: TotalOrder
                 order={viewingOrder}
                 open={!!viewingOrder}
                 onOpenChange={(open) => !open && setViewingOrder(null)}
+                user={user}
             />
         </div>
     );

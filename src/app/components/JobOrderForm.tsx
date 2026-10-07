@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
@@ -7,13 +7,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/app/components/ui/checkbox';
 import { Textarea } from '@/app/components/ui/textarea';
 import { toast } from 'sonner';
-import { Plus, X, User, Hash, ClipboardList, RotateCcw, Calendar as CalendarIcon, Clock, Sparkles, Info, Search, Check, ChevronDown, Loader2, Camera, Upload } from 'lucide-react';
+import { Plus, X, User, Hash, ClipboardList, RotateCcw, Calendar as CalendarIcon, Clock, Sparkles, Info, Search, Check, ChevronDown, Loader2, Camera, Upload, Lock, ShieldCheck, Eye, EyeOff, CheckCircle2, XCircle } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/app/components/ui/popover';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/app/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/app/components/ui/dropdown-menu';
-import { CameraCaptureModal } from './CameraCaptureModal';
+const CameraCaptureModal = lazy(() => import('./CameraCaptureModal').then(m => ({ default: m.CameraCaptureModal })));
 import { useOrders } from '../context/OrderContext';
 import { useServices } from '../context/ServiceContext';
+import { hasPermission } from '@/app/lib/permissions';
+import { sanitizeClientAuthCode, sanitizeClientUsername, hasMaliciousPattern } from '@/app/lib/security';
 import type { ShippingPreference, PaymentMethod, PaymentStatus, Priority } from '@/app/types';
 import { format as dateFnsFormat } from 'date-fns';
 import { CreatableCombobox } from './ui/creatable-combobox';
@@ -21,10 +23,10 @@ import { CUSTOM_OPTION_KEYS, seedCustomOptionsFromOrders, saveStoredCustomOption
 import { useInventory } from '../context/InventoryContext';
 import { getInventoryPresentation } from '@/app/lib/inventoryPresentation';
 import { API_BASE } from '@/app/lib/apiBase';
-import { isAddonVisibleForBaseServices, applyColorCountExclusive, syncColorRenewalAddons, shoeHasBothColorCounts, isColorCountAddon } from '@/app/lib/serviceCompatibility';
+import { isAddonVisibleForBaseServices, applyColorCountExclusive, syncColorRenewalAddons, syncFullReglueAddons, shoeHasBothColorCounts, isColorCountAddon, isFullReglueSoleAddon, getApplicableRushFee, TWO_COLORS, THREE_COLORS } from '@/app/lib/serviceCompatibility';
 import { nextOrderId } from '@/app/lib/orderNumber';
 import { calculateOfficialReleaseBreakdown } from '@/app/lib/businessRules';
-import { validateCustomerName, CUSTOMER_NAME_MAX_LENGTH } from '@/app/lib/customerValidation';
+import { validateCustomerName, CUSTOMER_NAME_MAX_LENGTH, validateSecurityInput, stripCyberAttackInput } from '@/app/lib/customerValidation';
 import { compressImageFile, saveOrderAttachments } from '@/app/lib/imageUtils';
 
 function formatMlModelName(name?: string | null): string {
@@ -45,6 +47,90 @@ function toDateInputValue(isoOrDate: string | Date | null | undefined): string {
     return dateFnsFormat(parsed, 'yyyy-MM-dd');
 }
 
+export function getPhilippineTimeString(): string {
+    try {
+        return new Intl.DateTimeFormat('en-GB', {
+            timeZone: 'Asia/Manila',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        }).format(new Date());
+    } catch {
+        return new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    }
+}
+
+export function getPhilippineDateString(): string {
+    try {
+        return new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Manila',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        }).format(new Date());
+    } catch {
+        return dateFnsFormat(new Date(), 'yyyy-MM-dd');
+    }
+}
+
+function formatIdWithHyphens(
+    val: string, 
+    format: 'alphanumeric' | 'numbers' | 'letters' = 'alphanumeric', 
+    maxDigits?: number,
+    prevVal?: string
+): string {
+    if (!val) return '';
+    
+    let clean = '';
+    if (format === 'numbers') {
+        clean = val.replace(/\D/g, '');
+    } else if (format === 'letters') {
+        clean = val.replace(/[^a-zA-Z]/g, '').toUpperCase();
+    } else {
+        clean = val.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    }
+
+    // If user hit backspace on a hyphen (e.g. from "12-34" to "1234"), drop the previous char
+    if (prevVal && val.length < prevVal.length) {
+        let prevClean = '';
+        if (format === 'numbers') {
+            prevClean = prevVal.replace(/\D/g, '');
+        } else if (format === 'letters') {
+            prevClean = prevVal.replace(/[^a-zA-Z]/g, '').toUpperCase();
+        } else {
+            prevClean = prevVal.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+        }
+
+        if (clean === prevClean && clean.length > 0) {
+            clean = clean.slice(0, -1);
+        }
+    }
+
+    if (maxDigits && maxDigits > 0) {
+        clean = clean.slice(0, maxDigits);
+    } else if (clean.length > 30) {
+        clean = clean.slice(0, 30);
+    }
+
+    const chunks = clean.match(/.{1,2}/g);
+    return chunks ? chunks.join('-') : '';
+}
+
+function isValidIdInput(val: string, format: 'alphanumeric' | 'numbers' | 'letters' = 'alphanumeric', expectedDigits?: number): boolean {
+    const clean = (val || '').replace(/-/g, '').trim();
+    if (clean.length === 0) return false;
+    if (expectedDigits && expectedDigits > 0 && clean.length !== expectedDigits) {
+        return false;
+    }
+    if (format === 'numbers') {
+        return /^\d+$/.test(clean);
+    }
+    if (format === 'letters') {
+        return /^[a-zA-Z]+$/.test(clean);
+    }
+    return /^[a-zA-Z0-9]+$/.test(clean);
+}
+
 type ServerPrediction = {
     predicted_date?: string;
     predicted_date_ymd?: string;
@@ -54,14 +140,31 @@ type ServerPrediction = {
     model_loaded?: boolean;
     fallback_reason?: string | null;
     authoritative?: string;
+    standard_base_days?: number | null;
+    standard_release_days?: number | null;
+    standard_release_date?: string | null;
+    standard_rollover_days?: number | null;
+    standard_has_rollover?: boolean;
     business_rule_days?: number;
     business_rule_date?: string;
+    ml_raw_prediction_days?: number | null;
+    ml_elapsed_days?: number | null;
+    ml_predicted_turnaround_days?: number | null;
+    ml_base_days?: number | null;
+    ml_predicted_release_date?: string | null;
+    ml_rollover_days?: number | null;
+    ml_has_rollover?: boolean;
+    ml_safety_rollover_days?: number | null;
+    ml_has_safety_rollover?: boolean;
     ml_predicted_days?: number | null;
     ml_predicted_date?: string | null;
     ml_model?: string;
     ml_status?: string;
     ml_source?: string;
     ml_reason?: string | null;
+    model_status?: string;
+    model_role?: string;
+    prediction_target?: string;
 };
 
 // Dropdown options
@@ -200,20 +303,28 @@ interface ShoeEntry {
 
 
 
-const LABEL_STYLE = "text-[11px] font-bold text-gray-500 mb-1 block uppercase tracking-tight";
+const LABEL_STYLE = "text-[11px] font-bold text-gray-700 mb-1 block uppercase tracking-tight";
 const INPUT_STYLE = "bg-white border-gray-100 h-9 text-xs focus:ring-red-50 focus:border-red-100 transition-all shadow-sm";
 
 
-const CARD_HEADER_STYLE = "bg-red-50/50 py-2 px-6 border-b border-red-100/50";
-const CARD_TITLE_STYLE = "text-gray-600 font-black text-[14px] uppercase tracking-widest flex items-center gap-2";
+const CARD_HEADER_STYLE = "bg-red-50/50 py-2 px-3.5 sm:px-6 border-b border-red-100/50";
+const CARD_TITLE_STYLE = "text-gray-600 font-black text-xs sm:text-[14px] uppercase tracking-widest flex items-center gap-2";
 
 function ClearableInput({ id, value, onChange, onClear, placeholder, className, required, type = "text", inputMode, maxLength, ...rest }: any) {
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const raw = e?.target?.value;
+        if (typeof raw === 'string' && (raw.includes('<') || raw.includes('>') || raw.toLowerCase().includes('script'))) {
+            e.target.value = stripCyberAttackInput(raw);
+        }
+        onChange?.(e);
+    };
+
     return (
         <div className="relative group/input">
             <Input
                 id={id}
                 value={value}
-                onChange={onChange}
+                onChange={handleInputChange}
                 placeholder={placeholder}
                 className={`${className} ${value ? 'pr-8' : ''}`}
                 required={required}
@@ -229,7 +340,8 @@ function ClearableInput({ id, value, onChange, onClear, placeholder, className, 
                         if (onClear) onClear();
                         else onChange({ target: { value: '' } } as any);
                     }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors opacity-0 group-hover/input:opacity-100"
+                    aria-label={`Clear ${placeholder || id || 'input'}`}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 min-w-[24px] min-h-[24px] flex items-center justify-center p-1 hover:bg-gray-100 rounded-full text-gray-500 hover:text-gray-700 transition-colors opacity-0 group-hover/input:opacity-100 cursor-pointer"
                 >
                     <X size={12} />
                 </button>
@@ -315,13 +427,15 @@ function FormattedDateInput({ value, onChange, className, id, iconClassName }: {
                 type="button"
                 onClick={openPicker}
                 title="Select date"
-                className={`absolute right-2.5 ${iconClassName || 'text-gray-400'} hover:text-red-600 transition-colors cursor-pointer p-0.5`}
+                aria-label={id ? `Select ${id}` : 'Select date'}
+                className={`absolute right-2.5 ${iconClassName || 'text-gray-400'} hover:text-red-600 transition-colors cursor-pointer min-w-[24px] min-h-[24px] flex items-center justify-center p-0.5`}
             >
                 <CalendarIcon size={14} />
             </button>
             <input
                 ref={hiddenDateRef}
                 type="date"
+                aria-label={id ? `${id} picker` : 'Date picker'}
                 value={value || ''}
                 onChange={handlePickerChange}
                 className="sr-only absolute pointer-events-none opacity-0"
@@ -350,6 +464,7 @@ function FormattedTimeInput({ value, onChange, className, id }: { value: string;
                 id={id}
                 ref={hiddenTimeRef}
                 type="time"
+                aria-label={id ? (id === 'orderTime' ? 'Order Time' : id === 'releaseTime' ? 'Release Time' : id) : 'Time picker'}
                 value={value}
                 onChange={onChange}
                 className={`${className || ''} pr-8 text-left font-normal [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer`}
@@ -358,7 +473,8 @@ function FormattedTimeInput({ value, onChange, className, id }: { value: string;
                 type="button"
                 onClick={openPicker}
                 title="Select time"
-                className="absolute right-2.5 text-gray-400 hover:text-red-600 transition-colors cursor-pointer p-0.5 pointer-events-none"
+                aria-label={id ? `Select ${id}` : 'Select time'}
+                className="absolute right-2.5 text-gray-400 hover:text-red-600 transition-colors cursor-pointer min-w-[24px] min-h-[24px] flex items-center justify-center p-0.5 pointer-events-none"
             >
                 <Clock size={14} />
             </button>
@@ -466,16 +582,18 @@ function InventorySearchSelect({
                     <input
                         ref={inputRef}
                         type="text"
+                        aria-label="Search supplies, volume, container"
                         placeholder="Search supplies, volume, container..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        className="w-full h-8 pl-8 pr-7 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-100 focus:border-red-200 transition-all font-medium text-gray-800 placeholder:text-gray-400"
+                        className="w-full h-8 pl-8 pr-7 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-red-100 focus:border-red-200 transition-all font-medium text-gray-800 placeholder:text-gray-500"
                     />
                     {search && (
                         <button
                             type="button"
                             onClick={() => setSearch("")}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-200 transition-colors"
+                            aria-label="Clear search"
+                            className="absolute right-2 top-1/2 -translate-y-1/2 min-w-[24px] min-h-[24px] flex items-center justify-center p-0.5 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-200 transition-colors"
                         >
                             <X size={12} />
                         </button>
@@ -561,7 +679,7 @@ function formatPhilippineContactNumber(value: string): string {
 
 export default function JobOrderFormComponent({ user, onSuccess, onCancel, initialOrder, mode = 'create' }: JobOrderFormProps) {
     const { addOrder, orders } = useOrders();
-    const { services } = useServices();
+    const { services, authorizationCode } = useServices();
     const { inventoryData } = useInventory();
     const [customerName, setCustomerName] = useState('');
     const [contactNumber, setContactNumber] = useState(() => initialOrder?.contactNumber ? formatPhilippineContactNumber(initialOrder.contactNumber) : '');
@@ -570,10 +688,58 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
     const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
     const [cameraModalShoeId, setCameraModalShoeId] = useState<string | null>(null);
 
-    // Automatically seed stored custom options from past orders so they appear in dropdowns
+    // Strictly check if current account is Admin account
+    const currentLoggedInUser = useMemo(() => {
+        if (user && (user.role || user.username)) return user;
+        if (typeof window !== 'undefined') {
+            try {
+                const stored = localStorage.getItem('user') || sessionStorage.getItem('user');
+                if (stored) return JSON.parse(stored);
+            } catch {}
+        }
+        return null;
+    }, [user]);
+
+    const isAdminAccount = useMemo(() => {
+        const role = String(currentLoggedInUser?.role?.role_name || currentLoggedInUser?.role || '').toLowerCase().trim();
+        const uname = String(currentLoggedInUser?.username || '').toLowerCase().trim();
+        return role === 'admin' || uname === 'admin';
+    }, [currentLoggedInUser]);
+
+    const isOwnerOrAdminUser = useMemo(() => {
+        const role = String(currentLoggedInUser?.role?.role_name || currentLoggedInUser?.role || user?.role || '').toLowerCase().trim();
+        const uname = String(currentLoggedInUser?.username || user?.username || '').toLowerCase().trim();
+        return role === 'owner' || role === 'admin' || uname === 'owner' || uname === 'admin' || uname === 'expert_owner';
+    }, [currentLoggedInUser, user]);
+
+    const canSelfAuthorizeDiscounts = useMemo(() => {
+        if (isOwnerOrAdminUser) return true;
+        return hasPermission(user, 'discounts.authorize');
+    }, [isOwnerOrAdminUser, user]);
+
+    const canStaffUseAuthCode = useMemo(() => {
+        if (isOwnerOrAdminUser) return true;
+        return hasPermission(user, 'discounts.use_auth_code') || hasPermission(user, 'discounts.authorize');
+    }, [isOwnerOrAdminUser, user]);
+
+    const canApplyDiscounts = useMemo(() => {
+        if (isOwnerOrAdminUser) return true;
+        return hasPermission(user, 'discounts.apply');
+    }, [isOwnerOrAdminUser, user]);
+
+    // Automatically seed stored custom options from past orders so they appear in dropdowns (deferred to protect FCP/LCP)
     useEffect(() => {
         if (orders && orders.length > 0) {
-            seedCustomOptionsFromOrders(orders);
+            const timer = setTimeout(() => {
+                if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+                    (window as any).requestIdleCallback(() => {
+                        seedCustomOptionsFromOrders(orders);
+                    });
+                } else {
+                    seedCustomOptionsFromOrders(orders);
+                }
+            }, 10000);
+            return () => clearTimeout(timer);
         }
     }, [orders]);
 
@@ -643,16 +809,67 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
     const [otherCourier, setOtherCourier] = useState('');
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
     const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('downpayment');
-    const [amountReceived, setAmountReceived] = useState('');
-    const [depositAmount, setDepositAmount] = useState('');
+    const [amountReceived, setAmountReceived] = useState('0.00');
+    const [depositAmount, setDepositAmount] = useState('0.00');
     const [isDepositAmountCustom, setIsDepositAmountCustom] = useState(false);
-    const [discountPreset, setDiscountPreset] = useState<'0' | '5' | '10' | '15' | '20' | '25' | 'custom'>('0');
+    const [discountPreset, setDiscountPreset] = useState<string>('0');
     const [customDiscountType, setCustomDiscountType] = useState<'percent' | 'amount'>('percent');
     const [customDiscountValue, setCustomDiscountValue] = useState<string>('');
+    const [enteredDiscountCode, setEnteredDiscountCode] = useState<string>('');
+    const [discountIdNumber, setDiscountIdNumber] = useState<string>('');
+    const [authorizedByUserId, setAuthorizedByUserId] = useState<number | null>(null);
+    const [authorizedByUsername, setAuthorizedByUsername] = useState<string | null>(null);
+    const [authUsername, setAuthUsername] = useState<string>('');
+    const [authCredential, setAuthCredential] = useState<string>('');
+    const [authMethod, setAuthMethod] = useState<'code' | 'credentials'>('code');
+    const [isAuthorizing, setIsAuthorizing] = useState<boolean>(false);
+    const [showDiscountAuthSecret, setShowDiscountAuthSecret] = useState<boolean>(false);
+
+    const handleAuthorizeDiscount = async () => {
+        const cleanUsername = sanitizeClientUsername(authUsername.trim());
+        if (!cleanUsername || !authCredential) {
+            toast.error('Please enter authorizer username and password.');
+            return;
+        }
+        if (hasMaliciousPattern(cleanUsername) || hasMaliciousPattern(authCredential)) {
+            toast.error('Malicious script or injection payload detected.');
+            return;
+        }
+        setIsAuthorizing(true);
+        try {
+            const resp = await fetch(`${API_BASE}/discounts/authorize`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${user?.token}`
+                },
+                body: JSON.stringify({
+                    authorizer_username: cleanUsername,
+                    authorizer_credential: authCredential,
+                    discount_type: selectedDiscountService?.name || (discountPreset === 'custom' ? 'Custom Discount' : 'Standard Discount'),
+                    discount_rate: totals?.grossSubtotal > 0 ? ((totals.discountAmount || 0) / totals.grossSubtotal) * 100 : 0
+                })
+            });
+            if (resp.ok) {
+                const data = await resp.json();
+                setAuthorizedByUserId(data.authorizer_user_id);
+                setAuthorizedByUsername(data.authorizer_username);
+                setAuthCredential('');
+                toast.success(`Discount authorized by ${data.authorizer_username} (${data.authorizer_role || 'Supervisor'})`);
+            } else {
+                const err = await resp.json().catch(() => ({}));
+                toast.error(err.detail || 'Authorization failed. Authorizer must be Owner or have discount authorization permission.');
+            }
+        } catch (e) {
+            toast.error('Network error during discount authorization.');
+        } finally {
+            setIsAuthorizing(false);
+        }
+    };
     const [referenceNo, setReferenceNo] = useState('');
     // shelfLocation removed
-    const [orderDate, setOrderDate] = useState(dateFnsFormat(new Date(), 'yyyy-MM-dd'));
-    const [orderTime, setOrderTime] = useState(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
+    const [orderDate, setOrderDate] = useState(getPhilippineDateString());
+    const [orderTime, setOrderTime] = useState(getPhilippineTimeString());
     const [manualReleaseDate, setManualReleaseDate] = useState('');
     const [releaseTime, setReleaseTime] = useState('');
 
@@ -667,6 +884,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
     const [predictionLoading, setPredictionLoading] = useState(false);
     const [predictionError, setPredictionError] = useState(false);
     const [isMlModalOpen, setIsMlModalOpen] = useState(false);
+    const latestPredictionRequestIdRef = useRef<number>(0);
 
     useEffect(() => {
         if (initialOrder) {
@@ -840,17 +1058,38 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
         setPaymentStatus('downpayment');
         setAmountReceived('');
         setDepositAmount('');
+        setIsDepositAmountCustom(false);
+        setIsAmountReceivedTyped(false);
+        setDiscountPreset('0');
+        setCustomDiscountValue('');
+        setCustomDiscountType('percent');
+        setEnteredDiscountCode('');
+        setDiscountIdNumber('');
+        setAuthorizedByUserId(null);
+        setAuthorizedByUsername(null);
+        setAuthUsername('');
+        setAuthCredential('');
+        setAuthMethod('code');
+        setShowDiscountAuthSecret(false);
         setReferenceNo('');
-        setOrderDate(dateFnsFormat(new Date(), 'yyyy-MM-dd'));
-        setOrderTime(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
+        setOrderDate(getPhilippineDateString());
+        setOrderTime(getPhilippineTimeString());
         setManualReleaseDate('');
         setReleaseTime('');
         setIsPastOrderMode(false);
         setPastOrderStatus('new-order');
         setPastOrderClaimedDate('');
         formStartTimeRef.current = Date.now();
+        toast.info('Form has been reset.');
     };
-    const [generatedOrderNumber, setGeneratedOrderNumber] = useState('');
+    const [generatedOrderNumber, setGeneratedOrderNumber] = useState(() => {
+        const safeOrders = Array.isArray(orders) ? orders : [];
+        const existingNumbers = safeOrders
+            .map(o => o && o.orderNumber)
+            .filter((n): n is string => typeof n === 'string');
+        const targetDate = getPhilippineDateString();
+        return nextOrderId(targetDate, existingNumbers);
+    });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const isSubmittingRef = useRef(false);
 
@@ -860,7 +1099,8 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
             .map(o => o && o.orderNumber)
             .filter((n): n is string => typeof n === 'string');
         const targetDate = orderDate || new Date();
-        setGeneratedOrderNumber(nextOrderId(targetDate, existingNumbers));
+        const nextId = nextOrderId(targetDate, existingNumbers);
+        setGeneratedOrderNumber(prev => prev !== nextId ? nextId : prev);
     }, [orders, orderDate]);
 
     const effectivePriorityLevel: Priority = useMemo(() => {
@@ -868,22 +1108,17 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
     }, [shoes]);
 
     // Auto-reset shoe priority level if conditions are not met:
-    // Rush order must be strictly plain Basic Cleaning with NO add-ons.
+    // Rush order must be applicable to the selected base services & add-ons.
     useEffect(() => {
         let changed = false;
         const updated = shoes.map(shoe => {
             if (shoe.priorityLevel === 'rush') {
                 const base = Array.isArray(shoe.baseService) ? shoe.baseService : [];
                 const addOns = Array.isArray(shoe.addOns) ? shoe.addOns : [];
-                // If base services do not include Basic Cleaning, reset priority to regular
-                if (!base.includes('Basic Cleaning')) {
+                const applicable = getApplicableRushFee(base, addOns, services);
+                if (base.length > 0 && !applicable) {
                     changed = true;
                     return { ...shoe, priorityLevel: 'regular' as Priority };
-                }
-                // Rush must have no add-ons and only plain Basic Cleaning
-                if (base.some(s => s !== 'Basic Cleaning') || addOns.length > 0) {
-                    changed = true;
-                    return { ...shoe, baseService: ['Basic Cleaning'], addOns: [] };
                 }
             }
             return shoe;
@@ -891,7 +1126,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
         if (changed) {
             setShoes(updated);
         }
-    }, [shoes]);
+    }, [shoes, services]);
 
     const activeServices = services.filter(s => s.active);
     const baseServices = activeServices.filter(s => s.category === 'base');
@@ -907,13 +1142,13 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
 
     const catalogDurations = useMemo(() => {
         const map: Record<string, string | number> = {};
-        [...baseServices, ...addOnServices].forEach((service) => {
+        services.forEach((service) => {
             if (service.name && service.durationDays !== undefined) {
                 map[service.name] = service.durationDays;
             }
         });
         return map;
-    }, [baseServices, addOnServices]);
+    }, [services]);
 
     const mlBreakdown = useMemo(
         () => calculateOfficialReleaseBreakdown(
@@ -942,8 +1177,21 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
             if (service) total += service.price;
         });
 
+        const hasFR = servicesArr.includes('Full Reglue');
+        let soleAddonsCounted = 0;
         shoe.addOns.forEach((addon: { name: string; quantity?: number }) => {
-            total += getAddonTotal(addon.name, addon.quantity || 1);
+            const addonQuantity = addon.quantity || 1;
+            if (hasFR && isFullReglueSoleAddon(addon.name)) {
+                if (soleAddonsCounted === 0) {
+                    // First Full Reglue specification is included in base Full Reglue fee (₱0)
+                    soleAddonsCounted++;
+                } else {
+                    // Second Full Reglue specification adds the additional section fee (+₱150)
+                    total += getAddonTotal(addon.name, addonQuantity);
+                }
+            } else {
+                total += getAddonTotal(addon.name, addonQuantity);
+            }
         });
 
         // Add retail items from supplies used
@@ -955,13 +1203,106 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
             }
         });
 
-        // Add rush fee to unit total if applicable (Only for plain Basic Cleaning)
-        if (shoe.priorityLevel === 'rush' && servicesArr.includes('Basic Cleaning')) {
-            total += 150;
+        // Add rush fee to unit total if applicable
+        if (shoe.priorityLevel === 'rush') {
+            const applicableRush = getApplicableRushFee(servicesArr, shoe.addOns || [], services);
+            if (applicableRush) {
+                total += applicableRush.price;
+            } else if (servicesArr.includes('Basic Cleaning')) {
+                total += 150;
+            }
         }
 
         return total * shoe.quantity;
     };
+    const selectedDiscountService = useMemo(() => {
+        return (services || []).find(s => s.id === discountPreset && s.category === 'discount');
+    }, [services, discountPreset]);
+
+    const activeDiscountConfig = useMemo(() => {
+        if (!selectedDiscountService) return null;
+        const n = (selectedDiscountService.name || '').toLowerCase();
+        const c = (selectedDiscountService.code || '').toLowerCase();
+        const isSenior = n.includes('senior') || n.includes('snr') || c.includes('senior') || c.includes('snr');
+        const isPwd = n.includes('pwd') || n.includes('disability') || c.includes('pwd') || c.includes('disability');
+        
+        const hasIdRequirement = selectedDiscountService.requiresIdVerification ?? (selectedDiscountService.idVerificationType && selectedDiscountService.idVerificationType !== 'none' ? true : (isSenior || isPwd));
+        if (!hasIdRequirement && selectedDiscountService.idVerificationType === 'none') {
+            return null;
+        }
+        if (!hasIdRequirement && !isSenior && !isPwd) {
+            return null;
+        }
+
+        const idType: 'control_number' | 'id_number' = selectedDiscountService.idVerificationType === 'id_number' || (isPwd && selectedDiscountService.idVerificationType !== 'control_number')
+            ? 'id_number'
+            : 'control_number';
+        
+        const idFormat: 'alphanumeric' | 'numbers' | 'letters' = selectedDiscountService.idFormat || (isSenior ? 'numbers' : 'alphanumeric');
+        const digits = selectedDiscountService.idDigits != null && Number(selectedDiscountService.idDigits) > 0
+            ? Number(selectedDiscountService.idDigits)
+            : (isSenior ? 6 : isPwd ? 12 : undefined);
+
+        const label = idType === 'control_number'
+            ? `${selectedDiscountService.name} Control No.`
+            : `${selectedDiscountService.name} ID No.`;
+
+        return {
+            requiresId: true,
+            idType,
+            idFormat,
+            digits,
+            label,
+            name: selectedDiscountService.name
+        };
+    }, [selectedDiscountService]);
+
+
+    const isAuthCodeValid = useMemo(() => {
+        if (!canStaffUseAuthCode) return false;
+        const code = enteredDiscountCode.trim().toUpperCase();
+        if (!code) return false;
+        const validCodes = (services || [])
+            .filter(s => s.category === 'discount' && s.code)
+            .map(s => (s.code || '').trim().toUpperCase());
+        const selectedCode = (selectedDiscountService?.code || '').trim().toUpperCase();
+        const activeSysCode = (authorizationCode || '').trim().toUpperCase();
+        return (Boolean(activeSysCode) && code === activeSysCode) || (Boolean(selectedCode) && code === selectedCode) || validCodes.includes(code);
+    }, [canStaffUseAuthCode, enteredDiscountCode, services, selectedDiscountService, authorizationCode]);
+
+    const isAuthorized = useMemo(() => {
+        if (canSelfAuthorizeDiscounts) return true;
+        if (authorizedByUserId) return true;
+        if (isAuthCodeValid) return true;
+        return false;
+    }, [canSelfAuthorizeDiscounts, authorizedByUserId, isAuthCodeValid]);
+
+    const isDiscountActivated = useMemo(() => {
+        if (discountPreset === '0') return false;
+
+        // Staff accounts must be authorized (via owner code or supervisor login)
+        if (!isAuthorized) {
+            return false;
+        }
+
+        // Beneficiary ID Verification (Senior / PWD / configured ID requirement)
+        if (activeDiscountConfig) {
+            return isValidIdInput(discountIdNumber, activeDiscountConfig.idFormat, activeDiscountConfig.digits);
+        }
+
+        // Custom discount (Only available to Owner / Admin)
+        if (discountPreset === 'custom') {
+            const customVal = parseFloat(customDiscountValue.replace(/,/g, '')) || 0;
+            return customVal > 0;
+        }
+
+        // Configured discount or fallback numeric presets
+        if (selectedDiscountService || !isNaN(Number(discountPreset))) {
+            return true;
+        }
+
+        return false;
+    }, [discountPreset, isAuthorized, activeDiscountConfig, discountIdNumber, customDiscountValue, selectedDiscountService]);
 
     const totals = useMemo(() => {
         let baseTotal = 0;
@@ -979,9 +1320,21 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                 }
             });
 
+            const hasFR = servicesArr.includes('Full Reglue');
+            let soleAddonsCounted = 0;
             shoe.addOns.forEach((addon: { name: string; quantity?: number }) => {
                 const addonQuantity = addon.quantity || 1;
-                addOnsTotal += getAddonTotal(addon.name, addonQuantity) * shoe.quantity;
+                if (hasFR && isFullReglueSoleAddon(addon.name)) {
+                    if (soleAddonsCounted === 0) {
+                        // First Full Reglue specification is included in base Full Reglue fee (₱0)
+                        soleAddonsCounted++;
+                    } else {
+                        // Second Full Reglue specification adds the additional section fee (+₱150)
+                        addOnsTotal += getAddonTotal(addon.name, addonQuantity) * shoe.quantity;
+                    }
+                } else {
+                    addOnsTotal += getAddonTotal(addon.name, addonQuantity) * shoe.quantity;
+                }
             });
 
             // Calculate retail supplies total
@@ -993,17 +1346,22 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                 }
             });
 
-            // Rush Fee only for Basic Cleaning
-            if (shoe.priorityLevel === 'rush' && servicesArr.includes('Basic Cleaning')) {
-                rushFee += 150 * shoe.quantity;
+            // Rush Fee calculation
+            if (shoe.priorityLevel === 'rush') {
+                const applicableRush = getApplicableRushFee(servicesArr, shoe.addOns || [], services);
+                if (applicableRush) {
+                    rushFee += applicableRush.price * shoe.quantity;
+                } else if (servicesArr.includes('Basic Cleaning')) {
+                    rushFee += 150 * shoe.quantity;
+                }
             }
         });
 
         const grossSubtotal = baseTotal + addOnsTotal + rushFee + retailTotal;
 
-        // Discount calculation
+        // Discount calculation - only applies if discount code / Senior / PWD ID is verified
         let calculatedDiscount = 0;
-        if (discountPreset !== '0') {
+        if (discountPreset !== '0' && isDiscountActivated) {
             if (discountPreset === 'custom') {
                 if (customDiscountType === 'percent') {
                     const pct = Math.min(100, Math.max(0, parseFloat(customDiscountValue) || 0));
@@ -1013,8 +1371,18 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                     calculatedDiscount = Math.min(grossSubtotal, amt);
                 }
             } else {
-                const pct = Number(discountPreset);
-                calculatedDiscount = (grossSubtotal * pct) / 100;
+                const matchedSvc = (services || []).find(s => s.id === discountPreset && s.category === 'discount');
+                if (matchedSvc) {
+                    const isFixed = matchedSvc.description?.toLowerCase().includes('fixed') || matchedSvc.description?.toLowerCase().includes('amount') || matchedSvc.code === 'PHP' || matchedSvc.name.includes('₱');
+                    if (isFixed) {
+                        calculatedDiscount = Math.min(grossSubtotal, matchedSvc.price);
+                    } else {
+                        calculatedDiscount = (grossSubtotal * matchedSvc.price) / 100;
+                    }
+                } else {
+                    const pct = Number(discountPreset);
+                    calculatedDiscount = (grossSubtotal * (isNaN(pct) ? 0 : pct)) / 100;
+                }
             }
         }
         const discountAmount = Math.min(grossSubtotal, Math.round(calculatedDiscount * 100) / 100);
@@ -1044,7 +1412,56 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
             remainingBalance,
             change
         };
-    }, [shoes, baseServices, addOnServices, priorityLevel, amountReceived, depositAmount, paymentStatus, inventoryData, discountPreset, customDiscountType, customDiscountValue]);
+    }, [shoes, baseServices, addOnServices, priorityLevel, amountReceived, depositAmount, paymentStatus, inventoryData, discountPreset, customDiscountType, customDiscountValue, services, isDiscountActivated]);
+
+    const discountOptions = useMemo(() => {
+        const list: Array<{ id: string; label: string; fullLabel: string; value: number; isPercent: boolean; rateText: string }> = [
+            { id: '0', label: 'None', fullLabel: 'No Discount', value: 0, isPercent: true, rateText: '' }
+        ];
+        const configured = (services || []).filter(s => s.category === 'discount' && s.active).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+        
+        if (configured.length > 0) {
+            configured.forEach(s => {
+                const isPercent = !s.description?.toLowerCase().includes('fixed') && !s.description?.toLowerCase().includes('amount') && s.code !== 'PHP' && !s.name.includes('₱');
+                const rateText = isPercent ? `${s.price}%` : `₱${s.price}`;
+                list.push({
+                    id: s.id,
+                    label: s.name,
+                    fullLabel: `${s.name} (${rateText})`,
+                    value: s.price,
+                    isPercent,
+                    rateText,
+                });
+            });
+        } else {
+            [
+                { id: '5', label: '5%', fullLabel: '5% Discount', value: 5, isPercent: true, rateText: '5%' },
+                { id: '10', label: '10%', fullLabel: '10% Discount', value: 10, isPercent: true, rateText: '10%' },
+                { id: '15', label: '15%', fullLabel: '15% Discount', value: 15, isPercent: true, rateText: '15%' },
+                { id: '20', label: '20%', fullLabel: '20% Discount', value: 20, isPercent: true, rateText: '20%' },
+                { id: '25', label: '25%', fullLabel: '25% Discount', value: 25, isPercent: true, rateText: '25%' },
+            ].forEach(opt => list.push(opt));
+        }
+        // Only show "Custom" for Owner and Admin accounts
+        if (isOwnerOrAdminUser) {
+            list.push({ id: 'custom', label: 'Custom', fullLabel: 'Custom Discount', value: 0, isPercent: false, rateText: '' });
+        }
+        return list;
+    }, [services, isOwnerOrAdminUser]);
+
+    const handleSelectDiscount = (id: string) => {
+        setDiscountPreset(id);
+        setEnteredDiscountCode('');
+        setDiscountIdNumber('');
+        setAuthorizedByUserId(null);
+        setAuthorizedByUsername(null);
+        setAuthUsername('');
+        setAuthCredential('');
+        setAuthMethod('code');
+        if (id === '0') {
+            setCustomDiscountValue('');
+        }
+    };
 
     const { baseTotal, addOnsTotal, rushFee, retailTotal, discountAmount, grandTotal, minimumDownpayment } = totals;
 
@@ -1052,18 +1469,12 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
 
     useEffect(() => {
         const exactHalf = Math.round((grandTotal / 2) * 100) / 100;
+        const target = paymentStatus === 'downpayment' ? exactHalf.toFixed(2) : grandTotal.toFixed(2);
 
-        if (paymentStatus === 'downpayment') {
-            if (!isDepositAmountCustom) {
-                setDepositAmount(exactHalf.toFixed(2));
-                if (!isAmountReceivedTyped) {
-                    setAmountReceived(exactHalf.toFixed(2));
-                }
-            }
-        } else if (paymentStatus === 'fully-paid') {
-            setDepositAmount(grandTotal.toFixed(2));
+        if (!isDepositAmountCustom) {
+            setDepositAmount(prev => prev !== target ? target : prev);
             if (!isAmountReceivedTyped) {
-                setAmountReceived(grandTotal.toFixed(2));
+                setAmountReceived(prev => prev !== target ? target : prev);
             }
         }
     }, [paymentStatus, grandTotal, isAmountReceivedTyped, isDepositAmountCustom]);
@@ -1076,27 +1487,26 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
         const target = new Date(y, m - 1, d + val);
         return dateFnsFormat(isNaN(target.getTime()) ? new Date() : target, 'yyyy-MM-dd');
     })();
-    const serverOfficialYmd = serverPrediction?.authoritative === 'business_rule'
-        ? (serverPrediction.business_rule_date || serverPrediction.predicted_date_ymd || '')
+    const serverOfficialYmd = (serverPrediction?.authoritative === 'business_rule' || serverPrediction?.authoritative === 'standard_business_rule')
+        ? (serverPrediction.standard_release_date || serverPrediction.business_rule_date || serverPrediction.predicted_date_ymd || '')
         : '';
-    const previewReleaseYmd = manualReleaseDate || (hasSelectedServices ? (officialReleaseYmd || serverOfficialYmd) : '');
+    const previewReleaseYmd = manualReleaseDate || (hasSelectedServices ? (serverOfficialYmd || officialReleaseYmd) : '');
 
     const officialDateDisplay = previewReleaseYmd
         ? dateFnsFormat(new Date(previewReleaseYmd), 'MM/dd/yyyy')
         : (officialReleaseYmd ? dateFnsFormat(new Date(officialReleaseYmd), 'MM/dd/yyyy') : '—');
 
     const predictedDateDisplay = (() => {
-        if (serverPrediction?.ml_predicted_date) {
-            const d = new Date(serverPrediction.ml_predicted_date);
+        if (predictionLoading) {
+            return 'Predicting…';
+        }
+        const mlDateStr = serverPrediction?.ml_predicted_release_date || serverPrediction?.ml_predicted_date;
+        if (mlDateStr) {
+            const d = new Date(mlDateStr);
             return isNaN(d.getTime()) ? '—' : dateFnsFormat(d, 'MM/dd/yyyy');
         }
-        if (serverPrediction?.ml_predicted_days != null && orderDate) {
-            const [y, m, d] = orderDate.split('-').map(Number);
-            const target = new Date(y, m - 1, d + Number(serverPrediction.ml_predicted_days));
-            return isNaN(target.getTime()) ? '—' : dateFnsFormat(target, 'MM/dd/yyyy');
-        }
-        if (hasSelectedServices && officialReleaseYmd) {
-            return `${dateFnsFormat(new Date(officialReleaseYmd), 'MM/dd/yyyy')} (Est.)`;
+        if (hasSelectedServices) {
+            return 'Predicting…';
         }
         return '—';
     })();
@@ -1107,17 +1517,25 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
             const a = Array.isArray(shoe.addOns) ? shoe.addOns : (shoe.addOns ? [shoe.addOns] : []);
             return b.length > 0 || a.length > 0;
         });
+
+        // 1. Immediately invalidate current server prediction whenever ANY ML input changes
+        setServerPrediction(null);
+
         if (!hasServices || manualReleaseDate) {
-            if (!hasServices) setServerPrediction(null);
             setPredictionLoading(false);
             setPredictionError(false);
             return;
         }
 
+        // 2. Immediately mark loading state while fresh prediction is pending
+        setPredictionLoading(true);
+        setPredictionError(false);
+
+        // 3. Track request sequence to prevent older async responses from overwriting newer ones
+        const requestId = ++latestPredictionRequestIdRef.current;
         const controller = new AbortController();
+
         const timer = window.setTimeout(async () => {
-            setPredictionLoading(true);
-            setPredictionError(false);
             try {
                 let authToken = user?.token || (user as any)?.access_token || '';
                 if (!authToken && typeof window !== 'undefined') {
@@ -1168,14 +1586,19 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                 });
                 if (!res.ok) throw new Error('Prediction request failed');
                 const data: ServerPrediction = await res.json();
-                setServerPrediction(data);
+                // Apply ONLY if this response corresponds to the latest prediction request
+                if (requestId === latestPredictionRequestIdRef.current) {
+                    setServerPrediction(data);
+                    setPredictionLoading(false);
+                }
             } catch (err: any) {
                 if (err?.name === 'AbortError') return;
-                setPredictionError(true);
-            } finally {
-                setPredictionLoading(false);
+                if (requestId === latestPredictionRequestIdRef.current) {
+                    setPredictionError(true);
+                    setPredictionLoading(false);
+                }
             }
-        }, 100);
+        }, 50);
 
         return () => {
             window.clearTimeout(timer);
@@ -1252,6 +1675,134 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                 return;
             }
 
+        // Security check against script or SQL injection across all fields
+        const contactSecCheck = validateSecurityInput(finalContactNumber, 'Contact Number');
+        if (!contactSecCheck.isValid) {
+            toast.error(contactSecCheck.error);
+            setIsSubmitting(false);
+            isSubmittingRef.current = false;
+            return;
+        }
+
+        for (let idx = 0; idx < shoes.length; idx++) {
+            const s = shoes[idx];
+            const brandVal = s.brand === 'Other' ? s.otherBrand : s.brand;
+            const bCheck = validateSecurityInput(brandVal, `Shoe #${idx + 1} Brand`);
+            if (!bCheck.isValid) {
+                toast.error(bCheck.error);
+                setIsSubmitting(false);
+                isSubmittingRef.current = false;
+                return;
+            }
+            const modelVal = s.shoeModel === 'Other' ? s.otherModel : s.shoeModel;
+            const mCheck = validateSecurityInput(modelVal, `Shoe #${idx + 1} Model`);
+            if (!mCheck.isValid) {
+                toast.error(mCheck.error);
+                setIsSubmitting(false);
+                isSubmittingRef.current = false;
+                return;
+            }
+            const matVal = s.shoeMaterial === 'Other' ? s.otherMaterial : s.shoeMaterial;
+            const matCheck = validateSecurityInput(matVal, `Shoe #${idx + 1} Material`);
+            if (!matCheck.isValid) {
+                toast.error(matCheck.error);
+                setIsSubmitting(false);
+                isSubmittingRef.current = false;
+                return;
+            }
+            if (s.shoeSize) {
+                const sizeCheck = validateSecurityInput(String(s.shoeSize), `Shoe #${idx + 1} Size`);
+                if (!sizeCheck.isValid) {
+                    toast.error(sizeCheck.error);
+                    setIsSubmitting(false);
+                    isSubmittingRef.current = false;
+                    return;
+                }
+            }
+            if (s.color) {
+                const colorVal = Array.isArray(s.color) ? s.color.join(', ') : String(s.color);
+                const colorCheck = validateSecurityInput(colorVal, `Shoe #${idx + 1} Color`);
+                if (!colorCheck.isValid) {
+                    toast.error(colorCheck.error);
+                    setIsSubmitting(false);
+                    isSubmittingRef.current = false;
+                    return;
+                }
+            }
+            const condOthers = s.condition?.others;
+            const condCheck = validateSecurityInput(condOthers, `Shoe #${idx + 1} Remarks/Condition`);
+            if (!condCheck.isValid) {
+                toast.error(condCheck.error);
+                setIsSubmitting(false);
+                isSubmittingRef.current = false;
+                return;
+            }
+        }
+
+        if (shippingPreference === 'delivery') {
+            const addressFields = [
+                { val: deliveryAddress.houseNo, name: 'House Number' },
+                { val: deliveryAddress.street, name: 'Street' },
+                { val: deliveryAddress.barangay, name: 'Barangay' },
+                { val: deliveryAddress.city, name: 'City' },
+                { val: deliveryAddress.province, name: 'Province' },
+                { val: deliveryAddress.zipCode, name: 'ZIP Code' },
+                { val: deliveryCourier, name: 'Courier' },
+                { val: otherCourier, name: 'Other Courier' },
+            ];
+            for (const field of addressFields) {
+                if (field.val) {
+                    const check = validateSecurityInput(field.val, field.name);
+                    if (!check.isValid) {
+                        toast.error(check.error);
+                        setIsSubmitting(false);
+                        isSubmittingRef.current = false;
+                        return;
+                    }
+                }
+            }
+        }
+
+        if (referenceNo) {
+            const refCheck = validateSecurityInput(referenceNo, 'Reference Number');
+            if (!refCheck.isValid) {
+                toast.error(refCheck.error);
+                setIsSubmitting(false);
+                isSubmittingRef.current = false;
+                return;
+            }
+        }
+
+        if (discountIdNumber) {
+            const idCheck = validateSecurityInput(discountIdNumber, 'Discount ID');
+            if (!idCheck.isValid) {
+                toast.error(idCheck.error);
+                setIsSubmitting(false);
+                isSubmittingRef.current = false;
+                return;
+            }
+        }
+
+        if (enteredDiscountCode) {
+            const codeCheck = validateSecurityInput(enteredDiscountCode, 'Discount Code');
+            if (!codeCheck.isValid) {
+                toast.error(codeCheck.error);
+                setIsSubmitting(false);
+                isSubmittingRef.current = false;
+                return;
+            }
+        }
+
+        if (customDiscountValue) {
+            const valCheck = validateSecurityInput(customDiscountValue, 'Discount Value');
+            if (!valCheck.isValid) {
+                toast.error(valCheck.error);
+                setIsSubmitting(false);
+                isSubmittingRef.current = false;
+                return;
+            }
+        }
+
         // Only Brand and Base Service are strictly required; Model, Material, Size, Color are optional
         const hasMissingShoeDetails = shoes.some(shoe => {
             const b = shoe.brand === 'Other' ? shoe.otherBrand : shoe.brand;
@@ -1261,12 +1812,48 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
         if (hasMissingShoeDetails) {
             toast.error('Brand and Base Service must be filled out for every item.');
             setIsSubmitting(false);
+            isSubmittingRef.current = false;
+            return;
+        }
+
+        // Color Renewal specification validation: requires 2 Colors or 3 Colors, never both
+        const shoeMissingColorCount = shoes.find(shoe => {
+            const base = shoe.baseService || [];
+            if (base.includes('Color Renewal')) {
+                const addOns = shoe.addOns || [];
+                const has2 = addOns.some(a => a.name === TWO_COLORS);
+                const has3 = addOns.some(a => a.name === THREE_COLORS);
+                return !has2 && !has3;
+            }
+            return false;
+        });
+        if (shoeMissingColorCount) {
+            toast.error('Color Renewal requires specifying the color option (2 Colors or 3 Colors).');
+            setIsSubmitting(false);
+            isSubmittingRef.current = false;
             return;
         }
 
         if (shoes.some((shoe) => shoeHasBothColorCounts(shoe.addOns || []))) {
             toast.error('Color Renewal can use either 2 Colors or 3 Colors, not both.');
             setIsSubmitting(false);
+            isSubmittingRef.current = false;
+            return;
+        }
+
+        // Full Reglue specification validation: requires at least one sole section (Midsole, Undersole, or both)
+        const shoeMissingFullReglueSpec = shoes.find(shoe => {
+            const base = shoe.baseService || [];
+            if (base.includes('Full Reglue')) {
+                const addOns = shoe.addOns || [];
+                return !addOns.some(a => isFullReglueSoleAddon(a.name));
+            }
+            return false;
+        });
+        if (shoeMissingFullReglueSpec) {
+            toast.error('Full Reglue requires specifying the reglue section (Midsole, Undersole, or both).');
+            setIsSubmitting(false);
+            isSubmittingRef.current = false;
             return;
         }
 
@@ -1296,6 +1883,34 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                 toast.error('Please select a delivery courier');
                 setIsSubmitting(false);
                 return;
+            }
+        }
+
+        // Discount Verification Validation
+        if (discountPreset !== '0') {
+            if (!isAuthorized) {
+                toast.error('Discount requires owner authorization code or supervisor login.');
+                isSubmittingRef.current = false;
+                setIsSubmitting(false);
+                return;
+            }
+            if (activeDiscountConfig) {
+                if (!isValidIdInput(discountIdNumber, activeDiscountConfig.idFormat, activeDiscountConfig.digits)) {
+                    const formatDesc = activeDiscountConfig.idFormat === 'numbers' ? 'numbers only' : activeDiscountConfig.idFormat === 'letters' ? 'letters only' : 'numbers & letters';
+                    const lengthDesc = activeDiscountConfig.digits ? ` (${activeDiscountConfig.digits} characters, ${formatDesc})` : ` (${formatDesc})`;
+                    toast.error(`${activeDiscountConfig.name} discount requires a valid ${activeDiscountConfig.idType === 'control_number' ? 'Control Number' : 'ID Number'}${lengthDesc}.`);
+                    isSubmittingRef.current = false;
+                    setIsSubmitting(false);
+                    return;
+                }
+            } else if (discountPreset === 'custom') {
+                const val = parseFloat(customDiscountValue.replace(/,/g, '')) || 0;
+                if (val <= 0) {
+                    toast.error('Please enter a valid custom discount value.');
+                    isSubmittingRef.current = false;
+                    setIsSubmitting(false);
+                    return;
+                }
             }
         }
 
@@ -1365,6 +1980,8 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
         } else {
             createdDate = new Date();
         }
+        const phFormattedTime = `${String(oHours).padStart(2, '0')}:${String(oMinutes).padStart(2, '0')}`;
+        const phLocalIsoDate = `${orderDate || getPhilippineDateString()}T${phFormattedTime}:00`;
 
         // Measure creation duration from form opening to submission (Digital vs Paper Manual efficiency)
         const submitNow = Date.now();
@@ -1376,8 +1993,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
             return s > 0 ? `${m}m ${s}s` : `${m}m`;
         };
         const formDurationFormatted = formatFormDuration(durationSec);
-        const efficiencyPct = Math.min(96, Math.max(50, Math.round((1 - durationSec / 450) * 100)));
-        const efficiencyMetric = `${formDurationFormatted} (Paper manual baseline: ~5–10 mins; ~${efficiencyPct}% faster digitally)`;
+        const efficiencyMetric = formDurationFormatted;
 
 
         // Helper to format delivery address
@@ -1403,11 +2019,22 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                 const service = baseServices.find(s => s.name === serviceName);
                 return { name: serviceName, price: service ? service.price : 0 };
             }),
-            historicalAddOnPrices: (shoes[0].addOns || []).map((addon: any) => {
-                const addonName = typeof addon === 'string' ? addon : addon.name;
-                const service = addOnServices.find(s => s.name === addonName);
-                return { name: addonName, price: service ? service.price : 0 };
-            }),
+            historicalAddOnPrices: (() => {
+                const hasFR0 = (shoes[0].baseService || []).includes('Full Reglue');
+                let sole0Recorded = 0;
+                return (shoes[0].addOns || []).map((addon: any) => {
+                    const addonName = typeof addon === 'string' ? addon : addon.name;
+                    const service = addOnServices.find(s => s.name === addonName);
+                    const catalogPrice = service ? service.price : 0;
+                    if (hasFR0 && isFullReglueSoleAddon(addonName)) {
+                        if (sole0Recorded === 0) {
+                            sole0Recorded++;
+                            return { name: addonName, price: 0 };
+                        }
+                    }
+                    return { name: addonName, price: catalogPrice };
+                });
+            })(),
             quantity: shoes.reduce((acc, s) => acc + s.quantity, 0),
 
             // Nested items for breakdown view
@@ -1417,11 +2044,27 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                     return { name: serviceName, price: service ? service.price : 0 };
                 });
 
+                const hasFR = (shoe.baseService || []).includes('Full Reglue');
+                let soleRecorded = 0;
                 const historicalAddOnPrices = (shoe.addOns || []).map((addon: any) => {
                     const addonName = typeof addon === 'string' ? addon : addon.name;
                     const service = addOnServices.find(s => s.name === addonName);
-                    return { name: addonName, price: service ? service.price : 0 };
+                    const catalogPrice = service ? service.price : 0;
+                    if (hasFR && isFullReglueSoleAddon(addonName)) {
+                        if (soleRecorded === 0) {
+                            soleRecorded++;
+                            return { name: addonName, price: 0 };
+                        }
+                    }
+                    return { name: addonName, price: catalogPrice };
                 });
+
+                const applicableRush = shoe.priorityLevel === 'rush'
+                    ? getApplicableRushFee(shoe.baseService || [], shoe.addOns || [], services)
+                    : null;
+                const shoeReduction = (applicableRush && applicableRush.durationDays !== undefined && applicableRush.durationDays !== 0)
+                    ? String(Math.abs(Number(applicableRush.durationDays)))
+                    : basicCleaningRushReduction;
 
                 return {
                     id: `${Date.now()}-${idx}`,
@@ -1432,7 +2075,10 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                     color: shoeColorValue(shoe),
                     quantity: shoe.quantity,
                     priorityLevel: shoe.priorityLevel || 'regular',
-                    rushReductionDays: shoe.priorityLevel === 'rush' ? basicCleaningRushReduction : undefined,
+                    rushReductionDays: shoe.priorityLevel === 'rush' ? (shoe.rushReductionDays !== undefined ? String(shoe.rushReductionDays) : shoeReduction) : undefined,
+                    rushFee: applicableRush ? applicableRush.price : (shoe.priorityLevel === 'rush' ? 150 : 0),
+                    rushFeeName: applicableRush ? applicableRush.name : undefined,
+                    rushFeeCode: applicableRush ? applicableRush.code : undefined,
                     condition: shoe.condition,
                     baseService: shoe.baseService,
                     addOns: shoe.addOns,
@@ -1449,10 +2095,18 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
             rushReductionDays: effectivePriorityLevel === 'rush' ? basicCleaningRushReduction : undefined,
             baseServiceFee: totals.baseTotal,
             addOnsTotal: totals.addOnsTotal,
+            rushFee: totals.rushFee,
             retailTotal: totals.retailTotal,
             grossTotal: totals.grossSubtotal,
             discountAmount: totals.discountAmount,
             discount: totals.discountAmount,
+            discountPreset,
+            discountType: activeDiscountConfig ? (activeDiscountConfig.idType === 'id_number' ? 'pwd' : 'senior') : (discountPreset === 'custom' ? 'custom' : 'promotional'),
+            discountName: selectedDiscountService?.name || (discountPreset === 'custom' ? 'Custom Discount' : (discountPreset !== '0' ? `${discountPreset}% Discount` : '')),
+            discountCode: enteredDiscountCode.trim().toUpperCase() || undefined,
+            discountIdNumber: activeDiscountConfig ? discountIdNumber.trim() : undefined,
+            authorized_by_user_id: authorizedByUserId || undefined,
+            authorized_by_username: authorizedByUsername || (isAuthCodeValid ? `Authorized by Code (${enteredDiscountCode.trim().toUpperCase()})` : (isOwnerOrAdminUser ? (user?.username || 'Owner') : undefined)),
             grandTotal: totals.grandTotal,
             shippingPreference,
             deliveryAddress: formatAddress(),
@@ -1495,13 +2149,13 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
             ],
             releaseTime,
             orderDate,
-            orderTime,
+            orderTime: phFormattedTime,
             formDurationSeconds: durationSec,
             formDurationFormatted,
             efficiencyMetric,
             entry_started_at: new Date(formStartTimeRef.current || submitNow).toISOString(),
-            transactionDate: createdDate,
-            createdAt: createdDate,
+            transactionDate: phLocalIsoDate,
+            createdAt: phLocalIsoDate,
             processedBy: user?.username || 'Current User',
             status: isPastOrderMode ? pastOrderStatus : 'new-order',
             claimedAt: (isPastOrderMode && pastOrderStatus === 'claimed')
@@ -1639,7 +2293,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
             }
         });
 
-        toast.success('Order created successfully!');
+        toast.success(`Order created successfully! (Duration: ${formDurationFormatted})`);
 
         if (onSuccess) onSuccess();
 
@@ -1688,9 +2342,11 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
         setDiscountPreset('0');
         setCustomDiscountValue('');
         setCustomDiscountType('percent');
+        setEnteredDiscountCode('');
+        setDiscountIdNumber('');
         setReferenceNo('');
-        setOrderDate(dateFnsFormat(new Date(), 'yyyy-MM-dd'));
-        setOrderTime(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
+        setOrderDate(getPhilippineDateString());
+        setOrderTime(getPhilippineTimeString());
         setManualReleaseDate('');
         setReleaseTime('');
         } catch (error) {
@@ -1736,7 +2392,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
     };
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form onSubmit={handleSubmit} className="space-y-2.5">
 
             
             {mode === 'edit' && (
@@ -1758,18 +2414,18 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
 
             {/* Customer Information Section */}
             <Card className="border-red-100/50 shadow-sm bg-white overflow-visible relative z-30 rounded-2xl">
-                <CardHeader className={`${CARD_HEADER_STYLE} !py-2 rounded-t-2xl`}>
+                <CardHeader className={`${CARD_HEADER_STYLE} !py-1.5 rounded-t-2xl`}>
                     <div className="flex items-center gap-3 translate-y-[1px]">
                         <User className="text-red-600 fill-red-600" size={18} />
                         <CardTitle className={`${CARD_TITLE_STYLE} text-slate-900`}>CUSTOMER DETAILS</CardTitle>
                     </div>
                 </CardHeader>
-                <CardContent className="px-6 pt-0 pb-4 space-y-4">
-                    <div className={`grid gap-3 md:gap-4 -mt-1 ${shippingPreference === 'pickup' ? 'grid-cols-1 md:grid-cols-3' : 'grid-cols-1 md:grid-cols-12 mb-2.5'}`}>
-                        <div className={`relative ${shippingPreference === 'pickup' ? 'col-span-1' : 'col-span-1 md:col-span-6'}`}>
+                <CardContent className="px-3.5 sm:px-6 pt-0 pb-2.5 space-y-2.5 sm:space-y-3">
+                    <div className={`grid gap-2.5 sm:gap-4 -mt-1 ${shippingPreference === 'pickup' ? 'grid-cols-2 md:grid-cols-3' : 'grid-cols-2 md:grid-cols-12 mb-2.5'}`}>
+                        <div className={`relative ${shippingPreference === 'pickup' ? 'col-span-2 md:col-span-1' : 'col-span-2 md:col-span-6'}`}>
                             <div className="flex items-center justify-between">
                                 <Label htmlFor="customerName" className={LABEL_STYLE}>Customer Name</Label>
-                                <span className={`text-[10px] font-bold ${customerName.length >= CUSTOMER_NAME_MAX_LENGTH ? 'text-red-600' : 'text-gray-400'}`}>
+                                <span className={`text-[10px] font-bold ${customerName.length >= CUSTOMER_NAME_MAX_LENGTH ? 'text-red-600' : 'text-gray-600'}`}>
                                     {customerName.length}/{CUSTOMER_NAME_MAX_LENGTH}
                                 </span>
                             </div>
@@ -1824,7 +2480,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                 </div>
                             )}
                         </div>
-                        <div className={shippingPreference === 'pickup' ? 'col-span-1' : 'col-span-1 md:col-span-6'}>
+                        <div className={shippingPreference === 'pickup' ? 'col-span-1 md:col-span-1' : 'col-span-2 md:col-span-6'}>
                             <Label htmlFor="contactNumber" className={LABEL_STYLE}>Contact Number</Label>
                             <ClearableInput
                                 id="contactNumber"
@@ -1848,10 +2504,10 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                             />
                         </div>
                         {shippingPreference === 'pickup' && (
-                            <div className="col-span-1">
+                            <div className="col-span-1 md:col-span-1">
                                 <Label htmlFor="shippingPref" className={LABEL_STYLE}>Shipping Preference</Label>
                                 <Select value={shippingPreference} onValueChange={(value: ShippingPreference) => setShippingPreference(value)}>
-                                    <SelectTrigger id="shippingPref" className={INPUT_STYLE}>
+                                    <SelectTrigger id="shippingPref" aria-label="Shipping Preference" className={INPUT_STYLE}>
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -1866,11 +2522,11 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                     {shippingPreference === 'delivery' && (
                         <div className="space-y-2.5">
                             {/* Row 1: Shipping Pref, Courier */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                            <div className="grid grid-cols-2 gap-2.5 sm:gap-4">
                                 <div className="col-span-1">
                                     <Label htmlFor="shippingPref" className={LABEL_STYLE}>Shipping Preference</Label>
                                     <Select value={shippingPreference} onValueChange={(value: ShippingPreference) => setShippingPreference(value)}>
-                                        <SelectTrigger id="shippingPref" className={INPUT_STYLE}>
+                                        <SelectTrigger id="shippingPref" aria-label="Shipping Preference" className={INPUT_STYLE}>
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -1882,6 +2538,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                 <div className="col-span-1">
                                     <Label htmlFor="deliveryCourier" className={LABEL_STYLE}>Delivery Courier</Label>
                                     <CreatableCombobox
+                                        id="deliveryCourier"
                                         options={DELIVERY_COURIERS}
                                         value={deliveryCourier}
                                         onChange={setDeliveryCourier}
@@ -1892,8 +2549,8 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                 </div>
                             </div>
 
-                            {/* Row 2: Unit/No, Street, Barangay */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
+                            {/* Address: 2 cols on mobile, 3 cols on desktop */}
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5 sm:gap-4">
                                 <div className="col-span-1">
                                     <Label htmlFor="unitNo" className={LABEL_STYLE}>HOUSE/UNIT NUMBER</Label>
                                     <ClearableInput
@@ -1927,10 +2584,6 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                         required
                                     />
                                 </div>
-                            </div>
-
-                            {/* Row 3: City, Province, Zip Code */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
                                 <div className="col-span-1">
                                     <Label htmlFor="city" className={LABEL_STYLE}>CITY/MUNICIPALITY</Label>
                                     <ClearableInput
@@ -1977,7 +2630,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                 {
                     shoes.map((shoe, index) => (
                         <Card key={shoe.id} className="border-red-100/50 shadow-sm bg-white group relative rounded-2xl">
-                            <CardHeader className={`${CARD_HEADER_STYLE} !py-2`}>
+                            <CardHeader className={`${CARD_HEADER_STYLE} !py-1.5`}>
                                 <div className="flex items-center justify-between translate-y-[1px]">
                                     <div className="flex items-center gap-3">
                                         <div className="bg-red-600 text-white text-[10px] font-black w-[18px] h-[18px] flex items-center justify-center rounded">
@@ -1999,7 +2652,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                     )}
                                 </div>
                             </CardHeader>
-                            <CardContent className="px-5 pt-0 pb-3">
+                            <CardContent className="px-3.5 sm:px-5 pt-0 pb-3">
                                 <div className="space-y-4">
                                     {/* Top Section: Identification & Condition */}
                                     <div className="grid grid-cols-1 md:grid-cols-12 gap-x-8 gap-y-6 -mt-1">
@@ -2007,10 +2660,11 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                         <div className="md:col-span-5 flex flex-col gap-3 h-full">
                                             {/* Identification Row - Stacked for narrow column */}
                                             <div className="space-y-2.5">
-                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                                    <div className="col-span-1">
-                                                        <Label className={LABEL_STYLE}>Brand <span className="text-red-500">*</span></Label>
+                                                <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5 sm:gap-3">
+                                                    <div className="col-span-2 md:col-span-1">
+                                                        <Label htmlFor={`shoeBrand-${shoe.id}`} className={LABEL_STYLE}>Brand <span className="text-red-500">*</span></Label>
                                                         <CreatableCombobox
+                                                            id={`shoeBrand-${shoe.id}`}
                                                             options={SHOE_BRANDS}
                                                             value={shoe.brand}
                                                             onChange={(val) => updateShoe(shoe.id, { brand: val })}
@@ -2028,8 +2682,9 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                         )}
                                                     </div>
                                                     <div className="col-span-1">
-                                                        <Label className={LABEL_STYLE}>Model <span className="text-gray-400 font-normal lowercase">(optional)</span></Label>
+                                                        <Label htmlFor={`shoeModel-${shoe.id}`} className={LABEL_STYLE}>Model <span className="text-gray-600 font-normal lowercase">(optional)</span></Label>
                                                         <CreatableCombobox
+                                                            id={`shoeModel-${shoe.id}`}
                                                             options={shoe.brand ? (BRAND_MODELS[shoe.brand] || ['Other']) : ALL_MODELS}
                                                             value={shoe.shoeModel}
                                                             onChange={(val) => {
@@ -2068,8 +2723,9 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                         )}
                                                     </div>
                                                     <div className="col-span-1">
-                                                        <Label className={LABEL_STYLE}>Material <span className="text-gray-400 font-normal lowercase">(optional)</span></Label>
+                                                        <Label htmlFor={`shoeMaterial-${shoe.id}`} className={LABEL_STYLE}>Material <span className="text-gray-600 font-normal lowercase">(optional)</span></Label>
                                                         <CreatableCombobox
+                                                            id={`shoeMaterial-${shoe.id}`}
                                                             options={SHOE_MATERIALS}
                                                             value={shoe.shoeMaterial}
                                                             onChange={(val) => updateShoe(shoe.id, { shoeMaterial: val })}
@@ -2087,10 +2743,11 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                         )}
                                                     </div>
                                                 </div>
-                                                <div className="flex flex-col md:flex-row gap-3 w-full">
-                                                    <div style={{ flex: 24 }}>
-                                                        <Label className={LABEL_STYLE}>Size <span className="text-gray-400 font-normal lowercase">(optional)</span></Label>
+                                                <div className="grid grid-cols-2 md:flex md:flex-row gap-2.5 sm:gap-3 w-full">
+                                                    <div className="col-span-1" style={{ flex: 24 }}>
+                                                        <Label htmlFor={`shoeSize-${shoe.id}`} className={LABEL_STYLE}>Size <span className="text-gray-600 font-normal lowercase">(optional)</span></Label>
                                                         <CreatableCombobox
+                                                            id={`shoeSize-${shoe.id}`}
                                                             options={SHOE_SIZES}
                                                             value={shoe.shoeSize || ''}
                                                             onChange={(val) => updateShoe(shoe.id, { shoeSize: val })}
@@ -2099,9 +2756,10 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                             storageKey={CUSTOM_OPTION_KEYS.SIZES}
                                                         />
                                                     </div>
-                                                    <div style={{ flex: 28 }}>
-                                                        <Label className={LABEL_STYLE} title="Multiple colors allowed (e.g. Black, Blue)">Color <span className="text-gray-400 font-normal lowercase">(optional)</span></Label>
+                                                    <div className="col-span-1" style={{ flex: 28 }}>
+                                                        <Label htmlFor={`shoeColor-${shoe.id}`} className={LABEL_STYLE} title="Multiple colors allowed (e.g. Black, Blue)">Color <span className="text-gray-600 font-normal lowercase">(optional)</span></Label>
                                                         <CreatableCombobox
+                                                            id={`shoeColor-${shoe.id}`}
                                                             options={SHOE_COLORS}
                                                             value={Array.isArray(shoe.color) ? shoe.color.filter(Boolean).join(', ') : (shoe.color || '')}
                                                             onChange={(val) => updateShoe(shoe.id, { color: val })}
@@ -2119,43 +2777,65 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                             />
                                                         )}
                                                     </div>
-                                                    <div style={{ flex: shoe.priorityLevel === 'rush' ? 26 : 48 }}>
+                                                    <div className={shoe.priorityLevel === 'rush' ? 'col-span-1 md:flex-1' : 'col-span-2 md:flex-1'} style={{ flex: shoe.priorityLevel === 'rush' ? 26 : 48 }}>
                                                         <div className="flex items-center justify-between">
-                                                            <Label className={LABEL_STYLE}>Priority Level</Label>
+                                                            <Label htmlFor={`priorityLevel-${shoe.id}`} className={LABEL_STYLE}>Priority Level</Label>
                                                         </div>
                                                         <div className="relative group/select">
                                                             <Select
                                                                 value={shoe.priorityLevel || 'regular'}
                                                                 onValueChange={(val: Priority) => {
                                                                     if (val === 'rush') {
-                                                                        updateShoe(shoe.id, {
+                                                                        const applicable = getApplicableRushFee(shoe.baseService || [], shoe.addOns || [], services);
+                                                                        const configuredReduction = (applicable && applicable.durationDays !== undefined && applicable.durationDays !== 0)
+                                                                            ? Math.abs(Number(applicable.durationDays))
+                                                                            : 9;
+                                                                        const reductionStr = String(configuredReduction);
+                                                                        updateShoe(shoe.id, { 
                                                                             priorityLevel: 'rush',
-                                                                            baseService: ['Basic Cleaning'],
-                                                                            addOns: []
+                                                                            rushReductionDays: reductionStr
                                                                         });
                                                                         setPriorityLevel('rush');
-                                                                        toast.info('Rush order set: Plain Basic Cleaning only (no add-ons).');
+                                                                        setBasicCleaningRushReduction(reductionStr);
+                                                                        if (applicable) {
+                                                                            toast.info(`Rush priority set: ${applicable.name} (+${formatPeso(applicable.price)}, -${configuredReduction}d)`);
+                                                                        } else {
+                                                                            toast.info('Rush priority set for expedited turnaround.');
+                                                                        }
                                                                     } else {
-                                                                        updateShoe(shoe.id, { priorityLevel: 'regular' });
+                                                                        updateShoe(shoe.id, { priorityLevel: 'regular', rushReductionDays: undefined });
                                                                     }
                                                                 }}
                                                             >
-                                                                <SelectTrigger className={`${INPUT_STYLE} font-normal`}>
+                                                                <SelectTrigger id={`priorityLevel-${shoe.id}`} aria-label="Priority Level" className={`${INPUT_STYLE} font-normal`}>
                                                                     <SelectValue placeholder="Regular" />
                                                                 </SelectTrigger>
-                                                                <SelectContent align="start" side="bottom" position="popper" sideOffset={5} className="pb-0 overflow-hidden">
-                                                                    <SelectItem value="regular">Regular</SelectItem>
-                                                                    <SelectItem value="rush">Rush</SelectItem>
-                                                                    <div className="sticky bottom-0 z-10 p-1.5 border-t border-gray-100 bg-gray-50/95 backdrop-blur-xs text-[10px] text-gray-500 font-semibold flex items-center justify-center select-none text-center">
-                                                                        <span>Rush: Plain Basic Cleaning only</span>
-                                                                    </div>
-                                                                </SelectContent>
+                                                                {(() => {
+                                                                    const applicable = getApplicableRushFee(shoe.baseService || [], shoe.addOns || [], services);
+                                                                    const hasBase = (shoe.baseService || []).length > 0;
+                                                                    return (
+                                                                        <SelectContent align="start" side="bottom" position="popper" sideOffset={5} className="pb-0 overflow-hidden">
+                                                                            <SelectItem value="regular">Regular</SelectItem>
+                                                                            <SelectItem value="rush" disabled={!applicable && hasBase}>
+                                                                                Rush
+                                                                            </SelectItem>
+                                                                            <div className="sticky bottom-0 z-10 p-1.5 border-t border-gray-100 bg-gray-50/95 backdrop-blur-xs text-[10px] text-gray-500 font-semibold flex items-center justify-center select-none text-center">
+                                                                                <span>
+                                                                                    {applicable 
+                                                                                        ? `${applicable.name}: +${formatPeso(applicable.price)} • ${applicable.durationDays ? Math.abs(Number(applicable.durationDays)) : 9}d reduction`
+                                                                                        : 'Rush: Expedited service'}
+                                                                                </span>
+                                                                            </div>
+                                                                        </SelectContent>
+                                                                    );
+                                                                })()}
                                                             </Select>
                                                             {(shoe.priorityLevel && shoe.priorityLevel !== 'regular') && (
                                                                 <button
                                                                     type="button"
-                                                                    onClick={() => updateShoe(shoe.id, { priorityLevel: 'regular' })}
-                                                                    className="absolute right-8 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors opacity-0 group-hover/select:opacity-100"
+                                                                    onClick={() => updateShoe(shoe.id, { priorityLevel: 'regular', rushReductionDays: undefined })}
+                                                                    aria-label="Reset to Regular"
+                                                                    className="absolute right-8 top-1/2 -translate-y-1/2 min-w-[24px] min-h-[24px] flex items-center justify-center p-1 hover:bg-gray-100 rounded-full text-gray-500 hover:text-gray-700 transition-colors opacity-0 group-hover/select:opacity-100 cursor-pointer"
                                                                     title="Reset to Regular"
                                                                 >
                                                                     <X size={12} />
@@ -2164,7 +2844,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                         </div>
                                                     </div>
                                                     {shoe.priorityLevel === 'rush' && (
-                                                        <div style={{ flex: 22 }}>
+                                                        <div className="col-span-1 md:flex-none" style={{ flex: 22 }}>
                                                             <Label className={`${LABEL_STYLE} whitespace-nowrap`} title="Reduced By">Reduced By</Label>
                                                             <div className="relative flex items-center">
                                                                 <Input
@@ -2172,7 +2852,13 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                                     placeholder=""
                                                                     inputMode="numeric"
                                                                     pattern="[0-9]*"
-                                                                    value={shoe.rushReductionDays !== undefined ? String(shoe.rushReductionDays) : basicCleaningRushReduction}
+                                                                    value={(() => {
+                                                                        if (shoe.rushReductionDays !== undefined) return String(shoe.rushReductionDays);
+                                                                        const applicable = getApplicableRushFee(shoe.baseService || [], shoe.addOns || [], services);
+                                                                        return String((applicable && applicable.durationDays !== undefined && applicable.durationDays !== 0)
+                                                                            ? Math.abs(Number(applicable.durationDays))
+                                                                            : (parseInt(basicCleaningRushReduction, 10) || 9));
+                                                                    })()}
                                                                     onChange={(e: any) => {
                                                                         const val = e.target.value.replace(/\D/g, '');
                                                                         const cleanVal = val.replace(/^0+/, '');
@@ -2192,12 +2878,13 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                             <div className="flex flex-col flex-1 gap-2 pt-2 border-t border-gray-200 mt-1">
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex items-center gap-2">
-                                                        <Label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Shoe Condition</Label>
+                                                        <Label className="text-[11px] font-black text-gray-700 uppercase tracking-widest">Shoe Condition</Label>
                                                         <Button
                                                             type="button"
                                                             variant="ghost"
                                                             size="icon"
-                                                            className="h-5 w-5 bg-transparent border border-transparent shadow-none text-gray-400 hover:bg-white hover:text-red-600 hover:border-red-100 hover:shadow-md p-0 transition-all rounded-md"
+                                                            aria-label="Reset condition"
+                                                            className="h-6 w-6 min-w-[24px] min-h-[24px] flex items-center justify-center bg-transparent border border-transparent shadow-none text-gray-500 hover:bg-white hover:text-red-600 hover:border-red-100 hover:shadow-md p-0 transition-all rounded-md"
                                                             onClick={() => updateShoe(shoe.id, {
                                                                 condition: {
                                                                     scratches: false,
@@ -2214,7 +2901,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                             <RotateCcw className="h-3 w-3" />
                                                         </Button>
                                                     </div>
-                                                    <span className="text-[9px] font-bold text-gray-300 uppercase italic">Check all that apply</span>
+                                                    <span className="text-[9px] font-bold text-gray-600 uppercase italic">Check all that apply</span>
                                                 </div>
                                                 <div className="bg-white rounded-xl border border-red-100/50 p-3">
                                                     <div className="grid grid-cols-2 gap-y-2 gap-x-2">
@@ -2257,99 +2944,102 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                             rows={3}
                                                             className="text-[11px] bg-[#F8F9FA]/80 border-none rounded-xl placeholder:text-gray-400/70 pl-3 pr-10 py-2.5 focus:ring-1 focus:ring-red-50 transition-all min-h-[88px] h-full flex-1 resize-none shadow-inner w-full leading-relaxed"
                                                         />
-                                                        {/* Small camera button with dropdown to capture or upload before condition photo */}
-                                                        <div className="absolute right-2.5 top-2.5 flex items-center gap-1 z-10">
-                                                            {/* Hidden input for direct device camera */}
-                                                            <input
-                                                                type="file"
-                                                                id={`before-camera-native-${shoe.id}`}
-                                                                accept="image/*"
-                                                                capture="environment"
-                                                                className="hidden"
-                                                                onChange={async (e) => {
-                                                                    const file = e.target.files?.[0];
-                                                                    if (!file) return;
-                                                                    try {
-                                                                        const dataUrl = await compressImageFile(file);
-                                                                        updateShoe(shoe.id, { beforeImage: dataUrl });
-                                                                        toast.success("Before photo attached to shoe condition");
-                                                                    } catch {
-                                                                        const reader = new FileReader();
-                                                                        reader.onload = () => {
-                                                                            updateShoe(shoe.id, { beforeImage: reader.result as string });
+                                                        {/* Small camera button with dropdown to capture or upload before condition photo (Admin only) */}
+                                                        {isAdminAccount && (
+                                                            <div className="absolute right-2.5 top-2.5 flex items-center gap-1 z-10">
+                                                                {/* Hidden input for direct device camera */}
+                                                                <input
+                                                                    type="file"
+                                                                    id={`before-camera-native-${shoe.id}`}
+                                                                    accept="image/*"
+                                                                    capture="environment"
+                                                                    className="hidden"
+                                                                    onChange={async (e) => {
+                                                                        const file = e.target.files?.[0];
+                                                                        if (!file) return;
+                                                                        try {
+                                                                            const dataUrl = await compressImageFile(file);
+                                                                            updateShoe(shoe.id, { beforeImage: dataUrl });
                                                                             toast.success("Before photo attached to shoe condition");
-                                                                        };
-                                                                        reader.readAsDataURL(file);
-                                                                    }
-                                                                    e.target.value = '';
-                                                                }}
-                                                            />
-                                                            {/* Hidden input for gallery/file upload */}
-                                                            <input
-                                                                type="file"
-                                                                id={`before-camera-upload-${shoe.id}`}
-                                                                accept="image/*"
-                                                                className="hidden"
-                                                                onChange={async (e) => {
-                                                                    const file = e.target.files?.[0];
-                                                                    if (!file) return;
-                                                                    try {
-                                                                        const dataUrl = await compressImageFile(file);
-                                                                        updateShoe(shoe.id, { beforeImage: dataUrl });
-                                                                        toast.success("Before photo attached to shoe condition");
-                                                                    } catch {
-                                                                        const reader = new FileReader();
-                                                                        reader.onload = () => {
-                                                                            updateShoe(shoe.id, { beforeImage: reader.result as string });
+                                                                        } catch {
+                                                                            const reader = new FileReader();
+                                                                            reader.onload = () => {
+                                                                                updateShoe(shoe.id, { beforeImage: reader.result as string });
+                                                                                toast.success("Before photo attached to shoe condition");
+                                                                            };
+                                                                            reader.readAsDataURL(file);
+                                                                        }
+                                                                        e.target.value = '';
+                                                                    }}
+                                                                />
+                                                                {/* Hidden input for gallery/file upload */}
+                                                                <input
+                                                                    type="file"
+                                                                    id={`before-camera-upload-${shoe.id}`}
+                                                                    accept="image/*"
+                                                                    className="hidden"
+                                                                    onChange={async (e) => {
+                                                                        const file = e.target.files?.[0];
+                                                                        if (!file) return;
+                                                                        try {
+                                                                            const dataUrl = await compressImageFile(file);
+                                                                            updateShoe(shoe.id, { beforeImage: dataUrl });
                                                                             toast.success("Before photo attached to shoe condition");
-                                                                        };
-                                                                        reader.readAsDataURL(file);
-                                                                    }
-                                                                    e.target.value = '';
-                                                                }}
-                                                            />
+                                                                        } catch {
+                                                                            const reader = new FileReader();
+                                                                            reader.onload = () => {
+                                                                                updateShoe(shoe.id, { beforeImage: reader.result as string });
+                                                                                toast.success("Before photo attached to shoe condition");
+                                                                            };
+                                                                            reader.readAsDataURL(file);
+                                                                        }
+                                                                        e.target.value = '';
+                                                                    }}
+                                                                />
 
-                                                            <DropdownMenu>
-                                                                <DropdownMenuTrigger asChild>
-                                                                    <button
-                                                                        type="button"
-                                                                        className="p-1 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-all cursor-pointer shadow-2xs group"
-                                                                        title="Take photo with camera or upload"
-                                                                    >
-                                                                        <Camera className="h-4 w-4 text-red-500 group-hover:scale-110 transition-transform" />
-                                                                    </button>
-                                                                </DropdownMenuTrigger>
-                                                                <DropdownMenuContent align="end" className="w-52 bg-white border border-gray-100 shadow-xl rounded-xl p-1.5 z-50">
-                                                                    <DropdownMenuItem
-                                                                        onClick={() => setCameraModalShoeId(shoe.id)}
-                                                                        className="text-xs font-bold text-gray-700 hover:text-red-600 hover:bg-red-50/80 rounded-lg p-2 flex items-center gap-2 cursor-pointer"
-                                                                    >
-                                                                        <Camera className="h-3.5 w-3.5 text-red-500 shrink-0" />
-                                                                        <span>Take Photo (Camera)</span>
-                                                                    </DropdownMenuItem>
-                                                                    <DropdownMenuItem
-                                                                        onClick={() => document.getElementById(`before-camera-upload-${shoe.id}`)?.click()}
-                                                                        className="text-xs font-bold text-gray-700 hover:text-red-600 hover:bg-red-50/80 rounded-lg p-2 flex items-center gap-2 cursor-pointer"
-                                                                    >
-                                                                        <Upload className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                                                                        <span>Upload from Files</span>
-                                                                    </DropdownMenuItem>
-                                                                    {shoe.beforeImage && (
-                                                                        <DropdownMenuItem
-                                                                            onClick={() => updateShoe(shoe.id, { beforeImage: undefined })}
-                                                                            className="text-xs font-bold text-red-600 hover:bg-red-50 rounded-lg p-2 flex items-center gap-2 cursor-pointer border-t border-gray-100 mt-1"
+                                                                <DropdownMenu>
+                                                                    <DropdownMenuTrigger asChild>
+                                                                        <button
+                                                                            type="button"
+                                                                            aria-label="Take photo with camera or upload"
+                                                                            className="p-1 min-w-[24px] min-h-[24px] flex items-center justify-center rounded-md text-gray-500 hover:text-red-600 hover:bg-red-50 transition-all cursor-pointer shadow-2xs group"
+                                                                            title="Take photo with camera or upload"
                                                                         >
-                                                                            <X className="h-3.5 w-3.5 text-red-500 shrink-0" />
-                                                                            <span>Remove Photo</span>
+                                                                            <Camera className="h-4 w-4 text-red-500 group-hover:scale-110 transition-transform" />
+                                                                        </button>
+                                                                    </DropdownMenuTrigger>
+                                                                    <DropdownMenuContent align="end" className="w-52 bg-white border border-gray-100 shadow-xl rounded-xl p-1.5 z-50">
+                                                                        <DropdownMenuItem
+                                                                            onClick={() => setCameraModalShoeId(shoe.id)}
+                                                                            className="text-xs font-bold text-gray-700 hover:text-red-600 hover:bg-red-50/80 rounded-lg p-2 flex items-center gap-2 cursor-pointer"
+                                                                        >
+                                                                            <Camera className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                                                                            <span>Take Photo (Camera)</span>
                                                                         </DropdownMenuItem>
-                                                                    )}
-                                                                </DropdownMenuContent>
-                                                            </DropdownMenu>
-                                                        </div>
+                                                                        <DropdownMenuItem
+                                                                            onClick={() => document.getElementById(`before-camera-upload-${shoe.id}`)?.click()}
+                                                                            className="text-xs font-bold text-gray-700 hover:text-red-600 hover:bg-red-50/80 rounded-lg p-2 flex items-center gap-2 cursor-pointer"
+                                                                        >
+                                                                            <Upload className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                                                                            <span>Upload from Files</span>
+                                                                        </DropdownMenuItem>
+                                                                        {shoe.beforeImage && (
+                                                                            <DropdownMenuItem
+                                                                                onClick={() => updateShoe(shoe.id, { beforeImage: undefined })}
+                                                                                className="text-xs font-bold text-red-600 hover:bg-red-50 rounded-lg p-2 flex items-center gap-2 cursor-pointer border-t border-gray-100 mt-1"
+                                                                            >
+                                                                                <X className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                                                                                <span>Remove Photo</span>
+                                                                            </DropdownMenuItem>
+                                                                        )}
+                                                                    </DropdownMenuContent>
+                                                                </DropdownMenu>
+                                                            </div>
+                                                        )}
                                                     </div>
 
-                                                    {/* Thumbnail preview if before photo attached */}
-                                                    {shoe.beforeImage && (
+                                                    {/* Thumbnail preview if before photo attached (Admin only) */}
+                                                    {isAdminAccount && shoe.beforeImage && (
                                                         <div className="flex items-center gap-2 p-1.5 rounded-lg bg-red-50/60 border border-red-200/60 shrink-0 animate-in fade-in duration-200">
                                                             <div className="w-8 h-8 rounded-md overflow-hidden border border-red-200 bg-white shrink-0 shadow-2xs">
                                                                 <img src={shoe.beforeImage} alt="Before condition" className="w-full h-full object-cover" />
@@ -2360,7 +3050,8 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                             <button
                                                                 type="button"
                                                                 onClick={() => updateShoe(shoe.id, { beforeImage: undefined })}
-                                                                className="text-gray-400 hover:text-red-600 p-1 cursor-pointer"
+                                                                aria-label="Remove photo"
+                                                                className="text-gray-400 hover:text-red-600 p-1 min-w-[24px] min-h-[24px] flex items-center justify-center cursor-pointer"
                                                                 title="Remove photo"
                                                             >
                                                                 <X className="h-3.5 w-3.5" />
@@ -2375,12 +3066,13 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                         <div className="md:col-span-7 border-l border-gray-50 md:pl-8 flex flex-col h-full">
                                             <div className="flex items-center justify-between mb-4">
                                                 <div className="flex items-center gap-2">
-                                                    <Label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Services & Add-ons</Label>
+                                                    <Label className="text-[11px] font-black text-gray-700 uppercase tracking-widest">Services & Add-ons</Label>
                                                     <Button
                                                         type="button"
                                                         variant="ghost"
                                                         size="icon"
-                                                        className="h-5 w-5 bg-transparent border border-transparent shadow-none text-gray-400 hover:bg-white hover:text-red-600 hover:border-red-100 hover:shadow-md p-0 transition-all rounded-md"
+                                                        aria-label="Reset services"
+                                                        className="h-6 w-6 min-w-[24px] min-h-[24px] flex items-center justify-center bg-transparent border border-transparent shadow-none text-gray-500 hover:bg-white hover:text-red-600 hover:border-red-100 hover:shadow-md p-0 transition-all rounded-md"
                                                         onClick={() => updateShoe(shoe.id, { baseService: [], addOns: [] })}
                                                         title="Reset services"
                                                     >
@@ -2392,7 +3084,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                         <span className="text-[10px] opacity-70">Unit Total:</span> {formatPeso(getShoeTotal(shoe))}
                                                     </span>
                                                 ) : (
-                                                    <span className="text-xs font-bold text-gray-300 uppercase italic">Select applicable services</span>
+                                                    <span className="text-xs font-bold text-gray-600 uppercase italic">Select applicable services</span>
                                                 )}
                                             </div>
 
@@ -2400,18 +3092,23 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                 <div className="flex flex-col h-full gap-4">
                                                     {/* Base Services */}
                                                     <div className="space-y-3">
-                                                        <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Base Services</Label>
+                                                        <Label className="text-[10px] font-black text-gray-700 uppercase tracking-widest">Base Services</Label>
                                                         <div className="w-full">
                                                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                                                 {baseServices.map(service => {
                                                                      const isChecked = (Array.isArray(shoe.baseService) ? shoe.baseService : []).includes(service.name);
                                                                      const isRushPair = shoe.priorityLevel === 'rush';
-                                                                     const isServiceDisabled = isRushPair && service.name !== 'Basic Cleaning';
+                                                                     const priorityCatalog = services.filter(s => s.category === 'priority' && s.active !== false);
+                                                                     const isSupportedByRush = priorityCatalog.length === 0 || priorityCatalog.some(p => {
+                                                                         if (!p.connectedBaseServices || p.connectedBaseServices.length === 0) return true;
+                                                                         return p.connectedBaseServices.includes(service.name);
+                                                                     });
+                                                                     const isServiceDisabled = isRushPair && !isSupportedByRush;
 
                                                                      return (
                                                                          <label
                                                                              key={service.id}
-                                                                             title={isServiceDisabled ? "Rush pairs only allow plain Basic Cleaning" : service.name}
+                                                                             title={isServiceDisabled ? "No configured Rush Fee is applicable to this base service" : service.name}
                                                                              className={`flex ${isChecked ? 'items-start' : 'items-center'} space-x-2 p-2.5 rounded-lg border transition-all shadow-sm ${
                                                                                  isServiceDisabled
                                                                                      ? 'opacity-40 cursor-not-allowed bg-gray-50/80 border-gray-200'
@@ -2426,15 +3123,15 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                                                  checked={isChecked}
                                                                                  disabled={isServiceDisabled}
                                                                                  onCheckedChange={(checked) => {
-                                                                                     if (isRushPair && !checked && service.name === 'Basic Cleaning') {
-                                                                                         updateShoe(shoe.id, { priorityLevel: 'regular', baseService: [], addOns: [] });
-                                                                                         return;
-                                                                                     }
-
                                                                                      const currentServices = Array.isArray(shoe.baseService) ? shoe.baseService : [];
                                                                                      let newServices = checked
                                                                                          ? [...currentServices, service.name]
                                                                                          : currentServices.filter(s => s !== service.name);
+
+                                                                                     if (isRushPair && newServices.length === 0) {
+                                                                                         updateShoe(shoe.id, { priorityLevel: 'regular', baseService: [], addOns: [] });
+                                                                                         return;
+                                                                                     }
 
                                                                                      // Minor Reglue and Full Reglue are mutually exclusive
                                                                                      if (checked && service.name === 'Minor Reglue') {
@@ -2456,7 +3153,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                                                          newServices = newServices.filter(s => !requiresCleaning.includes(s));
                                                                                      }
 
-                                                                                     const nextAddOns = syncColorRenewalAddons(shoe.addOns || [], newServices).filter(a => isAddonVisibleForBaseServices(a.name, newServices, services));
+                                                                                     const nextAddOns = syncFullReglueAddons(syncColorRenewalAddons(shoe.addOns || [], newServices), newServices).filter(a => isAddonVisibleForBaseServices(a.name, newServices, services));
                                                                                      updateShoe(shoe.id, { baseService: newServices, addOns: nextAddOns });
                                                                                  }}
                                                                                  className={`h-4 w-4 shrink-0 ${isChecked ? 'self-start mt-0.5' : ''} data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600`}
@@ -2498,46 +3195,45 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
 
                                                     {/* Add-ons Section */}
                                                     <div className="space-y-3 pt-3 border-t border-gray-200 flex flex-col flex-grow">
-                                                        <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Add-on Services</Label>
-                                                        {shoe.priorityLevel === 'rush' ? (
-                                                            <div className="border border-amber-200/80 bg-amber-50/60 rounded-xl p-3 flex flex-col items-center justify-center text-center gap-1.5 flex-grow min-h-[70px]">
-                                                                <div className="flex items-center gap-1.5 text-amber-800 text-xs font-bold">
-                                                                    <Info size={14} className="text-amber-600 shrink-0" />
-                                                                    <span>Rush Order Restriction</span>
-                                                                </div>
-                                                                <p className="text-[11px] text-amber-700 font-medium">
-                                                                    Rush pairs must have no add-on services (plain Basic Cleaning only).
-                                                                </p>
-                                                            </div>
-                                                        ) : (!shoe.baseService || shoe.baseService.length === 0) ? (
-                                                            <div className="border border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center bg-white gap-2 min-h-[60px] flex-grow">
-                                                                <span className="text-xs font-bold italic text-gray-300 uppercase tracking-widest">Awaiting Base Service</span>
-                                                            </div>
-                                                        ) : (
-                                                            <div className="max-h-[160px] overflow-y-auto pr-1 custom-scrollbar">
-                                                                <div className="grid grid-cols-2 gap-2">
-                                                                    {addOnServices.filter(addon => isAddonVisibleForBaseServices(addon.name, shoe.baseService || [], services)).sort((a, b) => {
-                                                                        const order: Record<string, number> = {
-                                                                            'Unyellowing': 1,
-                                                                            'Minor Retouch': 2,
-                                                                            'White Paint': 3,
-                                                                            'Minor Restoration': 4,
-                                                                            '2 Colors': 5,
-                                                                            '3 Colors': 6,
-                                                                            'Add Glue Layer': 7,
-                                                                            'Premium Glue': 8,
-                                                                            'Full Reglue Midsole': 9,
-                                                                            'Full Reglue Undersole': 10,
-                                                                            'Midsole Full Reglue': 9,
-                                                                            'Undersole Full Reglue': 10,
-                                                                            'Midsole': 9,
-                                                                            'Undersole': 10
-                                                                        };
-                                                                        return (order[a.name] || 99) - (order[b.name] || 99);
-                                                                    }).map((addon) => {
+                                                        <Label className="text-[10px] font-black text-gray-700 uppercase tracking-widest">Add-on Services</Label>
+                                                        {(() => {
+                                                            const activeRush = getApplicableRushFee(shoe.baseService || [], shoe.addOns || [], services);
+                                                            const rushHasAddonWhitelist = activeRush && Array.isArray(activeRush.connectedAddons) && activeRush.connectedAddons.length > 0;
+                                                            const rushBlocksAllAddons = shoe.priorityLevel === 'rush' && !rushHasAddonWhitelist;
+
+                                                            if (rushBlocksAllAddons) {
+                                                                return (
+                                                                    <div className="border border-amber-200/80 bg-amber-50/60 rounded-xl p-3 flex flex-col items-center justify-center text-center gap-1.5 flex-grow min-h-[70px]">
+                                                                        <div className="flex items-center gap-1.5 text-amber-800 text-xs font-bold">
+                                                                            <Info size={14} className="text-amber-600 shrink-0" />
+                                                                            <span>Rush Order Restriction</span>
+                                                                        </div>
+                                                                        <p className="text-[11px] text-amber-700 font-medium">
+                                                                            {activeRush?.name || 'Rush'} applies to base services only (no add-on services).
+                                                                        </p>
+                                                                    </div>
+                                                                );
+                                                            }
+
+                                                            if (!shoe.baseService || shoe.baseService.length === 0) {
+                                                                return (
+                                                                    <div className="border border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center bg-white gap-2 min-h-[60px] flex-grow">
+                                                                        <span className="text-xs font-bold italic text-gray-600 uppercase tracking-widest">Awaiting Base Service</span>
+                                                                    </div>
+                                                                );
+                                                            }
+
+                                                            return (
+                                                                <div className="max-h-[160px] overflow-y-auto pr-1 custom-scrollbar">
+                                                                    <div className="grid grid-cols-2 gap-2">
+                                                                    {addOnServices
+                                                                        .filter(addon => isAddonVisibleForBaseServices(addon.name, shoe.baseService || [], services))
+                                                                        .sort((a, b) => (Number(a.sortOrder) || 999) - (Number(b.sortOrder) || 999))
+                                                                        .map((addon) => {
                                                                         const isChecked = shoe.addOns.some(a => a.name === addon.name);
                                                                         const addonItem = shoe.addOns.find(a => a.name === addon.name);
                                                                         const quantity = addonItem?.quantity || 1;
+                                                                        const showSpinner = Boolean(addon.hasSpinner ?? ((addon.name || '').toLowerCase() === 'unyellowing' || (addon.name || '').toLowerCase() === 'white paint'));
                                                                         return (
                                                                             <div key={addon.id} className={`p-2 rounded-lg border bg-white transition-all ${isChecked ? 'border-red-100 bg-red-50/10' : 'border-gray-50'}`}>
                                                                                 {isChecked ? (
@@ -2587,7 +3283,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                                                                     }
                                                                                                 }
 
-                                                                                                const nextAddOns = syncColorRenewalAddons(newAddOns, newBaseServices).filter(a => isAddonVisibleForBaseServices(a.name, newBaseServices, services));
+                                                                                                const nextAddOns = syncFullReglueAddons(syncColorRenewalAddons(newAddOns, newBaseServices), newBaseServices).filter(a => isAddonVisibleForBaseServices(a.name, newBaseServices, services));
                                                                                                 updateShoe(shoe.id, { baseService: newBaseServices, addOns: nextAddOns });
                                                                                             }}
                                                                                             className="h-4 w-4 shrink-0 self-start mt-0.5 data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600"
@@ -2604,23 +3300,40 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                                                                 )}
                                                                                             </div>
                                                                                             <div className="flex items-center justify-between gap-2 mt-1.5 min-w-0">
-                                                                                                <div className="flex items-center shrink-0">
-                                                                                                    <input
-                                                                                                        type="number"
-                                                                                                        min="1"
-                                                                                                        value={quantity}
-                                                                                                        onChange={(e) => {
-                                                                                                            const val = e.target.value;
-                                                                                                            const newQuantity = val === '' ? 1 : Math.max(1, parseInt(val));
-                                                                                                            const newAddOns = shoe.addOns.map(a =>
-                                                                                                                a.name === addon.name ? { ...a, quantity: newQuantity } : a
-                                                                                                            );
-                                                                                                            updateShoe(shoe.id, { addOns: newAddOns });
-                                                                                                        }}
-                                                                                                        className="w-9 h-5 border border-gray-200 rounded text-[10px] font-bold text-center focus:outline-none focus:border-red-500 bg-white [&::-webkit-inner-spin-button]:opacity-100 [&::-webkit-inner-spin-button]:h-[16px] [&::-webkit-inner-spin-button]:my-auto px-0"
-                                                                                                    />
-                                                                                                </div>
-                                                                                                <span className="text-[11px] font-black text-red-600 shrink-0 ml-auto">{formatPeso(getAddonTotal(addon.name, quantity))}</span>
+                                                                                                {showSpinner ? (
+                                                                                                    <div className="flex items-center shrink-0">
+                                                                                                        <input
+                                                                                                            type="number"
+                                                                                                            min="1"
+                                                                                                            value={quantity}
+                                                                                                            onChange={(e) => {
+                                                                                                                const val = e.target.value;
+                                                                                                                const newQuantity = val === '' ? 1 : Math.max(1, parseInt(val));
+                                                                                                                const newAddOns = shoe.addOns.map(a =>
+                                                                                                                    a.name === addon.name ? { ...a, quantity: newQuantity } : a
+                                                                                                                );
+                                                                                                                updateShoe(shoe.id, { addOns: newAddOns });
+                                                                                                            }}
+                                                                                                            className="w-9 h-5 border border-gray-200 rounded text-[10px] font-bold text-center focus:outline-none focus:border-red-500 bg-white [&::-webkit-inner-spin-button]:opacity-100 [&::-webkit-inner-spin-button]:h-[16px] [&::-webkit-inner-spin-button]:my-auto px-0"
+                                                                                                        />
+                                                                                                    </div>
+                                                                                                ) : <div />}
+                                                                                                {(() => {
+                                                                                                    const isFR = (shoe.baseService || []).includes('Full Reglue');
+                                                                                                    const isSole = isFullReglueSoleAddon(addon.name);
+                                                                                                    const soleAddons = (shoe.addOns || []).filter(a => isFullReglueSoleAddon(a.name));
+                                                                                                    const isFirstSole = soleAddons[0]?.name === addon.name;
+                                                                                                    if (isFR && isSole && (soleAddons.length === 1 || isFirstSole)) {
+                                                                                                        return (
+                                                                                                            <span className="text-[11px] font-black text-red-600 shrink-0 ml-auto">
+                                                                                                                {formatPeso(0)}
+                                                                                                            </span>
+                                                                                                        );
+                                                                                                    }
+                                                                                                    return (
+                                                                                                        <span className="text-[11px] font-black text-red-600 shrink-0 ml-auto">{formatPeso(getAddonTotal(addon.name, quantity))}</span>
+                                                                                                    );
+                                                                                                })()}
                                                                                             </div>
                                                                                         </div>
                                                                                     </div>
@@ -2672,7 +3385,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                                                                     }
                                                                                                 }
 
-                                                                                                const nextAddOns = syncColorRenewalAddons(newAddOns, newBaseServices);
+                                                                                                const nextAddOns = syncFullReglueAddons(syncColorRenewalAddons(newAddOns, newBaseServices), newBaseServices);
                                                                                                 updateShoe(shoe.id, { baseService: newBaseServices, addOns: nextAddOns });
                                                                                             }}
                                                                                         />
@@ -2693,15 +3406,16 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                                     })}
                                                                 </div>
                                                             </div>
-                                                        )}
-                                                    </div>
+                                                        );
+                                                    })()}
+                                                </div>
                                                 </div>
                                             
                                             {/* Supplies & Materials Used */}
                                             <div className="space-y-3 pt-3 border-t border-gray-200 mt-4 h-full">
                                                 <div className="flex items-center justify-between">
-                                                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Supplies & Materials Used</Label>
-                                                    <span className="text-[10px] font-bold text-gray-300 uppercase italic">Stock will be subtracted</span>
+                                                    <Label className="text-[10px] font-black text-gray-700 uppercase tracking-widest">Supplies & Materials Used</Label>
+                                                    <span className="text-[10px] font-bold text-gray-600 uppercase italic">Stock will be subtracted</span>
                                                 </div>
                                                 <div className="space-y-2">
                                                     {shoe.inventoryUsed.map((usage, uIdx) => {
@@ -2835,7 +3549,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                         </Button>
                     </div>
                 </CardHeader>
-                <CardContent className="px-5 pt-0 pb-4">
+                <CardContent className="px-3.5 sm:px-5 pt-0 pb-4">
                     <div className="grid grid-cols-1 lg:grid-cols-[1.2fr,1fr] gap-4 -mt-1">
                         {/* Left: Metadata & Payment Details */}
                         <div className="h-full">
@@ -2851,11 +3565,11 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
 
 
                                 return (
-                                    <div className="bg-[#F8F9FA]/50 p-4 rounded-xl border border-red-50/50 space-y-3 shadow-sm h-full flex flex-col justify-center">
+                                    <div className="bg-[#F8F9FA]/50 p-3 sm:p-4 rounded-xl border border-red-50/50 space-y-3 shadow-sm h-full flex flex-col justify-center">
                                         <div className="grid grid-cols-2 md:grid-cols-12 gap-2">
                                             {/* Row 1: Order Date, Order Time, Release Date & Release Time */}
                                             <div className="space-y-1 col-span-1 md:col-span-3">
-                                                <Label className={LABEL_STYLE}>Order Date</Label>
+                                                <Label htmlFor="orderDate" className={LABEL_STYLE}>Order Date</Label>
                                                 <FormattedDateInput
                                                     id="orderDate"
                                                     value={orderDate}
@@ -2865,7 +3579,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                 />
                                             </div>
                                             <div className="space-y-1 col-span-1 md:col-span-3">
-                                                <Label className={LABEL_STYLE}>Order Time</Label>
+                                                <Label htmlFor="orderTime" className={LABEL_STYLE}>Order Time</Label>
                                                 <FormattedTimeInput
                                                     id="orderTime"
                                                     value={orderTime}
@@ -2874,7 +3588,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                 />
                                             </div>
                                             <div className="space-y-1 col-span-1 md:col-span-3">
-                                                <Label className={LABEL_STYLE}>Release Date</Label>
+                                                <Label htmlFor="releaseDate" className={LABEL_STYLE}>Release Date</Label>
                                                 <FormattedDateInput
                                                     id="releaseDate"
                                                     value={previewReleaseYmd}
@@ -2884,7 +3598,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                 />
                                             </div>
                                             <div className="space-y-1 col-span-1 md:col-span-3">
-                                                <Label className={LABEL_STYLE}>Release Time</Label>
+                                                <Label htmlFor="releaseTime" className={LABEL_STYLE}>Release Time</Label>
                                                 <FormattedTimeInput
                                                     id="releaseTime"
                                                     value={releaseTime}
@@ -2893,7 +3607,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                 />
                                             </div>
                                             <div className="col-span-2 md:col-span-12 space-y-2 mt-1">
-                                                {/* Card 1: Business Rules (Official) */}
+                                                {/* Card 1: Business Rules (Standard) */}
                                                 <div 
                                                     className="bg-emerald-50/70 border border-emerald-200/90 rounded-xl p-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-800 shadow-2xs hover:border-emerald-300 transition-colors"
                                                     title="Standard deterministic calculation based on service duration, add-ons, and rush order reduction."
@@ -2902,91 +3616,111 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                         <div className="flex items-center gap-1.5 shrink-0">
                                                             <ClipboardList size={14} className="text-emerald-700 shrink-0" />
                                                             <span className="font-bold uppercase tracking-wider text-[11px] text-emerald-950">
-                                                                BUSINESS RULES:
+                                                                BUSINESS RULES
                                                             </span>
                                                             <span className="inline-flex items-center bg-emerald-700 text-white text-[8.5px] font-bold uppercase px-2 py-0.5 rounded tracking-wide shadow-2xs shrink-0">
                                                                 STANDARD
                                                             </span>
                                                         </div>
                                                         {hasSelectedServices ? (
-                                                            <div className="flex items-center gap-1.5 flex-wrap">
-                                                                <span className="text-emerald-800/80 font-medium">Release Date:</span>
-                                                                <span className="font-bold text-slate-900 text-xs">{officialDateDisplay}</span>
-                                                                {releaseTime && <span className="text-emerald-700/80 text-[11px]">({releaseTime})</span>}
+                                                            <div className="flex flex-col gap-0.5 min-w-0">
+                                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                                    <span className="text-emerald-800/80 font-medium">Standard Release Date:</span>
+                                                                    <span className="font-bold text-slate-900 text-xs">{officialDateDisplay}</span>
+                                                                    {releaseTime && <span className="text-emerald-700/80 text-[11px]">({releaseTime})</span>}
+                                                                </div>
+                                                                {serverPrediction?.standard_has_rollover && (
+                                                                    <div className="text-[10px] text-emerald-800 font-medium flex items-center gap-1">
+                                                                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0" />
+                                                                        <span>Release date adjusted to next open date due to shop closure (+{serverPrediction.standard_rollover_days} {serverPrediction.standard_rollover_days === 1 ? 'day' : 'days'}).</span>
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         ) : (
                                                             <div className="flex items-center gap-1.5 flex-wrap">
-                                                                <span className="text-emerald-800/80 font-medium">Select a service for the release date</span>
+                                                                <span className="text-emerald-800/80 font-medium">Select a service to calculate the Standard Release Date</span>
                                                                 <span className="text-[10px] text-emerald-600/80 font-semibold hidden md:inline">(Service duration and combination rules)</span>
                                                             </div>
                                                         )}
                                                     </div>
                                                     <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0 pt-1 sm:pt-0 border-t sm:border-t-0 border-emerald-200/60">
-                                                        <div className="w-[140px] inline-flex items-center justify-between bg-white border border-emerald-300/90 px-2.5 py-1 rounded-lg shadow-2xs shrink-0">
-                                                            <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-800 whitespace-nowrap">TOTAL DAYS</span>
-                                                            <span className="h-3 w-px bg-emerald-200 shrink-0" />
-                                                            <span className="font-black text-slate-900 text-[11px] tabular-nums w-14 text-center shrink-0 flex items-center justify-center">
+                                                        <div className="w-[185px] h-7 inline-flex items-center justify-between bg-white border border-emerald-300/90 px-2.5 rounded-lg shadow-2xs shrink-0">
+                                                            <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-800 whitespace-nowrap">STANDARD DURATION</span>
+                                                            <span className="h-3 w-px bg-emerald-200 shrink-0 mx-1" />
+                                                            <span className="font-black text-slate-900 text-[11px] tabular-nums text-center shrink-0 flex items-center justify-center whitespace-nowrap min-w-[36px]">
                                                                 {manualReleaseDate ? 'MANUAL' : (hasSelectedServices && officialDays > 0) ? `${officialDays} ${officialDays === 1 ? 'DAY' : 'DAYS'}` : '—'}
                                                             </span>
                                                         </div>
                                                     </div>
                                                 </div>
 
-                                                {/* Card 2: ML Prediction (Advisory) */}
+                                                {/* Card 2: ML Prediction (Active Random Forest) */}
                                                 <div 
                                                     className="bg-blue-50/70 border border-blue-200/90 rounded-xl p-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-800 shadow-2xs hover:border-blue-300 transition-colors"
-                                                    title="Advisory operational prediction based on historical workshop order records."
+                                                    title="Active Random Forest machine-learning operational prediction of Ready-for-Release turnaround."
                                                 >
                                                     <div className="flex items-center gap-2 flex-wrap min-w-0">
                                                         <div className="flex items-center gap-1.5 shrink-0">
                                                             <Sparkles size={14} className="text-amber-500 shrink-0" />
                                                             <span className="font-bold uppercase tracking-wider text-[11px] text-blue-950">
-                                                                ML PREDICTION:
+                                                                ML PREDICTION
                                                             </span>
                                                             <button
                                                                 type="button"
                                                                 onClick={() => setIsMlModalOpen(true)}
-                                                                className="group inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-[8.5px] font-bold uppercase px-2 py-0.5 rounded-full tracking-wider transition-all duration-150 cursor-pointer shadow-2xs hover:scale-105 active:scale-95 shrink-0"
-                                                                title="Click to view standard business rules vs ML prediction details"
+                                                                className="group inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-[8.5px] font-bold uppercase px-2 py-0.5 rounded-full tracking-wider transition-all duration-150 cursor-pointer shadow-2xs hover:scale-105 active:scale-95 shrink-0"
+                                                                title="Click to view Standard Release Date vs ML Prediction details"
                                                             >
-                                                                <span>ADVISORY</span>
-                                                                <Info size={10} className="text-indigo-200 group-hover:text-white transition-colors" />
+                                                                <span>ACTIVE</span>
+                                                                <Info size={10} className="text-blue-200 group-hover:text-white transition-colors" />
                                                             </button>
                                                         </div>
                                                         {hasSelectedServices ? (
-                                                            <div className="flex items-center gap-1.5 flex-wrap">
-                                                                <span className="text-blue-800/80 font-medium">Predicted Release Date:</span>
-                                                                <span className="font-bold text-slate-900 text-xs inline-flex items-center gap-1.5">
-                                                                    {predictionLoading ? (
-                                                                        <span className="inline-flex items-center gap-1 text-red-600 font-medium">
-                                                                            <Loader2 className="w-3 h-3 animate-spin text-red-500 shrink-0" />
-                                                                            <span>Predicting…</span>
-                                                                        </span>
-                                                                    ) : (serverPrediction?.ml_predicted_date || serverPrediction?.ml_predicted_days != null) ? (
-                                                                        predictedDateDisplay
-                                                                    ) : (
-                                                                        <span className="text-slate-400 font-normal">Predicting…</span>
-                                                                    )}
-                                                                </span>
+                                                            <div className="flex flex-col gap-0.5 min-w-0">
+                                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                                    <span className="text-blue-800/80 font-medium">ML Predicted Release Date:</span>
+                                                                    <span className="font-bold text-slate-900 text-xs inline-flex items-center gap-1.5">
+                                                                        {predictionLoading ? (
+                                                                            <span className="inline-flex items-center gap-1 text-blue-600 font-medium">
+                                                                                <Loader2 className="w-3 h-3 animate-spin text-blue-500 shrink-0" />
+                                                                                <span>Predicting…</span>
+                                                                            </span>
+                                                                        ) : (serverPrediction?.ml_predicted_release_date || serverPrediction?.ml_predicted_date || serverPrediction?.ml_predicted_days != null) ? (
+                                                                            predictedDateDisplay
+                                                                        ) : hasSelectedServices && predictedDateDisplay !== '—' ? (
+                                                                            predictedDateDisplay
+                                                                        ) : (
+                                                                            <span className="text-slate-400 font-normal">Predicting…</span>
+                                                                        )}
+                                                                    </span>
+                                                                </div>
+                                                                {serverPrediction?.ml_has_safety_rollover && (
+                                                                    <div className="text-[10px] text-blue-900 font-medium flex items-center gap-1">
+                                                                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0" />
+                                                                        <span>Release date moved to next open date due to unmodeled shop closure (+{serverPrediction.ml_safety_rollover_days} {serverPrediction.ml_safety_rollover_days === 1 ? 'day' : 'days'}).</span>
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         ) : (
                                                             <div className="flex items-center gap-1.5 flex-wrap">
-                                                                <span className="text-blue-800/80 font-medium">Select a service for ML predicted date</span>
+                                                                <span className="text-blue-800/80 font-medium">Select a service to generate the ML Predicted Release Date</span>
                                                                 <span className="text-[10px] text-blue-600/80 font-semibold hidden md:inline">(Random Forest Model)</span>
                                                             </div>
                                                         )}
                                                     </div>
                                                     <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0 pt-1 sm:pt-0 border-t sm:border-t-0 border-blue-200/60">
-                                                        <div className="w-[140px] inline-flex items-center justify-between bg-white border border-blue-300/90 px-2.5 py-1 rounded-lg shadow-2xs shrink-0">
-                                                            <span className="text-[9px] font-bold uppercase tracking-wider text-blue-800 whitespace-nowrap">TOTAL DAYS</span>
-                                                            <span className="h-3 w-px bg-blue-200 shrink-0" />
-                                                            <span className="font-black text-slate-900 text-[11px] tabular-nums w-14 text-center shrink-0 flex items-center justify-center">
+                                                        <div className="w-[185px] h-7 inline-flex items-center justify-between bg-white border border-blue-300/90 px-2.5 rounded-lg shadow-2xs shrink-0">
+                                                            <span className="text-[9px] font-bold uppercase tracking-wider text-blue-800 whitespace-nowrap">PREDICTED DURATION</span>
+                                                            <span className="h-3 w-px bg-blue-200 shrink-0 mx-1" />
+                                                            <span className="font-black text-slate-900 text-[11px] tabular-nums text-center shrink-0 flex items-center justify-center whitespace-nowrap min-w-[36px]">
                                                                 {predictionLoading ? (
-                                                                    <Loader2 className="w-3.5 h-3.5 animate-spin text-red-500 shrink-0" />
+                                                                    <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500 shrink-0" />
                                                                 ) : !hasSelectedServices ? (
                                                                     '—'
-                                                                ) : serverPrediction?.ml_predicted_days != null && serverPrediction.ml_predicted_days > 0 ? (
-                                                                    `${serverPrediction.ml_predicted_days} ${serverPrediction.ml_predicted_days === 1 ? 'DAY' : 'DAYS'}`
+                                                                ) : serverPrediction?.ml_elapsed_days != null ? (
+                                                                    `${serverPrediction.ml_elapsed_days} ${serverPrediction.ml_elapsed_days === 1 ? 'DAY' : 'DAYS'}`
+                                                                ) : serverPrediction?.ml_base_days != null && serverPrediction.ml_base_days > 0 ? (
+                                                                    `${serverPrediction.ml_base_days} ${serverPrediction.ml_base_days === 1 ? 'DAY' : 'DAYS'}`
                                                                 ) : (
                                                                     '—'
                                                                 )}
@@ -3011,7 +3745,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                 </div>
                                             </div>
                                             <div className="space-y-1 col-span-2 md:col-span-4">
-                                                <Label className={LABEL_STYLE}>Payment Status</Label>
+                                                <Label htmlFor="paymentStatus" className={LABEL_STYLE}>Payment Status</Label>
                                                 <Select
                                                     value={paymentStatus}
                                                     onValueChange={(value: PaymentStatus) => {
@@ -3023,7 +3757,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                         }
                                                     }}
                                                 >
-                                                    <SelectTrigger className="bg-white border-gray-100/50 h-9 rounded-xl text-xs text-gray-900 shadow-sm px-3 w-full pr-4 transition-all hover:border-red-200">
+                                                    <SelectTrigger id="paymentStatus" aria-label="Payment Status" className="bg-white border-gray-100/50 h-9 rounded-xl text-xs text-gray-900 shadow-sm px-3 w-full pr-4 transition-all hover:border-red-200">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -3035,10 +3769,10 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                         </div>
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-gray-200/50 mt-2">
                                             <div className={`space-y-1 ${!['gcash', 'maya'].includes(paymentMethod) ? 'sm:col-span-2' : ''}`}>
-                                                <Label className={LABEL_STYLE}>Payment Method</Label>
+                                                <Label htmlFor="paymentMethod" className={LABEL_STYLE}>Payment Method</Label>
                                                 <div className="relative group/select">
                                                     <Select value={paymentMethod} onValueChange={(value: PaymentMethod) => setPaymentMethod(value)}>
-                                                        <SelectTrigger className="bg-white border-gray-100/50 h-9 rounded-xl text-xs shadow-sm px-3 w-full pr-4 transition-all hover:border-red-200">
+                                                        <SelectTrigger id="paymentMethod" aria-label="Payment Method" className="bg-white border-gray-100/50 h-9 rounded-xl text-xs shadow-sm px-3 w-full pr-4 transition-all hover:border-red-200">
                                                             <SelectValue />
                                                         </SelectTrigger>
                                                         <SelectContent>
@@ -3064,7 +3798,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                             )}
                                         </div>
 
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                                        <div className="grid grid-cols-2 gap-2 mt-2">
                                             {showAmountRec && (
                                                 <>
                                                     <div className="space-y-1">
@@ -3072,7 +3806,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                             <>
                                                                 <div className="flex items-center justify-between">
                                                                     <Label htmlFor="depositAmt" className={LABEL_STYLE}>Downpayment (Min 50%)</Label>
-                                                                    <span className="text-[10px] text-gray-400 font-semibold">Min: {formatPeso(minimumDownpayment)}</span>
+                                                                    <span className="text-[10px] text-gray-600 font-semibold">Min: {formatPeso(minimumDownpayment)}</span>
                                                                 </div>
                                                                 <div className="relative">
                                                                     <span className="absolute left-3 top-2.5 text-gray-900 text-xs font-black">{'\u20B1'}</span>
@@ -3211,7 +3945,14 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                     </div>
                                     {rushFee > 0 && (
                                         <div className="flex justify-between items-center text-[13px]">
-                                            <span className="text-gray-500 font-medium">{shoes.length > 1 ? 'Rush Fee Total' : 'Rush Fee'}</span>
+                                            <span className="text-gray-500 font-medium">
+                                                {(() => {
+                                                    if (shoes.length > 1) return 'Rush Fee Total';
+                                                    const firstRush = shoes.find(s => s.priorityLevel === 'rush');
+                                                    const matched = firstRush ? getApplicableRushFee(firstRush.baseService || [], firstRush.addOns || [], services) : null;
+                                                    return matched ? matched.name : 'Rush Fee';
+                                                })()}
+                                            </span>
                                             <span className="font-bold text-gray-800">{formatPeso(rushFee)}</span>
                                         </div>
                                     )}
@@ -3225,11 +3966,11 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                             <span className="font-bold text-emerald-700">{formatPeso(retailTotal)}</span>
                                         </div>
                                     )}
-
                                     {/* Discount Selector */}
+                                    {canApplyDiscounts && (
                                     <div className="pt-2 pb-1 border-t border-gray-200/60">
                                         <div className="flex items-center justify-between mb-1.5">
-                                            <span className="text-[11px] font-bold text-gray-600 uppercase tracking-tight flex items-center gap-1.5">
+                                            <span className="text-[11px] font-bold text-gray-600 uppercase tracking-tight flex items-center gap-1.5 flex-wrap">
                                                 <span>Discount</span>
                                                 {discountAmount > 0 && (
                                                     <span className="text-[10px] font-extrabold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
@@ -3240,10 +3981,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                             {discountPreset !== '0' && (
                                                 <button
                                                     type="button"
-                                                    onClick={() => {
-                                                        setDiscountPreset('0');
-                                                        setCustomDiscountValue('');
-                                                    }}
+                                                    onClick={() => handleSelectDiscount('0')}
                                                     className="text-[10.5px] font-bold text-red-500 hover:text-red-700 transition-colors"
                                                 >
                                                     Remove
@@ -3251,92 +3989,326 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                             )}
                                         </div>
 
-                                        <div className="grid grid-cols-4 sm:grid-cols-7 gap-1">
-                                            {[
-                                                { id: '0', label: 'None' },
-                                                { id: '5', label: '5%' },
-                                                { id: '10', label: '10%' },
-                                                { id: '15', label: '15%' },
-                                                { id: '20', label: '20%' },
-                                                { id: '25', label: '25%' },
-                                                { id: 'custom', label: 'Custom' },
-                                            ].map(opt => (
-                                                <button
-                                                    key={opt.id}
-                                                    type="button"
-                                                    onClick={() => setDiscountPreset(opt.id as any)}
-                                                    className={`py-1 text-[11px] font-black rounded-lg border transition-all ${
-                                                        discountPreset === opt.id
-                                                            ? 'bg-red-600 text-white border-red-600 shadow-2xs'
-                                                            : 'bg-white text-gray-700 border-gray-200 hover:border-red-200 hover:bg-red-50/50'
-                                                    }`}
-                                                >
-                                                    {opt.label}
-                                                </button>
-                                            ))}
+                                        <div className="flex flex-wrap gap-1">
+                                            {discountOptions.map(opt => {
+                                                const isSelected = discountPreset === opt.id;
+                                                const displayRate = opt.id !== '0' && opt.id !== 'custom'
+                                                    ? opt.rateText
+                                                    : (opt.id === 'custom' && customDiscountValue
+                                                        ? (customDiscountType === 'percent' ? `${customDiscountValue}%` : `₱${customDiscountValue}`)
+                                                        : '');
+                                                return (
+                                                    <button
+                                                        key={opt.id}
+                                                        type="button"
+                                                        title={opt.fullLabel}
+                                                        onClick={() => handleSelectDiscount(opt.id)}
+                                                        className={`px-2.5 py-1 text-[11px] font-black rounded-lg border transition-all ${
+                                                            isSelected
+                                                                ? 'bg-red-600 text-white border-red-600 shadow-2xs'
+                                                                : 'bg-white text-gray-700 border-gray-200 hover:border-red-200 hover:bg-red-50/50'
+                                                        }`}
+                                                    >
+                                                        <span>{opt.label}</span>
+                                                        {isSelected && displayRate && (
+                                                            <span className="ml-1 opacity-90 font-bold">({displayRate})</span>
+                                                        )}
+                                                    </button>
+                                                );
+                                            })}
                                         </div>
 
-                                        {discountPreset === 'custom' && (
-                                            <div className="flex items-center gap-2 mt-2 bg-white p-2 rounded-lg border border-red-100 shadow-2xs">
-                                                <Select
-                                                    value={customDiscountType}
-                                                    onValueChange={(val: 'percent' | 'amount') => {
-                                                        setCustomDiscountType(val);
-                                                        if (val === 'amount' && customDiscountValue.trim()) {
-                                                            const num = parseFloat(customDiscountValue.replace(/,/g, ''));
-                                                            if (!isNaN(num) && num >= 0) {
-                                                                setCustomDiscountValue(num.toFixed(2));
-                                                            }
-                                                        }
-                                                    }}
-                                                >
-                                                    <SelectTrigger className="h-8 w-24 text-xs font-bold border-gray-200">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="percent">% Off</SelectItem>
-                                                        <SelectItem value="amount">₱ Off</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                                <div className="relative flex-1">
-                                                    <Input
-                                                        type="text"
-                                                        inputMode="decimal"
-                                                        placeholder={customDiscountType === 'percent' ? "e.g. 12" : "0.00"}
-                                                        value={customDiscountValue}
-                                                        onChange={(e) => {
-                                                            let val = e.target.value;
-                                                            if (val === '') {
-                                                                setCustomDiscountValue('');
-                                                                return;
-                                                            }
-                                                            // Allow numbers with optional decimal point
-                                                            if (/^\d*\.?\d*$/.test(val)) {
-                                                                const parts = val.split('.');
-                                                                if (parts.length === 2 && parts[1].length > 2) {
-                                                                    val = `${parts[0]}.${parts[1].slice(0, 2)}`;
-                                                                }
-                                                                setCustomDiscountValue(val);
-                                                            }
-                                                        }}
-                                                        onBlur={() => {
-                                                            if (customDiscountValue.trim()) {
-                                                                const num = parseFloat(customDiscountValue.replace(/,/g, ''));
-                                                                if (!isNaN(num) && num >= 0) {
-                                                                    if (customDiscountType === 'amount') {
-                                                                        setCustomDiscountValue(num.toFixed(2));
-                                                                    } else {
-                                                                        setCustomDiscountValue(num <= 100 ? (num % 1 === 0 ? num.toString() : num.toFixed(2)) : '100');
-                                                                    }
-                                                                }
-                                                            }
-                                                        }}
-                                                        className="h-8 text-xs font-bold pl-2 font-mono"
-                                                    />
-                                                </div>
-                                            </div>
-                                        )}
+                                        {/* Beneficiary Verification & Integrated Authorization Panel */}
+                                        {(() => {
+                                            const renderDiscountAuthSection = () => {
+                                                if (canSelfAuthorizeDiscounts || discountPreset === '0') return null;
+                                                return (
+                                                    <div className="space-y-1.5">
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="text-[10px] font-bold uppercase tracking-wider text-red-900 flex items-center gap-1.5">
+                                                                <Lock size={11} className="text-red-600" />
+                                                                <span>Discount Authorization</span>
+                                                            </span>
+                                                            {isAuthorized ? (
+                                                                <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100/90 px-1.5 py-0.5 rounded border border-emerald-300 flex items-center gap-1">
+                                                                    <ShieldCheck size={10} className="text-emerald-600" />
+                                                                    {authorizedByUsername ? `Authorized: ${authorizedByUsername}` : '✓ Code Verified'}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-[9px] font-bold text-red-700 bg-white/90 px-1.5 py-0.5 rounded border border-red-200">
+                                                                    Required
+                                                                </span>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Selector: Authorization Code or Username & Password (only displayed if staff has permission to use code) */}
+                                                        {canStaffUseAuthCode ? (
+                                                            <div className="flex items-center gap-3 text-[10px] pt-0.5 font-semibold text-gray-700">
+                                                                <label className="flex items-center gap-1 cursor-pointer hover:text-red-700">
+                                                                    <input
+                                                                        type="radio"
+                                                                        name="authMethod"
+                                                                        checked={authMethod === 'code'}
+                                                                        onChange={() => setAuthMethod('code')}
+                                                                        className="accent-red-600 cursor-pointer"
+                                                                    />
+                                                                    <span>Authorization Code</span>
+                                                                </label>
+                                                                <label className="flex items-center gap-1 cursor-pointer hover:text-red-700">
+                                                                    <input
+                                                                        type="radio"
+                                                                        name="authMethod"
+                                                                        checked={authMethod === 'credentials'}
+                                                                        onChange={() => setAuthMethod('credentials')}
+                                                                        className="accent-red-600 cursor-pointer"
+                                                                    />
+                                                                    <span>Username & Password</span>
+                                                                </label>
+                                                            </div>
+                                                        ) : (
+                                                            <p className="text-[10px] text-gray-500 font-medium pt-0.5">
+                                                                Requires supervisor or manager authorization:
+                                                            </p>
+                                                        )}
+
+                                                        {canStaffUseAuthCode && authMethod === 'code' ? (
+                                                            <div className="space-y-1">
+                                                                <div className="relative">
+                                                                    <Input
+                                                                        type={showDiscountAuthSecret ? "text" : "password"}
+                                                                        value={enteredDiscountCode}
+                                                                        onChange={(e) => setEnteredDiscountCode(sanitizeClientAuthCode(e.target.value))}
+                                                                        placeholder="Enter authorization code"
+                                                                        autoComplete="off"
+                                                                        maxLength={64}
+                                                                        className={`h-7.5 text-xs font-medium pr-8 bg-white transition-colors ${
+                                                                            isAuthCodeValid
+                                                                                ? 'border-emerald-500 text-emerald-900 focus-visible:border-emerald-600 ring-1 ring-emerald-500/20'
+                                                                                : enteredDiscountCode.trim()
+                                                                                    ? 'border-red-500 text-red-900 focus-visible:border-red-600 ring-1 ring-red-500/20'
+                                                                                    : 'border-red-200 focus-visible:border-red-600'
+                                                                        }`}
+                                                                    />
+                                                                    <button
+                                                                        type="button"
+                                                                        tabIndex={-1}
+                                                                        onClick={() => setShowDiscountAuthSecret(!showDiscountAuthSecret)}
+                                                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+                                                                        title={showDiscountAuthSecret ? "Hide code" : "Show code"}
+                                                                    >
+                                                                        {showDiscountAuthSecret ? <EyeOff size={13} /> : <Eye size={13} />}
+                                                                    </button>
+                                                                </div>
+                                                                <p className="text-[9.5px]">
+                                                                    {isAuthCodeValid ? (
+                                                                        <span className="text-emerald-700 font-bold flex items-center gap-1">
+                                                                            <CheckCircle2 size={11} className="text-emerald-600 shrink-0 inline" />
+                                                                            ✓ Authorization code accepted.
+                                                                        </span>
+                                                                    ) : enteredDiscountCode.trim() ? (
+                                                                        <span className="text-red-600 font-bold flex items-center gap-1">
+                                                                            <XCircle size={11} className="text-red-500 shrink-0 inline" />
+                                                                            ✗ Invalid authorization code.
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="text-gray-500">
+                                                                            Enter authorization code to activate.
+                                                                        </span>
+                                                                    )}
+                                                                </p>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="space-y-1.5">
+                                                                {!authorizedByUsername ? (
+                                                                    <>
+                                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                                                                            <Input
+                                                                                type="text"
+                                                                                placeholder="Authorizer Username"
+                                                                                value={authUsername}
+                                                                                onChange={(e) => setAuthUsername(sanitizeClientUsername(e.target.value))}
+                                                                                autoComplete="off"
+                                                                                maxLength={50}
+                                                                                className="h-7.5 text-xs bg-white border-red-200 focus-visible:border-red-600"
+                                                                            />
+                                                                            <div className="relative">
+                                                                                <Input
+                                                                                    type={showDiscountAuthSecret ? "text" : "password"}
+                                                                                    placeholder="Password"
+                                                                                    value={authCredential}
+                                                                                    onChange={(e) => setAuthCredential(e.target.value)}
+                                                                                    autoComplete="current-password"
+                                                                                    maxLength={128}
+                                                                                    className="h-7.5 text-xs pr-8 bg-white border-red-200 focus-visible:border-red-600"
+                                                                                />
+                                                                                <button
+                                                                                    type="button"
+                                                                                    tabIndex={-1}
+                                                                                    onClick={() => setShowDiscountAuthSecret(!showDiscountAuthSecret)}
+                                                                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+                                                                                    title={showDiscountAuthSecret ? "Hide password" : "Show password"}
+                                                                                >
+                                                                                    {showDiscountAuthSecret ? <EyeOff size={13} /> : <Eye size={13} />}
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+                                                                        <Button
+                                                                            type="button"
+                                                                            size="sm"
+                                                                            disabled={isAuthorizing || !authUsername.trim() || !authCredential}
+                                                                            onClick={handleAuthorizeDiscount}
+                                                                            className="w-full h-7.5 bg-red-600 hover:bg-red-700 text-white text-[11px] font-bold cursor-pointer"
+                                                                        >
+                                                                            {isAuthorizing ? <Loader2 className="w-3 h-3 animate-spin mr-1.5" /> : null}
+                                                                            <span>Authorize Discount</span>
+                                                                        </Button>
+                                                                    </>
+                                                                ) : (
+                                                                    <div className="flex items-center justify-between text-[9.5px] text-emerald-800 pt-0.5">
+                                                                        <span>Authorized by {authorizedByUsername}</span>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setAuthorizedByUserId(null);
+                                                                                setAuthorizedByUsername(null);
+                                                                                setAuthUsername('');
+                                                                                setAuthCredential('');
+                                                                            }}
+                                                                            className="text-red-700 underline hover:text-red-900 font-semibold cursor-pointer"
+                                                                        >
+                                                                            Change Authorizer
+                                                                        </button>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            };
+
+                                            return (
+                                                <>
+                                                    {/* ID Verification Panel with Integrated Authorization */}
+                                                    {discountPreset !== '0' && activeDiscountConfig && (
+                                                        <div className="mt-2 p-2 bg-red-50/50 border border-red-200/90 rounded-xl space-y-1.5 animate-in fade-in duration-150">
+                                                            <div className="flex items-center justify-between">
+                                                                <span className="text-[10.5px] font-bold uppercase tracking-wider text-red-900 flex items-center gap-1">
+                                                                    <ShieldCheck size={13} className="text-red-600" />
+                                                                    <span>{activeDiscountConfig.label}</span>
+                                                                </span>
+                                                                {isValidIdInput(discountIdNumber, activeDiscountConfig.idFormat, activeDiscountConfig.digits) ? (
+                                                                    <span className="text-[9.5px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                                                                        ✓ Verified (Active)
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-[9.5px] font-semibold text-gray-500">
+                                                                        {activeDiscountConfig.digits
+                                                                            ? `${discountIdNumber.replace(/-/g, '').trim().length}/${activeDiscountConfig.digits} ${activeDiscountConfig.idFormat === 'numbers' ? 'digits' : 'chars'}`
+                                                                            : (activeDiscountConfig.idFormat === 'numbers' ? 'Numbers Only' : activeDiscountConfig.idFormat === 'letters' ? 'Letters Only' : 'Numbers & Letters')
+                                                                        }
+                                                                    </span>
+                                                                )}
+                                                            </div>
+
+                                                            <Input
+                                                                type="text"
+                                                                value={discountIdNumber}
+                                                                maxLength={activeDiscountConfig.digits ? activeDiscountConfig.digits + Math.floor((activeDiscountConfig.digits - 1) / 2) : 45}
+                                                                onChange={(e) => {
+                                                                    setDiscountIdNumber(formatIdWithHyphens(e.target.value, activeDiscountConfig.idFormat, activeDiscountConfig.digits, discountIdNumber));
+                                                                }}
+                                                                placeholder={activeDiscountConfig.digits
+                                                                    ? Array.from({ length: Math.ceil(activeDiscountConfig.digits / 2) }).map((_, i) => `${(i * 2 + 1) % 10}${((i * 2 + 2) % 10)}`).join('-')
+                                                                    : (activeDiscountConfig.idFormat === 'numbers' ? 'e.g. 12-34-56' : activeDiscountConfig.idFormat === 'letters' ? 'e.g. AB-CD-EF' : 'e.g. 12-34-AB')}
+                                                                className="h-8 text-xs font-mono font-bold tracking-wider bg-white border-red-200 focus-visible:ring-0 focus-visible:border-red-600"
+                                                            />
+                                                            <p className="text-[9.5px] text-gray-500">
+                                                                Allowed: {activeDiscountConfig.digits ? `Exactly ${activeDiscountConfig.digits} ` : ''}{activeDiscountConfig.idFormat === 'numbers' ? 'numbers only.' : activeDiscountConfig.idFormat === 'letters' ? 'letters only.' : 'characters (numbers & letters).' } Required to apply {activeDiscountConfig.name} discount.
+                                                            </p>
+
+                                                            {/* Integrated Authorization Inside the Red Box */}
+                                                            {!canSelfAuthorizeDiscounts && (
+                                                                <div className="pt-2 border-t border-red-200/80">
+                                                                    {renderDiscountAuthSection()}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+
+                                                    {/* Custom Discount Panel (Only for Owner / Admin) */}
+                                                    {discountPreset === 'custom' && isOwnerOrAdminUser && (
+                                                        <div className="mt-2.5 p-2.5 bg-red-50/40 border border-red-200 rounded-xl space-y-2">
+                                                            <div className="flex items-center gap-2">
+                                                                <Select
+                                                                    value={customDiscountType}
+                                                                    onValueChange={(val: 'percent' | 'amount') => {
+                                                                        setCustomDiscountType(val);
+                                                                        if (val === 'amount' && customDiscountValue.trim()) {
+                                                                            const num = parseFloat(customDiscountValue.replace(/,/g, ''));
+                                                                            if (!isNaN(num) && num >= 0) {
+                                                                                setCustomDiscountValue(num.toFixed(2));
+                                                                            }
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <SelectTrigger id="customDiscountType" aria-label="Custom Discount Type" className="h-8 w-24 text-xs font-bold border-gray-200 bg-white">
+                                                                        <SelectValue />
+                                                                    </SelectTrigger>
+                                                                    <SelectContent>
+                                                                        <SelectItem value="percent">% Off</SelectItem>
+                                                                        <SelectItem value="amount">₱ Off</SelectItem>
+                                                                    </SelectContent>
+                                                                </Select>
+                                                                <div className="relative flex-1">
+                                                                    <Input
+                                                                        type="text"
+                                                                        inputMode="decimal"
+                                                                        placeholder={customDiscountType === 'percent' ? "e.g. 12" : "0.00"}
+                                                                        value={customDiscountValue}
+                                                                        onChange={(e) => {
+                                                                            let val = e.target.value;
+                                                                            if (val === '') {
+                                                                                setCustomDiscountValue('');
+                                                                                return;
+                                                                            }
+                                                                            if (/^\d*\.?\d*$/.test(val)) {
+                                                                                const parts = val.split('.');
+                                                                                if (parts.length === 2 && parts[1].length > 2) {
+                                                                                    val = `${parts[0]}.${parts[1].slice(0, 2)}`;
+                                                                                }
+                                                                                setCustomDiscountValue(val);
+                                                                            }
+                                                                        }}
+                                                                        onBlur={() => {
+                                                                            if (customDiscountValue.trim()) {
+                                                                                const num = parseFloat(customDiscountValue.replace(/,/g, ''));
+                                                                                if (!isNaN(num) && num >= 0) {
+                                                                                    if (customDiscountType === 'amount') {
+                                                                                        setCustomDiscountValue(num.toFixed(2));
+                                                                                    } else {
+                                                                                        setCustomDiscountValue(num <= 100 ? (num % 1 === 0 ? num.toString() : num.toFixed(2)) : '100');
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        }}
+                                                                        className="h-8 text-xs font-bold pl-2 font-mono bg-white border-gray-200"
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* If a discount without an ID config is selected by staff, show authorization in matching red card */}
+                                                    {discountPreset !== '0' && !activeDiscountConfig && !canSelfAuthorizeDiscounts && (
+                                                        <div className="mt-2 p-2 bg-red-50/50 border border-red-200/90 rounded-xl space-y-1.5 animate-in fade-in duration-150">
+                                                            {renderDiscountAuthSection()}
+                                                        </div>
+                                                    )}
+                                                </>
+                                            );
+                                        })()}
                                     </div>
+                                    )}
 
                                     <div className="flex justify-between items-center text-[13px] pt-2 border-t border-gray-100">
                                         <span className="text-gray-500 font-medium">Total Quantity (Per Unit)</span>
@@ -3351,11 +4323,11 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                         </div>
                     </div>
 
-                    {/* Action Buttons */}
-                    <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4 pt-5 mt-2 border-t border-gray-100">
+                    {/* Action Buttons: strictly 1 row with Cancel on left and Submit on right */}
+                    <div className="grid grid-cols-2 gap-3 pt-4 sm:pt-5 mt-2 border-t border-gray-100 w-full">
                         <Button
                             type="button"
-                            className="w-full sm:flex-1 bg-gray-200 hover:bg-gray-700 text-gray-600 hover:text-white font-black text-xs uppercase tracking-widest h-10 transition-all rounded-lg shadow-sm"
+                            className="w-full bg-gray-200 hover:bg-gray-700 text-gray-600 hover:text-white font-black text-xs uppercase tracking-widest h-10 transition-all rounded-lg shadow-sm"
                             onClick={onCancel}
                         >
                             Cancel
@@ -3363,7 +4335,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                         <Button
                             type="submit"
                             disabled={isSubmitting}
-                            className="w-full sm:flex-1 bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-widest h-10 shadow-lg shadow-red-200 transition-all rounded-lg disabled:opacity-60 disabled:cursor-not-allowed"
+                            className="w-full bg-red-600 hover:bg-red-700 text-white font-black text-xs uppercase tracking-widest h-10 shadow-lg shadow-red-200 transition-all rounded-lg disabled:opacity-60 disabled:cursor-not-allowed"
                         >
                             {/* P1-7 FIX: visually disable + relabel Submit while the request is
                                 in flight, so the user gets clear feedback and cannot fire a
@@ -3381,11 +4353,11 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                         <div className="flex items-center gap-2 text-blue-700 mb-1">
                             <Sparkles className="w-5 h-5 text-amber-500" />
                             <DialogTitle className="text-base font-black text-gray-900 tracking-tight">
-                                Official Release Date & ML Prediction Details
+                                Standard Release Date & ML Prediction Details
                             </DialogTitle>
                         </div>
                         <DialogDescription className="text-[11px] sm:text-xs text-gray-500">
-                            Comparison between standard shop business rules and advisory ML operational prediction.
+                            Comparison of the shop's Standard Release Date and the Random Forest ML Predicted Release Date.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -3397,12 +4369,12 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                 <div className="flex items-center gap-1.5">
                                     <ClipboardList className="w-4 h-4 text-emerald-700 shrink-0" />
                                     <span className="font-bold uppercase tracking-wider text-[11px] text-slate-900">
-                                        Business Rules
+                                        BUSINESS RULES
                                     </span>
                                 </div>
                                 <div className="p-2.5 rounded-lg bg-white border border-emerald-200/80 space-y-1.5 shadow-2xs">
                                     <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800/90 block">
-                                        Release Date
+                                        STANDARD RELEASE DATE
                                     </span>
                                     <div className="flex items-center justify-between gap-2">
                                         <span className="text-xs font-bold text-slate-800 tabular-nums bg-emerald-50/60 px-2 py-0.5 rounded border border-emerald-200 shadow-2xs">
@@ -3430,11 +4402,22 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                             <span className="font-black">{mlBreakdown.priorityDays} days</span>
                                         </div>
                                     )}
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-500">Calendar Adjustment:</span>
+                                        <span className="font-semibold text-slate-800">
+                                            {serverPrediction?.standard_has_rollover
+                                                ? `+${serverPrediction.standard_rollover_days} day${serverPrediction.standard_rollover_days === 1 ? '' : 's'} — shop closure`
+                                                : 'None'}
+                                        </span>
+                                    </div>
                                     <div className="flex justify-between pt-1 border-t border-slate-200/60 font-black text-slate-950">
-                                        <span>Total Duration:</span>
-                                        <span>{officialDays} {officialDays === 1 ? 'Day' : 'Days'}</span>
+                                        <span>Standard Duration:</span>
+                                        <span>{officialDays} {officialDays === 1 ? 'day' : 'days'}</span>
                                     </div>
                                 </div>
+                                <p className="text-[10px] text-slate-500 italic pt-1 border-t border-slate-200/40">
+                                    “The Standard Release Date is calculated using Shoelotskey's established service-duration and service-combination rules. It represents the shop's standard customer scheduling commitment.”
+                                </p>
                             </div>
 
                             {/* ML Prediction Card */}
@@ -3442,12 +4425,12 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                 <div className="flex items-center gap-1.5">
                                     <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
                                     <span className="font-bold uppercase tracking-wider text-[11px] text-slate-900">
-                                        ML Prediction
+                                        ML PREDICTION
                                     </span>
                                 </div>
                                 <div className="p-2.5 rounded-lg bg-white border border-blue-200/80 space-y-1.5 shadow-2xs">
                                     <span className="text-[10px] font-bold uppercase tracking-wider text-blue-800/90 block">
-                                        Predicted Release Date
+                                        ML PREDICTED RELEASE DATE
                                     </span>
                                     <div className="flex items-center justify-between gap-2">
                                         <span className="text-xs font-bold text-slate-800 tabular-nums bg-blue-50/60 px-2 py-0.5 rounded border border-blue-200 shadow-2xs">
@@ -3458,48 +4441,61 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                 </span>
                                             ) : !hasSelectedServices ? (
                                                 <span className="text-slate-400 font-medium">Select service</span>
-                                            ) : predictionError && !serverPrediction?.ml_predicted_date ? (
-                                                <span className="text-slate-400 font-medium">Unable to calculate</span>
-                                            ) : serverPrediction?.ml_predicted_date ? (
+                                            ) : (serverPrediction?.ml_predicted_release_date || serverPrediction?.ml_predicted_date) ? (
+                                                predictedDateDisplay
+                                            ) : hasSelectedServices && predictedDateDisplay !== '—' ? (
                                                 predictedDateDisplay
                                             ) : (
                                                 <span className="text-slate-400 font-medium">Predicting…</span>
                                             )}
                                         </span>
-                                        <span className="inline-flex items-center gap-1 bg-indigo-600 text-white text-[8px] font-bold uppercase px-2.5 py-0.5 rounded-full tracking-wider shadow-2xs shrink-0">
-                                            <span>ADVISORY</span>
-                                            <Info size={9} className="text-indigo-200" />
+                                        <span className="inline-flex items-center gap-1 bg-blue-600 text-white text-[8px] font-bold uppercase px-2.5 py-0.5 rounded-full tracking-wider shadow-2xs shrink-0">
+                                            <span>ACTIVE</span>
+                                            <Sparkles size={9} className="text-amber-300" />
                                         </span>
                                     </div>
                                 </div>
                                 <div className="space-y-1 pt-1 border-t border-slate-100 text-[11px] text-slate-700">
                                     <div className="flex justify-between">
-                                        <span className="text-slate-500">Algorithm:</span>
-                                        <span className="font-bold text-slate-900">{formatMlModelName(serverPrediction?.ml_model)}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-slate-500">Training Base:</span>
-                                        <span className="font-bold text-slate-900">Validated Historical Orders</span>
+                                        <span className="text-slate-500">Model:</span>
+                                        <span className="font-bold text-slate-900">Random Forest Regressor</span>
                                     </div>
                                     <div className="flex justify-between">
                                         <span className="text-slate-500">Model Status:</span>
-                                        <span className="font-bold text-slate-900">
+                                        <span className="text-blue-700 font-bold">Active</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-500">Prediction Target:</span>
+                                        <span className="font-bold text-slate-900">Ready-for-Release Duration</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-500">Features:</span>
+                                        <span className="font-bold text-slate-900">12 Selected Features</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-500">Development Dataset:</span>
+                                        <span className="font-bold text-slate-900">10,000 Simulated Operational Orders</span>
+                                    </div>
+                                    <div className="flex justify-between text-[10px] text-slate-500 pl-2">
+                                        <span>Training / Val / Final Test:</span>
+                                        <span className="font-semibold text-slate-700">7,000 / 1,500 / 1,500</span>
+                                    </div>
+                                    <div className="flex justify-between pt-1 border-t border-slate-100">
+                                        <span className="text-slate-500">Raw RF Prediction:</span>
+                                        <span className="font-mono font-bold text-slate-800">
                                             {predictionLoading ? (
-                                                <span className="inline-flex items-center gap-1 text-blue-600">
-                                                    <Loader2 className="w-3 h-3 animate-spin" />
-                                                    <span>Predicting…</span>
-                                                </span>
-                                            ) : !hasSelectedServices ? (
-                                                <span className="text-slate-400 font-medium text-[11px]">Ready</span>
-                                            ) : predictionError && !serverPrediction?.ml_status ? (
-                                                <span className="text-amber-600 font-medium">Prediction unavailable</span>
-                                            ) : serverPrediction?.ml_status === 'valid' ? (
-                                                <span className="text-emerald-600 font-bold">Valid ✓</span>
-                                            ) : serverPrediction?.ml_status ? (
-                                                serverPrediction.ml_status.charAt(0).toUpperCase() + serverPrediction.ml_status.slice(1).toLowerCase()
-                                            ) : (
-                                                <span className="text-slate-400 font-medium">Predicting…</span>
-                                            )}
+                                                'Predicting…'
+                                            ) : serverPrediction?.ml_raw_prediction_days != null ? (
+                                                `${Number(serverPrediction.ml_raw_prediction_days).toFixed(2)} days`
+                                            ) : '—'}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-500">Calendar Adjustment:</span>
+                                        <span className="font-semibold text-slate-800">
+                                            {serverPrediction?.ml_has_safety_rollover
+                                                ? `+${serverPrediction.ml_safety_rollover_days} day — shop closure`
+                                                : 'None'}
                                         </span>
                                     </div>
                                     <div className="flex justify-between pt-1 border-t border-slate-100 font-black text-slate-950">
@@ -3512,24 +4508,27 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                 </span>
                                             ) : !hasSelectedServices ? (
                                                 <span className="text-slate-400 font-medium text-[11px]">Select service</span>
-                                            ) : predictionError && serverPrediction?.ml_predicted_days == null ? (
-                                                <span className="text-slate-400 font-medium">Unable to calculate</span>
-                                            ) : serverPrediction?.ml_predicted_days != null && serverPrediction.ml_predicted_days > 0 ? (
-                                                `${serverPrediction.ml_predicted_days} ${serverPrediction.ml_predicted_days === 1 ? 'Day' : 'Days'}`
+                                            ) : serverPrediction?.ml_elapsed_days != null ? (
+                                                `${serverPrediction.ml_elapsed_days} ${serverPrediction.ml_elapsed_days === 1 ? 'day' : 'days'}`
+                                            ) : serverPrediction?.ml_base_days != null && serverPrediction.ml_base_days > 0 ? (
+                                                `${serverPrediction.ml_base_days} ${serverPrediction.ml_base_days === 1 ? 'day' : 'days'}`
                                             ) : (
                                                 <span className="text-slate-400 font-medium text-[11px]">Predicting…</span>
                                             )}
                                         </span>
                                     </div>
                                 </div>
+                                <p className="text-[10px] text-slate-500 italic pt-1 border-t border-slate-200/40">
+                                    “The ML prediction estimates the number of days from Date Received to Ready-for-Release and may include calendar adjustments.”
+                                </p>
                             </div>
                         </div>
 
-                        {/* Why Dates Differ Explanation */}
+                        {/* Explanation Sections */}
                         <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 space-y-2.5 text-slate-800">
                             <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900">
                                 <Info className="w-4 h-4 text-slate-600 shrink-0" />
-                                <span>How Official Release Dates & ML Predictions Work</span>
+                                <span>How Standard Release Dates & ML Predictions Work</span>
                             </div>
                             <div className="space-y-2 text-[11px] leading-relaxed">
                                 <div className="p-2.5 bg-white rounded-lg border border-slate-200/80 border-l-4 border-l-emerald-500 shadow-2xs space-y-1.5">
@@ -3537,10 +4536,10 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                         1. Business Rules
                                     </strong>
                                     <p className="text-[10.5px] text-slate-600 leading-relaxed">
-                                        The official release date is calculated using the shop's standard service duration rules. The applicable duration is determined based on the selected service and service combination using the shop's non additive service combination rules. The resulting duration is then used to calculate the official release date.
+                                        The Standard Release Date is calculated using Shoelotskey's established service-duration and service-combination rules. Based on the selected service or combination of services, the system determines the applicable standard turnaround duration and calculates the corresponding release date.
                                     </p>
                                     <p className="text-[10px] text-emerald-800 font-medium italic bg-emerald-50/70 px-2 py-1 rounded border border-emerald-100">
-                                        The Business Rules calculation determines the official release date used for operational scheduling and the expected customer release date.
+                                        The Standard Release Date represents the shop's established customer scheduling commitment.
                                     </p>
                                 </div>
 
@@ -3549,11 +4548,20 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                         2. ML Prediction
                                     </strong>
                                     <p className="text-[10.5px] text-slate-600 leading-relaxed">
-                                        The ML prediction is generated using a Random Forest Regressor trained on validated historical job order records with usable historical order to claim turnaround data. The model uses 18 job order input features, including service types and quantities, number of footwear pairs, priority, order date features, order value, and shoe condition factors such as scratches, yellowing, deep stains, sole separation, rips or holes, and worn out condition. The model produces an estimated turnaround duration and corresponding predicted release date for a new job order.
+                                        The ML Predicted Release Date is generated by the system's active Random Forest Regressor using 12 selected job-order features representing the selected services, number of pairs, priority, and date the order was received.
+                                    </p>
+                                    <p className="text-[10.5px] text-slate-600 leading-relaxed">
+                                        The model predicts the expected Ready-for-Release turnaround duration for the current job order. The predicted duration is then used to calculate the corresponding ML Predicted Release Date.
+                                    </p>
+                                    <p className="text-[10.5px] text-slate-600 leading-relaxed">
+                                        The model was developed using a 10,000-record Simulated Operational Dataset, divided into 7,000 training, 1,500 validation, and 1,500 final test records.
                                     </p>
                                     <p className="text-[10px] text-blue-800 font-medium italic bg-blue-50/70 px-2 py-1 rounded border border-blue-100">
-                                        The ML result is advisory and does not replace the official Business Rules release date.
+                                        The Random Forest model actively generates a Ready-for-Release prediction for each eligible job order.
                                     </p>
+                                    <div className="text-[9.5px] text-slate-500 bg-slate-50 p-2 rounded border border-slate-200/80 leading-normal">
+                                        <strong>Dataset Information:</strong> The model-development dataset consists of simulated operational service orders generated using validated shop service-duration rules and operational conditions. It is separate from the 119 validated historical customer orders used in the historical empirical evaluation.
+                                    </div>
                                 </div>
 
                                 <div className="p-2.5 bg-white rounded-lg border border-slate-200/80 border-l-4 border-l-amber-500 shadow-2xs space-y-1.5">
@@ -3561,19 +4569,28 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                         3. Why Can the Dates Differ?
                                     </strong>
                                     <p className="text-[10.5px] text-slate-600 leading-relaxed">
-                                        The two methods serve different purposes. Business Rules calculate the official release date using the shop's standard service duration rules and non additive service combination rules. ML Prediction estimates an advisory turnaround duration using patterns identified from validated historical order to claim data. Because the two methods use different calculations and information, their results may differ. The Business Rules date remains the official release date, while the ML prediction serves only as an advisory estimate.
+                                        The Standard Release Date and ML Predicted Release Date are produced using different methods. The Standard Release Date follows Shoelotskey's established service-duration and service-combination rules, while the ML Predicted Release Date is generated by the Random Forest model using the characteristics of the current job order and patterns learned during model development.
+                                    </p>
+                                    <p className="text-[10.5px] text-slate-600 leading-relaxed">
+                                        Because one is a deterministic scheduling calculation and the other is a machine-learning regression prediction, their predicted turnaround durations and resulting dates may occasionally differ.
+                                    </p>
+                                    <p className="text-[10px] text-amber-800 font-medium italic bg-amber-50/70 px-2 py-1 rounded border border-amber-100">
+                                        Both values are retained to provide standard shop scheduling and machine-learning-based predictive information.
                                     </p>
                                 </div>
 
                                 <div className="p-2.5 bg-white rounded-lg border border-slate-200/80 border-l-4 border-l-purple-500 shadow-2xs space-y-1.5">
                                     <strong className="text-purple-950 font-bold block">
-                                        4. Operational Safeguard
+                                        4. Release Date Tracking
                                     </strong>
                                     <p className="text-[10.5px] text-slate-600 leading-relaxed">
-                                        The ML prediction is intended for internal use by the owner and staff as a decision support reference. It may assist in reviewing turnaround times, planning work schedules, and monitoring job order progress. When an order is actually completed, staff can update its status and inform the customer when it is ready for pickup. The actual release or completion event is recorded separately from the official Business Rules release date, ML predicted release date, and customer claimed date.
+                                        The system maintains the Standard Release Date, ML Predicted Release Date, Actual Ready-for-Release timestamp, and Claimed Date as separate values for operational monitoring and future prediction evaluation.
+                                    </p>
+                                    <p className="text-[10.5px] text-slate-600 leading-relaxed">
+                                        The Standard Release Date represents the shop's scheduled customer commitment. The ML Predicted Release Date represents the date estimated by the active Random Forest model. The Actual Ready-for-Release timestamp records when staff marks the order For Release, while the Claimed Date records when the customer receives or picks up the order.
                                     </p>
                                     <p className="text-[10px] text-purple-800 font-medium italic bg-purple-50/70 px-2 py-1 rounded border border-purple-100">
-                                        The ML prediction does not override, shorten, extend, or change the official release date.
+                                        Keeping these values separately allows the system to compare scheduled, predicted, actual ready-for-release, and claimed outcomes.
                                     </p>
                                 </div>
 
@@ -3582,7 +4599,13 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                         5. Machine Learning in Data Analytics
                                     </strong>
                                     <p className="text-[10.5px] text-slate-600 leading-relaxed">
-                                        Machine learning serves as the predictive analytics component of the system. The Random Forest Regressor analyzes relationships between the 18 job order input features and historical order to claim turnaround data, then estimates a turnaround duration and corresponding predicted release date for a new job order. This predictive component complements the system's descriptive analytics, which are presented through the dashboard and sales reports module.
+                                        Machine learning serves as the predictive analytics component of the Shoelotskey Service Management System. The active Random Forest Regressor analyzes 12 selected job-order features to generate an expected Ready-for-Release turnaround duration and corresponding ML Predicted Release Date for each eligible new job order.
+                                    </p>
+                                    <p className="text-[10.5px] text-slate-600 leading-relaxed">
+                                        The ML prediction complements the system's descriptive analytics provided through the Dashboard and Sales Report modules. Descriptive analytics summarizes historical and current operational information, while the Random Forest model provides predictive analytics for new job orders.
+                                    </p>
+                                    <p className="text-[10px] text-rose-800 font-medium italic bg-rose-50/70 px-2 py-1 rounded border border-rose-100">
+                                        Together, the system provides rule-based scheduling, descriptive analytics, and machine-learning-based predictive analytics for service management.
                                     </p>
                                 </div>
                             </div>
@@ -3602,16 +4625,20 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
             </Dialog>
 
             {/* Camera Capture Modal for Live Condition Photos */}
-            <CameraCaptureModal
-                open={cameraModalShoeId !== null}
-                onClose={() => setCameraModalShoeId(null)}
-                onCapture={(dataUrl) => {
-                    if (cameraModalShoeId) {
-                        updateShoe(cameraModalShoeId, { beforeImage: dataUrl });
-                    }
-                }}
-                title="Take Before Condition Photo"
-            />
+            {isAdminAccount && cameraModalShoeId !== null && (
+                <Suspense fallback={null}>
+                    <CameraCaptureModal
+                        open={cameraModalShoeId !== null}
+                        onClose={() => setCameraModalShoeId(null)}
+                        onCapture={(dataUrl) => {
+                            if (cameraModalShoeId) {
+                                updateShoe(cameraModalShoeId, { beforeImage: dataUrl });
+                            }
+                        }}
+                        title="Take Before Condition Photo"
+                    />
+                </Suspense>
+            )}
 
         </form>
     );

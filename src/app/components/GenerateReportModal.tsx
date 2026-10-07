@@ -6,6 +6,7 @@ import { Input } from '@/app/components/ui/input';
 import { Loader2, AlertCircle, TrendingUp, TrendingDown, Wallet, Check } from 'lucide-react';
 import { API_BASE } from '@/app/lib/apiBase';
 import { toast } from 'sonner';
+import { useActivities } from '@/app/context/ActivityContext';
 
 export type ReportType = 'Sales Report' | 'Expenses Report' | 'ROI Report';
 export type ReportPeriod = 'Daily' | 'Weekly' | 'Monthly' | 'Quarterly' | 'Annually' | 'Custom';
@@ -39,6 +40,7 @@ export default function GenerateReportModal({
   const [selectedFormat, setSelectedFormat] = useState<ExportActionType>('xlsx');
   const [isGenerating, setIsGenerating] = useState<ExportActionType | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const { addActivity } = useActivities();
 
   // Synchronous ref lock against button spam / race conditions
   const isGeneratingRef = useRef(false);
@@ -124,7 +126,24 @@ export default function GenerateReportModal({
       const elapsedMs = Math.round(performance.now() - startTime);
       const elapsedSec = (elapsedMs / 1000).toFixed(2);
       console.log(`[REPORT GENERATION] Generated ${reportType} (${reportPeriod}) PDF in ${elapsedMs}ms (${elapsedSec}s)`);
-      toast.success(`${reportType} (PDF) generated in ${elapsedSec}s.`);
+      toast.success(`${reportType} (PDF) generated (Duration: ${elapsedMs}ms).`);
+      addActivity({
+        type: 'Reports',
+        module: 'Sales Report',
+        user: JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}').username,
+        action: 'EXPORT_PDF',
+        table: 'reports',
+        details: `Exported ${reportType} (${reportPeriod}) to PDF (Duration: ${elapsedMs}ms)`,
+        newValues: {
+          report_type: reportType.toLowerCase(),
+          period: reportPeriod,
+          format: 'PDF',
+          filename: downloadFilename,
+          duration_ms: elapsedMs,
+          duration_formatted: `${elapsedMs}ms`,
+          status: 'SUCCESS'
+        }
+      });
       onClose();
     } catch (err: any) {
       console.error('[REPORT ERROR] PDF export failed:', err);
@@ -190,7 +209,24 @@ export default function GenerateReportModal({
       const elapsedMs = Math.round(performance.now() - startTime);
       const elapsedSec = (elapsedMs / 1000).toFixed(2);
       console.log(`[REPORT GENERATION] Generated ${reportType} (${reportPeriod}) Excel in ${elapsedMs}ms (${elapsedSec}s)`);
-      toast.success(`${reportType} (Excel .xlsx) generated in ${elapsedSec}s.`);
+      toast.success(`${reportType} (Excel .xlsx) generated (Duration: ${elapsedMs}ms).`);
+      addActivity({
+        type: 'Reports',
+        module: 'Sales Report',
+        user: JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}').username,
+        action: 'EXPORT_XLSX',
+        table: 'reports',
+        details: `Exported ${reportType} (${reportPeriod}) to Excel (.xlsx) (Duration: ${elapsedMs}ms)`,
+        newValues: {
+          report_type: reportType.toLowerCase(),
+          period: reportPeriod,
+          format: 'XLSX',
+          filename: downloadFilename,
+          duration_ms: elapsedMs,
+          duration_formatted: `${elapsedMs}ms`,
+          status: 'SUCCESS'
+        }
+      });
       onClose();
     } catch (err: any) {
       console.error('[REPORT ERROR] Excel export failed:', err);
@@ -256,7 +292,24 @@ export default function GenerateReportModal({
       const elapsedMs = Math.round(performance.now() - startTime);
       const elapsedSec = (elapsedMs / 1000).toFixed(2);
       console.log(`[REPORT GENERATION] Generated ${reportType} (${reportPeriod}) CSV in ${elapsedMs}ms (${elapsedSec}s)`);
-      toast.success(`${reportType} (CSV) generated in ${elapsedSec}s.`);
+      toast.success(`${reportType} (CSV) generated (Duration: ${elapsedMs}ms).`);
+      addActivity({
+        type: 'Reports',
+        module: 'Sales Report',
+        user: JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}').username,
+        action: 'EXPORT_CSV',
+        table: 'reports',
+        details: `Exported ${reportType} (${reportPeriod}) to CSV (Duration: ${elapsedMs}ms)`,
+        newValues: {
+          report_type: reportType.toLowerCase(),
+          period: reportPeriod,
+          format: 'CSV',
+          filename: downloadFilename,
+          duration_ms: elapsedMs,
+          duration_formatted: `${elapsedMs}ms`,
+          status: 'SUCCESS'
+        }
+      });
       onClose();
     } catch (err: any) {
       console.error('[REPORT ERROR] CSV export failed:', err);
@@ -280,6 +333,21 @@ export default function GenerateReportModal({
           onPrintReport(reportType, reportPeriod, startDate, endDate);
           const elapsedMs = Math.round(performance.now() - startTime);
           console.log(`[REPORT GENERATION] Compiled printable ${reportType} (${reportPeriod}) in ${elapsedMs}ms`);
+          addActivity({
+            type: 'Reports',
+            module: 'Sales Report',
+            user: JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}').username,
+            action: 'PRINT',
+            table: 'reports',
+            details: `Printed ${reportType} (${reportPeriod}) (Duration: ${elapsedMs}ms)`,
+            newValues: {
+              report_type: reportType.toLowerCase(),
+              period: reportPeriod,
+              duration_ms: elapsedMs,
+              duration_formatted: `${elapsedMs}ms`,
+              status: 'SUCCESS'
+            }
+          });
         }
       } catch (err: any) {
         console.error('[PRINT ERROR]', err);

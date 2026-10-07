@@ -1,0 +1,55 @@
+report_type,reporting_period,metric,dashboard_value,independent_value,difference,status
+Daily Sales,"July 30, 2026",Gross / Billed Sales,5125.0,5125.0,0.0,PASS
+Daily Sales,"July 30, 2026",Net Sales,5125.0,5125.0,0.0,PASS
+Daily Sales,"July 30, 2026",Total Orders Count,12,12,0,PASS
+Daily Sales,"July 30, 2026",Eligible Orders Count,12,12,0,PASS
+Daily Sales,"July 30, 2026",Payments Received,4637.5,4637.5,0.0,PASS
+Daily Sales,"July 30, 2026",Balance Due,487.5,487.5,0.0,PASS
+Daily Sales,"July 30, 2026",Discounts Granted,0.0,0.0,0.0,PASS
+Daily Sales,"July 30, 2026",Refunds Issued,0.0,0.0,0.0,PASS
+Daily Sales,"July 30, 2026",Retained Payments,0.0,0.0,0.0,PASS
+Weekly Sales,"July 06, 2026 – July 12, 2026",Gross / Billed Sales,7075.0,7075.0,0.0,PASS
+Weekly Sales,"July 06, 2026 – July 12, 2026",Net Sales,7075.0,7075.0,0.0,PASS
+Weekly Sales,"July 06, 2026 – July 12, 2026",Total Orders Count,12,12,0,PASS
+Weekly Sales,"July 06, 2026 – July 12, 2026",Eligible Orders Count,12,12,0,PASS
+Weekly Sales,"July 06, 2026 – July 12, 2026",Payments Received,5687.5,5687.5,0.0,PASS
+Weekly Sales,"July 06, 2026 – July 12, 2026",Balance Due,1387.5,1387.5,0.0,PASS
+Weekly Sales,"July 06, 2026 – July 12, 2026",Discounts Granted,0.0,0.0,0.0,PASS
+Weekly Sales,"July 06, 2026 – July 12, 2026",Refunds Issued,0.0,0.0,0.0,PASS
+Weekly Sales,"July 06, 2026 – July 12, 2026",Retained Payments,0.0,0.0,0.0,PASS
+Monthly Sales,"September 2026 (Sept 1 – Sept 30, 2026)",Gross / Billed Sales,31458.75,31458.75,0.0,PASS
+Monthly Sales,"September 2026 (Sept 1 – Sept 30, 2026)",Net Sales,31683.75,31683.75,0.0,PASS
+Monthly Sales,"September 2026 (Sept 1 – Sept 30, 2026)",Total Orders Count,40,40,0,PASS
+Monthly Sales,"September 2026 (Sept 1 – Sept 30, 2026)",Eligible Orders Count,38,38,0,PASS
+Monthly Sales,"September 2026 (Sept 1 – Sept 30, 2026)",Payments Received,20538.13,20538.13,0.0,PASS
+Monthly Sales,"September 2026 (Sept 1 – Sept 30, 2026)",Balance Due,10920.619999999999,10920.62,0.0,PASS
+Monthly Sales,"September 2026 (Sept 1 – Sept 30, 2026)",Discounts Granted,0.0,0.0,0.0,PASS
+Monthly Sales,"September 2026 (Sept 1 – Sept 30, 2026)",Refunds Issued,825.0,825.0,0.0,PASS
+Monthly Sales,"September 2026 (Sept 1 – Sept 30, 2026)",Retained Payments,225.0,225.0,0.0,PASS
+Quarterly Sales,"Q3 2026 (July 1 – September 30, 2026)",Gross / Billed Sales,53933.75,53933.75,0.0,PASS
+Quarterly Sales,"Q3 2026 (July 1 – September 30, 2026)",Net Sales,54158.75,54158.75,0.0,PASS
+Quarterly Sales,"Q3 2026 (July 1 – September 30, 2026)",Total Orders Count,88,88,0,PASS
+Quarterly Sales,"Q3 2026 (July 1 – September 30, 2026)",Eligible Orders Count,86,86,0,PASS
+Quarterly Sales,"Q3 2026 (July 1 – September 30, 2026)",Payments Received,38163.130000000005,38163.13,0.0,PASS
+Quarterly Sales,"Q3 2026 (July 1 – September 30, 2026)",Balance Due,15770.619999999999,15770.62,0.0,PASS
+Quarterly Sales,"Q3 2026 (July 1 – September 30, 2026)",Discounts Granted,0.0,0.0,0.0,PASS
+Quarterly Sales,"Q3 2026 (July 1 – September 30, 2026)",Refunds Issued,825.0,825.0,0.0,PASS
+Quarterly Sales,"Q3 2026 (July 1 – September 30, 2026)",Retained Payments,225.0,225.0,0.0,PASS
+Annual Sales,"Fiscal Year 2026 (Jan 1 – Dec 31, 2026)",Gross / Billed Sales,61883.75,61883.75,0.0,PASS
+Annual Sales,"Fiscal Year 2026 (Jan 1 – Dec 31, 2026)",Net Sales,62108.75,62108.75,0.0,PASS
+Annual Sales,"Fiscal Year 2026 (Jan 1 – Dec 31, 2026)",Total Orders Count,103,103,0,PASS
+Annual Sales,"Fiscal Year 2026 (Jan 1 – Dec 31, 2026)",Eligible Orders Count,101,101,0,PASS
+Annual Sales,"Fiscal Year 2026 (Jan 1 – Dec 31, 2026)",Payments Received,44025.630000000005,44025.63,0.0,PASS
+Annual Sales,"Fiscal Year 2026 (Jan 1 – Dec 31, 2026)",Balance Due,17858.12,17858.12,0.0,PASS
+Annual Sales,"Fiscal Year 2026 (Jan 1 – Dec 31, 2026)",Discounts Granted,0.0,0.0,0.0,PASS
+Annual Sales,"Fiscal Year 2026 (Jan 1 – Dec 31, 2026)",Refunds Issued,825.0,825.0,0.0,PASS
+Annual Sales,"Fiscal Year 2026 (Jan 1 – Dec 31, 2026)",Retained Payments,225.0,225.0,0.0,PASS
+Expenses,"Fiscal Year 2026 (Jan 1 – Dec 31, 2026)",Total Expenses,3820.0,3820.0,0.0,PASS
+Expenses,"Fiscal Year 2026 (Jan 1 – Dec 31, 2026)",Inventory Expenses,2420.0,2420.0,0.0,PASS
+Expenses,"Fiscal Year 2026 (Jan 1 – Dec 31, 2026)",Operating Expenses,1400.0,1400.0,0.0,PASS
+Expenses,"Fiscal Year 2026 (Jan 1 – Dec 31, 2026)",Other Expenses,0.0,0.0,0.0,PASS
+Expenses,"Fiscal Year 2026 (Jan 1 – Dec 31, 2026)",Net Profit,58288.75,58288.75,0.0,PASS
+ROI,"Fiscal Year 2026 (Jan 1 – Dec 31, 2026)",Net Sales Revenue,62108.75,62108.75,0.0,PASS
+ROI,"Fiscal Year 2026 (Jan 1 – Dec 31, 2026)",Total Expenses,3820.0,3820.0,0.0,PASS
+ROI,"Fiscal Year 2026 (Jan 1 – Dec 31, 2026)",Net Profit,58288.75,58288.75,0.0,PASS
+ROI,"Fiscal Year 2026 (Jan 1 – Dec 31, 2026)",ROI Value (%),1525.8835078534032,1525.8835078534032,0.0,PASS

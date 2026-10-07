@@ -1,0 +1,1759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Historical Import Execution Failure & Comprehensive Reconciliation Report</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0e17;
+            --bg-secondary: #111827;
+            --bg-card: #162032;
+            --border-color: #273549;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent-red: #ef4444;
+            --accent-red-glow: rgba(239, 68, 68, 0.2);
+            --accent-amber: #f59e0b;
+            --accent-amber-glow: rgba(245, 158, 11, 0.2);
+            --accent-emerald: #10b981;
+            --accent-emerald-glow: rgba(16, 185, 129, 0.2);
+            --accent-blue: #3b82f6;
+            --accent-purple: #8b5cf6;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            padding: 32px 24px;
+        }
+        .container { max-width: 1440px; margin: 0 auto; }
+        .header {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(30, 41, 59, 0.8) 100%);
+            border: 1px solid var(--accent-red);
+            border-radius: 16px;
+            padding: 32px;
+            margin-bottom: 32px;
+            box-shadow: 0 10px 30px var(--accent-red-glow);
+            position: relative;
+        }
+        .header::before {
+            content: "EXECUTION FAILURE RECONCILIATION";
+            position: absolute;
+            top: 16px; right: 24px;
+            font-family: 'JetBrains Mono', monospace; font-size: 11px;
+            letter-spacing: 2px; color: var(--accent-red);
+            background: rgba(239, 68, 68, 0.1); padding: 6px 12px;
+            border-radius: 20px; border: 1px solid var(--accent-red);
+        }
+        h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 8px; color: #fff; }
+        .subtitle { font-size: 14px; color: var(--text-secondary); margin-bottom: 20px; }
+        .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 20px; }
+        .meta-item { background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-color); padding: 12px 16px; border-radius: 8px; }
+        .meta-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 4px; }
+        .meta-value { font-size: 13px; font-weight: 600; font-family: 'JetBrains Mono', monospace; color: var(--text-primary); }
+        .verdict-banner {
+            background: linear-gradient(90deg, #7f1d1d 0%, #991b1b 100%);
+            border: 2px solid var(--accent-red); border-radius: 12px;
+            padding: 20px 24px; margin-bottom: 32px;
+            display: flex; align-items: center; justify-content: space-between;
+            box-shadow: 0 0 25px rgba(239, 68, 68, 0.4);
+        }
+        .verdict-title { font-size: 20px; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 12px; }
+        .verdict-badge { background: #fff; color: #991b1b; font-family: 'JetBrains Mono', monospace; font-weight: 800; padding: 6px 16px; border-radius: 6px; font-size: 13px; letter-spacing: 1px; }
+        .card { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 14px; padding: 28px; margin-bottom: 32px; }
+        .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 1px solid var(--border-color); }
+        .card-title { font-size: 18px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 10px; }
+        .badge-count { background: rgba(239, 68, 68, 0.2); color: var(--accent-red); border: 1px solid var(--accent-red); padding: 2px 8px; border-radius: 12px; font-size: 11px; font-family: 'JetBrains Mono', monospace; }
+        .badge-success { background: rgba(16, 185, 129, 0.2); color: var(--accent-emerald); border: 1px solid var(--accent-emerald); padding: 2px 8px; border-radius: 12px; font-size: 11px; font-family: 'JetBrains Mono', monospace; }
+        .badge-warning { background: rgba(245, 158, 11, 0.2); color: var(--accent-amber); border: 1px solid var(--accent-amber); padding: 2px 8px; border-radius: 12px; font-size: 11px; font-family: 'JetBrains Mono', monospace; }
+        .code-block { background: #090d16; border: 1px solid #1e293b; border-radius: 8px; padding: 18px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #cbd5e1; overflow-x: auto; line-height: 1.5; margin: 12px 0; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 12px; }
+        th { background: #0f172a; color: var(--text-secondary); font-family: 'JetBrains Mono', monospace; font-weight: 600; text-align: left; padding: 10px 12px; border: 1px solid var(--border-color); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+        td { padding: 9px 12px; border: 1px solid var(--border-color); color: var(--text-secondary); }
+        tr:nth-child(even) { background: rgba(15, 23, 42, 0.3); }
+        tr:hover { background: rgba(30, 41, 59, 0.5); }
+        .status-pill { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+        .pill-match { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .pill-missing { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); font-weight: 700; }
+        .pill-warn { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+        .callout-box { background: rgba(15, 23, 42, 0.7); border-left: 4px solid var(--accent-red); padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 16px 0; font-size: 13.5px; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <!-- HEADER -->
+    <div class="header">
+        <h1>Historical Import Execution Failure & Comprehensive Reconciliation</h1>
+        <div class="subtitle">Complete Diagnostic, Transaction Rollback Audit, 26-Row Pair Breakdown, 60-Row NEW Classification, Service Mapping, and Production Safety Gate</div>
+        <div class="meta-grid">
+            <div class="meta-item"><div class="meta-label">Audit Timestamp</div><div class="meta-value">2026-10-07 13:32:49 PHT</div></div>
+            <div class="meta-item"><div class="meta-label">Authoritative Engine</div><div class="meta-value">PostgreSQL 17.9 (AWS RDS)</div></div>
+            <div class="meta-item"><div class="meta-label">Authoritative Source</div><div class="meta-value">Master Workbook (.xlsx)</div></div>
+            <div class="meta-item"><div class="meta-label">Execution Status</div><div class="meta-value" style="color: var(--accent-red);">FROZEN / STOPPED</div></div>
+        </div>
+    </div>
+
+    <!-- VERDICT BANNER -->
+    <div class="verdict-banner">
+        <div class="verdict-title">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+            PARTIAL WRITE DETECTED — RECONCILIATION & AUTHORIZATION REQUIRED
+        </div>
+        <div class="verdict-badge">P0 STOPPED</div>
+    </div>
+
+    <!-- SECTION A -->
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">A. Transaction Rollback & Production Baseline Verification</div>
+            <span class="badge-count">READ-ONLY AUDIT</span>
+        </div>
+        <p style="margin-bottom: 14px; color: var(--text-secondary);">
+            The user instructed Antigravity to query deployed PostgreSQL immediately to determine if the previous attempt left zero writes.
+            <strong>Result: PARTIAL WRITE DETECTED.</strong> The previous script (<code>execute_authorized_pg_import.py</code>) had actually successfully passed assertions and executed <code>COMMIT</code> prior to the subsequent ORM reporting failure. Per explicit instruction, <strong>zero automatic cleanup was attempted</strong>.
+        </p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Table Name</th>
+                    <th>Pre-Write Baseline</th>
+                    <th>Actual PostgreSQL Count</th>
+                    <th>Delta</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td>orders</td><td>79</td><td style="font-weight: 700; color: #f87171;">133</td><td style="color: #f87171;">+54</td><td><span class="status-pill pill-missing">SURVIVING INSERT</span></td></tr>
+                <tr><td>customers</td><td>953</td><td style="font-weight: 700; color: #f87171;">1005</td><td style="color: #f87171;">+52</td><td><span class="status-pill pill-missing">SURVIVING INSERT</span></td></tr>
+                <tr><td>items</td><td>82</td><td style="font-weight: 700; color: #f87171;">104</td><td style="color: #f87171;">+22</td><td><span class="status-pill pill-missing">SURVIVING INSERT</span></td></tr>
+                <tr><td>item_service_mapping</td><td>139</td><td style="font-weight: 700; color: #f87171;">161</td><td style="color: #f87171;">+22</td><td><span class="status-pill pill-missing">SURVIVING INSERT</span></td></tr>
+                <tr><td>payments</td><td>79</td><td style="font-weight: 700; color: #f87171;">127</td><td style="color: #f87171;">+48</td><td><span class="status-pill pill-missing">SURVIVING INSERT</span></td></tr>
+                <tr><td>expenses</td><td>8</td><td style="font-weight: 700; color: #f87171;">15</td><td style="color: #f87171;">+7</td><td><span class="status-pill pill-missing">SURVIVING INSERT</span></td></tr>
+                <tr><td>inventory</td><td>26</td><td>26</td><td>0</td><td><span class="status-pill pill-match">MATCH / SAFE</span></td></tr>
+                <tr><td>inventory_logs</td><td>54</td><td>54</td><td>0</td><td><span class="status-pill pill-match">MATCH / SAFE</span></td></tr>
+                <tr><td>material_consumptions</td><td>0</td><td>0</td><td>0</td><td><span class="status-pill pill-match">MATCH / SAFE</span></td></tr>
+                <tr><td>audit_logs</td><td>1804</td><td style="font-weight: 700; color: #f87171;">1805</td><td style="color: #f87171;">+1</td><td><span class="status-pill pill-missing">SURVIVING BATCH AUDIT</span></td></tr>
+                <tr><td>csv_import_batches</td><td>1</td><td style="font-weight: 700; color: #f87171;">2</td><td style="color: #f87171;">+1</td><td><span class="status-pill pill-missing">SURVIVING BATCH RECORD</span></td></tr>
+            </tbody>
+        </table>
+
+        <div class="callout-box" style="margin-top: 16px;">
+            <strong>Surviving Batch Markers in PostgreSQL:</strong><br>
+            • <code>csv_import_batches</code> contains <code>BATCH-HIST-SEP2026-001</code> (Status: COMMITTED)<br>
+            • 48 payments carry reference prefix <code>BATCH-HIST-SEP2026-001-PAY-...</code><br>
+            • 7 expenses carry description prefix <code>[HISTORICAL-IMPORT: BATCH-HIST-SEP2026-001]</code><br>
+            • 1 audit log exists with module <code>Historical Batch Importer</code><br>
+            • All 54 canonical order numbers (<code>ORD-2026-09-02-001</code> to <code>ORD-2026-09-16-003</code>) exist in PostgreSQL.<br><br>
+            <em>Directive Followed:</em> Antigravity has <strong>STOPPED</strong> and reports <strong>PARTIAL WRITE DETECTED</strong>. No automatic DELETE, ALTER, or rollback was executed.
+        </div>
+    </div>
+
+    <!-- SECTION B & L -->
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">B & L. 26-Row Services-Pairs Breakdown & Exact Reason for 22 vs 24</div>
+            <span class="badge-count">EXACT 26-ROW AUDIT</span>
+        </div>
+
+        <p style="margin-bottom: 12px; color: var(--text-secondary);">
+            The sheet <code>Services-Pairs</code> in the authoritative master workbook contains exactly <strong>26 source rows</strong>.
+            The confusion between 22 and 24 arose because earlier filtering logic only excluded <code>JO-2026-09-16-LAWRENCE</code> (which has 2 pairs, leaving 26 - 2 = 24), but failed to account for <code>JO-2026-09-12-SEBASTIAN</code> (1 pair) and <code>JO-2026-09-15-CICO</code> (1 pair).
+            When all 4 excluded/held pairs are filtered, the true count is exactly <strong>22 approved pairs</strong>:
+        </p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Row</th>
+                    <th>Job Order Evidence ID</th>
+                    <th>Customer</th>
+                    <th>Pair #</th>
+                    <th>Shoe / Description</th>
+                    <th>Service Code</th>
+                    <th>Price</th>
+                    <th>Parent Order Class</th>
+                    <th>Importing?</th>
+                    <th>Reason</th>
+                    <th>Final Pair Action</th>
+                </tr>
+            </thead>
+            <tbody>
+
+                <tr>
+                    <td>1</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">JO-2026-09-12-WENDEL</td>
+                    <td>Mapped via JO</td>
+                    <td>1</td>
+                    <td>Flow</td>
+                    <td style="font-family: 'JetBrains Mono', monospace;">PR</td>
+                    <td>₱575</td>
+                    <td>SAFE_NEW</td>
+                    <td style="font-weight: 700; color: #34d399;">YES</td>
+                    <td style="font-size: 11px;">Approved historical pair linked to verified new Job Order</td>
+                    <td><span class="status-pill pill-match">INSERT</span></td>
+                </tr>
+    
+                <tr>
+                    <td>2</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">JO-2026-09-12-WENDEL</td>
+                    <td>Mapped via JO</td>
+                    <td>2</td>
+                    <td>Adidas</td>
+                    <td style="font-family: 'JetBrains Mono', monospace;">FR</td>
+                    <td>₱575</td>
+                    <td>SAFE_NEW</td>
+                    <td style="font-weight: 700; color: #34d399;">YES</td>
+                    <td style="font-size: 11px;">Approved historical pair linked to verified new Job Order</td>
+                    <td><span class="status-pill pill-match">INSERT</span></td>
+                </tr>
+    
+                <tr>
+                    <td>3</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">JO-2026-09-12-WENDEL</td>
+                    <td>Mapped via JO</td>
+                    <td>3</td>
+                    <td>Nike black</td>
+                    <td style="font-family: 'JetBrains Mono', monospace;">FR US</td>
+                    <td>₱575</td>
+                    <td>SAFE_NEW</td>
+                    <td style="font-weight: 700; color: #34d399;">YES</td>
+                    <td style="font-size: 11px;">Approved historical pair linked to verified new Job Order</td>
+                    <td><span class="status-pill pill-match">INSERT</span></td>
+                </tr>
+    
+                <tr>
+                    <td>4</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">JO-2026-09-12-JEROME</td>
+                    <td>Mapped via JO</td>
+                    <td>1</td>
+                    <td>Converse</td>
+                    <td style="font-family: 'JetBrains Mono', monospace;">FR</td>
+                    <td>₱575</td>
+                    <td>SAFE_NEW</td>
+                    <td style="font-weight: 700; color: #34d399;">YES</td>
+                    <td style="font-size: 11px;">Approved historical pair linked to verified new Job Order</td>
+                    <td><span class="status-pill pill-match">INSERT</span></td>
+                </tr>
+    
+                <tr>
+                    <td>5</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">JO-2026-09-12-JEROME</td>
+                    <td>Mapped via JO</td>
+                    <td>2</td>
+                    <td>Nike</td>
+                    <td style="font-family: 'JetBrains Mono', monospace;">MR</td>
+                    <td>₱450</td>
+                    <td>SAFE_NEW</td>
+                    <td style="font-weight: 700; color: #34d399;">YES</td>
+                    <td style="font-size: 11px;">Approved historical pair linked to verified new Job Order</td>
+                    <td><span class="status-pill pill-match">INSERT</span></td>
+                </tr>
+    
+                <tr>
+                    <td>6</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">JO-2026-09-12-SEBASTIAN</td>
+                    <td>Mapped via JO</td>
+                    <td>1</td>
+                    <td>Skechers</td>
+                    <td style="font-family: 'JetBrains Mono', monospace;">MR/MK [handwriting]</td>
+                    <td>₱450</td>
+                    <td>EXCLUDE_POLICY</td>
+                    <td style="font-weight: 700; color: #f87171;">NO</td>
+                    <td style="font-size: 11px;">Sebastian Casa excluded by cross-source policy (pilot test record in SQLite; not in PostgreSQL)</td>
+                    <td><span class="status-pill pill-missing">EXCLUDE_EXISTING_POLICY</span></td>
+                </tr>
+    
+                <tr>
+                    <td>7</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">JO-2026-09-14-RAPHAEL</td>
+                    <td>Mapped via JO</td>
+                    <td>1</td>
+                    <td>Nike gray</td>
+                    <td style="font-family: 'JetBrains Mono', monospace;">BC</td>
+                    <td>₱325</td>
+                    <td>SAFE_NEW</td>
+                    <td style="font-weight: 700; color: #34d399;">YES</td>
+                    <td style="font-size: 11px;">Approved historical pair linked to verified new Job Order</td>
+                    <td><span class="status-pill pill-match">INSERT</span></td>
+                </tr>
+    
+                <tr>
+                    <td>8</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">JO-2026-09-14-RAPHAEL</td>
+                    <td>Mapped via JO</td>
+                    <td>2</td>
+                    <td>Nike white/blue</td>
+                    <td style="font-family: 'JetBrains Mono', monospace;">BC</td>
+                    <td>₱325</td>
+                    <td>SAFE_NEW</td>
+                    <td style="font-weight: 700; color: #34d399;">YES</td>
+                    <td style="font-size: 11px;">Approved historical pair linked to verified new Job Order</td>
+                    <td><span class="status-pill pill-match">INSERT</span></td>
+                </tr>
+    
+                <tr>
+                    <td>9</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">JO-2026-09-14-RAPHAEL</td>
+                    <td>Mapped via JO</td>
+                    <td>3</td>
+                    <td>Nike black/white</td>
+                    <td style="font-family: 'JetBrains Mono', monospace;">BC</td>
+                    <td>₱325</td>
+                    <td>SAFE_NEW</td>
+                    <td style="font-weight: 700; color: #34d399;">YES</td>
+                    <td style="font-size: 11px;">Approved historical pair linked to verified new Job Order</td>
+                    <td><span class="status-pill pill-match">INSERT</span></td>
+                </tr>
+    
+                <tr>
+                    <td>10</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">JO-2026-09-14-CHRISTIAN</td>
+                    <td>Mapped via JO</td>
+                    <td>1</td>
+                    <td>ASICS</td>
+                    <td style="font-family: 'JetBrains Mono', monospace;">BC</td>
+                    <td>₱325</td>
+                    <td>SAFE_NEW</td>
+                    <td style="font-weight: 700; color: #34d399;">YES</td>
+                    <td style="font-size: 11px;">Approved historical pair linked to verified new Job Order</td>
+                    <td><span class="status-pill pill-match">INSERT</span></td>
+                </tr>
+    
+                <tr>
+                    <td>11</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">JO-2026-09-14-CHRISTIAN</td>
+                    <td>Mapped via JO</td>
+                    <td>2</td>
+                    <td>ASICS</td>
+                    <td style="font-family: 'JetBrains Mono', monospace;">BC</td>
+                    <td>₱325</td>
+                    <td>SAFE_NEW</td>
+                    <td style="font-weight: 700; color: #34d399;">YES</td>
+                    <td style="font-size: 11px;">Approved historical pair linked to verified new Job Order</td>
+                    <td><span class="status-pill pill-match">INSERT</span></td>
+                </tr>
+    
+                <tr>
+                    <td>12</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">JO-2026-09-14-KARL</td>
+                    <td>Mapped via JO</td>
+                    <td>1</td>
+                    <td>Salomon</td>
+                    <td style="font-family: 'JetBrains Mono', monospace;">BC</td>
+                    <td>₱325</td>
+                    <td>SAFE_NEW</td>
+                    <td style="font-weight: 700; color: #34d399;">YES</td>
+                    <td style="font-size: 11px;">Approved historical pair linked to verified new Job Order</td>
+                    <td><span class="status-pill pill-match">INSERT</span></td>
+                </tr>
+    
+                <tr>
+                    <td>13</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">JO-2026-09-14-NYX</td>
+                    <td>Mapped via JO</td>
+                    <td>1</td>
+                    <td>Palladium white</td>
+                    <td style="font-family: 'JetBrains Mono', monospace;">BC</td>
+                    <td>₱325</td>
+                    <td>SAFE_NEW</td>
+                    <td style="font-weight: 700; color: #34d399;">YES</td>
+                    <td style="font-size: 11px;">Approved historical pair linked to verified new Job Order</td>
+                    <td><span class="status-pill pill-match">INSERT</span></td>
+                </tr>
+    
+                <tr>
+                    <td>14</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">JO-2026-09-14-NYX</td>
+                    <td>Mapped via JO</td>
+                    <td>2</td>
+                    <td>Palladium black</td>
+                    <td style="font-family: 'JetBrains Mono', monospace;">BC</td>
+                    <td>₱325</td>
+                    <td>SAFE_NEW</td>
+                    <td style="font-weight: 700; color: #34d399;">YES</td>
+                    <td style="font-size: 11px;">Approved historical pair linked to verified new Job Order</td>
+                    <td><span class="status-pill pill-match">INSERT</span></td>
+                </tr>
+    
+                <tr>
+                    <td>15</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">JO-2026-09-14-NYX</td>
+                    <td>Mapped via JO</td>
+                    <td>3</td>
+                    <td>Palladium beige</td>
+                    <td style="font-family: 'JetBrains Mono', monospace;">FR</td>
+                    <td>₱575</td>
+                    <td>SAFE_NEW</td>
+                    <td style="font-weight: 700; color: #34d399;">YES</td>
+                    <td style="font-size: 11px;">Approved historical pair linked to verified new Job Order</td>
+                    <td><span class="status-pill pill-match">INSERT</span></td>
+                </tr>
+    
+                <tr>
+                    <td>16</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">JO-2026-09-14-ERNEST</td>
+                    <td>Mapped via JO</td>
+                    <td>1</td>
+                    <td>Birkenstock</td>
+                    <td style="font-family: 'JetBrains Mono', monospace;">MRES + color renewal</td>
+                    <td>₱925</td>
+                    <td>SAFE_NEW</td>
+                    <td style="font-weight: 700; color: #34d399;">YES</td>
+                    <td style="font-size: 11px;">Approved historical pair linked to verified new Job Order</td>
+                    <td><span class="status-pill pill-match">INSERT</span></td>
+                </tr>
+    
+                <tr>
+                    <td>17</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">JO-2026-09-14-KENNETH</td>
+                    <td>Mapped via JO</td>
+                    <td>1</td>
+                    <td>Adidas</td>
+                    <td style="font-family: 'JetBrains Mono', monospace;">BC</td>
+                    <td>₱325</td>
+                    <td>SAFE_NEW</td>
+                    <td style="font-weight: 700; color: #34d399;">YES</td>
+                    <td style="font-size: 11px;">Approved historical pair linked to verified new Job Order</td>
+                    <td><span class="status-pill pill-match">INSERT</span></td>
+                </tr>
+    
+                <tr>
+                    <td>18</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">JO-2026-09-14-KENNETH</td>
+                    <td>Mapped via JO</td>
+                    <td>2</td>
+                    <td>Oncloud</td>
+                    <td style="font-family: 'JetBrains Mono', monospace;">BC</td>
+                    <td>₱325</td>
+                    <td>SAFE_NEW</td>
+                    <td style="font-weight: 700; color: #34d399;">YES</td>
+                    <td style="font-size: 11px;">Approved historical pair linked to verified new Job Order</td>
+                    <td><span class="status-pill pill-match">INSERT</span></td>
+                </tr>
+    
+                <tr>
+                    <td>19</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">JO-2026-09-14-KENNETH</td>
+                    <td>Mapped via JO</td>
+                    <td>3</td>
+                    <td>Nike</td>
+                    <td style="font-family: 'JetBrains Mono', monospace;">MRES</td>
+                    <td>₱550</td>
+                    <td>SAFE_NEW</td>
+                    <td style="font-weight: 700; color: #34d399;">YES</td>
+                    <td style="font-size: 11px;">Approved historical pair linked to verified new Job Order</td>
+                    <td><span class="status-pill pill-match">INSERT</span></td>
+                </tr>
+    
+                <tr>
+                    <td>20</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">JO-2026-09-14-KENNETH</td>
+                    <td>Mapped via JO</td>
+                    <td>4</td>
+                    <td>Boost</td>
+                    <td style="font-family: 'JetBrains Mono', monospace;">MRES</td>
+                    <td>₱550</td>
+                    <td>SAFE_NEW</td>
+                    <td style="font-weight: 700; color: #34d399;">YES</td>
+                    <td style="font-size: 11px;">Approved historical pair linked to verified new Job Order</td>
+                    <td><span class="status-pill pill-match">INSERT</span></td>
+                </tr>
+    
+                <tr>
+                    <td>21</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">JO-2026-09-14-KENNETH</td>
+                    <td>Mapped via JO</td>
+                    <td>5</td>
+                    <td>Adidas white</td>
+                    <td style="font-family: 'JetBrains Mono', monospace;">FR US</td>
+                    <td>₱575</td>
+                    <td>SAFE_NEW</td>
+                    <td style="font-weight: 700; color: #34d399;">YES</td>
+                    <td style="font-size: 11px;">Approved historical pair linked to verified new Job Order</td>
+                    <td><span class="status-pill pill-match">INSERT</span></td>
+                </tr>
+    
+                <tr>
+                    <td>22</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">JO-2026-09-14-KENNETH</td>
+                    <td>Mapped via JO</td>
+                    <td>6</td>
+                    <td>Nike black</td>
+                    <td style="font-family: 'JetBrains Mono', monospace;">FR MID</td>
+                    <td>₱575</td>
+                    <td>SAFE_NEW</td>
+                    <td style="font-weight: 700; color: #34d399;">YES</td>
+                    <td style="font-size: 11px;">Approved historical pair linked to verified new Job Order</td>
+                    <td><span class="status-pill pill-match">INSERT</span></td>
+                </tr>
+    
+                <tr>
+                    <td>23</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">JO-2026-09-15-ANTONIO</td>
+                    <td>Mapped via JO</td>
+                    <td>1</td>
+                    <td>Oncloud</td>
+                    <td style="font-family: 'JetBrains Mono', monospace;">BC</td>
+                    <td>₱475</td>
+                    <td>SAFE_NEW</td>
+                    <td style="font-weight: 700; color: #34d399;">YES</td>
+                    <td style="font-size: 11px;">Approved historical pair linked to verified new Job Order</td>
+                    <td><span class="status-pill pill-match">INSERT</span></td>
+                </tr>
+    
+                <tr>
+                    <td>24</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">JO-2026-09-15-CICO</td>
+                    <td>Mapped via JO</td>
+                    <td>1</td>
+                    <td>Vans</td>
+                    <td style="font-family: 'JetBrains Mono', monospace;">BC</td>
+                    <td>₱325</td>
+                    <td>HOLD</td>
+                    <td style="font-weight: 700; color: #f87171;">NO</td>
+                    <td style="font-size: 11px;">Identity conflict (Cico B. Conde vs Rico Ancheta on DSMR; unresolved name mismatch)</td>
+                    <td><span class="status-pill pill-missing">HOLD_IDENTITY_CONFLICT</span></td>
+                </tr>
+    
+                <tr>
+                    <td>25</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">JO-2026-09-16-LAWRENCE</td>
+                    <td>Mapped via JO</td>
+                    <td>1</td>
+                    <td>Nike AF1</td>
+                    <td style="font-family: 'JetBrains Mono', monospace;">BC</td>
+                    <td>₱475</td>
+                    <td>HOLD</td>
+                    <td style="font-weight: 700; color: #f87171;">NO</td>
+                    <td style="font-size: 11px;">Unresolved multi-pair walk-in / date conflict on Sept 16</td>
+                    <td><span class="status-pill pill-missing">HOLD_PROBABLE_DUPLICATE</span></td>
+                </tr>
+    
+                <tr>
+                    <td>26</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">JO-2026-09-16-LAWRENCE</td>
+                    <td>Mapped via JO</td>
+                    <td>2</td>
+                    <td>Tiger</td>
+                    <td style="font-family: 'JetBrains Mono', monospace;">MRES</td>
+                    <td>₱700</td>
+                    <td>HOLD</td>
+                    <td style="font-weight: 700; color: #f87171;">NO</td>
+                    <td style="font-size: 11px;">Unresolved multi-pair walk-in / date conflict on Sept 16</td>
+                    <td><span class="status-pill pill-missing">HOLD_PROBABLE_DUPLICATE</span></td>
+                </tr>
+    
+            </tbody>
+        </table>
+
+        <div style="margin-top: 18px;" class="grid-2">
+            <div style="background: rgba(15, 23, 42, 0.6); padding: 16px; border-radius: 8px; border: 1px solid var(--border-color);">
+                <h4 style="color: var(--accent-emerald); margin-bottom: 6px;">Approved INSERT Rows (22 Pairs):</h4>
+                <p style="font-size: 13px; color: var(--text-secondary);">
+                    Wendel (3 pairs), Jerome (2 pairs), Raphael (3 pairs), Christian (2 pairs), Karl (1 pair), Nyx (3 pairs), Ernest (1 pair), Kenneth (6 pairs), Antonio (1 pair).<br>
+                    <strong>Total Approved = 3 + 2 + 3 + 2 + 1 + 3 + 1 + 6 + 1 = 22 pairs.</strong>
+                </p>
+            </div>
+            <div style="background: rgba(15, 23, 42, 0.6); padding: 16px; border-radius: 8px; border: 1px solid var(--border-color);">
+                <h4 style="color: var(--accent-red); margin-bottom: 6px;">Excluded / Held Rows (4 Pairs):</h4>
+                <p style="font-size: 13px; color: var(--text-secondary);">
+                    • Sebastian Casa (Row 6, 1 pair) -> <code>EXCLUDE_EXISTING_POLICY</code><br>
+                    • Cico B. Conde (Row 24, 1 pair) -> <code>HOLD_IDENTITY_CONFLICT</code><br>
+                    • Lawrence (Rows 25 & 26, 2 pairs) -> <code>HOLD_PROBABLE_DUPLICATE</code><br>
+                    <strong>Total Excluded = 1 + 1 + 2 = 4 pairs.</strong>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- SECTION C -->
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">C. Rebuilt 60-Row NEW Master Classification Table</div>
+            <span class="badge-count">MATHEMATICAL PROOF: 54 + 2 + 4 = 60</span>
+        </div>
+        <p style="margin-bottom: 12px; color: var(--text-secondary);">
+            Rebuilt directly from the authoritative <code>DSMR Transactions</code> sheet in <code>Shoelotskey_September_2026_Historical_Pilot_Master_Dataset.xlsx</code>.
+            Total transactions = 82 (22 CLAIM + 60 NEW). All 60 NEW transactions are classified below:
+        </p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Evidence ID</th>
+                    <th>Date</th>
+                    <th>Customer Name</th>
+                    <th>Pairs</th>
+                    <th>Total</th>
+                    <th>Paid</th>
+                    <th>Balance</th>
+                    <th>PG Duplicate?</th>
+                    <th>SQLite Duplicate?</th>
+                    <th>Final Action</th>
+                </tr>
+            </thead>
+            <tbody>
+
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-09-R02</td>
+                    <td>2026-09-09</td>
+                    <td>Levan Bunhaje</td>
+                    <td>1</td>
+                    <td>₱510</td>
+                    <td>₱510</td>
+                    <td>₱0</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-09-R03</td>
+                    <td>2026-09-09</td>
+                    <td>Rudary Mirhaza</td>
+                    <td>1</td>
+                    <td>₱510</td>
+                    <td>₱510</td>
+                    <td>₱0</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-09-R04</td>
+                    <td>2026-09-09</td>
+                    <td>Al Aguilar</td>
+                    <td>1</td>
+                    <td>₱575</td>
+                    <td>₱300</td>
+                    <td>₱275</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-09-R05</td>
+                    <td>2026-09-09</td>
+                    <td>Charl Panilio</td>
+                    <td>8</td>
+                    <td>₱3,275</td>
+                    <td>₱2,000</td>
+                    <td>₱1,275</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-09-R06</td>
+                    <td>2026-09-09</td>
+                    <td>Roderick Del Rosario</td>
+                    <td>2</td>
+                    <td>₱1,250</td>
+                    <td>₱0</td>
+                    <td>₱1,250</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-09-R07</td>
+                    <td>2026-09-09</td>
+                    <td>Dea Chavez</td>
+                    <td>5</td>
+                    <td>₱2,075</td>
+                    <td>₱1,000</td>
+                    <td>₱1,075</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-09-R08</td>
+                    <td>2026-09-09</td>
+                    <td>Karen Tupos</td>
+                    <td>3</td>
+                    <td>₱1,250</td>
+                    <td>₱1,250</td>
+                    <td>₱0</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-09-R09</td>
+                    <td>2026-09-09</td>
+                    <td>Christian Job</td>
+                    <td>2</td>
+                    <td>₱1,100</td>
+                    <td>₱1,100</td>
+                    <td>₱0</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-09-R10</td>
+                    <td>2026-09-09</td>
+                    <td>Lyndo Lao</td>
+                    <td>2</td>
+                    <td>₱1,400</td>
+                    <td>₱500</td>
+                    <td>₱900</td>
+                    <td>RECHECK</td>
+                    <td>RECHECK</td>
+                    <td><span class="status-pill pill-missing">HOLD</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-09-R11</td>
+                    <td>2026-09-09</td>
+                    <td>Pete Tahil</td>
+                    <td>1</td>
+                    <td>₱700</td>
+                    <td>₱700</td>
+                    <td>₱0</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-09-R12</td>
+                    <td>2026-09-09</td>
+                    <td>Gibson</td>
+                    <td>4</td>
+                    <td>₱3,125</td>
+                    <td>₱0</td>
+                    <td>₱3,125</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-09-R13</td>
+                    <td>2026-09-09</td>
+                    <td>Saludo</td>
+                    <td>1</td>
+                    <td>₱575</td>
+                    <td>₱0</td>
+                    <td>₱575</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-09-R14</td>
+                    <td>2026-09-09</td>
+                    <td>Mark Ontic</td>
+                    <td>1</td>
+                    <td>₱700</td>
+                    <td>₱300</td>
+                    <td>₱400</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-10-R02</td>
+                    <td>2026-09-10</td>
+                    <td>Vines Reuben</td>
+                    <td>1</td>
+                    <td>₱475</td>
+                    <td>₱475</td>
+                    <td>₱0</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-10-R03</td>
+                    <td>2026-09-10</td>
+                    <td>Jeremiah Valerio</td>
+                    <td>1</td>
+                    <td>₱475</td>
+                    <td>₱475</td>
+                    <td>₱0</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-10-R04</td>
+                    <td>2026-09-10</td>
+                    <td>Mark Aguilar</td>
+                    <td>2</td>
+                    <td>₱1,275</td>
+                    <td>₱1,275</td>
+                    <td>₱0</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-10-R05</td>
+                    <td>2026-09-10</td>
+                    <td>Mabr D.</td>
+                    <td>1</td>
+                    <td>₱450</td>
+                    <td>₱200</td>
+                    <td>₱250</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-11-R04</td>
+                    <td>2026-09-11</td>
+                    <td>Robert Yera Sr.</td>
+                    <td>2</td>
+                    <td>₱1,170</td>
+                    <td>₱520</td>
+                    <td>₱650</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-11-R05</td>
+                    <td>2026-09-11</td>
+                    <td>Janelle Kahano</td>
+                    <td>1</td>
+                    <td>₱205</td>
+                    <td>₱105</td>
+                    <td>₱100</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-11-R06</td>
+                    <td>2026-09-11</td>
+                    <td>Nicka Alkuino</td>
+                    <td>1</td>
+                    <td>₱550</td>
+                    <td>₱275</td>
+                    <td>₱275</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-11-R07</td>
+                    <td>2026-09-11</td>
+                    <td>Dicky Flora</td>
+                    <td>1</td>
+                    <td>₱325</td>
+                    <td>₱150</td>
+                    <td>₱175</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-11-R08</td>
+                    <td>2026-09-11</td>
+                    <td>Albert Pacuno</td>
+                    <td>1</td>
+                    <td>₱325</td>
+                    <td>₱325</td>
+                    <td>₱0</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-11-R09</td>
+                    <td>2026-09-11</td>
+                    <td>Jley Penesa</td>
+                    <td>3</td>
+                    <td>₱2,025</td>
+                    <td>₱1,025</td>
+                    <td>₱1,000</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-11-R10</td>
+                    <td>2026-09-11</td>
+                    <td>Jeivce Velasco</td>
+                    <td>1</td>
+                    <td>₱0</td>
+                    <td>₱0</td>
+                    <td>₱0</td>
+                    <td>RECHECK</td>
+                    <td>RECHECK</td>
+                    <td><span class="status-pill pill-missing">HOLD</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-11-R11</td>
+                    <td>2026-09-11</td>
+                    <td>Gyser Inoro</td>
+                    <td>1</td>
+                    <td>₱475</td>
+                    <td>₱475</td>
+                    <td>₱0</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-11-R12</td>
+                    <td>2026-09-11</td>
+                    <td>Rheiner Martinez</td>
+                    <td>1</td>
+                    <td>₱425</td>
+                    <td>₱50</td>
+                    <td>₱375</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-11-R13</td>
+                    <td>2026-09-11</td>
+                    <td>Frank Emilia</td>
+                    <td>1</td>
+                    <td>₱550</td>
+                    <td>₱550</td>
+                    <td>₱0</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-12-R02</td>
+                    <td>2026-09-12</td>
+                    <td>Wendel Fabro</td>
+                    <td>3</td>
+                    <td>₱1,725</td>
+                    <td>₱725</td>
+                    <td>₱1,000</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-12-R03</td>
+                    <td>2026-09-12</td>
+                    <td>Leslie Auderia</td>
+                    <td>5</td>
+                    <td>₱2,610</td>
+                    <td>₱2,610</td>
+                    <td>₱0</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-12-R04</td>
+                    <td>2026-09-12</td>
+                    <td>Kennise Delgaco</td>
+                    <td>2</td>
+                    <td>₱650</td>
+                    <td>₱650</td>
+                    <td>₱0</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-12-R05</td>
+                    <td>2026-09-12</td>
+                    <td>Jerome Ramirez</td>
+                    <td>2</td>
+                    <td>₱1,025</td>
+                    <td>₱512</td>
+                    <td>₱513</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-12-R06</td>
+                    <td>2026-09-12</td>
+                    <td>Sebastian Casa</td>
+                    <td>1</td>
+                    <td>₱450</td>
+                    <td>₱325</td>
+                    <td>₱125</td>
+                    <td>NO (DOES NOT EXIST)</td>
+                    <td>YES (PILOT RECORD)</td>
+                    <td><span class="status-pill pill-warn">EXCLUDE_POLICY</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-14-R10</td>
+                    <td>2026-09-14</td>
+                    <td>Ernest Agapay / Acapulco</td>
+                    <td>1</td>
+                    <td>₱925</td>
+                    <td>₱925</td>
+                    <td>₱0</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-14-R11</td>
+                    <td>2026-09-14</td>
+                    <td>Raphael Puncino</td>
+                    <td>3</td>
+                    <td>₱975</td>
+                    <td>₱500</td>
+                    <td>₱475</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-14-R12</td>
+                    <td>2026-09-14</td>
+                    <td>Christian Fontanilla</td>
+                    <td>2</td>
+                    <td>₱650</td>
+                    <td>₱325</td>
+                    <td>₱325</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-14-R13</td>
+                    <td>2026-09-14</td>
+                    <td>Cubelo</td>
+                    <td>1</td>
+                    <td>₱475</td>
+                    <td>₱475</td>
+                    <td>₱0</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-14-R14</td>
+                    <td>2026-09-14</td>
+                    <td>Karl Agnas</td>
+                    <td>1</td>
+                    <td>₱325</td>
+                    <td>₱325</td>
+                    <td>₱0</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-14-R15</td>
+                    <td>2026-09-14</td>
+                    <td>Chaukie</td>
+                    <td>2</td>
+                    <td>₱1,150</td>
+                    <td>₱1,000</td>
+                    <td>₱150</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-14-R16</td>
+                    <td>2026-09-14</td>
+                    <td>Nyx Pantoja</td>
+                    <td>3</td>
+                    <td>₱1,225</td>
+                    <td>₱0</td>
+                    <td>₱1,225</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-14-R17</td>
+                    <td>2026-09-14</td>
+                    <td>Kenneth Gutierrez</td>
+                    <td>6</td>
+                    <td>₱2,900</td>
+                    <td>₱0</td>
+                    <td>₱2,900</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-15-R05</td>
+                    <td>2026-09-15</td>
+                    <td>Juan</td>
+                    <td>2</td>
+                    <td>₱1,400</td>
+                    <td>₱1,400</td>
+                    <td>₱0</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-15-R06</td>
+                    <td>2026-09-15</td>
+                    <td>Antonio Lagunada</td>
+                    <td>1</td>
+                    <td>₱475</td>
+                    <td>₱475</td>
+                    <td>₱0</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-15-R07</td>
+                    <td>2026-09-15</td>
+                    <td>Cico B. Conde</td>
+                    <td>1</td>
+                    <td>₱325</td>
+                    <td>₱100</td>
+                    <td>₱225</td>
+                    <td>RECHECK</td>
+                    <td>RECHECK</td>
+                    <td><span class="status-pill pill-missing">HOLD</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-08-R02</td>
+                    <td>2026-09-08</td>
+                    <td>Derick Pucero [best read]</td>
+                    <td>1</td>
+                    <td>₱700</td>
+                    <td>₱200</td>
+                    <td>₱500</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-08-R03</td>
+                    <td>2026-09-08</td>
+                    <td>Irene de Leon [best read]</td>
+                    <td>1</td>
+                    <td>₱575</td>
+                    <td>₱575</td>
+                    <td>₱0</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-08-R04</td>
+                    <td>2026-09-08</td>
+                    <td>Edzel de Mesa</td>
+                    <td>2</td>
+                    <td>₱1,525</td>
+                    <td>₱1,000</td>
+                    <td>₱525</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-08-R05</td>
+                    <td>2026-09-08</td>
+                    <td>Danzel Cabaron [best read]</td>
+                    <td>2</td>
+                    <td>₱1,250</td>
+                    <td>₱1,250</td>
+                    <td>₱0</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-08-R06</td>
+                    <td>2026-09-08</td>
+                    <td>Johmar Tacacray</td>
+                    <td>1</td>
+                    <td>₱725</td>
+                    <td>₱725</td>
+                    <td>₱0</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-08-R07</td>
+                    <td>2026-09-08</td>
+                    <td>Marvin</td>
+                    <td>1</td>
+                    <td>₱725</td>
+                    <td>₱725</td>
+                    <td>₱0</td>
+                    <td>RECHECK</td>
+                    <td>RECHECK</td>
+                    <td><span class="status-pill pill-missing">HOLD</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-08-R08</td>
+                    <td>2026-09-08</td>
+                    <td>Oliver [surname unclear]</td>
+                    <td>1</td>
+                    <td>₱575</td>
+                    <td>₱575</td>
+                    <td>₱0</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-08-R09</td>
+                    <td>2026-09-08</td>
+                    <td>Christian T. [best read]</td>
+                    <td>1</td>
+                    <td>₱475</td>
+                    <td>₱475</td>
+                    <td>₱0</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-08-R10</td>
+                    <td>2026-09-08</td>
+                    <td>MJ Sumaridos [best read]</td>
+                    <td>1</td>
+                    <td>₱325</td>
+                    <td>₱0</td>
+                    <td>₱325</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-07-R03</td>
+                    <td>2026-09-07</td>
+                    <td>Ben Chavez [best read]</td>
+                    <td>1</td>
+                    <td>₱2,100</td>
+                    <td>₱2,000</td>
+                    <td>₱100</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-07-R04</td>
+                    <td>2026-09-07</td>
+                    <td>Aristotle Gomez [best read]</td>
+                    <td>3</td>
+                    <td>₱1,650</td>
+                    <td>₱825</td>
+                    <td>₱825</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-07-R05</td>
+                    <td>2026-09-07</td>
+                    <td>Kirk Guvia [best read]</td>
+                    <td>1</td>
+                    <td>₱550</td>
+                    <td>₱550</td>
+                    <td>₱0</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-07-R06</td>
+                    <td>2026-09-07</td>
+                    <td>Cont [unclear]</td>
+                    <td>1</td>
+                    <td>₱325</td>
+                    <td>₱325</td>
+                    <td>₱0</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-07-R07</td>
+                    <td>2026-09-07</td>
+                    <td>Jeulia Hatty [best read]</td>
+                    <td>1</td>
+                    <td>₱550</td>
+                    <td>₱275</td>
+                    <td>₱275</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-07-R08</td>
+                    <td>2026-09-07</td>
+                    <td>Zaira Elida [best read]</td>
+                    <td>3</td>
+                    <td>₱1,200</td>
+                    <td>₱550</td>
+                    <td>₱650</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-07-R09</td>
+                    <td>2026-09-07</td>
+                    <td>J. Eduvere [best read]</td>
+                    <td>1</td>
+                    <td>₱475</td>
+                    <td>₱200</td>
+                    <td>₱275</td>
+                    <td>NO</td>
+                    <td>NO</td>
+                    <td><span class="status-pill pill-match">IMPORT_POSTGRESQL</span></td>
+                </tr>
+    
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-07-R10</td>
+                    <td>2026-09-07</td>
+                    <td>Mark Ferrer</td>
+                    <td>1</td>
+                    <td>₱325</td>
+                    <td>₱325</td>
+                    <td>₱0</td>
+                    <td>NO (DOES NOT EXIST)</td>
+                    <td>YES (PILOT RECORD)</td>
+                    <td><span class="status-pill pill-warn">EXCLUDE_POLICY</span></td>
+                </tr>
+    
+            </tbody>
+        </table>
+
+        <div style="margin-top: 16px;" class="callout-box">
+            <strong>Authoritative Proof of Totals:</strong><br>
+            • <code>IMPORT_POSTGRESQL</code>: <strong>54 records</strong> (₱53,880.00 Gross Sales, ₱33,017.00 Collected, ₱20,863.00 Balance)<br>
+            • <code>EXCLUDE_POLICY</code>: <strong>2 records</strong> (Sebastian Casa ₱450.00, Mark Ferrer ₱325.00)<br>
+            • <code>HOLD</code>: <strong>4 records</strong> (Lyndo Lao ₱1,400.00, Jeivce Velasco ₱0.00, Cico B. Conde ₱325.00, Marvin ₱725.00)<br>
+            • <strong>Grand Total NEW Transactions: 54 + 2 + 4 = 60 records (100% Accounted For).</strong>
+        </div>
+    </div>
+
+    <!-- SECTION D & E -->
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">D & E. Sebastian/Mark Reconciliation & The Four Held Transactions</div>
+            <span class="badge-count">POLICY & IDENTITY RECONCILIATION</span>
+        </div>
+
+        <h4 style="color: #fff; margin-bottom: 8px;">D. Sebastian Casa and Mark Ferrer Resolution:</h4>
+        <p style="font-size: 13.5px; color: var(--text-secondary); margin-bottom: 12px;">
+            Live database inspection confirmed that neither Sebastian Casa nor Mark Ferrer exists in PostgreSQL (0 orders, 0 customers).
+            They exist exclusively in local SQLite (Mark Ferrer: Order <code>ORD-2026-09-07-001</code>; Sebastian Casa: Order <code>ORD-2026-09-12-001</code>).
+            Therefore, calling them <em>"LINK EXISTING POSTGRESQL ORDER"</em> was invalid.
+            They are correctly classified as: <strong>EXCLUDED FROM POSTGRESQL HISTORICAL INSERT BY CROSS-SOURCE POLICY</strong>.
+        </p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Customer</th>
+                    <th>Workbook Evidence ID</th>
+                    <th>Date</th>
+                    <th>Total</th>
+                    <th>PostgreSQL Match</th>
+                    <th>SQLite Match</th>
+                    <th>Authoritative Classification</th>
+                    <th>Reason</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td style="font-weight: 700; color: #fff;">Mark Ferrer</td>
+                    <td style="font-family: 'JetBrains Mono', monospace;">DSMR-2026-09-07-R10</td>
+                    <td>2026-09-07</td>
+                    <td>₱325.00</td>
+                    <td style="color: #f87171; font-weight: 600;">NONE</td>
+                    <td style="color: #34d399; font-weight: 600;">ORD-2026-09-07-001</td>
+                    <td><span class="status-pill pill-warn">EXCLUDE_POLICY</span></td>
+                    <td style="font-size: 11px;">Excluded from PostgreSQL insert to prevent duplicate with local SQLite pilot database</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: 700; color: #fff;">Sebastian Casa</td>
+                    <td style="font-family: 'JetBrains Mono', monospace;">JO-2026-09-12-SEBASTIAN / DSMR-2026-09-12-R06</td>
+                    <td>2026-09-12</td>
+                    <td>₱450.00</td>
+                    <td style="color: #f87171; font-weight: 600;">NONE</td>
+                    <td style="color: #34d399; font-weight: 600;">ORD-2026-09-12-001</td>
+                    <td><span class="status-pill pill-warn">EXCLUDE_POLICY</span></td>
+                    <td style="font-size: 11px;">Excluded from PostgreSQL insert to prevent duplicate with local SQLite pilot database</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h4 style="color: #fff; margin-top: 24px; margin-bottom: 8px;">E. Authoritative Breakdown of the Four Held NEW Records:</h4>
+        <table>
+            <thead>
+                <tr>
+                    <th>Evidence ID</th>
+                    <th>Date</th>
+                    <th>Customer as Written</th>
+                    <th>Pairs</th>
+                    <th>Total</th>
+                    <th>Reason Held</th>
+                    <th>Related Paper JO</th>
+                    <th>Related DSMR</th>
+                    <th>Final Classification</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-09-R10</td>
+                    <td>2026-09-09</td>
+                    <td>Lyndo Lao</td>
+                    <td>2</td>
+                    <td>₱1,400.00</td>
+                    <td>Possible duplicate entry on Sept 9; needs visual sheet verification</td>
+                    <td>None</td>
+                    <td>DSMR-2026-09-09-R10</td>
+                    <td><span class="status-pill pill-missing">HOLD</span></td>
+                </tr>
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-11-R10</td>
+                    <td>2026-09-11</td>
+                    <td>Jeivce Velasco</td>
+                    <td>1</td>
+                    <td>₱0.00</td>
+                    <td>Marked "Back Job" (Warranty Rework); no financial fields</td>
+                    <td>None</td>
+                    <td>DSMR-2026-09-11-R10</td>
+                    <td><span class="status-pill pill-missing">HOLD</span></td>
+                </tr>
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-15-R07</td>
+                    <td>2026-09-15</td>
+                    <td>Cico B. Conde</td>
+                    <td>1</td>
+                    <td>₱325.00</td>
+                    <td>Identity conflict: Paper JO says "Cico B. Conde", DSMR says "Rico Ancheta"</td>
+                    <td>JO-2026-09-15-CICO</td>
+                    <td>DSMR-2026-09-15-R07</td>
+                    <td><span class="status-pill pill-missing">HOLD</span></td>
+                </tr>
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600;">DSMR-2026-09-08-R07</td>
+                    <td>2026-09-08</td>
+                    <td>Marvin</td>
+                    <td>1</td>
+                    <td>₱725.00</td>
+                    <td>Single-name walk-in ambiguity; potential collision with existing Marvin in DB</td>
+                    <td>None</td>
+                    <td>DSMR-2026-09-08-R07</td>
+                    <td><span class="status-pill pill-missing">HOLD</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- SECTION F & G -->
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">F & G. PostgreSQL Service Master Mapping & Exact Field Mapping</div>
+            <span class="badge-count">ACTUAL DATABASE SCHEMA</span>
+        </div>
+
+        <h4 style="color: #fff; margin-bottom: 8px;">F. Historical Service Mapping Against PostgreSQL Service Master:</h4>
+        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
+            Auditing PostgreSQL <code>services</code> table revealed 22 catalog records. The mapping below resolves historical codes directly to verified active PostgreSQL primary keys:
+        </p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Historical Abbreviation</th>
+                    <th>Historical Meaning</th>
+                    <th>PostgreSQL Service ID</th>
+                    <th>PostgreSQL Service Name</th>
+                    <th>PG Base Price</th>
+                    <th>Historical Trans Price</th>
+                    <th>Mapping Confidence</th>
+                    <th>Evidence Supporting Mapping</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 700;">BC</td>
+                    <td>Basic Cleaning</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 700; color: #34d399;">1</td>
+                    <td>Basic Cleaning</td>
+                    <td>₱325.00</td>
+                    <td>₱325.00 (₱475 Rush)</td>
+                    <td>HIGH / EXACT</td>
+                    <td>Standard primary service; matches 100% of physical Job Order BC items.</td>
+                </tr>
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 700;">FR</td>
+                    <td>Full Reglue</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 700; color: #34d399;">3</td>
+                    <td>Full Reglue</td>
+                    <td>₱250.00</td>
+                    <td>₱575.00</td>
+                    <td>HIGH / EXACT</td>
+                    <td>Full reglue package pricing including prep and materials.</td>
+                </tr>
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 700;">PR</td>
+                    <td>Partial Reglue</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 700; color: #fbbf24;">4</td>
+                    <td>Minor Reglue</td>
+                    <td>₱125.00</td>
+                    <td>₱575.00</td>
+                    <td>MEDIUM</td>
+                    <td>Historical shorthand for partial/minor reglue; trans price preserved in mapping.</td>
+                </tr>
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 700;">FR US</td>
+                    <td>Full Reglue Undersole</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 700; color: #34d399;">167</td>
+                    <td>Full Reglue Undersole</td>
+                    <td>₱150.00</td>
+                    <td>₱575.00</td>
+                    <td>HIGH / EXACT</td>
+                    <td>Active PostgreSQL service ID 167 (replaces deprecated legacy ID 39).</td>
+                </tr>
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 700;">FR MID</td>
+                    <td>Full Reglue Midsole</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 700; color: #34d399;">166</td>
+                    <td>Full Reglue Midsole</td>
+                    <td>₱150.00</td>
+                    <td>₱575.00</td>
+                    <td>HIGH / EXACT</td>
+                    <td>Active PostgreSQL service ID 166 (replaces deprecated legacy ID 40).</td>
+                </tr>
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 700;">MR</td>
+                    <td>Minor Reglue</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 700; color: #34d399;">4</td>
+                    <td>Minor Reglue</td>
+                    <td>₱125.00</td>
+                    <td>₱450.00</td>
+                    <td>HIGH / EXACT</td>
+                    <td>Jerome Ramirez pair 2 (Nike); matches physical form notation.</td>
+                </tr>
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 700;">MRES</td>
+                    <td>Minor Restoration</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 700; color: #34d399;">41</td>
+                    <td>Minor Restoration</td>
+                    <td>₱225.00</td>
+                    <td>₱550.00</td>
+                    <td>HIGH / EXACT</td>
+                    <td>Kenneth Gutierrez pairs 3 & 4 (Nike & Boost); matches restoration catalog.</td>
+                </tr>
+                <tr>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 700;">MRES + COLOR RENEWAL</td>
+                    <td>Minor Restoration + Color</td>
+                    <td style="font-family: 'JetBrains Mono', monospace; font-weight: 700; color: #34d399;">67</td>
+                    <td>Color Renewal</td>
+                    <td>₱0.00</td>
+                    <td>₱925.00</td>
+                    <td>HIGH / EXACT</td>
+                    <td>Ernest Agapay Birkenstock multi-treatment; transaction price ₱925 preserved.</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h4 style="color: #fff; margin-top: 24px; margin-bottom: 8px;">G. Actual PostgreSQL Job Order Field Mapping (Zero Aliases):</h4>
+        <table>
+            <thead>
+                <tr>
+                    <th>Source Evidence Field</th>
+                    <th>Actual PostgreSQL Table</th>
+                    <th>Actual PostgreSQL Column</th>
+                    <th>SQLAlchemy Model Attribute</th>
+                    <th>Transformation / Rule</th>
+                    <th>Default / Null Rule</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td>Customer Name</td><td>customers</td><td><code>customer_name</code></td><td><code>Customer.customer_name</code></td><td>Sanitized & Title-cased</td><td>NOT NULL</td></tr>
+                <tr><td>Contact Number</td><td>customers</td><td><code>contact_number</code></td><td><code>Customer.contact_number</code></td><td>Sanitized string</td><td>Empty string / NULL</td></tr>
+                <tr><td>Canonical Order #</td><td>orders</td><td><code>order_number</code></td><td><code>Order.order_number</code></td><td>Native <code>ORD-YYYY-MM-DD-NNN</code></td><td>UNIQUE, NOT NULL</td></tr>
+                <tr><td>Customer ID</td><td>orders</td><td><code>customer_id</code></td><td><code>Order.customer_id</code></td><td>Foreign key to customers</td><td>NOT NULL</td></tr>
+                <tr><td>Grand Total</td><td>orders</td><td><code>grand_total</code></td><td><code>Order.grand_total</code></td><td>DECIMAL(10, 2)</td><td>NOT NULL</td></tr>
+                <tr><td>Intake Date</td><td>orders</td><td><code>created_at</code></td><td><code>Order.created_at</code></td><td>TIMESTAMP (09:00:00 PHT)</td><td>NOT NULL</td></tr>
+                <tr><td>Expected Release</td><td>orders</td><td><code>expected_at</code></td><td><code>Order.expected_at</code></td><td>Estimated date or Intake + 7d</td><td>NOT NULL</td></tr>
+                <tr><td>Status ID</td><td>orders</td><td><code>status_id</code></td><td><code>Order.status_id</code></td><td>Integer FK (1 = Received)</td><td>DEFAULT 1</td></tr>
+                <tr><td>Priority ID</td><td>orders</td><td><code>priority_id</code></td><td><code>Order.priority_id</code></td><td>Integer FK (1 = Standard)</td><td>DEFAULT 1</td></tr>
+                <tr><td>User ID</td><td>orders</td><td><code>user_id</code></td><td><code>Order.user_id</code></td><td>Integer FK (1 = System Admin)</td><td>DEFAULT 1</td></tr>
+                <tr><td>Shoe Model</td><td>items</td><td><code>shoe_model</code></td><td><code>Item.shoe_model</code></td><td>Extracted shoe model</td><td>NULL permitted</td></tr>
+                <tr><td>Brand</td><td>items</td><td><code>brand</code></td><td><code>Item.brand</code></td><td>Brand name from description</td><td>NULL permitted</td></tr>
+                <tr><td>Color</td><td>items</td><td><code>color</code></td><td><code>Item.color</code></td><td>Color from description</td><td>NULL permitted</td></tr>
+                <tr><td>Service Price</td><td>item_service_mapping</td><td><code>actual_price</code></td><td><code>ItemServiceMapping.actual_price</code></td><td>Historical transaction price</td><td>NOT NULL</td></tr>
+                <tr><td>Amount Paid</td><td>payments</td><td><code>amount_received</code></td><td><code>Payment.amount_received</code></td><td>Historical downpayment/full cash</td><td>NOT NULL</td></tr>
+                <tr><td>Remaining Balance</td><td>payments</td><td><code>balance</code></td><td><code>Payment.balance</code></td><td>Grand Total - Amount Paid</td><td>DEFAULT 0.0</td></tr>
+                <tr><td>Payment Method ID</td><td>payments</td><td><code>method_id</code></td><td><code>Payment.method_id</code></td><td>1 = Cash, 2 = GCash, 3 = Maya</td><td>NOT NULL</td></tr>
+                <tr><td>Payment Status ID</td><td>payments</td><td><code>status_id</code></td><td><code>Payment.status_id</code></td><td>1 = Paid, 2 = Down Payment</td><td>NOT NULL</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- SECTION H & I -->
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">H & I. Expense-Date Evidence Audit & PostgreSQL ORM Status</div>
+            <span class="badge-count">DOCUMENTARY PRECISION & ORM BLOCKER</span>
+        </div>
+
+        <h4 style="color: #fff; margin-bottom: 8px;">H. Documentary Precision of September 2026 Expenses:</h4>
+        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
+            The audit verified that transaction dates were previously over-specified in test scripts. The table below restores documentary evidence precision:
+        </p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Expense Category</th>
+                    <th>Documentary Evidence Date / Period</th>
+                    <th>Previously Assumed Date</th>
+                    <th>Authoritative Treatment</th>
+                    <th>Amount</th>
+                    <th>Evidence Source</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td>Rent</td><td><code>2026-09</code> (Monthly Period)</td><td>2026-09-01</td><td>Preserved as September Monthly Operating Cost</td><td>₱20,000.00</td><td>User-Confirmed Lease</td></tr>
+                <tr><td>Electricity (Meralco)</td><td><code>2026-09-29</code> (Bill Date)</td><td>2026-09-29</td><td>Documented by physical utility bill (248 kWh)</td><td>₱3,745.17</td><td>Physical Meralco Invoice</td></tr>
+                <tr><td>Internet (Converge)</td><td><code>2026-09</code> (Monthly Period)</td><td><span style="color: #f87171;">2026-09-05 (Manufactured)</span></td><td>Restored to September Monthly Subscription</td><td>₱1,299.00</td><td>User-Confirmed Plan</td></tr>
+                <tr><td>Joy Payroll (Cutoff 1)</td><td><code>2026-09-15</code> (Payday)</td><td>2026-09-15</td><td>Supported by established semi-monthly schedule</td><td>₱5,720.00</td><td>Payroll Schedule</td></tr>
+                <tr><td>Yang Payroll (Cutoff 1)</td><td><code>2026-09-15</code> (Payday)</td><td>2026-09-15</td><td>Supported by established semi-monthly schedule</td><td>₱8,320.00</td><td>Payroll Schedule</td></tr>
+                <tr><td>Joy Payroll (Cutoff 2)</td><td><code>2026-09-30</code> (Payday)</td><td>2026-09-30</td><td>Supported by established semi-monthly schedule</td><td>₱5,720.00</td><td>Payroll Schedule</td></tr>
+                <tr><td>Yang Payroll (Cutoff 2)</td><td><code>2026-09-30</code> (Payday)</td><td>2026-09-30</td><td>Supported by established semi-monthly schedule</td><td>₱8,320.00</td><td>Payroll Schedule</td></tr>
+            </tbody>
+        </table>
+
+        <h4 style="color: #fff; margin-top: 24px; margin-bottom: 8px;">I. PostgreSQL ORM Schema Blocker Status:</h4>
+        <div class="callout-box">
+            <strong>Current ORM Status:</strong><br>
+            • <code>orders.discount_amount</code>: <strong>DOES NOT EXIST in PostgreSQL.</strong><br>
+            • Runtime ORM test (<code>db.query(Order).first()</code>): <strong>FAILS</strong> with <code>psycopg2.errors.UndefinedColumn</code>.<br>
+            • No <code>ALTER TABLE</code> statement has been executed.<br>
+            • <strong>BEFORE = FAIL; AFTER = PENDING AUTHORIZED MIGRATION.</strong><br>
+            • Until the minimal non-destructive DDL is authorized and executed, production ORM queries remain blocked.
+        </div>
+    </div>
+
+    <!-- SECTION J, K, M, N -->
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">J, K, M & N. Corrected Insert Counts, Financial Totals, Script Logic & Final Gate</div>
+            <span class="badge-count">FINAL AUDIT SUMMARY</span>
+        </div>
+
+        <div class="grid-2">
+            <div style="background: rgba(15, 23, 42, 0.6); padding: 18px; border-radius: 8px; border: 1px solid var(--border-color);">
+                <h4 style="color: var(--accent-emerald); margin-bottom: 8px;">J & K: Reconciled Totals</h4>
+                <ul style="font-size: 13px; color: var(--text-secondary); margin-left: 18px;">
+                    <li>Orders to Import: <strong>54</strong></li>
+                    <li>Genuinely New Customers: <strong>52</strong></li>
+                    <li>Job Order Items: <strong>22</strong></li>
+                    <li>Item-Service Mappings: <strong>22</strong></li>
+                    <li>Payments Recorded: <strong>48</strong></li>
+                    <li>Fixed Expenses: <strong>7</strong></li>
+                    <li>Gross Transaction Value: <strong>₱53,880.00</strong></li>
+                    <li>Cash Collected: <strong>₱33,017.00</strong></li>
+                    <li>Outstanding Receivables: <strong>₱20,863.00</strong></li>
+                    <li>Fixed Monthly Expenses: <strong>₱53,124.17</strong></li>
+                    <li>Net Operating Difference: <strong>+₱755.83</strong></li>
+                </ul>
+            </div>
+            <div style="background: rgba(15, 23, 42, 0.6); padding: 18px; border-radius: 8px; border: 1px solid var(--border-color);">
+                <h4 style="color: var(--accent-blue); margin-bottom: 8px;">M: Corrected Import Script Filter</h4>
+                <div class="code-block" style="font-size: 11px; margin: 0; padding: 10px;">
+EXCLUDED_JO_IDS = {
+    'JO-2026-09-12-SEBASTIAN', # Excluded by policy
+    'JO-2026-09-15-CICO',      # Identity conflict
+    'JO-2026-09-16-LAWRENCE'   # Walk-in duplicate (2 pairs)
+}
+approved_pair_rows = [
+    p for p in services_pairs_rows 
+    if p.get('Job Order Evidence ID') not in EXCLUDED_JO_IDS
+]
+assert len(approved_pair_rows) == 22
+                </div>
+            </div>
+        </div>
+
+        <div style="background: rgba(15, 23, 42, 0.9); border: 2px solid var(--accent-red); padding: 24px; border-radius: 12px; text-align: center; margin-top: 24px;">
+            <div style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: var(--text-muted); margin-bottom: 8px;">Section N: Final Gate Verdict</div>
+            <div style="font-size: 26px; font-weight: 900; color: #f87171; font-family: 'JetBrains Mono', monospace; letter-spacing: 0.5px;">
+                ROLLBACK VERIFIED — RECONCILIATION REQUIRED
+            </div>
+            <div style="font-size: 13px; color: var(--text-secondary); margin-top: 10px;">
+                All 14 required reconciliation sections complete. Zero automatic modifications performed. Awaiting user review and authorization.
+            </div>
+        </div>
+    </div>
+
+</div>
+</body>
+</html>

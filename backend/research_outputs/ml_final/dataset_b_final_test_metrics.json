@@ -1,0 +1,447 @@
+{
+  "phase": "3B",
+  "description": "One-Time Final Frozen Test Evaluation",
+  "evaluation_timestamp_utc": "2026-10-03T09:13:40.513824+00:00",
+  "python_version": "3.14.3 (tags/v3.14.3:323c59a, Feb  3 2026, 16:04:56) [MSC v.1944 64 bit (AMD64)]",
+  "sklearn_version": "1.8.0",
+  "dataset_name": "Simulated Operational Dataset",
+  "target_variable": "simulated_turnaround_days",
+  "target_description": "Received-to-Ready-for-Release Turnaround Days (Simulated Operational Target)",
+  "test_sample_size": 1500,
+  "model_specification": {
+    "algorithm": "RandomForestRegressor",
+    "hyperparameters": {
+      "n_estimators": 300,
+      "max_depth": 12,
+      "min_samples_split": 10,
+      "min_samples_leaf": 4,
+      "max_features": 1.0,
+      "random_state": 20261002
+    },
+    "feature_set": "Feature Set C",
+    "feature_names_order": [
+      "total_pairs",
+      "basic_cleaning_qty",
+      "full_reglue_qty",
+      "minor_reglue_qty",
+      "unyellowing_qty",
+      "minor_restoration_qty",
+      "color_renewal_qty",
+      "rush_indicator",
+      "distinct_service_types",
+      "total_service_applications",
+      "intake_day_of_week",
+      "intake_month"
+    ]
+  },
+  "hashes": {
+    "model_pkl": "9ce390ca5f0197fe0eef86086ccfd78b79b18b37c19eae76fca7d518bbfeac3b",
+    "test_csv": "caaa2774868ce0657020cb1cfb2f153bc2fe56dee99af9cb2c6e38342e906a5f",
+    "predictions_csv": "b20ca2e68634ff95602acf7d01afc845ab2a5a1372a61c42ac7236d67c865ca0"
+  },
+  "final_test_metrics_random_forest": {
+    "mae": 0.0815,
+    "rmse": 0.4042,
+    "r2": 0.9976,
+    "med_ae": 0.0,
+    "bias": -0.0018,
+    "tolerance_1_day": {
+      "numerator": 1458,
+      "denominator": 1500,
+      "percentage": 97.2
+    },
+    "tolerance_2_day": {
+      "numerator": 1484,
+      "denominator": 1500,
+      "percentage": 98.93
+    },
+    "tolerance_3_day": {
+      "numerator": 1493,
+      "denominator": 1500,
+      "percentage": 99.53
+    },
+    "tolerance_5_day": {
+      "numerator": 1500,
+      "denominator": 1500,
+      "percentage": 100.0
+    }
+  },
+  "baseline_context_on_test": {
+    "mean_predictor": {
+      "mae": 7.6391,
+      "rmse": 8.2173,
+      "r2": -0.0,
+      "med_ae": 6.8356,
+      "bias": -0.0264,
+      "tolerance_1_day": {
+        "numerator": 0,
+        "denominator": 1500,
+        "percentage": 0.0
+      },
+      "tolerance_2_day": {
+        "numerator": 0,
+        "denominator": 1500,
+        "percentage": 0.0
+      },
+      "tolerance_3_day": {
+        "numerator": 2,
+        "denominator": 1500,
+        "percentage": 0.13
+      },
+      "tolerance_5_day": {
+        "numerator": 224,
+        "denominator": 1500,
+        "percentage": 14.93
+      }
+    },
+    "median_predictor": {
+      "mae": 7.3353,
+      "rmse": 8.796,
+      "r2": -0.1458,
+      "med_ae": 6.0,
+      "bias": 3.138,
+      "tolerance_1_day": {
+        "numerator": 220,
+        "denominator": 1500,
+        "percentage": 14.67
+      },
+      "tolerance_2_day": {
+        "numerator": 223,
+        "denominator": 1500,
+        "percentage": 14.87
+      },
+      "tolerance_3_day": {
+        "numerator": 223,
+        "denominator": 1500,
+        "percentage": 14.87
+      },
+      "tolerance_5_day": {
+        "numerator": 732,
+        "denominator": 1500,
+        "percentage": 48.8
+      }
+    },
+    "structurally_privileged_shop_rules": {
+      "mae": 0.1967,
+      "rmse": 0.5825,
+      "r2": 0.995,
+      "med_ae": 0.0,
+      "bias": -0.1967,
+      "tolerance_1_day": {
+        "numerator": 1475,
+        "denominator": 1500,
+        "percentage": 98.33
+      },
+      "tolerance_2_day": {
+        "numerator": 1486,
+        "denominator": 1500,
+        "percentage": 99.07
+      },
+      "tolerance_3_day": {
+        "numerator": 1490,
+        "denominator": 1500,
+        "percentage": 99.33
+      },
+      "tolerance_5_day": {
+        "numerator": 1500,
+        "denominator": 1500,
+        "percentage": 100.0
+      }
+    }
+  },
+  "validation_vs_test_comparison": {
+    "mae": {
+      "validation": 0.0641,
+      "test": 0.0815,
+      "diff_test_minus_val": 0.0174
+    },
+    "rmse": {
+      "validation": 0.2994,
+      "test": 0.4042,
+      "diff_test_minus_val": 0.1048
+    },
+    "r2": {
+      "validation": 0.9987,
+      "test": 0.9976,
+      "diff_test_minus_val": -0.0011
+    },
+    "tolerance_1_day": {
+      "validation": 97.73,
+      "test": 97.2,
+      "diff_test_minus_val": -0.53
+    },
+    "tolerance_2_day": {
+      "validation": 99.6,
+      "test": 98.93,
+      "diff_test_minus_val": -0.67
+    },
+    "tolerance_3_day": {
+      "validation": 99.93,
+      "test": 99.53,
+      "diff_test_minus_val": -0.4
+    },
+    "tolerance_5_day": {
+      "validation": 100.0,
+      "test": 100.0,
+      "diff_test_minus_val": 0.0
+    }
+  },
+  "subgroup_diagnostics_test": {
+    "by_rule_base_tier": [
+      {
+        "rule_base_days": 1,
+        "n": 133,
+        "mae": 0.07255371001291237,
+        "rmse": 0.3999362136283603,
+        "bias": -0.023678823584719302,
+        "tol_1": 97.74436090225564
+      },
+      {
+        "rule_base_days": 10,
+        "n": 545,
+        "mae": 0.04446748000773207,
+        "rmse": 0.2624685972864327,
+        "bias": 0.001109768402591757,
+        "tol_1": 98.53211009174312
+      },
+      {
+        "rule_base_days": 20,
+        "n": 227,
+        "mae": 0.1080552756363747,
+        "rmse": 0.5344464219106695,
+        "bias": -0.05173532499630405,
+        "tol_1": 97.3568281938326
+      },
+      {
+        "rule_base_days": 25,
+        "n": 595,
+        "mae": 0.10740031169717436,
+        "rmse": 0.45180752020535286,
+        "bias": 0.01955373818208324,
+        "tol_1": 95.7983193277311
+      }
+    ],
+    "by_rush_indicator": [
+      {
+        "rush_indicator": 0,
+        "n": 1317,
+        "mae": 0.08007585489629,
+        "rmse": 0.3908884454391967,
+        "bias": 0.0008314814208851303,
+        "tol_1": 97.19058466211085
+      },
+      {
+        "rush_indicator": 1,
+        "n": 183,
+        "mae": 0.09211066757810485,
+        "rmse": 0.489701528001225,
+        "bias": -0.020486149423400924,
+        "tol_1": 97.26775956284153
+      }
+    ],
+    "by_total_pairs": [
+      {
+        "total_pairs": 1,
+        "n": 913,
+        "mae": 0.0878934377247988,
+        "rmse": 0.43943220572062136,
+        "bias": -0.012801815220258061,
+        "tol_1": 96.93318729463309
+      },
+      {
+        "total_pairs": 2,
+        "n": 388,
+        "mae": 0.05704857931048288,
+        "rmse": 0.27288345670150865,
+        "bias": 0.021259142857234667,
+        "tol_1": 98.19587628865979
+      },
+      {
+        "total_pairs": 3,
+        "n": 89,
+        "mae": 0.06876217391719776,
+        "rmse": 0.36923655494058044,
+        "bias": -0.05108899812491438,
+        "tol_1": 97.75280898876404
+      },
+      {
+        "total_pairs": 4,
+        "n": 91,
+        "mae": 0.14157869342939433,
+        "rmse": 0.5481939040937602,
+        "bias": 0.04836731118831106,
+        "tol_1": 94.5054945054945
+      },
+      {
+        "total_pairs": 6,
+        "n": 19,
+        "mae": 0.04900531943647255,
+        "rmse": 0.15214965225831187,
+        "bias": 0.04900531943647255,
+        "tol_1": 100.0
+      }
+    ],
+    "by_rollover_status": [
+      {
+        "has_rollover": false,
+        "n": 1260,
+        "mae": 0.04737085460326681,
+        "rmse": 0.23518384004940457,
+        "bias": 0.04737085460326681,
+        "tol_1": 98.4126984126984
+      },
+      {
+        "has_rollover": true,
+        "n": 240,
+        "mae": 0.26095365110454555,
+        "rmse": 0.8549409816111236,
+        "bias": -0.2597549213053868,
+        "tol_1": 90.83333333333333
+      }
+    ]
+  },
+  "error_distribution": {
+    "min_signed_error": -4.2411,
+    "max_signed_error": 2.658,
+    "min_absolute_error": 0.0,
+    "max_absolute_error": 4.2411,
+    "mean_absolute_error": 0.0815,
+    "median_absolute_error": 0.0,
+    "p95_absolute_error": 0.5166,
+    "p99_absolute_error": 2.477
+  },
+  "largest_error_cases": [
+    {
+      "row_id": "SIM-02864",
+      "canonical_template_id": "CT32",
+      "total_pairs": 4,
+      "rush_indicator": 0,
+      "rule_base_days": 25,
+      "has_rollover": true,
+      "total_rollover_days": 5,
+      "actual_turnaround_days": 30.0,
+      "predicted_turnaround_days": 25.75888210803071,
+      "signed_error": -4.241117891969289,
+      "absolute_error": 4.241117891969289
+    },
+    {
+      "row_id": "SIM-05979",
+      "canonical_template_id": "CT05",
+      "total_pairs": 1,
+      "rush_indicator": 0,
+      "rule_base_days": 20,
+      "has_rollover": true,
+      "total_rollover_days": 5,
+      "actual_turnaround_days": 25.0,
+      "predicted_turnaround_days": 20.84293455046846,
+      "signed_error": -4.15706544953154,
+      "absolute_error": 4.15706544953154
+    },
+    {
+      "row_id": "SIM-09842",
+      "canonical_template_id": "CT05",
+      "total_pairs": 1,
+      "rush_indicator": 0,
+      "rule_base_days": 20,
+      "has_rollover": true,
+      "total_rollover_days": 5,
+      "actual_turnaround_days": 25.0,
+      "predicted_turnaround_days": 20.84293455046846,
+      "signed_error": -4.15706544953154,
+      "absolute_error": 4.15706544953154
+    },
+    {
+      "row_id": "SIM-02379",
+      "canonical_template_id": "CT02",
+      "total_pairs": 1,
+      "rush_indicator": 1,
+      "rule_base_days": 1,
+      "has_rollover": true,
+      "total_rollover_days": 5,
+      "actual_turnaround_days": 6.0,
+      "predicted_turnaround_days": 1.92037209257604,
+      "signed_error": -4.07962790742396,
+      "absolute_error": 4.07962790742396
+    },
+    {
+      "row_id": "SIM-01800",
+      "canonical_template_id": "CT07",
+      "total_pairs": 1,
+      "rush_indicator": 1,
+      "rule_base_days": 20,
+      "has_rollover": true,
+      "total_rollover_days": 4,
+      "actual_turnaround_days": 24.0,
+      "predicted_turnaround_days": 20.09685472860473,
+      "signed_error": -3.903145271395271,
+      "absolute_error": 3.903145271395271
+    },
+    {
+      "row_id": "SIM-00886",
+      "canonical_template_id": "CT09",
+      "total_pairs": 1,
+      "rush_indicator": 0,
+      "rule_base_days": 25,
+      "has_rollover": true,
+      "total_rollover_days": 5,
+      "actual_turnaround_days": 30.0,
+      "predicted_turnaround_days": 26.37355405061533,
+      "signed_error": -3.626445949384671,
+      "absolute_error": 3.626445949384671
+    },
+    {
+      "row_id": "SIM-04014",
+      "canonical_template_id": "CT09",
+      "total_pairs": 1,
+      "rush_indicator": 0,
+      "rule_base_days": 25,
+      "has_rollover": true,
+      "total_rollover_days": 5,
+      "actual_turnaround_days": 30.0,
+      "predicted_turnaround_days": 26.37355405061533,
+      "signed_error": -3.626445949384671,
+      "absolute_error": 3.626445949384671
+    },
+    {
+      "row_id": "SIM-00941",
+      "canonical_template_id": "CT24",
+      "total_pairs": 3,
+      "rush_indicator": 0,
+      "rule_base_days": 20,
+      "has_rollover": true,
+      "total_rollover_days": 4,
+      "actual_turnaround_days": 24.0,
+      "predicted_turnaround_days": 21.130896266071957,
+      "signed_error": -2.8691037339280427,
+      "absolute_error": 2.8691037339280427
+    },
+    {
+      "row_id": "SIM-08787",
+      "canonical_template_id": "CT02",
+      "total_pairs": 1,
+      "rush_indicator": 0,
+      "rule_base_days": 10,
+      "has_rollover": true,
+      "total_rollover_days": 3,
+      "actual_turnaround_days": 13.0,
+      "predicted_turnaround_days": 10.25647325588577,
+      "signed_error": -2.743526744114231,
+      "absolute_error": 2.743526744114231
+    },
+    {
+      "row_id": "SIM-09389",
+      "canonical_template_id": "CT19",
+      "total_pairs": 2,
+      "rush_indicator": 1,
+      "rule_base_days": 25,
+      "has_rollover": false,
+      "total_rollover_days": 0,
+      "actual_turnaround_days": 25.0,
+      "predicted_turnaround_days": 27.65801640610851,
+      "signed_error": 2.6580164061085085,
+      "absolute_error": 2.6580164061085085
+    }
+  ],
+  "interpretation_boundary_statement": "The final test results represent predictive performance under the chairperson-approved simulated operational workflow. Because Dataset B was generated using validated shop business rules and simulated release-date conditions, these results do not independently establish equivalent predictive accuracy on future real-world service orders. Dataset A remains the historical real-order evaluation and is preserved separately.",
+  "no_post_test_tuning_statement": "Zero post-test modifications, hyperparameter adjustments, feature engineering, or model refitting were conducted. The first test evaluation is the final evaluation."
+}

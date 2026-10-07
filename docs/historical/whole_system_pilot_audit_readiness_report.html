@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shoelotskey SMS - Whole-System Pilot Audit & Readiness Report</title>
+    <style>
+        :root {
+            --bg-primary: #0a0f1d;
+            --bg-secondary: #111827;
+            --bg-card: #1e293b;
+            --bg-card-hover: #24344d;
+            --border-color: #334155;
+            --border-accent: #dc2626;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent-red: #ef4444;
+            --accent-green: #10b981;
+            --accent-blue: #3b82f6;
+            --accent-purple: #8b5cf6;
+            --accent-amber: #f59e0b;
+            --accent-cyan: #06b6d4;
+            --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: var(--font-sans);
+            line-height: 1.6;
+            padding: 2rem 1rem;
+        }
+
+        .container {
+            max-width: 1350px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 50%, #1e293b 100%);
+            border: 1px solid var(--border-color);
+            border-left: 6px solid var(--accent-blue);
+            padding: 2.2rem;
+            border-radius: 1rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        h1 {
+            font-size: 1.95rem;
+            font-weight: 800;
+            color: #ffffff;
+            letter-spacing: -0.025em;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 1.05rem;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(59, 130, 246, 0.15);
+            border: 1px solid rgba(59, 130, 246, 0.4);
+            color: #93c5fd;
+            padding: 0.35rem 0.85rem;
+            border-radius: 9999px;
+            font-size: 0.825rem;
+            font-weight: 600;
+            font-family: var(--font-mono);
+        }
+
+        .badge-amber {
+            background: rgba(245, 158, 11, 0.15);
+            border: 1px solid rgba(245, 158, 11, 0.4);
+            color: #fcd34d;
+        }
+
+        .badge-green {
+            background: rgba(16, 185, 129, 0.15);
+            border: 1px solid rgba(16, 185, 129, 0.4);
+            color: #6ee7b7;
+        }
+
+        .badge-red {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            color: #fca5a5;
+        }
+
+        .meta-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1rem;
+        }
+
+        .meta-item {
+            background: rgba(0, 0, 0, 0.25);
+            padding: 0.85rem 1rem;
+            border-radius: 0.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .meta-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.25rem;
+        }
+
+        .meta-val {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            font-family: var(--font-mono);
+        }
+
+        section {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 0.85rem;
+            padding: 1.75rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+        }
+
+        h2 {
+            font-size: 1.4rem;
+            color: #ffffff;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 0.65rem;
+        }
+
+        h3 {
+            font-size: 1.15rem;
+            color: #e2e8f0;
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        p {
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+        }
+
+        .callout {
+            background: rgba(15, 23, 42, 0.8);
+            border-left: 4px solid var(--accent-blue);
+            padding: 1.25rem;
+            border-radius: 0 0.5rem 0.5rem 0;
+            margin: 1.25rem 0;
+            border-top: 1px solid var(--border-color);
+            border-right: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .callout-warning {
+            border-left-color: var(--accent-amber);
+            background: rgba(30, 27, 24, 0.6);
+        }
+
+        .callout-danger {
+            border-left-color: var(--accent-red);
+            background: rgba(36, 17, 17, 0.6);
+        }
+
+        .callout-success {
+            border-left-color: var(--accent-green);
+            background: rgba(16, 32, 24, 0.6);
+        }
+
+        .callout-title {
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Tables */
+        .table-container {
+            overflow-x: auto;
+            margin: 1.5rem 0;
+            border-radius: 0.5rem;
+            border: 1px solid var(--border-color);
+            background: var(--bg-card);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.825rem;
+            text-align: left;
+        }
+
+        th {
+            background: #0f172a;
+            color: #cbd5e1;
+            padding: 0.85rem 0.75rem;
+            font-weight: 700;
+            border-bottom: 2px solid var(--border-color);
+            white-space: nowrap;
+            text-transform: uppercase;
+            font-size: 0.725rem;
+            letter-spacing: 0.05em;
+        }
+
+        td {
+            padding: 0.85rem 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            vertical-align: top;
+        }
+
+        tr:hover td {
+            background-color: var(--bg-card-hover);
+        }
+
+        .code-cell {
+            font-family: var(--font-mono);
+            color: #93c5fd;
+            font-size: 0.775rem;
+            word-break: break-all;
+        }
+
+        .highlight-val {
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .issue-yes {
+            color: #f87171;
+            font-weight: 700;
+        }
+
+        .issue-no {
+            color: #34d399;
+            font-weight: 600;
+        }
+
+        .code-block {
+            background: #090d16;
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            color: #e2e8f0;
+            overflow-x: auto;
+            margin: 1rem 0;
+            line-height: 1.5;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+            gap: 1.25rem;
+            margin: 1.25rem 0;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            padding: 1.25rem;
+        }
+
+        .card-header {
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        ul, ol {
+            padding-left: 1.5rem;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+        }
+
+        li {
+            margin-bottom: 0.4rem;
+        }
+
+        strong {
+            color: #f8fafc;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-top">
+                <div>
+                    <h1>Whole-System Pilot Audit & Readiness Report</h1>
+                    <div class="subtitle">Shoelotskey Service Management System — Empirical Research & Production Validation</div>
+                </div>
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                    <span class="badge badge-amber">AUDIT SCOPE: FULL PILOT</span>
+                    <span class="badge badge-green">ISO 27001 / NIST TRACEABLE</span>
+                </div>
+            </div>
+            <div class="meta-grid">
+                <div class="meta-item">
+                    <div class="meta-label">Audit Target</div>
+                    <div class="meta-val">Production Pilot Data & Schedule Engine</div>
+                </div>
+                <div class="meta-item">
+                    <div class="meta-label">Audit Date</div>
+                    <div class="meta-val">2026-10-07</div>
+                </div>
+                <div class="meta-item">
+                    <div class="meta-label">ML Regression Model</div>
+                    <div class="meta-val">RandomForestRegressor (Feature Set C)</div>
+                </div>
+                <div class="meta-item">
+                    <div class="meta-label">Authoritative Target</div>
+                    <div class="meta-val">Received-to-Ready-for-Release</div>
+                </div>
+            </div>
+        </header>
+
+        <!-- SECTION: Schedule & Tracking Temporal Semantics Audit -->
+        <section id="schedule-temporal-audit">
+            <h2>
+                <span>⏱️</span> Schedule & Tracking Temporal Semantics Audit
+            </h2>
+            <p>
+                This audit investigates the precise mathematical, logical, and database mechanisms governing the six schedule timeline cards and punctuality metrics in <code>OrderDetailModal.tsx</code> and <code>backend/main.py</code>. It provides empirical verification for defense presentations and academic manuscript documentation, preventing premature inferences or semantic conflation between operational completion and customer pickup.
+            </p>
+
+            <div class="callout callout-warning">
+                <div class="callout-title">⚠️ Executive Summary: Three Core Semantic Clarifications</div>
+                <ol>
+                    <li><strong>Order Date Semantics:</strong> Represents the <em>counter intake recording timestamp</em> in <code>orders.created_at</code>, not physical customer arrival through the front door.</li>
+                    <li><strong>Workshop Release vs. Claim Conflation:</strong> In <code>backend/main.py</code> (L6491 & L5748), when an order transitions to <code>claimed</code> without a prior independent <code>for-release</code> status change, the system automatically falls back to <code>released_at = claimed_at</code>. Identical timestamps (e.g., <code>07/06/26 03:45 PM</code>) indicate this backend fallback or simultaneous counter claim, not an independent sensor of workshop completion.</li>
+                    <li><strong>Turnaround Integer Operational Day Floor:</strong> An elapsed turnaround from 07:42 AM to 03:45 PM (8 hours 3 minutes) is displayed as <code>1 day</code> due to calendar-day truncation and an integer operational day floor (<code>Math.max(1, diffDays)</code>). It does <strong>not</strong> represent 24 elapsed clock hours.</li>
+                </ol>
+            </div>
+
+            <h3>1. Comprehensive Timeline & Card Audit Matrix</h3>
+            <p>
+                The table below provides line-by-line traceability from raw database storage through post-processing algorithms to the user interface:
+            </p>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Card</th>
+                            <th>Displayed Value</th>
+                            <th>Source Field</th>
+                            <th>Source Table</th>
+                            <th>Calculation / Logic</th>
+                            <th>Raw Value</th>
+                            <th>Post-Processing</th>
+                            <th>Operational Meaning</th>
+                            <th>Verified?</th>
+                            <th>Issue Found?</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>1. Order Date</strong></td>
+                            <td class="highlight-val">07/06/26<br><span style="color:#a78bfa;">07:42 AM</span></td>
+                            <td class="code-cell">created_at<br>(fallback: order_date, order_time)</td>
+                            <td class="code-cell">orders</td>
+                            <td>Parsed via <code>parseDateFromOrderId()</code> and <code>orderTime.split(':')</code> in <code>OrderDetailModal.tsx</code> L800-840.</td>
+                            <td class="code-cell">2026-07-06 07:42:00</td>
+                            <td>Formatted as <code>MM/dd/yy</code> date and 12-hr AM/PM time string.</td>
+                            <td><strong>Counter Intake Timestamp:</strong> When the Job Order was recorded into the system at the counter.</td>
+                            <td><span class="badge badge-green">VERIFIED</span></td>
+                            <td><span class="issue-no">NO</span> (Refined narrative from "customer arrival")</td>
+                        </tr>
+                        <tr>
+                            <td><strong>2. Business Rules</strong></td>
+                            <td class="highlight-val">07/07/26<br><span style="color:#34d399;">10:00 PM</span><br><small style="color:#94a3b8;">(BR: 1 day)</small></td>
+                            <td class="code-cell">expected_at / releaseTime<br>(services standard)</td>
+                            <td class="code-cell">orders<br>services</td>
+                            <td><code>addCalendarDays(receivedDate, authoritativeBrDays)</code> in L855. Displayed time uses <code>order.releaseTime</code> (L2158).</td>
+                            <td class="code-cell">expected_at = 2026-07-07 22:00:00<br>estimated_days = 1</td>
+                            <td>Calendar day offset added to intake date; official store release closing cutoff applied (22:00).</td>
+                            <td><strong>Rule-Based Promised Deadline:</strong> Store policy completion commitment expiring at store closing (10:00 PM).</td>
+                            <td><span class="badge badge-green">VERIFIED</span></td>
+                            <td><span class="issue-no">NO</span> (Intentional business cutoff distinct from ML)</td>
+                        </tr>
+                        <tr>
+                            <td><strong>3. ML Prediction</strong></td>
+                            <td class="highlight-val">07/07/26<br><span style="color:#60a5fa;">07:42 AM</span><br><small style="color:#94a3b8;">(RF: 1 day)</small></td>
+                            <td class="code-cell">predicted_at<br>predicted_days</td>
+                            <td class="code-cell">orders</td>
+                            <td><code>rf_days = model.predict([vector])[0]</code> $\rightarrow$ <code>rf_elapsed_days = max(1, round(rf_days))</code> $\rightarrow$ <code>base_date + timedelta(days=rf_elapsed_days)</code> $\rightarrow$ <code>next_open_release_date()</code>.</td>
+                            <td class="code-cell">rf_days: continuous float (e.g. 0.85)<br>intake: 07:42 AM</td>
+                            <td>Continuous float rounded to integer 1 day; added to intake timestamp ($07:42 + 24\text{h} = 07:42$). Closed store days rolled over.</td>
+                            <td><strong>Model-Projected Turnaround:</strong> Random Forest predicted turnaround duration ($24.0\text{ hours}$ in integer days) projected from intake.</td>
+                            <td><span class="badge badge-green">VERIFIED</span></td>
+                            <td><span class="issue-yes">YES (SEMANTIC)</span>: Was incorrectly assumed to be raw 1.000 output. Proven to be rounded integer operational day.</td>
+                        </tr>
+                        <tr>
+                            <td><strong>4. Actual Release Date</strong></td>
+                            <td class="highlight-val">07/06/26<br><span style="color:#fbbf24;">03:45 PM</span></td>
+                            <td class="code-cell">released_at<br>(fallback: status_log 'for-release')</td>
+                            <td class="code-cell">orders<br>status_log</td>
+                            <td>Retrieved by <code>releaseTimestamp(order)</code> in L451-462. Persisted via <code>backend/main.py</code> L5742 & L6491.</td>
+                            <td class="code-cell">2026-07-06 15:45:00</td>
+                            <td>Formatted as <code>MM/dd/yy</code> date and 12-hr AM/PM time string.</td>
+                            <td><strong>Workshop Completion Timestamp:</strong> When servicing was completed and shoes became ready for customer pickup.</td>
+                            <td><span class="badge badge-green">VERIFIED</span></td>
+                            <td><span class="issue-yes">YES (COUPLING)</span>: If claimed directly without prior 'for-release' status, backend sets <code>released_at = claimed_at</code>.</td>
+                        </tr>
+                        <tr>
+                            <td><strong>5. Claimed Date</strong></td>
+                            <td class="highlight-val">07/06/26<br><span style="color:#2dd4bf;">03:45 PM</span></td>
+                            <td class="code-cell">claimed_at<br>(fallback: status_log 'claimed')</td>
+                            <td class="code-cell">orders<br>status_log</td>
+                            <td>Retrieved by <code>claimTimestamp(order)</code> in L464-474. Written by <code>POST /api/orders/{id}/claim</code> or status update to 'claimed'.</td>
+                            <td class="code-cell">2026-07-06 15:45:00</td>
+                            <td>Formatted as <code>MM/dd/yy</code> date and 12-hr AM/PM time string.</td>
+                            <td><strong>Customer Handover Timestamp:</strong> When the customer physically received the shoes and settled balance.</td>
+                            <td><span class="badge badge-green">VERIFIED</span></td>
+                            <td><span class="issue-no">NO</span> (Represents actual customer pickup)</td>
+                        </tr>
+                        <tr>
+                            <td><strong>6. Actual Turnaround</strong></td>
+                            <td class="highlight-val">1 day<br><small style="color:#94a3b8;">(Received to actual release)</small></td>
+                            <td class="code-cell">receivedDate, actualReleaseDate</td>
+                            <td class="code-cell">Computed in frontend</td>
+                            <td><code>rD.setHours(0,0,0,0); aD.setHours(0,0,0,0); diffDays = round((aD - rD)/86400000); return Math.max(1, diffDays);</code></td>
+                            <td class="code-cell">8h 03m (0.335 days)<br>diffDays = 0</td>
+                            <td>Calendar dates truncated to midnight. Same-day completion yields 0 days, which is clamped to 1 via <code>Math.max(1, diffDays)</code>.</td>
+                            <td><strong>Integer Operational Service Day:</strong> Minimum billing/operational convention. Does NOT mean 24 elapsed clock hours.</td>
+                            <td><span class="badge badge-green">VERIFIED</span></td>
+                            <td><span class="issue-yes">YES (DISPLAY)</span>: Card displays "1 day" for an 8h 3m job. Must be documented as "1 operational day (8h 3m elapsed)".</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Claim Punctuality</strong></td>
+                            <td class="highlight-val"><span style="color:#60a5fa;">Claimed 1 day early</span></td>
+                            <td class="code-cell">authoritativeOfficialReleaseDate, actualClaimedDate</td>
+                            <td class="code-cell">Computed in frontend</td>
+                            <td><code>expMid = midnight(expDt); claimMid = midnight(claimDt); diff = round((claimMid - expMid)/86400000);</code> (L2467-2476).</td>
+                            <td class="code-cell">expDt: July 7 10:00 PM<br>claimDt: July 6 03:45 PM<br>Clock diff: -30h 15m</td>
+                            <td>Both timestamps stripped to calendar-day midnight (July 6 vs July 7). Calendar difference is -1 day. Formatted as "1 day early".</td>
+                            <td><strong>Calendar-Day Punctuality vs. Promised Target:</strong> Measures calendar date of customer claim against promised target date.</td>
+                            <td><span class="badge badge-green">VERIFIED</span></td>
+                            <td><span class="issue-no">NO</span> (Mathematically consistent with calendar-day calculation)</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h3>2. In-Depth Technical Tracing & Findings</h3>
+
+            <div class="grid-2">
+                <div class="card">
+                    <div class="card-header">
+                        <span>1. Order Date & Intake Semantics</span>
+                        <span class="badge badge-green">CODE AUDITED</span>
+                    </div>
+                    <p>
+                        In <code>backend/models.py</code> line 242, <code>orders.created_at</code> is initialized to <code>datetime.now</code> at the moment the Job Order is persisted into the database. In <code>OrderDetailModal.tsx</code> lines 800-840, <code>receivedDate</code> prioritizes the intake ID prefix date, <code>order.orderDate</code>, and <code>order.orderTime</code> (counter intake form inputs), falling back to <code>created_at</code>.
+                    </p>
+                    <p>
+                        <strong>Finding:</strong> The system possesses no biometric entrance cameras or door sensors. Therefore, describing <code>created_at</code> as "the exact moment the customer entered the store" is scientifically unverified. The correct, defensible description is: <strong>"The timestamp when the Job Order was recorded at counter intake."</strong>
+                    </p>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <span>2. released_at vs. claimed_at Coupling Analysis</span>
+                        <span class="badge badge-red">CRITICAL FINDING</span>
+                    </div>
+                    <p>
+                        Code inspection of <code>backend/main.py</code> reveals three specific locations where <code>released_at</code> is coupled to <code>claimed_at</code>:
+                    </p>
+                    <div class="code-block">
+# backend/main.py (Line 6490-6491 in /api/orders/{order_id}/claim)
+db_order.claimed_at = get_ph_now()
+if not db_order.released_at:
+    db_order.released_at = db_order.claimed_at
+
+# backend/main.py (Line 5747-5748 in update_order)
+elif not db_order.released_at:
+    prev_release = _first_for_release_log()
+    db_order.released_at = prev_release.changed_at if prev_release else (db_order.claimed_at or datetime.now())
+
+# src/app/context/OrderContext.tsx (Line 533 frontend fallback)
+return bo.claimed_at ? parseUTC(bo.claimed_at) : undefined;
+                    </div>
+                    <p>
+                        <strong>Finding:</strong> The system permits an order to transition directly from <code>on-going</code> to <code>claimed</code>. When this occurs, <code>released_at</code> is automatically populated with the <code>claimed_at</code> timestamp. Therefore, identical timestamps (<code>07/06/26 03:45 PM</code>) do <strong>not</strong> independently prove immediate customer pickup; they indicate that the order was settled at the counter without a distinct, prior workshop release status logged. For research evaluation, this proxy must be explicitly documented.
+                    </p>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <span>3. Turnaround Calculation Math (8h 03m vs. 1 Day)</span>
+                        <span class="badge badge-amber">MATH VERIFIED</span>
+                    </div>
+                    <p>
+                        The calculation in <code>OrderDetailModal.tsx</code> lines 889-899 is:
+                    </p>
+                    <div class="code-block">
+const rD = new Date(receivedDate);
+rD.setHours(0, 0, 0, 0);
+const aD = new Date(actualReleaseDate);
+aD.setHours(0, 0, 0, 0);
+const diffDays = Math.round((aD.getTime() - rD.getTime()) / (1000 * 60 * 60 * 24));
+return Math.max(1, diffDays);
+                    </div>
+                    <p>
+                        <strong>Step-by-step evaluation for the July 6 example:</strong>
+                    </p>
+                    <ul>
+                        <li>Intake: <code>2026-07-06 07:42 AM</code> $\rightarrow$ stripped to <code>2026-07-06 00:00:00</code>.</li>
+                        <li>Release: <code>2026-07-06 03:45 PM</code> $\rightarrow$ stripped to <code>2026-07-06 00:00:00</code>.</li>
+                        <li><code>diffDays = Math.round(0 / 86400000) = 0</code> calendar days.</li>
+                        <li><code>Math.max(1, 0) = 1</code> day.</li>
+                    </ul>
+                    <p>
+                        <strong>Finding:</strong> "1 day" corresponds to <strong>Classification E (minimum display floor of 1 applied to integer calendar-day difference)</strong>. It is an operational business convention ("same-day service counts as 1 operational service day"), <strong>not</strong> 24 elapsed clock hours. The actual elapsed duration is <strong>8 hours and 3 minutes</strong>.
+                    </p>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <span>4. Random Forest Model Output & Post-Processing</span>
+                        <span class="badge badge-blue">PIPELINE AUDITED</span>
+                    </div>
+                    <p>
+                        In <code>backend/ml/ml_engine.py</code> lines 410-421:
+                    </p>
+                    <div class="code-block">
+rf_days = float(self.model.predict([vector])[0])  # Raw float (e.g., 0.85)
+rf_elapsed_days = max(1, int(round(rf_days)))     # Rounded to 1 integer day
+base_date = self._parse_base_date(order_data)     # 2026-07-06 07:42:00
+ml_predicted_date = base_date + timedelta(days=rf_elapsed_days)  # 2026-07-07 07:42:00
+final_target_date = next_open_release_date(ml_predicted_date)
+                    </div>
+                    <p>
+                        <strong>Classification:</strong> <span class="badge badge-blue">MODEL OUTPUT AFTER ROUNDING + CALENDAR POST-PROCESSING</span>.
+                    </p>
+                    <p>
+                        <strong>Finding:</strong> The Random Forest regressor does not predict clock hours or produce exactly <code>1.0000</code> days. It outputs a continuous float on target <em>Ready-for-Release Turnaround</em>. The pipeline rounds this to the nearest integer day ($\ge 1$), and offsets the intake timestamp by <code>timedelta(days=rf_elapsed_days)</code> ($24.0$ hours). This preserves the intake time (07:42 AM) while ensuring store operating calendar constraints are satisfied.
+                    </p>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <span>5. Business Rules (10:00 PM) vs. ML (07:42 AM)</span>
+                        <span class="badge badge-green">SEMANTICS CLARIFIED</span>
+                    </div>
+                    <p>
+                        Both cards report a duration of "1 day", but their target timestamps diverge:
+                    </p>
+                    <ul>
+                        <li><strong>Business Rules (07/07/26 10:00 PM):</strong> <code>order.releaseTime</code> defaults to <code>22:00</code> (store closing). Represents the <em>official customer delivery cutoff</em> on the target calendar day.</li>
+                        <li><strong>ML Prediction (07/07/26 07:42 AM):</strong> Adds the predicted duration ($1\text{ day} = 24\text{ hours}$) directly to intake time ($07:42\text{ AM} + 24\text{h}$). Represents the <em>expected elapsed servicing completion time</em>.</li>
+                    </ul>
+                    <p>
+                        <strong>Finding:</strong> The two timestamps represent different operational concepts. Business Rules defines an end-of-business commitment deadline, while ML estimates elapsed workshop cycle time. They are not mathematically contradictory once these separate roles are recognized.
+                    </p>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <span>6. Claim Punctuality Reference Point</span>
+                        <span class="badge badge-green">VERIFIED FORMULA</span>
+                    </div>
+                    <p>
+                        In <code>OrderDetailModal.tsx</code> lines 2463-2478:
+                    </p>
+                    <div class="code-block">
+const expDt = authoritativeOfficialReleaseDate; // Business Rules target (07/07/26 10:00 PM)
+const claimDt = actualClaimedDate;               // Customer pickup (07/06/26 03:45 PM)
+const expMid = new Date(expDt.getFullYear(), expDt.getMonth(), expDt.getDate()).getTime();
+const claimMid = new Date(claimDt.getFullYear(), claimDt.getMonth(), claimDt.getDate()).getTime();
+const diffDays = Math.round((claimMid - expMid) / (1000 * 60 * 60 * 24)); // -1
+if (diffDays < 0) return "Claimed " + Math.abs(diffDays) + " day early";
+                    </div>
+                    <p>
+                        <strong>Finding:</strong> Claim Punctuality compares <code>claimed_at</code> strictly against the <strong>Business Rules official promised date</strong>, not the ML prediction. Both timestamps are normalized to calendar-day midnight. Even though the elapsed clock difference is 30 hours and 15 minutes, the calendar-day difference is $-1$ day, yielding <code>"Claimed 1 day early"</code>.
+                    </p>
+                </div>
+            </div>
+
+            <h3>3. Academic Manuscript & Defense Alignment Statement</h3>
+            <div class="callout callout-success">
+                <div class="callout-title">🎓 Capstone Defense Talking Point & Ground Truth Alignment</div>
+                <p>
+                    <em>"The timestamps displayed on the Schedule & Tracking interface differ because they represent distinct, asynchronous events in the service lifecycle. <strong>Order Date</strong> records counter intake entry. <strong>Business Rules</strong> establishes the contractual customer delivery deadline ending at the store's daily closing cutoff (10:00 PM). <strong>ML Prediction</strong> estimates elapsed workshop turnaround duration projected from intake (7:42 AM). <strong>Actual Release Date</strong> records when workshop servicing concluded, while <strong>Claimed Date</strong> records customer pickup and final settlement. We maintain operational release and customer claim as separate data fields because workshop completion and customer retrieval are separate real-world events. In cases where an order is settled directly without a preceding status change, the backend records <code>released_at = claimed_at</code> as a fallback, which is explicitly tracked in our audit logs."</em>
+                </p>
+            </div>
+        </section>
+
+        <!-- SECTION: Pilot Audit Readiness & Quality Controls -->
+        <section id="pilot-quality-controls">
+            <h2>
+                <span>🛡️</span> Final Inventory Policy & Whole-System Quality Controls Verification
+            </h2>
+            <p>
+                In accordance with research integrity standards and project development guidelines, the official Shoelotskey inventory policy and system invariants have been audited and verified:
+            </p>
+
+            <div class="callout callout-success">
+                <div class="callout-title">📋 Official Manuscript-Compatible Inventory Policy</div>
+                <p>
+                    <em>"The inventory module enables authorized personnel to record actual material usage during service operations. Because standardized material-consumption quantities per service were not disclosed by the establishment due to the proprietary nature of its service materials and practices, the system does not rely on fixed automatic consumption recipes. Once actual material usage is recorded, the system automatically validates stock availability, deducts the recorded quantity, updates the remaining balance, and creates the corresponding inventory transaction record."</em>
+                </p>
+            </div>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Control Domain</th>
+                            <th>Policy / Constraint</th>
+                            <th>Implementation State</th>
+                            <th>Compliance Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>1. Service Auto-Deduct Status</strong></td>
+                            <td>Operational automatic service-based deduction must remain DISABLED across all services.</td>
+                            <td>Permanently disabled via <code>OPERATIONAL_SERVICE_AUTO_DEDUCT_ENABLED = False</code> in <code>backend/main.py</code> L5580. All active inventory rows have <code>auto_deduct = False</code>.</td>
+                            <td><span class="badge badge-green">COMPLIANT (DISABLED)</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>2. Actual-Usage Workflow</strong></td>
+                            <td>Manual quantity entry with automatic system calculation, deduction, and balance update.</td>
+                            <td><code>AddMaterialModal.tsx</code> requires manual entry of actual quantity consumed, auto-displays unit, validates available stock, and triggers atomic backend deduction.</td>
+                            <td><span class="badge badge-green">COMPLIANT (ACTIVE)</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>3. Stock Availability Guard</strong></td>
+                            <td>Enforce <code>requested_usage &le; current_stock</code>. HTTP 400 Bad Request on insufficient stock; no override.</td>
+                            <td>Enforced at UI level (L81-84) and backend (<code>backend/main.py</code> L6251-6255). Credentials cannot bypass physical stock limits.</td>
+                            <td><span class="badge badge-green">COMPLIANT (ENFORCED)</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>4. Active Order Rule</strong></td>
+                            <td>Material usage permitted on Active orders (New Order, On-going, For Release). Prohibited on Locked (Claimed, Cancelled).</td>
+                            <td>Gated at UI (L58-68) and backend API (L6217-6223). Locked orders reject material addition and display warning banner.</td>
+                            <td><span class="badge badge-green">COMPLIANT (GATED)</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>5. Audit & Inventory Logging</strong></td>
+                            <td>All actual material consumptions must produce immutable audit and inventory logs.</td>
+                            <td>Backend creates <code>MaterialConsumption</code> (idempotency key), <code>InventoryLog</code> (<code>order_material</code>), and <code>AuditLog</code> (<code>DEDUCT</code> snapshot).</td>
+                            <td><span class="badge badge-green">COMPLIANT (LOGGED)</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>6. Dormant Auto-Deduct Schema</strong></td>
+                            <td>Preserve <code>auto_deduct</code>, <code>auto_deduct_trigger</code>, <code>trigger_service</code>, <code>consumption_qty</code> without schema deletion.</td>
+                            <td>Columns retained in <code>models.py</code> for database backward compatibility; permanently decoupled from operational workflow.</td>
+                            <td><span class="badge badge-green">COMPLIANT (PRESERVED)</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>7. Unverified Defaults Labeling</strong></td>
+                            <td>Label historical defaults (Cleaner 2,000 mL/day, Bleach 1,000 mL/day, Deodorizer 180 mL/order) as developer defaults.</td>
+                            <td>Formally classified as <strong>NOT VERIFIED — DEVELOPER DEFAULT / NOT CLIENT-PROVIDED</strong>. Not used for costing, ROI, or manuscript claims.</td>
+                            <td><span class="badge badge-green">COMPLIANT (LABELED)</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>8. September Pilot Integrity</strong></td>
+                            <td>Zero synthetic September inventory movements generated. No backdating or fabrication.</td>
+                            <td>Absence of historical material records strictly preserved as absence of evidence. No synthetic records created.</td>
+                            <td><span class="badge badge-green">COMPLIANT (NO SYNTHETICS)</span></td>
+                        </tr>
+                        <tr>
+                            <td><strong>9. Timestamp Semantics & Precision</strong></td>
+                            <td>No artificial 12:00 AM midnight for date-only sources. Exact timestamp precision respected.</td>
+                            <td><code>Expenses.tsx</code> and <code>ExpenseDetailModal.tsx</code> format date-only sources as <code>MM/dd/yy</code>, suppressing artificial midnight.</td>
+                            <td><span class="badge badge-green">COMPLIANT (VERIFIED)</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</body>
+</html>

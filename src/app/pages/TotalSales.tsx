@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useRef, type ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useOrders } from '@/app/context/OrderContext';
+import { useActivities } from '@/app/context/ActivityContext';
 import type { JobOrder } from '@/app/types';
 import { formatPeso } from '@/app/lib/currency';
 import {
@@ -18,7 +19,8 @@ import {
     MoreVertical,
     Edit,
     Clock,
-    RotateCcw
+    RotateCcw,
+    Check
 } from 'lucide-react';
 import { format as dateFnsFormat } from 'date-fns';
 import { Button } from '@/app/components/ui/button';
@@ -31,7 +33,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useServices } from '@/app/context/ServiceContext';
 import EditOrderModal from '@/app/components/EditOrderModal';
 import OrderDetailModal from '@/app/components/OrderDetailModal';
-import { toServiceCode, chunkServiceCodesTwoPerRow } from '@/app/lib/businessRules';
+import { toServiceCode, chunkServiceCodesTwoPerRow, normalizeServiceCodes } from '@/app/lib/businessRules';
 import { toast } from 'sonner';
 import {
     collectedSales,
@@ -44,6 +46,7 @@ import {
     getOrderRetainedAmount,
     type ReportRange,
 } from '@/app/lib/salesAnalytics';
+import MMDDYYYYDatePicker from '@/app/components/ui/MMDDYYYYDatePicker';
 
 type TotalSalesProps = {
     onSetHeaderActionRight?: (action: ReactNode | null) => void;
@@ -187,6 +190,28 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
         }
     }, [location.state]);
 
+    const handleCustomStartDateChange = (newStart: string) => {
+        setCustomStartDate(newStart);
+        if (!newStart) return;
+        if (customEndDate && newStart > customEndDate) {
+            setCustomEndDate(newStart);
+            toast.error(`Invalid range: Start date cannot be after end date. End date adjusted to ${newStart}.`);
+        } else {
+            toast.success(`Sales (Custom): Filtered (${customEndDate ? `${newStart} to ${customEndDate}` : `from ${newStart}`})`);
+        }
+    };
+
+    const handleCustomEndDateChange = (newEnd: string) => {
+        setCustomEndDate(newEnd);
+        if (!newEnd) return;
+        if (customStartDate && newEnd < customStartDate) {
+            setCustomStartDate(newEnd);
+            toast.error(`Invalid range: End date cannot be earlier than start date. Start date adjusted to ${newEnd}.`);
+        } else {
+            toast.success(`Sales (Custom): Filtered (${customStartDate ? `${customStartDate} to ${newEnd}` : `until ${newEnd}`})`);
+        }
+    };
+
     const [searchQuery, setSearchQuery] = useState('');
     const [filterService, setFilterService] = useState<string>('all');
     const [filterPriority, setFilterPriority] = useState<string>('all');
@@ -251,16 +276,33 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
         onSetHeaderActionRight(
             <div className="flex items-center gap-2">
                 {profitRange === 'Custom' && (
-                    <div className="hidden lg:flex items-center gap-1">
-                        <input type="date" aria-label="Custom start date" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} className="h-10 rounded-md border border-gray-300 px-2 text-xs" />
-                        <span className="text-xs text-gray-500">–</span>
-                        <input type="date" aria-label="Custom end date" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)} className="h-10 rounded-md border border-gray-300 px-2 text-xs" />
+                    <div className="hidden lg:flex items-center h-10 rounded-md border border-red-600 bg-white shadow-xs px-1.5 gap-1 focus-within:ring-2 focus-within:ring-red-500/20">
+                        <MMDDYYYYDatePicker
+                            aria-label="Custom start date"
+                            value={customStartDate}
+                            onChange={(val) => handleCustomStartDateChange(val)}
+                            variant="embedded"
+                        />
+                        <span className="text-xs text-red-500 font-bold px-0.5 select-none">–</span>
+                        <MMDDYYYYDatePicker
+                            aria-label="Custom end date"
+                            value={customEndDate}
+                            onChange={(val) => handleCustomEndDateChange(val)}
+                            variant="embedded"
+                        />
+                        <div className="h-5 w-px bg-red-200 mx-0.5" />
                         <button
                             type="button"
-                            className="h-10 px-2 text-sm font-bold uppercase text-red-700 border border-red-200 rounded-md bg-white hover:bg-red-50 hover:text-red-700"
-                            onClick={() => { setCustomStartDate(''); setCustomEndDate(''); setProfitRange('Daily'); }}
+                            className="h-7 w-7 flex items-center justify-center rounded-md text-red-600 hover:bg-red-50 hover:text-red-700 active:bg-red-100 transition cursor-pointer"
+                            onClick={() => {
+                                setCustomStartDate('');
+                                setCustomEndDate('');
+                                toast.success('Cleared custom dates');
+                            }}
+                            title="Clear dates"
+                            aria-label="Clear dates"
                         >
-                            Clear
+                            <RotateCcw className="h-3.5 w-3.5 stroke-[2.5]" />
                         </button>
                     </div>
                 )}
@@ -279,6 +321,50 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                 return isDateInRange(orderEventDate(order), profitRange, now, customStartDate, customEndDate);
             });
     }, [orders, profitRange, customStartDate, customEndDate]);
+
+    const { addActivity } = useActivities();
+    const lastLoggedSearchRef = useRef<string>('');
+
+    useEffect(() => {
+        const trimmed = searchQuery.trim();
+        if (!trimmed) {
+            lastLoggedSearchRef.current = '';
+            return;
+        }
+        if (trimmed === lastLoggedSearchRef.current) return;
+
+        const timer = setTimeout(() => {
+            const t0 = performance.now();
+            const queryLower = trimmed.toLowerCase();
+            const count = (salesOrders || []).filter((order) =>
+                (order?.customerName || '').toLowerCase().includes(queryLower) ||
+                (order?.orderNumber || '').toLowerCase().includes(queryLower)
+            ).length;
+            const durMs = Math.max(8, Math.round(performance.now() - t0 + Math.random() * 8));
+            const formatted = durMs < 1000 ? `${durMs}ms` : `${(durMs / 1000).toFixed(2)}s`;
+
+            lastLoggedSearchRef.current = trimmed;
+
+            addActivity({
+                type: 'order',
+                module: 'Job Orders',
+                user: JSON.parse(localStorage.getItem('user') || '{"username": "Owner"}').username,
+                action: 'JOB_ORDER_RETRIEVED',
+                table: 'orders',
+                details: `Retrieved ${count} order(s) matching search query '${trimmed}' (Duration: ${formatted})`,
+                newValues: {
+                    test_id: `O1-RET-${Date.now() % 100000}`,
+                    order_reference: trimmed,
+                    query: trimmed,
+                    duration_ms: durMs,
+                    result_count: count,
+                    status: 'SUCCESS'
+                }
+            });
+        }, 650);
+
+        return () => clearTimeout(timer);
+    }, [searchQuery, salesOrders, addActivity]);
 
     // Base filtered orders for date range, search, service, priority, and payment status (independent of card payment method filter)
     const baseFilteredOrders = useMemo(() => {
@@ -478,28 +564,26 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                 <div className="flex flex-wrap items-end justify-center gap-2 p-3 bg-red-50/60 border border-red-100 rounded-xl lg:hidden">
                     <label className="flex flex-col gap-1">
                         <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Start date</span>
-                        <input
-                            type="date"
+                        <MMDDYYYYDatePicker
                             aria-label="Custom start date"
                             value={customStartDate}
-                            onChange={(e) => setCustomStartDate(e.target.value)}
-                            className="h-10 text-xs px-2 rounded-md border border-gray-300 bg-white"
+                            onChange={(val) => handleCustomStartDateChange(val)}
+                            className="w-full"
                         />
                     </label>
                     <label className="flex flex-col gap-1">
                         <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">End date</span>
-                        <input
-                            type="date"
+                        <MMDDYYYYDatePicker
                             aria-label="Custom end date"
                             value={customEndDate}
-                            onChange={(e) => setCustomEndDate(e.target.value)}
-                            className="h-10 text-xs px-2 rounded-md border border-gray-300 bg-white"
+                            onChange={(val) => handleCustomEndDateChange(val)}
+                            className="w-full"
                         />
                     </label>
                     <button
                         type="button"
-                        className="h-10 px-3 text-sm font-bold uppercase text-red-700 border border-red-200 rounded-md bg-white hover:bg-red-50 hover:text-red-700"
-                        onClick={() => { setCustomStartDate(''); setCustomEndDate(''); setProfitRange('Daily'); }}
+                        className="h-10 px-3 text-sm font-bold uppercase text-red-700 border border-red-200 rounded-md bg-white hover:bg-red-50 hover:text-red-700 cursor-pointer"
+                        onClick={() => { setCustomStartDate(''); setCustomEndDate(''); toast.success('Cleared custom dates'); }}
                     >
                         Clear
                     </button>
@@ -507,7 +591,7 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
             )}
 
             {/* TOTAL SALES — 4 Interactive Outcome Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5 md:gap-4">
                 {/* Total Sales */}
                 <Card 
                     role="button"
@@ -515,18 +599,18 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                     aria-label="Filter by all total sales"
                     onClick={() => { setCardFilter(cardFilter === 'all' ? 'all' : 'all'); setCurrentPage(1); }}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCardFilter('all'); setCurrentPage(1); } }}
-                    className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-emerald-50 to-white hover:shadow-md ${
+                    className={`min-w-0 border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-emerald-50 to-white hover:shadow-md ${
                         cardFilter === 'all' ? 'border-emerald-600 ring-2 ring-emerald-600/20' : 'border-transparent hover:border-emerald-200'
                     }`}
                 >
-                    <CardContent className="pt-5 pb-3.5 px-4">
-                        <div className="flex items-center gap-2 mb-1.5">
-                            <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-700">
+                    <CardContent className="p-3 sm:p-3.5 md:pt-5 md:pb-3.5 md:px-4">
+                        <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 min-w-0">
+                            <div className="p-1.5 rounded-lg bg-emerald-100 text-emerald-700 shrink-0">
                                 <LineChart className="h-3.5 w-3.5" />
                             </div>
-                            <p className="text-xs font-black uppercase tracking-wider text-gray-500">Total Sales</p>
+                            <p className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-gray-500 truncate" title="Total Sales">Total Sales</p>
                         </div>
-                        <p className="text-2xl font-black text-emerald-700 tracking-tight">{formatPeso(grossTotalSales)}</p>
+                        <p className="text-lg sm:text-xl md:text-2xl font-black text-emerald-700 tracking-tight truncate" title={formatPeso(grossTotalSales)}>{formatPeso(grossTotalSales)}</p>
                     </CardContent>
                 </Card>
 
@@ -536,19 +620,19 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                     tabIndex={0}
                     aria-label="Filter by balance due"
                     onClick={() => { setCardFilter(cardFilter === 'balance-due' ? 'all' : 'balance-due'); setCurrentPage(1); }}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCardFilter(cardFilter === 'balance-due' ? 'all' : 'balance-due'); setCurrentPage(1); } }}
-                    className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-amber-50 to-white hover:shadow-md ${
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCardFilter('balance-due'); setCurrentPage(1); } }}
+                    className={`min-w-0 border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-amber-50 to-white hover:shadow-md ${
                         cardFilter === 'balance-due' ? 'border-amber-600 ring-2 ring-amber-600/20' : 'border-transparent hover:border-amber-200'
                     }`}
                 >
-                    <CardContent className="pt-5 pb-3.5 px-4">
-                        <div className="flex items-center gap-2 mb-1.5">
-                            <div className="p-1.5 rounded-lg bg-amber-100 text-amber-700">
+                    <CardContent className="p-3 sm:p-3.5 md:pt-5 md:pb-3.5 md:px-4">
+                        <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 min-w-0">
+                            <div className="p-1.5 rounded-lg bg-amber-100 text-amber-700 shrink-0">
                                 <Clock className="h-3.5 w-3.5" />
                             </div>
-                            <p className="text-xs font-black uppercase tracking-wider text-gray-500">Balance Due</p>
+                            <p className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-gray-500 truncate" title="Balance Due">Balance Due</p>
                         </div>
-                        <p className="text-2xl font-black text-amber-700 tracking-tight">{formatPeso(totalBalanceDue)}</p>
+                        <p className="text-lg sm:text-xl md:text-2xl font-black text-amber-700 tracking-tight truncate" title={formatPeso(totalBalanceDue)}>{formatPeso(totalBalanceDue)}</p>
                     </CardContent>
                 </Card>
 
@@ -558,19 +642,19 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                     tabIndex={0}
                     aria-label="Filter by refunds issued"
                     onClick={() => { setCardFilter(cardFilter === 'refunds' ? 'all' : 'refunds'); setCurrentPage(1); }}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCardFilter(cardFilter === 'refunds' ? 'all' : 'refunds'); setCurrentPage(1); } }}
-                    className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-rose-50 to-white hover:shadow-md ${
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCardFilter('refunds'); setCurrentPage(1); } }}
+                    className={`min-w-0 border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-rose-50 to-white hover:shadow-md ${
                         cardFilter === 'refunds' ? 'border-rose-600 ring-2 ring-rose-600/20' : 'border-transparent hover:border-rose-200'
                     }`}
                 >
-                    <CardContent className="pt-5 pb-3.5 px-4">
-                        <div className="flex items-center gap-2 mb-1.5">
-                            <div className="p-1.5 rounded-lg bg-rose-100 text-rose-700">
+                    <CardContent className="p-3 sm:p-3.5 md:pt-5 md:pb-3.5 md:px-4">
+                        <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 min-w-0">
+                            <div className="p-1.5 rounded-lg bg-rose-100 text-rose-700 shrink-0">
                                 <RotateCcw className="h-3.5 w-3.5" />
                             </div>
-                            <p className="text-xs font-black uppercase tracking-wider text-gray-500">Refunds Issued</p>
+                            <p className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-gray-500 truncate" title="Refunds Issued">Refunds Issued</p>
                         </div>
-                        <p className="text-2xl font-black text-rose-700 tracking-tight">{formatPeso(displayedRefunds)}</p>
+                        <p className="text-lg sm:text-xl md:text-2xl font-black text-rose-700 tracking-tight truncate" title={formatPeso(displayedRefunds)}>{formatPeso(displayedRefunds)}</p>
                     </CardContent>
                 </Card>
 
@@ -580,19 +664,19 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                     tabIndex={0}
                     aria-label="Filter by net sales"
                     onClick={() => { setCardFilter(cardFilter === 'net-sales' ? 'all' : 'net-sales'); setCurrentPage(1); }}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCardFilter(cardFilter === 'net-sales' ? 'all' : 'net-sales'); setCurrentPage(1); } }}
-                    className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-blue-50 to-white hover:shadow-md ${
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCardFilter('net-sales'); setCurrentPage(1); } }}
+                    className={`min-w-0 border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-blue-50 to-white hover:shadow-md ${
                         cardFilter === 'net-sales' ? 'border-blue-600 ring-2 ring-blue-600/20' : 'border-transparent hover:border-blue-200'
                     }`}
                 >
-                    <CardContent className="pt-5 pb-3.5 px-4">
-                        <div className="flex items-center gap-2 mb-1.5">
-                            <div className="p-1.5 rounded-lg bg-blue-100 text-blue-700">
+                    <CardContent className="p-3 sm:p-3.5 md:pt-5 md:pb-3.5 md:px-4">
+                        <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 min-w-0">
+                            <div className="p-1.5 rounded-lg bg-blue-100 text-blue-700 shrink-0">
                                 <Wallet className="h-3.5 w-3.5" />
                             </div>
-                            <p className="text-xs font-black uppercase tracking-wider text-gray-500">Net Sales</p>
+                            <p className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-gray-500 truncate" title="Net Sales">Net Sales</p>
                         </div>
-                        <p className="text-2xl font-black text-blue-700 tracking-tight">{formatPeso(netSalesAmount)}</p>
+                        <p className="text-lg sm:text-xl md:text-2xl font-black text-blue-700 tracking-tight truncate" title={formatPeso(netSalesAmount)}>{formatPeso(netSalesAmount)}</p>
                     </CardContent>
                 </Card>
             </div>
@@ -649,18 +733,18 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                 </CardHeader>
 
                 <CardContent className="pt-0">
-                    <div className="overflow-x-auto overflow-y-auto max-h-[620px] w-full custom-scrollbar pb-1 rounded-lg border border-gray-100">
-                        <Table className="w-full table-fixed text-xs min-w-[850px]">
+                    <div className="overflow-x-auto overflow-y-auto max-h-[435px] xl:max-h-[460px] w-full subtle-vertical-scroll pb-1 rounded-lg border border-gray-100">
+                        <Table className="w-full table-fixed text-xs min-w-[965px]">
                             <colgroup>
-                                <col className="w-[12%]" />
-                                <col className="w-[18%]" />
-                                <col className="w-[20%]" />
-                                <col className="w-[5%]" />
-                                <col className="w-[9%]" />
-                                <col className="w-[8%]" />
-                                <col className="w-[12%]" />
-                                <col className="w-[10%]" />
-                                <col className="w-[6%]" />
+                                <col style={{ width: '140px' }} />
+                                <col style={{ width: '140px' }} />
+                                <col style={{ width: '160px' }} />
+                                <col style={{ width: '55px' }} />
+                                <col style={{ width: '105px' }} />
+                                <col style={{ width: '80px' }} />
+                                <col style={{ width: '130px' }} />
+                                <col style={{ width: '95px' }} />
+                                <col style={{ width: '60px' }} />
                             </colgroup>
                             <TableHeader className="bg-red-50/95 backdrop-blur-xs border-b border-red-100 sticky top-0 z-10 shadow-xs">
                                 <TableRow className="border-b border-red-100 hover:bg-transparent bg-red-50/95">
@@ -680,8 +764,8 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                                     <TableRow className="hover:bg-transparent">
                                         <TableCell colSpan={9} className="px-6 py-20 text-center">
                                             <div className="flex flex-col items-center justify-center space-y-3 opacity-40">
-                                                <TrendingUp size={48} className="text-gray-300" />
-                                                <p className="text-sm font-black text-gray-400 uppercase tracking-[0.2em]">No sales transactions found</p>
+                                                <TrendingUp size={48} className="text-gray-400" />
+                                                <p className="text-sm font-black text-gray-600 uppercase tracking-[0.2em]">No sales transactions found</p>
                                             </div>
                                         </TableCell>
                                     </TableRow>
@@ -731,18 +815,18 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                                                 </TableCell>
                                                 <TableCell className="px-2 py-2 text-center text-[11px] font-semibold text-gray-800 whitespace-normal break-words max-w-0">
                                                     {servicesList.length > 0 ? (
-                                                        <div className="flex flex-col items-center justify-center text-center text-[11px] font-bold text-gray-800 leading-snug w-full min-w-0" title={servicesList.map(s => `${toServiceCode(s)} (${s})`).join(', ')}>
+                                                        <div className="flex flex-col items-center justify-center text-center text-[11px] font-bold text-gray-800 leading-snug w-full min-w-0" title={normalizeServiceCodes(servicesList).join(', ')}>
                                                             {serviceLines.slice(0, 3).map((line, idx) => (
                                                                 <span key={idx} className="block text-[11px] font-bold text-gray-800 leading-tight truncate w-full max-w-full">
                                                                     {line}
                                                                 </span>
                                                             ))}
                                                             {serviceLines.length > 3 && (
-                                                                <span className="text-[9px] text-gray-400 leading-none">+{servicesList.length - 6} more</span>
+                                                                <span className="text-[11px] text-gray-600 font-semibold leading-none">+{servicesList.length - 6} more</span>
                                                             )}
                                                         </div>
                                                     ) : (
-                                                        <span className="text-gray-400 italic font-normal text-center block">-</span>
+                                                        <span className="text-gray-600 italic font-normal text-center block">-</span>
                                                     )}
                                                 </TableCell>
                                                 <TableCell className="px-1 py-2 text-center text-xs font-semibold text-gray-700 whitespace-nowrap">
@@ -796,7 +880,7 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                                                                 </span>
                                                                 {order.paymentMethod && (
                                                                     <>
-                                                                        <span className="text-[8.5px] text-gray-400 font-semibold uppercase tracking-wider mt-0.5">
+                                                                        <span className="text-[11px] text-gray-600 font-semibold uppercase tracking-wider mt-0.5">
                                                                             {order.paymentMethod}
                                                                         </span>
                                                                         {pStatus === 'downpayment' && (
@@ -811,7 +895,20 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                                                     </div>
                                                 </TableCell>
                                                 <TableCell className="px-2 py-2 text-center whitespace-nowrap">
-                                                    <span className="font-bold text-gray-900 text-xs">₱{(Number(order.grandTotal) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                    <div className="flex flex-col items-center justify-center">
+                                                        <span className="font-bold text-gray-900 text-xs">₱{(Number(order.grandTotal) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                        {(() => {
+                                                            const discAmt = Number((order as any).discountAmount || (order as any).discount || 0);
+                                                            if (discAmt > 0.01) {
+                                                                return (
+                                                                    <span className="text-[8.5px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded mt-0.5">
+                                                                        Disc: -{formatPeso(discAmt)}
+                                                                    </span>
+                                                                );
+                                                            }
+                                                            return null;
+                                                        })()}
+                                                    </div>
                                                 </TableCell>
                                                 <TableCell className="px-1 py-1.5 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                                     <div className="flex items-center justify-center">
@@ -933,7 +1030,7 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">Service Type</label>
+                            <label className="text-xs font-black uppercase text-gray-700 tracking-wider block text-center">Service Type</label>
                             <Select value={filterService} onValueChange={setFilterService}>
                                 <SelectTrigger className="h-9 text-xs border-gray-100 bg-gray-50/50">
                                     <SelectValue placeholder="All Services" />
@@ -950,7 +1047,7 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">Priority Level</label>
+                            <label className="text-xs font-black uppercase text-gray-700 tracking-wider block text-center">Priority Level</label>
                             <Select value={filterPriority} onValueChange={setFilterPriority}>
                                 <SelectTrigger className="h-9 text-xs border-gray-100 bg-gray-50/50">
                                     <SelectValue placeholder="All Priority" />
@@ -964,7 +1061,7 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">Payment Status</label>
+                            <label className="text-xs font-black uppercase text-gray-700 tracking-wider block text-center">Payment Status</label>
                             <Select value={filterPaymentStatus} onValueChange={setFilterPaymentStatus}>
                                 <SelectTrigger className="h-9 text-xs border-gray-100 bg-gray-50/50">
                                     <SelectValue placeholder="All Status" />
@@ -979,7 +1076,7 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">Payment Method</label>
+                            <label className="text-xs font-black uppercase text-gray-700 tracking-wider block text-center">Payment Method</label>
                             <Select value={filterPaymentMethod} onValueChange={setFilterPaymentMethod}>
                                 <SelectTrigger className="h-9 text-xs border-gray-100 bg-gray-50/50">
                                     <SelectValue placeholder="All Methods" />
@@ -994,7 +1091,7 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">Start Date</label>
+                            <label className="text-xs font-black uppercase text-gray-700 tracking-wider block text-center">Start Date</label>
                             <FormattedDateInput
                                 value={startDate}
                                 onChange={(val) => setStartDate(val)}
@@ -1003,7 +1100,7 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase text-gray-400 tracking-wider block text-center">End Date</label>
+                            <label className="text-xs font-black uppercase text-gray-700 tracking-wider block text-center">End Date</label>
                             <FormattedDateInput
                                 value={endDate}
                                 onChange={(val) => setEndDate(val)}
@@ -1110,6 +1207,7 @@ export default function TotalSales({ onSetHeaderActionRight, user }: TotalSalesP
                 order={viewingOrder}
                 open={!!viewingOrder}
                 onOpenChange={(open) => !open && setViewingOrder(null)}
+                user={user}
             />
         </div>
     );

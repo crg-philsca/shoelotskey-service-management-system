@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useRef, type ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useExpenses } from '@/app/context/ExpenseContext';
-import { ArrowLeft, ChevronLeft, PlusCircle, Calendar as CalendarIcon, ChevronRight, Filter, Search, ChevronDown, Wallet, Boxes, Building2, Tags, MoreVertical, Edit, Trash2 } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, PlusCircle, Calendar as CalendarIcon, ChevronRight, Filter, Search, ChevronDown, Wallet, Boxes, Building2, Tags, MoreVertical, Edit, Trash2, RotateCcw } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/app/components/ui/table';
@@ -21,6 +21,7 @@ import {
 } from '@/app/lib/expenseCategories';
 import { isDateInRange, type ReportRange } from '@/app/lib/salesAnalytics';
 import { formatPeso } from '@/app/lib/currency';
+import MMDDYYYYDatePicker from '@/app/components/ui/MMDDYYYYDatePicker';
 
 
 
@@ -172,6 +173,28 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
         }
     }, [location.state]);
 
+    const handleCustomStartDateChange = (newStart: string) => {
+        setCustomStartDate(newStart);
+        if (!newStart) return;
+        if (customEndDate && newStart > customEndDate) {
+            setCustomEndDate(newStart);
+            toast.error(`Invalid range: Start date cannot be after end date. End date adjusted to ${newStart}.`);
+        } else {
+            toast.success(`Expenses (Custom): Filtered (${customEndDate ? `${newStart} to ${customEndDate}` : `from ${newStart}`})`);
+        }
+    };
+
+    const handleCustomEndDateChange = (newEnd: string) => {
+        setCustomEndDate(newEnd);
+        if (!newEnd) return;
+        if (customStartDate && newEnd < customStartDate) {
+            setCustomStartDate(newEnd);
+            toast.error(`Invalid range: End date cannot be earlier than start date. Start date adjusted to ${newEnd}.`);
+        } else {
+            toast.success(`Expenses (Custom): Filtered (${customStartDate ? `${customStartDate} to ${newEnd}` : `until ${newEnd}`})`);
+        }
+    };
+
     const [categorySearch, setCategorySearch] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 15;
@@ -179,13 +202,29 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
 
 
     const formatNumericDate = (value: string | number | Date) => {
+        if (!value) return '—';
+        const strVal = typeof value === 'string' ? value.trim() : '';
+        const isDateOnlyString = /^\d{4}[-/]\d{2}[-/]\d{2}$/.test(strVal) || /^\d{2}[-/]\d{2}[-/]\d{4}$/.test(strVal);
+
         const d = new Date(value);
+        if (isNaN(d.getTime())) return String(value);
         const mm = String(d.getMonth() + 1).padStart(2, '0');
         const dd = String(d.getDate()).padStart(2, '0');
         const yy = String(d.getFullYear()).slice(-2);
-        const hh = String(d.getHours()).padStart(2, '0');
-        const min = String(d.getMinutes()).padStart(2, '0');
-        return `${mm}/${dd}/${yy} ${hh}:${min}`;
+
+        // Date-only format or artificial 00:00 midnight: show date only
+        const isMidnight = d.getHours() === 0 && d.getMinutes() === 0 && d.getSeconds() === 0;
+        if (isDateOnlyString || isMidnight) {
+            return `${mm}/${dd}/${yy}`;
+        }
+
+        let hours = d.getHours();
+        const minutes = String(d.getMinutes()).padStart(2, '0');
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12;
+        hours = hours ? hours : 12;
+        const hh = String(hours).padStart(2, '0');
+        return `${mm}/${dd}/${yy} ${hh}:${minutes} ${ampm}`;
     };
 
     // Categorization & Filter Groups
@@ -272,16 +311,33 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
         onSetHeaderActionRight(
             <div className="flex items-center gap-2">
                 {profitRange === 'Custom' && (
-                    <div className="hidden lg:flex items-center gap-1">
-                        <input type="date" aria-label="Custom start date" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} className="h-10 rounded-md border border-gray-300 px-2 text-xs" />
-                        <span className="text-xs text-gray-500">–</span>
-                        <input type="date" aria-label="Custom end date" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)} className="h-10 rounded-md border border-gray-300 px-2 text-xs" />
+                    <div className="hidden lg:flex items-center h-10 rounded-md border border-red-600 bg-white shadow-xs px-1.5 gap-1 focus-within:ring-2 focus-within:ring-red-500/20">
+                        <MMDDYYYYDatePicker
+                            aria-label="Custom start date"
+                            value={customStartDate}
+                            onChange={(val) => handleCustomStartDateChange(val)}
+                            variant="embedded"
+                        />
+                        <span className="text-xs text-red-500 font-bold px-0.5 select-none">–</span>
+                        <MMDDYYYYDatePicker
+                            aria-label="Custom end date"
+                            value={customEndDate}
+                            onChange={(val) => handleCustomEndDateChange(val)}
+                            variant="embedded"
+                        />
+                        <div className="h-5 w-px bg-red-200 mx-0.5" />
                         <button
                             type="button"
-                            className="h-10 px-2 text-sm font-bold uppercase text-red-700 border border-red-200 rounded-md bg-white hover:bg-red-50 hover:text-red-700"
-                            onClick={() => { setCustomStartDate(''); setCustomEndDate(''); setProfitRange('Daily'); }}
+                            className="h-7 w-7 flex items-center justify-center rounded-md text-red-600 hover:bg-red-50 hover:text-red-700 active:bg-red-100 transition cursor-pointer"
+                            onClick={() => {
+                                setCustomStartDate('');
+                                setCustomEndDate('');
+                                toast.success('Cleared custom dates');
+                            }}
+                            title="Clear dates"
+                            aria-label="Clear dates"
                         >
-                            Clear
+                            <RotateCcw className="h-3.5 w-3.5 stroke-[2.5]" />
                         </button>
                     </div>
                 )}
@@ -401,23 +457,23 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
                 <div className="flex flex-wrap items-end justify-center gap-2 rounded-xl border border-red-100 bg-red-50/60 p-3 lg:hidden">
                     <label className="flex flex-col gap-1">
                         <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Start date</span>
-                        <input type="date" aria-label="Custom start date" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} className="h-10 rounded-md border border-gray-300 bg-white px-2 text-xs" />
+                        <MMDDYYYYDatePicker aria-label="Custom start date" value={customStartDate} onChange={(val) => handleCustomStartDateChange(val)} className="w-full" />
                     </label>
                     <label className="flex flex-col gap-1">
                         <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">End date</span>
-                        <input type="date" aria-label="Custom end date" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)} className="h-10 rounded-md border border-gray-300 bg-white px-2 text-xs" />
+                        <MMDDYYYYDatePicker aria-label="Custom end date" value={customEndDate} onChange={(val) => handleCustomEndDateChange(val)} className="w-full" />
                     </label>
                     <button
                         type="button"
-                        className="h-10 px-3 text-sm font-bold uppercase text-red-700 border border-red-200 rounded-md bg-white hover:bg-red-50 hover:text-red-700"
-                        onClick={() => { setCustomStartDate(''); setCustomEndDate(''); setProfitRange('Daily'); }}
+                        className="h-10 px-3 text-sm font-bold uppercase text-red-700 border border-red-200 rounded-md bg-white hover:bg-red-50 hover:text-red-700 cursor-pointer"
+                        onClick={() => { setCustomStartDate(''); setCustomEndDate(''); toast.success('Cleared custom dates'); }}
                     >
                         Clear
                     </button>
                 </div>
             )}
             {/* 4 Interactive Expense Summary Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5 md:gap-4">
                 {/* Total Expenses */}
                 <Card 
                     role="button"
@@ -425,18 +481,20 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
                     aria-label="Show all expenses"
                     onClick={() => { setCardFilter('all'); setCurrentPage(1); }}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCardFilter('all'); setCurrentPage(1); } }}
-                    className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-red-50 to-white hover:shadow-md focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                    className={`min-w-0 border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-red-50 to-white hover:shadow-md focus:outline-none focus:ring-2 focus:ring-red-500 ${
                         cardFilter === 'all' ? 'border-red-600 ring-2 ring-red-600/20' : 'border-transparent hover:border-red-200'
                     }`}
                 >
-                    <CardContent className="pt-5 pb-4 px-4">
-                        <div className="flex items-center gap-2 mb-1.5">
-                            <div className="p-1.5 rounded-lg bg-red-100 text-red-600">
-                                <Wallet size={16} />
+                    <CardContent className="p-3 sm:p-3.5 md:pt-5 md:pb-4 md:px-4">
+                        <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 min-w-0">
+                            <div className="p-1.5 rounded-lg bg-red-100 text-red-600 shrink-0">
+                                <Wallet size={15} />
                             </div>
-                            <p className="text-[10px] font-black uppercase tracking-wider text-gray-500 truncate">Total Expenses</p>
+                            <p className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-gray-500 truncate" title="Total Expenses">Total Expenses</p>
                         </div>
-                        <p className="text-2xl font-black text-red-600 tracking-tight">₱{totalExpensesAmount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                        <p className="text-lg sm:text-xl md:text-2xl font-black text-red-600 tracking-tight truncate" title={`₱${totalExpensesAmount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}>
+                            ₱{totalExpensesAmount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </p>
                     </CardContent>
                 </Card>
 
@@ -446,19 +504,21 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
                     tabIndex={0}
                     aria-label="Filter by inventory expenses"
                     onClick={() => { setCardFilter(cardFilter === 'inventory' ? 'all' : 'inventory'); setCurrentPage(1); }}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCardFilter(cardFilter === 'inventory' ? 'all' : 'inventory'); setCurrentPage(1); } }}
-                    className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-amber-50 to-white hover:shadow-md focus:outline-none focus:ring-2 focus:ring-amber-500 ${
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCardFilter('inventory'); setCurrentPage(1); } }}
+                    className={`min-w-0 border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-amber-50 to-white hover:shadow-md focus:outline-none focus:ring-2 focus:ring-amber-500 ${
                         cardFilter === 'inventory' ? 'border-amber-600 ring-2 ring-amber-600/20' : 'border-transparent hover:border-amber-200'
                     }`}
                 >
-                    <CardContent className="pt-5 pb-4 px-4">
-                        <div className="flex items-center gap-2 mb-1.5">
-                            <div className="p-1.5 rounded-lg bg-amber-100 text-amber-700">
-                                <Boxes size={16} />
+                    <CardContent className="p-3 sm:p-3.5 md:pt-5 md:pb-4 md:px-4">
+                        <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 min-w-0">
+                            <div className="p-1.5 rounded-lg bg-amber-100 text-amber-700 shrink-0">
+                                <Boxes size={15} />
                             </div>
-                            <p className="text-[10px] font-black uppercase tracking-wider text-gray-500 truncate">Inventory Expenses</p>
+                            <p className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-gray-500 truncate" title="Inventory Expenses">Inventory Expenses</p>
                         </div>
-                        <p className="text-2xl font-black text-amber-700 tracking-tight">₱{inventoryExpensesAmount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                        <p className="text-lg sm:text-xl md:text-2xl font-black text-amber-700 tracking-tight truncate" title={`₱${inventoryExpensesAmount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}>
+                            ₱{inventoryExpensesAmount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </p>
                     </CardContent>
                 </Card>
 
@@ -468,19 +528,21 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
                     tabIndex={0}
                     aria-label="Filter by operational expenses"
                     onClick={() => { setCardFilter(cardFilter === 'operating' ? 'all' : 'operating'); setCurrentPage(1); }}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCardFilter(cardFilter === 'operating' ? 'all' : 'operating'); setCurrentPage(1); } }}
-                    className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-blue-50 to-white hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCardFilter('operating'); setCurrentPage(1); } }}
+                    className={`min-w-0 border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-blue-50 to-white hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                         cardFilter === 'operating' ? 'border-blue-600 ring-2 ring-blue-600/20' : 'border-transparent hover:border-blue-200'
                     }`}
                 >
-                    <CardContent className="pt-5 pb-4 px-4">
-                        <div className="flex items-center gap-2 mb-1.5">
-                            <div className="p-1.5 rounded-lg bg-blue-100 text-blue-600">
-                                <Building2 size={16} />
+                    <CardContent className="p-3 sm:p-3.5 md:pt-5 md:pb-4 md:px-4">
+                        <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 min-w-0">
+                            <div className="p-1.5 rounded-lg bg-blue-100 text-blue-600 shrink-0">
+                                <Building2 size={15} />
                             </div>
-                            <p className="text-[10px] font-black uppercase tracking-wider text-gray-500 truncate">Operational Expenses</p>
+                            <p className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-gray-500 truncate" title="Operational Expenses">Operational Expenses</p>
                         </div>
-                        <p className="text-2xl font-black text-blue-600 tracking-tight">₱{operatingExpensesAmount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                        <p className="text-lg sm:text-xl md:text-2xl font-black text-blue-600 tracking-tight truncate" title={`₱${operatingExpensesAmount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}>
+                            ₱{operatingExpensesAmount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </p>
                     </CardContent>
                 </Card>
 
@@ -490,19 +552,21 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
                     tabIndex={0}
                     aria-label="Filter by other expenses"
                     onClick={() => { setCardFilter(cardFilter === 'other' ? 'all' : 'other'); setCurrentPage(1); }}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCardFilter(cardFilter === 'other' ? 'all' : 'other'); setCurrentPage(1); } }}
-                    className={`border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-purple-50 to-white hover:shadow-md focus:outline-none focus:ring-2 focus:ring-purple-500 ${
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCardFilter('other'); setCurrentPage(1); } }}
+                    className={`min-w-0 border-2 shadow-sm transition-all cursor-pointer bg-gradient-to-br from-purple-50 to-white hover:shadow-md focus:outline-none focus:ring-2 focus:ring-purple-500 ${
                         cardFilter === 'other' ? 'border-purple-600 ring-2 ring-purple-600/20' : 'border-transparent hover:border-purple-200'
                     }`}
                 >
-                    <CardContent className="pt-5 pb-4 px-4">
-                        <div className="flex items-center gap-2 mb-1.5">
-                            <div className="p-1.5 rounded-lg bg-purple-100 text-purple-600">
-                                <Tags size={16} />
+                    <CardContent className="p-3 sm:p-3.5 md:pt-5 md:pb-4 md:px-4">
+                        <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 min-w-0">
+                            <div className="p-1.5 rounded-lg bg-purple-100 text-purple-600 shrink-0">
+                                <Tags size={15} />
                             </div>
-                            <p className="text-[10px] font-black uppercase tracking-wider text-gray-500 truncate">Other Expenses</p>
+                            <p className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-gray-500 truncate" title="Other Expenses">Other Expenses</p>
                         </div>
-                        <p className="text-2xl font-black text-purple-600 tracking-tight">₱{otherExpensesAmount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                        <p className="text-lg sm:text-xl md:text-2xl font-black text-purple-600 tracking-tight truncate" title={`₱${otherExpensesAmount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}>
+                            ₱{otherExpensesAmount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </p>
                     </CardContent>
                 </Card>
             </div>
@@ -573,17 +637,17 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
                 </CardHeader>
 
                 <CardContent className="pt-0">
-                    <div className="overflow-x-auto w-full custom-scrollbar pb-1">
-                        <Table className="w-full table-fixed text-sm min-w-[600px] lg:min-w-0">
+                    <div className="overflow-x-auto overflow-y-auto max-h-[435px] xl:max-h-[460px] w-full subtle-vertical-scroll pb-1 rounded-lg border border-gray-100">
+                        <Table className="w-full table-fixed text-sm min-w-[780px]">
                             <colgroup>
-                                <col className="w-[15%]" />
-                                <col className="w-[20%]" />
-                                <col className="w-[15%]" />
-                                <col className="w-[24%]" />
-                                <col className="w-[15%]" />
-                                <col className="w-[11%]" />
+                                <col style={{ width: '155px' }} />
+                                <col style={{ width: '155px' }} />
+                                <col style={{ width: '85px' }} />
+                                <col style={{ width: '210px' }} />
+                                <col style={{ width: '105px' }} />
+                                <col style={{ width: '70px' }} />
                             </colgroup>
-                            <TableHeader className="bg-red-50/50 border-b border-red-100">
+                            <TableHeader className="bg-red-50/95 backdrop-blur-xs border-b border-red-100 sticky top-0 z-10 shadow-xs">
                                 <TableRow className="border-b border-red-100 hover:bg-transparent">
                                     <TableHead className="h-9 px-3 text-center font-black text-gray-700 uppercase tracking-wider text-[10.5px] whitespace-nowrap">Date</TableHead>
                                     <TableHead className="h-9 px-3 text-center font-black text-gray-700 uppercase tracking-wider text-[10.5px] whitespace-nowrap">Category</TableHead>
@@ -647,20 +711,19 @@ export default function Expenses({ onSetHeaderActionRight, user }: ExpensesProps
                                                     })()}
                                                 </span>
                                             </TableCell>
-                                            <TableCell className="px-3 py-2 text-xs font-medium text-gray-700 text-center">
+                                            <TableCell className="px-3 py-2 text-xs font-medium text-gray-700 text-center max-w-[210px]">
                                                 {(() => {
                                                     const raw = expense.notes || '';
                                                     if (!raw.trim()) return <span className="text-gray-400 italic">—</span>;
                                                     // Extract only the [ADDITIONAL NOTES] section if present
                                                     const addlMatch = raw.match(/\[ADDITIONAL NOTES\]\s*\n?([\s\S]*)/i);
-                                                    if (addlMatch) {
-                                                        const clean = addlMatch[1].trim();
-                                                        return clean || <span className="text-gray-400 italic">—</span>;
-                                                    }
-                                                    // If no bracket markup at all, show raw
-                                                    if (!/^\[/.test(raw.trim())) return raw;
-                                                    // Has bracket header but no ADDITIONAL NOTES → no user notes
-                                                    return <span className="text-gray-400 italic">—</span>;
+                                                    const cleanText = addlMatch ? addlMatch[1].trim() : (/^\[/.test(raw.trim()) ? '' : raw);
+                                                    if (!cleanText) return <span className="text-gray-400 italic">—</span>;
+                                                    return (
+                                                        <div className="truncate max-w-[200px] mx-auto" title={cleanText}>
+                                                            {cleanText}
+                                                        </div>
+                                                    );
                                                 })()}
                                             </TableCell>
                                             <TableCell className="px-3 py-2 text-center font-bold text-xs text-red-700 whitespace-nowrap">

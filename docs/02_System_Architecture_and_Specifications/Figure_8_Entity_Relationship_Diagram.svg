@@ -1,0 +1,783 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2450 1350" width="2450" height="1350" style="background-color: #f8fafc; font-family: 'Plus Jakarta Sans', Segoe UI, sans-serif;">
+<defs>
+  <filter id="shadow" x="-5%" y="-5%" width="110%" height="115%" filterUnits="userSpaceOnUse">
+    <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#0f172a" flood-opacity="0.06"/>
+  </filter>
+  <marker id="crow-m" viewBox="0 0 16 16" refX="15" refY="8" markerWidth="12" markerHeight="12" orient="auto-start-reverse">
+    <path d="M 0 2 L 14 8 L 0 14 M 14 2 L 14 14" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round"/>
+  </marker>
+  <marker id="one-1" viewBox="0 0 16 16" refX="15" refY="8" markerWidth="10" markerHeight="10" orient="auto-start-reverse">
+    <path d="M 8 2 L 8 14 M 13 2 L 13 14" fill="none" stroke="#2563eb" stroke-width="2.2" stroke-linecap="round"/>
+  </marker>
+</defs>
+<!-- GRID BACKGROUND -->
+<rect width="2450" height="1350" fill="#f8fafc"/>
+<g opacity="0.4">
+<line x1="0" y1="0" x2="0" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="50" y1="0" x2="50" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="100" y1="0" x2="100" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="150" y1="0" x2="150" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="200" y1="0" x2="200" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="250" y1="0" x2="250" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="300" y1="0" x2="300" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="350" y1="0" x2="350" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="400" y1="0" x2="400" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="450" y1="0" x2="450" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="500" y1="0" x2="500" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="550" y1="0" x2="550" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="600" y1="0" x2="600" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="650" y1="0" x2="650" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="700" y1="0" x2="700" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="750" y1="0" x2="750" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="800" y1="0" x2="800" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="850" y1="0" x2="850" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="900" y1="0" x2="900" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="950" y1="0" x2="950" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="1000" y1="0" x2="1000" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="1050" y1="0" x2="1050" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="1100" y1="0" x2="1100" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="1150" y1="0" x2="1150" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="1200" y1="0" x2="1200" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="1250" y1="0" x2="1250" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="1300" y1="0" x2="1300" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="1350" y1="0" x2="1350" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="1400" y1="0" x2="1400" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="1450" y1="0" x2="1450" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="1500" y1="0" x2="1500" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="1550" y1="0" x2="1550" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="1600" y1="0" x2="1600" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="1650" y1="0" x2="1650" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="1700" y1="0" x2="1700" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="1750" y1="0" x2="1750" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="1800" y1="0" x2="1800" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="1850" y1="0" x2="1850" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="1900" y1="0" x2="1900" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="1950" y1="0" x2="1950" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="2000" y1="0" x2="2000" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="2050" y1="0" x2="2050" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="2100" y1="0" x2="2100" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="2150" y1="0" x2="2150" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="2200" y1="0" x2="2200" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="2250" y1="0" x2="2250" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="2300" y1="0" x2="2300" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="2350" y1="0" x2="2350" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="2400" y1="0" x2="2400" y2="1350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="0" y1="0" x2="2450" y2="0" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="0" y1="50" x2="2450" y2="50" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="0" y1="100" x2="2450" y2="100" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="0" y1="150" x2="2450" y2="150" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="0" y1="200" x2="2450" y2="200" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="0" y1="250" x2="2450" y2="250" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="0" y1="300" x2="2450" y2="300" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="0" y1="350" x2="2450" y2="350" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="0" y1="400" x2="2450" y2="400" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="0" y1="450" x2="2450" y2="450" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="0" y1="500" x2="2450" y2="500" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="0" y1="550" x2="2450" y2="550" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="0" y1="600" x2="2450" y2="600" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="0" y1="650" x2="2450" y2="650" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="0" y1="700" x2="2450" y2="700" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="0" y1="750" x2="2450" y2="750" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="0" y1="800" x2="2450" y2="800" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="0" y1="850" x2="2450" y2="850" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="0" y1="900" x2="2450" y2="900" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="0" y1="950" x2="2450" y2="950" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="0" y1="1000" x2="2450" y2="1000" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="0" y1="1050" x2="2450" y2="1050" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="0" y1="1100" x2="2450" y2="1100" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="0" y1="1150" x2="2450" y2="1150" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="0" y1="1200" x2="2450" y2="1200" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="0" y1="1250" x2="2450" y2="1250" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+<line x1="0" y1="1300" x2="2450" y2="1300" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2,4"/>
+</g>
+<!-- RELATIONSHIP LINES -->
+<path d="M 1090.0 250 Q 1097.5 305.0 1105.0 360" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round"/>
+<g transform="translate(1059.5, 293.0)">
+  <rect width="76" height="24" rx="12" fill="#ffffff" stroke="#dc2626" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="38.0" y="15.5" font-size="11" font-weight="700" fill="#991b1b" text-anchor="middle">places</text>
+</g>
+<text x="1108.0" y="242" font-size="12" font-weight="800" fill="#2563eb" text-anchor="middle">1</text>
+<text x="1087.0" y="352" font-size="12" font-weight="800" fill="#dc2626" text-anchor="middle">M</text>
+<path d="M 1260 570.0 Q 1370.0 545.0 1480 520.0" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round"/>
+<g transform="translate(1328.0, 533.0)">
+  <rect width="84.0" height="24" rx="12" fill="#ffffff" stroke="#dc2626" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="42.0" y="15.5" font-size="11" font-weight="700" fill="#991b1b" text-anchor="middle">contains</text>
+</g>
+<text x="1278" y="584.0" font-size="12" font-weight="800" fill="#2563eb" text-anchor="middle">1</text>
+<text x="1462" y="534.0" font-size="12" font-weight="800" fill="#dc2626" text-anchor="middle">M</text>
+<path d="M 1770 520.0 Q 1765.0 410.0 1760 300.0" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round"/>
+<g transform="translate(1723.0, 398.0)">
+  <rect width="84.0" height="24" rx="12" fill="#ffffff" stroke="#dc2626" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="42.0" y="15.5" font-size="11" font-weight="700" fill="#991b1b" text-anchor="middle">requires</text>
+</g>
+<text x="1752" y="534.0" font-size="12" font-weight="800" fill="#2563eb" text-anchor="middle">1</text>
+<text x="1778" y="314.0" font-size="12" font-weight="800" fill="#dc2626" text-anchor="middle">M</text>
+<path d="M 2020 295.0 Q 2010.0 297.5 2000 300.0" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round"/>
+<g transform="translate(1964.25, 285.5)">
+  <rect width="91.5" height="24" rx="12" fill="#ffffff" stroke="#dc2626" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="45.75" y="15.5" font-size="11" font-weight="700" fill="#991b1b" text-anchor="middle">mapped in</text>
+</g>
+<text x="2002" y="287.0" font-size="12" font-weight="800" fill="#2563eb" text-anchor="middle">1</text>
+<text x="2018" y="292.0" font-size="12" font-weight="800" fill="#dc2626" text-anchor="middle">M</text>
+<path d="M 1770 520.0 Q 1765.0 535.0 1760 550.0" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round"/>
+<g transform="translate(1723.0, 523.0)">
+  <rect width="84.0" height="24" rx="12" fill="#ffffff" stroke="#dc2626" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="42.0" y="15.5" font-size="11" font-weight="700" fill="#991b1b" text-anchor="middle">exhibits</text>
+</g>
+<text x="1752" y="512.0" font-size="12" font-weight="800" fill="#2563eb" text-anchor="middle">1</text>
+<text x="1778" y="542.0" font-size="12" font-weight="800" fill="#dc2626" text-anchor="middle">M</text>
+<path d="M 2020 590.0 Q 2010.0 570.0 2000 550.0" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round"/>
+<g transform="translate(1964.25, 558.0)">
+  <rect width="91.5" height="24" rx="12" fill="#ffffff" stroke="#dc2626" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="45.75" y="15.5" font-size="11" font-weight="700" fill="#991b1b" text-anchor="middle">tagged in</text>
+</g>
+<text x="2002" y="604.0" font-size="12" font-weight="800" fill="#2563eb" text-anchor="middle">1</text>
+<text x="2018" y="564.0" font-size="12" font-weight="800" fill="#dc2626" text-anchor="middle">M</text>
+<path d="M 1105.0 780 Q 1100.0 850.0 1095.0 920" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round"/>
+<g transform="translate(1050.5, 838.0)">
+  <rect width="99.0" height="24" rx="12" fill="#ffffff" stroke="#dc2626" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="49.5" y="15.5" font-size="11" font-weight="700" fill="#991b1b" text-anchor="middle">settled by</text>
+</g>
+<text x="1087.0" y="772" font-size="12" font-weight="800" fill="#2563eb" text-anchor="middle">1</text>
+<text x="1113.0" y="912" font-size="12" font-weight="800" fill="#dc2626" text-anchor="middle">M</text>
+<path d="M 1260 570.0 Q 1370.0 740.0 1480 910.0" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round"/>
+<g transform="translate(1309.25, 728.0)">
+  <rect width="121.5" height="24" rx="12" fill="#ffffff" stroke="#dc2626" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="60.75" y="15.5" font-size="11" font-weight="700" fill="#991b1b" text-anchor="middle">fulfilled via</text>
+</g>
+<text x="1278" y="562.0" font-size="12" font-weight="800" fill="#2563eb" text-anchor="middle">1</text>
+<text x="1462" y="902.0" font-size="12" font-weight="800" fill="#dc2626" text-anchor="middle">1</text>
+<path d="M 730 520.0 Q 840.0 545.0 950 570.0" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round"/>
+<g transform="translate(794.25, 533.0)">
+  <rect width="91.5" height="24" rx="12" fill="#ffffff" stroke="#dc2626" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="45.75" y="15.5" font-size="11" font-weight="700" fill="#991b1b" text-anchor="middle">processes</text>
+</g>
+<text x="748" y="512.0" font-size="12" font-weight="800" fill="#2563eb" text-anchor="middle">1</text>
+<text x="932" y="562.0" font-size="12" font-weight="800" fill="#dc2626" text-anchor="middle">M</text>
+<path d="M 560.0 300 Q 572.5 330.0 585.0 360" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round"/>
+<g transform="translate(534.25, 318.0)">
+  <rect width="76.5" height="24" rx="12" fill="#ffffff" stroke="#dc2626" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="38.25" y="15.5" font-size="11" font-weight="700" fill="#991b1b" text-anchor="middle">governs</text>
+</g>
+<text x="578.0" y="292" font-size="12" font-weight="800" fill="#2563eb" text-anchor="middle">1</text>
+<text x="567.0" y="352" font-size="12" font-weight="800" fill="#dc2626" text-anchor="middle">M</text>
+<path d="M 585.0 680 Q 580.0 730.0 575.0 780" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round"/>
+<g transform="translate(542.0, 718.0)">
+  <rect width="76" height="24" rx="12" fill="#ffffff" stroke="#dc2626" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="38.0" y="15.5" font-size="11" font-weight="700" fill="#991b1b" text-anchor="middle">logs</text>
+</g>
+<text x="567.0" y="672" font-size="12" font-weight="800" fill="#2563eb" text-anchor="middle">1</text>
+<text x="593.0" y="772" font-size="12" font-weight="800" fill="#dc2626" text-anchor="middle">M</text>
+<path d="M 850.0 300 Q 977.5 330.0 1105.0 360" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round"/>
+<g transform="translate(905.5, 318.0)">
+  <rect width="144.0" height="24" rx="12" fill="#ffffff" stroke="#dc2626" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="72.0" y="15.5" font-size="11" font-weight="700" fill="#991b1b" text-anchor="middle">determines state</text>
+</g>
+<text x="868.0" y="292" font-size="12" font-weight="800" fill="#2563eb" text-anchor="middle">1</text>
+<text x="1087.0" y="352" font-size="12" font-weight="800" fill="#dc2626" text-anchor="middle">M</text>
+<path d="M 1345.0 300 Q 1225.0 330.0 1105.0 360" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round"/>
+<g transform="translate(1171.75, 318.0)">
+  <rect width="106.5" height="24" rx="12" fill="#ffffff" stroke="#dc2626" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="53.25" y="15.5" font-size="11" font-weight="700" fill="#991b1b" text-anchor="middle">prioritizes</text>
+</g>
+<text x="1327.0" y="292" font-size="12" font-weight="800" fill="#2563eb" text-anchor="middle">1</text>
+<text x="1123.0" y="352" font-size="12" font-weight="800" fill="#dc2626" text-anchor="middle">M</text>
+<path d="M 2145.0 140 Q 2155.0 150.0 2165.0 160" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round"/>
+<g transform="translate(2105.5, 138.0)">
+  <rect width="99.0" height="24" rx="12" fill="#ffffff" stroke="#dc2626" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="49.5" y="15.5" font-size="11" font-weight="700" fill="#991b1b" text-anchor="middle">classifies</text>
+</g>
+<text x="2163.0" y="132" font-size="12" font-weight="800" fill="#2563eb" text-anchor="middle">1</text>
+<text x="2147.0" y="152" font-size="12" font-weight="800" fill="#dc2626" text-anchor="middle">M</text>
+<path d="M 900 1025.0 Q 925.0 1037.5 950 1050.0" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round"/>
+<g transform="translate(883.0, 1025.5)">
+  <rect width="84.0" height="24" rx="12" fill="#ffffff" stroke="#dc2626" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="42.0" y="15.5" font-size="11" font-weight="700" fill="#991b1b" text-anchor="middle">paid via</text>
+</g>
+<text x="918" y="1017.0" font-size="12" font-weight="800" fill="#2563eb" text-anchor="middle">1</text>
+<text x="932" y="1042.0" font-size="12" font-weight="800" fill="#dc2626" text-anchor="middle">M</text>
+<path d="M 900 1185.0 Q 925.0 1117.5 950 1050.0" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round"/>
+<g transform="translate(864.25, 1105.5)">
+  <rect width="121.5" height="24" rx="12" fill="#ffffff" stroke="#dc2626" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="60.75" y="15.5" font-size="11" font-weight="700" fill="#991b1b" text-anchor="middle">classified by</text>
+</g>
+<text x="918" y="1199.0" font-size="12" font-weight="800" fill="#2563eb" text-anchor="middle">1</text>
+<text x="932" y="1064.0" font-size="12" font-weight="800" fill="#dc2626" text-anchor="middle">M</text>
+<path d="M 1600.0 1100 Q 1610.0 1070.0 1620.0 1040" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round"/>
+<g transform="translate(1564.25, 1058.0)">
+  <rect width="91.5" height="24" rx="12" fill="#ffffff" stroke="#dc2626" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="45.75" y="15.5" font-size="11" font-weight="700" fill="#991b1b" text-anchor="middle">specifies</text>
+</g>
+<text x="1618.0" y="1114" font-size="12" font-weight="800" fill="#2563eb" text-anchor="middle">1</text>
+<text x="1602.0" y="1054" font-size="12" font-weight="800" fill="#dc2626" text-anchor="middle">M</text>
+<path d="M 2020 955.0 Q 2030.0 997.5 2040 1040.0" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round"/>
+<g transform="translate(1976.75, 985.5)">
+  <rect width="106.5" height="24" rx="12" fill="#ffffff" stroke="#dc2626" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="53.25" y="15.5" font-size="11" font-weight="700" fill="#991b1b" text-anchor="middle">adjusted in</text>
+</g>
+<text x="2038" y="947.0" font-size="12" font-weight="800" fill="#2563eb" text-anchor="middle">1</text>
+<text x="2022" y="1032.0" font-size="12" font-weight="800" fill="#dc2626" text-anchor="middle">M</text>
+<path d="M 1260 570.0 Q 1510.0 805.0 1760 1040.0" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round"/>
+<g transform="translate(1468.0, 793.0)">
+  <rect width="84.0" height="24" rx="12" fill="#ffffff" stroke="#dc2626" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="42.0" y="15.5" font-size="11" font-weight="700" fill="#991b1b" text-anchor="middle">consumes</text>
+</g>
+<text x="1278" y="562.0" font-size="12" font-weight="800" fill="#2563eb" text-anchor="middle">1</text>
+<text x="1742" y="1032.0" font-size="12" font-weight="800" fill="#dc2626" text-anchor="middle">M</text>
+<path d="M 730 520.0 Q 1245.0 780.0 1760 1040.0" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round"/>
+<g transform="translate(1195.5, 768.0)">
+  <rect width="99.0" height="24" rx="12" fill="#ffffff" stroke="#dc2626" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="49.5" y="15.5" font-size="11" font-weight="700" fill="#991b1b" text-anchor="middle">authorizes</text>
+</g>
+<text x="748" y="512.0" font-size="12" font-weight="800" fill="#2563eb" text-anchor="middle">1</text>
+<text x="1742" y="1032.0" font-size="12" font-weight="800" fill="#dc2626" text-anchor="middle">M</text>
+<path d="M 950 570.0 Q 930.0 620.0 910 670.0" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round"/>
+<g transform="translate(876.75, 608.0)">
+  <rect width="106.5" height="24" rx="12" fill="#ffffff" stroke="#dc2626" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="53.25" y="15.5" font-size="11" font-weight="700" fill="#991b1b" text-anchor="middle">transitions</text>
+</g>
+<text x="932" y="562.0" font-size="12" font-weight="800" fill="#2563eb" text-anchor="middle">1</text>
+<text x="928" y="662.0" font-size="12" font-weight="800" fill="#dc2626" text-anchor="middle">M</text>
+<path d="M 850.0 300 Q 820.0 440.0 790.0 580" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round"/>
+<g transform="translate(766.75, 428.0)">
+  <rect width="106.5" height="24" rx="12" fill="#ffffff" stroke="#dc2626" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="53.25" y="15.5" font-size="11" font-weight="700" fill="#991b1b" text-anchor="middle">recorded in</text>
+</g>
+<text x="832.0" y="292" font-size="12" font-weight="800" fill="#2563eb" text-anchor="middle">1</text>
+<text x="808.0" y="572" font-size="12" font-weight="800" fill="#dc2626" text-anchor="middle">M</text>
+<path d="M 730 520.0 Q 700.0 595.0 670 670.0" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round"/>
+<g transform="translate(650.5, 583.0)">
+  <rect width="99.0" height="24" rx="12" fill="#ffffff" stroke="#dc2626" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="49.5" y="15.5" font-size="11" font-weight="700" fill="#991b1b" text-anchor="middle">updated by</text>
+</g>
+<text x="712" y="512.0" font-size="12" font-weight="800" fill="#2563eb" text-anchor="middle">1</text>
+<text x="688" y="662.0" font-size="12" font-weight="800" fill="#dc2626" text-anchor="middle">M</text>
+<path d="M 440 520.0 Q 390.0 515.0 340 510.0" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round"/>
+<g transform="translate(351.75, 503.0)">
+  <rect width="76.5" height="24" rx="12" fill="#ffffff" stroke="#dc2626" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="38.25" y="15.5" font-size="11" font-weight="700" fill="#991b1b" text-anchor="middle">granted</text>
+</g>
+<text x="422" y="534.0" font-size="12" font-weight="800" fill="#2563eb" text-anchor="middle">1</text>
+<text x="358" y="524.0" font-size="12" font-weight="800" fill="#dc2626" text-anchor="middle">M</text>
+<path d="M 210.0 350 Q 210.0 385.0 210.0 420" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round"/>
+<g transform="translate(156.75, 373.0)">
+  <rect width="106.5" height="24" rx="12" fill="#ffffff" stroke="#dc2626" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="53.25" y="15.5" font-size="11" font-weight="700" fill="#991b1b" text-anchor="middle">assigned in</text>
+</g>
+<text x="228.0" y="342" font-size="12" font-weight="800" fill="#2563eb" text-anchor="middle">1</text>
+<text x="192.0" y="412" font-size="12" font-weight="800" fill="#dc2626" text-anchor="middle">M</text>
+<path d="M 585.0 680 Q 402.5 730.0 220.0 780" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round"/>
+<g transform="translate(353.0, 718.0)">
+  <rect width="99.0" height="24" rx="12" fill="#ffffff" stroke="#dc2626" stroke-width="1.8" filter="url(#shadow)"/>
+  <text x="49.5" y="15.5" font-size="11" font-weight="700" fill="#991b1b" text-anchor="middle">tracked in</text>
+</g>
+<text x="567.0" y="672" font-size="12" font-weight="800" fill="#2563eb" text-anchor="middle">1</text>
+<text x="238.0" y="772" font-size="12" font-weight="800" fill="#dc2626" text-anchor="middle">M</text>
+<!-- ENTITIES -->
+<g id="erd-CUSTOMERS" filter="url(#shadow)">
+  <rect x="950" y="60" width="280" height="190" rx="12" fill="#ffffff" stroke="#0284c7" stroke-width="2" />
+  <path d="M 950 72 Q 950 60 962 60 L 1218 60 Q 1230 60 1230 72 L 1230 98 L 950 98 Z" fill="#0284c7"/>
+  <text x="964" y="84" font-size="13" font-weight="800" fill="#ffffff" letter-spacing="0.5">CUSTOMERS</text>
+  <text x="1218" y="83" font-size="9" font-weight="700" fill="#ffffff" opacity="0.85" text-anchor="end">CRM / INTAKE</text>
+  <g transform="translate(962, 105)"><rect width="22" height="15" rx="3" fill="#d97706"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">PK</text></g>
+  <text x="1004" y="116" font-size="11" font-weight="700" fill="#0f172a">customer_id</text>
+  <text x="1218" y="116" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(962, 125)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="1004" y="136" font-size="11" font-weight="500" fill="#334155">customer_name</text>
+  <text x="1218" y="136" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(100)</text>
+  <g transform="translate(962, 145)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="1004" y="156" font-size="11" font-weight="500" fill="#334155">contact_number</text>
+  <text x="1218" y="156" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(20)</text>
+  <g transform="translate(962, 165)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="1004" y="176" font-size="11" font-weight="500" fill="#334155">created_at</text>
+  <text x="1218" y="176" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">TIMESTAMP</text>
+</g>
+<g id="erd-ORDERS" filter="url(#shadow)">
+  <rect x="950" y="360" width="310" height="420" rx="12" fill="#ffffff" stroke="#dc2626" stroke-width="2" />
+  <path d="M 950 372 Q 950 360 962 360 L 1248 360 Q 1260 360 1260 372 L 1260 398 L 950 398 Z" fill="#dc2626"/>
+  <text x="964" y="384" font-size="13" font-weight="800" fill="#ffffff" letter-spacing="0.5">ORDERS</text>
+  <text x="1248" y="383" font-size="9" font-weight="700" fill="#ffffff" opacity="0.85" text-anchor="end">CENTRAL FACT TABLE</text>
+  <g transform="translate(962, 405)"><rect width="22" height="15" rx="3" fill="#d97706"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">PK</text></g>
+  <text x="1004" y="416" font-size="11" font-weight="700" fill="#0f172a">order_id</text>
+  <text x="1248" y="416" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(962, 425)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="1004" y="436" font-size="11" font-weight="500" fill="#334155">order_number</text>
+  <text x="1248" y="436" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(50)</text>
+  <g transform="translate(962, 445)"><rect width="22" height="15" rx="3" fill="#2563eb"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">FK</text></g>
+  <text x="1004" y="456" font-size="11" font-weight="700" fill="#0f172a">customer_id</text>
+  <text x="1248" y="456" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(962, 465)"><rect width="22" height="15" rx="3" fill="#2563eb"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">FK</text></g>
+  <text x="1004" y="476" font-size="11" font-weight="700" fill="#0f172a">status_id</text>
+  <text x="1248" y="476" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(962, 485)"><rect width="22" height="15" rx="3" fill="#2563eb"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">FK</text></g>
+  <text x="1004" y="496" font-size="11" font-weight="700" fill="#0f172a">priority_id</text>
+  <text x="1248" y="496" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(962, 505)"><rect width="22" height="15" rx="3" fill="#2563eb"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">FK</text></g>
+  <text x="1004" y="516" font-size="11" font-weight="700" fill="#0f172a">user_id</text>
+  <text x="1248" y="516" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(962, 525)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="1004" y="536" font-size="11" font-weight="500" fill="#334155">grand_total</text>
+  <text x="1248" y="536" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">DECIMAL(10,2)</text>
+  <text x="1105.0" y="560" font-size="10" font-weight="600" fill="#94a3b8" text-anchor="middle">+ 8 more attributes...</text>
+</g>
+<g id="erd-ITEMS" filter="url(#shadow)">
+  <rect x="1480" y="360" width="290" height="320" rx="12" fill="#ffffff" stroke="#ea580c" stroke-width="2" />
+  <path d="M 1480 372 Q 1480 360 1492 360 L 1758 360 Q 1770 360 1770 372 L 1770 398 L 1480 398 Z" fill="#ea580c"/>
+  <text x="1494" y="384" font-size="13" font-weight="800" fill="#ffffff" letter-spacing="0.5">ITEMS</text>
+  <text x="1758" y="383" font-size="9" font-weight="700" fill="#ffffff" opacity="0.85" text-anchor="end">CRAFT SERVICE UNIT</text>
+  <g transform="translate(1492, 405)"><rect width="22" height="15" rx="3" fill="#d97706"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">PK</text></g>
+  <text x="1534" y="416" font-size="11" font-weight="700" fill="#0f172a">item_id</text>
+  <text x="1758" y="416" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(1492, 425)"><rect width="22" height="15" rx="3" fill="#2563eb"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">FK</text></g>
+  <text x="1534" y="436" font-size="11" font-weight="700" fill="#0f172a">order_id</text>
+  <text x="1758" y="436" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(1492, 445)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="1534" y="456" font-size="11" font-weight="500" fill="#334155">brand</text>
+  <text x="1758" y="456" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(50)</text>
+  <g transform="translate(1492, 465)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="1534" y="476" font-size="11" font-weight="500" fill="#334155">shoe_model</text>
+  <text x="1758" y="476" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(50)</text>
+  <g transform="translate(1492, 485)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="1534" y="496" font-size="11" font-weight="500" fill="#334155">shoe_size</text>
+  <text x="1758" y="496" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(20)</text>
+  <g transform="translate(1492, 505)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="1534" y="516" font-size="11" font-weight="500" fill="#334155">color</text>
+  <text x="1758" y="516" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(50)</text>
+  <g transform="translate(1492, 525)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="1534" y="536" font-size="11" font-weight="500" fill="#334155">material</text>
+  <text x="1758" y="536" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(50)</text>
+  <text x="1625.0" y="560" font-size="10" font-weight="600" fill="#94a3b8" text-anchor="middle">+ 4 more attributes...</text>
+</g>
+<g id="erd-SERVICES" filter="url(#shadow)">
+  <rect x="2020" y="160" width="290" height="270" rx="12" fill="#ffffff" stroke="#7c3aed" stroke-width="2" />
+  <path d="M 2020 172 Q 2020 160 2032 160 L 2298 160 Q 2310 160 2310 172 L 2310 198 L 2020 198 Z" fill="#7c3aed"/>
+  <text x="2034" y="184" font-size="13" font-weight="800" fill="#ffffff" letter-spacing="0.5">SERVICES</text>
+  <text x="2298" y="183" font-size="9" font-weight="700" fill="#ffffff" opacity="0.85" text-anchor="end">CRAFT SERVICE CATALOG</text>
+  <g transform="translate(2032, 205)"><rect width="22" height="15" rx="3" fill="#d97706"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">PK</text></g>
+  <text x="2074" y="216" font-size="11" font-weight="700" fill="#0f172a">service_id</text>
+  <text x="2298" y="216" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(2032, 225)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="2074" y="236" font-size="11" font-weight="500" fill="#334155">service_name</text>
+  <text x="2298" y="236" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(100)</text>
+  <g transform="translate(2032, 245)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="2074" y="256" font-size="11" font-weight="500" fill="#334155">base_price</text>
+  <text x="2298" y="256" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">DECIMAL(10,2)</text>
+  <g transform="translate(2032, 265)"><rect width="22" height="15" rx="3" fill="#2563eb"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">FK</text></g>
+  <text x="2074" y="276" font-size="11" font-weight="700" fill="#0f172a">category_id</text>
+  <text x="2298" y="276" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(2032, 285)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="2074" y="296" font-size="11" font-weight="500" fill="#334155">duration_days</text>
+  <text x="2298" y="296" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(2032, 305)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="2074" y="316" font-size="11" font-weight="500" fill="#334155">service_code</text>
+  <text x="2298" y="316" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(20)</text>
+  <g transform="translate(2032, 325)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="2074" y="336" font-size="11" font-weight="500" fill="#334155">is_active</text>
+  <text x="2298" y="336" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">BOOLEAN</text>
+  <text x="2165.0" y="360" font-size="10" font-weight="600" fill="#94a3b8" text-anchor="middle">+ 1 more attributes...</text>
+</g>
+<g id="erd-ITEM_SERVICE_MAPPING" filter="url(#shadow)">
+  <rect x="1760" y="220" width="240" height="160" rx="12" fill="#ffffff" stroke="#9333ea" stroke-width="3" stroke-dasharray="5,3"/>
+  <path d="M 1760 232 Q 1760 220 1772 220 L 1988 220 Q 2000 220 2000 232 L 2000 258 L 1760 258 Z" fill="#9333ea"/>
+  <text x="1774" y="244" font-size="13" font-weight="800" fill="#ffffff" letter-spacing="0.5">ITEM_SERVICE_MAPPING</text>
+  <text x="1988" y="243" font-size="9" font-weight="700" fill="#ffffff" opacity="0.85" text-anchor="end">ASSOCIATIVE ENTITY (M:M)</text>
+  <g transform="translate(1772, 265)"><rect width="36" height="15" rx="3" fill="#818cf8"/><text x="18" y="11" font-size="8.5" font-weight="800" fill="#ffffff" text-anchor="middle">PK,FK</text></g>
+  <text x="1814" y="276" font-size="11" font-weight="700" fill="#0f172a">item_id</text>
+  <text x="1988" y="276" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(1772, 285)"><rect width="36" height="15" rx="3" fill="#818cf8"/><text x="18" y="11" font-size="8.5" font-weight="800" fill="#ffffff" text-anchor="middle">PK,FK</text></g>
+  <text x="1814" y="296" font-size="11" font-weight="700" fill="#0f172a">service_id</text>
+  <text x="1988" y="296" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(1772, 305)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="1814" y="316" font-size="11" font-weight="500" fill="#334155">actual_price</text>
+  <text x="1988" y="316" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">DECIMAL(10,2)</text>
+</g>
+<g id="erd-CONDITIONS" filter="url(#shadow)">
+  <rect x="2020" y="520" width="260" height="140" rx="12" fill="#ffffff" stroke="#c026d3" stroke-width="2" />
+  <path d="M 2020 532 Q 2020 520 2032 520 L 2268 520 Q 2280 520 2280 532 L 2280 558 L 2020 558 Z" fill="#c026d3"/>
+  <text x="2034" y="544" font-size="13" font-weight="800" fill="#ffffff" letter-spacing="0.5">CONDITIONS</text>
+  <text x="2268" y="543" font-size="9" font-weight="700" fill="#ffffff" opacity="0.85" text-anchor="end">FOOTWEAR DEFECT LOOKUP</text>
+  <g transform="translate(2032, 565)"><rect width="22" height="15" rx="3" fill="#d97706"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">PK</text></g>
+  <text x="2074" y="576" font-size="11" font-weight="700" fill="#0f172a">condition_id</text>
+  <text x="2268" y="576" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(2032, 585)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="2074" y="596" font-size="11" font-weight="500" fill="#334155">condition_name</text>
+  <text x="2268" y="596" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(50)</text>
+</g>
+<g id="erd-ITEM_CONDITION_MAPPING" filter="url(#shadow)">
+  <rect x="1760" y="480" width="240" height="140" rx="12" fill="#ffffff" stroke="#a21caf" stroke-width="3" stroke-dasharray="5,3"/>
+  <path d="M 1760 492 Q 1760 480 1772 480 L 1988 480 Q 2000 480 2000 492 L 2000 518 L 1760 518 Z" fill="#a21caf"/>
+  <text x="1774" y="504" font-size="13" font-weight="800" fill="#ffffff" letter-spacing="0.5">ITEM_CONDITION_MAPPING</text>
+  <text x="1988" y="503" font-size="9" font-weight="700" fill="#ffffff" opacity="0.85" text-anchor="end">ASSOCIATIVE ENTITY (M:M)</text>
+  <g transform="translate(1772, 525)"><rect width="36" height="15" rx="3" fill="#818cf8"/><text x="18" y="11" font-size="8.5" font-weight="800" fill="#ffffff" text-anchor="middle">PK,FK</text></g>
+  <text x="1814" y="536" font-size="11" font-weight="700" fill="#0f172a">item_id</text>
+  <text x="1988" y="536" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(1772, 545)"><rect width="36" height="15" rx="3" fill="#818cf8"/><text x="18" y="11" font-size="8.5" font-weight="800" fill="#ffffff" text-anchor="middle">PK,FK</text></g>
+  <text x="1814" y="556" font-size="11" font-weight="700" fill="#0f172a">condition_id</text>
+  <text x="1988" y="556" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+</g>
+<g id="erd-PAYMENTS" filter="url(#shadow)">
+  <rect x="950" y="920" width="290" height="260" rx="12" fill="#ffffff" stroke="#059669" stroke-width="2" />
+  <path d="M 950 932 Q 950 920 962 920 L 1228 920 Q 1240 920 1240 932 L 1240 958 L 950 958 Z" fill="#059669"/>
+  <text x="964" y="944" font-size="13" font-weight="800" fill="#ffffff" letter-spacing="0.5">PAYMENTS</text>
+  <text x="1228" y="943" font-size="9" font-weight="700" fill="#ffffff" opacity="0.85" text-anchor="end">FINANCIAL SETTLEMENT</text>
+  <g transform="translate(962, 965)"><rect width="22" height="15" rx="3" fill="#d97706"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">PK</text></g>
+  <text x="1004" y="976" font-size="11" font-weight="700" fill="#0f172a">payment_id</text>
+  <text x="1228" y="976" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(962, 985)"><rect width="22" height="15" rx="3" fill="#2563eb"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">FK</text></g>
+  <text x="1004" y="996" font-size="11" font-weight="700" fill="#0f172a">order_id</text>
+  <text x="1228" y="996" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(962, 1005)"><rect width="22" height="15" rx="3" fill="#2563eb"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">FK</text></g>
+  <text x="1004" y="1016" font-size="11" font-weight="700" fill="#0f172a">method_id</text>
+  <text x="1228" y="1016" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(962, 1025)"><rect width="22" height="15" rx="3" fill="#2563eb"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">FK</text></g>
+  <text x="1004" y="1036" font-size="11" font-weight="700" fill="#0f172a">status_id</text>
+  <text x="1228" y="1036" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(962, 1045)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="1004" y="1056" font-size="11" font-weight="500" fill="#334155">amount_received</text>
+  <text x="1228" y="1056" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">DECIMAL(10,2)</text>
+  <g transform="translate(962, 1065)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="1004" y="1076" font-size="11" font-weight="500" fill="#334155">balance</text>
+  <text x="1228" y="1076" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">DECIMAL(10,2)</text>
+  <g transform="translate(962, 1085)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="1004" y="1096" font-size="11" font-weight="500" fill="#334155">reference_no</text>
+  <text x="1228" y="1096" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(100)</text>
+  <text x="1095.0" y="1120" font-size="10" font-weight="600" fill="#94a3b8" text-anchor="middle">+ 1 more attributes...</text>
+</g>
+<g id="erd-DELIVERIES" filter="url(#shadow)">
+  <rect x="1480" y="780" width="280" height="260" rx="12" fill="#ffffff" stroke="#0284c7" stroke-width="2" />
+  <path d="M 1480 792 Q 1480 780 1492 780 L 1748 780 Q 1760 780 1760 792 L 1760 818 L 1480 818 Z" fill="#0284c7"/>
+  <text x="1494" y="804" font-size="13" font-weight="800" fill="#ffffff" letter-spacing="0.5">DELIVERIES</text>
+  <text x="1748" y="803" font-size="9" font-weight="700" fill="#ffffff" opacity="0.85" text-anchor="end">ORDER FULFILLMENT</text>
+  <g transform="translate(1492, 825)"><rect width="22" height="15" rx="3" fill="#d97706"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">PK</text></g>
+  <text x="1534" y="836" font-size="11" font-weight="700" fill="#0f172a">delivery_id</text>
+  <text x="1748" y="836" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(1492, 845)"><rect width="22" height="15" rx="3" fill="#2563eb"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">FK</text></g>
+  <text x="1534" y="856" font-size="11" font-weight="700" fill="#0f172a">order_id</text>
+  <text x="1748" y="856" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(1492, 865)"><rect width="22" height="15" rx="3" fill="#2563eb"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">FK</text></g>
+  <text x="1534" y="876" font-size="11" font-weight="700" fill="#0f172a">pref_id</text>
+  <text x="1748" y="876" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(1492, 885)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="1534" y="896" font-size="11" font-weight="500" fill="#334155">delivery_address</text>
+  <text x="1748" y="896" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">TEXT</text>
+  <g transform="translate(1492, 905)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="1534" y="916" font-size="11" font-weight="500" fill="#334155">delivery_courier</text>
+  <text x="1748" y="916" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(50)</text>
+  <g transform="translate(1492, 925)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="1534" y="936" font-size="11" font-weight="500" fill="#334155">province</text>
+  <text x="1748" y="936" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(100)</text>
+  <g transform="translate(1492, 945)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="1534" y="956" font-size="11" font-weight="500" fill="#334155">city</text>
+  <text x="1748" y="956" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(100)</text>
+  <text x="1620.0" y="980" font-size="10" font-weight="600" fill="#94a3b8" text-anchor="middle">+ 1 more attributes...</text>
+</g>
+<g id="erd-USERS" filter="url(#shadow)">
+  <rect x="440" y="360" width="290" height="320" rx="12" fill="#ffffff" stroke="#1e293b" stroke-width="2" />
+  <path d="M 440 372 Q 440 360 452 360 L 718 360 Q 730 360 730 372 L 730 398 L 440 398 Z" fill="#1e293b"/>
+  <text x="454" y="384" font-size="13" font-weight="800" fill="#ffffff" letter-spacing="0.5">USERS</text>
+  <text x="718" y="383" font-size="9" font-weight="700" fill="#ffffff" opacity="0.85" text-anchor="end">SYSTEM IDENTITY & RBAC</text>
+  <g transform="translate(452, 405)"><rect width="22" height="15" rx="3" fill="#d97706"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">PK</text></g>
+  <text x="494" y="416" font-size="11" font-weight="700" fill="#0f172a">user_id</text>
+  <text x="718" y="416" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(452, 425)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="494" y="436" font-size="11" font-weight="500" fill="#334155">username</text>
+  <text x="718" y="436" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(50)</text>
+  <g transform="translate(452, 445)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="494" y="456" font-size="11" font-weight="500" fill="#334155">email</text>
+  <text x="718" y="456" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(100)</text>
+  <g transform="translate(452, 465)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="494" y="476" font-size="11" font-weight="500" fill="#334155">password_hash</text>
+  <text x="718" y="476" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(255)</text>
+  <g transform="translate(452, 485)"><rect width="22" height="15" rx="3" fill="#2563eb"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">FK</text></g>
+  <text x="494" y="496" font-size="11" font-weight="700" fill="#0f172a">role_id</text>
+  <text x="718" y="496" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(452, 505)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="494" y="516" font-size="11" font-weight="500" fill="#334155">is_active</text>
+  <text x="718" y="516" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">BOOLEAN</text>
+  <g transform="translate(452, 525)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="494" y="536" font-size="11" font-weight="500" fill="#334155">failed_login_attempts</text>
+  <text x="718" y="536" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <text x="585.0" y="560" font-size="10" font-weight="600" fill="#94a3b8" text-anchor="middle">+ 2 more attributes...</text>
+</g>
+<g id="erd-ROLES" filter="url(#shadow)">
+  <rect x="440" y="160" width="240" height="140" rx="12" fill="#ffffff" stroke="#475569" stroke-width="2" />
+  <path d="M 440 172 Q 440 160 452 160 L 668 160 Q 680 160 680 172 L 680 198 L 440 198 Z" fill="#475569"/>
+  <text x="454" y="184" font-size="13" font-weight="800" fill="#ffffff" letter-spacing="0.5">ROLES</text>
+  <text x="668" y="183" font-size="9" font-weight="700" fill="#ffffff" opacity="0.85" text-anchor="end">ROLE LOOKUP</text>
+  <g transform="translate(452, 205)"><rect width="22" height="15" rx="3" fill="#d97706"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">PK</text></g>
+  <text x="494" y="216" font-size="11" font-weight="700" fill="#0f172a">role_id</text>
+  <text x="668" y="216" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(452, 225)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="494" y="236" font-size="11" font-weight="500" fill="#334155">role_name</text>
+  <text x="668" y="236" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(20)</text>
+</g>
+<g id="erd-PERMISSIONS" filter="url(#shadow)">
+  <rect x="80" y="160" width="260" height="190" rx="12" fill="#ffffff" stroke="#4338ca" stroke-width="2" />
+  <path d="M 80 172 Q 80 160 92 160 L 328 160 Q 340 160 340 172 L 340 198 L 80 198 Z" fill="#4338ca"/>
+  <text x="94" y="184" font-size="13" font-weight="800" fill="#ffffff" letter-spacing="0.5">PERMISSIONS</text>
+  <text x="328" y="183" font-size="9" font-weight="700" fill="#ffffff" opacity="0.85" text-anchor="end">GRANULAR RBAC CATALOG</text>
+  <g transform="translate(92, 205)"><rect width="22" height="15" rx="3" fill="#d97706"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">PK</text></g>
+  <text x="134" y="216" font-size="11" font-weight="700" fill="#0f172a">permission_id</text>
+  <text x="328" y="216" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(92, 225)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="134" y="236" font-size="11" font-weight="500" fill="#334155">code</text>
+  <text x="328" y="236" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(50)</text>
+  <g transform="translate(92, 245)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="134" y="256" font-size="11" font-weight="500" fill="#334155">name</text>
+  <text x="328" y="256" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(100)</text>
+  <g transform="translate(92, 265)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="134" y="276" font-size="11" font-weight="500" fill="#334155">category</text>
+  <text x="328" y="276" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(50)</text>
+  <g transform="translate(92, 285)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="134" y="296" font-size="11" font-weight="500" fill="#334155">description</text>
+  <text x="328" y="296" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(255)</text>
+</g>
+<g id="erd-USER_PERMISSIONS" filter="url(#shadow)">
+  <rect x="80" y="420" width="260" height="180" rx="12" fill="#ffffff" stroke="#3730a3" stroke-width="3" stroke-dasharray="5,3"/>
+  <path d="M 80 432 Q 80 420 92 420 L 328 420 Q 340 420 340 432 L 340 458 L 80 458 Z" fill="#3730a3"/>
+  <text x="94" y="444" font-size="13" font-weight="800" fill="#ffffff" letter-spacing="0.5">USER_PERMISSIONS</text>
+  <text x="328" y="443" font-size="9" font-weight="700" fill="#ffffff" opacity="0.85" text-anchor="end">ASSOCIATIVE RBAC MATRIX</text>
+  <g transform="translate(92, 465)"><rect width="22" height="15" rx="3" fill="#d97706"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">PK</text></g>
+  <text x="134" y="476" font-size="11" font-weight="700" fill="#0f172a">user_permission_id</text>
+  <text x="328" y="476" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(92, 485)"><rect width="22" height="15" rx="3" fill="#2563eb"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">FK</text></g>
+  <text x="134" y="496" font-size="11" font-weight="700" fill="#0f172a">user_id</text>
+  <text x="328" y="496" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(92, 505)"><rect width="22" height="15" rx="3" fill="#2563eb"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">FK</text></g>
+  <text x="134" y="516" font-size="11" font-weight="700" fill="#0f172a">permission_id</text>
+  <text x="328" y="516" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(92, 525)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="134" y="536" font-size="11" font-weight="500" fill="#334155">enabled</text>
+  <text x="328" y="536" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">BOOLEAN</text>
+</g>
+<g id="erd-EXPENSES" filter="url(#shadow)">
+  <rect x="440" y="780" width="270" height="200" rx="12" fill="#ffffff" stroke="#b45309" stroke-width="2" />
+  <path d="M 440 792 Q 440 780 452 780 L 698 780 Q 710 780 710 792 L 710 818 L 440 818 Z" fill="#b45309"/>
+  <text x="454" y="804" font-size="13" font-weight="800" fill="#ffffff" letter-spacing="0.5">EXPENSES</text>
+  <text x="698" y="803" font-size="9" font-weight="700" fill="#ffffff" opacity="0.85" text-anchor="end">FINANCIAL ACCOUNTING</text>
+  <g transform="translate(452, 825)"><rect width="22" height="15" rx="3" fill="#d97706"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">PK</text></g>
+  <text x="494" y="836" font-size="11" font-weight="700" fill="#0f172a">expense_id</text>
+  <text x="698" y="836" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(452, 845)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="494" y="856" font-size="11" font-weight="500" fill="#334155">amount</text>
+  <text x="698" y="856" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">DECIMAL(10,2)</text>
+  <g transform="translate(452, 865)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="494" y="876" font-size="11" font-weight="500" fill="#334155">description</text>
+  <text x="698" y="876" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">TEXT</text>
+  <g transform="translate(452, 885)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="494" y="896" font-size="11" font-weight="500" fill="#334155">expense_date</text>
+  <text x="698" y="896" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">TIMESTAMP</text>
+  <g transform="translate(452, 905)"><rect width="22" height="15" rx="3" fill="#2563eb"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">FK</text></g>
+  <text x="494" y="916" font-size="11" font-weight="700" fill="#0f172a">user_id</text>
+  <text x="698" y="916" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(452, 925)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="494" y="936" font-size="11" font-weight="500" fill="#334155">created_at</text>
+  <text x="698" y="936" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">TIMESTAMP</text>
+</g>
+<g id="erd-INVENTORY" filter="url(#shadow)">
+  <rect x="2020" y="780" width="290" height="350" rx="12" fill="#ffffff" stroke="#047857" stroke-width="2" />
+  <path d="M 2020 792 Q 2020 780 2032 780 L 2298 780 Q 2310 780 2310 792 L 2310 818 L 2020 818 Z" fill="#047857"/>
+  <text x="2034" y="804" font-size="13" font-weight="800" fill="#ffffff" letter-spacing="0.5">INVENTORY</text>
+  <text x="2298" y="803" font-size="9" font-weight="700" fill="#ffffff" opacity="0.85" text-anchor="end">MATERIAL & CHEMICALS</text>
+  <g transform="translate(2032, 825)"><rect width="22" height="15" rx="3" fill="#d97706"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">PK</text></g>
+  <text x="2074" y="836" font-size="11" font-weight="700" fill="#0f172a">item_id</text>
+  <text x="2298" y="836" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(2032, 845)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="2074" y="856" font-size="11" font-weight="500" fill="#334155">item_name</text>
+  <text x="2298" y="856" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(100)</text>
+  <g transform="translate(2032, 865)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="2074" y="876" font-size="11" font-weight="500" fill="#334155">inventory_number</text>
+  <text x="2298" y="876" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(50)</text>
+  <g transform="translate(2032, 885)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="2074" y="896" font-size="11" font-weight="500" fill="#334155">category</text>
+  <text x="2298" y="896" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(50)</text>
+  <g transform="translate(2032, 905)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="2074" y="916" font-size="11" font-weight="500" fill="#334155">stock_quantity</text>
+  <text x="2298" y="916" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">FLOAT</text>
+  <g transform="translate(2032, 925)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="2074" y="936" font-size="11" font-weight="500" fill="#334155">unit</text>
+  <text x="2298" y="936" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(20)</text>
+  <g transform="translate(2032, 945)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="2074" y="956" font-size="11" font-weight="500" fill="#334155">unit_price</text>
+  <text x="2298" y="956" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">DECIMAL(10,2)</text>
+  <text x="2165.0" y="980" font-size="10" font-weight="600" fill="#94a3b8" text-anchor="middle">+ 4 more attributes...</text>
+</g>
+<g id="erd-INVENTORY_LOGS" filter="url(#shadow)">
+  <rect x="1760" y="920" width="280" height="240" rx="12" fill="#ffffff" stroke="#065f46" stroke-width="2" />
+  <path d="M 1760 932 Q 1760 920 1772 920 L 2028 920 Q 2040 920 2040 932 L 2040 958 L 1760 958 Z" fill="#065f46"/>
+  <text x="1774" y="944" font-size="13" font-weight="800" fill="#ffffff" letter-spacing="0.5">INVENTORY_LOGS</text>
+  <text x="2028" y="943" font-size="9" font-weight="700" fill="#ffffff" opacity="0.85" text-anchor="end">STOCK AUDIT TRAIL</text>
+  <g transform="translate(1772, 965)"><rect width="22" height="15" rx="3" fill="#d97706"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">PK</text></g>
+  <text x="1814" y="976" font-size="11" font-weight="700" fill="#0f172a">log_id</text>
+  <text x="2028" y="976" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(1772, 985)"><rect width="22" height="15" rx="3" fill="#2563eb"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">FK</text></g>
+  <text x="1814" y="996" font-size="11" font-weight="700" fill="#0f172a">item_id</text>
+  <text x="2028" y="996" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(1772, 1005)"><rect width="22" height="15" rx="3" fill="#2563eb"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">FK</text></g>
+  <text x="1814" y="1016" font-size="11" font-weight="700" fill="#0f172a">order_id</text>
+  <text x="2028" y="1016" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(1772, 1025)"><rect width="22" height="15" rx="3" fill="#2563eb"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">FK</text></g>
+  <text x="1814" y="1036" font-size="11" font-weight="700" fill="#0f172a">user_id</text>
+  <text x="2028" y="1036" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(1772, 1045)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="1814" y="1056" font-size="11" font-weight="500" fill="#334155">change_amount</text>
+  <text x="2028" y="1056" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">FLOAT</text>
+  <g transform="translate(1772, 1065)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="1814" y="1076" font-size="11" font-weight="500" fill="#334155">action_type</text>
+  <text x="2028" y="1076" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(50)</text>
+  <g transform="translate(1772, 1085)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="1814" y="1096" font-size="11" font-weight="500" fill="#334155">created_at</text>
+  <text x="2028" y="1096" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">TIMESTAMP</text>
+</g>
+<g id="erd-STATUS" filter="url(#shadow)">
+  <rect x="740" y="160" width="220" height="140" rx="12" fill="#ffffff" stroke="#475569" stroke-width="2" />
+  <path d="M 740 172 Q 740 160 752 160 L 948 160 Q 960 160 960 172 L 960 198 L 740 198 Z" fill="#475569"/>
+  <text x="754" y="184" font-size="13" font-weight="800" fill="#ffffff" letter-spacing="0.5">STATUS</text>
+  <text x="948" y="183" font-size="9" font-weight="700" fill="#ffffff" opacity="0.85" text-anchor="end">WORKFLOW STATE LOOKUP</text>
+  <g transform="translate(752, 205)"><rect width="22" height="15" rx="3" fill="#d97706"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">PK</text></g>
+  <text x="794" y="216" font-size="11" font-weight="700" fill="#0f172a">status_id</text>
+  <text x="948" y="216" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(752, 225)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="794" y="236" font-size="11" font-weight="500" fill="#334155">status_name</text>
+  <text x="948" y="236" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(30)</text>
+</g>
+<g id="erd-PRIORITY_LEVELS" filter="url(#shadow)">
+  <rect x="1230" y="160" width="230" height="140" rx="12" fill="#ffffff" stroke="#475569" stroke-width="2" />
+  <path d="M 1230 172 Q 1230 160 1242 160 L 1448 160 Q 1460 160 1460 172 L 1460 198 L 1230 198 Z" fill="#475569"/>
+  <text x="1244" y="184" font-size="13" font-weight="800" fill="#ffffff" letter-spacing="0.5">PRIORITY_LEVELS</text>
+  <text x="1448" y="183" font-size="9" font-weight="700" fill="#ffffff" opacity="0.85" text-anchor="end">URGENCY LOOKUP</text>
+  <g transform="translate(1242, 205)"><rect width="22" height="15" rx="3" fill="#d97706"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">PK</text></g>
+  <text x="1284" y="216" font-size="11" font-weight="700" fill="#0f172a">priority_id</text>
+  <text x="1448" y="216" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(1242, 225)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="1284" y="236" font-size="11" font-weight="500" fill="#334155">priority_name</text>
+  <text x="1448" y="236" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(30)</text>
+</g>
+<g id="erd-STATUS_LOG" filter="url(#shadow)">
+  <rect x="670" y="580" width="240" height="180" rx="12" fill="#ffffff" stroke="#64748b" stroke-width="2" />
+  <path d="M 670 592 Q 670 580 682 580 L 898 580 Q 910 580 910 592 L 910 618 L 670 618 Z" fill="#64748b"/>
+  <text x="684" y="604" font-size="13" font-weight="800" fill="#ffffff" letter-spacing="0.5">STATUS_LOG</text>
+  <text x="898" y="603" font-size="9" font-weight="700" fill="#ffffff" opacity="0.85" text-anchor="end">LEAD-TIME HISTORY</text>
+  <g transform="translate(682, 625)"><rect width="22" height="15" rx="3" fill="#d97706"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">PK</text></g>
+  <text x="724" y="636" font-size="11" font-weight="700" fill="#0f172a">status_log_id</text>
+  <text x="898" y="636" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(682, 645)"><rect width="22" height="15" rx="3" fill="#2563eb"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">FK</text></g>
+  <text x="724" y="656" font-size="11" font-weight="700" fill="#0f172a">order_id</text>
+  <text x="898" y="656" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(682, 665)"><rect width="22" height="15" rx="3" fill="#2563eb"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">FK</text></g>
+  <text x="724" y="676" font-size="11" font-weight="700" fill="#0f172a">status_id</text>
+  <text x="898" y="676" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(682, 685)"><rect width="22" height="15" rx="3" fill="#2563eb"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">FK</text></g>
+  <text x="724" y="696" font-size="11" font-weight="700" fill="#0f172a">user_id</text>
+  <text x="898" y="696" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(682, 705)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="724" y="716" font-size="11" font-weight="500" fill="#334155">changed_at</text>
+  <text x="898" y="716" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">TIMESTAMP</text>
+</g>
+<g id="erd-SERVICE_CATEGORIES" filter="url(#shadow)">
+  <rect x="2020" y="20" width="250" height="120" rx="12" fill="#ffffff" stroke="#475569" stroke-width="2" />
+  <path d="M 2020 32 Q 2020 20 2032 20 L 2258 20 Q 2270 20 2270 32 L 2270 58 L 2020 58 Z" fill="#475569"/>
+  <text x="2034" y="44" font-size="13" font-weight="800" fill="#ffffff" letter-spacing="0.5">SERVICE_CATEGORIES</text>
+  <text x="2258" y="43" font-size="9" font-weight="700" fill="#ffffff" opacity="0.85" text-anchor="end">SERVICE TYPE LOOKUP</text>
+  <g transform="translate(2032, 65)"><rect width="22" height="15" rx="3" fill="#d97706"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">PK</text></g>
+  <text x="2074" y="76" font-size="11" font-weight="700" fill="#0f172a">category_id</text>
+  <text x="2258" y="76" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(2032, 85)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="2074" y="96" font-size="11" font-weight="500" fill="#334155">category_name</text>
+  <text x="2258" y="96" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(30)</text>
+</g>
+<g id="erd-PAYMENT_METHODS" filter="url(#shadow)">
+  <rect x="670" y="960" width="230" height="130" rx="12" fill="#ffffff" stroke="#475569" stroke-width="2" />
+  <path d="M 670 972 Q 670 960 682 960 L 888 960 Q 900 960 900 972 L 900 998 L 670 998 Z" fill="#475569"/>
+  <text x="684" y="984" font-size="13" font-weight="800" fill="#ffffff" letter-spacing="0.5">PAYMENT_METHODS</text>
+  <text x="888" y="983" font-size="9" font-weight="700" fill="#ffffff" opacity="0.85" text-anchor="end">TENDER METHOD LOOKUP</text>
+  <g transform="translate(682, 1005)"><rect width="22" height="15" rx="3" fill="#d97706"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">PK</text></g>
+  <text x="724" y="1016" font-size="11" font-weight="700" fill="#0f172a">method_id</text>
+  <text x="888" y="1016" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(682, 1025)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="724" y="1036" font-size="11" font-weight="500" fill="#334155">method_name</text>
+  <text x="888" y="1036" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(30)</text>
+</g>
+<g id="erd-PAYMENT_STATUSES" filter="url(#shadow)">
+  <rect x="670" y="1120" width="230" height="130" rx="12" fill="#ffffff" stroke="#475569" stroke-width="2" />
+  <path d="M 670 1132 Q 670 1120 682 1120 L 888 1120 Q 900 1120 900 1132 L 900 1158 L 670 1158 Z" fill="#475569"/>
+  <text x="684" y="1144" font-size="13" font-weight="800" fill="#ffffff" letter-spacing="0.5">PAYMENT_STATUSES</text>
+  <text x="888" y="1143" font-size="9" font-weight="700" fill="#ffffff" opacity="0.85" text-anchor="end">SETTLEMENT STATE LOOKUP</text>
+  <g transform="translate(682, 1165)"><rect width="22" height="15" rx="3" fill="#d97706"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">PK</text></g>
+  <text x="724" y="1176" font-size="11" font-weight="700" fill="#0f172a">p_status_id</text>
+  <text x="888" y="1176" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(682, 1185)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="724" y="1196" font-size="11" font-weight="500" fill="#334155">status_name</text>
+  <text x="888" y="1196" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(30)</text>
+</g>
+<g id="erd-SHIPPING_PREFERENCES" filter="url(#shadow)">
+  <rect x="1480" y="1100" width="240" height="130" rx="12" fill="#ffffff" stroke="#475569" stroke-width="2" />
+  <path d="M 1480 1112 Q 1480 1100 1492 1100 L 1708 1100 Q 1720 1100 1720 1112 L 1720 1138 L 1480 1138 Z" fill="#475569"/>
+  <text x="1494" y="1124" font-size="13" font-weight="800" fill="#ffffff" letter-spacing="0.5">SHIPPING_PREFERENCES</text>
+  <text x="1708" y="1123" font-size="9" font-weight="700" fill="#ffffff" opacity="0.85" text-anchor="end">FULFILLMENT LOOKUP</text>
+  <g transform="translate(1492, 1145)"><rect width="22" height="15" rx="3" fill="#d97706"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">PK</text></g>
+  <text x="1534" y="1156" font-size="11" font-weight="700" fill="#0f172a">pref_id</text>
+  <text x="1708" y="1156" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(1492, 1165)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="1534" y="1176" font-size="11" font-weight="500" fill="#334155">pref_name</text>
+  <text x="1708" y="1176" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(30)</text>
+</g>
+<g id="erd-AUDIT_LOGS" filter="url(#shadow)">
+  <rect x="80" y="780" width="280" height="260" rx="12" fill="#ffffff" stroke="#334155" stroke-width="2" />
+  <path d="M 80 792 Q 80 780 92 780 L 348 780 Q 360 780 360 792 L 360 818 L 80 818 Z" fill="#334155"/>
+  <text x="94" y="804" font-size="13" font-weight="800" fill="#ffffff" letter-spacing="0.5">AUDIT_LOGS</text>
+  <text x="348" y="803" font-size="9" font-weight="700" fill="#ffffff" opacity="0.85" text-anchor="end">FORENSIC & SECURITY TRAIL</text>
+  <g transform="translate(92, 825)"><rect width="22" height="15" rx="3" fill="#d97706"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">PK</text></g>
+  <text x="134" y="836" font-size="11" font-weight="700" fill="#0f172a">audit_log_id</text>
+  <text x="348" y="836" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(92, 845)"><rect width="22" height="15" rx="3" fill="#2563eb"/><text x="11" y="11" font-size="9" font-weight="800" fill="#ffffff" text-anchor="middle">FK</text></g>
+  <text x="134" y="856" font-size="11" font-weight="700" fill="#0f172a">user_id</text>
+  <text x="348" y="856" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">INT</text>
+  <g transform="translate(92, 865)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="134" y="876" font-size="11" font-weight="500" fill="#334155">username</text>
+  <text x="348" y="876" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(50)</text>
+  <g transform="translate(92, 885)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="134" y="896" font-size="11" font-weight="500" fill="#334155">role</text>
+  <text x="348" y="896" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(20)</text>
+  <g transform="translate(92, 905)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="134" y="916" font-size="11" font-weight="500" fill="#334155">action_type</text>
+  <text x="348" y="916" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(30)</text>
+  <g transform="translate(92, 925)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="134" y="936" font-size="11" font-weight="500" fill="#334155">table_name</text>
+  <text x="348" y="936" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">VARCHAR(50)</text>
+  <g transform="translate(92, 945)"><rect width="18" height="15" rx="3" fill="#f1f5f9" stroke="#cbd5e1"/><text x="9" y="11" font-size="8" font-weight="700" fill="#64748b" text-anchor="middle">att</text></g>
+  <text x="134" y="956" font-size="11" font-weight="500" fill="#334155">old_values</text>
+  <text x="348" y="956" font-size="9.5" font-family="JetBrains Mono, monospace" fill="#64748b" text-anchor="end">JSON</text>
+  <text x="220.0" y="980" font-size="10" font-weight="600" fill="#94a3b8" text-anchor="middle">+ 2 more attributes...</text>
+</g>
+<!-- HEADER BANNER -->
+<g transform="translate(60, 40)">
+  <rect width="680" height="74" rx="14" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="0" y="0" width="8" height="74" rx="4" fill="#dc2626"/>
+  <text x="24" y="28" font-size="16" font-weight="800" fill="#0f172a">FIGURE 8: ENTITY-RELATIONSHIP DIAGRAM (ERD)</text>
+  <text x="24" y="48" font-size="11" font-weight="600" fill="#64748b">Shoelotskey Service Management System with Data Analytics &bull; 3NF Normalized</text>
+  <text x="24" y="64" font-size="9.5" font-weight="700" fill="#dc2626">NOTATION: CROW'S FOOT &bull; RESOLVED M:M ASSOCIATIVE TABLES &bull; ISO/IEC 25010 AUDITED</text>
+</g>
+<!-- LEGEND -->
+<g transform="translate(1830, 40)">
+  <rect width="560" height="74" rx="14" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="18" y="22" font-size="11" font-weight="800" fill="#0f172a">CARDINALITY &amp; KEY CONVENTIONS</text>
+  <g transform="translate(18, 32)">
+    <rect width="22" height="15" rx="3" fill="#d97706"/><text x="11" y="11" font-size="9" font-weight="800" fill="#fff" text-anchor="middle">PK</text>
+    <text x="28" y="12" font-size="10" font-weight="600" fill="#334155">Primary Key</text>
+  </g>
+  <g transform="translate(145, 32)">
+    <rect width="22" height="15" rx="3" fill="#2563eb"/><text x="11" y="11" font-size="9" font-weight="800" fill="#fff" text-anchor="middle">FK</text>
+    <text x="28" y="12" font-size="10" font-weight="600" fill="#334155">Foreign Key</text>
+  </g>
+  <g transform="translate(260, 32)">
+    <rect width="36" height="15" rx="3" fill="#818cf8"/><text x="18" y="11" font-size="8.5" font-weight="800" fill="#fff" text-anchor="middle">PK,FK</text>
+    <text x="42" y="12" font-size="10" font-weight="600" fill="#334155">Composite Bridge</text>
+  </g>
+  <g transform="translate(415, 32)">
+    <rect width="38" height="15" rx="8" fill="#fef2f2" stroke="#dc2626"/><text x="19" y="11" font-size="8" font-weight="800" fill="#dc2626" text-anchor="middle">1 : M</text>
+    <text x="44" y="12" font-size="10" font-weight="600" fill="#334155">One-to-Many</text>
+  </g>
+  <text x="18" y="64" font-size="9.5" font-weight="500" fill="#64748b">Solid outline = Strong Entity &bull; Dashed outline = Associative Bridge (Resolving Many-to-Many)</text>
+</g>
+</svg>

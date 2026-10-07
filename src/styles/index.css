@@ -21,27 +21,113 @@ body:has(#customer-tracking-page),
 	overflow-x: hidden !important;
 }
 
-/* Allow toasts to show above overflow hidden */
-.toaster {
-	z-index: 9999 !important;
+/* Allow toasts to show above overflow hidden and stay centered */
+.toaster,
+[data-sonner-toaster] {
+	z-index: 99999 !important;
 	pointer-events: none;
-}
-
-/* Dashboard specific toaster positioning with offset */
-.dashboard-toaster {
 	position: fixed !important;
 	top: 20px !important;
 	left: 50% !important;
+	right: auto !important;
 	transform: translateX(-50%) !important;
-	margin-left: 128px !important;
-	/* Half of expanded sidebar width to center in content area */
-	transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+	margin: 0 !important;
+	margin-left: 0 !important;
+	display: flex !important;
+	flex-direction: column !important;
+	align-items: center !important;
+	justify-content: center !important;
+	transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
-/* Adjust toast position for collapsed sidebar */
-.sidebar-collapsed .dashboard-toaster {
-	margin-left: 20px !important;
-	/* Adjusted from 40px to move it more left as requested */
+/* Ensure toast is always centered regardless of sidebar */
+.sidebar-collapsed .dashboard-toaster,
+.sidebar-collapsed [data-sonner-toaster],
+.sidebar-collapsed .toaster {
+	left: 50% !important;
+	transform: translateX(-50%) !important;
+	margin-left: 0 !important;
+}
+
+/* Desktop and Large Screen Toasts: Centered, dynamic width (fits content snugly, expands for long text), centered text */
+@media screen and (min-width: 641px) {
+	html body [data-sonner-toaster],
+	html body .toaster,
+	html body .dashboard-toaster {
+		--width: max-content !important;
+		width: max-content !important;
+		min-width: 0 !important;
+		max-width: calc(100vw - 48px) !important;
+		left: 50% !important;
+		right: auto !important;
+		transform: translateX(-50%) !important;
+		display: flex !important;
+		flex-direction: column !important;
+		align-items: center !important;
+		justify-content: center !important;
+	}
+
+	html body [data-sonner-toaster] [data-sonner-toast],
+	html body [data-sonner-toaster] [data-sonner-toast][data-styled="true"],
+	html body [data-sonner-toast].custom-toast,
+	html body .custom-toast {
+		pointer-events: auto !important;
+		width: max-content !important;
+		min-width: 0 !important;
+		max-width: min(920px, calc(100vw - 48px)) !important;
+		white-space: nowrap !important;
+		display: inline-flex !important;
+		flex-direction: row !important;
+		align-items: center !important;
+		justify-content: center !important;
+		text-align: center !important;
+		padding: 10px 20px !important;
+		box-sizing: border-box !important;
+		margin: 0 auto !important;
+		gap: 8px !important;
+	}
+
+	html body [data-sonner-toaster] [data-sonner-toast] [data-icon] {
+		display: inline-flex !important;
+		align-items: center !important;
+		justify-content: center !important;
+		flex-shrink: 0 !important;
+		margin: 0 !important;
+	}
+
+	html body [data-sonner-toaster] [data-sonner-toast] [data-content],
+	html body [data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-content] {
+		white-space: nowrap !important;
+		display: inline-flex !important;
+		flex-direction: row !important;
+		align-items: center !important;
+		justify-content: center !important;
+		text-align: center !important;
+		flex: 0 1 auto !important;
+		gap: 8px !important;
+		overflow: visible !important;
+	}
+
+	html body [data-sonner-toaster] [data-sonner-toast] [data-title],
+	html body [data-sonner-toaster] [data-sonner-toast][data-styled="true"] [data-title] {
+		white-space: nowrap !important;
+		word-break: keep-all !important;
+		overflow-wrap: normal !important;
+		font-size: 13.5px !important;
+		font-weight: 600 !important;
+		line-height: 1.4 !important;
+		display: inline-block !important;
+		text-align: center !important;
+		overflow: visible !important;
+	}
+
+	html body [data-sonner-toaster] [data-sonner-toast] [data-description] {
+		white-space: nowrap !important;
+		word-break: keep-all !important;
+		overflow-wrap: normal !important;
+		display: inline-block !important;
+		text-align: center !important;
+	}
 }
 
 /* Center page titles and table headers when sidebar is collapsed */
@@ -193,6 +279,129 @@ main,
 	height: 0 !important;
 }
 
+/* Subtle vertical scrollbar when content overflows */
+.service-card-scroll,
+.service-card-scroll *,
+.subtle-vertical-scroll,
+.subtle-vertical-scroll * {
+	scrollbar-width: thin !important;
+	scrollbar-color: #cbd5e1 transparent !important;
+	-ms-overflow-style: auto !important;
+}
+
+.service-card-scroll::-webkit-scrollbar,
+.service-card-scroll::-webkit-scrollbar:vertical,
+.service-card-scroll *::-webkit-scrollbar,
+.service-card-scroll *::-webkit-scrollbar:vertical,
+.subtle-vertical-scroll::-webkit-scrollbar,
+.subtle-vertical-scroll::-webkit-scrollbar:vertical,
+.subtle-vertical-scroll *::-webkit-scrollbar,
+.subtle-vertical-scroll *::-webkit-scrollbar:vertical {
+	display: block !important;
+	width: 4px !important;
+	height: 4px !important;
+}
+
+.service-card-scroll::-webkit-scrollbar-track,
+.service-card-scroll::-webkit-scrollbar-track:vertical,
+.service-card-scroll *::-webkit-scrollbar-track,
+.service-card-scroll *::-webkit-scrollbar-track:vertical,
+.subtle-vertical-scroll::-webkit-scrollbar-track,
+.subtle-vertical-scroll::-webkit-scrollbar-track:vertical,
+.subtle-vertical-scroll *::-webkit-scrollbar-track,
+.subtle-vertical-scroll *::-webkit-scrollbar-track:vertical {
+	display: block !important;
+	background: transparent !important;
+}
+
+.service-card-scroll::-webkit-scrollbar-thumb,
+.service-card-scroll::-webkit-scrollbar-thumb:vertical,
+.service-card-scroll *::-webkit-scrollbar-thumb,
+.service-card-scroll *::-webkit-scrollbar-thumb:vertical,
+.subtle-vertical-scroll::-webkit-scrollbar-thumb,
+.subtle-vertical-scroll::-webkit-scrollbar-thumb:vertical,
+.subtle-vertical-scroll *::-webkit-scrollbar-thumb,
+.subtle-vertical-scroll *::-webkit-scrollbar-thumb:vertical {
+	display: block !important;
+	width: 4px !important;
+	background: #cbd5e1 !important;
+	border-radius: 9999px !important;
+}
+
+.service-card-scroll::-webkit-scrollbar-thumb:hover,
+.service-card-scroll::-webkit-scrollbar-thumb:vertical:hover,
+.service-card-scroll *::-webkit-scrollbar-thumb:hover,
+.service-card-scroll *::-webkit-scrollbar-thumb:vertical:hover,
+.subtle-vertical-scroll::-webkit-scrollbar-thumb:hover,
+.subtle-vertical-scroll::-webkit-scrollbar-thumb:vertical:hover,
+.subtle-vertical-scroll *::-webkit-scrollbar-thumb:hover,
+.subtle-vertical-scroll *::-webkit-scrollbar-thumb:vertical:hover {
+	background: #94a3b8 !important;
+}
+
+.service-card-scroll::-webkit-scrollbar:horizontal,
+.service-card-scroll *::-webkit-scrollbar:horizontal {
+	display: none !important;
+	height: 0 !important;
+	width: 0 !important;
+}
+
+.subtle-vertical-scroll::-webkit-scrollbar:horizontal,
+.subtle-vertical-scroll *::-webkit-scrollbar:horizontal {
+	display: block !important;
+	height: 5px !important;
+}
+
+.subtle-vertical-scroll::-webkit-scrollbar-thumb:horizontal,
+.subtle-vertical-scroll *::-webkit-scrollbar-thumb:horizontal {
+	background: #cbd5e1 !important;
+	border-radius: 9999px !important;
+}
+
+.subtle-vertical-scroll::-webkit-scrollbar-thumb:horizontal:hover,
+.subtle-vertical-scroll *::-webkit-scrollbar-thumb:horizontal:hover {
+	background: #94a3b8 !important;
+}
+
+/* Clearly visible vertical scrollbar for modals with scrollable lists */
+.visible-vertical-scroll {
+	scrollbar-width: thin !important;
+	scrollbar-color: #94a3b8 #f1f5f9 !important;
+	-ms-overflow-style: auto !important;
+}
+
+.visible-vertical-scroll::-webkit-scrollbar,
+.visible-vertical-scroll::-webkit-scrollbar:vertical {
+	display: block !important;
+	width: 7px !important;
+}
+
+.visible-vertical-scroll::-webkit-scrollbar-track,
+.visible-vertical-scroll::-webkit-scrollbar-track:vertical {
+	display: block !important;
+	background: #f1f5f9 !important;
+	border-radius: 9999px !important;
+}
+
+.visible-vertical-scroll::-webkit-scrollbar-thumb,
+.visible-vertical-scroll::-webkit-scrollbar-thumb:vertical {
+	display: block !important;
+	width: 7px !important;
+	background: #94a3b8 !important;
+	border-radius: 9999px !important;
+}
+
+.visible-vertical-scroll::-webkit-scrollbar-thumb:hover,
+.visible-vertical-scroll::-webkit-scrollbar-thumb:vertical:hover {
+	background: #64748b !important;
+}
+
+.visible-vertical-scroll::-webkit-scrollbar:horizontal {
+	display: none !important;
+	height: 0 !important;
+	width: 0 !important;
+}
+
 /* Date input styling */
 input[type="date"] {
 	color: black;
@@ -210,12 +419,26 @@ input[type="date"]::-webkit-datetime-edit-year-field {
 	color: black;
 }
 
+/* Custom MMDDYYYY Date Picker bold formatting */
+.mmddyyyy-datepicker input,
+input.mmddyyyy-datepicker-input {
+	font-weight: 700 !important;
+}
+
+.mmddyyyy-datepicker input::placeholder,
+input.mmddyyyy-datepicker-input::placeholder {
+	font-weight: 700 !important;
+	color: #9ca3af !important;
+	opacity: 1 !important;
+}
+/* Top-level portrait print specification with zero base margin for US Letter and A4 */
+@page {
+  size: portrait;
+  margin: 0;
+}
+
 @media print {
-  /* Responsive portrait print with zero base margin for both US Letter and ISO A4 */
-  @page {
-    size: portrait;
-    margin: 0;
-  }
+  /* Hide sidebar and top header */
 
   /* Hide sidebar and top header */
   .lg\:flex.flex-col.bg-red-700, 
@@ -494,13 +717,10 @@ input[type="date"]::-webkit-datetime-edit-year-field {
      CLAIM SLIP & JOB ORDER PRINT SPECIFICATIONS
      Responsive to both US Letter (8.5in x 11in) and ISO A4 (210mm x 297mm).
      Exact 50/50 Midpoint: The cut line is placed at EXACTLY 50% of the page.
-     Both halves are constrained to exact 50% minus half of the divider height,
-     guaranteeing that the cut line is ALWAYS precisely in the physical center!
+     Top half and bottom half use flex: 1 1 0% with equal distribution,
+     guaranteeing that the cut line is ALWAYS precisely in the physical center
+     and neither half overflows or cuts off borders.
      ========================================================================== */
-  @page {
-    size: portrait;
-    margin: 0;
-  }
 
   html:has(#claim-slip-print-content),
   body:has(#claim-slip-print-content),
@@ -587,7 +807,7 @@ input[type="date"]::-webkit-datetime-edit-year-field {
     height: 100% !important;
     max-height: 100% !important;
     min-height: 100% !important;
-    padding: 3.5mm 5mm !important;
+    padding: 3mm 5mm !important;
     background: #ffffff !important;
     color: #000000 !important;
     box-shadow: none !important;
@@ -606,10 +826,10 @@ input[type="date"]::-webkit-datetime-edit-year-field {
   body:has(#claim-slip-print-content) .claim-slip-half,
   body.printing-claim-slip .claim-slip-half,
   #claim-slip-print-content .claim-slip-half {
-    height: calc(50% - 3mm) !important;
-    min-height: calc(50% - 3mm) !important;
-    max-height: calc(50% - 3mm) !important;
-    flex: 0 0 calc(50% - 3mm) !important;
+    flex: 1 1 0% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
     display: flex !important;
     flex-direction: column !important;
     justify-content: space-between !important;
@@ -622,10 +842,10 @@ input[type="date"]::-webkit-datetime-edit-year-field {
   body:has(#claim-slip-print-content) .claim-slip-divider,
   body.printing-claim-slip .claim-slip-divider,
   #claim-slip-print-content .claim-slip-divider {
-    height: 6mm !important;
-    min-height: 6mm !important;
-    max-height: 6mm !important;
-    flex: 0 0 6mm !important;
+    height: 5mm !important;
+    min-height: 5mm !important;
+    max-height: 5mm !important;
+    flex: 0 0 5mm !important;
     box-sizing: border-box !important;
     display: flex !important;
     align-items: center !important;
@@ -640,6 +860,10 @@ input[type="date"]::-webkit-datetime-edit-year-field {
 
   #claim-slip-print-content .text-red-600 {
     color: #dc2626 !important;
+  }
+
+  #claim-slip-print-content .border-black {
+    border-color: #000000 !important;
   }
 
   #print-job-summary *,
@@ -727,36 +951,109 @@ input[type="date"]::-webkit-datetime-edit-year-field {
   transform-origin: 48% 88%;
 }
 
+.animate-shoe-run {
+  animation: shoeWalk 1.4s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+  transform-origin: 48% 88%;
+}
+
+@keyframes shadowPulse {
+  0%, 100% { transform: scaleX(1); opacity: 0.35; }
+  45% { transform: scaleX(0.7); opacity: 0.15; }
+}
+
+.animate-shadow-pulse {
+  animation: shadowPulse 1.4s ease-in-out infinite;
+}
+
 /* Mobile Toast and Pop-Up Alert Responsiveness */
 @media screen and (max-width: 640px) {
   [data-sonner-toaster] {
-    left: 12px !important;
-    right: 12px !important;
-    width: calc(100vw - 24px) !important;
+    --width: min(360px, calc(100vw - 24px)) !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+    width: var(--width) !important;
     max-width: calc(100vw - 24px) !important;
-    margin: 0 auto !important;
-    top: 12px !important;
+    top: 16px !important;
+    margin: 0 !important;
+    padding: 0 !important;
     display: flex !important;
-    justify-content: center !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    pointer-events: none !important;
   }
 
   [data-sonner-toast] {
-    width: 100% !important;
-    max-width: 100% !important;
+    pointer-events: auto !important;
+    width: max-content !important;
+    max-width: calc(100vw - 24px) !important;
+    min-width: 0 !important;
     box-sizing: border-box !important;
     font-size: 13px !important;
     border-radius: 12px !important;
-    padding: 12px 14px !important;
-    word-break: break-word !important;
+    padding: 10px 16px !important;
+    white-space: normal !important;
+    word-break: normal !important;
+    overflow-wrap: break-word !important;
+    margin: 0 auto !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
+    gap: 8px !important;
+  }
+
+  [data-sonner-toast] [data-icon] {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+    margin: 0 !important;
+  }
+
+  [data-sonner-toast] [data-content] {
+    white-space: normal !important;
+    display: inline-flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
+    flex: 0 1 auto !important;
+    gap: 6px !important;
+  }
+
+  [data-sonner-toast] [data-title] {
+    white-space: normal !important;
+    word-break: normal !important;
+    overflow-wrap: break-word !important;
+    text-align: center !important;
+  }
+
+  [data-sonner-toast] [data-description] {
+    white-space: normal !important;
+    word-break: normal !important;
+    overflow-wrap: break-word !important;
+    text-align: center !important;
   }
 
   [data-slot="dialog-content"],
-  [role="dialog"] {
+  [role="dialog"]:not([data-slot="sheet-content"]) {
     width: calc(100vw - 16px) !important;
     max-width: calc(100vw - 16px) !important;
     margin: 0 auto !important;
     max-height: 94dvh !important;
     overflow-y: auto !important;
+    box-sizing: border-box !important;
+  }
+
+  [data-slot="sheet-content"] {
+    margin: 0 !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    height: 100% !important;
+    min-height: 100dvh !important;
+    max-height: 100dvh !important;
+    border-radius: 0 !important;
     box-sizing: border-box !important;
   }
 }

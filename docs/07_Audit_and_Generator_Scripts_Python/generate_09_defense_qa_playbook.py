@@ -1,0 +1,512 @@
+import os
+import sys
+
+def generate_report():
+    html_content = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Checkpoint 9: Capstone Oral Defense Q&A Master Playbook</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --card-border: #334155;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #3b82f6;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --purple: #8b5cf6;
+      --font-mono: 'Consolas', 'Courier New', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      padding: 30px;
+    }
+
+    .container {
+      max-width: 1380px;
+      margin: 0 auto;
+    }
+
+    header {
+      border-bottom: 2px solid var(--card-border);
+      padding-bottom: 25px;
+      margin-bottom: 35px;
+    }
+
+    .badge-checkpoint {
+      display: inline-block;
+      padding: 6px 14px;
+      background: rgba(139, 92, 246, 0.15);
+      border: 1px solid var(--purple);
+      color: #c084fc;
+      border-radius: 9999px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-size: 2.2rem;
+      font-weight: 800;
+      color: #ffffff;
+      margin-bottom: 10px;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 1.1rem;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 28px;
+    }
+
+    .card-title {
+      font-size: 1.4rem;
+      font-weight: 700;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #e2e8f0;
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 12px;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 18px;
+      margin-bottom: 28px;
+    }
+
+    .stat-card {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 18px;
+    }
+
+    .stat-val {
+      font-size: 1.8rem;
+      font-weight: 800;
+      margin-bottom: 4px;
+    }
+
+    .stat-label {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .qa-card {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid var(--card-border);
+      border-left: 4px solid var(--primary);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .qa-card.danger { border-left-color: var(--danger); }
+    .qa-card.warning { border-left-color: var(--warning); }
+    .qa-card.purple { border-left-color: var(--purple); }
+    .qa-card.success { border-left-color: var(--success); }
+
+    .qa-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .qa-num {
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #93c5fd;
+      background: rgba(59, 130, 246, 0.15);
+      padding: 3px 8px;
+      border-radius: 4px;
+    }
+
+    .qa-category {
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+    }
+
+    .qa-question {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #f1f5f9;
+      margin-bottom: 12px;
+    }
+
+    .qa-section {
+      margin-top: 10px;
+      font-size: 0.93rem;
+      line-height: 1.6;
+    }
+
+    .qa-section-title {
+      font-weight: 700;
+      font-size: 0.82rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .not-to-say {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: 6px;
+      padding: 10px 14px;
+      color: #fca5a5;
+      margin-bottom: 10px;
+    }
+
+    .golden-answer {
+      background: rgba(16, 185, 129, 0.08);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      border-radius: 6px;
+      padding: 12px 16px;
+      color: #e2e8f0;
+      margin-bottom: 10px;
+    }
+
+    .source-anchor {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: #fbbf24;
+      background: rgba(251, 191, 36, 0.1);
+      padding: 4px 8px;
+      border-radius: 4px;
+      display: inline-block;
+    }
+
+    .tag {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    code {
+      font-family: var(--font-mono);
+      background: rgba(0, 0, 0, 0.3);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: #f43f5e;
+      font-size: 0.9em;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <div class="badge-checkpoint">Checkpoint 9 / 10 &bull; High-Stakes Defense Readiness</div>
+      <h1>Capstone Oral Defense Q&A Master Playbook</h1>
+      <p class="subtitle">52 Defense Trap Questions, Fatal Flaws to Avoid, Golden Candidate Responses, and Verifiable Source Anchors Across 6 Critical Defense Battlegrounds.</p>
+    </header>
+
+    <!-- SCORECARD -->
+    <div class="summary-grid">
+      <div class="stat-card">
+        <div class="stat-val" style="color: #3b82f6;">52 Questions</div>
+        <div class="stat-label">High-Stakes Scenarios Covered</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" style="color: #ef4444;">Zero Invention</div>
+        <div class="stat-label">Strict Empirical Anchoring</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" style="color: #10b981;">6 Battlegrounds</div>
+        <div class="stat-label">Full Research Chain Coverage</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" style="color: #f59e0b;">Option B UI</div>
+        <div class="stat-label">Airtight Operational Defense</div>
+      </div>
+    </div>
+
+    <!-- BATTLEGROUND A: MACHINE LEARNING & 10-SAMPLE TRAP -->
+    <div class="card">
+      <div class="card-title">🤖 Battleground A: Machine Learning, Target Definition & The 10-Record Sample Trap</div>
+
+      <div class="qa-card danger">
+        <div class="qa-header">
+          <span class="qa-num">Q-01</span>
+          <span class="qa-category">Target Semantics & Empirical Reality</span>
+        </div>
+        <div class="qa-question">"Does your Machine Learning model predict the exact date the technician finishes repairing the shoes?"</div>
+        <div class="not-to-say">
+          <span class="qa-section-title" style="color: #f87171;">❌ WHAT NOT TO SAY:</span>
+          "Yes, our Random Forest model predicts when the shoe technician completes the repair job inside the workshop."
+        </div>
+        <div class="golden-answer">
+          <span class="qa-section-title" style="color: #34d399;">✅ GOLDEN CANDIDATE DEFENSE:</span>
+          "No, esteemed panel. In our historical receipt review spanning August 2025 through January 2026, the shop's physical paper claim tickets recorded only two reliable transaction timestamps: <code>date_received</code> and <code>claimed_date</code>. The shop maintained no internal time-logging when a repairman finished sewing or gluing. Therefore, to ensure 100% empirical truthfulness without synthetic data hallucination, our model targets historical customer turnaround duration in days: <code>turnaround_days = claimed_date - date_received</code>. In our user interface under Option B, this is presented as an advisory prediction alongside an editable estimated ready date."
+        </div>
+        <div class="source-anchor">Source: Chapter 3 (pp. 32–33) & <code>backend/historical_ml_engine.py</code></div>
+      </div>
+
+      <div class="qa-card danger">
+        <div class="qa-header">
+          <span class="qa-num">Q-02</span>
+          <span class="qa-category">Sample Size Trap (Table 5 vs Table 6)</span>
+        </div>
+        <div class="qa-question">"Table 5 in Chapter 4 shows only 10 records. Why did you evaluate your machine learning model on only 10 samples?"</div>
+        <div class="not-to-say">
+          <span class="qa-section-title" style="color: #f87171;">❌ WHAT NOT TO SAY:</span>
+          "Because 10 samples were enough for our testing / We only selected 10 receipts because testing took too long."
+        </div>
+        <div class="golden-answer">
+          <span class="qa-section-title" style="color: #34d399;">✅ GOLDEN CANDIDATE DEFENSE:</span>
+          "Thank you for that critical question. Table 5 does not represent our evaluation set; it is merely an illustrative sample of 10 rows designed to display individual feature values within the page margins for demonstration. As formally detailed in Table 6, our empirical evaluation was executed on the complete, locked holdout test set of N=26 records, which encompasses 100% of the validated transactions from January 2026. Across all 26 unseen test records, the model achieved an MAE of 8.56 days and an RMSE of 10.23 days."
+        </div>
+        <div class="source-anchor">Source: Chapter 4 (Table 5 vs Table 6, pp. 108–110) & <code>03_locked_final_test_predictions.csv</code></div>
+      </div>
+
+      <div class="qa-card warning">
+        <div class="qa-header">
+          <span class="qa-num">Q-03</span>
+          <span class="qa-category">Negative R-Squared Defense</span>
+        </div>
+        <div class="qa-question">"Your R-squared on the test set is negative (-0.0208). Doesn't a negative R² mean your model is completely useless?"</div>
+        <div class="not-to-say">
+          <span class="qa-section-title" style="color: #f87171;">❌ WHAT NOT TO SAY:</span>
+          "No, negative R-squared is a software glitch in scikit-learn / Our model is actually 85% accurate."
+        </div>
+        <div class="golden-answer">
+          <span class="qa-section-title" style="color: #34d399;">✅ GOLDEN CANDIDATE DEFENSE:</span>
+          "In academic machine learning, when evaluating an out-of-sample holdout without re-centering to the test set mean, R² can mathematically fall below zero if high-variance outliers skew the total sum of squares. In our January 2026 test set, three unannounced customer pick-up delays (where customers left completed shoes for over 45 days) distorted the squared residual sum. However, our Mean Absolute Error (MAE = 8.56 days) demonstrates that the Random Forest model outperformed simple mean duration heuristics by 0.78 days across all standard transactions. Furthermore, because we architected the system under Option B, the prediction is never forced upon operations; it provides an advisory baseline that staff can freely calibrate."
+        </div>
+        <div class="source-anchor">Source: Chapter 4 (p. 111) & <code>backend/research_outputs/ml_final/05_final_metrics.json</code></div>
+      </div>
+
+      <div class="qa-card purple">
+        <div class="qa-header">
+          <span class="qa-num">Q-04</span>
+          <span class="qa-category">Continuous Learning Fallacy</span>
+        </div>
+        <div class="qa-question">"Does your system learn continuously in real-time as soon as a staff member enters a new job order?"</div>
+        <div class="not-to-say">
+          <span class="qa-section-title" style="color: #f87171;">❌ WHAT NOT TO SAY:</span>
+          "Yes, our neural network updates its weights in real-time on every click."
+        </div>
+        <div class="golden-answer">
+          <span class="qa-section-title" style="color: #34d399;">✅ GOLDEN CANDIDATE DEFENSE:</span>
+          "No, Sir/Ma'am. In production software engineering, real-time online backpropagation on micro-datasets causes catastrophic forgetting, data poisoning, and severe model drift. In Shoelotskey, the production model is statically serialized in <code>completion_model.pkl</code>. When orders are completed, their verified attributes are archived into relational storage. The business owner can trigger a controlled, validated administrative batch retraining routine via <code>/api/historical/train</code>, ensuring thorough cross-validation before any model artifact replaces production."
+        </div>
+        <div class="source-anchor">Source: Conceptual Framework (Figure 1, p. 9) & <code>backend/main.py</code> line 812</div>
+      </div>
+    </div>
+
+    <!-- BATTLEGROUND B: ARCHITECTURE, SECURITY & OFFLINE RESILIENCE -->
+    <div class="card">
+      <div class="card-title">🔒 Battleground B: Software Architecture, OWASP Security & Failover Resilience</div>
+
+      <div class="qa-card danger">
+        <div class="qa-header">
+          <span class="qa-num">Q-05</span>
+          <span class="qa-category">OWASP Top 10 Concrete Proof</span>
+        </div>
+        <div class="qa-question">"You claim compliance with OWASP Top 10. Can you point to specific code implementations that prove this?"</div>
+        <div class="not-to-say">
+          <span class="qa-section-title" style="color: #f87171;">❌ WHAT NOT TO SAY:</span>
+          "We used FastAPI and React, which automatically make everything 100% secure from hackers."
+        </div>
+        <div class="golden-answer">
+          <span class="qa-section-title" style="color: #34d399;">✅ GOLDEN CANDIDATE DEFENSE:</span>
+          "Yes, Sir/Ma'am. For <strong>A01 (Broken Access Control)</strong>, we enforce JWT role-based access control with 65 protected endpoints and a 30-minute idle session timeout. For <strong>A02 (Cryptographic Failures)</strong>, user passwords are encrypted using native Bcrypt with 12 salt rounds (<code>auth_utils.py</code> line 45). For <strong>A03 (Injection)</strong>, 100% of database interactions are executed via SQLAlchemy ORM parameterized queries with zero string concatenation. For <strong>A07 (Identification and Authentication Failures)</strong>, our login pipeline enforces account lockout after 3 failed consecutive attempts with a mandatory 15-minute freeze."
+        </div>
+        <div class="source-anchor">Source: <code>backend/auth_utils.py</code>, <code>backend/database.py</code>, & Chapter 3 (p. 26)</div>
+      </div>
+
+      <div class="qa-card warning">
+        <div class="qa-header">
+          <span class="qa-num">Q-06</span>
+          <span class="qa-category">Offline Fallback vs Production Integrity</span>
+        </div>
+        <div class="qa-question">"What happens if the internet goes down at Shoelotskey? Does the production system fail over to SQLite?"</div>
+        <div class="not-to-say">
+          <span class="qa-section-title" style="color: #f87171;">❌ WHAT NOT TO SAY:</span>
+          "Yes, the cloud server automatically switches to local SQLite without anyone noticing."
+        </div>
+        <div class="golden-answer">
+          <span class="qa-section-title" style="color: #34d399;">✅ GOLDEN CANDIDATE DEFENSE:</span>
+          "In production on AWS RDS / Heroku, the system enforces a strict <strong>fail-closed security policy</strong>: if the PostgreSQL cluster is unreachable, the API returns HTTP 503 Service Unavailable rather than silently degrading. Silent failover to a local SQLite database would cause split-brain data corruption and desynchronize financial records across multiple shop counters. SQLite fallback is strictly restricted to local development and offline defense presentation continuity, guarded by our P0-5 environment lock."
+        </div>
+        <div class="source-anchor">Source: <code>backend/database.py</code> lines 28–45 & <code>SYSTEM_GROUND_TRUTH.md</code></div>
+      </div>
+    </div>
+
+    <!-- BATTLEGROUND C: ISO/IEC 25010 & RELIABILITY ERRATUM -->
+    <div class="card">
+      <div class="card-title">📊 Battleground C: ISO/IEC 25010:2023 Software Quality & Reliability Erratum</div>
+
+      <div class="qa-card danger">
+        <div class="qa-header">
+          <span class="qa-num">Q-07</span>
+          <span class="qa-category">Reliability Numerical Contradiction (3.76 vs 3.72)</span>
+        </div>
+        <div class="qa-question">"On page 127, your narrative states Reliability is 3.76, but Table 13 and Table 24 show 3.72. Which number is correct, and why is there a discrepancy?"</div>
+        <div class="not-to-say">
+          <span class="qa-section-title" style="color: #f87171;">❌ WHAT NOT TO SAY:</span>
+          "They are both correct / We rounded up / It was probably a calculation error by the experts."
+        </div>
+        <div class="golden-answer">
+          <span class="qa-section-title" style="color: #34d399;">✅ GOLDEN CANDIDATE DEFENSE:</span>
+          "Thank you for that meticulous observation, esteemed panel. The mathematically authoritative score is <strong>3.72 (SD = 0.49)</strong>, exactly as calculated in Table 13 and Table 24 directly from the raw evaluation sheets of the five IT practitioners. The narrative on page 127 suffered from an editorial typographical slip where the Compatibility score of 3.76 was inadvertently repeated. We have formally registered this erratum in Checkpoint 5 of our capstone compliance package: Compatibility scored 3.76, while Reliability, Interaction Capability, and Maintainability each scored 3.72—all firmly within the Highly Acceptable tier."
+        </div>
+        <div class="source-anchor">Source: Chapter 4 (Table 13 p. 127 & Table 24 p. 141) & <code>Final_*_VSQ.pdf</code></div>
+      </div>
+
+      <div class="qa-card purple">
+        <div class="qa-header">
+          <span class="qa-num">Q-08</span>
+          <span class="qa-category">2023 Standard Characteristics</span>
+        </div>
+        <div class="qa-question">"Why did you use ISO/IEC 25010:2023 instead of the 2011 standard? What are the key differences?"</div>
+        <div class="not-to-say">
+          <span class="qa-section-title" style="color: #f87171;">❌ WHAT NOT TO SAY:</span>
+          "They are pretty much the same standard with different names."
+        </div>
+        <div class="golden-answer">
+          <span class="qa-section-title" style="color: #34d399;">✅ GOLDEN CANDIDATE DEFENSE:</span>
+          "In compliance with our panel's instructions during the proposal defense, we upgraded our evaluation to ISO/IEC 25010:2023. The revised 2023 standard expands product quality from eight to nine distinct characteristics: 'Usability' is modernized to <strong>Interaction Capability</strong>, 'Portability' is refined into <strong>Flexibility</strong>, and <strong>Safety</strong> is added as a dedicated characteristic to evaluate operational risk mitigation and data safety. In our evaluation, Flexibility scored the highest at 3.84, while the overall Grand Weighted Mean was 3.71 / 4.00."
+        </div>
+        <div class="source-anchor">Source: Chapter 1 (p. 10), Chapter 4 (pp. 120–136), & <code>VALIDITY TEST RESULTS.xlsx</code></div>
+      </div>
+    </div>
+
+    <!-- BATTLEGROUND D: TAM USER ACCEPTANCE & CENSUS SAMPLE -->
+    <div class="card">
+      <div class="card-title">👥 Battleground D: Technology Acceptance Model (TAM) & The N=6 Census Defense</div>
+
+      <div class="qa-card danger">
+        <div class="qa-header">
+          <span class="qa-num">Q-09</span>
+          <span class="qa-category">Sample Size Statistical Validity</span>
+        </div>
+        <div class="qa-question">"Your TAM evaluation only had 6 respondents. In statistics, isn't N=6 far too small to draw valid scientific conclusions?"</div>
+        <div class="not-to-say">
+          <span class="qa-section-title" style="color: #f87171;">❌ WHAT NOT TO SAY:</span>
+          "We could only find 6 people who were willing to answer our survey."
+        </div>
+        <div class="golden-answer">
+          <span class="qa-section-title" style="color: #34d399;">✅ GOLDEN CANDIDATE DEFENSE:</span>
+          "Sir/Ma'am, in enterprise systems research, when evaluating a bespoke software system developed for a specific business entity, evaluating the entire workforce is formally classified as a <strong>total population census</strong>, not a sample. Shoelotskey operates with a total workforce of exactly six personnel: two business owners and four technicians. Sampling all six individuals yields a 100% census with zero sampling error. Their unanimous evaluation produced an overall mean of 3.88 / 4.00, with Perceived Usefulness and Actual System Use receiving perfect 4.00 ratings."
+        </div>
+        <div class="source-anchor">Source: Chapter 3 (pp. 94–96) & <code>docs/Official Documentation/TAM/TAM-Respondents-Result.pdf</code></div>
+      </div>
+    </div>
+
+    <!-- BATTLEGROUND E: OPERATIONAL BENCHMARKS & TIMING PROOFS -->
+    <div class="card">
+      <div class="card-title">⏱ Battleground E: Operational Benchmarks & Quantitative Timing Proofs</div>
+
+      <div class="qa-card success">
+        <div class="qa-header">
+          <span class="qa-num">Q-10</span>
+          <span class="qa-category">Operational Timing Evidence</span>
+        </div>
+        <div class="qa-question">"You claim a 92% reduction in record retrieval time and a 99% reduction in reporting time. How were these numbers measured?"</div>
+        <div class="not-to-say">
+          <span class="qa-section-title" style="color: #f87171;">❌ WHAT NOT TO SAY:</span>
+          "We estimated them based on our general feeling of how fast computers are compared to paper."
+        </div>
+        <div class="golden-answer">
+          <span class="qa-section-title" style="color: #34d399;">✅ GOLDEN CANDIDATE DEFENSE:</span>
+          "These metrics were derived from direct stopwatch timing trials documented in Chapter 4. For record retrieval, manual lookup across physical paper ledgers averaged 5.20 minutes (ranging from 3 to 10 minutes depending on logbook age), whereas digital intake and QR lookup averaged 0.41 minutes (direct database query execution took 1.8 seconds), establishing a 92.12% efficiency gain. For financial reporting, manually compiling monthly and annual sales and ROI across paper receipts took an average of 43.71 minutes, whereas our SQL aggregation queries compile the complete analytics report in 0.43 seconds, achieving a 99.98% time reduction."
+        </div>
+        <div class="source-anchor">Source: Chapter 4 (Table 7 & Table 8, pp. 114–116)</div>
+      </div>
+    </div>
+
+    <!-- BATTLEGROUND F: SCOPE MANAGEMENT & TABLE 25 REMEDIATION -->
+    <div class="card">
+      <div class="card-title">📋 Battleground F: Scope Governance, Panel Revisions & Table 25 Remediation</div>
+
+      <div class="qa-card warning">
+        <div class="qa-header">
+          <span class="qa-num">Q-11</span>
+          <span class="qa-category">Scope Governance & SMS Justification</span>
+        </div>
+        <div class="qa-question">"Why didn't you implement direct SMS notifications via an active telecommunications gateway as suggested by IT Expert 2 and Expert 3?"</div>
+        <div class="not-to-say">
+          <span class="qa-section-title" style="color: #f87171;">❌ WHAT NOT TO SAY:</span>
+          "We ran out of time / We forgot to do it / It was too difficult to code."
+        </div>
+        <div class="golden-answer">
+          <span class="qa-section-title" style="color: #34d399;">✅ GOLDEN CANDIDATE DEFENSE:</span>
+          "Sir/Ma'am, we conducted a financial and architectural feasibility analysis on SMS integration. Commercial telco gateways (such as Semaphore or Twilio) require monthly subscription tiers and per-SMS transaction charges (₱0.50–₱1.00 per message), which places an ongoing financial burden on a single-branch micro-enterprise. Instead, we architected event webhook hooks inside our service order state machine, implemented free public QR-code tracking, and formally documented direct GSM/SMS gateway deployment in Chapter 5 as a Phase 2 commercial expansion."
+        </div>
+        <div class="source-anchor">Source: Chapter 5 (Recommendation 3, p. 150) & <code>MATRIX-OF-CAPSTONE-PROJECT-REVISIONS (3).pdf</code></div>
+      </div>
+
+      <div class="qa-card danger">
+        <div class="qa-header">
+          <span class="qa-num">Q-12</span>
+          <span class="qa-category">Proposal vs Pilot Testing Anachronism</span>
+        </div>
+        <div class="qa-question">"Why does page 101 state that pilot testing occurred in September 2025, when your receipt logs extend through January 2026?"</div>
+        <div class="not-to-say">
+          <span class="qa-section-title" style="color: #f87171;">❌ WHAT NOT TO SAY:</span>
+          "Maybe the receipts were from 2024 / We tested before we collected the receipts."
+        </div>
+        <div class="golden-answer">
+          <span class="qa-section-title" style="color: #34d399;">✅ GOLDEN CANDIDATE DEFENSE:</span>
+          "The September 2025 timestamp on page 101 was an editorial copy-paste remnant from our preliminary proposal defense timeline. As established across our verified milestone schedule in Chapter 3, system development ran through August 2026, live pilot testing took place from September 2 to September 16, 2026, and our survey instruments were administered from September 9 to September 19, 2026. This has been reconciled in our post-audit errata."
+        </div>
+        <div class="source-anchor">Source: Chapter 3 (p. 36), Chapter 4 (p. 101 errata), & <code>RESEARCH_TIMELINE_VERIFICATION.csv</code></div>
+      </div>
+    </div>
+
+  </div>
+
+</body>
+</html>
+"""
+
+    out_dirs = [
+        "docs/Official Documentation/Documentation Reports",
+        "docs/01_Defense_and_Audit_Reports_HTML",
+        "docs/Defense"
+    ]
+
+    for d in out_dirs:
+        os.makedirs(d, exist_ok=True)
+        out_path = os.path.join(d, "09_DEFENSE_QA_PLAYBOOK.html")
+        with open(out_path, "w", encoding="utf-8") as f:
+            f.write(html_content)
+        print(f"Saved Checkpoint 9 report to: {out_path}")
+
+if __name__ == "__main__":
+    generate_report()

@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shoelotskey ML Methodology & Evaluation Evidence Report</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        code, pre, .font-mono { font-family: 'JetBrains Mono', monospace; }
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white !important; padding: 0 !important; }
+            .page-break { page-break-before: always; }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased p-4 sm:p-8">
+    <div class="max-w-6xl mx-auto space-y-6">
+
+        <!-- ========================================== -->
+        <!-- HEADER & CAPSTONE DEFENSE CONTEXT BANNER   -->
+        <!-- ========================================== -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 pb-5">
+                <div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="px-3 py-1 bg-red-100 text-red-700 rounded-full text-xs font-black uppercase tracking-wider">
+                            Capstone Thesis Defense Artifact
+                        </span>
+                        <span class="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-black uppercase tracking-wider">
+                            Methodology & Empirical Evidence
+                        </span>
+                    </div>
+                    <h1 class="text-2xl sm:text-3xl font-black text-slate-900 mt-2">
+                        Machine Learning Methodology & Validation Evidence Report
+                    </h1>
+                    <p class="text-sm text-slate-500 mt-1">
+                        Dual-Dataset Evolution: From 119 Empirical Paper Claim Slips to 10,000 Chairperson-Directed Operational Records
+                    </p>
+                </div>
+                <div class="text-right sm:border-l sm:border-slate-200 sm:pl-6 text-xs text-slate-500 space-y-1 shrink-0">
+                    <div><strong>System:</strong> Shoelotskey SMS</div>
+                    <div><strong>Institution:</strong> Capstone Project Defense</div>
+                    <div><strong>Chairperson Directive:</strong> October 2026</div>
+                    <div><strong>Model Status:</strong> <span class="text-emerald-700 font-bold">FROZEN & VERIFIED</span></div>
+                </div>
+            </div>
+
+            <!-- EXECUTIVE TAKEAWAY METRIC CARDS -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+                <div class="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                    <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Dataset A (Empirical)</span>
+                    <p class="text-2xl font-black text-slate-900 mt-1">119 Orders</p>
+                    <span class="text-[11px] text-slate-500">Historical Paper Receipts (Order-to-Claim)</span>
+                </div>
+                <div class="p-4 bg-blue-50 rounded-xl border border-blue-200">
+                    <span class="text-[11px] font-bold text-blue-700 uppercase tracking-wider">Dataset B (Simulated)</span>
+                    <p class="text-2xl font-black text-blue-900 mt-1">10,000 Orders</p>
+                    <span class="text-[11px] text-blue-700">Chairperson-Approved Operational Target</span>
+                </div>
+                <div class="p-4 bg-emerald-50 rounded-xl border border-emerald-200">
+                    <span class="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">Final Test Error (MAE)</span>
+                    <p class="text-2xl font-black text-emerald-700 mt-1">0.0815 Days</p>
+                    <span class="text-[11px] text-emerald-600">≈ 1.96 Hours Across 1,500 Test Cases</span>
+                </div>
+                <div class="p-4 bg-purple-50 rounded-xl border border-purple-200">
+                    <span class="text-[11px] font-bold text-purple-700 uppercase tracking-wider">±1-Day Tolerance</span>
+                    <p class="text-2xl font-black text-purple-700 mt-1">97.20%</p>
+                    <span class="text-[11px] text-purple-600">1,458 / 1,500 Within ±24 Hours</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- ======================================================== -->
+        <!-- EXECUTIVE NARRATIVE: THE EVOLUTION & CHAIRPERSON DIRECTIVE -->
+        <!-- ======================================================== -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8 space-y-4">
+            <div class="flex items-center gap-2 border-b border-slate-100 pb-3">
+                <span class="h-3 w-1.5 bg-red-600 rounded-full"></span>
+                <h2 class="text-lg font-black text-slate-900 uppercase tracking-wide">
+                    Executive Narrative: Why the Methodology Evolved
+                </h2>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs text-slate-700 leading-relaxed">
+                <div class="bg-amber-50/70 border border-amber-200 rounded-xl p-4 space-y-2">
+                    <h3 class="font-black text-amber-900 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                        1. The Problem with Dataset A (N = 119 Empirical Orders)
+                    </h3>
+                    <p>
+                        The development team initially gathered <strong>119 human-verified historical paper claim slips</strong> from Shoelotskey. The available recorded target on these slips was <strong>Claim Date minus Date Received</strong>.
+                    </p>
+                    <p>
+                        When machine learning models were trained on this data, the best candidate (Random Forest) achieved an MAE of <strong>8.35 days</strong> and a 5-day tolerance accuracy of only <strong>42.3%</strong>.
+                    </p>
+                    <p class="font-semibold text-amber-950">
+                        <strong>Root Cause:</strong> Shoes were completed and sitting ready on the shop shelf within 1 to 25 days, but customers frequently did not claim them until weeks or months later (some claiming after 30, 45, or 60+ days). The models were learning human customer pickup habits rather than actual repair duration.
+                    </p>
+                </div>
+
+                <div class="bg-blue-50/70 border border-blue-200 rounded-xl p-4 space-y-2">
+                    <h3 class="font-black text-blue-900 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                        2. The Chairperson's Directive & Solution (Dataset B)
+                    </h3>
+                    <p>
+                        During capstone research review, the <strong>thesis committee chairperson and faculty panel</strong> explicitly pointed out:
+                    </p>
+                    <blockquote class="border-l-2 border-blue-500 pl-3 italic text-blue-950 font-medium">
+                        “Predicting customer pickup behavior is outside shop operational control. The service management system must predict Ready-for-Release Date (when the shop finishes the shoes), not customer claiming latency. Furthermore, 119 records lack the statistical support for complex multi-pair and rush permutations.”
+                    </blockquote>
+                    <p>
+                        The chairperson instructed the team to generate <strong>Dataset B (10,000 simulated operational records)</strong> using verified shop business rules, non-additive service tiers, pair-level max rules, rush fee acceleration, and calendar rollovers.
+                    </p>
+                    <p class="font-semibold text-blue-950">
+                        <strong>Methodological Preservation:</strong> Dataset A was NOT deleted. It is preserved in the thesis as the empirical historical baseline of customer pickup latency, while Dataset B is the authorized operational dataset.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ======================================================== -->
+        <!-- CHAPTER 1: DATASET A EMPIRICAL BENCHMARK (N = 119)        -->
+        <!-- ======================================================== -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="p-5 border-b border-slate-200 bg-slate-50/80 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                <div>
+                    <h2 class="text-sm font-black text-slate-900 uppercase tracking-wide">
+                        Chapter 1: Dataset A — Empirical Order-to-Claim Benchmark (N = 119)
+                    </h2>
+                    <p class="text-xs text-slate-500 mt-0.5">
+                        Evaluation on 26 locked temporal holdout orders (Jan 2 – Jan 27, 2026) extracted from authenticated claim receipts.
+                    </p>
+                </div>
+                <span class="text-xs font-mono bg-white px-2.5 py-1 rounded border border-slate-200 text-slate-600 shrink-0">
+                    Target: (Claim Date − Date Received)
+                </span>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                        <tr class="bg-slate-100 text-slate-700 uppercase text-[10px] font-extrabold border-b border-slate-200">
+                            <th class="py-3 px-4">Model / Benchmark</th>
+                            <th class="py-3 px-4 text-center">MAE</th>
+                            <th class="py-3 px-4 text-center">RMSE</th>
+                            <th class="py-3 px-4 text-center">R²</th>
+                            <th class="py-3 px-4 text-center">MedAE</th>
+                            <th class="py-3 px-4 text-center">±1 Day (%)</th>
+                            <th class="py-3 px-4 text-center">±2 Days (%)</th>
+                            <th class="py-3 px-4 text-center">±3 Days (%)</th>
+                            <th class="py-3 px-4 text-center text-red-700 font-black">±5 Days (%)</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 font-mono">
+                        <tr class="hover:bg-slate-50">
+                            <td class="py-2.5 px-4 font-sans font-bold text-slate-900">Mean Baseline</td>
+                            <td class="py-2.5 px-4 text-center">9.34 d</td>
+                            <td class="py-2.5 px-4 text-center">10.13 d</td>
+                            <td class="py-2.5 px-4 text-center">-0.0006</td>
+                            <td class="py-2.5 px-4 text-center">9.50 d</td>
+                            <td class="py-2.5 px-4 text-center">3.9%</td>
+                            <td class="py-2.5 px-4 text-center">3.9%</td>
+                            <td class="py-2.5 px-4 text-center">7.7%</td>
+                            <td class="py-2.5 px-4 text-center font-bold text-red-600">11.5%</td>
+                        </tr>
+                        <tr class="hover:bg-slate-50">
+                            <td class="py-2.5 px-4 font-sans font-bold text-slate-900">Median Baseline</td>
+                            <td class="py-2.5 px-4 text-center">8.96 d</td>
+                            <td class="py-2.5 px-4 text-center">10.36 d</td>
+                            <td class="py-2.5 px-4 text-center">-0.0469</td>
+                            <td class="py-2.5 px-4 text-center">8.50 d</td>
+                            <td class="py-2.5 px-4 text-center">7.7%</td>
+                            <td class="py-2.5 px-4 text-center">7.7%</td>
+                            <td class="py-2.5 px-4 text-center">15.4%</td>
+                            <td class="py-2.5 px-4 text-center font-bold text-red-600">34.6%</td>
+                        </tr>
+                        <tr class="hover:bg-slate-50 bg-blue-50/30">
+                            <td class="py-2.5 px-4 font-sans font-bold text-blue-900">Shop Business Rules (Official Sched)</td>
+                            <td class="py-2.5 px-4 text-center">6.62 d</td>
+                            <td class="py-2.5 px-4 text-center">8.45 d</td>
+                            <td class="py-2.5 px-4 text-center text-emerald-700 font-bold">0.3033</td>
+                            <td class="py-2.5 px-4 text-center">6.00 d</td>
+                            <td class="py-2.5 px-4 text-center">23.1%</td>
+                            <td class="py-2.5 px-4 text-center">30.8%</td>
+                            <td class="py-2.5 px-4 text-center">38.5%</td>
+                            <td class="py-2.5 px-4 text-center font-bold text-red-600">42.3%</td>
+                        </tr>
+                        <tr class="hover:bg-slate-50">
+                            <td class="py-2.5 px-4 font-sans font-bold text-slate-900">Linear Regression</td>
+                            <td class="py-2.5 px-4 text-center">18.50 d</td>
+                            <td class="py-2.5 px-4 text-center">20.51 d</td>
+                            <td class="py-2.5 px-4 text-center">-3.1065</td>
+                            <td class="py-2.5 px-4 text-center">17.11 d</td>
+                            <td class="py-2.5 px-4 text-center">0.0%</td>
+                            <td class="py-2.5 px-4 text-center">0.0%</td>
+                            <td class="py-2.5 px-4 text-center">0.0%</td>
+                            <td class="py-2.5 px-4 text-center font-bold text-red-600">7.7%</td>
+                        </tr>
+                        <tr class="hover:bg-slate-50">
+                            <td class="py-2.5 px-4 font-sans font-bold text-slate-900">Decision Tree</td>
+                            <td class="py-2.5 px-4 text-center">10.23 d</td>
+                            <td class="py-2.5 px-4 text-center">13.29 d</td>
+                            <td class="py-2.5 px-4 text-center">-0.7237</td>
+                            <td class="py-2.5 px-4 text-center">7.50 d</td>
+                            <td class="py-2.5 px-4 text-center">19.2%</td>
+                            <td class="py-2.5 px-4 text-center">23.1%</td>
+                            <td class="py-2.5 px-4 text-center">26.9%</td>
+                            <td class="py-2.5 px-4 text-center font-bold text-red-600">42.3%</td>
+                        </tr>
+                        <tr class="hover:bg-slate-50 bg-red-50/40">
+                            <td class="py-2.5 px-4 font-sans font-bold text-red-900 flex items-center gap-1.5">
+                                Random Forest Regressor <span class="px-1.5 py-0.5 bg-red-600 text-white rounded text-[9px] font-black uppercase">Candidate</span>
+                            </td>
+                            <td class="py-2.5 px-4 text-center font-bold text-red-700">8.35 d</td>
+                            <td class="py-2.5 px-4 text-center">10.19 d</td>
+                            <td class="py-2.5 px-4 text-center">-0.0125</td>
+                            <td class="py-2.5 px-4 text-center">8.01 d</td>
+                            <td class="py-2.5 px-4 text-center">11.5%</td>
+                            <td class="py-2.5 px-4 text-center">23.1%</td>
+                            <td class="py-2.5 px-4 text-center">30.8%</td>
+                            <td class="py-2.5 px-4 text-center font-bold text-red-600">42.3%</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="p-4 bg-slate-50 border-t border-slate-200 text-xs text-slate-600 leading-relaxed">
+                <strong>Key Methodological Conclusion from Dataset A:</strong> While Random Forest reduced MAE by 0.78 days over the baseline, its accuracy at ±5 days plateaued at 42.3% (falling short of the institutional 85% requirement). This empirical finding proved that historical claim receipts reflect customer collection behavior rather than shop service efficiency.
+            </div>
+        </div>
+
+        <!-- ======================================================== -->
+        <!-- CHAPTER 2: DATASET B PARTITIONING & FEATURE SET C        -->
+        <!-- ======================================================== -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8 space-y-5">
+            <div class="flex items-center gap-2 border-b border-slate-100 pb-3">
+                <span class="h-3 w-1.5 bg-red-600 rounded-full"></span>
+                <h2 class="text-lg font-black text-slate-900 uppercase tracking-wide">
+                    Chapter 2: Dataset B Operational Simulation Design (N = 10,000)
+                </h2>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                    <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">70% Training Set</span>
+                    <p class="text-xl font-black text-slate-900">7,000 Orders</p>
+                    <p class="text-[11px] text-slate-500 font-mono">dataset_b_train_7000.csv</p>
+                    <p class="text-[11px] text-slate-600 mt-2">Exclusively used to train all candidate models and perform hyperparameter grid searches.</p>
+                </div>
+
+                <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                    <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">15% Validation Set</span>
+                    <p class="text-xl font-black text-slate-900">1,500 Orders</p>
+                    <p class="text-[11px] text-slate-500 font-mono">dataset_b_validation_1500.csv</p>
+                    <p class="text-[11px] text-slate-600 mt-2">Used strictly to evaluate, compare, and select the winning candidate model.</p>
+                </div>
+
+                <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                    <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">15% Sealed Final Test</span>
+                    <p class="text-xl font-black text-slate-900">1,500 Orders</p>
+                    <p class="text-[11px] text-slate-500 font-mono">dataset_b_test_1500.csv</p>
+                    <p class="text-[11px] text-slate-600 mt-2">Remained completely sealed until model selection was locked; evaluated exactly once.</p>
+                </div>
+            </div>
+
+            <!-- FEATURE SET C -->
+            <div class="bg-slate-50 rounded-xl border border-slate-200 p-4 space-y-2">
+                <span class="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                    Feature Set C — 12 Operational Predictors (Zero Leakage)
+                </span>
+                <p class="text-xs text-slate-600">
+                    Feature Set C was engineered to strictly represent information known at the intake counter. It intentionally excludes internal rule-tier labels, exact calendar days, and closure lookup tables to prevent synthetic data leakage:
+                </p>
+                <div class="flex flex-wrap gap-1.5 pt-1 font-mono text-[11px]">
+                    <span class="px-2 py-1 bg-white border border-slate-200 rounded font-semibold text-slate-800">1. total_pairs</span>
+                    <span class="px-2 py-1 bg-white border border-slate-200 rounded font-semibold text-slate-800">2. basic_cleaning_qty</span>
+                    <span class="px-2 py-1 bg-white border border-slate-200 rounded font-semibold text-slate-800">3. full_reglue_qty</span>
+                    <span class="px-2 py-1 bg-white border border-slate-200 rounded font-semibold text-slate-800">4. minor_reglue_qty</span>
+                    <span class="px-2 py-1 bg-white border border-slate-200 rounded font-semibold text-slate-800">5. unyellowing_qty</span>
+                    <span class="px-2 py-1 bg-white border border-slate-200 rounded font-semibold text-slate-800">6. minor_restoration_qty</span>
+                    <span class="px-2 py-1 bg-white border border-slate-200 rounded font-semibold text-slate-800">7. color_renewal_qty</span>
+                    <span class="px-2 py-1 bg-white border border-slate-200 rounded font-semibold text-slate-800">8. rush_indicator</span>
+                    <span class="px-2 py-1 bg-white border border-slate-200 rounded font-semibold text-slate-800">9. distinct_service_types</span>
+                    <span class="px-2 py-1 bg-white border border-slate-200 rounded font-semibold text-slate-800">10. total_service_applications</span>
+                    <span class="px-2 py-1 bg-white border border-slate-200 rounded font-semibold text-slate-800">11. intake_day_of_week</span>
+                    <span class="px-2 py-1 bg-white border border-slate-200 rounded font-semibold text-slate-800">12. intake_month</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- ======================================================== -->
+        <!-- CHAPTER 3: THREE-MODEL CANDIDATE VALIDATION               -->
+        <!-- ======================================================== -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="p-5 border-b border-slate-200 bg-slate-50/80 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                <div>
+                    <h2 class="text-sm font-black text-slate-900 uppercase tracking-wide">
+                        Chapter 3: Three-Model Candidate Validation Comparison (N = 1,500)
+                    </h2>
+                    <p class="text-xs text-slate-500 mt-0.5">
+                        Trained on 7,000 training records and evaluated on untouched validation partition (Phase 3A).
+                    </p>
+                </div>
+                <span class="text-xs font-mono bg-white px-2.5 py-1 rounded border border-slate-200 text-slate-600 shrink-0">
+                    Source: dataset_b_phase3a_validation_report.json
+                </span>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                        <tr class="bg-slate-100 text-slate-700 uppercase text-[10px] font-extrabold border-b border-slate-200">
+                            <th class="py-3 px-4">Candidate Model</th>
+                            <th class="py-3 px-4 text-center">Validation MAE</th>
+                            <th class="py-3 px-4 text-center">Validation RMSE</th>
+                            <th class="py-3 px-4 text-center">Validation R²</th>
+                            <th class="py-3 px-4 text-center">MedAE</th>
+                            <th class="py-3 px-4 text-center">±1 Day (%)</th>
+                            <th class="py-3 px-4 text-center">Selection Outcome</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 font-mono">
+                        <tr class="hover:bg-slate-50">
+                            <td class="py-2.5 px-4 font-sans font-bold text-slate-900">Linear Regression</td>
+                            <td class="py-2.5 px-4 text-center text-red-600 font-bold">2.4764 d</td>
+                            <td class="py-2.5 px-4 text-center">3.1062 d</td>
+                            <td class="py-2.5 px-4 text-center">0.8619</td>
+                            <td class="py-2.5 px-4 text-center">1.9708 d</td>
+                            <td class="py-2.5 px-4 text-center">20.33%</td>
+                            <td class="py-2.5 px-4 text-center font-sans font-medium text-slate-400">Eliminated (Underfitting)</td>
+                        </tr>
+                        <tr class="hover:bg-slate-50 bg-amber-50/20">
+                            <td class="py-2.5 px-4 font-sans font-bold text-slate-900">Decision Tree Regressor (depth=8)</td>
+                            <td class="py-2.5 px-4 text-center text-emerald-700 font-bold">0.0616 d</td>
+                            <td class="py-2.5 px-4 text-center">0.3093 d</td>
+                            <td class="py-2.5 px-4 text-center">0.9986</td>
+                            <td class="py-2.5 px-4 text-center">0.0000 d</td>
+                            <td class="py-2.5 px-4 text-center">97.53%</td>
+                            <td class="py-2.5 px-4 text-center font-sans font-medium text-amber-700">Lowest MAE / Higher RMSE</td>
+                        </tr>
+                        <tr class="hover:bg-slate-50 bg-emerald-50/40">
+                            <td class="py-2.5 px-4 font-sans font-bold text-emerald-950 flex items-center gap-1.5">
+                                Random Forest Regressor (trees=300, depth=12)
+                                <span class="px-1.5 py-0.5 bg-emerald-600 text-white rounded text-[9px] font-black uppercase">Selected</span>
+                            </td>
+                            <td class="py-2.5 px-4 text-center font-bold text-emerald-800">0.0641 d</td>
+                            <td class="py-2.5 px-4 text-center font-bold text-emerald-700">0.2994 d</td>
+                            <td class="py-2.5 px-4 text-center font-bold text-emerald-700">0.9987</td>
+                            <td class="py-2.5 px-4 text-center">0.0000 d</td>
+                            <td class="py-2.5 px-4 text-center font-bold text-emerald-700">97.73%</td>
+                            <td class="py-2.5 px-4 text-center font-sans font-black text-emerald-700">SELECTED & FROZEN</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- MODEL SELECTION RATIONALE CALLOUT -->
+            <div class="p-5 bg-slate-50 border-t border-slate-200 text-xs text-slate-700 space-y-2">
+                <div class="font-bold text-slate-900 uppercase tracking-wide flex items-center gap-1">
+                    <span class="w-2 h-2 rounded-full bg-emerald-600"></span>
+                    Model Selection Decision Rationale (Preserved from Phase 3A):
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                    <div>
+                        <strong class="text-slate-900">1. Full Transparency Regarding MAE:</strong>
+                        <p class="mt-0.5 text-slate-600">
+                            The Decision Tree achieved an MAE of 0.0616 days, which was marginally lower than Random Forest's 0.0641 days (a difference of only ≈ 3.6 minutes). The research documentation explicitly acknowledges this and does <em>not</em> falsely claim Random Forest had the lowest MAE.
+                        </p>
+                    </div>
+                    <div>
+                        <strong class="text-slate-900">2. Why Random Forest was Selected (Decisive Criteria):</strong>
+                        <ul class="list-disc pl-4 mt-0.5 space-y-1 text-slate-600">
+                            <li><strong>Lowest RMSE (0.2994 days):</strong> Outperformed Decision Tree (0.3093 days), penalizing large tail errors from multi-day holiday rollovers.</li>
+                            <li><strong>Highest Variance Explained (R² = 0.9987):</strong> Highest explanatory power on operational duration.</li>
+                            <li><strong>Ensemble Generalization:</strong> A single tree carries high variance. Random Forest averages 300 decorrelated trees, mitigating overfitting risk across edge cases.</li>
+                            <li><strong>Predeclared Tie-Breaker:</strong> Specification predeclared RMSE as decisive when MAE values were within ±0.005 days.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ======================================================== -->
+        <!-- CHAPTER 4: FROZEN FINAL TEST EVALUATION (N = 1,500)       -->
+        <!-- ======================================================== -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8 space-y-5">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-100 pb-3">
+                <div class="flex items-center gap-2">
+                    <span class="h-3 w-1.5 bg-red-600 rounded-full"></span>
+                    <h2 class="text-lg font-black text-slate-900 uppercase tracking-wide">
+                        Chapter 4: Locked Final Test Results on Unseen Partition (N = 1,500)
+                    </h2>
+                </div>
+                <span class="text-xs font-mono bg-slate-100 px-2.5 py-1 rounded text-slate-600">
+                    Model SHA-256: 9ce390ca5f0197fe...
+                </span>
+            </div>
+
+            <p class="text-xs text-slate-600 leading-relaxed">
+                The locked Random Forest model (<code class="font-mono bg-slate-100 px-1 py-0.5 rounded">dataset_b_selected_model.pkl</code>) was evaluated exactly once on the sealed 1,500 test records without unsealing, retraining, or threshold tuning.
+            </p>
+
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 text-center">
+                    <span class="text-[11px] font-bold text-slate-500 uppercase">Test MAE</span>
+                    <p class="text-2xl font-black text-slate-900 mt-1">0.0815 d</p>
+                    <span class="text-[10px] text-slate-500">≈ 1.96 Hours Error</span>
+                </div>
+                <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 text-center">
+                    <span class="text-[11px] font-bold text-slate-500 uppercase">Test RMSE</span>
+                    <p class="text-2xl font-black text-slate-900 mt-1">0.4042 d</p>
+                    <span class="text-[10px] text-slate-500">Penalizes Holiday Clustered Skew</span>
+                </div>
+                <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 text-center">
+                    <span class="text-[11px] font-bold text-slate-500 uppercase">Test R²</span>
+                    <p class="text-2xl font-black text-slate-900 mt-1">0.9976</p>
+                    <span class="text-[10px] text-slate-500">99.76% Variance Explained</span>
+                </div>
+                <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 text-center">
+                    <span class="text-[11px] font-bold text-slate-500 uppercase">Test MedAE / Bias</span>
+                    <p class="text-2xl font-black text-slate-900 mt-1">0.0000 d</p>
+                    <span class="text-[10px] text-slate-500">Bias = -0.0018 Days (Near-Zero)</span>
+                </div>
+            </div>
+
+            <!-- TOLERANCE DISTRIBUTION ACCURACY TABLE -->
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                        <tr class="bg-slate-100 text-slate-700 uppercase text-[10px] font-extrabold border-b border-slate-200">
+                            <th class="py-2.5 px-4">Tolerance Window</th>
+                            <th class="py-2.5 px-4 text-center">Test Orders Within Window</th>
+                            <th class="py-2.5 px-4 text-center">Accuracy (%)</th>
+                            <th class="py-2.5 px-4">Operational Business Significance</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 font-mono">
+                        <tr class="hover:bg-slate-50">
+                            <td class="py-2.5 px-4 font-sans font-bold text-slate-900">Within ±1 Day (±24 Hours)</td>
+                            <td class="py-2.5 px-4 text-center">1,458 / 1,500</td>
+                            <td class="py-2.5 px-4 text-center font-bold text-emerald-700">97.20%</td>
+                            <td class="py-2.5 px-4 font-sans text-slate-600">Far exceeds the institutional 85% capstone accuracy requirement.</td>
+                        </tr>
+                        <tr class="hover:bg-slate-50">
+                            <td class="py-2.5 px-4 font-sans font-bold text-slate-900">Within ±2 Days (±48 Hours)</td>
+                            <td class="py-2.5 px-4 text-center">1,484 / 1,500</td>
+                            <td class="py-2.5 px-4 text-center font-bold text-emerald-700">98.93%</td>
+                            <td class="py-2.5 px-4 font-sans text-slate-600">Captures near-total volume across standard service tiers.</td>
+                        </tr>
+                        <tr class="hover:bg-slate-50">
+                            <td class="py-2.5 px-4 font-sans font-bold text-slate-900">Within ±3 Days (±72 Hours)</td>
+                            <td class="py-2.5 px-4 text-center">1,493 / 1,500</td>
+                            <td class="py-2.5 px-4 text-center font-bold text-emerald-700">99.53%</td>
+                            <td class="py-2.5 px-4 font-sans text-slate-600">Absorbs Sunday weekend boundary rollovers.</td>
+                        </tr>
+                        <tr class="hover:bg-slate-50 bg-emerald-50/30">
+                            <td class="py-2.5 px-4 font-sans font-bold text-emerald-950">Within ±5 Days (±120 Hours)</td>
+                            <td class="py-2.5 px-4 text-center font-bold">1,500 / 1,500</td>
+                            <td class="py-2.5 px-4 text-center font-bold text-emerald-700">100.00%</td>
+                            <td class="py-2.5 px-4 font-sans text-emerald-900 font-medium">100% of test records fall within 5 days, including statutory Holy Week multi-day closures.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ======================================================== -->
+        <!-- CHAPTER 5: DUAL-DATASET SYNTHESIS TABLE (A vs B)          -->
+        <!-- ======================================================== -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="p-5 border-b border-slate-200 bg-slate-50/80">
+                <h2 class="text-sm font-black text-slate-900 uppercase tracking-wide">
+                    Chapter 5: Dual-Dataset Methodological Comparison (For Thesis Chapter 3 &amp; 4)
+                </h2>
+                <p class="text-xs text-slate-500 mt-0.5">
+                    Clear side-by-side presentation showing why both datasets are essential and how they serve distinct capstone research roles.
+                </p>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                        <tr class="bg-slate-100 text-slate-700 uppercase text-[10px] font-extrabold border-b border-slate-200">
+                            <th class="py-3 px-4 w-1/4">Comparison Dimension</th>
+                            <th class="py-3 px-4 w-3/8 text-amber-900 bg-amber-50/40">Dataset A (Empirical Benchmark)</th>
+                            <th class="py-3 px-4 w-3/8 text-blue-900 bg-blue-50/40">Dataset B (Operational Target)</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 text-xs">
+                        <tr class="hover:bg-slate-50">
+                            <td class="py-2.5 px-4 font-bold text-slate-900">Total Sample Size</td>
+                            <td class="py-2.5 px-4 bg-amber-50/10 font-mono">N = 119 physical receipts</td>
+                            <td class="py-2.5 px-4 bg-blue-50/10 font-mono font-bold text-blue-950">N = 10,000 simulated orders</td>
+                        </tr>
+                        <tr class="hover:bg-slate-50">
+                            <td class="py-2.5 px-4 font-bold text-slate-900">Evaluation Target</td>
+                            <td class="py-2.5 px-4 bg-amber-50/10">Order-to-Claim (Customer Pickup Latency)</td>
+                            <td class="py-2.5 px-4 bg-blue-50/10 font-bold text-blue-950">Order-to-Ready-for-Release (Shop Completion)</td>
+                        </tr>
+                        <tr class="hover:bg-slate-50">
+                            <td class="py-2.5 px-4 font-bold text-slate-900">Target Mechanism</td>
+                            <td class="py-2.5 px-4 bg-amber-50/10">Includes customer unpunctuality (30–60+ days)</td>
+                            <td class="py-2.5 px-4 bg-blue-50/10">Simulated shop tiers, pair max, rush, closures</td>
+                        </tr>
+                        <tr class="hover:bg-slate-50">
+                            <td class="py-2.5 px-4 font-bold text-slate-900">Origin / Authority</td>
+                            <td class="py-2.5 px-4 bg-amber-50/10">Shoelotskey manual paper receipts</td>
+                            <td class="py-2.5 px-4 bg-blue-50/10 font-medium text-blue-900">Directed by Thesis Chairperson &amp; Faculty Panel</td>
+                        </tr>
+                        <tr class="hover:bg-slate-50">
+                            <td class="py-2.5 px-4 font-bold text-slate-900">Candidate RF MAE</td>
+                            <td class="py-2.5 px-4 bg-amber-50/10 font-mono">8.35 days (Holdout Test)</td>
+                            <td class="py-2.5 px-4 bg-blue-50/10 font-mono font-bold text-emerald-700">0.0815 days (Final Test)</td>
+                        </tr>
+                        <tr class="hover:bg-slate-50">
+                            <td class="py-2.5 px-4 font-bold text-slate-900">±1-Day Accuracy</td>
+                            <td class="py-2.5 px-4 bg-amber-50/10 font-mono">11.5%</td>
+                            <td class="py-2.5 px-4 bg-blue-50/10 font-mono font-bold text-emerald-700">97.20%</td>
+                        </tr>
+                        <tr class="hover:bg-slate-50">
+                            <td class="py-2.5 px-4 font-bold text-slate-900">±5-Day Accuracy</td>
+                            <td class="py-2.5 px-4 bg-amber-50/10 font-mono">42.3%</td>
+                            <td class="py-2.5 px-4 bg-blue-50/10 font-mono font-bold text-emerald-700">100.00%</td>
+                        </tr>
+                        <tr class="hover:bg-slate-50">
+                            <td class="py-2.5 px-4 font-bold text-slate-900">Primary Role in Manuscript</td>
+                            <td class="py-2.5 px-4 bg-amber-50/10 font-medium text-amber-950">Empirical Baseline &amp; Proof that Claim Date cannot be predicted due to customer latency.</td>
+                            <td class="py-2.5 px-4 bg-blue-50/10 font-medium text-blue-950">Production ML Model powering the live Ready-for-Release completion estimation feature.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ======================================================== -->
+        <!-- CHAPTER 6: ARTIFACT INVENTORY & CRYPTOGRAPHIC HASHES      -->
+        <!-- ======================================================== -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8 space-y-4">
+            <div class="flex items-center gap-2 border-b border-slate-100 pb-3">
+                <span class="h-3 w-1.5 bg-red-600 rounded-full"></span>
+                <h2 class="text-lg font-black text-slate-900 uppercase tracking-wide">
+                    Chapter 6: Cryptographic Artifact Inventory &amp; Audit Trail
+                </h2>
+            </div>
+            
+            <p class="text-xs text-slate-600">
+                To guarantee academic integrity and ensure these values were generated via programmatic pipeline execution rather than manual manuscript typing, all artifact hashes are recorded below:
+            </p>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-[11px] font-mono">
+                    <thead>
+                        <tr class="bg-slate-100 text-slate-700 uppercase text-[9.5px] font-bold border-b border-slate-200">
+                            <th class="py-2 px-3">File Name</th>
+                            <th class="py-2 px-3">File Size</th>
+                            <th class="py-2 px-3">Cryptographic SHA-256 Hash</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        <tr class="hover:bg-slate-50">
+                            <td class="py-2 px-3 font-bold text-slate-900">dataset_b_selected_model.pkl</td>
+                            <td class="py-2 px-3">3,071,905 B</td>
+                            <td class="py-2 px-3 text-emerald-800 font-bold">9ce390ca5f0197fe0eef86086ccfd78b79b18b37c19eae76fca7d518bbfeac3b</td>
+                        </tr>
+                        <tr class="hover:bg-slate-50">
+                            <td class="py-2 px-3 font-bold text-slate-900">dataset_b_10000.csv</td>
+                            <td class="py-2 px-3">1,662,920 B</td>
+                            <td class="py-2 px-3 text-slate-700">bffe2f45043c97262471fbca02fd2f5a52163735c452f4a25a8045e6977e91bb</td>
+                        </tr>
+                        <tr class="hover:bg-slate-50">
+                            <td class="py-2 px-3 font-bold text-slate-900">dataset_b_train_7000.csv</td>
+                            <td class="py-2 px-3">1,159,941 B</td>
+                            <td class="py-2 px-3 text-slate-700">4dab063f029936a2788454a013539294eff13f29036bff6ba30e9701c45c2aed</td>
+                        </tr>
+                        <tr class="hover:bg-slate-50">
+                            <td class="py-2 px-3 font-bold text-slate-900">dataset_b_validation_1500.csv</td>
+                            <td class="py-2 px-3">255,477 B</td>
+                            <td class="py-2 px-3 text-slate-700">d2dc915946435d85448a3bde6f4981177e8c4ebf710908c3bf8e8fa7c30ed0c3</td>
+                        </tr>
+                        <tr class="hover:bg-slate-50">
+                            <td class="py-2 px-3 font-bold text-slate-900">dataset_b_test_1500.csv</td>
+                            <td class="py-2 px-3">248,614 B</td>
+                            <td class="py-2 px-3 text-slate-700">caaa2774868ce0657020cb1cfb2f153bc2fe56dee99af9cb2c6e38342e906a5f</td>
+                        </tr>
+                        <tr class="hover:bg-slate-50">
+                            <td class="py-2 px-3 font-bold text-slate-900">dataset_b_phase3a_validation_report.json</td>
+                            <td class="py-2 px-3">18,076 B</td>
+                            <td class="py-2 px-3 text-slate-700">1fa803c2c6dddc63007ec1593f72a5d7e535bc4bf655f9564d1bf7007d86bd96</td>
+                        </tr>
+                        <tr class="hover:bg-slate-50">
+                            <td class="py-2 px-3 font-bold text-slate-900">dataset_b_final_test_predictions.csv</td>
+                            <td class="py-2 px-3">81,649 B</td>
+                            <td class="py-2 px-3 text-slate-700">b20ca2e68634ff95602acf7d01afc845ab2a5a1372a61c42ac7236d67c865ca0</td>
+                        </tr>
+                        <tr class="hover:bg-slate-50">
+                            <td class="py-2 px-3 font-bold text-slate-900">dataset_b_final_test_metrics.json</td>
+                            <td class="py-2 px-3">12,992 B</td>
+                            <td class="py-2 px-3 text-slate-700">eb28e40e6adbfd733de7c5af516f7431196231194bb49212606a179221cd6af3</td>
+                        </tr>
+                        <tr class="hover:bg-slate-50">
+                            <td class="py-2 px-3 font-bold text-slate-900">dataset_b_phase3b_final_report_corrected.md</td>
+                            <td class="py-2 px-3">14,820 B</td>
+                            <td class="py-2 px-3 text-slate-700">5ac104c337a5b78eda8ef6a53489f13fe57e44a21fc36490d8403ef554f0291b</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- AUDIT VERIFICATION COMMAND -->
+            <div class="p-3 bg-slate-900 text-slate-200 rounded-xl text-xs space-y-1 font-mono">
+                <span class="text-slate-400 text-[10px] block">// Terminal Command for Panel Hash Verification:</span>
+                <code>python -c "import hashlib; print(hashlib.sha256(open('backend/research_outputs/ml_final/dataset_b_selected_model.pkl','rb').read()).hexdigest())"</code>
+            </div>
+        </div>
+
+        <!-- ======================================================== -->
+        <!-- FOOTER & AUDIT ATTESTATION                               -->
+        <!-- ======================================================== -->
+        <div class="text-center text-xs text-slate-500 py-4 space-y-1">
+            <p><strong>Shoelotskey Service Management System</strong> • Capstone Research &amp; Machine Learning Documentation</p>
+            <p>Report generated directly from immutable repository artifacts. All datasets, models, and predictions remain strictly frozen.</p>
+        </div>
+
+    </div>
+</body>
+</html>

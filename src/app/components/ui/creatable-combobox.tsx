@@ -23,6 +23,7 @@ import {
     removeStoredCustomOption,
     CUSTOM_OPTION_EVENT,
 } from "@/app/lib/customOptions"
+import { stripCyberAttackInput, isCyberAttack } from "@/app/lib/customerValidation"
 
 interface CreatableComboboxProps {
     options: string[]
@@ -32,6 +33,9 @@ interface CreatableComboboxProps {
     searchPlaceholder?: string
     multiple?: boolean
     storageKey?: string
+    id?: string
+    name?: string
+    'aria-label'?: string
 }
 
 export function CreatableCombobox({
@@ -41,6 +45,9 @@ export function CreatableCombobox({
     placeholder = "Select...",
     multiple = false,
     storageKey,
+    id,
+    name,
+    'aria-label': ariaLabel,
 }: CreatableComboboxProps) {
     const [open, setOpen] = React.useState(false)
     const [searchValue, setSearchValue] = React.useState("")
@@ -124,8 +131,8 @@ export function CreatableCombobox({
     }, [combinedOptions, searchValue]);
 
     const commitCustomOption = (text: string) => {
-        const clean = text.trim();
-        if (!clean || clean.toLowerCase() === 'other') return;
+        const clean = stripCyberAttackInput(text.trim());
+        if (!clean || clean.toLowerCase() === 'other' || isCyberAttack(clean)) return;
         if (storageKey) {
             saveStoredCustomOption(storageKey, clean);
         }
@@ -138,12 +145,16 @@ export function CreatableCombobox({
                     <div className="relative">
                         <input
                             ref={inputRef}
+                            id={id}
+                            name={name}
                             type="text"
+                            aria-label={ariaLabel || placeholder}
                             value={searchValue || valueText}
                             readOnly={isFixedValue && !open && valueText !== 'Other'}
                             onChange={(e) => {
-                                setSearchValue(e.target.value)
-                                if (!multiple) onChange(e.target.value)
+                                const sanitizedVal = stripCyberAttackInput(e.target.value);
+                                setSearchValue(sanitizedVal)
+                                if (!multiple) onChange(sanitizedVal)
                                 if (!open) setOpen(true)
                             }}
                             onFocus={() => {
@@ -155,16 +166,18 @@ export function CreatableCombobox({
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter' && searchValue.trim()) {
                                     e.preventDefault();
-                                    const clean = searchValue.trim();
-                                    commitCustomOption(clean);
-                                    if (multiple) {
-                                        if (!selectedOptions.some(s => s.toLowerCase() === clean.toLowerCase())) {
-                                            const newValues = [...selectedOptions, clean];
-                                            onChange(newValues.join(', '));
+                                    const clean = stripCyberAttackInput(searchValue.trim());
+                                    if (clean && !isCyberAttack(clean)) {
+                                        commitCustomOption(clean);
+                                        if (multiple) {
+                                            if (!selectedOptions.some(s => s.toLowerCase() === clean.toLowerCase())) {
+                                                const newValues = [...selectedOptions, clean];
+                                                onChange(newValues.join(', '));
+                                            }
+                                        } else {
+                                            onChange(clean);
+                                            setOpen(false);
                                         }
-                                    } else {
-                                        onChange(clean);
-                                        setOpen(false);
                                     }
                                     setSearchValue("");
                                 }
@@ -180,9 +193,10 @@ export function CreatableCombobox({
                                 <button
                                     type="button"
                                     onClick={handleClear}
-                                    className="p-1 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors"
+                                    aria-label="Clear selection"
+                                    className="min-w-[24px] min-h-[24px] flex items-center justify-center p-1 hover:bg-gray-100 rounded-full text-gray-500 hover:text-gray-700 transition-colors cursor-pointer"
                                 >
-                                    <X size={12} />
+                                    <X size={13} />
                                 </button>
                             )}
                             <button
@@ -192,9 +206,10 @@ export function CreatableCombobox({
                                     e.stopPropagation();
                                     setOpen(!open);
                                 }}
-                                className="p-1 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+                                aria-label="Toggle options"
+                                className="min-w-[24px] min-h-[24px] flex items-center justify-center p-1 hover:bg-gray-100 rounded-full text-gray-500 hover:text-gray-700 transition-colors cursor-pointer"
                             >
-                                <ChevronsUpDown className="h-3 w-3 opacity-50 shrink-0" />
+                                <ChevronsUpDown className="h-3.5 w-3.5 opacity-60 shrink-0" />
                             </button>
                         </div>
                     </div>

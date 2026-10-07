@@ -1,0 +1,6 @@
+attempt_number,account_tested,role,credential_state,expected_status,actual_status,failed_counter_observed,locked_until_timestamp,account_state,passed,notes
+1,qa_lockout_tester,staff,Invalid Password (Attempt 1),401,401,1,None,Active,PASS,"Attempt 1 rejected with 401, counter incremented to 1"
+2,qa_lockout_tester,staff,Invalid Password (Attempt 2),401,401,2,None,Active,PASS,"Attempt 2 rejected with 401, counter incremented to 2"
+3,qa_lockout_tester,staff,Invalid Password (Attempt 3 - Threshold),403,403,3,2026-10-05 21:15:37.500845,Locked (15 mins),PASS,"Lockout triggered: HTTP 403 detail='Too many failed attempts. Account locked for 15 minutes.', locked_until=2026-10-05 21:15:37.500845"
+4,qa_lockout_tester,staff,Subsequent Attempt During Active Lockout,403,403,3,2026-10-05 21:15:37.500845,Locked (15 mins),PASS,Blocked by lockout guard: HTTP 403 detail='Account locked. Try again in 15 minutes.'
+5,admin,admin,Bad Password on Admin Account (Anti-DoS Immunity Check),401,401,0,None,Active (Immune),PASS,Anti-DoS Protection: Admin account is completely immune to lockout

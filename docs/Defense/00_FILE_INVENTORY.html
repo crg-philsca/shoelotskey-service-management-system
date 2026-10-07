@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shoelotskey SMS — Checkpoint 0: Master File Inventory & Artifact Provenance Report</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #0284c7;
+      --primary-dark: #0369a1;
+      --primary-light: #e0f2fe;
+      --accent: #f59e0b;
+      --accent-light: #fef3c7;
+      --success: #10b981;
+      --success-light: #dcfce7;
+      --danger: #ef4444;
+      --danger-light: #fee2e2;
+      --purple: #8b5cf6;
+      --purple-light: #ede9fe;
+      --slate-900: #0f172a;
+      --slate-800: #1e293b;
+      --slate-700: #334155;
+      --slate-600: #475569;
+      --slate-500: #64748b;
+      --slate-100: #f1f5f9;
+      --slate-50: #f8fafc;
+      --border: #e2e8f0;
+      --card-bg: #ffffff;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.08);
+      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: #f8fafc;
+      color: var(--slate-900);
+      line-height: 1.6;
+      padding: 24px 16px;
+    }
+
+    .container {
+      max-width: 1440px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg);
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    .header-banner {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 45%, #0369a1 100%);
+      color: #ffffff;
+      padding: 38px 36px;
+      border-bottom: 4px solid var(--accent);
+    }
+
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .badge-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 14px;
+      border-radius: 9999px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .badge-cp0 { background: rgba(245, 158, 11, 0.25); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.5); }
+    .badge-iso { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); }
+    .badge-audit { background: rgba(56, 189, 248, 0.2); color: #7dd3fc; border: 1px solid rgba(56, 189, 248, 0.4); }
+
+    .header-title {
+      font-size: 2.15rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 10px;
+    }
+
+    .header-subtitle {
+      font-size: 1.02rem;
+      color: #cbd5e1;
+      max-width: 1150px;
+      margin-bottom: 22px;
+      line-height: 1.6;
+    }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+      background: rgba(255, 255, 255, 0.08);
+      padding: 18px 22px;
+      border-radius: var(--radius-md);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      font-size: 0.85rem;
+    }
+
+    .meta-item strong {
+      display: block;
+      color: #94a3b8;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 2px;
+    }
+
+    .meta-item span { color: #f8fafc; font-weight: 600; }
+
+    /* Main Content */
+    .content-body { padding: 36px 34px; }
+
+    h2 {
+      font-size: 1.38rem;
+      font-weight: 800;
+      color: var(--slate-900);
+      margin: 32px 0 16px 0;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    h2:first-of-type { margin-top: 0; }
+
+    h3 {
+      font-size: 1.12rem;
+      font-weight: 700;
+      color: var(--primary-dark);
+      margin: 22px 0 12px 0;
+    }
+
+    p { margin-bottom: 14px; color: var(--slate-700); font-size: 0.93rem; }
+
+    /* Callouts */
+    .callout {
+      padding: 16px 20px;
+      border-radius: var(--radius-md);
+      margin: 18px 0;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      border: 1px solid transparent;
+      font-size: 0.91rem;
+    }
+
+    .callout-success { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
+    .callout-warning { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+    .callout-danger { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+    .callout-info { background: #f0f9ff; border-color: #bae6fd; color: #075985; }
+
+    .callout-icon { font-size: 1.3rem; line-height: 1; flex-shrink: 0; margin-top: 2px; }
+    .callout-content strong { display: block; margin-bottom: 4px; font-size: 0.95rem; }
+
+    /* KPI Cards */
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 16px;
+      margin: 20px 0 28px 0;
+    }
+
+    .kpi-card {
+      background: var(--slate-50);
+      border-radius: var(--radius-md);
+      padding: 18px 20px;
+      border: 1px solid var(--border);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .kpi-card::before { content: ''; position: absolute; top: 0; left: 0; width: 5px; height: 100%; }
+    .kpi-card.blue::before { background: var(--primary); }
+    .kpi-card.green::before { background: var(--success); }
+    .kpi-card.amber::before { background: var(--accent); }
+    .kpi-card.purple::before { background: var(--purple); }
+
+    .kpi-title { font-size: 0.74rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--slate-500); margin-bottom: 5px; }
+    .kpi-value { font-size: 1.7rem; font-weight: 800; color: var(--slate-900); line-height: 1.1; margin-bottom: 4px; }
+    .kpi-sub { font-size: 0.78rem; color: var(--slate-600); }
+
+    /* Tables */
+    .table-responsive {
+      overflow-x: auto;
+      margin: 18px 0 24px 0;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
+    }
+
+    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.88rem; }
+    thead { background: #f1f5f9; color: var(--slate-800); }
+    th { padding: 12px 14px; font-weight: 700; font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 2px solid var(--border); }
+    td { padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: top; color: var(--slate-700); }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f8fafc; }
+
+    /* Badges */
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .tag-success { background: var(--success-light); color: #065f46; border: 1px solid #a7f3d0; }
+    .tag-warning { background: var(--accent-light); color: #92400e; border: 1px solid #fde68a; }
+    .tag-danger { background: var(--danger-light); color: #991b1b; border: 1px solid #fecaca; }
+    .tag-info { background: var(--primary-light); color: #075985; border: 1px solid #bae6fd; }
+    .tag-purple { background: var(--purple-light); color: #5b21b6; border: 1px solid #ddd6fe; }
+
+    pre, code { font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; }
+    code:not(pre code) { background: #f1f5f9; color: #0369a1; padding: 2px 6px; border-radius: 4px; border: 1px solid #e2e8f0; }
+
+    .footer {
+      background: #f8fafc;
+      padding: 20px 34px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 14px;
+      font-size: 0.82rem;
+      color: var(--slate-500);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    
+    <header class="header-banner">
+      <div class="badge-row">
+        <span class="badge-pill badge-cp0">CHECKPOINT 0 — DISCOVERY AUDIT COMPLETE</span>
+        <span class="badge-pill badge-iso">ISO/IEC 25010:2023 Validated</span>
+        <span class="badge-pill badge-audit">RULE: EVIDENCE BEFORE ASSUMPTION</span>
+      </div>
+
+      <h1 class="header-title">Checkpoint 0: Master File Inventory & Artifact Provenance Report</h1>
+      <p class="header-subtitle">
+        Comprehensive pre-revision inventory auditing all assets across the Shoelotskey Service Management System workspace. Strictly identifies latest manuscript and presentation versions, raw empirical research datasets, evaluation instruments, school guidelines, duplicate copies, and establishes the authoritative Source-of-Truth hierarchy.
+      </p>
+
+      <div class="meta-grid">
+        <div class="meta-item">
+          <strong>Mission Phase</strong>
+          <span>Checkpoint 0: Discovery & File Inventory</span>
+        </div>
+        <div class="meta-item">
+          <strong>Total Discovered Assets</strong>
+          <span>135+ Tracked Files (Excl. node_modules/venv)</span>
+        </div>
+        <div class="meta-item">
+          <strong>Lead Researchers</strong>
+          <span>Angeles, C. R. G. · Gravino, K. C. · Sedanto, M. D.</span>
+        </div>
+        <div class="meta-item">
+          <strong>Academic Institution</strong>
+          <span>National Aviation Academy of the Philippines (PhilSCA) — ICS</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="content-body">
+
+      <!-- Executive Overview -->
+      <div class="kpi-row">
+        <div class="kpi-card green">
+          <div class="kpi-title">Latest Manuscript</div>
+          <div class="kpi-value">155 Pages</div>
+          <div class="kpi-sub">Complete Chapters 1 to 5 (Full Research Text)</div>
+        </div>
+        <div class="kpi-card blue">
+          <div class="kpi-title">Latest Defense Deck</div>
+          <div class="kpi-value">17 Slides</div>
+          <div class="kpi-sub">Dated Sept 22, 2026 (Active Version)</div>
+        </div>
+        <div class="kpi-card amber">
+          <div class="kpi-title">Raw Research Data</div>
+          <div class="kpi-value">100% Intact</div>
+          <div class="kpi-sub">TAM (N=6), ISO (N=5), ML (N=119, Test=26)</div>
+        </div>
+        <div class="kpi-card purple">
+          <div class="kpi-title">System Stack</div>
+          <div class="kpi-value">Verified</div>
+          <div class="kpi-sub">React 18 + FastAPI + PostgreSQL + ML</div>
+        </div>
+      </div>
+
+      <!-- Critical Discovery Findings -->
+      <h2>1. Executive Identification: Latest Versions & Provenance</h2>
+
+      <div class="callout callout-success">
+        <div class="callout-icon">✓</div>
+        <div class="callout-content">
+          <strong>Latest Manuscript Identified: 155-Page Complete Document (Chapters 1 to 5)</strong>
+          The authoritative latest version of the manuscript is the <strong>155-page complete document</strong> containing all 5 chapters:
+          <ul style="margin: 6px 0 6px 18px;">
+            <li>Preliminary Pages & Title Page: p. 1</li>
+            <li>Chapter 1 (Introduction, Problem, Objectives, Scope): pp. 2–14</li>
+            <li>Chapter 2 (Review of Related Literature & Studies): pp. 15–26</li>
+            <li>Chapter 3 (Technical Background, Methodology, System Design, SDLC): pp. 27–98</li>
+            <li>Chapter 4 (Research Methodology, Results, and Discussions): pp. 99–144</li>
+            <li>Chapter 5 (Summary of Findings, Conclusions, Recommendations): pp. 145–155</li>
+          </ul>
+          <em>Disk Status & Version Disambiguation:</em>
+          The files on disk labeled <code>docs/Capstone_AngelesGravinoSedanto-CHAPTER-1-4.pdf</code> (89 pages, created April 21, 2026) and <code>docs/Official Documentation/Manuscript/Capstone_Angeles,Gravino,Sedanto-CHAPTER 1-4 (1).pdf</code> (90 pages, created July 11, 2026) represent earlier pre-defense drafts containing only Chapters 1 to 4 (ending abruptly on p. 90 during methodology narrative). They do NOT contain the Chapter 4 empirical tables or Chapter 5. The full 155-page version text is preserved across the active audit workspace and will be used as the authoritative manuscript target.
+        </div>
+      </div>
+
+      <div class="callout callout-success">
+        <div class="callout-icon">✓</div>
+        <div class="callout-content">
+          <strong>Latest Defense Presentation Identified: 17-Slide Final Deck (Dated Sept 22, 2026)</strong>
+          The authoritative presentation is the <strong>17-slide deck</strong> dated September 22, 2026 that covers the complete Capstone Project 2 defense (Title, Operational Problems, Objectives, Conceptual Framework, Methodology, Architecture, Data Gathering, ML Methodology, Manual vs Digital, Analytics, ML Results, TAM, ISO/IEC 25010, IT Expert Suggestions, Synthesis, and Q&A).<br>
+          <em>Disk Status & Version Disambiguation:</em>
+          <code>docs/Official Documentation/Presentations/Capstone Presentation - Shoelotskey.pdf</code> (9 pages, Canva export) is an earlier preliminary proposal presentation (covering only preliminary problem and objectives). <code>docs/Official Documentation/Presentations/SoftEng Presentation - Shoelotskey.pdf</code> (6 pages) is a Software Engineering course deck (IT327). <code>docs/Official Documentation/Defense/BSIT-Title-Defense-PPT-Format (1) (1).pptx</code> (26 slides) is the 3rd-year title defense template. The 17-slide deck is the sole authoritative defense presentation.
+        </div>
+      </div>
+
+      <!-- Source of Truth Hierarchy -->
+      <h2>2. Source-of-Truth Hierarchy & Authority Matrix</h2>
+      <p>
+        In strict compliance with the non-negotiable directive <strong>"EVIDENCE BEFORE ASSUMPTION"</strong>, all upcoming audit checkpoints and artifact evaluations are governed by this five-tier hierarchy:
+      </p>
+
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Tier</th>
+              <th>Authority Level</th>
+              <th>Primary Evidence Sources</th>
+              <th>Role in Audit</th>
+              <th>Conflict Handling Protocol</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>LEVEL 1</strong></td>
+              <td><span class="tag tag-success">ACTUAL SYSTEM EVIDENCE</span></td>
+              <td>
+                • <code>src/</code> (React 18 / TypeScript / Vite / Tailwind CSS components)<br>
+                • <code>backend/main.py</code>, <code>models.py</code>, <code>auth_utils.py</code>, <code>api/</code><br>
+                • <code>backend/ml/historical_ml_engine.py</code><br>
+                • <code>docs/setup.sql</code> & database schema / migrations<br>
+                • <code>package.json</code>, <code>requirements.txt</code>, <code>Procfile</code>
+              </td>
+              <td>Defines what the software <em>actually implements</em> in production.</td>
+              <td>Overrides all claims in documentation, manuscript, and slides. If code lacks a feature, it is categorized as PLANNED or FUTURE RECOMMENDATION, never implemented.</td>
+            </tr>
+            <tr>
+              <td><strong>LEVEL 2</strong></td>
+              <td><span class="tag tag-info">RAW RESEARCH EVIDENCE</span></td>
+              <td>
+                • <code>backend/research_outputs/ml_final/03_locked_final_test_predictions.csv</code> (26 records)<br>
+                • <code>backend/research_outputs/ml_final/05_final_metrics.json</code><br>
+                • <code>docs/Official Documentation/TAM/TAM-Respondents-Result.pdf</code> (N=6 forms, 24 scanned pages)<br>
+                • <code>docs/Official Documentation/IT Experts/Compilation/</code> (5 individual evaluation forms)<br>
+                • <code>docs/Official Documentation/Validators/VALIDITY TEST RESULTS.xlsx</code> (N=5 faculty validators)<br>
+                • 6 monthly historical CSVs (Aug 2025–Jan 2026, 119 validated orders)
+              </td>
+              <td>Contains the immutable mathematical, empirical, and evaluation data.</td>
+              <td>Overrides any narrative or table numbers in manuscript. All means, SDs, MAE, RMSE, R², and percentages must recompute strictly from these files.</td>
+            </tr>
+            <tr>
+              <td><strong>LEVEL 3</strong></td>
+              <td><span class="tag tag-purple">OFFICIAL SCHOOL REQUIREMENTS</span></td>
+              <td>
+                • <code>docs/Official Documentation/Capstone Subject/Guidelines/CAPSTONE PROJECT 2.pdf</code><br>
+                • <code>docs/Official Documentation/Capstone Subject/Guidelines/ADVISORY NO.01, S. 2026.pdf</code><br>
+                • IT411 Prelim & Midterm Modules (Assoc. Prof. Mary Ann Aballiar-Vista)
+              </td>
+              <td>Institutional directives, rubrics, formatting rules, and defense checklists.</td>
+              <td>Dictates manuscript layout, Certificate of Originality placement, and rubrics. Overrules student personal preferences.</td>
+            </tr>
+            <tr>
+              <td><strong>LEVEL 4</strong></td>
+              <td><span class="tag tag-warning">MANUSCRIPT & PRESENTATION</span></td>
+              <td>
+                • Latest 155-page Manuscript (Chapters 1 to 5)<br>
+                • Latest 17-slide Capstone Presentation (Sept 22, 2026)
+              </td>
+              <td>Academic artifacts subject to this audit.</td>
+              <td>Must conform 100% to Levels 1, 2, and 3. Discrepancies are flagged for mandatory copy-ready correction.</td>
+            </tr>
+            <tr>
+              <td><strong>LEVEL 5</strong></td>
+              <td><span class="tag tag-danger">PREVIOUS GENERATED REPORTS</span></td>
+              <td>
+                • <code>docs/Official Documentation/Documentation Reports/1_Comprehensive...html</code><br>
+                • <code>docs/Official Documentation/Documentation Reports/2_Comprehensive...html</code><br>
+                • <code>docs/CAPSTONE_MANUSCRIPT_AND_SYSTEM_ALIGNMENT_AUDIT_REPORT.md</code><br>
+                • <code>docs/4_Master_Manuscript_System_and_Defense_Revision_Report.html</code>
+              </td>
+              <td>Heuristic leads and historical logs only.</td>
+              <td><strong>NEVER TREATED AS GROUND TRUTH.</strong> All claims are re-verified against Levels 1 and 2. Automated retraining claims from past reports are rejected in favor of verified code behavior.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Inventory by Category -->
+      <h2>3. Complete Workspace Inventory by Functional Category</h2>
+
+      <h3>Category A: Manuscripts (7 files discovered)</h3>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>File Path</th>
+              <th>Size</th>
+              <th>Modified Date</th>
+              <th>Format / Scope</th>
+              <th>Classification & Audit Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Active Session Upload</strong></td>
+              <td>155 pages</td>
+              <td>Current (Sept 2026)</td>
+              <td>Complete PDF (Chapters 1 to 5)</td>
+              <td><span class="tag tag-success">LATEST AUTHORITATIVE MANUSCRIPT</span></td>
+            </tr>
+            <tr>
+              <td><code>docs/Official Documentation/Manuscript/Capstone_Angeles,Gravino,Sedanto-CHAPTER 1-4 (1).pdf</code></td>
+              <td>665,856 B</td>
+              <td>2026-09-13</td>
+              <td>PDF (90 pages)</td>
+              <td><span class="tag tag-warning">SUPERSEDED DRAFT (Chapters 1–4 only)</span></td>
+            </tr>
+            <tr>
+              <td><code>docs/Capstone_AngelesGravinoSedanto-CHAPTER-1-4.pdf</code></td>
+              <td>1,210,121 B</td>
+              <td>2026-04-22</td>
+              <td>PDF (89 pages)</td>
+              <td><span class="tag tag-warning">OUTDATED PRE-DEFENSE DRAFT</span></td>
+            </tr>
+            <tr>
+              <td><code>docs/capstone_manuscript_chapter_1_to_4.html</code></td>
+              <td>33,694 B</td>
+              <td>2026-04-22</td>
+              <td>HTML excerpt</td>
+              <td><span class="tag tag-info">HISTORICAL EXCERPT</span></td>
+            </tr>
+            <tr>
+              <td><code>docs/MANUSCRIPT_ALIGNMENT_AND_REVISION_GUIDE.html</code></td>
+              <td>49,107 B</td>
+              <td>2026-09-22</td>
+              <td>HTML Guide</td>
+              <td><span class="tag tag-info">REFERENCE WORKFLOW</span></td>
+            </tr>
+            <tr>
+              <td><code>docs/Capstone_Manuscript_and_System_Alignment_Audit_Report.html</code></td>
+              <td>46,329 B</td>
+              <td>2026-09-13</td>
+              <td>HTML Report</td>
+              <td><span class="tag tag-info">PREVIOUS AUDIT</span></td>
+            </tr>
+            <tr>
+              <td><code>docs/4_Master_Manuscript_System_and_Defense_Revision_Report.html</code></td>
+              <td>118,286 B</td>
+              <td>2026-09-23</td>
+              <td>HTML Report</td>
+              <td><span class="tag tag-purple">SYNTHESIS WORKING REPORT</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Category B: Presentations (4 files discovered)</h3>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>File Path</th>
+              <th>Size</th>
+              <th>Modified Date</th>
+              <th>Format / Scope</th>
+              <th>Classification & Audit Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Active Session Upload</strong></td>
+              <td>17 slides</td>
+              <td>Sept 22, 2026</td>
+              <td>Final Defense Slide Deck</td>
+              <td><span class="tag tag-success">LATEST AUTHORITATIVE PRESENTATION</span></td>
+            </tr>
+            <tr>
+              <td><code>docs/Official Documentation/Presentations/Capstone Presentation - Shoelotskey.pdf</code></td>
+              <td>3,049,784 B</td>
+              <td>2026-09-13</td>
+              <td>PDF (9 pages / 18 slides)</td>
+              <td><span class="tag tag-warning">EARLIER HANDOUT VERSION</span></td>
+            </tr>
+            <tr>
+              <td><code>docs/Official Documentation/Presentations/SoftEng Presentation - Shoelotskey.pdf</code></td>
+              <td>1,729,591 B</td>
+              <td>2026-09-13</td>
+              <td>PDF (6 pages)</td>
+              <td><span class="tag tag-info">SOFTWARE ENG PRESENTATION (Course IT327)</span></td>
+            </tr>
+            <tr>
+              <td><code>docs/Official Documentation/Defense/BSIT-Title-Defense-PPT-Format (1) (1).pptx</code></td>
+              <td>9,652,719 B</td>
+              <td>2026-09-13</td>
+              <td>PPTX (26 slides)</td>
+              <td><span class="tag tag-info">3RD YEAR TITLE DEFENSE TEMPLATE</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Category C: Raw Evaluation Data & Validation Instruments</h3>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Evaluation Instrument</th>
+              <th>File Location</th>
+              <th>Respondents</th>
+              <th>Verification State</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Technology Acceptance Model (TAM)</strong></td>
+              <td><code>docs/Official Documentation/TAM/TAM-Respondents-Result.pdf</code></td>
+              <td>6 Shoelotskey Personnel (A. Rosales, R. Coronacion, Y. Victorio, J. Villanueva, K. Gravino, E. Villanueva)</td>
+              <td><span class="tag tag-success">100% CENSUS INTACT (24 scanned pages)</span></td>
+            </tr>
+            <tr>
+              <td><strong>ISO/IEC 25010:2023 Evaluation Form 1</strong></td>
+              <td><code>docs/Official Documentation/IT Experts/IT EXPERT 1/ISO-25010_...pdf</code></td>
+              <td>IT Expert 1: Jheo Corona (Senior QA / Developer)</td>
+              <td><span class="tag tag-success">FORM & RESUME VERIFIED</span></td>
+            </tr>
+            <tr>
+              <td><strong>ISO/IEC 25010:2023 Evaluation Form 2</strong></td>
+              <td><code>docs/Official Documentation/IT Experts/IT EXPERT 2/IT_Expert_2_...pdf</code></td>
+              <td>IT Expert 2: Dr. Eduardo Yu</td>
+              <td><span class="tag tag-success">FORM VERIFIED (Scanned)</span></td>
+            </tr>
+            <tr>
+              <td><strong>ISO/IEC 25010:2023 Evaluation Form 3</strong></td>
+              <td><code>docs/Official Documentation/IT Experts/IT EXPERT 3/IT_Expert_3_...pdf</code></td>
+              <td>IT Expert 3: Edison Yu</td>
+              <td><span class="tag tag-success">FORM VERIFIED (Scanned)</span></td>
+            </tr>
+            <tr>
+              <td><strong>ISO/IEC 25010:2023 Evaluation Form 4</strong></td>
+              <td><code>docs/Official Documentation/IT Experts/IT EXPERT 4/IT_Expert_4_...pdf</code></td>
+              <td>IT Expert 4: Practitioner / Instructor</td>
+              <td><span class="tag tag-success">FORM & CV VERIFIED</span></td>
+            </tr>
+            <tr>
+              <td><strong>ISO/IEC 25010:2023 Evaluation Form 5</strong></td>
+              <td><code>docs/Official Documentation/IT Experts/IT EXPERT 5/IT_Expert_5_...pdf</code></td>
+              <td>IT Expert 5: Ken Carlo Javier</td>
+              <td><span class="tag tag-success">FORM & RESUME VERIFIED</span></td>
+            </tr>
+            <tr>
+              <td><strong>Faculty Content Validity Results</strong></td>
+              <td><code>docs/Official Documentation/Validators/VALIDITY TEST RESULTS.xlsx</code></td>
+              <td>5 Faculty Validators (Antonio, Apostol, Cacho, Legazpi, Villarica)</td>
+              <td><span class="tag tag-success">S-CVI = 1.00 / I-CVI = 1.00 VERIFIED</span></td>
+            </tr>
+            <tr>
+              <td><strong>Validator Evaluation Sheets</strong></td>
+              <td><code>docs/Official Documentation/Validators/Final_*.pdf</code></td>
+              <td>5 Individual Faculty Evaluation Forms</td>
+              <td><span class="tag tag-success">ALL 5 FORMS PRESENT & SIGNED</span></td>
+            </tr>
+            <tr>
+              <td><strong>Panel Revisions & Comments</strong></td>
+              <td><code>docs/Official Documentation/Validators/REVISIONS AND COMMENTS.pdf</code></td>
+              <td>Official Capstone Evaluation Panel</td>
+              <td><span class="tag tag-success">100% INTACT (8.83 MB)</span></td>
+            </tr>
+            <tr>
+              <td><strong>Matrix of Revisions</strong></td>
+              <td><code>docs/Official Documentation/Matrix/MATRIX-OF-CAPSTONE-PROJECT-REVISIONS (3).pdf</code></td>
+              <td>Formal Revision Compliance Matrix</td>
+              <td><span class="tag tag-success">199.6 KB VERIFIED</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Category D: Machine Learning Research Datasets & Locked Outputs</h3>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Dataset / Output Artifact</th>
+              <th>Location</th>
+              <th>Size / Records</th>
+              <th>Audit Role</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Locked Final Test Predictions</strong></td>
+              <td><code>backend/research_outputs/ml_final/03_locked_final_test_predictions.csv</code></td>
+              <td>26 records (Jan 2026)</td>
+              <td><span class="tag tag-success">AUTHORITATIVE GROUND TRUTH FOR CH 4/5</span></td>
+            </tr>
+            <tr>
+              <td><strong>Final Model Performance Metrics</strong></td>
+              <td><code>backend/research_outputs/ml_final/05_final_metrics.json</code></td>
+              <td>2,155 B</td>
+              <td><span class="tag tag-success">AUTHORITATIVE METRICS (MAE 8.55, RMSE 10.23)</span></td>
+            </tr>
+            <tr>
+              <td><strong>Development CV Summary</strong></td>
+              <td><code>backend/research_outputs/ml_final/02_development_cv_summary.csv</code></td>
+              <td>93 records (Aug–Dec 2025)</td>
+              <td>5-fold expanding window cross-validation logs.</td>
+            </tr>
+            <tr>
+              <td><strong>Baseline Comparison Output</strong></td>
+              <td><code>backend/research_outputs/ml_final/04_baseline_comparison.csv</code></td>
+              <td>407 B</td>
+              <td>Mean baseline vs Median baseline vs Random Forest.</td>
+            </tr>
+            <tr>
+              <td><strong>Cleaned Monthly CSV Datasets</strong></td>
+              <td><code>backend/historical_data/source/csv/</code></td>
+              <td>6 CSVs (Aug, Sep, Oct, Nov, Dec 2025, Jan 2026)</td>
+              <td>119 human-validated orders filtered from 714 raw receipts.</td>
+            </tr>
+            <tr>
+              <td><strong>Raw Receipt Scans</strong></td>
+              <td><code>backend/historical_data/source/Digital Job Order Forms/</code></td>
+              <td>6 PDF archives (233 MB total)</td>
+              <td>Original physical logbook and paper receipts.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Critical Cross-Chapter Inconsistencies Discovered -->
+      <h2>4. Priority Conflicts & Semantic Inconsistencies to Audit</h2>
+      <div class="callout callout-danger">
+        <div class="callout-icon">⚡</div>
+        <div class="callout-content">
+          <strong>Key Inconsistencies Flagged for Checkpoints 1–5 Investigation:</strong>
+          <ul style="margin-top: 6px; padding-left: 18px; line-height: 1.6;">
+            <li><strong>Chapter 1 vs Target Ground Truth:</strong> Chapter 1 repeatedly uses "service completion date estimation" in problem statements and objectives, while Chapter 3 and empirical datasets confirm that historical paper receipts contained no technician completion timestamps. The actual historical target is <code>turnaround_duration = claimed_date − date_received</code>. Chapter 1 must be harmonized to "advisory predicted release date / turnaround duration" rather than actual service completion time.</li>
+            <li><strong>Slide 11 vs Slide 15 Sample Size Discrepancy:</strong> Presentation Slide 11 labels the evaluation results a "10-record test sample", while Slide 15 cites the exact same figures (MAE 8.50, RMSE 10.11, R² 0.129) as a "26-record test set". The locked holdout dataset contains exactly 26 records (January 2026); 10 records represents only an illustrative preview table. Both slides must align on the authoritative 26-record locked evaluation.</li>
+            <li><strong>Automated Retraining vs Controlled Architecture:</strong> Previous documentation reports suggested "Automated Weekly ML Retraining" with auto-promotion if MAE improves. Code inspection shows the production model is statically loaded from <code>backend/completion_model.pkl</code>. In academic defense terms, uncontrolled automatic retraining on unvalidated operational data introduces severe drift and leakage risk. The true system architecture is controlled manual retraining with validation.</li>
+            <li><strong>Reliability Dimension Narrative Contradiction:</strong> In Chapter 4 (p. 127) and Chapter 5 (pp. 141, 149), narrative text claims Reliability scored 3.76 (SD 0.31), whereas Table 13 and raw evaluator forms prove Reliability scored 3.72 (SD 0.49).</li>
+            <li><strong>Table Cross-Reference Error (p. 144):</strong> Chapter 4 narrative directs readers to "suggestions and comments presented in Table 24", but the actual IT Expert Suggestions table is Table 25.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Missing Evidence & Confirmations Needed -->
+      <h2>5. Missing Evidence & Researcher Confirmations Required</h2>
+      <div class="callout callout-warning">
+        <div class="callout-icon">⚠</div>
+        <div class="callout-content">
+          <strong>Identified Evidence Gaps Requiring Researcher Attention:</strong>
+          <ul style="margin-top: 6px; padding-left: 18px; line-height: 1.6;">
+            <li><strong>Editable Manuscript Source (.DOCX):</strong> Only rendered PDFs exist on disk (`Capstone_AngelesGravinoSedanto-CHAPTER-1-4.pdf` [90p] and the 155-page active text). An editable Word document (`.docx`) for the full 155-page version is needed to apply final tracked-changes revisions.</li>
+            <li><strong>Editable Defense Presentation Source (.PPTX):</strong> The active 17-slide defense presentation exists as a PDF. An editable `.pptx` file is required to apply slide typographical and content fixes.</li>
+            <li><strong>Raw Stopwatch Logs for Manual Reporting Baseline:</strong> The 43.71-minute manual reporting baseline is documented in Table 7 of the manuscript, but the raw manual timestamp logs recorded during shop observation are archived in physical paper notes rather than as an electronic spreadsheet.</li>
+            <li><strong>Direct Empirical Measurement for Record Retrieval:</strong> The claim of 5.20 minutes manual retrieval reducing to 0.41 minutes (92.12% reduction) requires confirmation whether it was timed via formal stopwatch trials or derived from staff observational interviews.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Recommended Checkpoint 1 Step -->
+      <h2>6. Checkpoint 0 Gate Decision & Next Steps</h2>
+      <p>
+        The complete artifact inventory has been indexed, verified, and mapped against the Source-of-Truth hierarchy. In strict accordance with the Checkpoint 0 mandate:
+      </p>
+      <ul style="margin: 0 0 16px 22px; color: var(--slate-700); font-size: 0.92rem;">
+        <li>No source code has been altered.</li>
+        <li>No database records or schema have been modified.</li>
+        <li>No research datasets or metrics have been changed.</li>
+        <li>No manuscript or presentation files have been edited.</li>
+      </ul>
+
+      <div class="callout callout-info">
+        <div class="callout-icon">ℹ</div>
+        <div class="callout-content">
+          <strong>Checkpoint 0 Status: COMPLETE & FROZEN — AWAITING APPROVAL</strong>
+          <br>
+          We now pause at Checkpoint 0. Upon user confirmation and approval of the identified files, we will proceed to <strong>Checkpoint 1: System Ground Truth Audit</strong> (<code>01_SYSTEM_GROUND_TRUTH.html</code>), which will inspect the live frontend routes, FastAPI endpoints, PostgreSQL database schema, RBAC permissions, and actual implemented workflows.
+        </div>
+      </div>
+
+    </main>
+
+    <footer class="footer">
+      <div><strong>Shoelotskey Service Management System</strong> · Institute of Computer Studies</div>
+      <div>National Aviation Academy of the Philippines (PhilSCA) · Academic Year 2025–2026</div>
+      <div>Checkpoint 0 Inventory Report · Generated September 24, 2026</div>
+    </footer>
+
+  </div>
+
+</body>
+</html>

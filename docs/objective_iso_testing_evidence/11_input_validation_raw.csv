@@ -1,0 +1,16 @@
+vector_id,category,target_field,test_input_value,endpoint,method,expected_status,actual_status,response_detail,database_mutated,passed,vulnerability_assessment
+IV-01,Blank Required Customer Name,customerName,,/api/orders,POST,400,422,Invalid order payload: 2 validation errors for OrderCreatePa,NO,PASS,Rejected securely; no database compromise
+IV-02,Missing Customer Name Key,customerName,MISSING_KEY,/api/orders,POST,400,422,Invalid order payload: 2 validation errors for OrderCreatePa,NO,PASS,Rejected securely; no database compromise
+IV-03,Null Customer Name,customerName,None,/api/orders,POST,400,422,Invalid order payload: 2 validation errors for OrderCreatePa,NO,PASS,Rejected securely; no database compromise
+IV-04,Negative Grand Total,grand_total,-500.0,/api/orders,POST,400,422,Invalid order payload: 1 validation error for OrderCreatePay,NO,PASS,Rejected securely; no database compromise
+IV-05,Negative Balance Amount,balance,-250.0,/api/orders,POST,400,422,Invalid order payload: 1 validation error for OrderCreatePay,NO,PASS,Rejected securely; no database compromise
+IV-06,Zero Service Price with Paid Total,price,0,/api/orders,POST,400,422,Invalid order payload: 1 validation error for OrderCreatePay,NO,PASS,Rejected securely; no database compromise
+IV-07,Extremely Long String (Buffer Overflow Attempt),customerName,AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA,/api/orders,POST,400,422,Invalid order payload: 2 validation errors for OrderCreatePa,NO,PASS,Rejected securely; no database compromise
+IV-08,Malformed Contact Number Format,contactNumber,NOT-A-PHONE-NUMBER,/api/orders,POST,400,422,Invalid order payload: 1 validation error for OrderCreatePay,NO,PASS,Rejected securely; no database compromise
+IV-09,Invalid Calendar Date Format,predictedCompletionDate,2026-99-99-invalid,/api/orders,POST,400,422,Invalid order payload: 1 validation error for OrderCreatePay,NO,PASS,Rejected securely; no database compromise
+IV-10,Invalid Lifecycle Status Transition,status,IMPOSSIBLE_STATUS_STATE,/api/orders,POST,400,422,Invalid order payload: 1 validation error for OrderCreatePay,NO,PASS,Rejected securely; no database compromise
+IV-11,Cross-Site Scripting (XSS) in Notes,notes,<script>alert('xss')</script>,/api/orders,POST,400,422,Invalid order payload: 1 validation error for OrderCreatePay,NO,PASS,Rejected securely; no database compromise
+IV-12,SQL Injection Probe in Customer Name,customerName,Customer'; DROP TABLE users;--,/api/orders,POST,400,422,Invalid order payload: 2 validation errors for OrderCreatePa,NO,PASS,Rejected securely; no database compromise
+IV-13,Duplicate Unique Key Insertion,username,owner,/api/users,POST,400,400,Username already exists,NO,PASS,Rejected securely; no database compromise
+IV-14,Valid Boundary Values,grandTotal,250.0,/api/orders,POST,200,200,"{'order_id': 857, 'order_number': 'ORD-2026-10-06-VAL14-3505",NO,PASS,Rejected securely; no database compromise
+IV-15,Normal Standard Valid Input,all_fields,STANDARD_VALID,/api/orders,POST,200,200,"{'order_id': 857, 'order_number': 'ORD-2026-10-06-VAL15-3505",NO,PASS,Rejected securely; no database compromise

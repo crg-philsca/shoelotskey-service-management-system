@@ -437,8 +437,10 @@ export function CustomerTracking() {
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <div className="h-9 w-9 sm:h-11 sm:w-11 rounded-xl border border-red-200 bg-white p-1 shadow-xs ring-2 ring-red-500/10 flex items-center justify-center shrink-0">
               <img 
-                src="/logo.png" 
+                src="/logo.webp" 
                 alt="Shoelotskey Logo" 
+                width="44"
+                height="44"
                 className="h-full w-full object-contain" 
               />
             </div>

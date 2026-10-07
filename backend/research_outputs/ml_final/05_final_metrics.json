@@ -1,0 +1,71 @@
+{
+  "evaluation_timestamp": "2026-09-22T08:22:28.432429",
+  "development_dataset": {
+    "n": 93,
+    "mean_turnaround_days": 18.440860215053764,
+    "median_turnaround_days": 16.0,
+    "cv_mae": 8.1541,
+    "cv_rmse": 10.3225,
+    "cv_r2": 0.2679
+  },
+  "locked_final_test": {
+    "n": 26,
+    "date_range": [
+      "2026-01-02",
+      "2026-01-27"
+    ],
+    "random_forest": {
+      "mae": 8.555414072039072,
+      "rmse": 10.2272490543618,
+      "r2": -0.020823176159422196,
+      "median_ae": 7.783583333333334,
+      "mean_signed_error": -4.629651251526251,
+      "min_ae": 0.18324999999999925,
+      "max_ae": 20.81675,
+      "within_1_day": 11.538461538461538,
+      "within_2_days": 19.230769230769234,
+      "within_3_days": 23.076923076923077,
+      "count_within_1": 3,
+      "count_within_2": 5,
+      "count_within_3": 6
+    },
+    "dev_mean_baseline": {
+      "mae": 9.33705541770058,
+      "rmse": 10.12545288409574,
+      "r2": -0.0006029332135550902,
+      "median_ae": 9.5,
+      "mean_signed_error": 0.24855252274607176,
+      "min_ae": 0.5591397849462361,
+      "max_ae": 16.440860215053764,
+      "within_1_day": 3.8461538461538463,
+      "within_2_days": 3.8461538461538463,
+      "within_3_days": 7.6923076923076925,
+      "count_within_1": 1,
+      "count_within_2": 1,
+      "count_within_3": 2
+    },
+    "dev_median_baseline": {
+      "mae": 8.961538461538462,
+      "rmse": 10.357086017274877,
+      "r2": -0.046906807189778466,
+      "median_ae": 8.5,
+      "mean_signed_error": -2.1923076923076925,
+      "min_ae": 0.0,
+      "max_ae": 18.0,
+      "within_1_day": 7.6923076923076925,
+      "within_2_days": 7.6923076923076925,
+      "within_3_days": 15.384615384615385,
+      "count_within_1": 2,
+      "count_within_2": 2,
+      "count_within_3": 4
+    },
+    "rf_improvement_vs_mean_baseline": {
+      "mae_reduction_days": 0.781641345661507,
+      "rmse_reduction_days": -0.10179617026606103
+    },
+    "rf_improvement_vs_median_baseline": {
+      "mae_reduction_days": 0.40612438949938934,
+      "rmse_reduction_days": 0.12983696291307645
+    }
+  }
+}

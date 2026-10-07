@@ -1,0 +1,23 @@
+Audit_Category,Audit_Metric,Run1_Localhost_Mobile_Dev,Run2_Localhost_Desktop_Dev,Run3_Deployed_Production,Run4_Desktop_Optimized,Run5_Mobile_Optimized,Remediation_Status
+Performance,Performance Score,44 / 100,50 / 100,85 / 100,98 / 100,83 / 100,VERIFIED ELITE (+39 pts Mobile / +48 pts Desktop)
+Performance,First Contentful Paint (FCP),17.9 s,3.5 s,1.2 s,0.6 s,2.7 s,VERIFIED (Instant Desktop / 2.7s Throttled Mobile)
+Performance,Largest Contentful Paint (LCP),34.6 s,6.7 s,1.4 s,1.1 s,2.9 s,VERIFIED (1.1s Desktop / 2.9s Throttled Mobile)
+Performance,Total Blocking Time (TBT),440 ms,210 ms,0 ms,0 ms,340 ms,VERIFIED (0 ms Desktop / Low TBT Mobile)
+Performance,Cumulative Layout Shift (CLS),0.000,0.000,0.000,0.000,0.000,VERIFIED (0.000 - Perfectly Stable across all runs)
+Performance,Speed Index,17.9 s,4.3 s,3.4 s,0.6 s,2.7 s,VERIFIED (0.6s Desktop / 2.7s Mobile)
+Performance,Total Transferred Payload,6436 KiB,6436 KiB,2023 KiB,995 KiB,995 KiB,VERIFIED (< 1 MB Sub-megabyte Payload)
+Performance,Total Network Requests,74,74,13,13,13,VERIFIED (13 Bundled Chunks)
+Accessibility,Accessibility Score,84 / 100,84 / 100,84 / 100,100 / 100,100 / 100,VERIFIED PERFECT 100/100 (Mobile & Desktop)
+Accessibility,Button Accessible Name (button-name),Failed (0),Failed (0),Failed (0),Pass (1.0),Pass (1.0),VERIFIED: aria-label & title on eye toggle
+Accessibility,Color Contrast (color-contrast),Failed (4.35:1),Failed (4.35:1),Failed (4.35:1),Pass (1.0),Pass (1.0),VERIFIED: Theme red #dc2626 (> 4.8:1)
+Accessibility,Main Landmark (landmark-one-main),Failed (0),Failed (0),Failed (0),Pass (1.0),Pass (1.0),VERIFIED: <main role="main"> landmark
+Accessibility,Touch Target Size (target-size),Failed (20px),N/A,N/A,Pass (1.0),Pass (1.0),VERIFIED: Expanded touch target >= 28x28px
+Best Practices,Best Practices Score,100 / 100,100 / 100,100 / 100,100 / 100,100 / 100,VERIFIED PERFECT 100/100 (Mobile & Desktop)
+Best Practices,Uses HTTPS,Pass,Pass,Pass,Pass,Pass,VERIFIED
+Best Practices,Console Errors,None (Pass),None (Pass),None (Pass),None (Pass),None (Pass),VERIFIED (0 Console Errors)
+Best Practices,Avoids Deprecated APIs,Pass,Pass,Pass,Pass,Pass,VERIFIED
+SEO,SEO Score,83 / 100,83 / 100,83 / 100,100 / 100,100 / 100,VERIFIED PERFECT 100/100 (Mobile & Desktop)
+SEO,Meta Description (meta-description),Failed (0),Failed (0),Failed (0),Pass (1.0),Pass (1.0),VERIFIED: Added meta description
+SEO,Robots.txt Validity (robots-txt),Failed (31 syntax errors),Failed,Failed,Pass (1.0),Pass (1.0),VERIFIED: Created clean public/robots.txt
+SEO,Crawlable Links,Pass,Pass,Pass,Pass,Pass,VERIFIED
+SEO,Successful HTTP Status,Pass,Pass,Pass,Pass,Pass,VERIFIED

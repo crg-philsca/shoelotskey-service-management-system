@@ -8,9 +8,10 @@ ML-Specific fields are explicitly labeled for easy feature extraction.
 
 from sqlalchemy import (
     Column, String, Float, Boolean, JSON, Integer, 
-    ForeignKey, Text, DateTime, Date, DECIMAL, Enum, TIMESTAMP, Table, text, func
+    ForeignKey, Text, DateTime, Date, DECIMAL, Enum, TIMESTAMP, Table, text, func,
+    UniqueConstraint
 )
-from sqlalchemy.orm import declarative_base, relationship, backref
+from sqlalchemy.orm import declarative_base, relationship, backref, synonym
 from datetime import datetime
 
 # Central base for all ORM classes
@@ -106,6 +107,7 @@ class User(Base):
     expenses = relationship("Expense", back_populates="user")
     status_logs = relationship("StatusLog", back_populates="user")
     sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
+    user_permissions = relationship("UserPermission", back_populates="user", cascade="all, delete-orphan")
 
 class UserSession(Base):
     """Authoritative persistent session tracking supporting multiple independent sessions per account."""
@@ -121,6 +123,35 @@ class UserSession(Base):
     user_agent = Column(String(255), nullable=True)
 
     user = relationship("User", back_populates="sessions")
+
+class Permission(Base):
+    """Normalized catalog of fine-grained permissions."""
+    __tablename__ = "permissions"
+    permission_id = Column(Integer, primary_key=True, autoincrement=True)
+    code = Column(String(50), unique=True, nullable=False, index=True)
+    name = Column(String(100), nullable=False)
+    description = Column(String(255), nullable=True)
+    category = Column(String(50), nullable=False, index=True)
+    created_at = Column(TIMESTAMP, default=datetime.utcnow)
+    updated_at = Column(TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user_permissions = relationship("UserPermission", back_populates="permission", cascade="all, delete-orphan")
+
+class UserPermission(Base):
+    """User-specific permission activation/deactivation."""
+    __tablename__ = "user_permissions"
+    __table_args__ = (
+        UniqueConstraint("user_id", "permission_id", name="uq_user_permission"),
+    )
+    user_permission_id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True)
+    permission_id = Column(Integer, ForeignKey("permissions.permission_id", ondelete="CASCADE"), nullable=False, index=True)
+    enabled = Column(Boolean, default=True, nullable=False)
+    created_at = Column(TIMESTAMP, default=datetime.utcnow)
+    updated_at = Column(TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = relationship("User", back_populates="user_permissions")
+    permission = relationship("Permission", back_populates="user_permissions")
 
 class Customer(Base):
     """Central customer database for CRM and return-user tracking."""
@@ -150,6 +181,8 @@ class Service(Base):
     is_active = Column(Boolean, default=True)
     sort_order = Column(Integer, default=0)
     connected_addons = Column(JSON, nullable=True)
+    connected_base_services = Column(JSON, nullable=True)
+    has_spinner = Column(Boolean, default=False)
 
     category = relationship("ServiceCategory", back_populates="services")
 
@@ -199,6 +232,13 @@ class Order(Base):
     refund_reason = Column(String(255), nullable=True)
     cancelled_at = Column(DateTime, nullable=True)
     pre_cancellation_state = Column(JSON, nullable=True)
+    discount_amount = Column(DECIMAL(10, 2), default=0.0)
+    discount_type = Column(String(50), nullable=True)
+    discount_name = Column(String(100), nullable=True)
+    discount_id_number = Column(String(50), nullable=True)
+    authorized_by_username = Column(String(100), nullable=True)
+    base_service_fee = Column(DECIMAL(10, 2), default=0.0)
+    add_ons_total = Column(DECIMAL(10, 2), default=0.0)
     created_at = Column(TIMESTAMP, default=datetime.now)
     updated_at = Column(TIMESTAMP, default=datetime.now, onupdate=datetime.now)
     
@@ -350,6 +390,7 @@ class AuditLog(Base):
     """
     __tablename__ = "audit_logs"
     audit_log_id = Column(Integer, primary_key=True, autoincrement=True)
+    log_id = synonym("audit_log_id")
     user_id = Column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)  # nullable: system events may have no user
 
     # Denormalized identity snapshot (forensic integrity - see docstring above)
@@ -357,6 +398,7 @@ class AuditLog(Base):
     role = Column(String(20), nullable=True)                   # Captured at event time
 
     action_type = Column(String(30), nullable=False, index=True)  # CREATE, UPDATE, DELETE, LOGIN, etc.
+    action = synonym("action_type")
     module = Column(String(50), nullable=True, index=True)     # Human-readable: Job Orders, Inventory, etc.
     table_name = Column(String(50), nullable=False)
     record_id = Column(Integer, nullable=True)                 # nullable: some events have no specific record
@@ -368,6 +410,12 @@ class AuditLog(Base):
     user_agent = Column(String(255), nullable=True)
 
     created_at = Column(TIMESTAMP, default=datetime.now, index=True)
+
+    @property
+    def details(self):
+        if self.new_values and isinstance(self.new_values, dict):
+            return self.new_values.get("details") or str(self.new_values)
+        return ""
 
 # ==========================================
 # 8. INVENTORY & STOCK MANAGEMENT
@@ -428,6 +476,7 @@ class InventoryLog(Base):
     service_name = Column(String(100), nullable=True)
     execution_ref = Column(String(100), nullable=True, index=True)
     user_id = Column(Integer, ForeignKey("users.user_id"), nullable=False)
+    authorized_by = Column(String(50), nullable=True)
     created_at = Column(TIMESTAMP, default=datetime.now)
     
     inventory_item = relationship("Inventory")
@@ -488,13 +537,13 @@ class HistoricalOrder(Base):
     historical_order_id = Column(Integer, primary_key=True, autoincrement=True)
 
     # User-entered order identifier from paper receipt (e.g. ORD-2025-08-15-001)
-    order_id = Column(String(50), unique=True, nullable=False, index=True)
+    order_id = Column(String(50), unique=False, nullable=False, index=True)
 
     # Reuse existing customers table (normalized CRM)
     customer_id = Column(Integer, ForeignKey("customers.customer_id"), nullable=False)
 
     branch        = Column(String(100), nullable=True)   # Free-text branch name
-    date_received = Column(DateTime, nullable=False)
+    date_received = Column(DateTime, nullable=True)
     original_estimated_release_date = Column(DateTime, nullable=True)
     claimed_date  = Column(DateTime, nullable=True)
 
@@ -502,7 +551,7 @@ class HistoricalOrder(Base):
     completion_days = Column(Integer, nullable=True)
 
     total_pairs  = Column(Integer, default=1)
-    grand_total  = Column(DECIMAL(10, 2), nullable=False)
+    grand_total  = Column(DECIMAL(10, 2), nullable=True)
     downpayment  = Column(DECIMAL(10, 2), default=0.0)
     balance      = Column(DECIMAL(10, 2), default=0.0)
     # Paper subtotal before any handwritten discount; grand_total stays the final amount.
@@ -515,9 +564,31 @@ class HistoricalOrder(Base):
     # Offline sync tracking
     sync_status  = Column(String(20), default="pending")  # 'pending', 'synced', 'failed'
     
-    # OCR Validation Tracking
+    # OCR & CSV Validation & Provenance Tracking
     ocr_status = Column(String(50), default="Validated") # Legacy records are validated by default
+    source_type = Column(String(50), default="OCR") # 'OCR', 'CSV_IMPORT', 'MANUAL'
+    source_filename = Column(String(255), nullable=True)
+    source_row = Column(Integer, nullable=True)
+    control_no = Column(String(50), nullable=True)
+    import_batch_id = Column(String(100), nullable=True)
+    target_provenance = Column(String(50), nullable=True) # 'CLAIM_DATE_CALCULATED', 'EXPECTED_DATE_CALCULATED', 'HEURISTIC_GENERATED', 'UNKNOWN', 'NONE'
+    reconciliation_status = Column(String(50), default="CONFIRMED") # 'CONFIRMED', 'NEW', 'EXACT_MATCH', 'CONFLICT', 'POSSIBLE_MATCH'
+    reconciliation_notes = Column(Text, nullable=True)
+    potential_ml_candidate = Column(Boolean, default=False, index=True)
+    quantity_source = Column(String(50), nullable=True)
+    raw_services = Column(Text, nullable=True)
+    raw_date_received = Column(String(100), nullable=True)
+    raw_claimed_date = Column(String(100), nullable=True)
+    raw_order_id = Column(String(50), nullable=True)
+    raw_total = Column(String(50), nullable=True)
+    validated_by = Column(String(100), nullable=True)
+    validated_at = Column(DateTime, nullable=True)
     audit_trail = Column(JSON, nullable=True) # Stores manual corrections made during review
+
+    # Legacy Dataset Archive Tracking (Phase 2 & Phase 4)
+    is_legacy_archived = Column(Boolean, default=False, nullable=False, index=True)
+    legacy_archived_at = Column(DateTime, nullable=True)
+    legacy_archive_reason = Column(Text, nullable=True)
 
     created_at   = Column(TIMESTAMP, default=datetime.now)
     updated_at   = Column(TIMESTAMP, default=datetime.now, onupdate=datetime.now)
@@ -562,6 +633,13 @@ class HistoricalItem(Base):
     deep_stains     = Column(Boolean, nullable=True)
     rips_holes      = Column(Boolean, nullable=True)
     worn_out        = Column(Boolean, nullable=True)
+
+    # Auditable Provenance & Normalization Metadata
+    raw_model                      = Column(Text, nullable=True)
+    attribute_normalization_status = Column(String(50), nullable=True)
+    attribute_review_reason        = Column(String(150), nullable=True)
+    normalization_method           = Column(String(50), nullable=True)
+    normalization_timestamp        = Column(String(50), nullable=True)
 
     order    = relationship("HistoricalOrder", back_populates="items")
     services = relationship("HistoricalItemService", back_populates="item",
@@ -631,6 +709,77 @@ class EtlImportHistory(Base):
     imported_by         = Column(String(100), nullable=True)           # Username who triggered it
     status              = Column(String(20), default="running")        # 'completed' | 'failed' | 'running'
     error_message       = Column(Text, nullable=True)                  # Populated on failure
+
+
+class CsvImportBatch(Base):
+    """
+    Audit log for structured CSV historical imports.
+    Captures batch-level and file-level metrics.
+    """
+    __tablename__ = "csv_import_batches"
+
+    id                  = Column(Integer, primary_key=True, autoincrement=True)
+    batch_id            = Column(String(100), unique=True, index=True, nullable=False)
+    source_filename     = Column(String(255), nullable=False)
+    file_size_bytes     = Column(Integer, default=0)
+    imported_by         = Column(String(100), nullable=False)
+    import_started      = Column(TIMESTAMP, default=datetime.now)
+    import_finished     = Column(TIMESTAMP, nullable=True)
+    status              = Column(String(30), default="PREVIEW") # 'PREVIEW', 'COMMITTED', 'FAILED'
+    
+    rows_read           = Column(Integer, default=0)
+    rows_parsed         = Column(Integer, default=0)
+    exact_duplicates    = Column(Integer, default=0)
+    possible_duplicates = Column(Integer, default=0)
+    conflicts           = Column(Integer, default=0)
+    new_records         = Column(Integer, default=0)
+    invalid_records     = Column(Integer, default=0)
+    accepted_records    = Column(Integer, default=0)
+    rejected_records    = Column(Integer, default=0)
+    details_json        = Column(JSON, nullable=True)
+
+
+class HistoricalReconciliationConflict(Base):
+    """
+    Stores conflicts and possible duplicate matches between CSV imports and existing records.
+    Requires deliberate human review and action.
+    """
+    __tablename__ = "historical_reconciliation_conflicts"
+
+    id                          = Column(Integer, primary_key=True, autoincrement=True)
+    conflict_id                 = synonym("id")
+    batch_id                    = Column(String(100), index=True, nullable=False)
+    csv_row_index               = Column(Integer, nullable=False)
+    csv_order_id                = Column(String(100), nullable=False)
+    existing_historical_order_id= Column(Integer, ForeignKey("historical_orders.historical_order_id", ondelete="CASCADE"), nullable=True)
+    
+    conflict_type               = Column(String(50), nullable=False) # 'POSSIBLE_DUPLICATE', 'SERVICE_CONFLICT', 'AMOUNT_CONFLICT', 'DATE_CONFLICT', 'CLAIM_DATE_CONFLICT'
+    status                      = Column(String(30), default="PENDING", index=True) # 'PENDING', 'RESOLVED_KEEP_EXISTING', 'RESOLVED_USE_CSV', 'RESOLVED_MANUAL', 'RESOLVED_DIFFERENT_ORDER', 'REJECTED_CSV'
+    
+    existing_data               = Column(JSON, nullable=True)
+    existing_values             = synonym("existing_data")
+    csv_data                    = Column(JSON, nullable=False)
+    csv_values                  = synonym("csv_data")
+    disputed_fields             = Column(JSON, nullable=False) # e.g. ["services", "grand_total"]
+    conflicting_fields          = synonym("disputed_fields")
+    
+    resolution_action           = Column(String(50), nullable=True)
+    resolution_notes            = Column(Text, nullable=True)
+    resolved_by                 = Column(String(100), nullable=True)
+    resolved_at                 = Column(DateTime, nullable=True)
+    created_at                  = Column(TIMESTAMP, default=datetime.now)
+
+    # Relationships
+    existing_order = relationship("HistoricalOrder")
+
+    @property
+    def existing_order_id(self):
+        if self.existing_data and isinstance(self.existing_data, dict):
+            return self.existing_data.get("order_id")
+        if self.existing_order:
+            return self.existing_order.order_id
+        return None
+
 
 
 # ==========================================

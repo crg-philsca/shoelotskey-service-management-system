@@ -50,47 +50,42 @@ const formatError = (errOrDetail: any, fallback: string = 'Operation failed'): s
 const getRoleBadge = (roleName: string, isSystemAdmin?: boolean) => {
   if (isSystemAdmin || roleName?.toLowerCase() === 'admin') {
     return (
-      <Badge className="bg-slate-100 text-slate-700 border-slate-300 text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 shadow-none hover:bg-slate-100 whitespace-nowrap">
+      <Badge className="bg-slate-100 text-slate-700 border-slate-300 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider px-1.5 sm:px-2.5 py-0.5 shadow-none hover:bg-slate-100 whitespace-nowrap">
         SYSTEM
       </Badge>
     );
   }
 
-  const normalized = (roleName || '').toLowerCase();
+  const normalized = (roleName || '').toLowerCase().replace(/_/g, ' ');
   switch (normalized) {
     case 'owner':
       return (
-        <Badge className="bg-purple-50 text-purple-700 border-purple-200 text-[10px] font-bold uppercase px-2.5 py-0.5 shadow-none hover:bg-purple-50 whitespace-nowrap">
-          {roleName}
+        <Badge className="bg-purple-50 text-purple-700 border-purple-200 text-[9px] sm:text-[10px] font-bold uppercase px-1.5 sm:px-2.5 py-0.5 shadow-none hover:bg-purple-50 whitespace-nowrap">
+          OWNER
         </Badge>
       );
     case 'staff':
-      return (
-        <Badge className="bg-sky-50 text-sky-700 border-sky-200 text-[10px] font-bold uppercase px-2.5 py-0.5 shadow-none hover:bg-sky-50 whitespace-nowrap">
-          {roleName}
-        </Badge>
-      );
     case 'front staff':
       return (
-        <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] font-bold uppercase px-2.5 py-0.5 shadow-none hover:bg-emerald-50 whitespace-nowrap">
-          {roleName}
+        <Badge className="bg-sky-50 text-sky-700 border-sky-200 text-[9px] sm:text-[10px] font-bold uppercase px-1.5 sm:px-2.5 py-0.5 shadow-none hover:bg-sky-50 whitespace-nowrap">
+          STAFF
         </Badge>
       );
     case 'manager':
       return (
-        <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200 text-[10px] font-bold uppercase px-2.5 py-0.5 shadow-none hover:bg-indigo-50 whitespace-nowrap">
+        <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200 text-[9px] sm:text-[10px] font-bold uppercase px-1.5 sm:px-2.5 py-0.5 shadow-none hover:bg-indigo-50 whitespace-nowrap">
           {roleName}
         </Badge>
       );
     case 'cashier':
       return (
-        <Badge className="bg-teal-50 text-teal-700 border-teal-200 text-[10px] font-bold uppercase px-2.5 py-0.5 shadow-none hover:bg-teal-50 whitespace-nowrap">
+        <Badge className="bg-teal-50 text-teal-700 border-teal-200 text-[9px] sm:text-[10px] font-bold uppercase px-1.5 sm:px-2.5 py-0.5 shadow-none hover:bg-teal-50 whitespace-nowrap">
           {roleName}
         </Badge>
       );
     default:
       return (
-        <Badge className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] font-bold uppercase px-2.5 py-0.5 shadow-none hover:bg-amber-50 whitespace-nowrap">
+        <Badge className="bg-amber-50 text-amber-700 border-amber-200 text-[9px] sm:text-[10px] font-bold uppercase px-1.5 sm:px-2.5 py-0.5 shadow-none hover:bg-amber-50 whitespace-nowrap">
           {roleName}
         </Badge>
       );
@@ -148,7 +143,7 @@ const getStatusBadge = (
         <Badge 
           onClick={canUnlock && onUnlock ? (e) => { e.stopPropagation(); onUnlock(); } : undefined}
           title={canUnlock ? "Account access restricted by administrator. Click or use Actions menu to unlock" : "Account access restricted by administrator"}
-          className={`bg-rose-50 text-rose-700 border-rose-200 text-[10px] font-black uppercase whitespace-nowrap shadow-none px-2.5 py-0.5 inline-flex items-center gap-1 hover:bg-rose-50 ${canUnlock ? 'cursor-pointer hover:bg-rose-100 transition-colors' : ''}`}
+          className={`bg-rose-50 text-rose-700 border-rose-200 text-[9px] sm:text-[10px] font-black uppercase whitespace-nowrap shadow-none px-1.5 sm:px-2.5 py-0.5 inline-flex items-center gap-1 hover:bg-rose-50 ${canUnlock ? 'cursor-pointer hover:bg-rose-100 transition-colors' : ''}`}
         >
           <Lock size={10} className="text-rose-600 shrink-0" />
           <span>Restricted</span>
@@ -160,7 +155,7 @@ const getStatusBadge = (
       <Badge 
         onClick={canUnlock && onUnlock ? (e) => { e.stopPropagation(); onUnlock(); } : undefined}
         title={canUnlock ? `Account is locked${minsText}. Click or use Actions menu to unlock` : `Account is locked${minsText}`}
-        className={`bg-amber-50 text-amber-700 border-amber-200 text-[10px] font-black uppercase whitespace-nowrap shadow-none px-2.5 py-0.5 inline-flex items-center gap-1 hover:bg-amber-50 ${canUnlock ? 'cursor-pointer hover:bg-amber-100 transition-colors' : ''}`}
+        className={`bg-amber-50 text-amber-700 border-amber-200 text-[9px] sm:text-[10px] font-black uppercase whitespace-nowrap shadow-none px-1.5 sm:px-2.5 py-0.5 inline-flex items-center gap-1 hover:bg-amber-50 ${canUnlock ? 'cursor-pointer hover:bg-amber-100 transition-colors' : ''}`}
       >
         <Lock size={10} className="text-amber-600 shrink-0" />
         <span>Locked{minsText}</span>
@@ -170,7 +165,7 @@ const getStatusBadge = (
 
   if (active) {
     return (
-      <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] font-black uppercase whitespace-nowrap inline-flex items-center gap-1.5 shadow-none px-2 py-0.5 hover:bg-emerald-50">
+      <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[9px] sm:text-[10px] font-black uppercase whitespace-nowrap inline-flex items-center gap-1 sm:gap-1.5 shadow-none px-1.5 sm:px-2 py-0.5 hover:bg-emerald-50">
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 inline-block" />
         <span>Active</span>
       </Badge>
@@ -178,7 +173,7 @@ const getStatusBadge = (
   }
 
   return (
-    <Badge className="bg-rose-50 text-rose-700 border-rose-200 text-[10px] font-black uppercase whitespace-nowrap inline-flex items-center gap-1.5 shadow-none px-2 py-0.5 hover:bg-rose-50">
+    <Badge className="bg-rose-50 text-rose-700 border-rose-200 text-[9px] sm:text-[10px] font-black uppercase whitespace-nowrap inline-flex items-center gap-1 sm:gap-1.5 shadow-none px-1.5 sm:px-2 py-0.5 hover:bg-rose-50">
       <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0 inline-block" />
       <span>Inactive</span>
     </Badge>
@@ -235,7 +230,9 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
             role: u.role?.role_name || 'staff',
             active: u.is_active,
             failedLoginAttempts: u.failed_login_attempts ?? u.failedLoginAttempts ?? 0,
-            lockedUntil: u.locked_until || u.lockedUntil || null
+            lockedUntil: u.locked_until || u.lockedUntil || null,
+            permissions: u.permissions || [],
+            permissions_summary: u.permissions_summary || ''
           }));
           setUsers(mappedUsers);
           localStorage.setItem('userManagement_cache', JSON.stringify(mappedUsers));
@@ -267,7 +264,10 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
       return users.filter(user => {
         const matchesSearch = (user.username || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
           (user.email || '').toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesRole = roleFilter === 'all' || user.role === roleFilter;
+        const normalizedUserRole = (user.role || '').toLowerCase().replace(/_/g, ' ');
+        const matchesRole = roleFilter === 'all' || 
+          user.role === roleFilter ||
+          (roleFilter === 'staff' && normalizedUserRole === 'front staff');
         const { isLocked } = getLockInfo(user);
         const matchesStatus = statusFilter === 'all' || 
           (statusFilter === 'locked' ? isLocked :
@@ -340,6 +340,32 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
           });
 
           if (response.ok) {
+            if (userData.permissions && (userData.role === 'staff' || userData.role === 'front staff')) {
+              try {
+                const permRes = await fetch(`${API_BASE}/users/${editingUser.id}/permissions`, {
+                  method: 'PUT',
+                  headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${user.token}`
+                  },
+                  body: JSON.stringify({ permissions: userData.permissions })
+                });
+                if (!permRes.ok) {
+                  const permErr = await permRes.json().catch(() => ({}));
+                  console.error('Failed to update user permissions:', permErr);
+                  toast.error(permErr.detail || 'Could not update user permissions.');
+                } else {
+                  try {
+                    const bc = new BroadcastChannel('shoelotskey_perms_channel');
+                    bc.postMessage({ type: 'PERMISSIONS_UPDATED', userId: editingUser.id });
+                    bc.close();
+                  } catch (_) {}
+                }
+              } catch (pErr) {
+                console.error('Network error updating permissions:', pErr);
+              }
+            }
+
             const changes: string[] = [];
             if (editingUser.username !== userData.username) changes.push(`Username: ${editingUser.username} -> ${userData.username}`);
             if (editingUser.email !== userData.email) changes.push(`Email: ${editingUser.email || 'N/A'} -> ${userData.email}`);
@@ -376,7 +402,8 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
               email: userData.email,
               password: userData.password,
               role_name: userData.role,
-              is_active: userData.active
+              is_active: userData.active,
+              permissions: userData.permissions
             })
           });
 
@@ -541,7 +568,7 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
     };
 
     return (
-      <Card className="flex flex-col max-h-[calc(100vh-5.5rem)] shadow-md border-gray-100 no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden overflow-y-auto">
+      <Card className="flex flex-col max-h-[calc(100vh-5.5rem)] shadow-md border-gray-100 subtle-vertical-scroll overflow-y-auto">
         <CardHeader className="pt-4 pb-0 px-6 shrink-0">
           <div className="flex items-center justify-center">
             <CardTitle className="text-center text-[15px] font-black text-gray-900 uppercase tracking-[0.1em] leading-tight p-0 -m-1">
@@ -642,23 +669,150 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
             </DialogContent>
           </Dialog>
 
-          {/* Table Section - Limited to 10 rows with smooth vertical scroll & sticky header, scrollbar hidden */}
-          <div className="overflow-x-auto overflow-y-auto flex-1 w-full max-h-[435px] xl:max-h-[460px] no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden border border-gray-100 rounded-lg min-h-0 pb-1">
-            <table className="w-full table-fixed min-w-[700px]">
+          {/* User List / Table Section - Responsive dual-mode layout */}
+          <div className="overflow-x-hidden overflow-y-auto flex-1 w-full max-h-[435px] xl:max-h-[460px] subtle-vertical-scroll border border-gray-100 rounded-lg min-h-0 pb-1">
+            
+            {/* MOBILE VIEW (< 640px): Responsive user card list with full readable username, email, badges and actions */}
+            <div className="block sm:hidden divide-y divide-gray-100">
+              {loading ? (
+                <div className="py-8 text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto"></div>
+                </div>
+              ) : paginatedUsers.length === 0 ? (
+                <div className="py-8 text-center text-gray-500 text-sm">
+                  No users found matching your criteria.
+                </div>
+              ) : (
+                paginatedUsers.map((user) => {
+                  const isSystemAdmin = user.username?.toLowerCase() === 'admin' || user.role?.toLowerCase() === 'admin';
+                  const isProtectedDelete = ['admin', 'owner', 'front_staff', 'staff'].includes((user.username || '').toLowerCase().trim());
+                  const { isLocked, isRestricted, minsRemaining } = getLockInfo(user);
+
+                  return (
+                    <div key={user.id} className="p-2.5 hover:bg-gray-50/80 transition-colors flex items-center justify-between gap-2">
+                      {/* Username & Email */}
+                      <div className="min-w-0 flex-1 pr-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-gray-900 text-xs sm:text-sm truncate" title={user.username}>
+                            {user.username}
+                          </span>
+                          {getRoleBadge(user.role, isSystemAdmin)}
+                        </div>
+                        <p className="text-[11px] text-gray-500 truncate mt-0.5" title={user.email}>
+                          {user.email || <span className="text-gray-400 italic">No email</span>}
+                        </p>
+                      </div>
+
+                      {/* Status + Actions */}
+                      <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        {getStatusBadge(user.active, isLocked, () => handleUnlockUser(user), canUnlock, minsRemaining, isRestricted)}
+                        {isSystemAdmin ? (
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            disabled
+                            className="h-8 w-8 p-0 rounded-md border border-gray-200 text-gray-300 bg-gray-50 opacity-40 cursor-not-allowed shadow-none inline-flex items-center justify-center" 
+                            title="System account protected"
+                          >
+                            <MoreVertical className="h-4 w-4 text-gray-400" />
+                          </Button>
+                        ) : (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button 
+                                variant="outline" 
+                                className="h-8 w-8 p-0 border-red-200 text-red-700 bg-red-50 hover:bg-red-100 font-bold rounded-md inline-flex items-center justify-center" 
+                                title="Actions"
+                              >
+                                <MoreVertical className="h-4 w-4 text-red-500" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48 p-1.5 space-y-1">
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEditClick(user);
+                                }}
+                                className="border border-yellow-200 rounded-md px-2.5 py-1.5 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:text-yellow-800 focus:bg-yellow-100 font-bold cursor-pointer"
+                              >
+                                <Edit className="h-4 w-4 mr-2 text-yellow-600" />
+                                Edit User
+                              </DropdownMenuItem>
+                              {isLocked ? (
+                                canUnlock && (
+                                  <DropdownMenuItem
+                                    disabled={actionLoadingUserId === user.id}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleUnlockUser(user);
+                                    }}
+                                    className="border border-blue-200 rounded-md px-2.5 py-1.5 text-blue-700 bg-blue-50 hover:bg-blue-100 focus:text-blue-800 focus:bg-blue-100 font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    {actionLoadingUserId === user.id ? (
+                                      <Loader2 className="h-4 w-4 mr-2 animate-spin text-blue-600" />
+                                    ) : (
+                                      <Unlock className="h-4 w-4 mr-2 text-blue-600" />
+                                    )}
+                                    {actionLoadingUserId === user.id ? 'Unlocking...' : 'Unlock Account'}
+                                  </DropdownMenuItem>
+                                )
+                              ) : (
+                                canUnlock && !isSystemAdmin && (
+                                  <DropdownMenuItem
+                                    disabled={actionLoadingUserId === user.id}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleLockUser(user);
+                                    }}
+                                    className="border border-orange-300 rounded-md px-2.5 py-1.5 text-orange-700 bg-orange-50 hover:bg-orange-100 focus:text-orange-800 focus:bg-orange-100 font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    {actionLoadingUserId === user.id ? (
+                                      <Loader2 className="h-4 w-4 mr-2 animate-spin text-orange-600" />
+                                    ) : (
+                                      <Lock className="h-4 w-4 mr-2 text-orange-600" />
+                                    )}
+                                    {actionLoadingUserId === user.id ? 'Restricting...' : 'Lock Account'}
+                                  </DropdownMenuItem>
+                                )
+                              )}
+                              {!isProtectedDelete && (
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteUser(user.id);
+                                  }}
+                                  className="border border-red-200 rounded-md px-2.5 py-1.5 text-red-700 bg-red-50 hover:bg-red-100 focus:text-red-800 focus:bg-red-100 font-bold cursor-pointer"
+                                >
+                                  <Trash className="h-4 w-4 mr-2 text-red-600" />
+                                  Delete User
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* DESKTOP / TABLET VIEW (>= 640px): Standard 5-column table */}
+            <table className="w-full table-fixed hidden sm:table">
               <colgroup>
-                <col className="w-[28%]" />
+                <col className="w-[22%]" />
                 <col className="w-[34%]" />
                 <col className="w-[16%]" />
-                <col className="w-[14%]" />
-                <col className="w-[8%]" />
+                <col className="w-[16%]" />
+                <col className="w-[12%]" />
               </colgroup>
               <thead className="bg-red-50/95 backdrop-blur-xs border-b border-red-100 sticky top-0 z-10 shadow-xs">
                 <tr>
-                  <th className="px-3 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap bg-red-50/95">Username</th>
-                  <th className="px-3 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap bg-red-50/95">Email</th>
-                  <th className="px-3 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap bg-red-50/95">Role</th>
-                  <th className="px-3 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap bg-red-50/95">Status</th>
-                  <th className="px-3 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap bg-red-50/95">Actions</th>
+                  <th className="px-3 py-2 text-left text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap bg-red-50/95">Username</th>
+                  <th className="px-3 py-2 text-left text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap bg-red-50/95">Email</th>
+                  <th className="px-2 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap bg-red-50/95">Role</th>
+                  <th className="px-2 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap bg-red-50/95">Status</th>
+                  <th className="px-2 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-wider whitespace-nowrap bg-red-50/95">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -684,23 +838,21 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
                     return (
                     <tr key={user.id} className="hover:bg-gray-50/80 transition-colors animate-in fade-in duration-500">
                       <td className="px-3 py-2 text-xs font-medium max-w-0">
-                        <div className="flex justify-center w-full">
-                          <div className="w-[180px] max-w-full flex items-center gap-1.5 text-left min-w-0">
-                            <span className="font-semibold text-gray-900 truncate" title={user.username}>{user.username}</span>
-                          </div>
+                        <div className="flex items-center justify-start w-full min-w-0">
+                          <span className="font-semibold text-gray-900 truncate block text-left w-full min-w-0" title={user.username}>{user.username}</span>
                         </div>
                       </td>
                       <td className="px-3 py-2 text-xs text-gray-600 max-w-0">
-                        <div className="flex justify-center w-full">
-                          <div className="w-[260px] max-w-full text-left min-w-0">
-                            <span className="truncate block" title={user.email}>{user.email || <span className="text-gray-400 italic">—</span>}</span>
-                          </div>
+                        <div className="flex items-center justify-start w-full min-w-0">
+                          <span className="truncate block text-left w-full min-w-0 text-xs" title={user.email}>{user.email || <span className="text-gray-400 italic">—</span>}</span>
                         </div>
                       </td>
-                      <td className="px-3 py-2 text-center max-w-0">
-                        {getRoleBadge(user.role, isSystemAdmin)}
+                      <td className="px-2 py-2 text-center max-w-0">
+                        <div className="flex items-center justify-center">
+                          {getRoleBadge(user.role, isSystemAdmin)}
+                        </div>
                       </td>
-                      <td className="px-3 py-2 text-center max-w-0">
+                      <td className="px-2 py-2 text-center max-w-0">
                         {getStatusBadge(user.active, isLocked, () => handleUnlockUser(user), canUnlock, minsRemaining, isRestricted)}
                       </td>
                       <td className="px-2 py-2 text-xs text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
@@ -726,7 +878,7 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
                                   <MoreVertical className="h-3.5 w-3.5 text-red-500" />
                                 </Button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-44 p-1.5 space-y-1">
+                              <DropdownMenuContent align="end" className="w-48 p-1.5 space-y-1">
                                 <DropdownMenuItem
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -873,7 +1025,7 @@ export default function UserManagement({ onSetHeaderActionRight, user }: { onSet
                 </DialogTitle>
               </DialogHeader>
               <p className="text-sm text-gray-700 leading-relaxed py-2">
-                Are you sure you want to permanently delete the user account <strong className="text-red-700 font-bold">"{deleteTarget.username}"</strong> ({deleteTarget.role})? This action will instantly revoke access and cannot be undone.
+                Are you sure you want to permanently delete the user account <strong className="text-red-700 font-bold">"{deleteTarget.username}"</strong> ({(deleteTarget.role?.toLowerCase() === 'front staff' || deleteTarget.role?.toLowerCase() === 'front_staff') ? 'staff' : deleteTarget.role})? This action will instantly revoke access and cannot be undone.
               </p>
               <div className="flex items-center justify-center gap-3 mt-4 pt-4 border-t border-gray-100 w-full">
                 <Button variant="outline" onClick={() => setDeleteTarget(null)} className="flex-1 h-11 rounded-xl font-bold text-xs uppercase tracking-wider text-gray-600 hover:bg-gray-100 justify-center">

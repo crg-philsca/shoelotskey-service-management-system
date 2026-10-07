@@ -80,45 +80,74 @@ export function removeStoredCustomOption(key?: string, optionToRemove?: string):
  * courier, model, etc., added by any user/station becomes automatically selectable.
  */
 export function seedCustomOptionsFromOrders(orders: any[]): void {
-    if (!orders || !Array.isArray(orders) || typeof window === 'undefined') return;
+    if (!orders || !Array.isArray(orders) || typeof window === 'undefined' || orders.length === 0) return;
+
+    // Aggregate in memory using Sets to avoid thousands of repetitive localStorage reads/writes
+    const existingSets: Record<string, Set<string>> = {
+        [CUSTOM_OPTION_KEYS.COURIERS]: new Set(getStoredCustomOptions(CUSTOM_OPTION_KEYS.COURIERS).map(s => s.toLowerCase())),
+        [CUSTOM_OPTION_KEYS.BRANDS]: new Set(getStoredCustomOptions(CUSTOM_OPTION_KEYS.BRANDS).map(s => s.toLowerCase())),
+        [CUSTOM_OPTION_KEYS.MODELS]: new Set(getStoredCustomOptions(CUSTOM_OPTION_KEYS.MODELS).map(s => s.toLowerCase())),
+        [CUSTOM_OPTION_KEYS.MATERIALS]: new Set(getStoredCustomOptions(CUSTOM_OPTION_KEYS.MATERIALS).map(s => s.toLowerCase())),
+        [CUSTOM_OPTION_KEYS.SIZES]: new Set(getStoredCustomOptions(CUSTOM_OPTION_KEYS.SIZES).map(s => s.toLowerCase())),
+        [CUSTOM_OPTION_KEYS.COLORS]: new Set(getStoredCustomOptions(CUSTOM_OPTION_KEYS.COLORS).map(s => s.toLowerCase())),
+    };
+
+    const newAdditions: Record<string, string[]> = {
+        [CUSTOM_OPTION_KEYS.COURIERS]: [],
+        [CUSTOM_OPTION_KEYS.BRANDS]: [],
+        [CUSTOM_OPTION_KEYS.MODELS]: [],
+        [CUSTOM_OPTION_KEYS.MATERIALS]: [],
+        [CUSTOM_OPTION_KEYS.SIZES]: [],
+        [CUSTOM_OPTION_KEYS.COLORS]: [],
+    };
+
+    const addIfNew = (key: string, val: any) => {
+        if (!val || typeof val !== 'string') return;
+        const clean = val.trim();
+        if (!clean || clean.toLowerCase() === 'other' || clean.length < 1) return;
+        const lower = clean.toLowerCase();
+        if (!existingSets[key].has(lower)) {
+            existingSets[key].add(lower);
+            newAdditions[key].push(clean);
+        }
+    };
 
     for (const order of orders) {
         if (!order) continue;
 
         // Courier
         const courier = order.deliveryCourier || order.delivery_courier;
-        if (courier && typeof courier === 'string') {
-            saveStoredCustomOption(CUSTOM_OPTION_KEYS.COURIERS, courier);
-        }
+        addIfNew(CUSTOM_OPTION_KEYS.COURIERS, courier);
 
         // Shoes / Items
         const items = order.items || [];
         if (Array.isArray(items)) {
             for (const item of items) {
                 if (!item) continue;
-                if (item.brand && typeof item.brand === 'string') {
-                    saveStoredCustomOption(CUSTOM_OPTION_KEYS.BRANDS, item.brand);
-                }
-                const model = item.shoeModel || item.shoe_model || item.model;
-                if (model && typeof model === 'string') {
-                    saveStoredCustomOption(CUSTOM_OPTION_KEYS.MODELS, model);
-                }
-                const material = item.shoeMaterial || item.shoe_material || item.material;
-                if (material && typeof material === 'string') {
-                    saveStoredCustomOption(CUSTOM_OPTION_KEYS.MATERIALS, material);
-                }
-                const size = item.shoeSize || item.shoe_size || item.size;
-                if (size && typeof size === 'string') {
-                    saveStoredCustomOption(CUSTOM_OPTION_KEYS.SIZES, size);
-                }
+                addIfNew(CUSTOM_OPTION_KEYS.BRANDS, item.brand);
+                addIfNew(CUSTOM_OPTION_KEYS.MODELS, item.shoeModel || item.shoe_model || item.model);
+                addIfNew(CUSTOM_OPTION_KEYS.MATERIALS, item.shoeMaterial || item.shoe_material || item.material);
+                addIfNew(CUSTOM_OPTION_KEYS.SIZES, item.shoeSize || item.shoe_size || item.size);
+
                 const color = item.color;
                 if (color && typeof color === 'string') {
-                    // Could be comma separated if multiple
-                    color.split(',').forEach(c => {
-                        const trimmed = c.trim();
-                        if (trimmed) saveStoredCustomOption(CUSTOM_OPTION_KEYS.COLORS, trimmed);
-                    });
+                    color.split(',').forEach(c => addIfNew(CUSTOM_OPTION_KEYS.COLORS, c));
                 }
+            }
+        }
+    }
+
+    // Persist batch additions to localStorage once per key with change dispatch
+    for (const [key, additions] of Object.entries(newAdditions)) {
+        if (additions.length > 0) {
+            try {
+                const current = getStoredCustomOptions(key);
+                localStorage.setItem(key, JSON.stringify([...current, ...additions]));
+                window.dispatchEvent(new CustomEvent(CUSTOM_OPTION_EVENT, {
+                    detail: { key, action: 'seed' }
+                }));
+            } catch (e) {
+                console.warn(`[CustomOptions] Failed to batch save ${key}:`, e);
             }
         }
     }

@@ -1,13 +1,14 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Box, Typography, Paper, Grid, Button, IconButton, 
-  Divider, TextField, Card, CircularProgress, Alert, MenuItem, InputAdornment, Chip, Autocomplete, Collapse,
+  Divider, TextField, Card, CircularProgress, Alert, MenuItem, InputAdornment, Chip, Autocomplete,
+  Dialog, DialogTitle, DialogContent, DialogActions,
 } from '@mui/material';
 import Checkbox from '@mui/material/Checkbox';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
-import { CheckCircle, Cancel, Edit, ArrowBack, ArrowForward, Refresh, Add, DeleteOutline, DocumentScanner, Clear as ClearIcon } from '@mui/icons-material';
+import { CheckCircle, Cancel, Edit, ArrowBack, ArrowForward, Refresh, Add, DeleteOutline, Clear as ClearIcon, WarningAmber, InfoOutlined } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 // P1-10 FIX: this previously hardcoded `http://localhost:8000/api` unconditionally, which
@@ -24,6 +25,10 @@ const DEFAULT_MODELS = ['Air Force 1', 'Dunk Low', 'Air Jordan 1', 'Ultraboost',
 const DEFAULT_MATERIALS = ['Leather', 'Suede', 'Canvas', 'Mesh', 'Nubuck', 'Nylon', 'Patent Leather', 'Knit', 'Rubber', 'Foam', 'Synthetic'];
 const DEFAULT_COLORS = ['White', 'Black', 'Red', 'Blue', 'Green', 'Grey', 'Brown', 'Yellow', 'Orange', 'Pink', 'Purple', 'Multi', 'Tan', 'Beige', 'Navy'];
 const DEFAULT_SIZES = ['US 6', 'US 6.5', 'US 7', 'US 7.5', 'US 8', 'US 8.5', 'US 9', 'US 9.5', 'US 10', 'US 10.5', 'US 11', 'US 11.5', 'US 12', 'UK 6', 'UK 6.5', 'UK 7', 'UK 7.5', 'UK 8', 'UK 8.5', 'UK 9', 'UK 9.5', 'UK 10', 'EU 38', 'EU 39', 'EU 40', 'EU 41', 'EU 42', 'EU 43', 'EU 44', 'EU 45'];
+
+export const BASE_SERVICE_OPTIONS = ['Basic Cleaning', 'Full Reglue', 'Minor Reglue', 'Color Renewal'];
+export const ADDON_SERVICE_OPTIONS = ['White Paint', 'Unyellowing', 'Minor Restoration', 'Minor Retouch', 'Full Reglue Midsole', 'Full Reglue Undersole', '2 Color', '3 Color'];
+export const DEFAULT_CONDITIONS = ['scratches', 'yellowing', 'sole separation', 'deep stains', 'rips/holes', 'worn out', 'creasing', 'heel drag'];
 
 function getRememberedOptions(category: string, defaults: string[]): string[] {
   const key = `shoelotskey_custom_${category}`;
@@ -235,12 +240,39 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
   const [currentIndex, setCurrentIndex] = useState(0);
   const [editMode, setEditMode] = useState(false);
   const [editedData, setEditedData] = useState<any>(null);
-  const [imageUrl, setImageUrl] = useState<string>('');
-  const [previewKind, setPreviewKind] = useState<'image' | 'pdf'>('image');
   const [busy, setBusy] = useState(false);
-  const [ocrRunning, setOcrRunning] = useState(false);
-  const [showOcrSnapshot, setShowOcrSnapshot] = useState(false);
-  const ocrAbortRef = useRef<AbortController | null>(null);
+  const [showRejectConfirm, setShowRejectConfirm] = useState(false);
+  const [showCsvSource, setShowCsvSource] = useState(true);
+
+  const [activeFilter, setActiveFilter] = useState<string>('potential_ml');
+  const [filterCounts, setFilterCounts] = useState<{
+    all_pending: number;
+    potential_ml: number;
+    historical_only: number;
+    needs_human_review: number;
+    order_id_collision: number;
+    legacy_reference_match: number;
+    validated: number;
+    corrected: number;
+    rejected: number;
+    confirmed_ml_eligible: number;
+    unresolved_collisions: number;
+  }>({
+    all_pending: 714,
+    potential_ml: 120,
+    historical_only: 591,
+    needs_human_review: 3,
+    order_id_collision: 6,
+    legacy_reference_match: 61,
+    validated: 0,
+    corrected: 0,
+    rejected: 0,
+    confirmed_ml_eligible: 0,
+    unresolved_collisions: 6,
+  });
+
+  const [rejectionCategory, setRejectionCategory] = useState<string>('confirmed duplicate');
+  const [rejectReason, setRejectReason] = useState<string>('Confirmed duplicate');
 
   const [brandOptions, setBrandOptions] = useState(() => getRememberedOptions('brands', DEFAULT_BRANDS));
   const [modelOptions, setModelOptions] = useState(() => getRememberedOptions('models', DEFAULT_MODELS));
@@ -255,15 +287,32 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
     Authorization: `Bearer ${user.token}`,
   });
 
-  const fetchQueue = async (opts?: { keepPosition?: boolean }) => {
+  const refreshCountsOnly = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/historical/processing/queue?limit=1&source_filter=${encodeURIComponent(activeFilter)}`, {
+        headers: authHeaders(),
+      });
+      if (res.ok) {
+        const p = await res.json();
+        if (p?.counts) {
+          setFilterCounts(p.counts);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const fetchQueue = async (opts?: { keepPosition?: boolean; filter?: string }) => {
     const keepPosition = opts?.keepPosition !== false;
+    const filterToUse = opts?.filter !== undefined ? opts.filter : activeFilter;
     const previousId = keepPosition
       ? (queue[currentIndex]?.historical_image_id ?? recalledOcrPosition())
       : null;
     setLoading(true);
     setLoadError(null);
     try {
-      const response = await fetch(`${API_BASE_URL}/historical/processing/queue?limit=800`, {
+      const response = await fetch(`${API_BASE_URL}/historical/processing/queue?limit=800&source_filter=${encodeURIComponent(filterToUse)}`, {
         headers: authHeaders(),
       });
       if (!response.ok) throw new Error(`Queue request failed (${response.status})`);
@@ -277,6 +326,9 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
         ? data.length
         : Number(payload?.total);
       setQueue(data);
+      if (payload?.counts) {
+        setFilterCounts(payload.counts);
+      }
       setEditMode(false);
       const restoredIdx = previousId != null
         ? data.findIndex((item: any) => item?.historical_image_id === previousId)
@@ -299,10 +351,18 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
     }
   };
 
-  useEffect(() => {
-    // Always open at the first pending record. Resume position is only used on Refresh.
+  const handleFilterChange = (newFilter: string) => {
+    if (newFilter === activeFilter) return;
+    setActiveFilter(newFilter);
+    setCurrentIndex(0);
     rememberOcrPosition(null);
-    fetchQueue({ keepPosition: false });
+    void fetchQueue({ keepPosition: false, filter: newFilter });
+  };
+
+  useEffect(() => {
+    // Always open at POTENTIAL ML filter first as prioritized by requirements.
+    rememberOcrPosition(null);
+    void fetchQueue({ keepPosition: false, filter: 'potential_ml' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -321,42 +381,6 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
     rememberOcrPosition(queue[clamped]?.historical_image_id);
   };
 
-  useEffect(() => {
-    const filename = queue[currentIndex]?.image_filename;
-    if (!filename || !user.token) {
-      setImageUrl('');
-      return;
-    }
-    let objectUrl = '';
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(
-          `${API_BASE_URL}/historical/image/${encodeURIComponent(filename)}`,
-          { headers: { Authorization: `Bearer ${user.token}` } },
-        );
-        if (!res.ok) throw new Error('image');
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        if (cancelled) {
-          URL.revokeObjectURL(url);
-          return;
-        }
-        objectUrl = url;
-        const type = (res.headers.get('content-type') || blob.type || '').toLowerCase();
-        setPreviewKind(
-          type.includes('pdf') || String(filename).toLowerCase().endsWith('.pdf') ? 'pdf' : 'image'
-        );
-        setImageUrl(url);
-      } catch {
-        if (!cancelled) setImageUrl('');
-      }
-    })();
-    return () => {
-      cancelled = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [queue, currentIndex, user.token]);
 
   const displayIsoDate = (val: any) => {
     if (val === undefined || val === null || val === '') return '';
@@ -477,6 +501,37 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
     return BASE_SERVICE_LABELS[code] || ADDON_SERVICE_LABELS[code] || String(name || '').trim();
   };
 
+  const parseServicesInput = (input: unknown): string[] => {
+    if (Array.isArray(input)) {
+      return Array.from(
+        new Set(
+          input
+            .flatMap((item) => parseServicesInput(item))
+            .filter(Boolean)
+        )
+      );
+    }
+    if (typeof input !== 'string') return [];
+    const parts = input.split(/[,+/|\n]+/).map((s) => s.trim()).filter(Boolean);
+    const normalized = parts.map((p) => serviceFullName(p) || p);
+    return Array.from(new Set(normalized));
+  };
+
+  const parseConditionsInput = (input: unknown): string[] => {
+    if (Array.isArray(input)) {
+      return Array.from(
+        new Set(
+          input
+            .flatMap((item) => parseConditionsInput(item))
+            .filter(Boolean)
+        )
+      );
+    }
+    if (typeof input !== 'string') return [];
+    const parts = input.split(/[,+|\n]+/).map((s) => s.trim()).filter(Boolean);
+    return Array.from(new Set(parts));
+  };
+
   const catalogGroupedServices = (item: any) => {
     const all = [
       ...(Array.isArray(item?.base_services) ? item.base_services : []),
@@ -530,7 +585,9 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
     const match = (Array.isArray(item?.services) ? item.services : []).find((svc: any) =>
       String(svc.service_name || '').trim() === name && Number(svc.price) > 0
     );
-    return match ? Number(match.price) : '';
+    if (match) return Number(match.price);
+    const catalog = resolveCatalogPrice(name);
+    return catalog != null && Number(catalog) > 0 ? Number(catalog) : '';
   };
 
   const explicitGroupPrice = (item: any, group: 'base' | 'addon'): number | '' => {
@@ -555,7 +612,34 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
     (['base', 'addon'] as const).forEach((group) => {
       const names = listGroupServices(item, group);
       const amount = explicitGroupPrice(item, group);
-      if (amount !== '' && names.length) prices[names[0]] = amount;
+      if (amount !== '' && names.length) {
+        if (names.length === 1) {
+          prices[names[0]] = amount;
+        } else {
+          const currentSum = names.reduce((sum, n) => sum + (prices[n] || 0), 0);
+          if (Math.abs(currentSum - amount) > 0.05) {
+            const catalogVals = names.map(resolveCatalogPrice);
+            const catalogSum = catalogVals.reduce<number>((sum, val) => sum + (val || 0), 0);
+            if (catalogVals.every((val) => val != null) && Math.abs(catalogSum - amount) < 0.05) {
+              names.forEach((name, idx) => { prices[name] = catalogVals[idx] as number; });
+            } else {
+              let remaining = amount;
+              names.forEach((name, idx) => {
+                if (idx === names.length - 1) {
+                  prices[name] = Math.max(0, Math.round(remaining * 100) / 100);
+                } else if (catalogVals[idx] != null && catalogVals[idx]! < remaining) {
+                  prices[name] = catalogVals[idx] as number;
+                  remaining = Math.round((remaining - (catalogVals[idx] as number)) * 100) / 100;
+                } else {
+                  const share = Math.round((amount / names.length) * 100) / 100;
+                  prices[name] = share;
+                  remaining = Math.round((remaining - share) * 100) / 100;
+                }
+              });
+            }
+          }
+        }
+      }
     });
     if (item?.prices_manual) return prices;
 
@@ -750,11 +834,13 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
     };
     const baseNames = listGroupServices(next, 'base');
     const addonNames = listGroupServices(next, 'addon');
-    if (!next.prices_manual && explicitGroupPrice(next, 'base') === '' && baseNames.length && service_prices[baseNames[0]] != null) {
-      next.base_service_price = service_prices[baseNames[0]];
+    if (!next.prices_manual && explicitGroupPrice(next, 'base') === '' && baseNames.length) {
+      const baseSum = baseNames.reduce((sum, name) => sum + (Number(service_prices[name]) || 0), 0);
+      if (baseSum > 0) next.base_service_price = Math.round(baseSum * 100) / 100;
     }
-    if (!next.prices_manual && explicitGroupPrice(next, 'addon') === '' && addonNames.length && service_prices[addonNames[0]] != null) {
-      next.addon_service_price = service_prices[addonNames[0]];
+    if (!next.prices_manual && explicitGroupPrice(next, 'addon') === '' && addonNames.length) {
+      const addonSum = addonNames.reduce((sum, name) => sum + (Number(service_prices[name]) || 0), 0);
+      if (addonSum > 0) next.addon_service_price = Math.round(addonSum * 100) / 100;
     }
     return next;
   };
@@ -837,11 +923,13 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
     };
   };
 
-  const handleAction = async (action: 'approve' | 'reject' | 'correct' | 'save') => {
+  const handleAction = async (action: 'approve' | 'reject' | 'correct' | 'save', customReason?: string) => {
     if (queue.length === 0 || busy) return;
     const currentImg = queue[currentIndex];
     const stayInQueue = action === 'correct' || action === 'save';
-    const snapshot = stayInQueue || action === 'approve' ? currentSnapshot() : undefined;
+    const isEditApproval = action === 'approve' && editMode;
+    const hasCorrections = stayInQueue || isEditApproval;
+    const snapshot = hasCorrections ? currentSnapshot() : undefined;
 
     setBusy(true);
     try {
@@ -854,12 +942,18 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
         headers: authHeaders(),
         body: JSON.stringify({
           action,
-          corrections: action === 'reject' ? undefined : snapshot,
+          corrections: hasCorrections ? snapshot : undefined,
+          reason: action === 'reject' ? (customReason || rejectReason || 'Manual rejection by researcher') : undefined,
+          was_corrected: editMode,
         }),
       });
       if (!res.ok) {
-        throw new Error(stayInQueue ? 'Failed to save corrections' : 'Failed to validate record');
+        const errJson = await res.json().catch(() => ({}));
+        const detailMsg = errJson?.detail || res.statusText || 'Server Error';
+        throw new Error(`Validation failed (HTTP ${res.status}: ${detailMsg}). Record was not modified.`);
       }
+
+      const data = await res.json().catch(() => ({}));
 
       if (stayInQueue) {
         setQueue((prev) => prev.map((item, i) => (
@@ -877,6 +971,19 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
         const base = total != null ? total : queue.length;
         return Math.max(0, base - 1);
       });
+
+      if (action === 'approve') {
+        if (data?.is_ml_eligible) {
+          toast.success('Historical record validated successfully and added to the clean ML dataset.');
+        } else if (data?.new_status === 'CORRECTED') {
+          toast.success('Historical record corrected and validated successfully.');
+        } else {
+          toast.success('Historical record validated successfully.');
+        }
+      } else if (action === 'reject') {
+        toast.success('Historical record rejected.');
+      }
+
       if (remaining.length === 0) {
         rememberOcrPosition(null);
         await fetchQueue({ keepPosition: false });
@@ -884,81 +991,16 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
         const nextIdx = Math.min(currentIndex, remaining.length - 1);
         setCurrentIndex(nextIdx);
         rememberOcrPosition(remaining[nextIdx]?.historical_image_id);
+        void refreshCountsOnly();
       }
     } catch (error: any) {
       console.error(`Failed to ${action} record`, error);
-      alert(`${stayInQueue ? 'Failed to save corrections' : 'Failed to validate record'}: ${error.message || 'Server Error'}`);
+      toast.error(error?.message || 'Validation failed. Record was not modified.');
     } finally {
       setBusy(false);
     }
   };
 
-  const handleCancelReocr = async () => {
-    const currentImg = queue[currentIndex];
-    ocrAbortRef.current?.abort();
-    if (currentImg?.historical_image_id) {
-      try {
-        await fetch(
-          `${API_BASE_URL}/historical/processing/reocr/${currentImg.historical_image_id}/cancel`,
-          { method: 'POST', headers: authHeaders() },
-        );
-      } catch {
-        // UI unlock still happens below
-      }
-    }
-    setOcrRunning(false);
-    setBusy(false);
-    toast.message('OCR run cancelled.');
-  };
-
-  const handleReocr = async () => {
-    const currentImg = queue[currentIndex];
-    if (!currentImg?.historical_image_id || busy || ocrRunning) return;
-    ocrAbortRef.current?.abort();
-    const controller = new AbortController();
-    ocrAbortRef.current = controller;
-    setBusy(true);
-    setOcrRunning(true);
-    try {
-      const res = await fetch(
-        `${API_BASE_URL}/historical/processing/reocr/${currentImg.historical_image_id}`,
-        { method: 'POST', headers: authHeaders(), signal: controller.signal },
-      );
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        if (res.status === 409 || String(data?.detail || '').toLowerCase().includes('cancel')) {
-          toast.message('OCR run cancelled.');
-          return;
-        }
-        const detail = data?.detail;
-        const message = Array.isArray(detail)
-          ? detail.map((d: any) => d?.msg || JSON.stringify(d)).join('; ')
-          : (typeof detail === 'string' ? detail : null);
-        throw new Error(message || `Re-OCR failed (${res.status})`);
-      }
-      if (data?.item) {
-        setQueue((prev) => prev.map((item, i) => (i === currentIndex ? data.item : item)));
-        setEditMode(false);
-        setEditedData(null);
-      }
-      if (data?.usable) {
-        toast.success(`OCR refreshed (${data.engine || 'engine'}, ${Math.round((data.confidence || 0) * 100)}%). Review the filled fields.`);
-      } else {
-        toast.message('OCR ran again but still could not read most fields. Keep verifying against the scan.');
-      }
-    } catch (error: any) {
-      if (error?.name === 'AbortError') {
-        toast.message('OCR run cancelled.');
-        return;
-      }
-      console.error('Re-OCR failed', error);
-      toast.error(error?.message || 'Re-OCR failed');
-    } finally {
-      if (ocrAbortRef.current === controller) ocrAbortRef.current = null;
-      setOcrRunning(false);
-      setBusy(false);
-    }
-  };
 
   const roundMoney = (n: number) => Math.round(n * 100) / 100;
 
@@ -1237,11 +1279,31 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
         const names = listGroupServices(nextItem, group);
         const amount = parseOptionalMoney(value);
         const service_prices = { ...(current.service_prices || {}) };
-        names.forEach((name, nameIdx) => {
-          if (amount === '') delete service_prices[name];
-          else if (nameIdx === 0) service_prices[name] = amount;
-          else delete service_prices[name];
-        });
+        if (amount === '') {
+          names.forEach((name) => delete service_prices[name]);
+        } else if (names.length === 1) {
+          service_prices[names[0]] = amount;
+        } else if (names.length > 1) {
+          const catalogVals = names.map(resolveCatalogPrice);
+          const catalogSum = catalogVals.reduce<number>((sum, val) => sum + (val || 0), 0);
+          if (catalogVals.every((val) => val != null) && Math.abs(catalogSum - amount) < 0.05) {
+            names.forEach((name, idx) => { service_prices[name] = catalogVals[idx] as number; });
+          } else {
+            let remaining = amount;
+            names.forEach((name, idx) => {
+              if (idx === names.length - 1) {
+                service_prices[name] = Math.max(0, Math.round(remaining * 100) / 100);
+              } else if (catalogVals[idx] != null && catalogVals[idx]! < remaining) {
+                service_prices[name] = catalogVals[idx] as number;
+                remaining = Math.round((remaining - (catalogVals[idx] as number)) * 100) / 100;
+              } else {
+                const share = Math.round((amount / names.length) * 100) / 100;
+                service_prices[name] = share;
+                remaining = Math.round((remaining - share) * 100) / 100;
+              }
+            });
+          }
+        }
         nextItem = {
           ...nextItem,
           service_prices,
@@ -1255,6 +1317,27 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
         }
         nextItem.price_breakdown = formatServicePriceBreakdown(nextItem);
       } else if (['item_price', 'base_services', 'addon_services'].includes(field)) {
+        if (field === 'base_services' || field === 'addon_services') {
+          const group = field === 'base_services' ? 'base' : 'addon';
+          const newNames = listGroupServices(nextItem, group);
+          const service_prices = { ...(nextItem.service_prices || {}) };
+          newNames.forEach((name) => {
+            if (service_prices[name] == null) {
+              const catPrice = resolveCatalogPrice(name);
+              if (catPrice != null) service_prices[name] = catPrice;
+            }
+          });
+          const oldNames = listGroupServices(current, group);
+          oldNames.forEach((name) => {
+            if (!newNames.includes(name)) delete service_prices[name];
+          });
+          nextItem.service_prices = service_prices;
+          const groupSum = newNames.reduce((sum, n) => sum + (Number(service_prices[n]) || 0), 0);
+          if (groupSum > 0) {
+            if (field === 'base_services') nextItem.base_service_price = groupSum;
+            else nextItem.addon_service_price = groupSum;
+          }
+        }
         nextItem = decorateItemPricing(nextItem);
         if (field === 'base_services' || field === 'addon_services') {
           const basePrice = explicitGroupPrice(nextItem, 'base');
@@ -1424,7 +1507,7 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
     return (
       <Box sx={{ p: 4, textAlign: 'center' }}>
         <Alert severity="error" sx={{ mb: 2, textAlign: 'left' }}>
-          The review queue could not be loaded. Pending OCR records were not validated or deleted.
+          The review queue could not be loaded. Pending historical records were not validated or deleted.
           {pendingTotal ? ` About ${pendingTotal} records are still waiting for review.` : ''}
         </Alert>
         <Typography color="textSecondary" sx={{ mb: 3 }}>{loadError}</Typography>
@@ -1438,50 +1521,150 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
     );
   }
 
-  if (queue.length === 0) {
-    if (pendingTotal && pendingTotal > 0) {
-      return (
-        <Box sx={{ p: 4, textAlign: 'center' }}>
-          <Alert severity="warning" sx={{ mb: 2, textAlign: 'left' }}>
-            About {pendingTotal} records are still waiting for review, but this page did not receive them.
-            They were not validated or deleted.
-          </Alert>
-          <Button variant="contained" startIcon={<Refresh />} onClick={() => { void fetchQueue(); }} sx={{ mr: 1 }}>
-            Retry Queue
+  const renderLiveCountersRibbon = () => (
+    <Box sx={{ mb: 1.5, display: 'flex', gap: 0.75, flexWrap: 'wrap', alignItems: 'center', bgcolor: '#f8fafc', p: 1, borderRadius: 2, border: '1px solid #e2e8f0' }}>
+      <Typography variant="caption" sx={{ fontWeight: 800, color: '#475569', textTransform: 'uppercase', mr: 0.5, fontSize: '0.72rem' }}>
+        Live Database Status:
+      </Typography>
+      <Chip label={`ALL PENDING: ${filterCounts.all_pending}`} size="small" sx={{ fontWeight: 700, fontSize: '0.7rem', height: 22, bgcolor: '#e2e8f0' }} />
+      <Chip label={`POTENTIAL ML REMAINING: ${filterCounts.potential_ml}`} size="small" color="primary" variant="outlined" sx={{ fontWeight: 800, fontSize: '0.7rem', height: 22 }} />
+      <Chip label={`VALIDATED: ${filterCounts.validated}`} size="small" color="success" variant="outlined" sx={{ fontWeight: 700, fontSize: '0.7rem', height: 22 }} />
+      <Chip label={`CORRECTED: ${filterCounts.corrected}`} size="small" color="secondary" variant="outlined" sx={{ fontWeight: 700, fontSize: '0.7rem', height: 22 }} />
+      <Chip label={`REJECTED: ${filterCounts.rejected}`} size="small" color="error" variant="outlined" sx={{ fontWeight: 700, fontSize: '0.7rem', height: 22 }} />
+      <Chip label={`CONFIRMED ML ELIGIBLE: ${filterCounts.confirmed_ml_eligible}`} size="small" sx={{ fontWeight: 900, fontSize: '0.7rem', height: 22, bgcolor: '#dcfce7', color: '#166534', border: '1px solid #86efac' }} />
+      <Chip label={`HISTORICAL ONLY: ${filterCounts.historical_only}`} size="small" sx={{ fontWeight: 600, fontSize: '0.7rem', height: 22, bgcolor: '#f1f5f9' }} />
+      <Chip label={`NEEDS HUMAN REVIEW: ${filterCounts.needs_human_review}`} size="small" color="warning" variant="outlined" sx={{ fontWeight: 700, fontSize: '0.7rem', height: 22 }} />
+      <Chip label={`UNRESOLVED COLLISIONS: ${filterCounts.unresolved_collisions}`} size="small" color="error" variant="outlined" sx={{ fontWeight: 700, fontSize: '0.7rem', height: 22 }} />
+    </Box>
+  );
+
+  const renderFilterTabs = () => (
+    <Box sx={{ mb: 2, display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center', bgcolor: '#ffffff', p: 1, borderRadius: 2, border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
+      <Typography variant="caption" sx={{ fontWeight: 800, color: '#64748b', px: 1, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+        Queue Filter:
+      </Typography>
+      {[
+        { key: 'potential_ml', label: 'POTENTIAL ML', count: filterCounts.potential_ml, activeColor: '#2563eb' },
+        { key: 'all_pending', label: 'ALL PENDING', count: filterCounts.all_pending, activeColor: '#1e293b' },
+        { key: 'historical_only', label: 'HISTORICAL ONLY', count: filterCounts.historical_only, activeColor: '#475569' },
+        { key: 'needs_human_review', label: 'NEEDS HUMAN REVIEW', count: filterCounts.needs_human_review, activeColor: '#dc2626' },
+        { key: 'order_id_collision', label: 'ORDER ID COLLISION', count: filterCounts.order_id_collision, activeColor: '#d97706' },
+        { key: 'legacy_reference_match', label: 'LEGACY REFERENCE MATCH', count: filterCounts.legacy_reference_match, activeColor: '#7c3aed' },
+      ].map((tab) => {
+        const isSelected = activeFilter === tab.key;
+        return (
+          <Button
+            key={tab.key}
+            variant={isSelected ? 'contained' : 'outlined'}
+            size="small"
+            onClick={() => handleFilterChange(tab.key)}
+            sx={{
+              borderRadius: 2,
+              textTransform: 'none',
+              fontWeight: isSelected ? 800 : 600,
+              fontSize: '0.8rem',
+              py: 0.5,
+              px: 1.5,
+              bgcolor: isSelected ? tab.activeColor : 'transparent',
+              color: isSelected ? '#ffffff' : '#334155',
+              borderColor: isSelected ? 'transparent' : '#cbd5e1',
+              '&:hover': {
+                bgcolor: isSelected ? tab.activeColor : '#f1f5f9',
+                filter: isSelected ? 'brightness(0.92)' : 'none',
+              }
+            }}
+          >
+            {tab.label}
+            <Box
+              component="span"
+              sx={{
+                ml: 1,
+                px: 0.75,
+                py: 0.15,
+                borderRadius: 10,
+                fontSize: '0.72rem',
+                fontWeight: 800,
+                bgcolor: isSelected ? 'rgba(255,255,255,0.25)' : '#e2e8f0',
+                color: isSelected ? '#ffffff' : '#334155',
+              }}
+            >
+              {tab.count}
+            </Box>
           </Button>
-          <Button variant="outlined" startIcon={<ArrowBack />} onClick={() => onBack ? onBack() : navigate('/job-order-form/historical-records')}>
+        );
+      })}
+    </Box>
+  );
+
+  if (queue.length === 0) {
+    return (
+      <Box sx={{ p: 3, height: 'calc(100vh - 100px)', display: 'flex', flexDirection: 'column' }}>
+        {renderLiveCountersRibbon()}
+        {renderFilterTabs()}
+        <Box sx={{ p: 6, textAlign: 'center', bgcolor: 'background.paper', borderRadius: 2, border: '1px solid #e2e8f0' }}>
+          <CheckCircle color="success" sx={{ fontSize: 60, mb: 2 }} />
+          <Typography variant="h5" gutterBottom fontWeight="bold">
+            No Records in "{activeFilter.toUpperCase().replace(/_/g, ' ')}"
+          </Typography>
+          <Typography color="textSecondary" sx={{ mb: 3 }}>
+            There are currently 0 records waiting in this validation category.
+          </Typography>
+          <Button variant="outlined" startIcon={<Refresh />} onClick={() => { void fetchQueue(); }} sx={{ mr: 1 }}>
+            Refresh Queue
+          </Button>
+          <Button variant="contained" startIcon={<ArrowBack />} onClick={() => onBack ? onBack() : navigate('/job-order-form/historical-records')}>
             Return to Historical Records
           </Button>
         </Box>
-      );
-    }
-    return (
-      <Box sx={{ p: 4, textAlign: 'center' }}>
-        <CheckCircle color="success" sx={{ fontSize: 60, mb: 2 }} />
-        <Typography variant="h5" gutterBottom>Validation Queue Empty</Typography>
-        <Typography color="textSecondary" sx={{ mb: 3 }}>All historical records have been successfully validated.</Typography>
-        <Button variant="outlined" startIcon={<Refresh />} onClick={() => { void fetchQueue(); }} sx={{ mr: 1 }}>
-          Refresh Queue
-        </Button>
-        <Button variant="contained" startIcon={<ArrowBack />} onClick={() => onBack ? onBack() : navigate('/job-order-form/historical-records')}>
-          Return to Historical Records
-        </Button>
       </Box>
     );
   }
 
   const currentItem = queue[currentIndex];
-  const reviewTotal = Math.max(pendingTotal ?? 0, queue.length);
-  const reviewCurrent = queue.length === 0 ? 0 : Math.min(currentIndex + 1, queue.length);
+  const reviewedSoFar = (filterCounts.validated || 0) + (filterCounts.corrected || 0) + (filterCounts.rejected || 0);
+  const totalPotentialMl = (filterCounts.potential_ml || 0) + reviewedSoFar;
+  const isPotentialMlView = activeFilter === 'potential_ml';
+  const reviewTotal = isPotentialMlView ? (totalPotentialMl || 120) : Math.max(pendingTotal ?? 0, queue.length);
+  const reviewCurrent = isPotentialMlView 
+    ? Math.min(reviewTotal, reviewedSoFar + 1)
+    : (queue.length === 0 ? 0 : Math.min(currentIndex + 1, queue.length));
   const canGoPrev = currentIndex > 0;
   const canGoNext = currentIndex < queue.length - 1;
 
   return (
-    <Box sx={{ p: 3, height: 'calc(100vh - 100px)', display: 'flex', flexDirection: 'column' }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2, gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+    <Box sx={{ width: '100%', maxWidth: 'none', px: { xs: 1.5, md: 2.5, xl: 3 }, py: 1.5, minHeight: '100vh', display: 'flex', flexDirection: 'column', pb: 4 }}>
+      <Box sx={{
+        position: 'sticky',
+        top: 0,
+        zIndex: 25,
+        bgcolor: '#f8fafc',
+        py: 1,
+        mb: 1.5,
+        borderBottom: '1px solid #e2e8f0',
+        display: 'flex',
+        justifyContent: 'space-between',
+        gap: 2,
+        flexWrap: 'wrap',
+        alignItems: 'center'
+      }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
           <Typography variant="h5" component="div" sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', fontWeight: 800 }}>
-            Needs Human Review
+            HISTORICAL DATA VALIDATION
+            {activeFilter === 'potential_ml' && (
+              <Chip
+                label="POTENTIAL ML CANDIDATE"
+                size="small"
+                sx={{ bgcolor: '#dbeafe', color: '#1e40af', fontWeight: 900, fontSize: '0.75rem', height: 26 }}
+              />
+            )}
+            {currentItem?.order && (
+              <Chip
+                label={currentItem.order?.raw_order_id || currentItem.order?.original_order_id || currentItem.order?.order_id}
+                size="small"
+                variant="outlined"
+                sx={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.78rem', height: 26, borderColor: '#cbd5e1', bgcolor: '#ffffff' }}
+              />
+            )}
             <Box
               component="span"
               sx={{
@@ -1505,7 +1688,7 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
               >
                 <ArrowBack fontSize="small" />
               </IconButton>
-              Record {reviewCurrent} of {reviewTotal}
+              Candidate {reviewCurrent} of {reviewTotal}
               <IconButton
                 size="small"
                 aria-label="Next record"
@@ -1517,7 +1700,28 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
             </Box>
           </Typography>
         </Box>
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center' }}>
+        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center' }}>
+          {/* Read-Only Clean ML Dataset Counter */}
+          <Box
+            sx={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 1,
+              px: 1.5,
+              py: 0.5,
+              borderRadius: 2,
+              bgcolor: '#ecfdf5',
+              border: '1px solid #10b981',
+              color: '#065f46',
+            }}
+          >
+            <Typography variant="caption" sx={{ fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Clean ML Dataset:
+            </Typography>
+            <Typography variant="body2" sx={{ fontWeight: 900 }}>
+              {filterCounts.confirmed_ml_eligible || 0} validated records
+            </Typography>
+          </Box>
           <Button
             variant="text"
             size="small"
@@ -1527,74 +1731,443 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
           >
             First
           </Button>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={() => setShowCsvSource((prev) => !prev)}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 700,
+              fontSize: '0.75rem',
+              borderRadius: 2,
+              borderColor: '#cbd5e1',
+              color: '#1e293b',
+              bgcolor: showCsvSource ? '#ffffff' : '#e0e7ff',
+              '&:hover': { bgcolor: '#f1f5f9' },
+            }}
+          >
+            {showCsvSource ? 'Hide CSV Source (Full Width)' : 'Show CSV Source (Split View)'}
+          </Button>
         </Box>
       </Box>
 
-      <Grid container spacing={3} sx={{ flex: 1, minHeight: 0 }}>
-        {/* Left Side: Original Document (45%) */}
-        <Grid size={{ xs: 12, md: 5.4 }} sx={{ display: 'flex', flexDirection: 'column', height: { xs: '50vh', md: '100%' } }}>
-          <Paper variant="outlined" sx={{ flex: 1, p: 2, display: 'flex', flexDirection: 'column', bgcolor: 'grey.50' }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1, mb: 1 }}>
-              <Box>
-                <Typography variant="subtitle1" fontWeight="bold">Original Scanned Document</Typography>
-                <Typography variant="body2" color="textSecondary">{currentItem.image_filename}</Typography>
-              </Box>
-              {currentItem?.historical_image_id && (
-                ocrRunning ? (
-                  <Button
-                    size="small"
-                    variant="contained"
-                    color="error"
-                    startIcon={<Cancel />}
-                    onClick={() => { void handleCancelReocr(); }}
-                    sx={{ flexShrink: 0 }}
-                  >
-                    Cancel OCR
-                  </Button>
-                ) : (
-                  <Button
-                    size="small"
-                    variant="contained"
-                    startIcon={<DocumentScanner />}
-                    onClick={() => { void handleReocr(); }}
-                    disabled={busy}
-                    sx={{ flexShrink: 0 }}
-                  >
-                    Re-run OCR
-                  </Button>
-                )
-              )}
-            </Box>
-            <Box sx={{ flex: 1, position: 'relative', bgcolor: 'white', border: '1px solid #e0e0e0', borderRadius: 1, overflowY: 'auto' }}>
-              {imageUrl ? (
-                previewKind === 'pdf' ? (
-                  <iframe
-                    src={imageUrl}
-                    title="Receipt PDF"
-                    style={{ width: '100%', height: '100%', minHeight: 420, border: 0 }}
-                  />
-                ) : (
-                  <img
-                    src={imageUrl}
-                    alt="Receipt"
-                    style={{ width: '100%', objectFit: 'contain', objectPosition: 'top' }}
-                  />
-                )
-              ) : (
-                <Box sx={{ p: 4, textAlign: 'center', color: 'text.secondary' }}>
-                  <Typography variant="body2">Source image could not be loaded.</Typography>
-                  <Typography variant="caption">{currentItem.image_filename}</Typography>
-                </Box>
-              )}
-            </Box>
-          </Paper>
-        </Grid>
+      {renderLiveCountersRibbon()}
+      {renderFilterTabs()}
 
-        {/* Right Side: Extracted Data (55%) */}
-        <Grid size={{ xs: 12, md: 6.6 }} sx={{ display: 'flex', flexDirection: 'column', height: { xs: 'auto', md: '100%' } }}>
-          <Paper variant="outlined" sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <Box sx={{ p: 1.5, bgcolor: 'primary.main', color: 'primary.contrastText', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: showCsvSource
+            ? { xs: '1fr', md: 'minmax(380px, 42%) minmax(480px, 58%)', lg: 'minmax(420px, 40%) minmax(620px, 60%)' }
+            : '1fr',
+          gap: 2.5,
+          width: '100%',
+          maxWidth: 'none',
+          alignItems: 'start',
+          flex: 1,
+        }}
+      >
+        {/* Left Side: Original CSV Source (~40% on desktop) */}
+        {showCsvSource && (
+          <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%', minWidth: 0 }}>
+            <Paper variant="outlined" sx={{ p: 2, display: 'flex', flexDirection: 'column', bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0', gap: 2 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1 }}>
+                <Box>
+                  <Typography variant="subtitle1" fontWeight="bold" sx={{ color: '#0f172a', letterSpacing: 0.5 }}>
+                    ORIGINAL CSV SOURCE
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary" sx={{ overflowWrap: 'anywhere' }}>
+                    {currentItem.order?.source_filename
+                      ? `${currentItem.order.source_filename}${currentItem.order?.source_row ? ` · Row ${currentItem.order.source_row}` : ''}`
+                      : 'Structured Historical CSV Import'}
+                  </Typography>
+                </Box>
+              </Box>
+
+              {/* Status & Reconciliation Banners */}
+              {currentItem.order?.reconciliation_status === 'ORDER_ID_COLLISION' && (
+                <Alert severity="warning" icon={<WarningAmber fontSize="inherit" />} sx={{ py: 0.5, px: 1.5, fontSize: '0.78rem' }}>
+                  <strong>ORDER ID COLLISION — HUMAN REVIEW REQUIRED:</strong> Duplicated Order ID in source spreadsheet. Preserved as a genuine distinct candidate record with internal technical identity. Manual human review required.
+                </Alert>
+              )}
+              {currentItem.order?.reconciliation_status === 'NEEDS_HUMAN_REVIEW' && (
+                <Alert severity="error" sx={{ py: 0.5, px: 1.5, fontSize: '0.78rem' }}>
+                  <strong>NEEDS HUMAN REVIEW:</strong> Intake date contains date-range or complex text (<code>{currentItem.order?.raw_date_received}</code>). <code>date_received</code> is NULL until manual human resolution.
+                </Alert>
+              )}
+              {currentItem.order?.reconciliation_notes?.includes('LEGACY_REFERENCE_MATCH') && (
+                <Alert severity="info" icon={<InfoOutlined fontSize="inherit" />} sx={{ py: 0.5, px: 1.5, fontSize: '0.78rem' }}>
+                  <strong>LEGACY REFERENCE MATCH:</strong> Matches archived reference order. CSV remains primary active candidate; reference record remains archived.
+                </Alert>
+              )}
+
+              {/* 1. SOURCE INFORMATION */}
+              <Box sx={{ p: 1.5, bgcolor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 2 }}>
+                <Typography variant="caption" sx={{ fontWeight: 800, color: '#1e3a8a', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
+                  1. SOURCE INFORMATION
+                </Typography>
+                <Grid container spacing={1.25} sx={{ fontSize: '0.75rem' }}>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <Box sx={{ p: 0.75, bgcolor: '#f8fafc', borderRadius: 1, border: '1px solid #f1f5f9' }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Source Type:</Typography>
+                      <Typography variant="body2" fontWeight="bold">CSV_IMPORT</Typography>
+                    </Box>
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <Box sx={{ p: 0.75, bgcolor: '#f8fafc', borderRadius: 1, border: '1px solid #f1f5f9' }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Source Filename:</Typography>
+                      <Typography variant="body2" fontWeight="bold" sx={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                        {currentItem.order?.source_filename || '—'}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <Box sx={{ p: 0.75, bgcolor: '#f8fafc', borderRadius: 1, border: '1px solid #f1f5f9' }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Source Row:</Typography>
+                      <Typography variant="body2" fontWeight="bold">
+                        {currentItem.order?.source_row != null ? currentItem.order.source_row : '—'}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <Box sx={{ p: 0.75, bgcolor: '#f8fafc', borderRadius: 1, border: '1px solid #f1f5f9' }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Original CSV Order ID:</Typography>
+                      <Typography variant="body2" fontWeight="bold" sx={{ color: '#0f766e', overflowWrap: 'anywhere' }}>
+                        {currentItem.order?.raw_order_id || currentItem.order?.original_order_id || currentItem.order?.order_id || '—'}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <Box sx={{ p: 0.75, bgcolor: '#f8fafc', borderRadius: 1, border: '1px solid #f1f5f9' }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Control No:</Typography>
+                      <Typography variant="body2" fontWeight="bold" color={currentItem.order?.control_no ? 'text.primary' : 'text.disabled'}>
+                        {currentItem.order?.control_no || 'NOT_RECORDED'}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <Box sx={{ p: 0.75, bgcolor: '#f8fafc', borderRadius: 1, border: '1px solid #f1f5f9' }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Import Batch:</Typography>
+                      <Typography variant="body2" fontWeight="bold" sx={{ color: '#475569', fontSize: '0.72rem', overflowWrap: 'anywhere' }}>
+                        {currentItem.order?.import_batch_id || 'CSV_REBUILD_2026'}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                </Grid>
+              </Box>
+
+              {/* 2. ORDER INFORMATION */}
+              <Box sx={{ p: 1.5, bgcolor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 2 }}>
+                <Typography variant="caption" sx={{ fontWeight: 800, color: '#1e3a8a', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
+                  2. ORDER INFORMATION
+                </Typography>
+                <Grid container spacing={1.25} sx={{ fontSize: '0.75rem' }}>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <Box sx={{ p: 0.75, bgcolor: '#f8fafc', borderRadius: 1, border: '1px solid #f1f5f9' }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Customer:</Typography>
+                      <Typography variant="body2" fontWeight="bold" sx={{ overflowWrap: 'anywhere' }}>{currentItem.order?.customer?.name || 'NOT_RECORDED'}</Typography>
+                    </Box>
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <Box sx={{ p: 0.75, bgcolor: '#f8fafc', borderRadius: 1, border: '1px solid #f1f5f9' }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Contact:</Typography>
+                      <Typography variant="body2" fontWeight="bold" sx={{ overflowWrap: 'anywhere' }}>{currentItem.order?.customer?.contact || 'NOT_RECORDED'}</Typography>
+                    </Box>
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <Box sx={{ p: 1, bgcolor: '#f8fafc', borderRadius: 1.5, border: '1px solid #e2e8f0', height: '100%' }}>
+                      <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', display: 'block', mb: 0.25 }}>DATE RECEIVED</Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                        <strong>Source:</strong> {currentItem.order?.raw_date_received || 'NOT_RECORDED'}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: currentItem.order?.date_received ? '#0369a1' : '#dc2626', fontWeight: 700, display: 'block' }}>
+                        <strong>Normalized:</strong> {currentItem.order?.date_received ? currentItem.order.date_received.slice(0, 10) : 'NULL (Needs Review)'}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <Box sx={{ p: 1, bgcolor: '#f8fafc', borderRadius: 1.5, border: '1px solid #e2e8f0', height: '100%' }}>
+                      <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569', display: 'block', mb: 0.25 }}>CLAIMED DATE</Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                        <strong>Source:</strong> {currentItem.order?.raw_claimed_date || 'NOT_RECORDED'}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: currentItem.order?.claimed_date ? '#047857' : '#64748b', fontWeight: 700, display: 'block' }}>
+                        <strong>Normalized:</strong> {currentItem.order?.claimed_date ? currentItem.order.claimed_date.slice(0, 10) : 'NOT_RECORDED'}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                </Grid>
+              </Box>
+
+              {/* 3. ITEM INFORMATION */}
+              <Box sx={{ p: 1.5, bgcolor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 800, color: '#1e3a8a', textTransform: 'uppercase' }}>
+                    3. ITEM INFORMATION
+                  </Typography>
+                  <Chip
+                    label={`Qty: ${currentItem.order?.items?.length || 1} (${currentItem.order?.quantity_source || 'DERIVED_FROM_ITEM_ENTRIES'})`}
+                    size="small"
+                    sx={{ fontSize: '0.68rem', height: 20 }}
+                  />
+                </Box>
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: (currentItem.order?.items || []).length > 1 ? { xs: '1fr', sm: 'repeat(2, 1fr)' } : '1fr',
+                    gap: 1.25,
+                  }}
+                >
+                  {(currentItem.order?.items || []).map((it: any, idx: number) => (
+                    <Box key={idx} sx={{ p: 1.25, bgcolor: '#f8fafc', borderRadius: 1.5, border: '1px solid #e2e8f0' }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5, borderBottom: '1px solid #e2e8f0', pb: 0.25 }}>
+                        <Typography variant="caption" fontWeight="bold" sx={{ color: '#1e293b' }}>
+                          PAIR #{idx + 1}
+                        </Typography>
+                        {it.attribute_normalization_status === 'NEEDS_ATTRIBUTE_REVIEW' && (
+                          <Chip label="NEEDS REVIEW" size="small" color="warning" sx={{ height: 18, fontSize: '0.62rem', fontWeight: 800 }} />
+                        )}
+                      </Box>
+                      <Grid container spacing={0.75} sx={{ fontSize: '0.72rem' }}>
+                        <Grid size={{ xs: 12 }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Raw Description (Source):</Typography>
+                          <Typography variant="body2" sx={{ fontSize: '0.75rem', fontWeight: 600, overflowWrap: 'anywhere', fontFamily: 'monospace', bgcolor: '#f1f5f9', p: 0.5, borderRadius: 1 }}>
+                            {it.raw_model || it.model || 'NOT_RECORDED'}
+                          </Typography>
+                        </Grid>
+                        <Grid size={{ xs: 6 }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Brand:</Typography>
+                          <Typography variant="body2" sx={{ fontSize: '0.75rem', fontWeight: 600, overflowWrap: 'anywhere' }}>{it.brand || 'NOT_RECORDED'}</Typography>
+                        </Grid>
+                        <Grid size={{ xs: 6 }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Size:</Typography>
+                          <Typography variant="body2" sx={{ fontSize: '0.75rem', fontWeight: 600, overflowWrap: 'anywhere' }}>{it.size || 'NOT_RECORDED'}</Typography>
+                        </Grid>
+                        <Grid size={{ xs: 12 }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Model:</Typography>
+                          <Typography variant="body2" sx={{ fontSize: '0.75rem', fontWeight: 600, overflowWrap: 'anywhere' }}>{it.model || 'NOT_RECORDED'}</Typography>
+                        </Grid>
+                        <Grid size={{ xs: 6 }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Color:</Typography>
+                          <Typography variant="body2" sx={{ fontSize: '0.75rem', color: it.color ? 'text.primary' : 'text.disabled', overflowWrap: 'anywhere' }}>{it.color || 'NOT_RECORDED'}</Typography>
+                        </Grid>
+                        <Grid size={{ xs: 6 }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Material:</Typography>
+                          <Typography variant="body2" sx={{ fontSize: '0.75rem', color: it.material ? 'text.primary' : 'text.disabled', overflowWrap: 'anywhere' }}>{it.material || 'NOT_RECORDED'}</Typography>
+                        </Grid>
+                        <Grid size={{ xs: 12 }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Condition:</Typography>
+                          <Typography variant="body2" sx={{ fontSize: '0.75rem', color: (it.conditions && it.conditions.length > 0) ? 'text.primary' : 'text.disabled', overflowWrap: 'anywhere' }}>
+                            {(it.conditions && it.conditions.length > 0) ? it.conditions.join(', ') : 'NOT_RECORDED'}
+                          </Typography>
+                        </Grid>
+                      </Grid>
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+
+              {/* 4. SERVICE INFORMATION */}
+              <Box sx={{ p: 1.5, bgcolor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 2 }}>
+                <Typography variant="caption" sx={{ fontWeight: 800, color: '#1e3a8a', textTransform: 'uppercase', mb: 1, display: 'block' }}>
+                  4. SERVICE INFORMATION
+                </Typography>
+                <Grid container spacing={1.25} sx={{ fontSize: '0.75rem' }}>
+                  <Grid size={{ xs: 12 }}>
+                    <Typography variant="caption" color="text.secondary">Raw Service (Source Value):</Typography>
+                    <Typography variant="body2" fontWeight="bold" sx={{ fontFamily: 'monospace', bgcolor: '#f1f5f9', p: 0.75, borderRadius: 1, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                      {currentItem.order?.raw_services || 'NOT_RECORDED'}
+                    </Typography>
+                  </Grid>
+                  <Grid size={{ xs: 12 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+                      <Typography variant="caption" color="text.secondary">Normalized Service(s):</Typography>
+                      {(
+                        ['ORD-2025-08-16-005', 'ORD-2025-08-27-006', 'ORD-2025-12-05-006', 'ORD-2025-12-26-005'].includes(currentItem.order?.order_id) ||
+                        ['ORD-2025-08-16-005', 'ORD-2025-08-27-006', 'ORD-2025-12-05-006', 'ORD-2025-12-26-005'].includes(currentItem.order?.raw_order_id) ||
+                        (currentItem.order?.raw_services && (/\b(DC|M RES|100)\b/i.test(currentItem.order.raw_services) || /recolor renewal/i.test(currentItem.order.raw_services)))
+                      ) && (
+                        <Chip 
+                          label="⚠️ NEEDS SERVICE REVIEW" 
+                          size="small" 
+                          sx={{ 
+                            fontWeight: 800, 
+                            fontSize: '0.7rem', 
+                            height: 20, 
+                            bgcolor: '#fef3c7', 
+                            color: '#b45309', 
+                            border: '1px solid #f59e0b'
+                          }} 
+                        />
+                      )}
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.5 }}>
+                      {(currentItem.order?.items || []).flatMap((it: any) => (it.base_services || []).concat(it.addon_services || [])).length > 0 ? (
+                        Array.from(new Set((currentItem.order?.items || []).flatMap((it: any) => (it.base_services || []).concat(it.addon_services || [])))).map((s: any, sIdx: number) => (
+                          <Chip key={sIdx} label={String(s)} size="small" color="primary" variant="outlined" sx={{ fontSize: '0.72rem', height: 22 }} />
+                        ))
+                      ) : (
+                        <Chip label="Basic Cleaning" size="small" variant="outlined" sx={{ fontSize: '0.72rem', height: 22 }} />
+                      )}
+                    </Box>
+                    {(
+                      ['ORD-2025-08-16-005', 'ORD-2025-08-27-006', 'ORD-2025-12-05-006', 'ORD-2025-12-26-005'].includes(currentItem.order?.order_id) ||
+                      ['ORD-2025-08-16-005', 'ORD-2025-08-27-006', 'ORD-2025-12-05-006', 'ORD-2025-12-26-005'].includes(currentItem.order?.raw_order_id) ||
+                      (currentItem.order?.raw_services && (/\b(DC|M RES|100)\b/i.test(currentItem.order.raw_services) || /recolor renewal/i.test(currentItem.order.raw_services)))
+                    ) && (
+                      <Alert severity="warning" sx={{ mt: 1, py: 0.5, px: 1, fontSize: '0.72rem', fontWeight: 600 }}>
+                        NEEDS SERVICE REVIEW: Source CSV context contains ambiguous service ({currentItem.order?.raw_services}). Please inspect and determine correct service manually.
+                      </Alert>
+                    )}
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <Box sx={{ p: 0.75, bgcolor: '#f8fafc', borderRadius: 1, border: '1px solid #f1f5f9' }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Distinct Service Types:</Typography>
+                      <Typography variant="body2" fontWeight="bold">
+                        {Array.from(new Set((currentItem.order?.items || []).flatMap((it: any) => (it.base_services || []).concat(it.addon_services || [])))).length || (currentItem.order?.raw_services ? 1 : 0)}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <Box sx={{ p: 0.75, bgcolor: '#f8fafc', borderRadius: 1, border: '1px solid #f1f5f9' }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Total Service Applications:</Typography>
+                      <Typography variant="body2" fontWeight="bold" sx={{ color: '#2563eb' }}>
+                        {(currentItem.order?.items || []).flatMap((it: any) => (it.base_services || []).concat(it.addon_services || [])).length || (currentItem.order?.raw_services ? 1 : 0)}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <Box sx={{ p: 0.75, bgcolor: '#f8fafc', borderRadius: 1, border: '1px solid #f1f5f9' }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Total Pairs:</Typography>
+                      <Typography variant="body2" fontWeight="bold">
+                        {currentItem.order?.total_pairs || (currentItem.order?.items || []).length || 1}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <Box sx={{ p: 0.75, bgcolor: '#f8fafc', borderRadius: 1, border: '1px solid #f1f5f9' }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Priority (Source):</Typography>
+                      <Typography variant="body2" fontWeight="bold" sx={{ color: currentItem.order?.raw_priority === 'RUSH' || String(currentItem.order?.priority).toUpperCase() === 'RUSH' ? '#dc2626' : '#64748b' }}>
+                        {currentItem.order?.raw_priority || (String(currentItem.order?.priority).toUpperCase() === 'RUSH' ? 'RUSH' : 'NOT_RECORDED')}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                </Grid>
+              </Box>
+
+              {/* 5. FINANCIAL INFORMATION */}
+              <Box sx={{ p: 1.5, bgcolor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 2 }}>
+                <Typography variant="caption" sx={{ fontWeight: 800, color: '#1e3a8a', textTransform: 'uppercase', mb: 1, display: 'block' }}>
+                  5. FINANCIAL INFORMATION
+                </Typography>
+                <Grid container spacing={1.25} sx={{ fontSize: '0.75rem' }}>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <Box sx={{ p: 0.75, bgcolor: '#f8fafc', borderRadius: 1, border: '1px solid #f1f5f9', minWidth: 0 }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Grand Total (Source):</Typography>
+                      <Typography variant="body2" fontWeight="bold" sx={{ overflowWrap: 'anywhere' }}>
+                        {currentItem.order?.raw_total != null ? `₱${currentItem.order.raw_total}` : 'NOT_RECORDED'}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <Box sx={{ p: 0.75, bgcolor: '#f0fdf4', borderRadius: 1, border: '1px solid #bbf7d0', minWidth: 0 }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Grand Total (Normalized):</Typography>
+                      <Typography variant="body2" fontWeight="bold" sx={{ color: '#047857', overflowWrap: 'anywhere' }}>
+                        {currentItem.order?.grand_total != null ? `₱${Number(currentItem.order.grand_total).toLocaleString()}` : 'NOT_RECORDED'}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <Box sx={{ p: 0.75, bgcolor: '#f8fafc', borderRadius: 1, border: '1px solid #f1f5f9', minWidth: 0 }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Downpayment:</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}>
+                        {currentItem.order?.downpayment != null ? `₱${Number(currentItem.order.downpayment).toLocaleString()}` : 'NOT_RECORDED'}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <Box sx={{ p: 0.75, bgcolor: '#f8fafc', borderRadius: 1, border: '1px solid #f1f5f9', minWidth: 0 }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Balance:</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}>
+                        {currentItem.order?.balance != null ? `₱${Number(currentItem.order.balance).toLocaleString()}` : 'NOT_RECORDED'}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid size={{ xs: 12 }}>
+                    <Box sx={{ p: 0.75, bgcolor: '#f8fafc', borderRadius: 1, border: '1px solid #f1f5f9', minWidth: 0 }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Payment Method:</Typography>
+                      <Typography variant="body2" fontWeight="bold" sx={{ overflowWrap: 'anywhere' }}>
+                        {currentItem.order?.payment_method || 'NOT_RECORDED'}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                </Grid>
+              </Box>
+
+              {/* 6. ML TARGET PREVIEW */}
+              <Box sx={{ p: 1.5, bgcolor: currentItem.order?.potential_ml_candidate ? '#f0fdf4' : '#f8fafc', border: `1px solid ${currentItem.order?.potential_ml_candidate ? '#bbf7d0' : '#e2e8f0'}`, borderRadius: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, flexWrap: 'wrap', gap: 0.5 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 800, color: currentItem.order?.potential_ml_candidate ? '#166534' : '#475569', textTransform: 'uppercase' }}>
+                    6. ML TARGET PREVIEW
+                  </Typography>
+                  {currentItem.order?.potential_ml_candidate && currentItem.order?.ocr_status === 'PENDING_REVIEW' ? (
+                    <Chip
+                      label="POTENTIAL ML — NOT YET VALIDATED"
+                      color="warning"
+                      size="small"
+                      sx={{ fontWeight: 900, fontSize: '0.68rem', height: 20 }}
+                    />
+                  ) : (
+                    <Chip
+                      label={currentItem.order?.potential_ml_candidate ? 'POTENTIAL ML: YES' : 'POTENTIAL ML: NO'}
+                      color={currentItem.order?.potential_ml_candidate ? 'success' : 'default'}
+                      size="small"
+                      sx={{ fontWeight: 800, fontSize: '0.7rem', height: 20 }}
+                    />
+                  )}
+                </Box>
+                <Grid container spacing={1.25} sx={{ fontSize: '0.75rem' }}>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <Box sx={{ p: 0.75, bgcolor: '#ffffff', borderRadius: 1, border: '1px solid #dcfce7', minWidth: 0 }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Date Received:</Typography>
+                      <Typography variant="body2" fontWeight="bold">{currentItem.order?.date_received ? currentItem.order.date_received.slice(0, 10) : 'NULL'}</Typography>
+                    </Box>
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <Box sx={{ p: 0.75, bgcolor: '#ffffff', borderRadius: 1, border: '1px solid #dcfce7', minWidth: 0 }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Claimed Date:</Typography>
+                      <Typography variant="body2" fontWeight="bold" sx={{ color: currentItem.order?.claimed_date ? '#047857' : '#dc2626' }}>
+                        {currentItem.order?.claimed_date ? currentItem.order.claimed_date.slice(0, 10) : 'NOT_RECORDED'}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <Box sx={{ p: 0.75, bgcolor: '#ffffff', borderRadius: 1, border: '1px solid #dcfce7', minWidth: 0 }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Calculated Turnaround:</Typography>
+                      <Typography variant="body2" fontWeight="bold" sx={{ color: currentItem.order?.completion_days != null ? '#15803d' : '#64748b' }}>
+                        {currentItem.order?.completion_days != null ? `${currentItem.order.completion_days} days` : 'Ineligible'}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <Box sx={{ p: 0.75, bgcolor: '#ffffff', borderRadius: 1, border: '1px solid #dcfce7', minWidth: 0 }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Target Provenance:</Typography>
+                      <Typography variant="body2" fontWeight="bold" sx={{ overflowWrap: 'anywhere', color: '#1e3a8a' }}>
+                        {currentItem.order?.target_provenance || 'NONE'}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                </Grid>
+              </Box>
+            </Paper>
+          </Box>
+        )}
+
+        {/* Right Side: Normalized Data (~60% on desktop, 100% when source hidden) */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%', minWidth: 0 }}>
+          <Paper variant="outlined" sx={{ flex: 1, display: 'flex', flexDirection: 'column', borderRadius: 2, border: '1px solid #e2e8f0', bgcolor: '#ffffff', overflow: 'hidden' }}>
+            <Box sx={{ p: 1.5, bgcolor: 'primary.main', color: 'primary.contrastText', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1.5 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                 <IconButton
                   size="small"
                   onClick={() => fetchQueue({ keepPosition: true })}
@@ -1604,61 +2177,40 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
                 >
                   <Refresh fontSize="small" />
                 </IconButton>
+                <Typography variant="subtitle1" fontWeight="bold">
+                  NORMALIZED DATA
+                </Typography>
+                {!showCsvSource && (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => setShowCsvSource(true)}
+                    sx={{
+                      color: 'white',
+                      borderColor: 'rgba(255,255,255,0.4)',
+                      textTransform: 'none',
+                      fontSize: '0.7rem',
+                      py: 0.2,
+                      px: 1,
+                      '&:hover': { bgcolor: 'rgba(255,255,255,0.1)', borderColor: 'white' },
+                    }}
+                  >
+                    Show CSV Source
+                  </Button>
+                )}
               </Box>
-              <Typography variant="subtitle1" fontWeight="bold" sx={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', textAlign: 'center' }}>
-                Extracted Data
-              </Typography>
-              <Typography variant="body2" sx={{ fontWeight: 600 }}>Confidence: {(currentItem.ocr_confidence * 100).toFixed(1)}%</Typography>
+              <Chip
+                label={currentItem.order?.potential_ml_candidate ? "★ POTENTIAL ML CANDIDATE" : "HISTORICAL RECORD"}
+                size="small"
+                sx={{
+                  bgcolor: currentItem.order?.potential_ml_candidate ? '#fef3c7' : 'rgba(255,255,255,0.2)',
+                  color: currentItem.order?.potential_ml_candidate ? '#92400e' : 'white',
+                  fontWeight: 900,
+                  fontSize: '0.7rem'
+                }}
+              />
             </Box>
-
-            <Box sx={{ p: 2, flex: 1, overflowY: 'auto' }}>
-              {currentItem.ocr_empty && (
-                <Alert
-                  severity="error"
-                  sx={{ mb: 2 }}
-                  action={
-                    currentItem.historical_image_id ? (
-                      ocrRunning ? (
-                        <Button
-                          color="inherit"
-                          size="small"
-                          startIcon={<Cancel />}
-                          onClick={() => { void handleCancelReocr(); }}
-                        >
-                          Cancel OCR
-                        </Button>
-                      ) : (
-                        <Button
-                          color="inherit"
-                          size="small"
-                          startIcon={<DocumentScanner />}
-                          disabled={busy}
-                          onClick={() => { void handleReocr(); }}
-                        >
-                          Re-run OCR
-                        </Button>
-                      )
-                    ) : undefined
-                  }
-                >
-                  <Typography variant="body2" fontWeight={600}>
-                    OCR did not extract line items for this scan.
-                  </Typography>
-                  <Typography variant="body2">
-                    Brand, service, item price, downpayment, and balance were not stored — that is why the form looks empty and needs typing from the paper image. Use <strong>Re-run OCR</strong> to try again, then save corrections once.
-                  </Typography>
-                </Alert>
-              )}
-              {(currentItem.missing_fields?.length > 0 || (currentItem.ocr_confidence ?? 1) < 0.7) && !currentItem.ocr_empty && (
-                <Alert severity="warning" sx={{ mb: 2, py: 0 }}>
-                  <Typography variant="body2">
-                    ⚠ Low OCR confidence detected. Please verify highlighted fields against the original scan.
-                    {currentItem.missing_fields?.length > 0 && (
-                      <> Fields to verify: {currentItem.missing_fields.filter((f: string) => !f.startsWith('pair_') || f.endsWith('_item_price') || f.endsWith('_brand')).slice(0, 8).join(', ')}</>
-                    )}
-                  </Typography>
-                </Alert>
-              )}
+            <Box sx={{ p: 2, flex: 1, pb: 4 }}>
               {currentItem.source_document_ref
                 && currentItem.source_document_ref !== currentItem.order?.order_id && (
                 <Alert severity="info" sx={{ mb: 2, py: 0 }}>
@@ -1667,78 +2219,17 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
                   </Typography>
                 </Alert>
               )}
-              {currentItem.raw_text_summary && (
-                <Alert 
-                  severity="info" 
-                  sx={{ 
-                    mb: 2,
-                    backgroundColor: 'rgba(235, 245, 255, 0.96)',
-                    border: '1px solid #91caff',
-                    borderRadius: 2,
-                    py: 0.5,
-                  }}
-                  action={
-                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                      <Button
-                        size="small"
-                        color="inherit"
-                        onClick={() => setShowOcrSnapshot(prev => !prev)}
-                        sx={{ textTransform: 'none', fontWeight: 600, fontSize: '0.75rem' }}
-                      >
-                        {showOcrSnapshot ? 'Hide Text' : 'View Text'}
-                      </Button>
-                      <Button
-                        size="small"
-                        color="inherit"
-                        onClick={() => {
-                          navigator.clipboard.writeText(currentItem.raw_text_summary);
-                          toast.success('OCR snapshot copied to clipboard');
-                        }}
-                        sx={{ textTransform: 'none', fontWeight: 700, fontSize: '0.75rem' }}
-                      >
-                        Copy All
-                      </Button>
-                    </Box>
-                  }
-                >
-                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, display: 'inline-block' }}>
-                    OCR text snapshot
-                  </Typography>
-                  <Collapse in={showOcrSnapshot}>
-                    <Typography
-                      variant="body2"
-                      component="pre"
-                      sx={{
-                        mt: 1,
-                        mb: 0,
-                        whiteSpace: 'pre-wrap',
-                        fontFamily: 'inherit',
-                        maxHeight: 140,
-                        overflow: 'auto',
-                        fontSize: '0.8rem',
-                        color: 'text.primary',
-                        backgroundColor: 'rgba(255, 255, 255, 0.7)',
-                        p: 1,
-                        borderRadius: 1,
-                      }}
-                    >
-                      {currentItem.raw_text_summary}
-                    </Typography>
-                  </Collapse>
-                </Alert>
-              )}
 
-              <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, textTransform: 'uppercase', fontWeight: 'bold' }}>Customer Information</Typography>
+              <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, textTransform: 'uppercase', fontWeight: 'bold' }}>Order Information</Typography>
               <Grid container spacing={1} sx={{ mb: 3 }}>
                 <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField 
                     fullWidth size="small"
                     label="Order ID" 
-                    value={editMode ? editedData?.order_id : currentItem.order?.order_id} 
-                    onChange={(e) => handleEditChange('order_id', e.target.value)}
-                    InputProps={{ readOnly: !editMode }}
-                    helperText={!editMode ? 'Canonical ORD-YYYY-MM-DD-NNN' : undefined}
-                    variant={editMode ? "outlined" : "filled"}
+                    value={currentItem.order?.raw_order_id || currentItem.order?.original_order_id || currentItem.order?.order_id || '—'} 
+                    InputProps={{ readOnly: true }}
+                    helperText={!editMode ? 'Original CSV transaction identifier' : undefined}
+                    variant="filled"
                   />
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6 }}>
@@ -1754,6 +2245,18 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
                     variant={editMode ? "outlined" : "filled"}
                   />
                 </Grid>
+                {currentItem.order?.raw_order_id && currentItem.order?.order_id && currentItem.order?.raw_order_id !== currentItem.order?.order_id && (
+                  <Grid size={{ xs: 12 }}>
+                    <Box sx={{ p: 1, bgcolor: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: 1.5 }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 600 }}>
+                        Internal Record Reference: <span style={{ fontFamily: 'monospace', color: '#475569' }}>{currentItem.order?.order_id}</span>
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: '#94a3b8', fontSize: '0.68rem', display: 'block', mt: 0.25 }}>
+                        Internal database identifier generated to prevent a collision with an archived legacy record.
+                      </Typography>
+                    </Box>
+                  </Grid>
+                )}
                 <Grid size={{ xs: 6, sm: 4 }}>
                   <TextField 
                     fullWidth size="small"
@@ -1785,6 +2288,12 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
                         ? 'Rush'
                         : 'Regular'}
                       InputProps={{ readOnly: true }}
+                      helperText={
+                        String(currentItem.order?.priority || 'regular').toLowerCase() === 'rush'
+                          ? (currentItem.order?.priority_provenance === 'EXPLICIT_SOURCE_VALUE' ? 'Explicit source value' : 'Rush priority')
+                          : 'Derived — default non-Rush priority'
+                      }
+                      FormHelperTextProps={{ sx: { fontSize: '0.68rem', mt: 0.25 } }}
                       variant="filled"
                     />
                   )}
@@ -2039,7 +2548,16 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e0e0e0', pb: 0.5 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <Typography variant="subtitle2" fontWeight="bold">ITEM {idx + 1}</Typography>
-                      {!editMode && (!item.brand || !item.base_services?.length) && (
+                      {!editMode && item.attribute_normalization_status === 'NEEDS_ATTRIBUTE_REVIEW' && (
+                        <Chip
+                          label="Needs Attribute Review"
+                          size="small"
+                          color="warning"
+                          sx={{ height: 18, fontSize: '0.62rem', fontWeight: 800 }}
+                          title={item.attribute_review_reason || 'Ambiguous shoe attributes'}
+                        />
+                      )}
+                      {!editMode && item.attribute_normalization_status !== 'NEEDS_ATTRIBUTE_REVIEW' && (!item.brand || !item.base_services?.length) && (
                         <Chip
                           label="Needs Review"
                           size="small"
@@ -2251,31 +2769,202 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
                            variant="outlined"
                          />
                        </Grid>
-                       <Grid size={{ xs: 12, sm: 7 }}><TextField label="Base Services" value={Array.isArray(item.base_services) ? item.base_services.join(', ') : item.base_services || ''} onChange={e => handleEditItem(idx, 'base_services', e.target.value.split(',').map((s: string) => s.trim()).filter(Boolean))} size="small" fullWidth variant="outlined" /></Grid>
-                       <Grid size={{ xs: 12, sm: 5 }}>
-                         <TextField
-                           label="Base Service Price"
-                           value={item.base_service_price ?? ''}
-                           onChange={e => handleEditItem(idx, 'base_service_price', e.target.value)}
-                           size="small"
-                           fullWidth
-                           variant="outlined"
-                           InputProps={{ startAdornment: <InputAdornment position="start">₱</InputAdornment> }}
-                         />
-                       </Grid>
-                       <Grid size={{ xs: 12, sm: 7 }}><TextField label="Add-on Services" value={Array.isArray(item.addon_services) ? item.addon_services.join(', ') : item.addon_services || ''} onChange={e => handleEditItem(idx, 'addon_services', e.target.value.split(',').map((s: string) => s.trim()).filter(Boolean))} size="small" fullWidth variant="outlined" /></Grid>
-                       <Grid size={{ xs: 12, sm: 5 }}>
-                         <TextField
-                           label="Add-on Service Price"
-                           value={item.addon_service_price ?? ''}
-                           onChange={e => handleEditItem(idx, 'addon_service_price', e.target.value)}
-                           size="small"
-                           fullWidth
-                           variant="outlined"
-                           InputProps={{ startAdornment: <InputAdornment position="start">₱</InputAdornment> }}
-                         />
-                       </Grid>
-                       <Grid size={{ xs: 12 }}><TextField label="Conditions (comma separated)" value={Array.isArray(item.conditions) ? item.conditions.join(', ') : item.conditions || ''} onChange={e => handleEditItem(idx, 'conditions', e.target.value.split(',').map((s: string) => s.trim()).filter(Boolean))} size="small" fullWidth variant="outlined" /></Grid>
+                       <Grid size={{ xs: 12, sm: 7 }}>
+                          <Autocomplete
+                            multiple
+                            freeSolo
+                            options={BASE_SERVICE_OPTIONS}
+                            value={Array.isArray(item.base_services) ? item.base_services : []}
+                            onChange={(_, newValue) => {
+                              const parsed = parseServicesInput(newValue);
+                              handleEditItem(idx, 'base_services', parsed);
+                            }}
+                            renderTags={(tagValue, getTagProps) =>
+                              tagValue.map((option, tagIdx) => (
+                                <Chip
+                                  {...getTagProps({ index: tagIdx })}
+                                  key={option + tagIdx}
+                                  label={option}
+                                  size="small"
+                                  color="primary"
+                                  variant="outlined"
+                                  sx={{ height: 24, fontSize: '0.75rem', fontWeight: 600 }}
+                                />
+                              ))
+                            }
+                            renderInput={(params) => (
+                              <TextField
+                                {...params}
+                                label="Base Services"
+                                placeholder={(!item.base_services || !item.base_services.length) ? "Select or type (e.g. Full Reglue, BC)" : ""}
+                                size="small"
+                                fullWidth
+                                variant="outlined"
+                                onKeyDown={(e) => {
+                                  if (e.key === ',' || e.key === '+') {
+                                    const inputVal = (e.target as HTMLInputElement).value;
+                                    if (inputVal && inputVal.trim()) {
+                                      e.preventDefault();
+                                      const currentVals = Array.isArray(item.base_services) ? item.base_services : [];
+                                      const newParsed = parseServicesInput([...currentVals, inputVal]);
+                                      handleEditItem(idx, 'base_services', newParsed);
+                                      (e.target as HTMLInputElement).value = '';
+                                    }
+                                  }
+                                }}
+                                onBlur={(e) => {
+                                  const inputVal = e.target.value;
+                                  if (inputVal && inputVal.trim()) {
+                                    const currentVals = Array.isArray(item.base_services) ? item.base_services : [];
+                                    const newParsed = parseServicesInput([...currentVals, inputVal]);
+                                    handleEditItem(idx, 'base_services', newParsed);
+                                  }
+                                }}
+                              />
+                            )}
+                          />
+                        </Grid>
+                        <Grid size={{ xs: 12, sm: 5 }}>
+                          <TextField
+                            label="Base Service Price"
+                            value={item.base_service_price ?? ''}
+                            onChange={e => handleEditItem(idx, 'base_service_price', e.target.value)}
+                            size="small"
+                            fullWidth
+                            variant="outlined"
+                            InputProps={{ startAdornment: <InputAdornment position="start">₱</InputAdornment> }}
+                          />
+                        </Grid>
+                        <Grid size={{ xs: 12, sm: 7 }}>
+                          <Autocomplete
+                            multiple
+                            freeSolo
+                            options={ADDON_SERVICE_OPTIONS}
+                            value={Array.isArray(item.addon_services) ? item.addon_services : []}
+                            onChange={(_, newValue) => {
+                              const parsed = parseServicesInput(newValue);
+                              handleEditItem(idx, 'addon_services', parsed);
+                            }}
+                            renderTags={(tagValue, getTagProps) =>
+                              tagValue.map((option, tagIdx) => (
+                                <Chip
+                                  {...getTagProps({ index: tagIdx })}
+                                  key={option + tagIdx}
+                                  label={option}
+                                  size="small"
+                                  color="secondary"
+                                  variant="outlined"
+                                  sx={{ height: 24, fontSize: '0.75rem', fontWeight: 600 }}
+                                />
+                              ))
+                            }
+                            renderInput={(params) => (
+                              <TextField
+                                {...params}
+                                label="Add-on Services"
+                                placeholder={(!item.addon_services || !item.addon_services.length) ? "Select or type (e.g. White Paint, UNY)" : ""}
+                                size="small"
+                                fullWidth
+                                variant="outlined"
+                                onKeyDown={(e) => {
+                                  if (e.key === ',' || e.key === '+') {
+                                    const inputVal = (e.target as HTMLInputElement).value;
+                                    if (inputVal && inputVal.trim()) {
+                                      e.preventDefault();
+                                      const currentVals = Array.isArray(item.addon_services) ? item.addon_services : [];
+                                      const newParsed = parseServicesInput([...currentVals, inputVal]);
+                                      handleEditItem(idx, 'addon_services', newParsed);
+                                      (e.target as HTMLInputElement).value = '';
+                                    }
+                                  }
+                                }}
+                                onBlur={(e) => {
+                                  const inputVal = e.target.value;
+                                  if (inputVal && inputVal.trim()) {
+                                    const currentVals = Array.isArray(item.addon_services) ? item.addon_services : [];
+                                    const newParsed = parseServicesInput([...currentVals, inputVal]);
+                                    handleEditItem(idx, 'addon_services', newParsed);
+                                  }
+                                }}
+                              />
+                            )}
+                          />
+                        </Grid>
+                        <Grid size={{ xs: 12, sm: 5 }}>
+                          <TextField
+                            label="Add-on Service Price"
+                            value={item.addon_service_price ?? ''}
+                            onChange={e => handleEditItem(idx, 'addon_service_price', e.target.value)}
+                            size="small"
+                            fullWidth
+                            variant="outlined"
+                            InputProps={{ startAdornment: <InputAdornment position="start">₱</InputAdornment> }}
+                          />
+                        </Grid>
+                        <Grid size={{ xs: 12 }}>
+                          <Autocomplete
+                            multiple
+                            freeSolo
+                            options={DEFAULT_CONDITIONS}
+                            value={
+                              Array.isArray(item.conditions)
+                                ? item.conditions
+                                : (typeof item.conditions === 'string' && item.conditions
+                                    ? item.conditions.split(/[,+|\n]+/).map((s: string) => s.trim()).filter(Boolean)
+                                    : [])
+                            }
+                            onChange={(_, newValue) => {
+                              const parsed = parseConditionsInput(newValue);
+                              handleEditItem(idx, 'conditions', parsed);
+                            }}
+                            renderTags={(tagValue, getTagProps) =>
+                              tagValue.map((option, tagIdx) => (
+                                <Chip
+                                  {...getTagProps({ index: tagIdx })}
+                                  key={option + tagIdx}
+                                  label={option}
+                                  size="small"
+                                  variant="outlined"
+                                  sx={{ height: 24, fontSize: '0.75rem' }}
+                                />
+                              ))
+                            }
+                            renderInput={(params) => (
+                              <TextField
+                                {...params}
+                                label="Conditions / Defects"
+                                placeholder={(!item.conditions || (Array.isArray(item.conditions) && !item.conditions.length)) ? "Select or type conditions (e.g. scratches, sole separation)..." : ""}
+                                size="small"
+                                fullWidth
+                                variant="outlined"
+                                onKeyDown={(e) => {
+                                  if (e.key === ',' || e.key === '+') {
+                                    const inputVal = (e.target as HTMLInputElement).value;
+                                    if (inputVal && inputVal.trim()) {
+                                      e.preventDefault();
+                                      const currentVals = Array.isArray(item.conditions)
+                                        ? item.conditions
+                                        : (typeof item.conditions === 'string' && item.conditions ? item.conditions.split(/[,+|\n]+/).map((s: string) => s.trim()).filter(Boolean) : []);
+                                      const newParsed = parseConditionsInput([...currentVals, inputVal]);
+                                      handleEditItem(idx, 'conditions', newParsed);
+                                      (e.target as HTMLInputElement).value = '';
+                                    }
+                                  }
+                                }}
+                                onBlur={(e) => {
+                                  const inputVal = e.target.value;
+                                  if (inputVal && inputVal.trim()) {
+                                    const currentVals = Array.isArray(item.conditions)
+                                      ? item.conditions
+                                      : (typeof item.conditions === 'string' && item.conditions ? item.conditions.split(/[,+|\n]+/).map((s: string) => s.trim()).filter(Boolean) : []);
+                                    const newParsed = parseConditionsInput([...currentVals, inputVal]);
+                                    handleEditItem(idx, 'conditions', newParsed);
+                                  }
+                                }}
+                              />
+                            )}
+                          />
+                        </Grid>
                     </Grid>
                   ) : (
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, flex: 1 }}>
@@ -2283,23 +2972,23 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
                       <Box sx={{ display: 'grid', gridTemplateColumns: '100px 1fr', rowGap: 0.5, columnGap: 1 }}>
                         <>
                           <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 'bold', textTransform: 'uppercase' }}>Brand</Typography>
-                          <Typography variant="body2" fontWeight="bold" sx={{ color: item.brand ? 'text.primary' : 'text.disabled', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{item.brand || '—'}</Typography>
+                          <Typography variant="body2" fontWeight="bold" sx={{ color: item.brand ? 'text.primary' : 'text.disabled', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{item.brand || 'NOT_RECORDED'}</Typography>
                         </>
                         <>
                           <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 'bold', textTransform: 'uppercase' }}>Model</Typography>
-                          <Typography variant="body2" fontWeight="bold" sx={{ color: item.model ? 'text.primary' : 'text.disabled', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{item.model || '—'}</Typography>
+                          <Typography variant="body2" fontWeight="bold" sx={{ color: item.model ? 'text.primary' : 'text.disabled', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{item.model || 'NOT_RECORDED'}</Typography>
                         </>
                         <>
                           <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 'bold', textTransform: 'uppercase' }}>Color</Typography>
-                          <Typography variant="body2" fontWeight="bold" sx={{ color: item.color ? 'text.primary' : 'text.disabled', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{item.color || '—'}</Typography>
+                          <Typography variant="body2" fontWeight="bold" sx={{ color: item.color ? 'text.primary' : 'text.disabled', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{item.color || 'NOT_RECORDED'}</Typography>
                         </>
                         <>
                           <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 'bold', textTransform: 'uppercase' }}>Material</Typography>
-                          <Typography variant="body2" fontWeight="bold" sx={{ color: item.material ? 'text.primary' : 'text.disabled', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{item.material || '—'}</Typography>
+                          <Typography variant="body2" fontWeight="bold" sx={{ color: item.material ? 'text.primary' : 'text.disabled', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{item.material || 'NOT_RECORDED'}</Typography>
                         </>
                         <>
                           <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 'bold', textTransform: 'uppercase' }}>Size</Typography>
-                          <Typography variant="body2" fontWeight="bold" sx={{ color: item.size ? 'text.primary' : 'text.disabled', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{item.size || '—'}</Typography>
+                          <Typography variant="body2" fontWeight="bold" sx={{ color: item.size ? 'text.primary' : 'text.disabled', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{item.size || 'NOT_RECORDED'}</Typography>
                         </>
                         <>
                           <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 'bold', textTransform: 'uppercase' }}>Claimed</Typography>
@@ -2402,27 +3091,22 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
                   : String(currentItem.order?.discount_type || 'amount').toLowerCase();
                 const recordedDownpayment = editMode ? toNum(editedData?.downpayment) : toNum(currentItem.order?.downpayment);
                 const recordedBalance = editMode ? toNum(editedData?.balance) : toNum(currentItem.order?.balance);
-                const discountDisplay = recordedDiscount != null
-                  ? recordedDiscount
-                  : (recordedOriginal != null && recordedTotal != null && recordedOriginal > recordedTotal
-                    ? Math.round((recordedOriginal - recordedTotal) * 100) / 100
-                    : null);
-                const hasDiscount = discountDisplay != null && discountDisplay > 0.009;
+                const priceDiff = recordedTotal !== null ? Math.round((recordedTotal - calculatedTotal) * 100) / 100 : null;
+                const hasPriceDifference = priceDiff !== null && Math.abs(priceDiff) > 0.01;
+                const discountDisplay = editMode
+                  ? toNum(editedData?.discount_value)
+                  : (recordedDiscount != null && recordedDiscount > 0.009 ? recordedDiscount : null);
+                const hasExplicitDiscount = editMode ? Boolean(editedData?.discount_enabled) : (discountDisplay !== null && discountDisplay > 0.009);
                 const percentLabel = recordedDiscountPercent != null && recordedDiscountPercent > 0
                   ? recordedDiscountPercent
                   : (recordedOriginal != null && recordedOriginal > 0 && discountDisplay != null
                     ? Math.round((discountDisplay / recordedOriginal) * 1000) / 10
                     : null);
-                // Item-sum check: against original when discounted, else final grand total.
-                const compareForItems = hasDiscount && recordedOriginal != null ? recordedOriginal : recordedTotal;
-                const hasDiscrepancy = compareForItems !== null && pricedItems.length > 0 && Math.abs(calculatedTotal - compareForItems) > 0.009;
                 const calculatedBalance = recordedTotal !== null && recordedDownpayment !== null
                   ? Math.round((recordedTotal - recordedDownpayment) * 100) / 100
                   : null;
                 const hasPaymentDiscrepancy = calculatedBalance !== null && recordedBalance !== null
                   && Math.abs(calculatedBalance - recordedBalance) > 0.009;
-                const backendWarnings = currentItem.payment_warnings || [];
-                const showPaymentWarning = hasDiscrepancy || hasPaymentDiscrepancy || backendWarnings.length > 0;
                 
                 return (
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -2435,54 +3119,83 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
                       </Box>
                     )}
                     <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden', display: 'flex', flexWrap: 'wrap' }}>
-                      {hasDiscount ? (
-                        <>
-                          <Box sx={{ flex: 1, p: 1.5, minWidth: '120px', borderRight: '1px solid', borderColor: 'divider', bgcolor: 'grey.100' }}>
-                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>GRAND TOTAL (ORIGINAL)</Typography>
-                            <Typography variant="subtitle1" fontWeight="bold">
-                              ₱{formatMoney(recordedOriginal)}
+                      <Box sx={{ flex: 1.2, p: 1.5, minWidth: '140px', borderRight: '1px solid', borderColor: 'divider', bgcolor: '#f8fafc' }}>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 800, fontSize: '0.68rem', textTransform: 'uppercase' }}>
+                          HISTORICAL GRAND TOTAL (SOURCE)
+                        </Typography>
+                        <Typography variant="subtitle1" fontWeight="bold" sx={{ color: '#0f172a' }}>
+                          ₱{formatMoney(recordedTotal)}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ flex: 1.2, p: 1.5, minWidth: '140px', borderRight: '1px solid', borderColor: 'divider', bgcolor: '#f8fafc' }}>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 800, fontSize: '0.68rem', textTransform: 'uppercase' }}>
+                          CURRENT/REFERENCE SERVICE TOTAL
+                        </Typography>
+                        <Typography variant="subtitle1" fontWeight="bold" sx={{ color: '#2563eb' }}>
+                          ₱{formatMoney(calculatedTotal)}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ flex: 1, p: 1.5, minWidth: '120px', borderRight: '1px solid', borderColor: 'divider', bgcolor: hasPriceDifference ? (priceDiff < 0 ? '#fff1f2' : '#f0fdf4') : '#f8fafc' }}>
+                        <Typography variant="caption" sx={{ color: hasPriceDifference ? (priceDiff < 0 ? '#e11d48' : '#16a34a') : 'text.secondary', fontWeight: 800, fontSize: '0.68rem', textTransform: 'uppercase' }}>
+                          DIFFERENCE
+                        </Typography>
+                        <Typography variant="subtitle1" fontWeight="bold" sx={{ color: hasPriceDifference ? (priceDiff < 0 ? '#e11d48' : '#16a34a') : '#64748b' }}>
+                          {priceDiff !== null ? (priceDiff > 0 ? `+₱${formatMoney(priceDiff)}` : priceDiff < 0 ? `-₱${formatMoney(Math.abs(priceDiff))}` : '₱0.00') : '—'}
+                        </Typography>
+                      </Box>
+                      {hasExplicitDiscount && (
+                        <Box sx={{ flex: 1, p: 1.5, minWidth: '120px', borderRight: '1px solid', borderColor: 'divider', bgcolor: 'grey.50' }}>
+                          <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 800, fontSize: '0.68rem', textTransform: 'uppercase' }}>
+                            DISCOUNT AMOUNT
+                          </Typography>
+                          <Typography variant="subtitle1" fontWeight="bold">
+                            ₱{formatMoney(discountDisplay)}
+                          </Typography>
+                          {percentLabel != null && (
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                              {recordedDiscountType === 'percent' ? `${formatMoney(percentLabel)}%` : `≈ ${formatMoney(percentLabel)}%`}
                             </Typography>
-                          </Box>
-                          <Box sx={{ flex: 1, p: 1.5, minWidth: '120px', borderRight: '1px solid', borderColor: 'divider', bgcolor: 'grey.50' }}>
-                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>DISCOUNT AMOUNT</Typography>
-                            <Typography variant="subtitle1" fontWeight="bold">
-                              ₱{formatMoney(discountDisplay)}
-                            </Typography>
-                            {percentLabel != null && (
-                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                                {recordedDiscountType === 'percent' ? `${formatMoney(percentLabel)}%` : `≈ ${formatMoney(percentLabel)}%`}
-                              </Typography>
-                            )}
-                          </Box>
-                          <Box sx={{ flex: 1, p: 1.5, minWidth: '120px', borderRight: '1px solid', borderColor: 'divider', bgcolor: 'primary.main', color: 'primary.contrastText' }}>
-                            <Typography variant="caption" sx={{ opacity: 0.8 }}>DISCOUNTED GRAND TOTAL</Typography>
-                            <Typography variant="subtitle1" fontWeight="bold">₱{formatMoney(recordedTotal)}</Typography>
-                          </Box>
-                        </>
-                      ) : (
-                        <Box sx={{ flex: 1, p: 1.5, minWidth: '120px', borderRight: '1px solid', borderColor: 'divider', bgcolor: 'primary.main', color: 'primary.contrastText' }}>
-                          <Typography variant="caption" sx={{ opacity: 0.8 }}>GRAND TOTAL</Typography>
-                          <Typography variant="subtitle1" fontWeight="bold">₱{formatMoney(recordedTotal)}</Typography>
+                          )}
                         </Box>
                       )}
-                      <Box sx={{ flex: 1, p: 1.5, minWidth: '120px', borderRight: '1px solid', borderColor: 'divider', bgcolor: 'grey.100' }}>
-                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>DOWNPAYMENT</Typography>
+                      <Box sx={{ flex: 1, p: 1.5, minWidth: '110px', borderRight: '1px solid', borderColor: 'divider', bgcolor: 'grey.100' }}>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, fontSize: '0.68rem', textTransform: 'uppercase' }}>DOWNPAYMENT</Typography>
                         <Typography variant="subtitle1" fontWeight="bold">₱{formatMoney(recordedDownpayment)}</Typography>
                       </Box>
-                      <Box sx={{ flex: 1, p: 1.5, minWidth: '120px', borderRight: '1px solid', borderColor: 'divider', bgcolor: 'grey.100' }}>
-                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>BALANCE</Typography>
+                      <Box sx={{ flex: 1, p: 1.5, minWidth: '110px', borderRight: '1px solid', borderColor: 'divider', bgcolor: 'grey.100' }}>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, fontSize: '0.68rem', textTransform: 'uppercase' }}>BALANCE</Typography>
                         <Typography variant="subtitle1" fontWeight="bold">₱{formatMoney(recordedBalance)}</Typography>
                       </Box>
-                      <Box sx={{ flex: 1, p: 1.5, minWidth: '120px', bgcolor: 'grey.100' }}>
-                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>PAYMENT METHOD</Typography>
+                      <Box sx={{ flex: 1, p: 1.5, minWidth: '110px', bgcolor: 'grey.100' }}>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 700, fontSize: '0.68rem', textTransform: 'uppercase' }}>PAYMENT METHOD</Typography>
                         <Typography variant="subtitle1" fontWeight="bold">{displayPaymentMethod(editMode ? editedData?.payment_method : currentItem.order?.payment_method)}</Typography>
                       </Box>
                     </Box>
                     
-                    {showPaymentWarning && (
-                      <Alert severity="warning" sx={{ py: 0, px: 2 }}>
-                        <Typography variant="body2">
-                          Payment discrepancy detected. Please verify against the original document.
+                    {hasPriceDifference && (
+                      <Alert severity="info" sx={{ py: 1, px: 2, border: '1px solid #bfdbfe', bgcolor: '#eff6ff' }}>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#1e40af', fontSize: '0.8125rem' }}>
+                              HISTORICAL PRICE DIFFERENCE — Source grand total differs from the total calculated using current service prices.
+                            </Typography>
+                            <Chip 
+                              label="SOURCE TOTAL DIFFERS FROM CURRENT REFERENCE PRICING" 
+                              size="small" 
+                              sx={{ bgcolor: '#dbeafe', color: '#1e40af', fontWeight: 800, fontSize: '0.68rem', height: 20 }} 
+                            />
+                          </Box>
+                          <Typography variant="caption" sx={{ color: '#475569', fontSize: '0.75rem', lineHeight: 1.4 }}>
+                            Current service prices are displayed for reference only and are not used to alter historical transaction amounts.
+                          </Typography>
+                        </Box>
+                      </Alert>
+                    )}
+
+                    {hasPaymentDiscrepancy && (
+                      <Alert severity="warning" sx={{ py: 0.75, px: 2 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 700, fontSize: '0.8rem' }}>
+                          Payment discrepancy detected: Recorded Downpayment (₱{formatMoney(recordedDownpayment)}) + Balance (₱{formatMoney(recordedBalance)}) does not equal Recorded Total (₱{formatMoney(recordedTotal)}). Please verify against the original document.
                         </Typography>
                       </Alert>
                     )}
@@ -2634,9 +3347,23 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
               })()}
             </Box>
 
-            {/* Action Bar */}
+            {/* Sticky Action Bar */}
             <Divider />
-            <Box sx={{ p: 2, display: 'flex', gap: 2, bgcolor: 'grey.100', alignItems: 'center', flexDirection: { xs: 'column', sm: 'row' } }}>
+            <Box
+              sx={{
+                p: 2,
+                display: 'flex',
+                gap: 2,
+                bgcolor: '#ffffff',
+                alignItems: 'center',
+                flexDirection: { xs: 'column', sm: 'row' },
+                position: 'sticky',
+                bottom: 0,
+                zIndex: 10,
+                borderTop: '1px solid #e2e8f0',
+                boxShadow: '0 -4px 12px rgba(0,0,0,0.06)',
+              }}
+            >
               {!editMode ? (
                 <>
                   <Button 
@@ -2647,7 +3374,7 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
                     disabled={busy}
                     sx={{ flex: 1, minHeight: 46, height: 46, fontSize: '0.8125rem', fontWeight: 800, letterSpacing: '0.05em', width: { xs: '100%', sm: 'auto' }, borderRadius: 2 }}
                   >
-                    VALIDATE & SAVE
+                    ACCEPT VALIDATION
                   </Button>
                   <Button 
                     variant="contained" 
@@ -2657,30 +3384,43 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
                     disabled={busy}
                     sx={{ flex: 1, minHeight: 46, height: 46, fontSize: '0.8125rem', fontWeight: 800, letterSpacing: '0.05em', width: { xs: '100%', sm: 'auto' }, borderRadius: 2 }}
                   >
-                    EDIT DATA
+                    EDIT
                   </Button>
                   <Button 
                     variant="contained" 
                     color="error" 
                     startIcon={<Cancel />}
-                    onClick={() => handleAction('reject')}
+                    onClick={() => {
+                      setRejectionCategory('confirmed duplicate');
+                      setRejectReason('Confirmed duplicate');
+                      setShowRejectConfirm(true);
+                    }}
                     disabled={busy}
                     sx={{ flex: 1, minHeight: 46, height: 46, fontSize: '0.8125rem', fontWeight: 800, letterSpacing: '0.05em', width: { xs: '100%', sm: 'auto' }, borderRadius: 2 }}
                   >
-                    REJECT / FLAG
+                    REJECT
                   </Button>
                 </>
               ) : (
                 <>
                   <Button 
                     variant="contained" 
-                    color="primary" 
+                    color="success" 
                     startIcon={<CheckCircle />}
+                    onClick={() => handleAction('approve')}
+                    disabled={busy}
+                    sx={{ flex: 1, minHeight: 46, height: 46, fontSize: '0.8125rem', fontWeight: 800, letterSpacing: '0.05em', width: { xs: '100%', sm: 'auto' }, borderRadius: 2 }}
+                  >
+                    ACCEPT WITH CORRECTIONS
+                  </Button>
+                  <Button 
+                    variant="contained" 
+                    color="primary" 
                     onClick={() => handleAction('save')}
                     disabled={busy}
                     sx={{ flex: 1, minHeight: 46, height: 46, fontSize: '0.8125rem', fontWeight: 800, letterSpacing: '0.05em', width: { xs: '100%', sm: 'auto' }, borderRadius: 2 }}
                   >
-                    {busy ? 'Saving…' : 'Save Corrections'}
+                    {busy ? 'Saving…' : 'Save Corrections (Stay in Queue)'}
                   </Button>
                   <Button 
                     variant="contained" 
@@ -2695,8 +3435,72 @@ export default function HistoricalValidationQueue({ user, onBack }: HistoricalVa
               )}
             </Box>
           </Paper>
-        </Grid>
-      </Grid>
+        </Box>
+      </Box>
+
+      {/* Confirmation Dialog for Rejecting Record */}
+      <Dialog open={showRejectConfirm} onClose={() => setShowRejectConfirm(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontWeight: 'bold', fontSize: '1rem', color: 'error.main' }}>
+          Reject this historical record?
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            This will flag the pending historical record as rejected and prevent it from entering the canonical dataset. The decision and original evidence will remain preserved in the audit trail.
+          </Typography>
+          <TextField
+            select
+            fullWidth
+            size="small"
+            label="Rejection Category"
+            value={rejectionCategory}
+            onChange={(e) => {
+              const val = e.target.value;
+              setRejectionCategory(val);
+              if (val !== 'Other') {
+                setRejectReason(val.charAt(0).toUpperCase() + val.slice(1));
+              } else {
+                setRejectReason('');
+              }
+            }}
+            sx={{ mb: 2 }}
+          >
+            <MenuItem value="confirmed duplicate">Confirmed duplicate</MenuItem>
+            <MenuItem value="cannot identify genuine transaction">Cannot identify genuine transaction</MenuItem>
+            <MenuItem value="source corruption prevents reliable interpretation">Source corruption prevents reliable interpretation</MenuItem>
+            <MenuItem value="record does not represent an actual Shoelotskey order">Record does not represent an actual Shoelotskey order</MenuItem>
+            <MenuItem value="Other">Other (specify custom reason below)</MenuItem>
+          </TextField>
+          <TextField
+            fullWidth
+            required
+            multiline
+            rows={3}
+            size="small"
+            label="Rejection Justification *"
+            placeholder="Explain why this record cannot serve as a canonical historical transaction..."
+            value={rejectReason}
+            onChange={(e) => setRejectReason(e.target.value)}
+            helperText="A valid reason is required. Note: Missing fields (Color, Material, Claimed Date, Priority) are historically valid and should NOT be rejected solely for missing data."
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setShowRejectConfirm(false)} disabled={busy}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            disabled={busy || !rejectReason.trim()}
+            onClick={async () => {
+              const reasonToSubmit = rejectReason.trim();
+              setShowRejectConfirm(false);
+              await handleAction('reject', reasonToSubmit);
+            }}
+          >
+            Reject Record
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

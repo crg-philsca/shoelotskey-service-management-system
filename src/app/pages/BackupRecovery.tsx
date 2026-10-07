@@ -64,7 +64,7 @@ export default function BackupRecovery({ user }: BackupRecoveryProps) {
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadErrorMessage, setDownloadErrorMessage] = useState<string | null>(null);
 
-  const isMainOwnerOrAdmin = user.username?.toLowerCase() === 'owner' || user.username?.toLowerCase() === 'admin';
+  const isMainOwnerOrAdmin = user.role === 'admin' || user.username?.toLowerCase() === 'admin';
 
   // Fetch available backups
   const fetchBackups = async () => {
@@ -219,7 +219,7 @@ export default function BackupRecovery({ user }: BackupRecoveryProps) {
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-red-200 text-xs font-black uppercase tracking-widest">
               <ShieldCheck className="h-4 w-4 text-emerald-400" />
-              <span>Owner Administration • Security Hardened</span>
+              <span>Admin Administration • Security Hardened</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight">
               Secure System Backup & Disaster Recovery
@@ -230,7 +230,7 @@ export default function BackupRecovery({ user }: BackupRecoveryProps) {
             {!isMainOwnerOrAdmin && (
               <div className="mt-2 p-3 bg-red-950/70 border border-amber-400/40 rounded-xl text-xs text-amber-200 font-semibold flex items-center gap-2">
                 <ShieldAlert className="h-4 w-4 shrink-0 text-amber-400" />
-                <span>Access Restricted: Only the primary Owner account ('owner') and Admin account ('admin') are authorized to create or download system backup snapshots.</span>
+                <span>Access Restricted: Only the Administrator account ('admin') is authorized to create or download system backup snapshots.</span>
               </div>
             )}
           </div>
@@ -666,7 +666,7 @@ export default function BackupRecovery({ user }: BackupRecoveryProps) {
               </div>
               {!isMainOwnerOrAdmin && (
                 <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-[11px] font-medium leading-snug">
-                  Only the primary <strong>owner</strong> account or <strong>admin</strong> account can authorize backup downloads.
+                  Only the primary <strong>admin</strong> account can authorize backup downloads.
                 </div>
               )}
             </div>
