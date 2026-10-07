@@ -1469,13 +1469,12 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                         <div className={`w-full overflow-y-auto max-h-[435px] xl:max-h-[460px] subtle-vertical-scroll pb-1 rounded-lg border border-gray-100 ${paginatedOrders.length === 0 ? 'overflow-x-hidden' : 'overflow-x-auto lg:overflow-x-hidden'}`}>
                           <table className={`w-full text-xs table-fixed ${paginatedOrders.length === 0 ? 'min-w-full' : 'min-w-[820px] lg:min-w-full'}`}>
                             <colgroup>
-                               <col style={{ width: '11%' }} />
-                               <col style={{ width: '13%' }} />
-                               <col style={{ width: '11%' }} />
                                <col style={{ width: '12%' }} />
-                               <col style={{ width: '4%' }} />
-                               <col style={{ width: '9%' }} />
-                               <col style={{ width: '11%' }} />
+                               <col style={{ width: '16%' }} />
+                               <col style={{ width: '16%' }} />
+                               <col style={{ width: '5%' }} />
+                               <col style={{ width: '10%' }} />
+                               <col style={{ width: '12%' }} />
                                <col style={{ width: '7%' }} />
                                <col style={{ width: '11%' }} />
                                <col style={{ width: '7%' }} />
@@ -1485,12 +1484,11 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                               <tr className="bg-red-50/95">
                                 <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-tight text-[10.5px] whitespace-nowrap">Order #</th>
                                 <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-tight text-[10.5px] whitespace-nowrap">Customer</th>
-                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-tight text-[10.5px] whitespace-nowrap">Shoe / Brand</th>
                                 <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-tight text-[10.5px] whitespace-nowrap">Services</th>
                                 <th className="h-9 px-1.5 text-center font-black text-gray-700 uppercase tracking-tight text-[10.5px] whitespace-nowrap">QTY</th>
                                 <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-tight text-[10.5px] whitespace-nowrap">Order Date</th>
                                 <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-tight text-[10.5px] whitespace-nowrap">
-                                  {selectedStatus === 'for-release' ? 'Released Date' : selectedStatus === 'claimed' ? 'Claimed Date' : selectedStatus === 'cancelled' ? 'Cancelled Date' : 'Expected Release'}
+                                  {selectedStatus === 'for-release' ? 'Released Date' : selectedStatus === 'claimed' ? 'Claimed Date' : selectedStatus === 'cancelled' ? 'Cancelled Date' : 'Release Date'}
                                 </th>
                                 <th className="h-9 px-1.5 text-center font-black text-gray-700 uppercase tracking-tight text-[10.5px] whitespace-nowrap">Priority</th>
                                 <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-tight text-[10.5px] whitespace-nowrap">Payment</th>
@@ -1501,7 +1499,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                             <tbody className="divide-y divide-gray-100">
                               {paginatedOrders.length === 0 ? (
                                 <tr>
-                                  <td colSpan={11} className="px-6 py-20 text-center">
+                                  <td colSpan={10} className="px-6 py-20 text-center">
                                     <div className="flex flex-col items-center justify-center space-y-3 opacity-40">
                                       <ClipboardCheck size={48} className="text-gray-400" />
                                       <p className="text-sm font-black text-gray-600 uppercase tracking-[0.2em]">
@@ -1553,38 +1551,6 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                     </td>
                                     <td className="px-2 py-2 text-center">
                                       {(() => {
-                                        let brandDisplay = '—';
-                                        if (order.items && order.items.length > 0) {
-                                          const brandCounts: Record<string, number> = {};
-                                          order.items.forEach((item: any) => {
-                                            const b = (item.brand || item.shoeModel || '').trim();
-                                            if (b) {
-                                              brandCounts[b] = (brandCounts[b] || 0) + (item.quantity || 1);
-                                            }
-                                          });
-                                          const entries = Object.entries(brandCounts);
-                                          if (entries.length > 0) {
-                                            brandDisplay = entries.map(([b, cnt]) => cnt > 1 ? `${b} ×${cnt}` : b).join(', ');
-                                          }
-                                        } else if (order.brand && order.brand.trim()) {
-                                          brandDisplay = order.brand.trim();
-                                        }
-
-                                        if (brandDisplay === '—' || !brandDisplay) {
-                                          return <span className="text-gray-400 font-semibold">—</span>;
-                                        }
-
-                                        return (
-                                          <div className="max-w-[115px] mx-auto text-center" title={brandDisplay}>
-                                            <span className="text-[11px] font-semibold text-gray-800 leading-tight line-clamp-2 break-words block">
-                                              {brandDisplay}
-                                            </span>
-                                          </div>
-                                        );
-                                      })()}
-                                    </td>
-                                    <td className="px-2 py-2 text-center">
-                                      {(() => {
                                         const itemSvcs: string[] = [];
                                         if (order.items && order.items.length > 0) {
                                           order.items.forEach((it: any) => {
@@ -1621,7 +1587,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
 
                                         return serviceLines.length > 0 ? (
                                           <div 
-                                            className="flex flex-col items-center justify-center text-center text-[11px] font-bold text-gray-800 leading-tight max-w-[95px] mx-auto" 
+                                            className="flex flex-col items-center justify-center text-center text-[11px] font-bold text-gray-800 leading-tight max-w-[140px] mx-auto" 
                                             title={allServices.join(', ')}
                                           >
                                             {serviceLines.slice(0, 2).map((line, idx) => (
