@@ -209,14 +209,14 @@ class UserUpdateSchema(BaseModel):
 class CustomerSchema(BaseModel):
     customer_id: Optional[int] = None
     customer_name: str = Field(..., min_length=2, max_length=60)
-    contact_number: str
+    contact_number: Optional[str] = None
     created_at: Optional[datetime] = None
 
     @field_validator('customer_name', 'contact_number', mode='before')
     @classmethod
     def sanitize_customer_fields(cls, v):
         if v is None:
-            return v
+            return None
         return sanitize_security_string(str(v).strip())
 
     class Config:

@@ -277,6 +277,8 @@ const TrendTooltip = ({ active, payload, label }: any) => {
 };
 
 function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
+  const location = useLocation();
+  const navigate = useNavigate();
   const role = (user?.role || '').toLowerCase().trim();
   const isOwner = ['owner', 'admin'].includes(role);
   const isFrontStaff = (user?.username || '').toLowerCase().trim() === 'front_staff' || role === 'front staff';
@@ -569,8 +571,6 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
   // STATE: Drill-down status filter
   // When a user clicks a status card (e.g., 'New Order'), this state is set
   // and the dashboard switches to show a detailed table for that status.
-  const location = useLocation();
-  const navigate = useNavigate();
   const [selectedStatus, setSelectedStatus] = useState<'new-order' | 'on-going' | 'for-release' | 'claimed' | 'cancelled' | null>(() => {
     return (location.state as any)?.status || null;
   });
