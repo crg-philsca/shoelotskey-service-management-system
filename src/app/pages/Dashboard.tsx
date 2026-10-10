@@ -404,9 +404,15 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
     }
   };
   const { addActivity } = useActivities();
-  const [profitRange, setProfitRange] = useState<ReportRange>('Daily');
-  const [customStartDate, setCustomStartDate] = useState('');
-  const [customEndDate, setCustomEndDate] = useState('');
+  const [profitRange, setProfitRange] = useState<ReportRange>(() => {
+    const stateRange = (location.state as any)?.dateRange || (location.state as any)?.profitRange;
+    if (stateRange && ['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Annually', 'Custom'].includes(stateRange)) {
+      return stateRange;
+    }
+    return 'Annually';
+  });
+  const [customStartDate, setCustomStartDate] = useState(() => (location.state as any)?.customStartDate || '');
+  const [customEndDate, setCustomEndDate] = useState(() => (location.state as any)?.customEndDate || '');
 
   const formatDurationText = (ms: number) => {
     return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(2)}s`;
@@ -621,12 +627,12 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
     return source.filter(order => order.status === selectedStatus || (selectedStatus === 'cancelled' && isCancelledOrder(order)));
   }, [analyticsOrders, selectedStatus]);
 
-  // Telemetry: Log initial Daily metrics generation on dashboard load
-  const initialDailyLoggedRef = useRef(false);
+  // Telemetry: Log initial metrics generation on dashboard load
+  const initialMetricsLoggedRef = useRef(false);
 
   useEffect(() => {
-    if (!loading && orders && !initialDailyLoggedRef.current) {
-      initialDailyLoggedRef.current = true;
+    if (!loading && orders && !initialMetricsLoggedRef.current) {
+      initialMetricsLoggedRef.current = true;
       const t0 = performance.now();
       requestAnimationFrame(() => {
         const elapsed = performance.now() - t0;
