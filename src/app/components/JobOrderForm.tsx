@@ -1220,7 +1220,29 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
     }, [services, discountPreset]);
 
     const activeDiscountConfig = useMemo(() => {
-        if (!selectedDiscountService) return null;
+        if (!selectedDiscountService) {
+            if (discountPreset === 'senior') {
+                return {
+                    requiresId: true,
+                    idType: 'control_number' as const,
+                    idFormat: 'numbers' as const,
+                    digits: 6,
+                    label: 'Senior Citizen Control No.',
+                    name: 'Senior Citizen'
+                };
+            }
+            if (discountPreset === 'pwd') {
+                return {
+                    requiresId: true,
+                    idType: 'id_number' as const,
+                    idFormat: 'numbers' as const,
+                    digits: 12,
+                    label: 'Person with Disability (PWD) ID No.',
+                    name: 'Person with Disability (PWD)'
+                };
+            }
+            return null;
+        }
         const n = (selectedDiscountService.name || '').toLowerCase();
         const c = (selectedDiscountService.code || '').toLowerCase();
         const isSenior = n.includes('senior') || n.includes('snr') || c.includes('senior') || c.includes('snr');
@@ -1296,8 +1318,8 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
             return customVal > 0;
         }
 
-        // Configured discount or fallback numeric presets
-        if (selectedDiscountService || !isNaN(Number(discountPreset))) {
+        // Configured discount or fallback statutory/numeric presets
+        if (selectedDiscountService || !isNaN(Number(discountPreset)) || discountPreset === 'promo') {
             return true;
         }
 
@@ -1379,6 +1401,10 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                     } else {
                         calculatedDiscount = (grossSubtotal * matchedSvc.price) / 100;
                     }
+                } else if (discountPreset === 'senior' || discountPreset === 'pwd') {
+                    calculatedDiscount = (grossSubtotal * 10) / 100;
+                } else if (discountPreset === 'promo') {
+                    calculatedDiscount = (grossSubtotal * 5) / 100;
                 } else {
                     const pct = Number(discountPreset);
                     calculatedDiscount = (grossSubtotal * (isNaN(pct) ? 0 : pct)) / 100;
@@ -1424,10 +1450,11 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
             configured.forEach(s => {
                 const isPercent = !s.description?.toLowerCase().includes('fixed') && !s.description?.toLowerCase().includes('amount') && s.code !== 'PHP' && !s.name.includes('₱');
                 const rateText = isPercent ? `${s.price}%` : `₱${s.price}`;
+                const trimmedName = (s.name || '').trim();
                 list.push({
                     id: s.id,
-                    label: s.name,
-                    fullLabel: `${s.name} (${rateText})`,
+                    label: trimmedName,
+                    fullLabel: `${trimmedName} (${rateText})`,
                     value: s.price,
                     isPercent,
                     rateText,
@@ -1435,11 +1462,9 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
             });
         } else {
             [
-                { id: '5', label: '5%', fullLabel: '5% Discount', value: 5, isPercent: true, rateText: '5%' },
-                { id: '10', label: '10%', fullLabel: '10% Discount', value: 10, isPercent: true, rateText: '10%' },
-                { id: '15', label: '15%', fullLabel: '15% Discount', value: 15, isPercent: true, rateText: '15%' },
-                { id: '20', label: '20%', fullLabel: '20% Discount', value: 20, isPercent: true, rateText: '20%' },
-                { id: '25', label: '25%', fullLabel: '25% Discount', value: 25, isPercent: true, rateText: '25%' },
+                { id: 'senior', label: 'Senior Citizen', fullLabel: 'Senior Citizen (10%)', value: 10, isPercent: true, rateText: '10%' },
+                { id: 'pwd', label: 'Person with Disability (PWD)', fullLabel: 'Person with Disability (PWD) (10%)', value: 10, isPercent: true, rateText: '10%' },
+                { id: 'promo', label: 'Promo', fullLabel: 'Promo (5%)', value: 5, isPercent: true, rateText: '5%' },
             ].forEach(opt => list.push(opt));
         }
         // Only show "Custom" for Owner and Admin accounts
@@ -2087,7 +2112,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
             discount: totals.discountAmount,
             discountPreset,
             discountType: activeDiscountConfig ? (activeDiscountConfig.idType === 'id_number' ? 'pwd' : 'senior') : (discountPreset === 'custom' ? 'custom' : 'promotional'),
-            discountName: selectedDiscountService?.name || (discountPreset === 'custom' ? 'Custom Discount' : (discountPreset !== '0' ? `${discountPreset}% Discount` : '')),
+            discountName: selectedDiscountService?.name?.trim() || (discountPreset === 'custom' ? 'Custom Discount' : (discountPreset === 'senior' ? 'Senior Citizen' : (discountPreset === 'pwd' ? 'Person with Disability (PWD)' : (discountPreset === 'promo' ? 'Promo' : (discountPreset !== '0' ? `${discountPreset}% Discount` : ''))))),
             discountCode: enteredDiscountCode.trim().toUpperCase() || undefined,
             discountIdNumber: activeDiscountConfig ? discountIdNumber.trim() : undefined,
             authorized_by_user_id: authorizedByUserId || undefined,

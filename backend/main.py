@@ -1821,7 +1821,12 @@ def seed_lookups(db: Session):
     # Seed Service Categories
     if db.query(ServiceCategory).count() == 0:
         print(">>> Seeding Service Categories...")
-        db.add_all([ServiceCategory(category_name=c) for c in ['base', 'addon', 'priority']])
+        db.add_all([ServiceCategory(category_name=c) for c in ['base', 'addon', 'priority', 'discount']])
+        db.commit()
+    else:
+        for cat in ['base', 'addon', 'priority', 'discount']:
+            if not db.query(ServiceCategory).filter(ServiceCategory.category_name == cat).first():
+                db.add(ServiceCategory(category_name=cat))
         db.commit()
 
     # Seed Conditions
@@ -1930,8 +1935,48 @@ def seed_lookups(db: Session):
                     if not kept:
                         kept = True
                         cr.is_active = True
-                    else:
-                        cr.is_active = False
+            # ── Ensure default statutory and promotional discounts exist ──
+            discount_cat_id = cat_map.get('discount')
+            if not discount_cat_id:
+                disc_cat_obj = db.query(ServiceCategory).filter(ServiceCategory.category_name == 'discount').first()
+                if disc_cat_obj:
+                    discount_cat_id = disc_cat_obj.category_id
+            if discount_cat_id:
+                disc_count = db.query(Service).filter(Service.category_id == discount_cat_id).count()
+                if disc_count == 0:
+                    print(">>> Catalog Sync: Seeding statutory and promotional discounts...")
+                    db.add_all([
+                        Service(
+                            service_name="Senior Citizen",
+                            base_price=Decimal("10.00"),
+                            category_id=discount_cat_id,
+                            description=json.dumps({"discountType": "percent", "requiresId": True, "idType": "control_number", "idFormat": "numbers", "digits": 6}),
+                            duration_days=0,
+                            service_code="SC10",
+                            is_active=True,
+                            sort_order=1
+                        ),
+                        Service(
+                            service_name="Person with Disability (PWD)",
+                            base_price=Decimal("10.00"),
+                            category_id=discount_cat_id,
+                            description=json.dumps({"discountType": "percent", "requiresId": True, "idType": "id_number", "idFormat": "numbers", "digits": 12}),
+                            duration_days=0,
+                            service_code="PWD10",
+                            is_active=True,
+                            sort_order=2
+                        ),
+                        Service(
+                            service_name="Promo",
+                            base_price=Decimal("5.00"),
+                            category_id=discount_cat_id,
+                            description=json.dumps({"discountType": "percent", "requiresId": False, "idType": "none", "idFormat": "alphanumeric", "digits": None}),
+                            duration_days=0,
+                            service_code="PROMO5",
+                            is_active=True,
+                            sort_order=3
+                        ),
+                    ])
             db.commit()
     except Exception as lock_err:
         db.rollback()
