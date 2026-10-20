@@ -3,7 +3,12 @@ import * as React from "react";
 import { cn } from "./utils";
 import { stripCyberAttackInput } from "@/app/lib/customerValidation";
 
-function Textarea({ className, onChange, onPaste, ...props }: React.ComponentProps<"textarea">) {
+function Textarea({ className, id, name, onChange, onPaste, ...props }: React.ComponentProps<"textarea">) {
+  const generatedId = React.useId();
+  const cleanGeneratedId = `field-${generatedId.replace(/:/g, '')}`;
+  const effectiveId = id || name || cleanGeneratedId;
+  const effectiveName = name || id || effectiveId;
+
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     if (val && (val.includes('<') || /script/i.test(val) || /javascript:/i.test(val) || /vbscript:/i.test(val))) {
@@ -18,6 +23,8 @@ function Textarea({ className, onChange, onPaste, ...props }: React.ComponentPro
 
   return (
     <textarea
+      id={effectiveId}
+      name={effectiveName}
       data-slot="textarea"
       onChange={handleChange}
       onPaste={handlePaste}

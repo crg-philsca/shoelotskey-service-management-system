@@ -978,15 +978,15 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                                                         <div className="flex flex-col gap-0.5 flex-1 min-w-0">
                                                                             <span className="text-[11px] font-bold text-gray-700 leading-tight">{s.name}</span>
                                                                             {s.name === 'Full Reglue' ? (
-                                                                                <div className="mt-0.5 min-w-0">
-                                                                                    <span className="text-[8.5px] font-semibold text-amber-700 leading-tight block break-words" title="Select Midsole or Undersole">
-                                                                                        Select Midsole or Undersole
+                                                                                <div className="mt-0.5 min-w-0 overflow-hidden">
+                                                                                    <span className="text-[7.5px] sm:text-[8px] font-medium text-gray-500 leading-tight block whitespace-nowrap truncate tracking-tight" title="(Select Midsole or Undersole)">
+                                                                                        (Select Midsole or Undersole)
                                                                                     </span>
                                                                                 </div>
                                                                             ) : s.name === 'Color Renewal' ? (
-                                                                                <div className="mt-0.5 min-w-0">
-                                                                                    <span className="text-[8.5px] font-semibold text-amber-700 leading-tight block break-words" title="Select 2 Colors or 3 Colors">
-                                                                                        Select 2 Colors or 3 Colors
+                                                                                <div className="mt-0.5 min-w-0 overflow-hidden">
+                                                                                    <span className="text-[7.5px] sm:text-[8px] font-medium text-gray-500 leading-tight block whitespace-nowrap truncate tracking-tight" title="(Select 2 Colors or 3 Colors)">
+                                                                                        (Select 2 Colors or 3 Colors)
                                                                                     </span>
                                                                                 </div>
                                                                             ) : null}

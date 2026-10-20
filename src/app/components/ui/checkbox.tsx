@@ -8,11 +8,20 @@ import { cn } from "./utils";
 
 function Checkbox({
   className,
+  id,
+  name,
   ...props
 }: React.ComponentProps<typeof CheckboxPrimitive.Root>) {
+  const generatedId = React.useId();
+  const cleanGeneratedId = "chk-" + generatedId.replace(/:/g, "");
+  const effectiveId = id || name || cleanGeneratedId;
+  const effectiveName = name || id || effectiveId;
+
   return (
     <CheckboxPrimitive.Root
       type="button"
+      id={effectiveId}
+      name={effectiveName}
       data-slot="checkbox"
       className={cn(
         "peer border border-gray-300 bg-input-background dark:bg-input/30 data-[state=checked]:bg-red-600 data-[state=checked]:text-white dark:data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600 focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive size-4 shrink-0 rounded-[4px] shadow-xs transition-shadow outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50",

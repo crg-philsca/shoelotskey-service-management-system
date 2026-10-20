@@ -162,7 +162,7 @@ export default function ServiceManagement({ onSetHeaderActionRight, user }: Serv
               <CardTitle className="text-xs sm:text-[13px] font-black text-gray-900 uppercase tracking-wide">Base Services</CardTitle>
             </CardHeader>
             <CardContent className="pt-0 px-3.5 sm:px-4 pb-2 sm:pb-2.5">
-              <div className="overflow-y-auto pr-0.5 service-card-scroll">
+              <div className="max-h-[196px] sm:max-h-[202px] overflow-y-auto pr-0.5 service-card-scroll">
                 <Reorder.Group axis="y" values={localBase} onReorder={(newOrder) => handleReorder('base', newOrder)} className="space-y-1 sm:space-y-1.25 list-none p-0">
                   {localBase.map(service => (
                     <Reorder.Item 
@@ -179,11 +179,6 @@ export default function ServiceManagement({ onSetHeaderActionRight, user }: Serv
                           <p className="text-[11px] sm:text-[11.5px] font-black text-red-600 mt-0.5 leading-none">
                             {service.price > 0 ? formatPeso(service.price) : 'Price varies'}
                           </p>
-                          {service.name === 'Color Renewal' && (
-                            <p className="text-[9.5px] font-medium text-gray-500 mt-0.5 leading-tight truncate" title="Select 2 Colors or 3 Colors under Add-on Services.">
-                              Select 2 or 3 Colors in Add-ons
-                            </p>
-                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">

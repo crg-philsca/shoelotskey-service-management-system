@@ -321,9 +321,9 @@ export const ShoeItem: React.FC<ShoeItemProps> = ({ shoe, index, updateShoe, rem
                                                             )}
                                                         </div>
                                                         {isChecked && (service.name === 'Full Reglue' || service.name === 'Color Renewal') && (
-                                                            <div className="mt-0.5 min-w-0">
-                                                                <span className="text-[8.5px] font-semibold text-amber-700 leading-tight block break-words" title={service.name === 'Full Reglue' ? "Select Midsole or Undersole" : "Select 2 Colors or 3 Colors"}>
-                                                                    {service.name === 'Full Reglue' ? "Select Midsole or Undersole" : "Select 2 Colors or 3 Colors"}
+                                                            <div className="mt-0.5 min-w-0 overflow-hidden">
+                                                                <span className="text-[7.5px] sm:text-[8px] font-medium text-gray-500 leading-tight block whitespace-nowrap truncate tracking-tight" title={service.name === 'Full Reglue' ? "(Select Midsole or Undersole)" : "(Select 2 Colors or 3 Colors)"}>
+                                                                    {service.name === 'Full Reglue' ? "(Select Midsole or Undersole)" : "(Select 2 Colors or 3 Colors)"}
                                                                 </span>
                                                             </div>
                                                         )}

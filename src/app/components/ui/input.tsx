@@ -4,7 +4,12 @@ import { cn } from "./utils";
 import { stripCyberAttackInput } from "@/app/lib/customerValidation";
 
 const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
-  ({ className, type, onChange, onPaste, ...props }, ref) => {
+  ({ className, type, id, name, onChange, onPaste, ...props }, ref) => {
+    const generatedId = React.useId();
+    const cleanGeneratedId = `field-${generatedId.replace(/:/g, '')}`;
+    const effectiveId = id || name || cleanGeneratedId;
+    const effectiveName = name || id || effectiveId;
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       if (type !== 'file' && type !== 'checkbox' && type !== 'radio' && type !== 'password') {
         const val = e.target.value;
@@ -24,6 +29,8 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
     return (
       <input
         type={type}
+        id={effectiveId}
+        name={effectiveName}
         ref={ref}
         data-slot="input"
         onChange={handleChange}

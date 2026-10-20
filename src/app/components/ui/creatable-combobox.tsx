@@ -138,6 +138,11 @@ export function CreatableCombobox({
         }
     };
 
+    const generatedId = React.useId();
+    const cleanGeneratedId = `field-${generatedId.replace(/:/g, '')}`;
+    const effectiveId = id || name || cleanGeneratedId;
+    const effectiveName = name || id || effectiveId;
+
     return (
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverAnchor asChild>
@@ -145,8 +150,8 @@ export function CreatableCombobox({
                     <div className="relative">
                         <input
                             ref={inputRef}
-                            id={id}
-                            name={name}
+                            id={effectiveId}
+                            name={effectiveName}
                             type="text"
                             aria-label={ariaLabel || placeholder}
                             value={searchValue || valueText}

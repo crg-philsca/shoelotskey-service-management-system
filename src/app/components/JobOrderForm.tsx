@@ -323,6 +323,7 @@ function ClearableInput({ id, value, onChange, onClear, placeholder, className, 
         <div className="relative group/input">
             <Input
                 id={id}
+                name={rest?.name || id}
                 value={value}
                 onChange={handleInputChange}
                 placeholder={placeholder}
@@ -417,6 +418,7 @@ function FormattedDateInput({ value, onChange, className, id, iconClassName }: {
         <div className="relative w-full flex items-center">
             <Input
                 id={id}
+                name={id}
                 type="text"
                 placeholder="MM/DD/YYYY"
                 value={localVal}
@@ -435,6 +437,8 @@ function FormattedDateInput({ value, onChange, className, id, iconClassName }: {
             <input
                 ref={hiddenDateRef}
                 type="date"
+                id={id ? `${id}-native-date` : 'native-date-picker'}
+                name={id ? `${id}-native-date` : 'native-date-picker'}
                 aria-label={id ? `${id} picker` : 'Date picker'}
                 value={value || ''}
                 onChange={handlePickerChange}
@@ -462,6 +466,7 @@ function FormattedTimeInput({ value, onChange, className, id }: { value: string;
         <div className="relative w-full flex items-center">
             <Input
                 id={id}
+                name={id}
                 ref={hiddenTimeRef}
                 type="time"
                 aria-label={id ? (id === 'orderTime' ? 'Order Time' : id === 'releaseTime' ? 'Release Time' : id) : 'Time picker'}
@@ -581,6 +586,8 @@ function InventorySearchSelect({
                     <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                     <input
                         ref={inputRef}
+                        id="inventory-search-input"
+                        name="inventory-search-input"
                         type="text"
                         aria-label="Search supplies, volume, container"
                         placeholder="Search supplies, volume, container..."
@@ -2697,6 +2704,8 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                         />
                                                         {shoe.brand === 'Other' && (
                                                             <Input
+                                                                id={`otherBrand-${shoe.id}`}
+                                                                name={`otherBrand-${shoe.id}`}
                                                                 className={`${INPUT_STYLE} mt-1`}
                                                                 placeholder="Please specify brand"
                                                                 value={shoe.otherBrand}
@@ -2738,6 +2747,8 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                         />
                                                         {shoe.shoeModel === 'Other' && (
                                                             <Input
+                                                                id={`otherModel-${shoe.id}`}
+                                                                name={`otherModel-${shoe.id}`}
                                                                 className={`${INPUT_STYLE} mt-1`}
                                                                 placeholder="Please specify model"
                                                                 value={shoe.otherModel}
@@ -2758,6 +2769,8 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                         />
                                                         {shoe.shoeMaterial === 'Other' && (
                                                             <Input
+                                                                id={`otherMaterial-${shoe.id}`}
+                                                                name={`otherMaterial-${shoe.id}`}
                                                                 className={`${INPUT_STYLE} mt-1`}
                                                                 placeholder="Please specify material"
                                                                 value={shoe.otherMaterial}
@@ -2793,6 +2806,8 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                         />
                                                         {shoe.color === 'Other' && (
                                                             <Input
+                                                                id={`otherColor-${shoe.id}`}
+                                                                name={`otherColor-${shoe.id}`}
                                                                 className={`${INPUT_STYLE} mt-1`}
                                                                 placeholder="Please specify color"
                                                                 value={shoe.otherColor || ''}
@@ -2868,9 +2883,11 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                     </div>
                                                     {shoe.priorityLevel === 'rush' && (
                                                         <div className="col-span-1 md:flex-none" style={{ flex: 22 }}>
-                                                            <Label className={`${LABEL_STYLE} whitespace-nowrap`} title="Reduced By">Reduced By</Label>
+                                                            <Label htmlFor={`rushReductionDays-${shoe.id}`} className={`${LABEL_STYLE} whitespace-nowrap`} title="Reduced By">Reduced By</Label>
                                                             <div className="relative flex items-center">
                                                                 <Input
+                                                                    id={`rushReductionDays-${shoe.id}`}
+                                                                    name={`rushReductionDays-${shoe.id}`}
                                                                     type="text"
                                                                     placeholder=""
                                                                     inputMode="numeric"
@@ -2901,7 +2918,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                             <div className="flex flex-col flex-1 gap-2 pt-2 border-t border-gray-200 mt-1">
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex items-center gap-2">
-                                                        <Label className="text-[11px] font-black text-gray-700 uppercase tracking-widest">Shoe Condition</Label>
+                                                        <span className="text-[11px] font-black text-gray-700 uppercase tracking-widest">Shoe Condition</span>
                                                         <Button
                                                             type="button"
                                                             variant="ghost"
@@ -2957,6 +2974,9 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                 <div className="relative pt-1 flex-1 flex flex-col gap-1.5">
                                                     <div className="relative flex-1 flex flex-col min-h-[88px]">
                                                         <Textarea
+                                                            id={`conditionNotes-${shoe.id}`}
+                                                            name={`conditionNotes-${shoe.id}`}
+                                                            aria-label="Shoe condition notes"
                                                             placeholder="Notes: "
                                                             value={shoe.condition.others}
                                                             onChange={(e) =>
@@ -2974,6 +2994,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                                 <input
                                                                     type="file"
                                                                     id={`before-camera-native-${shoe.id}`}
+                                                                    name={`before-camera-native-${shoe.id}`}
                                                                     accept="image/*"
                                                                     capture="environment"
                                                                     className="hidden"
@@ -2999,6 +3020,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                                 <input
                                                                     type="file"
                                                                     id={`before-camera-upload-${shoe.id}`}
+                                                                    name={`before-camera-upload-${shoe.id}`}
                                                                     accept="image/*"
                                                                     className="hidden"
                                                                     onChange={async (e) => {
@@ -3089,7 +3111,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                         <div className="md:col-span-7 border-l border-gray-50 md:pl-8 flex flex-col h-full">
                                             <div className="flex items-center justify-between mb-4">
                                                 <div className="flex items-center gap-2">
-                                                    <Label className="text-[11px] font-black text-gray-700 uppercase tracking-widest">Services & Add-ons</Label>
+                                                    <span className="text-[11px] font-black text-gray-700 uppercase tracking-widest">Services & Add-ons</span>
                                                     <Button
                                                         type="button"
                                                         variant="ghost"
@@ -3115,7 +3137,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                 <div className="flex flex-col h-full gap-4">
                                                     {/* Base Services */}
                                                     <div className="space-y-3">
-                                                        <Label className="text-[10px] font-black text-gray-700 uppercase tracking-widest">Base Services</Label>
+                                                        <span className="text-[10px] font-black text-gray-700 uppercase tracking-widest">Base Services</span>
                                                         <div className="w-full">
                                                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                                                 {baseServices.map(service => {
@@ -3131,7 +3153,8 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                                      return (
                                                                          <label
                                                                              key={service.id}
-                                                                            title={isServiceDisabled ? "No configured Rush Fee is applicable to this base service" : (service.name === 'Full Reglue' ? "Full Reglue (₱250.00) - Select Midsole or Undersole" : service.name === 'Color Renewal' ? "Color Renewal (Price varies) - Select 2 Colors or 3 Colors" : service.name)}
+                                                                             htmlFor={`shoe-${shoe.id}-service-${service.id}`}
+                                                                             title={isServiceDisabled ? "No configured Rush Fee is applicable to this base service" : (service.name === 'Full Reglue' ? "Full Reglue (₱250.00) - (Select Midsole or Undersole)" : service.name === 'Color Renewal' ? "Color Renewal (Price varies) - (Select 2 Colors or 3 Colors)" : service.name)}
                                                                              className={`flex ${isChecked ? 'items-start min-h-[64px]' : 'items-center min-h-[58px]'} space-x-2 p-2.5 rounded-lg border transition-all shadow-sm ${
                                                                                  isServiceDisabled
                                                                                      ? 'opacity-40 cursor-not-allowed bg-gray-50/80 border-gray-200'
@@ -3143,6 +3166,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                                              <Checkbox
                                                                                  type="button"
                                                                                  id={`shoe-${shoe.id}-service-${service.id}`}
+                                                                                 name={`shoe-${shoe.id}-service-${service.id}`}
                                                                                  checked={isChecked}
                                                                                  disabled={isServiceDisabled}
                                                                                  onCheckedChange={(checked) => {
@@ -3194,18 +3218,18 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                                                          )}
                                                                                      </div>
                                                                                      {service.name === 'Full Reglue' ? (
-                                                                                          <div className="mt-0.5 min-w-0">
-                                                                                              <span className="text-[8.5px] font-semibold text-amber-700 leading-tight block break-words" title="Select Midsole or Undersole">
-                                                                                                  Select Midsole or Undersole
-                                                                                              </span>
-                                                                                          </div>
-                                                                                      ) : service.name === 'Color Renewal' ? (
-                                                                                          <div className="mt-0.5 min-w-0">
-                                                                                              <span className="text-[8.5px] font-semibold text-amber-700 leading-tight block break-words" title="Select 2 Colors or 3 Colors">
-                                                                                                  Select 2 Colors or 3 Colors
-                                                                                              </span>
-                                                                                          </div>
-                                                                                      ) : null}
+                                                                                         <div className="mt-0.5 min-w-0 overflow-hidden">
+                                                                                             <span className="text-[7.5px] sm:text-[8px] font-medium text-gray-500 leading-tight block whitespace-nowrap truncate tracking-tight" title="(Select Midsole or Undersole)">
+                                                                                                 (Select Midsole or Undersole)
+                                                                                             </span>
+                                                                                         </div>
+                                                                                     ) : service.name === 'Color Renewal' ? (
+                                                                                         <div className="mt-0.5 min-w-0 overflow-hidden">
+                                                                                             <span className="text-[7.5px] sm:text-[8px] font-medium text-gray-500 leading-tight block whitespace-nowrap truncate tracking-tight" title="(Select 2 Colors or 3 Colors)">
+                                                                                                 (Select 2 Colors or 3 Colors)
+                                                                                             </span>
+                                                                                         </div>
+                                                                                     ) : null}
                                                                                       <div className="flex items-center justify-end mt-1 min-w-0">
                                                                                           <span className="text-[11px] font-black text-red-600 shrink-0 ml-auto whitespace-nowrap">
                                                                                               {service.price > 0 ? formatPeso(service.price) : 'Price varies'}
@@ -3233,7 +3257,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
 
                                                     {/* Add-ons Section */}
                                                     <div className="space-y-3 pt-3 border-t border-gray-200 flex flex-col flex-grow">
-                                                        <Label className="text-[10px] font-black text-gray-700 uppercase tracking-widest">Add-on Services</Label>
+                                                        <span className="text-[10px] font-black text-gray-700 uppercase tracking-widest">Add-on Services</span>
                                                         {(() => {
                                                             const activeRush = getApplicableRushFee(shoe.baseService || [], shoe.addOns || [], services);
                                                             const rushHasAddonWhitelist = activeRush && Array.isArray(activeRush.connectedAddons) && activeRush.connectedAddons.length > 0;
@@ -3279,6 +3303,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                                                         <Checkbox
                                                                                             type="button"
                                                                                             id={`addon-${shoe.id}-${addon.id}`}
+                                                                                            name={`addon-${shoe.id}-${addon.id}`}
                                                                                             checked={isChecked}
                                                                                             onCheckedChange={(checked) => {
                                                                                                 let newAddOns = shoe.addOns || [];
@@ -3342,6 +3367,9 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                                                                     <div className="flex items-center shrink-0">
                                                                                                         <input
                                                                                                             type="number"
+                                                                                                            id={`addon-qty-${shoe.id}-${addon.id}`}
+                                                                                                            name={`addon-qty-${shoe.id}-${addon.id}`}
+                                                                                                            aria-label={`${addon.name} quantity`}
                                                                                                             min="1"
                                                                                                             value={quantity}
                                                                                                             onChange={(e) => {
@@ -3379,6 +3407,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                                                         <Checkbox
                                                                                             type="button"
                                                                                             id={`addon-${shoe.id}-${addon.id}`}
+                                                                                            name={`addon-${shoe.id}-${addon.id}`}
                                                                                             checked={isChecked}
                                                                                             className="h-4 w-4 shrink-0 data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600"
                                                                                             onCheckedChange={(checked) => {
@@ -3451,7 +3480,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                             {/* Supplies & Materials Used */}
                                             <div className="space-y-3 pt-3 border-t border-gray-200 mt-4 h-full">
                                                 <div className="flex items-center justify-between">
-                                                    <Label className="text-[10px] font-black text-gray-700 uppercase tracking-widest">Supplies & Materials Used</Label>
+                                                    <span className="text-[10px] font-black text-gray-700 uppercase tracking-widest">Supplies & Materials Used</span>
                                                     <span className="text-[10px] font-bold text-gray-600 uppercase italic">Stock will be subtracted</span>
                                                 </div>
                                                 <div className="space-y-2">
@@ -3489,12 +3518,15 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                                                 ({formatPeso(rowRetailTotal)})
                                                                             </span>
                                                                         )}
-                                                                    </div>
-                                                                )}
+                                                                      </div>
+                                                                  )}
 
-                                                                <div className="flex items-center gap-1 shrink-0 bg-gray-50 px-2 py-1 rounded-md border border-gray-100">
+                                                                  <div className="flex items-center gap-1 shrink-0 bg-gray-50 px-2 py-1 rounded-md border border-gray-100">
                                                                     <input
                                                                         type="number"
+                                                                        id={`supply-amount-${shoe.id}-${uIdx}`}
+                                                                        name={`supply-amount-${shoe.id}-${uIdx}`}
+                                                                        aria-label={`Supply quantity for ${item?.name || 'supply'}`}
                                                                         step={isDiscrete ? "1" : "0.1"}
                                                                         min={isDiscrete ? "1" : "0.01"}
                                                                         value={usage.amount}
@@ -3768,14 +3800,14 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                             </div>
                                             {/* Row 2: Order ID, Processed By */}
                                             <div className="space-y-1 col-span-1 md:col-span-4">
-                                                <Label className={LABEL_STYLE}>Order ID</Label>
+                                                <span className={LABEL_STYLE}>Order ID</span>
                                                 <div className="flex items-center bg-white h-9 rounded-xl px-3 text-xs font-normal text-gray-900 border border-gray-100/50 shadow-sm">
                                                     <Hash size={14} className="mr-2 text-gray-400" />
                                                     <span className="whitespace-nowrap font-normal">{generatedOrderNumber || 'Generating...'}</span>
                                                 </div>
                                             </div>
                                             <div className="space-y-1 col-span-1 md:col-span-4">
-                                                <Label className={LABEL_STYLE}>Processed By</Label>
+                                                <span className={LABEL_STYLE}>Processed By</span>
                                                 <div className="flex items-center bg-white h-9 rounded-xl px-3 text-xs text-gray-900 border border-gray-100/50 shadow-sm">
                                                     <User size={14} className="mr-2 text-gray-400" />
                                                     <span className="truncate">{user?.username || 'Current User'}</span>
@@ -3826,6 +3858,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                     <Label htmlFor="refNo" className={LABEL_STYLE}>Reference Number</Label>
                                                     <ClearableInput
                                                         id="refNo"
+                                                        name="refNo"
                                                         value={referenceNo}
                                                         onChange={(e: any) => setReferenceNo(formatReferenceNo(e.target.value))}
                                                         placeholder={paymentMethod === 'gcash' ? "xxxx-xxx-xxx-xxx" : "xxxx-xxxx-xxxx"}
@@ -3849,6 +3882,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                                     <span className="absolute left-3 top-2.5 text-gray-900 text-xs font-black">{'\u20B1'}</span>
                                                                     <Input
                                                                         id="depositAmt"
+                                                                        name="depositAmt"
                                                                         type="text"
                                                                         inputMode="numeric"
                                                                         value={depositAmount}
@@ -3880,7 +3914,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                             </>
                                                         ) : (
                                                             <>
-                                                                <Label className={LABEL_STYLE}>Total Due</Label>
+                                                                <span className={LABEL_STYLE}>Total Due</span>
                                                                 <div className={`h-10 flex items-center px-4 rounded-xl font-black text-xs text-gray-900 bg-white border border-gray-100 shadow-sm`}>
                                                                     {formatPeso(total)}
                                                                 </div>
@@ -3894,6 +3928,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                             <span className="absolute left-3 top-2.5 text-gray-900 text-xs font-black">{'\u20B1'}</span>
                                                             <Input
                                                                 id="amountRec"
+                                                                name="amountRec"
                                                                 type="text"
                                                                 inputMode="numeric"
                                                                 value={amountReceived}
@@ -3931,10 +3966,12 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                             {showAmountRec && (
                                                 <>
                                                     <div className={`space-y-1 ${!isPartial ? 'col-span-2' : ''}`}>
-                                                        <Label className={LABEL_STYLE}>Amount Change</Label>
+                                                        <Label htmlFor="amountChange" className={LABEL_STYLE}>Amount Change</Label>
                                                         <div className="relative">
                                                             <span className="absolute left-3 top-2.5 text-gray-900 text-xs font-black">{'\u20B1'}</span>
                                                             <Input
+                                                                id="amountChange"
+                                                                name="amountChange"
                                                                 title="Amount Change"
                                                                 readOnly
                                                                 value={(() => {
@@ -3948,10 +3985,12 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                     </div>
                                                     {isPartial && (
                                                         <div className="space-y-1">
-                                                            <Label className={LABEL_STYLE}>Remaining Balance</Label>
+                                                            <Label htmlFor="remainingBalance" className={LABEL_STYLE}>Remaining Balance</Label>
                                                             <div className="relative">
                                                                 <span className="absolute left-3 top-2.5 text-gray-900 text-xs font-black">{'\u20B1'}</span>
                                                                 <Input
+                                                                    id="remainingBalance"
+                                                                    name="remainingBalance"
                                                                     title="Remaining Balance"
                                                                     readOnly
                                                                     value={(() => {
@@ -4081,9 +4120,10 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                         {/* Selector: Authorization Code or Username & Password (only displayed if staff has permission to use code) */}
                                                         {canStaffUseAuthCode ? (
                                                             <div className="flex items-center gap-3 text-[10px] pt-0.5 font-semibold text-gray-700">
-                                                                <label className="flex items-center gap-1 cursor-pointer hover:text-red-700">
+                                                                <label htmlFor="authMethod-code" className="flex items-center gap-1 cursor-pointer hover:text-red-700">
                                                                     <input
                                                                         type="radio"
+                                                                        id="authMethod-code"
                                                                         name="authMethod"
                                                                         checked={authMethod === 'code'}
                                                                         onChange={() => setAuthMethod('code')}
@@ -4091,9 +4131,10 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                                     />
                                                                     <span>Authorization Code</span>
                                                                 </label>
-                                                                <label className="flex items-center gap-1 cursor-pointer hover:text-red-700">
+                                                                <label htmlFor="authMethod-credentials" className="flex items-center gap-1 cursor-pointer hover:text-red-700">
                                                                     <input
                                                                         type="radio"
+                                                                        id="authMethod-credentials"
                                                                         name="authMethod"
                                                                         checked={authMethod === 'credentials'}
                                                                         onChange={() => setAuthMethod('credentials')}
@@ -4112,6 +4153,8 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                             <div className="space-y-1">
                                                                 <div className="relative">
                                                                     <Input
+                                                                        id="discountAuthCode"
+                                                                        name="discountAuthCode"
                                                                         type={showDiscountAuthSecret ? "text" : "password"}
                                                                         value={enteredDiscountCode}
                                                                         onChange={(e) => setEnteredDiscountCode(sanitizeClientAuthCode(e.target.value))}
@@ -4160,6 +4203,8 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                                     <>
                                                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                                                                             <Input
+                                                                                id="discountAuthUsername"
+                                                                                name="discountAuthUsername"
                                                                                 type="text"
                                                                                 placeholder="Authorizer Username"
                                                                                 value={authUsername}
@@ -4170,6 +4215,8 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                                             />
                                                                             <div className="relative">
                                                                                 <Input
+                                                                                    id="discountAuthPassword"
+                                                                                    name="discountAuthPassword"
                                                                                     type={showDiscountAuthSecret ? "text" : "password"}
                                                                                     placeholder="Password"
                                                                                     value={authCredential}
@@ -4248,6 +4295,8 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                             </div>
 
                                                             <Input
+                                                                id="discountIdNumber"
+                                                                name="discountIdNumber"
                                                                 type="text"
                                                                 value={discountIdNumber}
                                                                 maxLength={activeDiscountConfig.digits ? activeDiscountConfig.digits + Math.floor((activeDiscountConfig.digits - 1) / 2) : 45}
@@ -4298,6 +4347,8 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                                 </Select>
                                                                 <div className="relative flex-1">
                                                                     <Input
+                                                                        id="customDiscountValue"
+                                                                        name="customDiscountValue"
                                                                         type="text"
                                                                         inputMode="decimal"
                                                                         placeholder={customDiscountType === 'percent' ? "e.g. 12" : "0.00"}
